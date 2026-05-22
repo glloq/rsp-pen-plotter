@@ -14,9 +14,10 @@ function download(): void {
   if (!gcode.value) return
   const blob = new Blob([gcode.value], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
+  const base = (store.job?.source_file ?? 'output').replace(/\.[^.]+$/, '')
   const link = document.createElement('a')
   link.href = url
-  link.download = `${store.job?.source_file ?? 'output'}.gcode`
+  link.download = `${base}.gcode`
   link.click()
   URL.revokeObjectURL(url)
 }

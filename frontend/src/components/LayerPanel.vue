@@ -123,5 +123,12 @@ function formatDuration(seconds: number): string {
       </div>
       <p class="mt-1 text-xs text-sky-400/80">{{ t('layers.fillHint') }}</p>
     </div>
+
+    <p
+      v-if="store.error && (store.errorScope === 'optimize' || store.errorScope === 'generate')"
+      class="text-sm text-red-400"
+    >
+      {{ store.error }}
+    </p>
   </div>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 
@@ -13,6 +14,16 @@ const targetY = ref(0)
 
 function jog(dx: number, dy: number): void {
   plotter.jog(dx * step.value, dy * step.value, job.selectedProfileName)
+}
+
+async function home(): Promise<void> {
+  const confirmed = await confirmAction({
+    title: t('confirm.homeTitle'),
+    message: t('confirm.homeMsg'),
+    confirmLabel: t('plotter.home'),
+    cancelLabel: t('confirm.cancel'),
+  })
+  if (confirmed) plotter.home(job.selectedProfileName)
 }
 
 function gotoTarget(): void {
@@ -46,13 +57,13 @@ const corners = computed(() => {
     </div>
     <div class="grid grid-cols-3 gap-1 w-36">
       <span />
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" @click="jog(0, 1)">↑</button>
+      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.jogUp')" :title="t('plotter.jogUp')" @click="jog(0, 1)">↑</button>
       <span />
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" @click="jog(-1, 0)">←</button>
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" @click="plotter.home(job.selectedProfileName)">⌂</button>
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" @click="jog(1, 0)">→</button>
+      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.jogLeft')" :title="t('plotter.jogLeft')" @click="jog(-1, 0)">←</button>
+      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.home')" :title="t('plotter.home')" @click="home">⌂</button>
+      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.jogRight')" :title="t('plotter.jogRight')" @click="jog(1, 0)">→</button>
       <span />
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" @click="jog(0, -1)">↓</button>
+      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.jogDown')" :title="t('plotter.jogDown')" @click="jog(0, -1)">↓</button>
       <span />
     </div>
 
@@ -85,6 +96,7 @@ const corners = computed(() => {
           v-for="corner in corners"
           :key="corner.label"
           class="flex-1 rounded bg-slate-700 py-1 text-slate-100 hover:bg-slate-600"
+          :aria-label="t('plotter.gotoCorner', { x: corner.x, y: corner.y })"
           :title="`X${corner.x} Y${corner.y}`"
           @click="plotter.goto(corner.x, corner.y, job.selectedProfileName)"
         >

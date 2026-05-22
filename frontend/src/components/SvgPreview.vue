@@ -13,18 +13,42 @@ const container = ref<HTMLDivElement | null>(null)
 let panZoom: SvgPanZoom.Instance | null = null
 let viewport: SVGElement | null = null
 
-function applyVisibility(): void {
+function layerGroups(): Map<string, SVGElement> {
   const root = container.value?.querySelector('svg')
-  if (!root) return
   const byLabel = new Map<string, SVGElement>()
+  if (!root) return byLabel
   for (const group of Array.from(root.querySelectorAll('g'))) {
     const label = group.getAttribute('inkscape:label')
     if (label) byLabel.set(label, group)
   }
+  return byLabel
+}
+
+function applyVisibility(): void {
+  const byLabel = layerGroups()
+  if (!byLabel.size && !viewport) return
   for (const layer of store.layers) {
     const target = byLabel.get(layer.layer_id) ?? viewport
     if (target) {
       target.style.display = store.isVisible(layer.layer_id) ? '' : 'none'
+    }
+  }
+}
+
+function applyPenColors(): void {
+  const pens = store.selectedProfile?.pens ?? []
+  const byLabel = layerGroups()
+  for (const layer of store.layers) {
+    const group = byLabel.get(layer.layer_id)
+    if (!group) continue
+    const color =
+      layer.target_pen_slot === null
+        ? null
+        : (pens.find((p) => p.index === layer.target_pen_slot)?.color ?? null)
+    if (!color) continue
+    group.style.stroke = color
+    for (const el of Array.from(group.querySelectorAll<SVGElement>('[stroke]'))) {
+      if (el.getAttribute('stroke') !== 'none') el.style.stroke = color
     }
   }
 }
@@ -49,10 +73,16 @@ function render(markup: string | null): void {
   })
   viewport = container.value.querySelector<SVGElement>('.svg-pan-zoom_viewport')
   applyVisibility()
+  applyPenColors()
 }
 
 watch(svg, (markup) => render(markup), { immediate: true })
 watch(visibility, () => applyVisibility(), { deep: true })
+watch(
+  () => store.layers.map((l) => l.target_pen_slot),
+  () => applyPenColors(),
+)
+watch(() => store.selectedProfileName, () => applyPenColors())
 
 onBeforeUnmount(() => panZoom?.destroy())
 </script>

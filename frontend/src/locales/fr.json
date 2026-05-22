@@ -33,7 +33,27 @@
     "generating": "Génération…",
     "penUpTravel": "Déplacement à vide",
     "travelReduction": "Réduction du déplacement",
-    "fillHint": "L'optimisation convertit les formes pleines en contours (un stylo trace des lignes, pas des remplissages)."
+    "fillHint": "L'optimisation convertit les formes pleines en contours (un stylo trace des lignes, pas des remplissages).",
+    "optimizeFailed": "Échec de l'optimisation.",
+    "generateFailed": "Échec de la génération du G-code."
+  },
+  "confirm": {
+    "cancel": "Annuler",
+    "deleteProfileTitle": "Supprimer le profil",
+    "deleteProfileMsg": "Supprimer le profil « {name} » ? Cette action est irréversible.",
+    "deleteMacroTitle": "Supprimer la macro",
+    "deleteMacroMsg": "Supprimer la macro « {name} » ?",
+    "sendJobTitle": "Envoyer le travail",
+    "sendJobMsg": "Envoyer le G-code généré au traceur et démarrer le tracé ?",
+    "homeTitle": "Origine machine",
+    "homeMsg": "Déplacer le traceur vers sa position d'origine ?"
+  },
+  "sheet": {
+    "title": "Mise en page",
+    "sheet": "Feuille",
+    "drawing": "Dessin",
+    "scale": "Échelle",
+    "outOfBounds": "Le dessin dépasse l'espace de travail ; il pourrait être tronqué ou hors limites."
   },
   "convert": {
     "options": "Options de conversion",
@@ -108,16 +128,26 @@
     "drawing": "Tracé",
     "travel": "Déplacement",
     "totalSim": "Total (sim)",
-    "layerEstimate": "Estimation calques"
+    "layerEstimate": "Estimation calques",
+    "dimensions": "Dimensions",
+    "end": "Fin"
   },
   "plotter": {
     "title": "Traceur",
     "connect": "Connecter",
     "connected": "Connecté",
     "disconnect": "Déconnecter",
+    "port": "Port série",
+    "baudrate": "Débit (baud)",
     "step": "Pas",
     "goto": "Aller à (mm)",
     "go": "Aller",
+    "home": "Origine",
+    "jogUp": "Déplacer vers le haut (Y+)",
+    "jogDown": "Déplacer vers le bas (Y−)",
+    "jogLeft": "Déplacer à gauche (X−)",
+    "jogRight": "Déplacer à droite (X+)",
+    "gotoCorner": "Aller au coin X{x} Y{y}",
     "sendJob": "Envoyer le travail",
     "pause": "Pause",
     "resume": "Reprendre",
@@ -130,6 +160,7 @@
     "run": "Exécuter",
     "runHint": "Connectez un traceur (et mettez en pause tout travail en cours) pour exécuter des macros.",
     "edit": "Éditer",
+    "delete": "Supprimer la macro",
     "name": "Nom",
     "description": "Description (facultatif)",
     "commands": "Une commande par ligne",

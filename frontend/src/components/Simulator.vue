@@ -23,6 +23,20 @@ let last = 0
 
 const speeds = [1, 5, 100]
 
+const frameBounds = computed<SimBounds>(() => {
+  const ws = store.selectedProfile?.workspace
+  if (ws && ws.x_max > ws.x_min && ws.y_max > ws.y_min) {
+    return { minX: ws.x_min, minY: ws.y_min, maxX: ws.x_max, maxY: ws.y_max }
+  }
+  return sim.value?.bounds ?? { minX: 0, minY: 0, maxX: 1, maxY: 1 }
+})
+
+const drawingSize = computed(() => {
+  const b = sim.value?.bounds
+  if (!b || b.maxX < b.minX) return null
+  return { w: b.maxX - b.minX, h: b.maxY - b.minY }
+})
+
 const progress = computed(() =>
   sim.value && sim.value.totalTimeSeconds > 0
     ? simTime.value / sim.value.totalTimeSeconds
@@ -52,9 +66,32 @@ function draw(): void {
   if (!c || !r) return
   const ctx = c.getContext('2d')
   if (!ctx) return
+  const dpr = window.devicePixelRatio || 1
+  const bw = Math.round(WIDTH * dpr)
+  const bh = Math.round(HEIGHT * dpr)
+  if (c.width !== bw || c.height !== bh) {
+    c.width = bw
+    c.height = bh
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
+  const bounds = frameBounds.value
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, WIDTH, HEIGHT)
+
+  // Sheet / workspace outline.
+  const [sx0, sy0] = project(bounds.minX, bounds.minY, bounds)
+  const [sx1, sy1] = project(bounds.maxX, bounds.maxY, bounds)
+  ctx.strokeStyle = '#94a3b8'
+  ctx.lineWidth = 1
+  ctx.setLineDash([])
+  ctx.strokeRect(
+    Math.min(sx0, sx1),
+    Math.min(sy0, sy1),
+    Math.abs(sx1 - sx0),
+    Math.abs(sy1 - sy0),
+  )
+
   const t = simTime.value
   let pen: [number, number] | null = null
 
@@ -63,8 +100,8 @@ function draw(): void {
     const frac = seg.duration > 0 ? Math.min(1, (t - seg.startTime) / seg.duration) : 1
     const ex = seg.x0 + (seg.x1 - seg.x0) * frac
     const ey = seg.y0 + (seg.y1 - seg.y0) * frac
-    const [ax, ay] = project(seg.x0, seg.y0, r.bounds)
-    const [bx, by] = project(ex, ey, r.bounds)
+    const [ax, ay] = project(seg.x0, seg.y0, bounds)
+    const [bx, by] = project(ex, ey, bounds)
     ctx.beginPath()
     ctx.moveTo(ax, ay)
     ctx.lineTo(bx, by)
@@ -190,7 +227,7 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
         class="rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-sm text-slate-100"
         @click="jumpToEnd"
       >
-        max
+        {{ t('simulator.end') }}
       </button>
     </div>
 
@@ -218,6 +255,10 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
       <div>
         <dt class="text-xs text-slate-500">{{ t('simulator.layerEstimate') }}</dt>
         <dd class="font-mono">{{ formatDuration(store.totalDurationSeconds) }}</dd>
+      </div>
+      <div v-if="drawingSize">
+        <dt class="text-xs text-slate-500">{{ t('simulator.dimensions') }}</dt>
+        <dd class="font-mono">{{ drawingSize.w.toFixed(0) }}×{{ drawingSize.h.toFixed(0) }} mm</dd>
       </div>
     </dl>
   </section>

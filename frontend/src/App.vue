@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getHealth } from './api/client'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 import FileUpload from './components/FileUpload.vue'
 import GcodePreview from './components/GcodePreview.vue'
 import JobHistory from './components/JobHistory.vue'
@@ -9,6 +10,7 @@ import LayerPanel from './components/LayerPanel.vue'
 import MacroPanel from './components/MacroPanel.vue'
 import PlotterPanel from './components/PlotterPanel.vue'
 import ProfileEditor from './components/ProfileEditor.vue'
+import SheetPreview from './components/SheetPreview.vue'
 import Simulator from './components/Simulator.vue'
 import SvgPreview from './components/SvgPreview.vue'
 import { useJobStore } from './stores/job'
@@ -25,6 +27,14 @@ const canSimulate = computed(() => store.selectedProfile?.gcode_dialect !== 'ebb
 function setLocale(value: string): void {
   locale.value = value
 }
+
+watch(
+  locale,
+  (value) => {
+    document.documentElement.setAttribute('lang', value)
+  },
+  { immediate: true },
+)
 
 onMounted(async () => {
   try {
@@ -84,10 +94,12 @@ onMounted(async () => {
         <JobHistory />
       </aside>
       <section>
+        <SheetPreview />
         <SvgPreview />
         <Simulator v-if="canSimulate" />
         <GcodePreview />
       </section>
     </main>
+    <ConfirmDialog />
   </div>
 </template>

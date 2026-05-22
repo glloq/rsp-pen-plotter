@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { exportProfileYaml, type EbbConfig, type MachineProfile, type PenSlot } from '../api/client'
+import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
 
 const { t } = useI18n()
@@ -81,6 +82,14 @@ function duplicate(): void {
 
 async function remove(): Promise<void> {
   if (!draft.value) return
+  const confirmed = await confirmAction({
+    title: t('confirm.deleteProfileTitle'),
+    message: t('confirm.deleteProfileMsg', { name: draft.value.name }),
+    confirmLabel: t('profile.delete'),
+    cancelLabel: t('confirm.cancel'),
+    danger: true,
+  })
+  if (!confirmed) return
   error.value = null
   try {
     await store.deleteProfile(draft.value.name)
@@ -108,6 +117,7 @@ async function downloadYaml(): Promise<void> {
     <button
       type="button"
       class="flex w-full items-center justify-between px-4 py-3 text-sm uppercase tracking-wide text-slate-300"
+      :aria-expanded="open"
       @click="open = !open"
     >
       {{ t('profile.title') }}

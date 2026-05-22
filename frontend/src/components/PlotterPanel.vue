@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import JogControls from './JogControls.vue'
@@ -20,8 +21,15 @@ watch(
   { immediate: true },
 )
 
-function sendJob(): void {
-  if (job.gcode) plotter.run(job.gcode)
+async function sendJob(): Promise<void> {
+  if (!job.gcode) return
+  const confirmed = await confirmAction({
+    title: t('confirm.sendJobTitle'),
+    message: t('confirm.sendJobMsg'),
+    confirmLabel: t('plotter.sendJob'),
+    cancelLabel: t('confirm.cancel'),
+  })
+  if (confirmed) plotter.run(job.gcode)
 }
 </script>
 
@@ -30,16 +38,23 @@ function sendJob(): void {
     <h2 class="text-sm uppercase tracking-wide text-slate-400">{{ t('plotter.title') }}</h2>
 
     <div v-if="!status.connected" class="space-y-2">
-      <input
-        v-model="port"
-        placeholder="/dev/ttyUSB0"
-        class="w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-sm text-slate-100"
-      />
-      <input
-        v-model.number="baudrate"
-        type="number"
-        class="w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-sm text-slate-100"
-      />
+      <label class="block text-xs text-slate-400">
+        {{ t('plotter.port') }}
+        <input
+          v-model="port"
+          placeholder="/dev/ttyUSB0"
+          class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-sm text-slate-100"
+        />
+      </label>
+      <label class="block text-xs text-slate-400">
+        {{ t('plotter.baudrate') }}
+        <input
+          v-model.number="baudrate"
+          type="number"
+          placeholder="115200"
+          class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-sm text-slate-100"
+        />
+      </label>
       <select
         v-model="terminator"
         class="w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-sm text-slate-100"
