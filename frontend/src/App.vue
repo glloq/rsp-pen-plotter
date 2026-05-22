@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getHealth } from './api/client'
 import FileUpload from './components/FileUpload.vue'
@@ -16,6 +16,9 @@ const store = useJobStore()
 const status = ref<string | null>(null)
 const version = ref<string | null>(null)
 const apiError = ref(false)
+
+// The canvas simulator only understands G-code (G0/G1); EBB output isn't G-code.
+const canSimulate = computed(() => store.selectedProfile?.gcode_dialect !== 'ebb')
 
 function setLocale(value: string): void {
   locale.value = value
@@ -78,7 +81,7 @@ onMounted(async () => {
       </aside>
       <section>
         <SvgPreview />
-        <Simulator />
+        <Simulator v-if="canSimulate" />
         <GcodePreview />
       </section>
     </main>

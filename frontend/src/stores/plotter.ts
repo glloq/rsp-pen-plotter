@@ -21,6 +21,7 @@ export const usePlotterStore = defineStore('plotter', () => {
   })
   const port = ref('/dev/ttyUSB0')
   const baudrate = ref(115200)
+  const terminator = ref<'cr' | 'lf' | 'crlf'>('lf')
   const error = ref<string | null>(null)
   let socket: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -62,7 +63,7 @@ export const usePlotterStore = defineStore('plotter', () => {
   }
 
   async function connect(): Promise<void> {
-    await withErrors(() => plotterConnect(port.value, baudrate.value))
+    await withErrors(() => plotterConnect(port.value, baudrate.value, terminator.value))
     if (status.value.connected) openSocket()
   }
 
@@ -80,6 +81,7 @@ export const usePlotterStore = defineStore('plotter', () => {
     status,
     port,
     baudrate,
+    terminator,
     error,
     progress,
     connect,

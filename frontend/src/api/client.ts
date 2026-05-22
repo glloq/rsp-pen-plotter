@@ -172,8 +172,16 @@ export interface PlotterStatus {
   state: string
 }
 
-export async function plotterConnect(port: string, baudrate: number): Promise<PlotterStatus> {
-  const response = await api.post<PlotterStatus>('/plotter/connect', { port, baudrate })
+export async function plotterConnect(
+  port: string,
+  baudrate: number,
+  terminator: 'cr' | 'lf' | 'crlf' = 'lf',
+): Promise<PlotterStatus> {
+  const response = await api.post<PlotterStatus>('/plotter/connect', {
+    port,
+    baudrate,
+    terminator,
+  })
   return response.data
 }
 

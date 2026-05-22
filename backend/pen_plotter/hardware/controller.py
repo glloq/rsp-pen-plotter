@@ -43,14 +43,16 @@ class PlotterController:
         """Attach an already-open transport (used in tests and after connect)."""
         self._transport = transport
 
-    async def open_serial(self, port: str, baudrate: int = 115200) -> None:
+    async def open_serial(self, port: str, baudrate: int = 115200, terminator: str = "\n") -> None:
         """Open and attach a real serial transport.
 
         Args:
             port: Serial device path.
             baudrate: Connection baud rate.
+            terminator: Line terminator (line feed for GRBL/Marlin, carriage
+                return for EBB).
         """
-        self.attach(await SerialTransport.open(port, baudrate))
+        self.attach(await SerialTransport.open(port, baudrate, terminator))
 
     async def disconnect(self) -> None:
         """Abort any running job and close the transport."""

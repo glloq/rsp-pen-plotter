@@ -32,6 +32,20 @@ class BoundingBox(BaseModel):
     y_max: float
 
 
+class EbbConfig(BaseModel):
+    """EiBotBoard (AxiDraw-class) motion parameters.
+
+    Required only for profiles whose ``gcode_dialect`` is ``"ebb"``. The two
+    motors form an H-bot, so a Cartesian move maps to mixed motor steps.
+    """
+
+    steps_per_mm: float = 80.0
+    servo_up: int = 16000
+    servo_down: int = 12000
+    servo_rate: int = 400
+    serial_terminator: Literal["cr", "lf", "crlf"] = "cr"
+
+
 class MachineProfile(BaseModel):
     """Describes a target pen plotter.
 
@@ -53,6 +67,7 @@ class MachineProfile(BaseModel):
     travel_speed_mm_s: float
     acceleration_mm_s2: float
     pen_slot_count: int
+    ebb: EbbConfig | None = None
 
 
 class LayerInfo(BaseModel):

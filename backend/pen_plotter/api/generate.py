@@ -7,6 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from pen_plotter.core.ebb import generate_ebb
 from pen_plotter.core.gcode import LayerGeneration, generate_gcode
 from pen_plotter.profiles import get_profile
 
@@ -55,18 +56,20 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
     if profile is None:
         raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
 
+    generator = generate_ebb if profile.gcode_dialect == "ebb" else generate_gcode
+    layer_settings = [
+        LayerGeneration(
+            layer_id=layer.layer_id,
+            target_pen_slot=layer.target_pen_slot,
+            drawing_speed_mm_s=layer.drawing_speed_mm_s,
+        )
+        for layer in request.layers
+    ]
     try:
-        gcode = generate_gcode(
+        program = generator(
             request.svg,
             profile,
-            layers=[
-                LayerGeneration(
-                    layer_id=layer.layer_id,
-                    target_pen_slot=layer.target_pen_slot,
-                    drawing_speed_mm_s=layer.drawing_speed_mm_s,
-                )
-                for layer in request.layers
-            ],
+            layers=layer_settings,
             scale_mode=request.scale_mode,
             margin_mm=request.margin_mm,
         )
@@ -75,4 +78,4 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
     except Exception as exc:  # template/geometry failures
         raise HTTPException(status_code=422, detail=f"Generation failed: {exc}") from exc
 
-    return GenerateResponse(gcode=gcode, line_count=gcode.count("\n"))
+    return GenerateResponse(gcode=program, line_count=program.count("\n"))
