@@ -15,6 +15,21 @@ const visible = computed({
 
 const penSlotCount = computed(() => store.selectedProfile?.pen_slot_count ?? 0)
 
+const penSlots = computed(() => {
+  const profile = store.selectedProfile
+  const pens = profile?.pens ?? []
+  return Array.from({ length: penSlotCount.value }, (_, i) => {
+    const pen = pens.find((p) => p.index === i)
+    return { index: i, name: pen?.name || `${i}`, color: pen?.color ?? '#94a3b8' }
+  })
+})
+
+const selectedPen = computed(() =>
+  props.layer.target_pen_slot === null
+    ? null
+    : (penSlots.value.find((p) => p.index === props.layer.target_pen_slot) ?? null),
+)
+
 function onPenSlot(event: Event): void {
   const value = (event.target as HTMLSelectElement).value
   store.updateLayer(props.layer.layer_id, { target_pen_slot: value === '' ? null : Number(value) })
@@ -68,15 +83,22 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
 
     <div class="grid grid-cols-2 gap-2 text-xs">
       <label class="text-slate-400">
-        {{ t('layers.penSlot') }}
+        <span class="flex items-center gap-1">
+          {{ t('layers.penSlot') }}
+          <span
+            v-if="selectedPen"
+            class="inline-block h-3 w-3 rounded-full border border-slate-600"
+            :style="{ backgroundColor: selectedPen.color }"
+          />
+        </span>
         <select
           :value="layer.target_pen_slot ?? ''"
           class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
           @change="onPenSlot"
         >
           <option value="">{{ t('layers.none') }}</option>
-          <option v-for="slot in penSlotCount" :key="slot" :value="slot - 1">
-            {{ slot - 1 }}
+          <option v-for="pen in penSlots" :key="pen.index" :value="pen.index">
+            {{ pen.index }} — {{ pen.name }}
           </option>
         </select>
       </label>

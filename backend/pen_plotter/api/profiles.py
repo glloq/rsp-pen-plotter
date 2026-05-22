@@ -9,6 +9,7 @@ from pydantic import BaseModel, ValidationError
 
 from pen_plotter.models import MachineProfile
 from pen_plotter.profiles import (
+    delete_profile,
     export_profile_yaml,
     get_profile,
     load_profiles,
@@ -54,6 +55,36 @@ async def export_one(name: str) -> str:
     if profile is None:
         raise HTTPException(status_code=404, detail=f"Unknown profile: {name!r}")
     return export_profile_yaml(profile)
+
+
+@router.post("/profiles")
+async def create_or_update(profile: MachineProfile) -> MachineProfile:
+    """Create or update a profile from a JSON body and persist it.
+
+    The profile is written to the writable user directory, overriding any
+    bundled profile with the same name. FastAPI returns 422 if the body fails
+    validation.
+    """
+    save_profile(profile)
+    return profile
+
+
+@router.delete("/profiles/{name}")
+async def delete_one(name: str) -> dict[str, str]:
+    """Delete a user profile by name.
+
+    Raises:
+        HTTPException: 404 if no profile with the name exists; 400 if the
+            profile is bundled (read-only) and therefore cannot be deleted.
+    """
+    if delete_profile(name):
+        return {"deleted": name}
+    if get_profile(name) is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Profile {name!r} is bundled and cannot be deleted.",
+        )
+    raise HTTPException(status_code=404, detail=f"Unknown profile: {name!r}")
 
 
 @router.post("/profiles/import")

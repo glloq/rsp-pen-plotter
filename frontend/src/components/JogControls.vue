@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
@@ -8,10 +8,27 @@ const { t } = useI18n()
 const plotter = usePlotterStore()
 const job = useJobStore()
 const step = ref(10)
+const targetX = ref(0)
+const targetY = ref(0)
 
 function jog(dx: number, dy: number): void {
   plotter.jog(dx * step.value, dy * step.value, job.selectedProfileName)
 }
+
+function gotoTarget(): void {
+  plotter.goto(targetX.value, targetY.value, job.selectedProfileName)
+}
+
+const corners = computed(() => {
+  const ws = job.selectedProfile?.workspace
+  if (!ws) return []
+  return [
+    { label: '↙', x: ws.x_min, y: ws.y_min },
+    { label: '↘', x: ws.x_max, y: ws.y_min },
+    { label: '↖', x: ws.x_min, y: ws.y_max },
+    { label: '↗', x: ws.x_max, y: ws.y_max },
+  ]
+})
 </script>
 
 <template>
@@ -37,6 +54,43 @@ function jog(dx: number, dy: number): void {
       <span />
       <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" @click="jog(0, -1)">↓</button>
       <span />
+    </div>
+
+    <div class="space-y-1">
+      <span class="text-sm text-slate-400">{{ t('plotter.goto') }}</span>
+      <div class="flex items-center gap-1">
+        <input
+          v-model.number="targetX"
+          type="number"
+          step="any"
+          placeholder="X"
+          class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+        />
+        <input
+          v-model.number="targetY"
+          type="number"
+          step="any"
+          placeholder="Y"
+          class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+        />
+        <button
+          class="rounded bg-slate-700 px-3 py-1 text-slate-100 hover:bg-slate-600"
+          @click="gotoTarget"
+        >
+          {{ t('plotter.go') }}
+        </button>
+      </div>
+      <div v-if="corners.length" class="flex gap-1">
+        <button
+          v-for="corner in corners"
+          :key="corner.label"
+          class="flex-1 rounded bg-slate-700 py-1 text-slate-100 hover:bg-slate-600"
+          :title="`X${corner.x} Y${corner.y}`"
+          @click="plotter.goto(corner.x, corner.y, job.selectedProfileName)"
+        >
+          {{ corner.label }}
+        </button>
+      </div>
     </div>
   </div>
 </template>

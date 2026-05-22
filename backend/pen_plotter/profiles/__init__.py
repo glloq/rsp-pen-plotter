@@ -79,6 +79,40 @@ def _slug(name: str) -> str:
     return slug or "profile"
 
 
+def _user_file_for(name: str, directory: Path) -> Path | None:
+    """Return the user-dir file whose stored profile name equals ``name``.
+
+    Filenames are derived from a lossy slug, so distinct names can collide on
+    the same stem. To map a name back to its file reliably we match on the
+    profile's own ``name`` field rather than trusting the slug.
+    """
+    if not directory.is_dir():
+        return None
+    for path in sorted(directory.glob("*.yaml")):
+        try:
+            profile = MachineProfile.model_validate(yaml.safe_load(path.read_text()))
+        except (yaml.YAMLError, ValueError, OSError):
+            continue
+        if profile.name == name:
+            return path
+    return None
+
+
+def _free_path(name: str, directory: Path) -> Path:
+    """Pick a writable path for a new profile, avoiding clobbering a different one.
+
+    If the natural slug file is already taken by a profile with a *different*
+    name, a numeric suffix is appended so the two profiles do not share a file.
+    """
+    stem = _slug(name)
+    candidate = directory / f"{stem}.yaml"
+    counter = 2
+    while candidate.is_file():
+        candidate = directory / f"{stem}_{counter}.yaml"
+        counter += 1
+    return candidate
+
+
 def export_profile_yaml(profile: MachineProfile) -> str:
     """Serialize a profile to YAML."""
     return yaml.safe_dump(profile.model_dump(), sort_keys=False)
@@ -86,6 +120,10 @@ def export_profile_yaml(profile: MachineProfile) -> str:
 
 def save_profile(profile: MachineProfile, directory: Path = USER_DIR) -> Path:
     """Persist a profile to the user directory as YAML.
+
+    Existing profiles are updated in place (matched by name); new profiles get
+    a fresh filename that never overwrites a differently-named profile that
+    happens to share a slug.
 
     Args:
         profile: The validated profile to save.
@@ -95,6 +133,22 @@ def save_profile(profile: MachineProfile, directory: Path = USER_DIR) -> Path:
         The path the profile was written to.
     """
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{_slug(profile.name)}.yaml"
+    path = _user_file_for(profile.name, directory) or _free_path(profile.name, directory)
     path.write_text(export_profile_yaml(profile))
     return path
+
+
+def delete_profile(name: str, directory: Path = USER_DIR) -> bool:
+    """Delete a user profile by its exact name.
+
+    Only profiles stored in the user directory can be removed; bundled
+    profiles are read-only.
+
+    Returns:
+        ``True`` if a user profile file was removed, ``False`` otherwise.
+    """
+    path = _user_file_for(name, directory)
+    if path is not None:
+        path.unlink()
+        return True
+    return False

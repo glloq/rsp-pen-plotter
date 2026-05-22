@@ -62,6 +62,55 @@ def test_tool_change_emitted_for_pen_slots() -> None:
     assert "M0" in gcode
 
 
+def test_tool_change_uses_configured_pen_name_and_warns_when_absent() -> None:
+    from pen_plotter.models import PenSlot
+
+    profile = _profile()
+    profile = profile.model_copy(
+        update={
+            "pens": [
+                PenSlot(index=0, name="Black 0.3", installed=True),
+                PenSlot(index=3, name="Red 0.5", installed=False),
+            ]
+        }
+    )
+    gcode = generate_gcode(
+        TWO_LAYERS,
+        profile,
+        layers=[
+            LayerGeneration(layer_id="red", target_pen_slot=0),
+            LayerGeneration(layer_id="blue", target_pen_slot=3),
+        ],
+    )
+    assert "Black 0.3" in gcode
+    assert "Red 0.5" in gcode
+    assert "pen slot 3 is not installed" in gcode
+
+
+def test_tool_change_warns_when_target_slot_absent_from_magazine() -> None:
+    from pen_plotter.models import PenSlot
+
+    profile = _profile().model_copy(
+        update={"pens": [PenSlot(index=0, name="Black", installed=True)]}
+    )
+    gcode = generate_gcode(
+        TWO_LAYERS,
+        profile,
+        layers=[
+            LayerGeneration(layer_id="red", target_pen_slot=0),
+            LayerGeneration(layer_id="blue", target_pen_slot=2),
+        ],
+    )
+    assert "pen slot 2 is not installed" in gcode
+
+
+def test_effective_pens_derives_defaults_when_unset() -> None:
+    pens = _profile().effective_pens()
+    assert len(pens) == 6
+    assert pens[0].index == 0
+    assert pens[0].installed is True
+
+
 def test_layer_speed_override_sets_feed() -> None:
     gcode = generate_gcode(
         TWO_LAYERS,

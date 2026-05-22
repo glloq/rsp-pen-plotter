@@ -28,6 +28,28 @@ def jog_command(dx_mm: float, dy_mm: float, profile: MachineProfile) -> list[str
     ]
 
 
+def goto_command(x_mm: float, y_mm: float, profile: MachineProfile) -> list[str]:
+    """Build an absolute move to a workspace position.
+
+    The pen is lifted first so the move never draws, and absolute mode is
+    asserted in case a prior relative jog left the controller in G91.
+
+    Args:
+        x_mm: Absolute X target in millimeters.
+        y_mm: Absolute Y target in millimeters.
+        profile: The target machine profile (for travel speed and pen-up).
+
+    Returns:
+        The G-code lines for an absolute travel move.
+    """
+    feed = profile.travel_speed_mm_s * 60.0
+    return [
+        "G90",
+        profile.pen_up_command,
+        f"G1 X{x_mm:.3f} Y{y_mm:.3f} F{feed:.1f}",
+    ]
+
+
 def home_command(profile: MachineProfile) -> list[str]:
     """Build a homing command appropriate for the profile's dialect.
 

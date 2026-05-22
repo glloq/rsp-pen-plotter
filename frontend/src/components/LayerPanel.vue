@@ -69,6 +69,33 @@ function formatDuration(seconds: number): string {
       {{ store.optimizing ? t('layers.optimizing') : t('layers.optimizeButton') }}
     </button>
 
+    <div
+      v-if="store.layers.length"
+      class="grid grid-cols-2 gap-2 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+    >
+      <label class="block text-slate-400">
+        {{ t('job.scaleMode') }}
+        <select
+          v-model="store.scaleMode"
+          class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-slate-100"
+        >
+          <option value="fit">{{ t('job.scaleFit') }}</option>
+          <option value="actual">{{ t('job.scaleActual') }}</option>
+        </select>
+      </label>
+      <label class="block text-slate-400" :class="{ 'opacity-40': store.scaleMode !== 'fit' }">
+        {{ t('job.margin') }}
+        <input
+          v-model.number="store.marginMm"
+          type="number"
+          step="any"
+          min="0"
+          :disabled="store.scaleMode !== 'fit'"
+          class="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-slate-100"
+        />
+      </label>
+    </div>
+
     <button
       v-if="store.layers.length"
       type="button"

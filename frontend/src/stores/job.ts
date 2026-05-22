@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
+  deleteProfile as apiDeleteProfile,
+  saveProfile as apiSaveProfile,
   generateGcode,
   getPresets,
   getProfiles,
@@ -34,6 +36,9 @@ export const useJobStore = defineStore('job', () => {
 
   const generating = ref(false)
   const gcode = ref<string | null>(null)
+
+  const scaleMode = ref<'fit' | 'actual'>('fit')
+  const marginMm = ref(10)
 
   const selectedProfile = computed(
     () => profiles.value.find((p) => p.name === selectedProfileName.value) ?? null,
@@ -85,14 +90,30 @@ export const useJobStore = defineStore('job', () => {
     presets.value = await getPresets()
   }
 
-  async function upload(file: File): Promise<void> {
+  async function saveProfile(profile: MachineProfile): Promise<void> {
+    const saved = await apiSaveProfile(profile)
+    await loadProfiles()
+    selectedProfileName.value = saved.name
+  }
+
+  async function deleteProfile(name: string): Promise<void> {
+    await apiDeleteProfile(name)
+    await loadProfiles()
+    if (selectedProfileName.value === name && profiles.value.length) {
+      selectedProfileName.value = profiles.value[0]!.name
+    }
+  }
+
+  async function upload(file: File, optionsOverride?: Record<string, unknown>): Promise<void> {
     const preset = presets.value.find((p) => p.name === selectedPresetName.value)
+    const options =
+      preset?.options || optionsOverride ? { ...preset?.options, ...optionsOverride } : undefined
     loading.value = true
     error.value = null
     metrics.value = null
     gcode.value = null
     try {
-      const result = await uploadFile(file, selectedProfileName.value, preset?.options)
+      const result = await uploadFile(file, selectedProfileName.value, options)
       job.value = result.job
       svg.value = result.svg
       layers.value = result.job.layers
@@ -146,6 +167,8 @@ export const useJobStore = defineStore('job', () => {
           target_pen_slot: layer.target_pen_slot,
           drawing_speed_mm_s: layer.drawing_speed_mm_s,
         })),
+        scaleMode.value,
+        marginMm.value,
       )
       gcode.value = result.gcode
     } catch {
@@ -171,6 +194,8 @@ export const useJobStore = defineStore('job', () => {
     metrics,
     generating,
     gcode,
+    scaleMode,
+    marginMm,
     totalLengthMm,
     totalDurationSeconds,
     effectiveSpeed,
@@ -181,6 +206,8 @@ export const useJobStore = defineStore('job', () => {
     reorderLayers,
     loadProfiles,
     loadPresets,
+    saveProfile,
+    deleteProfile,
     upload,
     optimize,
     generate,

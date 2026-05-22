@@ -11,7 +11,7 @@ import asyncio
 import contextlib
 import logging
 
-from pen_plotter.hardware.commands import home_command, jog_command
+from pen_plotter.hardware.commands import goto_command, home_command, jog_command
 from pen_plotter.hardware.streamer import GcodeStreamer, StreamProgress, StreamState
 from pen_plotter.hardware.transport import SerialTransport, Transport
 from pen_plotter.models import MachineProfile
@@ -102,10 +102,24 @@ class PlotterController:
         self._require_idle()
         await self._send_immediate(jog_command(dx_mm, dy_mm, profile))
 
+    async def goto(self, x_mm: float, y_mm: float, profile: MachineProfile) -> None:
+        """Move the head to an absolute workspace position."""
+        self._require_idle()
+        await self._send_immediate(goto_command(x_mm, y_mm, profile))
+
     async def home(self, profile: MachineProfile) -> None:
         """Home the machine."""
         self._require_idle()
         await self._send_immediate(home_command(profile))
+
+    async def send_commands(self, lines: list[str]) -> None:
+        """Send raw control lines immediately, e.g. for a user macro.
+
+        Raises:
+            RuntimeError: If disconnected or a job currently owns the transport.
+        """
+        self._require_idle()
+        await self._send_immediate(lines)
 
     async def run(self, gcode: str) -> None:
         """Start streaming a G-code program in the background.
