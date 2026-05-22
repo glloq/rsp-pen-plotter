@@ -58,6 +58,8 @@ class PrintRun(SQLModel, table=True):
     error: str | None = None
     # {executable_line_index: operator prompt} for guided tool-change pauses.
     pause_points: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    # Optional client-supplied key to make enqueue idempotent across retries.
+    idempotency_key: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -67,9 +69,22 @@ def enqueue(
     profile_name: str,
     gcode: str,
     priority: int = 0,
+    idempotency_key: str | None = None,
     target: Engine = default_engine,
 ) -> PrintRun:
-    """Add a run to the queue."""
+    """Add a run to the queue.
+
+    When ``idempotency_key`` is supplied and a run already exists with it, the
+    existing run is returned unchanged so retries don't enqueue duplicates.
+    """
+    if idempotency_key:
+        with Session(target) as session:
+            existing = session.exec(
+                select(PrintRun).where(PrintRun.idempotency_key == idempotency_key)
+            ).first()
+            if existing is not None:
+                return existing
+
     profile = get_profile(profile_name)
     pause_points = guided_pause_points(gcode, profile) if profile else {}
     run = PrintRun(
@@ -80,6 +95,7 @@ def enqueue(
         total_lines=len(executable_lines(gcode)),
         priority=priority,
         pause_points={str(k): v for k, v in pause_points.items()},
+        idempotency_key=idempotency_key,
     )
     with Session(target) as session:
         session.add(run)

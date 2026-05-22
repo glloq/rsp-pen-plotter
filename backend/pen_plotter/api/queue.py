@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from pen_plotter import queue as q
+from pen_plotter.audit import record
 from pen_plotter.auth import require_api_key
 from pen_plotter.hardware.controller import controller
 from pen_plotter.profiles import get_profile
@@ -49,15 +50,28 @@ async def get_one(run_id: str) -> q.PrintRun:
 
 
 @router.post("/queue", dependencies=[Depends(require_api_key)])
-async def create(request: EnqueueRequest) -> q.PrintRun:
+async def create(
+    request: EnqueueRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> q.PrintRun:
     """Enqueue a G-code program for the plotter.
+
+    Supplying an ``Idempotency-Key`` header makes retries safe: if a run already
+    exists with that key, it is returned instead of creating a duplicate.
 
     Raises:
         HTTPException: 404 if the profile is unknown.
     """
     if get_profile(request.profile_name) is None:
         raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
-    run = q.enqueue(request.name, request.profile_name, request.gcode, request.priority)
+    run = q.enqueue(
+        request.name,
+        request.profile_name,
+        request.gcode,
+        request.priority,
+        idempotency_key=idempotency_key,
+    )
+    record("queue.enqueue", f"{run.name} ({run.id})")
     print_queue.wake()
     return run
 
@@ -80,6 +94,7 @@ async def resume(run_id: str) -> q.PrintRun:
 async def cancel(run_id: str) -> q.PrintRun:
     """Cancel a run, aborting it if it is currently streaming."""
     _run_or_404(run_id)
+    record("queue.cancel", run_id)
     return print_queue.cancel(run_id) or _run_or_404(run_id)
 
 

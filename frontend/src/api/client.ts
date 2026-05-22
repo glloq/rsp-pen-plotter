@@ -89,6 +89,18 @@ export async function getJobs(): Promise<JobRecord[]> {
   return response.data
 }
 
+export interface AuditEntry {
+  id: number
+  timestamp: string
+  action: string
+  detail: string
+}
+
+export async function getAudit(): Promise<AuditEntry[]> {
+  const response = await api.get<AuditEntry[]>('/audit')
+  return response.data
+}
+
 export interface WorkspaceBounds {
   x_min: number
   y_min: number

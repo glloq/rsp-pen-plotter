@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from pen_plotter.audit import record
 from pen_plotter.auth import require_api_key
 from pen_plotter.hardware.controller import controller
 from pen_plotter.macros import delete_macro, get_macro, load_macros, save_macro
@@ -51,4 +52,5 @@ async def run_one(name: str) -> dict[str, str]:
         await controller.send_commands(macro.commands)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    record("macro.run", name)
     return {"ran": name}

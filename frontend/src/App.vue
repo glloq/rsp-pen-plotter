@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getHealth } from './api/client'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import AuditPanel from './components/AuditPanel.vue'
 import FileUpload from './components/FileUpload.vue'
 import GcodePreview from './components/GcodePreview.vue'
 import JobHistory from './components/JobHistory.vue'
@@ -94,6 +95,7 @@ onMounted(async () => {
         <QueuePanel />
         <MacroPanel />
         <JobHistory />
+        <AuditPanel />
       </aside>
       <section>
         <SheetPreview />

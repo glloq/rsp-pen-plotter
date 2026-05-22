@@ -207,5 +207,9 @@
   "history": {
     "title": "Historique",
     "empty": "Aucun travail pour l'instant."
+  },
+  "audit": {
+    "title": "Journal d'audit",
+    "empty": "Aucune action enregistrée pour l'instant."
   }
 }

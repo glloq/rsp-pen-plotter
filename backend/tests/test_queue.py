@@ -13,6 +13,7 @@ from pen_plotter.queue import (
     _update,
     enqueue,
     get_run,
+    list_runs,
     next_queued,
     recover_interrupted,
 )
@@ -113,6 +114,21 @@ def test_enqueue_computes_guided_pause_points() -> None:
     run = enqueue("job", PROFILE, gcode, target=engine)
     # The M0 is the 3rd executable line (index 2).
     assert run.pause_points == {"2": "Insert pen slot 1: Red"}
+
+
+def test_enqueue_is_idempotent_with_key() -> None:
+    engine = _engine()
+    a = enqueue("job", PROFILE, GCODE, idempotency_key="k1", target=engine)
+    b = enqueue("job", PROFILE, GCODE, idempotency_key="k1", target=engine)
+    assert a.id == b.id
+    assert len(list_runs(engine)) == 1
+
+
+def test_enqueue_without_key_allows_duplicates() -> None:
+    engine = _engine()
+    enqueue("job", PROFILE, GCODE, target=engine)
+    enqueue("job", PROFILE, GCODE, target=engine)
+    assert len(list_runs(engine)) == 2
 
 
 def test_cancel_queued_run() -> None:
