@@ -48,6 +48,15 @@
     "homeTitle": "Origine machine",
     "homeMsg": "Déplacer le traceur vers sa position d'origine ?"
   },
+  "preflight": {
+    "button": "Vérification pré-tracé",
+    "running": "Vérification…",
+    "failed": "Échec de la vérification pré-tracé.",
+    "size": "Dimensions du dessin",
+    "estimate": "Durée estimée",
+    "penChanges": "Changements de stylo",
+    "missingPens": "Le(s) emplacement(s) {slots} sont assignés mais non installés ; installez-les ou réassignez avant de générer."
+  },
   "sheet": {
     "title": "Mise en page",
     "sheet": "Feuille",

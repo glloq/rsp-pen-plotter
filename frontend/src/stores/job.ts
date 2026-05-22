@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
 import {
@@ -9,11 +9,13 @@ import {
   getPresets,
   getProfiles,
   optimizeToolpaths,
+  preflightCheck,
   uploadFile,
   type Job,
   type LayerInfo,
   type MachineProfile,
   type Preset,
+  type PreflightReport,
   type ToolpathMetrics,
 } from '../api/client'
 
@@ -40,12 +42,34 @@ export const useJobStore = defineStore('job', () => {
   const generating = ref(false)
   const gcode = ref<string | null>(null)
 
+  const preflighting = ref(false)
+  const preflight = ref<PreflightReport | null>(null)
+
   const scaleMode = ref<'fit' | 'actual'>('fit')
   const marginMm = ref(10)
 
   const selectedProfile = computed(
     () => profiles.value.find((p) => p.name === selectedProfileName.value) ?? null,
   )
+
+  // Pen slots assigned to a layer that are out of range or not installed,
+  // mirroring the backend magazine check so generation can be gated.
+  const missingPenSlots = computed<number[]>(() => {
+    const profile = selectedProfile.value
+    if (!profile) return []
+    const hasExplicit = (profile.pens?.length ?? 0) > 0
+    const installed = new Set(
+      (profile.pens ?? []).filter((p) => p.installed).map((p) => p.index),
+    )
+    const missing = new Set<number>()
+    for (const layer of layers.value) {
+      const slot = layer.target_pen_slot
+      if (slot === null) continue
+      if (slot < 0 || slot >= profile.pen_slot_count) missing.add(slot)
+      else if (hasExplicit && !installed.has(slot)) missing.add(slot)
+    }
+    return [...missing].sort((a, b) => a - b)
+  })
 
   function effectiveSpeed(layer: LayerInfo): number {
     return layer.drawing_speed_mm_s ?? selectedProfile.value?.drawing_speed_mm_s ?? DEFAULT_SPEED_MM_S
@@ -76,11 +100,17 @@ export const useJobStore = defineStore('job', () => {
     layers.value = layers.value.map((layer) =>
       layer.layer_id === layerId ? { ...layer, ...patch } : layer,
     )
+    preflight.value = null
   }
 
   function reorderLayers(ordered: LayerInfo[]): void {
     layers.value = ordered.map((layer, index) => ({ ...layer, draw_order: index }))
+    preflight.value = null
   }
+
+  watch([scaleMode, marginMm, selectedProfileName], () => {
+    preflight.value = null
+  })
 
   async function loadProfiles(): Promise<void> {
     profiles.value = await getProfiles()
@@ -116,6 +146,7 @@ export const useJobStore = defineStore('job', () => {
     errorScope.value = null
     metrics.value = null
     gcode.value = null
+    preflight.value = null
     try {
       const result = await uploadFile(file, selectedProfileName.value, options)
       job.value = result.job
@@ -153,11 +184,38 @@ export const useJobStore = defineStore('job', () => {
       metrics.value = result.metrics
       visibility.value = Object.fromEntries(result.layers.map((layer) => [layer.layer_id, true]))
       gcode.value = null
+      preflight.value = null
     } catch (err) {
       error.value = errorDetail(err, i18n.global.t('layers.optimizeFailed'))
       errorScope.value = 'optimize'
     } finally {
       optimizing.value = false
+    }
+  }
+
+  async function runPreflight(): Promise<void> {
+    if (!svg.value) return
+    preflighting.value = true
+    error.value = null
+    errorScope.value = null
+    try {
+      preflight.value = await preflightCheck(
+        svg.value,
+        selectedProfileName.value,
+        layers.value.map((layer) => ({
+          layer_id: layer.layer_id,
+          target_pen_slot: layer.target_pen_slot,
+          drawing_speed_mm_s: layer.drawing_speed_mm_s,
+        })),
+        scaleMode.value,
+        marginMm.value,
+      )
+    } catch (err) {
+      preflight.value = null
+      error.value = errorDetail(err, i18n.global.t('preflight.failed'))
+      errorScope.value = 'generate'
+    } finally {
+      preflighting.value = false
     }
   }
 
@@ -204,6 +262,9 @@ export const useJobStore = defineStore('job', () => {
     metrics,
     generating,
     gcode,
+    preflighting,
+    preflight,
+    missingPenSlots,
     scaleMode,
     marginMm,
     totalLengthMm,
@@ -220,6 +281,7 @@ export const useJobStore = defineStore('job', () => {
     deleteProfile,
     upload,
     optimize,
+    runPreflight,
     generate,
   }
 })
