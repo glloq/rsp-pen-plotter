@@ -296,18 +296,20 @@ Any plotter with a documented G-code dialect can be supported by writing a new m
 git clone https://github.com/glloq/rsp-pen-plotter.git
 cd rsp-pen-plotter
 
-# Backend
-cd backend
-uv sync
-uv run uvicorn pen_plotter.main:app --reload
-
-# Frontend (in another terminal)
-cd ../frontend
-npm install
-npm run dev
+./install.sh   # backend deps (uv sync) + frontend deps and build
+./start.sh     # production: one process serves the UI and API on :8000
 ```
 
-The UI will be available at `http://localhost:5173`, the API at `http://localhost:8000`.
+The interface opens at `http://localhost:8000` (and at `http://<host-ip>:8000`
+on the LAN). Set `OMNIPLOT_API_KEY=...` before `./start.sh` to require an API
+key for machine-control endpoints when the host is reachable from other
+devices.
+
+For development with hot reload, use `./start.sh --dev` instead — the UI runs
+on `http://localhost:5173` and the API on `http://localhost:8000`.
+
+The legacy manual flow (`uv sync` + `uv run uvicorn …` and `npm run dev` in
+another terminal) still works for development.
 
 ---
 

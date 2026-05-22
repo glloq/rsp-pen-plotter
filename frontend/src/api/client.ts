@@ -1,6 +1,9 @@
 import axios, { type AxiosInstance } from 'axios'
 
-const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+// Empty default = same origin, so the production appliance can serve the UI
+// and API from one host without baking in an address. Dev sets VITE_API_URL
+// (see .env.development) to reach the separate backend on port 8000.
+const baseURL = import.meta.env.VITE_API_URL ?? ''
 const apiKey = import.meta.env.VITE_API_KEY as string | undefined
 
 export const api: AxiosInstance = axios.create({ baseURL, timeout: 30000 })
@@ -10,7 +13,10 @@ if (apiKey) {
 }
 
 export function websocketUrl(path: string): string {
-  const url = baseURL.replace(/^http/, 'ws') + path
+  const origin = baseURL
+    ? baseURL.replace(/^http/, 'ws')
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
+  const url = origin + path
   return apiKey ? `${url}?token=${encodeURIComponent(apiKey)}` : url
 }
 

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from pen_plotter import __version__
@@ -85,3 +88,20 @@ async def health() -> HealthResponse:
         A payload with a fixed ``ok`` status and the package version.
     """
     return HealthResponse(status="ok", version=__version__)
+
+
+def _static_dir() -> Path | None:
+    """Locate the built frontend, if present (production appliance mode)."""
+    override = os.environ.get("OMNIPLOT_STATIC_DIR")
+    if override:
+        candidate = Path(override)
+    else:
+        candidate = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    return candidate if (candidate / "index.html").is_file() else None
+
+
+# Serve the built single-page app from the same origin when it exists, so one
+# process serves both the UI and the API. Mounted last so API routes win.
+_STATIC = _static_dir()
+if _STATIC is not None:
+    app.mount("/", StaticFiles(directory=_STATIC, html=True), name="frontend")
