@@ -14,7 +14,9 @@
     "running": "En cours",
     "paused": "En pause",
     "toolChange": "Changement de stylo",
-    "error": "Erreur"
+    "error": "Erreur",
+    "done": "Terminé",
+    "aborted": "Interrompu"
   },
   "prepare": {
     "source": "Source",

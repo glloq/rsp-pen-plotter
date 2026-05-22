@@ -185,10 +185,10 @@ onBeforeUnmount(() => queue.stopPolling())
             + {{ t('queue.add') }}
           </button>
 
-          <div v-if="status.connected && status.state !== 'idle' && status.state !== 'waiting'" class="space-y-2">
+          <div v-if="status.connected && (status.state === 'running' || status.state === 'paused')" class="space-y-2">
             <div>
               <div class="mb-1 flex justify-between text-[10px] text-slate-500">
-                <span>{{ t(`queue.state.${status.state === 'running' ? 'running' : status.state === 'paused' ? 'paused' : 'queued'}`) }}</span>
+                <span>{{ t(`machine.${status.state}`) }}</span>
                 <span class="font-mono">{{ status.acked }} / {{ status.total }}</span>
               </div>
               <div class="h-1.5 w-full overflow-hidden rounded bg-slate-700">
@@ -218,6 +218,20 @@ onBeforeUnmount(() => queue.stopPolling())
               </button>
             </div>
           </div>
+
+          <p
+            v-else-if="status.connected && status.state === 'done'"
+            class="rounded border border-emerald-800 bg-emerald-950/40 px-2 py-1 text-xs text-emerald-200"
+          >
+            ✓ {{ t('machine.done') }} · {{ status.acked }} / {{ status.total }}
+          </p>
+          <p
+            v-else-if="status.connected && (status.state === 'aborted' || status.state === 'error')"
+            class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-xs text-amber-200"
+          >
+            {{ t(`machine.${status.state}`) }}
+            <span v-if="status.message"> · {{ status.message }}</span>
+          </p>
 
           <p v-if="error" class="text-xs text-red-400">{{ error }}</p>
         </div>

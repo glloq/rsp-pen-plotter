@@ -27,6 +27,10 @@ const view = computed<{ tone: Tone; label: string; sub: string | null }>(() => {
       return { tone: 'warn', label: t('machine.toolChange'), sub: null }
     case 'error':
       return { tone: 'warn', label: t('machine.error'), sub: null }
+    case 'done':
+      return { tone: 'idle', label: t('machine.done'), sub: null }
+    case 'aborted':
+      return { tone: 'warn', label: t('machine.aborted'), sub: null }
     default:
       return { tone: 'idle', label: t('machine.idle'), sub: null }
   }

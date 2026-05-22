@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useUiStore, type SettingsTab } from '../stores/ui'
@@ -21,6 +22,13 @@ const tabs: Array<{ id: SettingsTab; label: string }> = [
 function select(tab: SettingsTab): void {
   settingsTab.value = tab
 }
+
+function onKey(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && settingsOpen.value) ui.closeSettings()
+}
+
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>

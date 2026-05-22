@@ -14,7 +14,9 @@
     "running": "Running",
     "paused": "Paused",
     "toolChange": "Pen change",
-    "error": "Error"
+    "error": "Error",
+    "done": "Done",
+    "aborted": "Aborted"
   },
   "prepare": {
     "source": "Source",

@@ -58,7 +58,7 @@ function select(tab: CanvasTab): void {
         <div v-show="canvasTab === 'sheet'">
           <SheetPreview />
         </div>
-        <div v-show="canvasTab === 'svg'" class="h-full">
+        <div v-if="canvasTab === 'svg'" class="h-full">
           <SvgPreview />
         </div>
         <div v-show="canvasTab === 'simulator'">
