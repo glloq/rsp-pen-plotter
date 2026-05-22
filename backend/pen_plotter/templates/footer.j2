@@ -1,0 +1,3 @@
+{{ profile.pen_up_command }}
+G0 X{{ "%.3f"|format(home_x) }} Y{{ "%.3f"|format(home_y) }}
+{{ "M2" if profile.gcode_dialect == "grbl" else "M30" }}

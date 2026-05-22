@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Local data (SQLite job history)
+backend/data/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+*.local
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

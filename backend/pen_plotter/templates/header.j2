@@ -1,0 +1,8 @@
+; OmniPlot generated G-code
+; Profile: {{ profile.name }} ({{ profile.gcode_dialect }})
+{% if profile.gcode_dialect == "ebb" -%}
+; Note: this profile targets an EiBotBoard; standard G-code is emitted for the simulator.
+{% endif -%}
+{{ "G20" if profile.units == "inch" else "G21" }}
+G90
+{{ profile.pen_up_command }}

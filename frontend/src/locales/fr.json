@@ -1,0 +1,67 @@
+{
+  "app": {
+    "tagline": "Studio universel de traceur à plume",
+    "apiUnreachable": "API injoignable"
+  },
+  "upload": {
+    "profile": "Profil machine",
+    "preset": "Préréglage",
+    "presetNone": "Aucun",
+    "choose": "Choisir un fichier à tracer",
+    "converting": "Conversion…",
+    "failed": "Échec de l'envoi. Vérifiez le type de fichier et que l'API fonctionne.",
+    "loaded": "Chargé",
+    "layers": "calque | calques"
+  },
+  "layers": {
+    "title": "Calques",
+    "dragHint": "glisser pour réordonner",
+    "empty": "Aucun calque pour l'instant.",
+    "penSlot": "Emplacement stylo",
+    "none": "aucun",
+    "speed": "Vitesse (mm/s)",
+    "default": "défaut",
+    "simplify": "Simplifier (mm)",
+    "optimize": "Optimiser",
+    "paths": "tracés",
+    "totalLength": "Longueur totale",
+    "estimatedTime": "Durée estimée",
+    "optimizeButton": "Optimiser les trajectoires",
+    "optimizing": "Optimisation…",
+    "generate": "Générer le G-code",
+    "generating": "Génération…",
+    "penUpTravel": "Déplacement à vide",
+    "travelReduction": "Réduction du déplacement"
+  },
+  "gcode": {
+    "title": "G-code",
+    "lines": "lignes",
+    "download": "Télécharger"
+  },
+  "simulator": {
+    "title": "Simulateur",
+    "play": "Lecture",
+    "pause": "Pause",
+    "restart": "Redémarrer",
+    "drawing": "Tracé",
+    "travel": "Déplacement",
+    "totalSim": "Total (sim)",
+    "layerEstimate": "Estimation calques"
+  },
+  "plotter": {
+    "title": "Traceur",
+    "connect": "Connecter",
+    "connected": "Connecté",
+    "disconnect": "Déconnecter",
+    "step": "Pas",
+    "sendJob": "Envoyer le travail",
+    "pause": "Pause",
+    "resume": "Reprendre",
+    "abort": "Annuler",
+    "commandFailed": "Échec de la commande du traceur (un appareil est-il connecté ?)."
+  },
+  "history": {
+    "title": "Historique",
+    "empty": "Aucun travail pour l'instant."
+  }
+}

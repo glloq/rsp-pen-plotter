@@ -1,0 +1,67 @@
+{
+  "app": {
+    "tagline": "Universal pen plotter studio",
+    "apiUnreachable": "API unreachable"
+  },
+  "upload": {
+    "profile": "Machine profile",
+    "preset": "Preset",
+    "presetNone": "None",
+    "choose": "Choose a file to plot",
+    "converting": "Converting…",
+    "failed": "Upload failed. Check the file type and that the API is running.",
+    "loaded": "Loaded",
+    "layers": "layer | layers"
+  },
+  "layers": {
+    "title": "Layers",
+    "dragHint": "drag to reorder",
+    "empty": "No layers yet.",
+    "penSlot": "Pen slot",
+    "none": "none",
+    "speed": "Speed (mm/s)",
+    "default": "default",
+    "simplify": "Simplify (mm)",
+    "optimize": "Optimize",
+    "paths": "paths",
+    "totalLength": "Total length",
+    "estimatedTime": "Estimated time",
+    "optimizeButton": "Optimize toolpaths",
+    "optimizing": "Optimizing…",
+    "generate": "Generate G-code",
+    "generating": "Generating…",
+    "penUpTravel": "Pen-up travel",
+    "travelReduction": "Travel reduction"
+  },
+  "gcode": {
+    "title": "G-code",
+    "lines": "lines",
+    "download": "Download"
+  },
+  "simulator": {
+    "title": "Simulator",
+    "play": "Play",
+    "pause": "Pause",
+    "restart": "Restart",
+    "drawing": "Drawing",
+    "travel": "Travel",
+    "totalSim": "Total (sim)",
+    "layerEstimate": "Layer estimate"
+  },
+  "plotter": {
+    "title": "Plotter",
+    "connect": "Connect",
+    "connected": "Connected",
+    "disconnect": "Disconnect",
+    "step": "Step",
+    "sendJob": "Send job",
+    "pause": "Pause",
+    "resume": "Resume",
+    "abort": "Abort",
+    "commandFailed": "Plotter command failed (is a device connected?)."
+  },
+  "history": {
+    "title": "History",
+    "empty": "No jobs yet."
+  }
+}

@@ -1,0 +1,76 @@
+import pytest
+
+from pen_plotter.core.gcode import LayerGeneration, generate_gcode
+from pen_plotter.profiles import get_profile
+
+NS = (
+    'xmlns="http://www.w3.org/2000/svg" '
+    'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"'
+)
+TWO_LAYERS = (
+    f'<svg {NS} viewBox="0 0 100 100">'
+    '<g inkscape:label="red" stroke="#ff0000"><path d="M10 10 L90 10 L90 90"/></g>'
+    '<g inkscape:label="blue" stroke="#0000ff"><path d="M10 50 L90 50"/></g>'
+    "</svg>"
+)
+
+
+def _profile():
+    profile = get_profile("Custom CoreXY A3")
+    assert profile is not None
+    return profile
+
+
+def test_generates_header_pen_and_footer() -> None:
+    gcode = generate_gcode(TWO_LAYERS, _profile())
+    assert "G21" in gcode  # mm units
+    assert "G90" in gcode  # absolute
+    assert "M280 P0 S40" in gcode  # pen up command from profile
+    assert "M280 P0 S90" in gcode  # pen down command
+    assert "G1 X" in gcode
+    assert gcode.strip().endswith("M2")  # grbl end
+
+
+def test_fits_within_workspace() -> None:
+    profile = _profile()
+    gcode = generate_gcode(TWO_LAYERS, profile, scale_mode="fit", margin_mm=10)
+    xs, ys = [], []
+    for line in gcode.splitlines():
+        if line.startswith(("G0", "G1")):
+            for token in line.split():
+                if token.startswith("X"):
+                    xs.append(float(token[1:]))
+                elif token.startswith("Y"):
+                    ys.append(float(token[1:]))
+    assert min(xs) >= profile.workspace.x_min - 0.01
+    assert max(xs) <= profile.workspace.x_max + 0.01
+    assert min(ys) >= profile.workspace.y_min - 0.01
+    assert max(ys) <= profile.workspace.y_max + 0.01
+
+
+def test_tool_change_emitted_for_pen_slots() -> None:
+    gcode = generate_gcode(
+        TWO_LAYERS,
+        _profile(),
+        layers=[
+            LayerGeneration(layer_id="red", target_pen_slot=0),
+            LayerGeneration(layer_id="blue", target_pen_slot=3),
+        ],
+    )
+    assert "Change to pen slot 0" in gcode
+    assert "Change to pen slot 3" in gcode
+    assert "M0" in gcode
+
+
+def test_layer_speed_override_sets_feed() -> None:
+    gcode = generate_gcode(
+        TWO_LAYERS,
+        _profile(),
+        layers=[LayerGeneration(layer_id="red", drawing_speed_mm_s=10.0)],
+    )
+    assert "F600.0" in gcode  # 10 mm/s * 60
+
+
+def test_invalid_svg_raises() -> None:
+    with pytest.raises(ValueError):
+        generate_gcode("<svg><g></svg>", _profile())

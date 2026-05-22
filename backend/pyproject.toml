@@ -1,0 +1,90 @@
+[project]
+name = "pen-plotter"
+version = "0.1.0"
+description = "OmniPlot backend — universal pen plotter studio orchestrator"
+readme = "../README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
+    "python-multipart>=0.0.12",
+    "pillow>=10.4",
+    "pillow-heif>=0.18",
+    "numpy>=2.0",
+    "scikit-learn>=1.5",
+    "pymupdf>=1.24",
+    "ezdxf>=1.3",
+    "hershey-fonts>=2.1",
+    "markdown-it-py>=3.0",
+    "beautifulsoup4>=4.12",
+    "weasyprint>=62",
+    "svgelements>=1.9.6",
+    "vpype>=1.15.0",
+    "jinja2>=3.1.6",
+    "pyserial-asyncio>=0.6",
+    "sqlmodel>=0.0.38",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "types-pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pen_plotter"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "D"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["pen_plotter"]
+
+[[tool.mypy.overrides]]
+module = [
+    "pillow_heif",
+    "sklearn.*",
+    "pymupdf",
+    "ezdxf",
+    "ezdxf.*",
+    "HersheyFonts",
+    "weasyprint",
+    "svgelements",
+    "vpype",
+    "vpype_cli",
+    "serial_asyncio",
+]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "python-docx>=1.1",
+]

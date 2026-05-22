@@ -1,0 +1,20 @@
+# DIY CoreXY A3 pen plotter — reference machine profile.
+# Edit a copy of this file to support a new plotter; no code changes required.
+name: "Custom CoreXY A3"
+units: "mm"
+workspace:
+  x_min: 0.0
+  y_min: 0.0
+  x_max: 300.0
+  y_max: 420.0
+origin: "bottom_left"
+gcode_dialect: "grbl"
+# SG90 servo on a PCA9685, driven via M280 (servo angle command).
+pen_up_command: "M280 P0 S40"
+pen_down_command: "M280 P0 S90"
+tool_change_method: "manual_pause"
+tool_change_command: "M0"
+drawing_speed_mm_s: 60.0
+travel_speed_mm_s: 120.0
+acceleration_mm_s2: 1500.0
+pen_slot_count: 6
