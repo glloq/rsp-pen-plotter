@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
+  generateGcode,
   getProfiles,
   optimizeToolpaths,
   uploadFile,
@@ -25,6 +26,9 @@ export const useJobStore = defineStore('job', () => {
 
   const optimizing = ref(false)
   const metrics = ref<ToolpathMetrics | null>(null)
+
+  const generating = ref(false)
+  const gcode = ref<string | null>(null)
 
   const selectedProfile = computed(
     () => profiles.value.find((p) => p.name === selectedProfileName.value) ?? null,
@@ -76,6 +80,7 @@ export const useJobStore = defineStore('job', () => {
     loading.value = true
     error.value = null
     metrics.value = null
+    gcode.value = null
     try {
       const result = await uploadFile(file, selectedProfileName.value, options)
       job.value = result.job
@@ -110,10 +115,33 @@ export const useJobStore = defineStore('job', () => {
       layers.value = result.layers
       metrics.value = result.metrics
       visibility.value = Object.fromEntries(result.layers.map((layer) => [layer.layer_id, true]))
+      gcode.value = null
     } catch {
       error.value = 'Optimization failed.'
     } finally {
       optimizing.value = false
+    }
+  }
+
+  async function generate(): Promise<void> {
+    if (!svg.value) return
+    generating.value = true
+    error.value = null
+    try {
+      const result = await generateGcode(
+        svg.value,
+        selectedProfileName.value,
+        layers.value.map((layer) => ({
+          layer_id: layer.layer_id,
+          target_pen_slot: layer.target_pen_slot,
+          drawing_speed_mm_s: layer.drawing_speed_mm_s,
+        })),
+      )
+      gcode.value = result.gcode
+    } catch {
+      error.value = 'G-code generation failed.'
+    } finally {
+      generating.value = false
     }
   }
 
@@ -129,6 +157,8 @@ export const useJobStore = defineStore('job', () => {
     selectedProfile,
     optimizing,
     metrics,
+    generating,
+    gcode,
     totalLengthMm,
     totalDurationSeconds,
     effectiveSpeed,
@@ -140,5 +170,6 @@ export const useJobStore = defineStore('job', () => {
     loadProfiles,
     upload,
     optimize,
+    generate,
   }
 })

@@ -65,6 +65,16 @@ function formatDuration(seconds: number): string {
       {{ store.optimizing ? 'Optimizing…' : 'Optimize toolpaths' }}
     </button>
 
+    <button
+      v-if="store.layers.length"
+      type="button"
+      class="w-full rounded bg-emerald-600 hover:bg-emerald-500 px-4 py-2 font-medium text-white disabled:opacity-50"
+      :disabled="store.generating"
+      @click="store.generate()"
+    >
+      {{ store.generating ? 'Generating…' : 'Generate G-code' }}
+    </button>
+
     <div
       v-if="store.metrics"
       class="rounded border border-sky-800 bg-sky-950/40 px-3 py-2 text-sm text-sky-200"

@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { getHealth } from './api/client'
 import FileUpload from './components/FileUpload.vue'
+import GcodePreview from './components/GcodePreview.vue'
 import LayerPanel from './components/LayerPanel.vue'
 import SvgPreview from './components/SvgPreview.vue'
 import { useJobStore } from './stores/job'
@@ -45,6 +46,7 @@ onMounted(async () => {
       </aside>
       <section>
         <SvgPreview />
+        <GcodePreview />
       </section>
     </main>
   </div>

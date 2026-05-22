@@ -106,6 +106,32 @@ export async function optimizeToolpaths(
   return response.data
 }
 
+export interface GenerateLayer {
+  layer_id: string
+  target_pen_slot: number | null
+  drawing_speed_mm_s: number | null
+}
+
+export interface GenerateResponse {
+  gcode: string
+  line_count: number
+}
+
+export async function generateGcode(
+  svg: string,
+  profileName: string,
+  layers: GenerateLayer[],
+  scaleMode: 'fit' | 'actual' = 'fit',
+): Promise<GenerateResponse> {
+  const response = await api.post<GenerateResponse>('/generate', {
+    svg,
+    profile_name: profileName,
+    layers,
+    scale_mode: scaleMode,
+  })
+  return response.data
+}
+
 export async function uploadFile(
   file: File,
   profileName: string,
