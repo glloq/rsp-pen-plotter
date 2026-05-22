@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from pen_plotter import __version__
 from pen_plotter.api.algorithms import router as algorithms_router
 from pen_plotter.api.fonts import router as fonts_router
+from pen_plotter.api.profiles import router as profiles_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
@@ -28,6 +29,7 @@ app.add_middleware(
 app.include_router(upload_router)
 app.include_router(algorithms_router)
 app.include_router(fonts_router)
+app.include_router(profiles_router)
 
 
 class HealthResponse(BaseModel):

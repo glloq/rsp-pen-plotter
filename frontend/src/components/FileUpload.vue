@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useJobStore } from '../stores/job'
 
 const store = useJobStore()
-const profileName = ref('Custom CoreXY A3')
+const { profiles, selectedProfileName } = storeToRefs(store)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 async function onFileChange(event: Event): Promise<void> {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   if (file) {
-    await store.upload(file, profileName.value)
+    await store.upload(file)
   }
+  target.value = ''
 }
 
 function openPicker(): void {
@@ -23,10 +25,14 @@ function openPicker(): void {
   <div class="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-3">
     <label class="block text-sm text-slate-400">
       Machine profile
-      <input
-        v-model="profileName"
+      <select
+        v-model="selectedProfileName"
         class="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-100"
-      />
+      >
+        <option v-for="profile in profiles" :key="profile.name" :value="profile.name">
+          {{ profile.name }} ({{ profile.pen_slot_count }} pens)
+        </option>
+      </select>
     </label>
 
     <input

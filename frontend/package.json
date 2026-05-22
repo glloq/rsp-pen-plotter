@@ -12,7 +12,8 @@
     "axios": "^1.7.7",
     "pinia": "^3.0.4",
     "svg-pan-zoom": "^3.6.2",
-    "vue": "^3.5.12"
+    "vue": "^3.5.12",
+    "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1.4",

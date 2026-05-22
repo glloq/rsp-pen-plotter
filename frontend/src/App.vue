@@ -4,7 +4,9 @@ import { getHealth } from './api/client'
 import FileUpload from './components/FileUpload.vue'
 import LayerPanel from './components/LayerPanel.vue'
 import SvgPreview from './components/SvgPreview.vue'
+import { useJobStore } from './stores/job'
 
+const store = useJobStore()
 const status = ref<string | null>(null)
 const version = ref<string | null>(null)
 const apiError = ref(false)
@@ -14,6 +16,7 @@ onMounted(async () => {
     const health = await getHealth()
     status.value = health.status
     version.value = health.version
+    await store.loadProfiles()
   } catch {
     apiError.value = true
   }

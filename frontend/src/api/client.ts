@@ -29,6 +29,22 @@ export async function getFonts(): Promise<string[]> {
   return response.data
 }
 
+export interface MachineProfile {
+  name: string
+  units: string
+  origin: string
+  gcode_dialect: string
+  drawing_speed_mm_s: number
+  travel_speed_mm_s: number
+  acceleration_mm_s2: number
+  pen_slot_count: number
+}
+
+export async function getProfiles(): Promise<MachineProfile[]> {
+  const response = await api.get<MachineProfile[]>('/profiles')
+  return response.data
+}
+
 export interface BoundingBox {
   x_min: number
   y_min: number
