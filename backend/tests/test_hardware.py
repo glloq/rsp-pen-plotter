@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from pen_plotter.hardware.commands import home_command, jog_command
+from pen_plotter.hardware.commands import goto_command, home_command, jog_command
 from pen_plotter.hardware.controller import PlotterController
 from pen_plotter.hardware.streamer import (
     GcodeStreamer,
@@ -67,6 +67,14 @@ def test_jog_command_is_relative() -> None:
 
 def test_home_command_grbl() -> None:
     assert home_command(_profile()) == ["$H"]
+
+
+def test_goto_command_is_absolute_and_lifts_pen() -> None:
+    profile = _profile()
+    lines = goto_command(12.5, 34.0, profile)
+    assert lines[0] == "G90"
+    assert profile.pen_up_command in lines
+    assert "X12.500 Y34.000" in lines[-1]
 
 
 @pytest.mark.asyncio

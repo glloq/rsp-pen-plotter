@@ -11,7 +11,7 @@ import asyncio
 import contextlib
 import logging
 
-from pen_plotter.hardware.commands import home_command, jog_command
+from pen_plotter.hardware.commands import goto_command, home_command, jog_command
 from pen_plotter.hardware.streamer import GcodeStreamer, StreamProgress, StreamState
 from pen_plotter.hardware.transport import SerialTransport, Transport
 from pen_plotter.models import MachineProfile
@@ -101,6 +101,11 @@ class PlotterController:
         """Jog the head by a relative offset."""
         self._require_idle()
         await self._send_immediate(jog_command(dx_mm, dy_mm, profile))
+
+    async def goto(self, x_mm: float, y_mm: float, profile: MachineProfile) -> None:
+        """Move the head to an absolute workspace position."""
+        self._require_idle()
+        await self._send_immediate(goto_command(x_mm, y_mm, profile))
 
     async def home(self, profile: MachineProfile) -> None:
         """Home the machine."""

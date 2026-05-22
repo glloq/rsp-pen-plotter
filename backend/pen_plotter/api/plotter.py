@@ -34,6 +34,14 @@ class JogRequest(BaseModel):
     profile_name: str
 
 
+class GotoRequest(BaseModel):
+    """Absolute move parameters."""
+
+    x_mm: float
+    y_mm: float
+    profile_name: str
+
+
 class RunRequest(BaseModel):
     """G-code job to stream."""
 
@@ -104,6 +112,17 @@ async def jog(request: JogRequest) -> StatusResponse:
     profile = _profile_or_404(request.profile_name)
     try:
         await controller.jog(request.dx_mm, request.dy_mm, profile)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _status()
+
+
+@router.post("/plotter/goto")
+async def goto(request: GotoRequest) -> StatusResponse:
+    """Move the head to an absolute workspace position."""
+    profile = _profile_or_404(request.profile_name)
+    try:
+        await controller.goto(request.x_mm, request.y_mm, profile)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _status()

@@ -46,6 +46,16 @@ async def test_jog_unknown_profile_returns_404(connected: MockTransport) -> None
 
 
 @pytest.mark.asyncio
+async def test_goto_when_connected_returns_200(connected: MockTransport) -> None:
+    async with _client() as client:
+        response = await client.post(
+            "/plotter/goto", json={"x_mm": 20, "y_mm": 30, "profile_name": PROFILE}
+        )
+    assert response.status_code == 200
+    assert any("X20.000 Y30.000" in line for line in connected.written)
+
+
+@pytest.mark.asyncio
 async def test_home_when_connected_returns_200(connected: MockTransport) -> None:
     async with _client() as client:
         response = await client.post("/plotter/home", params={"profile_name": PROFILE})

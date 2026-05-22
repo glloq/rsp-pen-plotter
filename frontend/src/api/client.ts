@@ -258,6 +258,19 @@ export async function plotterJog(
   return response.data
 }
 
+export async function plotterGoto(
+  xMm: number,
+  yMm: number,
+  profileName: string,
+): Promise<PlotterStatus> {
+  const response = await api.post<PlotterStatus>('/plotter/goto', {
+    x_mm: xMm,
+    y_mm: yMm,
+    profile_name: profileName,
+  })
+  return response.data
+}
+
 export async function plotterHome(profileName: string): Promise<PlotterStatus> {
   const response = await api.post<PlotterStatus>(
     `/plotter/home?profile_name=${encodeURIComponent(profileName)}`,

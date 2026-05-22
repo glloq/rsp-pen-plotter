@@ -95,6 +95,8 @@
     "connected": "Connecté",
     "disconnect": "Déconnecter",
     "step": "Pas",
+    "goto": "Aller à (mm)",
+    "go": "Aller",
     "sendJob": "Envoyer le travail",
     "pause": "Pause",
     "resume": "Reprendre",

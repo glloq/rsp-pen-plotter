@@ -4,6 +4,7 @@ import {
   plotterCommand,
   plotterConnect,
   plotterDisconnect,
+  plotterGoto,
   plotterHome,
   plotterJog,
   plotterRun,
@@ -74,6 +75,8 @@ export const usePlotterStore = defineStore('plotter', () => {
   const disconnect = (): Promise<void> => withErrors(() => plotterDisconnect())
   const jog = (dx: number, dy: number, profileName: string): Promise<void> =>
     withErrors(() => plotterJog(dx, dy, profileName))
+  const goto = (x: number, y: number, profileName: string): Promise<void> =>
+    withErrors(() => plotterGoto(x, y, profileName))
   const home = (profileName: string): Promise<void> =>
     withErrors(() => plotterHome(profileName))
   const run = (gcode: string): Promise<void> => withErrors(() => plotterRun(gcode))
@@ -91,6 +94,7 @@ export const usePlotterStore = defineStore('plotter', () => {
     connect,
     disconnect,
     jog,
+    goto,
     home,
     run,
     pause,
