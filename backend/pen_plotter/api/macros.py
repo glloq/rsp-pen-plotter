@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from pen_plotter.auth import require_api_key
 from pen_plotter.hardware.controller import controller
 from pen_plotter.macros import delete_macro, get_macro, load_macros, save_macro
 from pen_plotter.models import Macro
@@ -35,7 +36,7 @@ async def delete_one(name: str) -> dict[str, str]:
     raise HTTPException(status_code=404, detail=f"Unknown macro: {name!r}")
 
 
-@router.post("/macros/{name}/run")
+@router.post("/macros/{name}/run", dependencies=[Depends(require_api_key)])
 async def run_one(name: str) -> dict[str, str]:
     """Execute a macro's commands on the connected plotter.
 

@@ -128,6 +128,24 @@ class LayerInfo(BaseModel):
     drawing_speed_mm_s: float | None = None
 
 
+class PreflightReport(BaseModel):
+    """Pre-run safety and estimation checks for a placed drawing."""
+
+    ok: bool
+    within_bounds: bool
+    width_mm: float
+    height_mm: float
+    scale: float
+    drawing_length_mm: float
+    travel_length_mm: float
+    estimated_seconds: float
+    pen_changes: int
+    layer_count: int
+    path_count: int
+    missing_pen_slots: list[int] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class Macro(BaseModel):
     """A user-defined sequence of raw plotter commands triggerable as one action."""
 

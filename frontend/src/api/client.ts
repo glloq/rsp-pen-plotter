@@ -1,11 +1,17 @@
 import axios, { type AxiosInstance } from 'axios'
 
 const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const apiKey = import.meta.env.VITE_API_KEY as string | undefined
 
 export const api: AxiosInstance = axios.create({ baseURL, timeout: 30000 })
 
+if (apiKey) {
+  api.defaults.headers.common['X-API-Key'] = apiKey
+}
+
 export function websocketUrl(path: string): string {
-  return baseURL.replace(/^http/, 'ws') + path
+  const url = baseURL.replace(/^http/, 'ws') + path
+  return apiKey ? `${url}?token=${encodeURIComponent(apiKey)}` : url
 }
 
 export interface HealthResponse {
@@ -234,6 +240,39 @@ export async function generateGcode(
   marginMm = 10,
 ): Promise<GenerateResponse> {
   const response = await api.post<GenerateResponse>('/generate', {
+    svg,
+    profile_name: profileName,
+    layers,
+    scale_mode: scaleMode,
+    margin_mm: marginMm,
+  })
+  return response.data
+}
+
+export interface PreflightReport {
+  ok: boolean
+  within_bounds: boolean
+  width_mm: number
+  height_mm: number
+  scale: number
+  drawing_length_mm: number
+  travel_length_mm: number
+  estimated_seconds: number
+  pen_changes: number
+  layer_count: number
+  path_count: number
+  missing_pen_slots: number[]
+  warnings: string[]
+}
+
+export async function preflightCheck(
+  svg: string,
+  profileName: string,
+  layers: GenerateLayer[],
+  scaleMode: 'fit' | 'actual' = 'fit',
+  marginMm = 10,
+): Promise<PreflightReport> {
+  const response = await api.post<PreflightReport>('/preflight', {
     svg,
     profile_name: profileName,
     layers,

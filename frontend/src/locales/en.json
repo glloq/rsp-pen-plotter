@@ -48,6 +48,15 @@
     "homeTitle": "Home axes",
     "homeMsg": "Move the plotter to its home position?"
   },
+  "preflight": {
+    "button": "Preflight check",
+    "running": "Checking…",
+    "failed": "Preflight check failed.",
+    "size": "Drawing size",
+    "estimate": "Estimated time",
+    "penChanges": "Pen changes",
+    "missingPens": "Pen slot(s) {slots} are assigned but not installed; install them or reassign before generating."
+  },
   "sheet": {
     "title": "Sheet layout",
     "sheet": "Sheet",

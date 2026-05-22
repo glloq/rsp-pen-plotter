@@ -96,11 +96,56 @@ function formatDuration(seconds: number): string {
       </label>
     </div>
 
+    <p
+      v-if="store.layers.length && store.missingPenSlots.length"
+      class="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-300"
+    >
+      {{ t('preflight.missingPens', { slots: store.missingPenSlots.join(', ') }) }}
+    </p>
+
+    <button
+      v-if="store.layers.length"
+      type="button"
+      class="w-full rounded bg-slate-700 hover:bg-slate-600 px-4 py-2 font-medium text-slate-100 disabled:opacity-50"
+      :disabled="store.preflighting"
+      @click="store.runPreflight()"
+    >
+      {{ store.preflighting ? t('preflight.running') : t('preflight.button') }}
+    </button>
+
+    <div
+      v-if="store.preflight"
+      class="rounded border px-3 py-2 text-sm"
+      :class="store.preflight.ok
+        ? 'border-emerald-800 bg-emerald-950/30 text-emerald-200'
+        : 'border-amber-700 bg-amber-950/30 text-amber-200'"
+    >
+      <div class="flex justify-between">
+        <span>{{ t('preflight.size') }}</span>
+        <span class="font-mono">
+          {{ store.preflight.width_mm.toFixed(0) }}×{{ store.preflight.height_mm.toFixed(0) }} mm
+          ({{ store.scaleMode === 'actual' ? '1:1' : `${(store.preflight.scale * 100).toFixed(0)}%` }})
+        </span>
+      </div>
+      <div class="flex justify-between">
+        <span>{{ t('preflight.estimate') }}</span>
+        <span class="font-mono">{{ formatDuration(store.preflight.estimated_seconds) }}</span>
+      </div>
+      <div class="flex justify-between">
+        <span>{{ t('preflight.penChanges') }}</span>
+        <span class="font-mono">{{ store.preflight.pen_changes }}</span>
+      </div>
+      <ul v-if="store.preflight.warnings.length" class="mt-1 list-disc pl-4 text-xs">
+        <li v-for="(warning, i) in store.preflight.warnings" :key="i">{{ warning }}</li>
+      </ul>
+    </div>
+
     <button
       v-if="store.layers.length"
       type="button"
       class="w-full rounded bg-emerald-600 hover:bg-emerald-500 px-4 py-2 font-medium text-white disabled:opacity-50"
-      :disabled="store.generating"
+      :disabled="store.generating || store.missingPenSlots.length > 0"
+      :title="store.missingPenSlots.length ? t('preflight.missingPens', { slots: store.missingPenSlots.join(', ') }) : ''"
       @click="store.generate()"
     >
       {{ store.generating ? t('layers.generating') : t('layers.generate') }}
