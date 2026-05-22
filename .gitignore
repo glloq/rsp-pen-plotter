@@ -10,6 +10,9 @@ venv/
 dist/
 build/
 
+# Local data (SQLite job history)
+backend/data/
+
 # Node / frontend
 node_modules/
 frontend/dist/

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import { parseGcode, type SimBounds, type SimResult } from '../lib/gcode'
 
+const { t } = useI18n()
 const store = useJobStore()
 const { gcode } = storeToRefs(store)
 
@@ -156,20 +158,22 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 <template>
   <section v-if="sim" class="mt-4 rounded-lg border border-slate-700 bg-slate-800">
     <div class="flex flex-wrap items-center gap-2 border-b border-slate-700 px-4 py-2">
-      <h2 class="mr-auto text-sm uppercase tracking-wide text-slate-400">Simulator</h2>
+      <h2 class="mr-auto text-sm uppercase tracking-wide text-slate-400">
+        {{ t('simulator.title') }}
+      </h2>
       <button
         type="button"
         class="rounded bg-emerald-600 hover:bg-emerald-500 px-3 py-1 text-sm text-white"
         @click="playing ? pause() : play()"
       >
-        {{ playing ? 'Pause' : 'Play' }}
+        {{ playing ? t('simulator.pause') : t('simulator.play') }}
       </button>
       <button
         type="button"
         class="rounded bg-slate-700 hover:bg-slate-600 px-3 py-1 text-sm text-slate-100"
         @click="restart"
       >
-        Restart
+        {{ t('simulator.restart') }}
       </button>
       <button
         v-for="s in speeds"
@@ -200,19 +204,19 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 
     <dl class="grid grid-cols-2 gap-x-4 gap-y-1 px-4 pb-3 text-sm text-slate-300 sm:grid-cols-4">
       <div>
-        <dt class="text-xs text-slate-500">Drawing</dt>
+        <dt class="text-xs text-slate-500">{{ t('simulator.drawing') }}</dt>
         <dd class="font-mono">{{ formatDuration(sim.drawingTimeSeconds) }}</dd>
       </div>
       <div>
-        <dt class="text-xs text-slate-500">Travel</dt>
+        <dt class="text-xs text-slate-500">{{ t('simulator.travel') }}</dt>
         <dd class="font-mono">{{ formatDuration(sim.travelTimeSeconds) }}</dd>
       </div>
       <div>
-        <dt class="text-xs text-slate-500">Total (sim)</dt>
+        <dt class="text-xs text-slate-500">{{ t('simulator.totalSim') }}</dt>
         <dd class="font-mono text-emerald-300">{{ formatDuration(sim.totalTimeSeconds) }}</dd>
       </div>
       <div>
-        <dt class="text-xs text-slate-500">Layer estimate</dt>
+        <dt class="text-xs text-slate-500">{{ t('simulator.layerEstimate') }}</dt>
         <dd class="font-mono">{{ formatDuration(store.totalDurationSeconds) }}</dd>
       </div>
     </dl>

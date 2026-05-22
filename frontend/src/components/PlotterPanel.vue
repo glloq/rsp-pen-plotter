@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import JogControls from './JogControls.vue'
 
+const { t } = useI18n()
 const plotter = usePlotterStore()
 const job = useJobStore()
 const { status, port, baudrate, error, progress } = storeToRefs(plotter)
@@ -15,7 +17,7 @@ function sendJob(): void {
 
 <template>
   <div class="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-3">
-    <h2 class="text-sm uppercase tracking-wide text-slate-400">Plotter</h2>
+    <h2 class="text-sm uppercase tracking-wide text-slate-400">{{ t('plotter.title') }}</h2>
 
     <div v-if="!status.connected" class="space-y-2">
       <input
@@ -33,15 +35,15 @@ function sendJob(): void {
         class="w-full rounded bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-medium text-white"
         @click="plotter.connect()"
       >
-        Connect
+        {{ t('plotter.connect') }}
       </button>
     </div>
 
     <div v-else class="space-y-3">
       <div class="flex items-center justify-between text-sm">
-        <span class="text-emerald-300">Connected</span>
+        <span class="text-emerald-300">{{ t('plotter.connected') }}</span>
         <button class="text-slate-400 hover:text-slate-200" @click="plotter.disconnect()">
-          Disconnect
+          {{ t('plotter.disconnect') }}
         </button>
       </div>
 
@@ -53,16 +55,16 @@ function sendJob(): void {
           :disabled="!job.gcode"
           @click="sendJob"
         >
-          Send job
+          {{ t('plotter.sendJob') }}
         </button>
         <button class="rounded bg-slate-700 px-3 py-1 text-sm text-slate-100" @click="plotter.pause()">
-          Pause
+          {{ t('plotter.pause') }}
         </button>
         <button class="rounded bg-slate-700 px-3 py-1 text-sm text-slate-100" @click="plotter.resume()">
-          Resume
+          {{ t('plotter.resume') }}
         </button>
         <button class="rounded bg-red-700 px-3 py-1 text-sm text-white" @click="plotter.abort()">
-          Abort
+          {{ t('plotter.abort') }}
         </button>
       </div>
 
@@ -77,6 +79,6 @@ function sendJob(): void {
       </div>
     </div>
 
-    <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
+    <p v-if="error" class="text-sm text-red-400">{{ t('plotter.commandFailed') }}</p>
   </div>
 </template>

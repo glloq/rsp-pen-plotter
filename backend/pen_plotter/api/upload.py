@@ -14,6 +14,7 @@ from pen_plotter.converters.base import UnsupportedFormatError
 from pen_plotter.converters.registry import registry
 from pen_plotter.core.layers import extract_layers
 from pen_plotter.models import Job
+from pen_plotter.persistence import save_job
 
 router = APIRouter()
 
@@ -112,4 +113,5 @@ async def upload(
         layers=extract_layers(result.svg),
         status="ready",
     )
+    save_job(job)
     return UploadResponse(job=job, svg=result.svg)

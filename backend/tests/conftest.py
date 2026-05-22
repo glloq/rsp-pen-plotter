@@ -1,8 +1,13 @@
 import io
+import os
+import tempfile
 
-import numpy as np
-import pytest
-from PIL import Image
+# Isolate the job-history database from the real one before pen_plotter imports.
+os.environ.setdefault("OMNIPLOT_DB", os.path.join(tempfile.gettempdir(), "omniplot_test.db"))
+
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
+from PIL import Image  # noqa: E402
 
 
 @pytest.fixture

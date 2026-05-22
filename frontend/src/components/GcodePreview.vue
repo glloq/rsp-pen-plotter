@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 
+const { t } = useI18n()
 const store = useJobStore()
 const { gcode } = storeToRefs(store)
 
@@ -24,14 +26,14 @@ function download(): void {
   <section v-if="gcode" class="mt-4 rounded-lg border border-slate-700 bg-slate-800">
     <div class="flex items-center justify-between border-b border-slate-700 px-4 py-2">
       <h2 class="text-sm uppercase tracking-wide text-slate-400">
-        G-code ({{ lineCount }} lines)
+        {{ t('gcode.title') }} ({{ lineCount }} {{ t('gcode.lines') }})
       </h2>
       <button
         type="button"
         class="rounded bg-slate-700 hover:bg-slate-600 px-3 py-1 text-sm text-slate-100"
         @click="download"
       >
-        Download
+        {{ t('gcode.download') }}
       </button>
     </div>
     <pre

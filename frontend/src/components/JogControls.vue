@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 
+const { t } = useI18n()
 const plotter = usePlotterStore()
 const job = useJobStore()
 const step = ref(10)
@@ -15,7 +17,7 @@ function jog(dx: number, dy: number): void {
 <template>
   <div class="space-y-2">
     <div class="flex items-center gap-2 text-sm text-slate-400">
-      <span>Step</span>
+      <span>{{ t('plotter.step') }}</span>
       <select
         v-model.number="step"
         class="rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-100"

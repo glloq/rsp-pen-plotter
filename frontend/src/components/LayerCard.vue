@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../api/client'
 import { useJobStore } from '../stores/job'
 
+const { t } = useI18n()
 const props = defineProps<{ layer: LayerInfo }>()
 const store = useJobStore()
 
@@ -58,38 +60,39 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       <div class="min-w-0 flex-1">
         <p class="truncate font-mono text-sm text-slate-200">{{ layer.layer_id }}</p>
         <p class="text-xs text-slate-500">
-          {{ layer.path_count }} paths · {{ layer.total_length_mm.toFixed(1) }} mm · {{ duration }}
+          {{ layer.path_count }} {{ t('layers.paths') }} ·
+          {{ layer.total_length_mm.toFixed(1) }} mm · {{ duration }}
         </p>
       </div>
     </div>
 
     <div class="grid grid-cols-2 gap-2 text-xs">
       <label class="text-slate-400">
-        Pen slot
+        {{ t('layers.penSlot') }}
         <select
           :value="layer.target_pen_slot ?? ''"
           class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
           @change="onPenSlot"
         >
-          <option value="">none</option>
+          <option value="">{{ t('layers.none') }}</option>
           <option v-for="slot in penSlotCount" :key="slot" :value="slot - 1">
             {{ slot - 1 }}
           </option>
         </select>
       </label>
       <label class="text-slate-400">
-        Speed (mm/s)
+        {{ t('layers.speed') }}
         <input
           type="number"
           min="1"
           :value="layer.drawing_speed_mm_s ?? ''"
-          placeholder="default"
+          :placeholder="t('layers.default')"
           class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
           @change="onSpeed"
         />
       </label>
       <label class="text-slate-400">
-        Simplify (mm)
+        {{ t('layers.simplify') }}
         <input
           type="number"
           min="0"
@@ -106,7 +109,7 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
           class="h-4 w-4 accent-emerald-500"
           @change="onOptimize"
         />
-        Optimize
+        {{ t('layers.optimize') }}
       </label>
     </div>
   </div>

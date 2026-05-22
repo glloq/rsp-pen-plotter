@@ -33,6 +33,32 @@ export async function getFonts(): Promise<string[]> {
   return response.data
 }
 
+export interface Preset {
+  name: string
+  description: string
+  options: Record<string, unknown>
+}
+
+export async function getPresets(): Promise<Preset[]> {
+  const response = await api.get<Preset[]>('/presets')
+  return response.data
+}
+
+export interface JobRecord {
+  job_id: string
+  source_file: string
+  source_mime: string
+  profile_name: string
+  status: string
+  layer_count: number
+  created_at: string
+}
+
+export async function getJobs(): Promise<JobRecord[]> {
+  const response = await api.get<JobRecord[]>('/jobs')
+  return response.data
+}
+
 export interface MachineProfile {
   name: string
   units: string

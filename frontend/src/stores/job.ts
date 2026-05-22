@@ -2,12 +2,14 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
   generateGcode,
+  getPresets,
   getProfiles,
   optimizeToolpaths,
   uploadFile,
   type Job,
   type LayerInfo,
   type MachineProfile,
+  type Preset,
   type ToolpathMetrics,
 } from '../api/client'
 
@@ -23,6 +25,9 @@ export const useJobStore = defineStore('job', () => {
 
   const profiles = ref<MachineProfile[]>([])
   const selectedProfileName = ref('Custom CoreXY A3')
+
+  const presets = ref<Preset[]>([])
+  const selectedPresetName = ref<string>('')
 
   const optimizing = ref(false)
   const metrics = ref<ToolpathMetrics | null>(null)
@@ -76,13 +81,18 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
-  async function upload(file: File, options?: Record<string, unknown>): Promise<void> {
+  async function loadPresets(): Promise<void> {
+    presets.value = await getPresets()
+  }
+
+  async function upload(file: File): Promise<void> {
+    const preset = presets.value.find((p) => p.name === selectedPresetName.value)
     loading.value = true
     error.value = null
     metrics.value = null
     gcode.value = null
     try {
-      const result = await uploadFile(file, selectedProfileName.value, options)
+      const result = await uploadFile(file, selectedProfileName.value, preset?.options)
       job.value = result.job
       svg.value = result.svg
       layers.value = result.job.layers
@@ -155,6 +165,8 @@ export const useJobStore = defineStore('job', () => {
     profiles,
     selectedProfileName,
     selectedProfile,
+    presets,
+    selectedPresetName,
     optimizing,
     metrics,
     generating,
@@ -168,6 +180,7 @@ export const useJobStore = defineStore('job', () => {
     updateLayer,
     reorderLayers,
     loadProfiles,
+    loadPresets,
     upload,
     optimize,
     generate,
