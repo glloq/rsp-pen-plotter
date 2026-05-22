@@ -34,6 +34,8 @@ export interface MachineProfile {
   units: string
   origin: string
   gcode_dialect: string
+  pen_up_command: string
+  pen_down_command: string
   drawing_speed_mm_s: number
   travel_speed_mm_s: number
   acceleration_mm_s2: number
