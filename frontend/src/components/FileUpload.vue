@@ -155,6 +155,7 @@ function openPicker(): void {
       <button
         type="button"
         class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400"
+        :aria-expanded="showOptions"
         @click="showOptions = !showOptions"
       >
         {{ t('convert.options') }}
@@ -246,7 +247,9 @@ function openPicker(): void {
       {{ store.loading ? t('upload.converting') : t('upload.choose') }}
     </button>
 
-    <p v-if="store.error" class="text-sm text-red-400">{{ t('upload.failed') }}</p>
+    <p v-if="store.error && store.errorScope === 'upload'" class="text-sm text-red-400">
+      {{ store.error }}
+    </p>
     <p v-else-if="store.job" class="text-sm text-slate-400">
       {{ t('upload.loaded') }}
       <span class="font-mono text-slate-200">{{ store.job.source_file }}</span>

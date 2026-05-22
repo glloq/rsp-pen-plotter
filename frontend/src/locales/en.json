@@ -33,7 +33,27 @@
     "generating": "Generating…",
     "penUpTravel": "Pen-up travel",
     "travelReduction": "Travel reduction",
-    "fillHint": "Optimization converts filled shapes to outline strokes (pens draw lines, not fills)."
+    "fillHint": "Optimization converts filled shapes to outline strokes (pens draw lines, not fills).",
+    "optimizeFailed": "Optimization failed.",
+    "generateFailed": "G-code generation failed."
+  },
+  "confirm": {
+    "cancel": "Cancel",
+    "deleteProfileTitle": "Delete profile",
+    "deleteProfileMsg": "Delete profile \"{name}\"? This cannot be undone.",
+    "deleteMacroTitle": "Delete macro",
+    "deleteMacroMsg": "Delete macro \"{name}\"?",
+    "sendJobTitle": "Send job",
+    "sendJobMsg": "Send the generated G-code to the plotter and start drawing?",
+    "homeTitle": "Home axes",
+    "homeMsg": "Move the plotter to its home position?"
+  },
+  "sheet": {
+    "title": "Sheet layout",
+    "sheet": "Sheet",
+    "drawing": "Drawing",
+    "scale": "Scale",
+    "outOfBounds": "The drawing exceeds the workspace; it may be clipped or out of bounds."
   },
   "convert": {
     "options": "Conversion options",
@@ -108,16 +128,26 @@
     "drawing": "Drawing",
     "travel": "Travel",
     "totalSim": "Total (sim)",
-    "layerEstimate": "Layer estimate"
+    "layerEstimate": "Layer estimate",
+    "dimensions": "Size",
+    "end": "End"
   },
   "plotter": {
     "title": "Plotter",
     "connect": "Connect",
     "connected": "Connected",
     "disconnect": "Disconnect",
+    "port": "Serial port",
+    "baudrate": "Baud rate",
     "step": "Step",
     "goto": "Go to (mm)",
     "go": "Go",
+    "home": "Home",
+    "jogUp": "Jog up (Y+)",
+    "jogDown": "Jog down (Y−)",
+    "jogLeft": "Jog left (X−)",
+    "jogRight": "Jog right (X+)",
+    "gotoCorner": "Go to corner X{x} Y{y}",
     "sendJob": "Send job",
     "pause": "Pause",
     "resume": "Resume",
@@ -130,6 +160,7 @@
     "run": "Run",
     "runHint": "Connect a plotter (and pause any running job) to run macros.",
     "edit": "Edit",
+    "delete": "Delete macro",
     "name": "Name",
     "description": "Description (optional)",
     "commands": "One command per line",

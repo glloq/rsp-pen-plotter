@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { errorDetail } from '../api/error'
+import { i18n } from '../i18n'
 import {
   deleteProfile as apiDeleteProfile,
   saveProfile as apiSaveProfile,
@@ -24,6 +26,7 @@ export const useJobStore = defineStore('job', () => {
   const visibility = ref<Record<string, boolean>>({})
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const errorScope = ref<'upload' | 'optimize' | 'generate' | null>(null)
 
   const profiles = ref<MachineProfile[]>([])
   const selectedProfileName = ref('Custom CoreXY A3')
@@ -110,6 +113,7 @@ export const useJobStore = defineStore('job', () => {
       preset?.options || optionsOverride ? { ...preset?.options, ...optionsOverride } : undefined
     loading.value = true
     error.value = null
+    errorScope.value = null
     metrics.value = null
     gcode.value = null
     try {
@@ -120,8 +124,9 @@ export const useJobStore = defineStore('job', () => {
       visibility.value = Object.fromEntries(
         result.job.layers.map((layer) => [layer.layer_id, true]),
       )
-    } catch {
-      error.value = 'Upload failed. Check the file type and that the API is running.'
+    } catch (err) {
+      error.value = errorDetail(err, i18n.global.t('upload.failed'))
+      errorScope.value = 'upload'
       svg.value = null
       layers.value = []
     } finally {
@@ -133,6 +138,7 @@ export const useJobStore = defineStore('job', () => {
     if (!svg.value) return
     optimizing.value = true
     error.value = null
+    errorScope.value = null
     try {
       const result = await optimizeToolpaths(
         svg.value,
@@ -147,8 +153,9 @@ export const useJobStore = defineStore('job', () => {
       metrics.value = result.metrics
       visibility.value = Object.fromEntries(result.layers.map((layer) => [layer.layer_id, true]))
       gcode.value = null
-    } catch {
-      error.value = 'Optimization failed.'
+    } catch (err) {
+      error.value = errorDetail(err, i18n.global.t('layers.optimizeFailed'))
+      errorScope.value = 'optimize'
     } finally {
       optimizing.value = false
     }
@@ -158,6 +165,7 @@ export const useJobStore = defineStore('job', () => {
     if (!svg.value) return
     generating.value = true
     error.value = null
+    errorScope.value = null
     try {
       const result = await generateGcode(
         svg.value,
@@ -171,8 +179,9 @@ export const useJobStore = defineStore('job', () => {
         marginMm.value,
       )
       gcode.value = result.gcode
-    } catch {
-      error.value = 'G-code generation failed.'
+    } catch (err) {
+      error.value = errorDetail(err, i18n.global.t('layers.generateFailed'))
+      errorScope.value = 'generate'
     } finally {
       generating.value = false
     }
@@ -185,6 +194,7 @@ export const useJobStore = defineStore('job', () => {
     visibility,
     loading,
     error,
+    errorScope,
     profiles,
     selectedProfileName,
     selectedProfile,

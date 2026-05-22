@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Macro } from '../api/client'
+import { confirmAction } from '../composables/confirm'
 import { useMacroStore } from '../stores/macros'
 import { usePlotterStore } from '../stores/plotter'
 
@@ -44,6 +45,17 @@ async function save(): Promise<void> {
   await store.save({ name, description: editDescription.value.trim(), commands })
   reset()
 }
+
+async function removeMacro(name: string): Promise<void> {
+  const confirmed = await confirmAction({
+    title: t('confirm.deleteMacroTitle'),
+    message: t('confirm.deleteMacroMsg', { name }),
+    confirmLabel: t('macros.delete'),
+    cancelLabel: t('confirm.cancel'),
+    danger: true,
+  })
+  if (confirmed) await store.remove(name)
+}
 </script>
 
 <template>
@@ -51,6 +63,7 @@ async function save(): Promise<void> {
     <button
       type="button"
       class="flex w-full items-center justify-between px-4 py-3 text-sm uppercase tracking-wide text-slate-300"
+      :aria-expanded="open"
       @click="open = !open"
     >
       {{ t('macros.title') }}
@@ -88,7 +101,9 @@ async function save(): Promise<void> {
           </button>
           <button
             class="rounded bg-red-900/70 px-2 py-1 text-xs text-red-200 hover:bg-red-800"
-            @click="store.remove(macro.name)"
+            :aria-label="t('macros.delete')"
+            :title="t('macros.delete')"
+            @click="removeMacro(macro.name)"
           >
             ×
           </button>

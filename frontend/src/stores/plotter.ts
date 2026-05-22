@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { errorDetail } from '../api/error'
+import { i18n } from '../i18n'
 import {
   plotterCommand,
   plotterConnect,
@@ -53,17 +55,12 @@ export const usePlotterStore = defineStore('plotter', () => {
     }
   }
 
-  function withErrorDetail(err: unknown): string {
-    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-    return detail ?? 'Plotter command failed (is a device connected?).'
-  }
-
   async function withErrors(fn: () => Promise<PlotterStatus>): Promise<void> {
     error.value = null
     try {
       status.value = await fn()
     } catch (err) {
-      error.value = withErrorDetail(err)
+      error.value = errorDetail(err, i18n.global.t('plotter.commandFailed'))
     }
   }
 
