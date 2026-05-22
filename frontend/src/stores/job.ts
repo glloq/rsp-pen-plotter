@@ -104,14 +104,16 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
-  async function upload(file: File): Promise<void> {
+  async function upload(file: File, optionsOverride?: Record<string, unknown>): Promise<void> {
     const preset = presets.value.find((p) => p.name === selectedPresetName.value)
+    const options =
+      preset?.options || optionsOverride ? { ...preset?.options, ...optionsOverride } : undefined
     loading.value = true
     error.value = null
     metrics.value = null
     gcode.value = null
     try {
-      const result = await uploadFile(file, selectedProfileName.value, preset?.options)
+      const result = await uploadFile(file, selectedProfileName.value, options)
       job.value = result.job
       svg.value = result.svg
       layers.value = result.job.layers
