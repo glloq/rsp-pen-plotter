@@ -4,6 +4,10 @@ const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
 export const api: AxiosInstance = axios.create({ baseURL })
 
+export function websocketUrl(path: string): string {
+  return baseURL.replace(/^http/, 'ws') + path
+}
+
 export interface HealthResponse {
   status: string
   version: string
@@ -131,6 +135,56 @@ export async function generateGcode(
     layers,
     scale_mode: scaleMode,
   })
+  return response.data
+}
+
+export interface PlotterStatus {
+  connected: boolean
+  total: number
+  sent: number
+  acked: number
+  state: string
+}
+
+export async function plotterConnect(port: string, baudrate: number): Promise<PlotterStatus> {
+  const response = await api.post<PlotterStatus>('/plotter/connect', { port, baudrate })
+  return response.data
+}
+
+export async function plotterDisconnect(): Promise<PlotterStatus> {
+  const response = await api.post<PlotterStatus>('/plotter/disconnect')
+  return response.data
+}
+
+export async function plotterJog(
+  dxMm: number,
+  dyMm: number,
+  profileName: string,
+): Promise<PlotterStatus> {
+  const response = await api.post<PlotterStatus>('/plotter/jog', {
+    dx_mm: dxMm,
+    dy_mm: dyMm,
+    profile_name: profileName,
+  })
+  return response.data
+}
+
+export async function plotterHome(profileName: string): Promise<PlotterStatus> {
+  const response = await api.post<PlotterStatus>(
+    `/plotter/home?profile_name=${encodeURIComponent(profileName)}`,
+  )
+  return response.data
+}
+
+export async function plotterRun(gcode: string): Promise<PlotterStatus> {
+  const response = await api.post<PlotterStatus>('/plotter/run', { gcode })
+  return response.data
+}
+
+export async function plotterCommand(
+  action: 'pause' | 'resume' | 'abort',
+): Promise<PlotterStatus> {
+  const response = await api.post<PlotterStatus>(`/plotter/${action}`)
   return response.data
 }
 

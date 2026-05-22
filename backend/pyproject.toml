@@ -23,6 +23,7 @@ dependencies = [
     "svgelements>=1.9.6",
     "vpype>=1.15.0",
     "jinja2>=3.1.6",
+    "pyserial-asyncio>=0.6",
 ]
 
 [project.optional-dependencies]
@@ -73,6 +74,7 @@ module = [
     "svgelements",
     "vpype",
     "vpype_cli",
+    "serial_asyncio",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

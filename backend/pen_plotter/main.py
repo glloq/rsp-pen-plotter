@@ -11,6 +11,7 @@ from pen_plotter.api.algorithms import router as algorithms_router
 from pen_plotter.api.fonts import router as fonts_router
 from pen_plotter.api.generate import router as generate_router
 from pen_plotter.api.optimize import router as optimize_router
+from pen_plotter.api.plotter import router as plotter_router
 from pen_plotter.api.profiles import router as profiles_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.converters.defaults import register_default_converters
@@ -34,6 +35,7 @@ app.include_router(fonts_router)
 app.include_router(profiles_router)
 app.include_router(optimize_router)
 app.include_router(generate_router)
+app.include_router(plotter_router)
 
 
 class HealthResponse(BaseModel):
