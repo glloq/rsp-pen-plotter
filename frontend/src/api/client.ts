@@ -80,6 +80,32 @@ export interface UploadResponse {
   svg: string
 }
 
+export interface ToolpathMetrics {
+  pen_up_before_mm: number
+  pen_up_after_mm: number
+  reduction_pct: number
+}
+
+export interface LayerOptimization {
+  layer_id: string
+  optimize: boolean
+  simplify_tolerance_mm: number
+}
+
+export interface OptimizeResponse {
+  svg: string
+  layers: LayerInfo[]
+  metrics: ToolpathMetrics
+}
+
+export async function optimizeToolpaths(
+  svg: string,
+  layers: LayerOptimization[],
+): Promise<OptimizeResponse> {
+  const response = await api.post<OptimizeResponse>('/optimize', { svg, layers })
+  return response.data
+}
+
 export async function uploadFile(
   file: File,
   profileName: string,

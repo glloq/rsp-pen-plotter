@@ -21,6 +21,7 @@ dependencies = [
     "beautifulsoup4>=4.12",
     "weasyprint>=62",
     "svgelements>=1.9.6",
+    "vpype>=1.15.0",
 ]
 
 [project.optional-dependencies]
@@ -69,6 +70,8 @@ module = [
     "HersheyFonts",
     "weasyprint",
     "svgelements",
+    "vpype",
+    "vpype_cli",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

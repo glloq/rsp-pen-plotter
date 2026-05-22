@@ -54,5 +54,32 @@ function formatDuration(seconds: number): string {
         <span class="font-mono">{{ formatDuration(store.totalDurationSeconds) }}</span>
       </div>
     </div>
+
+    <button
+      v-if="store.layers.length"
+      type="button"
+      class="w-full rounded bg-sky-600 hover:bg-sky-500 px-4 py-2 font-medium text-white disabled:opacity-50"
+      :disabled="store.optimizing"
+      @click="store.optimize()"
+    >
+      {{ store.optimizing ? 'Optimizing…' : 'Optimize toolpaths' }}
+    </button>
+
+    <div
+      v-if="store.metrics"
+      class="rounded border border-sky-800 bg-sky-950/40 px-3 py-2 text-sm text-sky-200"
+    >
+      <div class="flex justify-between">
+        <span>Pen-up travel</span>
+        <span class="font-mono">
+          {{ store.metrics.pen_up_before_mm.toFixed(0) }} →
+          {{ store.metrics.pen_up_after_mm.toFixed(0) }} mm
+        </span>
+      </div>
+      <div class="flex justify-between font-medium">
+        <span>Travel reduction</span>
+        <span class="font-mono">{{ store.metrics.reduction_pct.toFixed(1) }}%</span>
+      </div>
+    </div>
   </div>
 </template>

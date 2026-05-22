@@ -2,10 +2,12 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
   getProfiles,
+  optimizeToolpaths,
   uploadFile,
   type Job,
   type LayerInfo,
   type MachineProfile,
+  type ToolpathMetrics,
 } from '../api/client'
 
 const DEFAULT_SPEED_MM_S = 60
@@ -20,6 +22,9 @@ export const useJobStore = defineStore('job', () => {
 
   const profiles = ref<MachineProfile[]>([])
   const selectedProfileName = ref('Custom CoreXY A3')
+
+  const optimizing = ref(false)
+  const metrics = ref<ToolpathMetrics | null>(null)
 
   const selectedProfile = computed(
     () => profiles.value.find((p) => p.name === selectedProfileName.value) ?? null,
@@ -70,6 +75,7 @@ export const useJobStore = defineStore('job', () => {
   async function upload(file: File, options?: Record<string, unknown>): Promise<void> {
     loading.value = true
     error.value = null
+    metrics.value = null
     try {
       const result = await uploadFile(file, selectedProfileName.value, options)
       job.value = result.job
@@ -87,6 +93,30 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
+  async function optimize(): Promise<void> {
+    if (!svg.value) return
+    optimizing.value = true
+    error.value = null
+    try {
+      const result = await optimizeToolpaths(
+        svg.value,
+        layers.value.map((layer) => ({
+          layer_id: layer.layer_id,
+          optimize: layer.optimize,
+          simplify_tolerance_mm: layer.simplify_tolerance_mm,
+        })),
+      )
+      svg.value = result.svg
+      layers.value = result.layers
+      metrics.value = result.metrics
+      visibility.value = Object.fromEntries(result.layers.map((layer) => [layer.layer_id, true]))
+    } catch {
+      error.value = 'Optimization failed.'
+    } finally {
+      optimizing.value = false
+    }
+  }
+
   return {
     job,
     svg,
@@ -97,6 +127,8 @@ export const useJobStore = defineStore('job', () => {
     profiles,
     selectedProfileName,
     selectedProfile,
+    optimizing,
+    metrics,
     totalLengthMm,
     totalDurationSeconds,
     effectiveSpeed,
@@ -107,5 +139,6 @@ export const useJobStore = defineStore('job', () => {
     reorderLayers,
     loadProfiles,
     upload,
+    optimize,
   }
 })
