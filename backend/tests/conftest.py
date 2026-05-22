@@ -9,6 +9,17 @@ import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 from PIL import Image  # noqa: E402
 
+from pen_plotter.converters.defaults import register_default_converters  # noqa: E402
+from pen_plotter.converters.registry import registry  # noqa: E402
+from pen_plotter.persistence import init_db  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _app_setup() -> None:
+    """Prime the converter registry and database, mirroring the app lifespan."""
+    register_default_converters(registry)
+    init_db()
+
 
 @pytest.fixture
 def two_color_png() -> bytes:

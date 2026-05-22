@@ -12,7 +12,7 @@ import yaml
 
 from pen_plotter.models import MachineProfile
 
-PROFILES_DIR = Path(__file__).resolve().parent.parent / "profiles"
+PROFILES_DIR = Path(__file__).resolve().parent
 
 
 def load_profiles(directory: Path = PROFILES_DIR) -> list[MachineProfile]:

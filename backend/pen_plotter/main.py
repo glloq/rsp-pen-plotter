@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -20,10 +23,16 @@ from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
 from pen_plotter.persistence import init_db
 
-register_default_converters(registry)
-init_db()
 
-app = FastAPI(title="OmniPlot", version=__version__)
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Initialize converters and the database on startup."""
+    register_default_converters(registry)
+    init_db()
+    yield
+
+
+app = FastAPI(title="OmniPlot", version=__version__, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

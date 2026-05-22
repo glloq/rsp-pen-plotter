@@ -13,10 +13,13 @@ from pydantic import BaseModel
 from pen_plotter.converters.base import UnsupportedFormatError
 from pen_plotter.converters.registry import registry
 from pen_plotter.core.layers import extract_layers
+from pen_plotter.core.sanitize import sanitize_svg
 from pen_plotter.models import Job
 from pen_plotter.persistence import save_job
 
 router = APIRouter()
+
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 class UploadResponse(BaseModel):
@@ -100,18 +103,25 @@ async def upload(
     parsed_options = _parse_options(options)
     parsed_options.setdefault("source_mime", mime)
     data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413, detail=f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit"
+        )
     try:
         result = converter.convert(data, options=parsed_options)
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # converter/subprocess/library failures
+        raise HTTPException(status_code=422, detail=f"Could not convert file: {exc}") from exc
 
+    svg = sanitize_svg(result.svg)
     source_file = PurePosixPath(file.filename).name if file.filename else "upload"
     job = Job(
         source_file=source_file,
         source_mime=mime,
         profile_name=profile_name,
-        layers=extract_layers(result.svg),
+        layers=extract_layers(svg),
         status="ready",
     )
     save_job(job)
-    return UploadResponse(job=job, svg=result.svg)
+    return UploadResponse(job=job, svg=svg)

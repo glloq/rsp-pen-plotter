@@ -20,11 +20,11 @@ from pydantic import BaseModel
 from pen_plotter.core.layers import (
     _INKSCAPE_LABEL,
     _INKSCAPE_NS,
-    _SIZE_ATTR_RE,
     _SVG_NS,
     _group_color,
     _group_to_svg,
     _local,
+    strip_root_size,
 )
 
 _QUANTIZATION = 0.5
@@ -55,7 +55,7 @@ class ToolpathResult(BaseModel):
 
 def _doc_from_svg(group_svg: str) -> vp.Document:
     """Read a self-contained SVG into a vpype document in user units."""
-    stripped = _SIZE_ATTR_RE.sub("", group_svg, count=2)
+    stripped = strip_root_size(group_svg)
     return vp.read_multilayer_svg(io.StringIO(stripped), quantization=_QUANTIZATION)
 
 

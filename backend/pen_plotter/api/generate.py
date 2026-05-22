@@ -72,5 +72,7 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # template/geometry failures
+        raise HTTPException(status_code=422, detail=f"Generation failed: {exc}") from exc
 
     return GenerateResponse(gcode=gcode, line_count=gcode.count("\n"))

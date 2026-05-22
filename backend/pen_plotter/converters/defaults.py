@@ -21,15 +21,25 @@ from pen_plotter.converters.text import TextConverter
 def register_default_converters(target: ConverterRegistry) -> None:
     """Register every built-in converter on the given registry.
 
+    Idempotent: converters whose MIME types are already registered are skipped,
+    so this is safe to call from both application startup and test setup.
+
     Args:
         target: The registry to populate.
     """
-    target.register(SvgConverter())
-    target.register(BitmapConverter())
-    target.register(PdfConverter())
-    target.register(DxfConverter())
-    target.register(EpsConverter())
-    target.register(TextConverter())
-    target.register(MarkdownConverter())
-    target.register(HtmlConverter())
-    target.register(DocumentConverter())
+    existing = target.supported_mimes()
+    converters = [
+        SvgConverter(),
+        BitmapConverter(),
+        PdfConverter(),
+        DxfConverter(),
+        EpsConverter(),
+        TextConverter(),
+        MarkdownConverter(),
+        HtmlConverter(),
+        DocumentConverter(),
+    ]
+    for converter in converters:
+        if converter.supported_mimes & existing:
+            continue
+        target.register(converter)

@@ -4,7 +4,7 @@ import yaml
 
 from pen_plotter.models import MachineProfile
 
-PROFILE_PATH = Path(__file__).parent.parent / "profiles" / "custom_plotter.yaml"
+PROFILE_PATH = Path(__file__).parent.parent / "pen_plotter" / "profiles" / "custom_plotter.yaml"
 
 
 def test_custom_plotter_profile_parses() -> None:

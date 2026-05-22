@@ -50,6 +50,8 @@ async def optimize(request: OptimizeRequest) -> OptimizeResponse:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # vpype/geometry failures
+        raise HTTPException(status_code=422, detail=f"Optimization failed: {exc}") from exc
 
     return OptimizeResponse(
         svg=result.svg,

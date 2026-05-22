@@ -138,6 +138,26 @@ def _make_transform(
     return transform
 
 
+def _exceeds_workspace(
+    bounds: _Bounds,
+    transform: Callable[[float, float], tuple[float, float]],
+    profile: MachineProfile,
+) -> bool:
+    """Whether the transformed drawing falls outside the workspace bounds."""
+    ws = profile.workspace
+    tol = 0.01
+    corners = [
+        transform(bounds.x_min, bounds.y_min),
+        transform(bounds.x_min, bounds.y_max),
+        transform(bounds.x_max, bounds.y_min),
+        transform(bounds.x_max, bounds.y_max),
+    ]
+    return any(
+        x < ws.x_min - tol or x > ws.x_max + tol or y < ws.y_min - tol or y > ws.y_max + tol
+        for x, y in corners
+    )
+
+
 def generate_gcode(
     svg: str,
     profile: MachineProfile,
@@ -180,6 +200,8 @@ def generate_gcode(
     tool_change_t = _env.get_template("tool_change.j2")
 
     out: list[str] = [header_t.render(profile=profile)]
+    if not bounds.empty and _exceeds_workspace(bounds, transform, profile):
+        out.append("; WARNING: drawing exceeds the workspace; coordinates may be out of bounds")
     previous_slot: int | None = None
 
     if not bounds.empty:

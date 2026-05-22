@@ -4,7 +4,12 @@ import pytest
 
 from pen_plotter.hardware.commands import home_command, jog_command
 from pen_plotter.hardware.controller import PlotterController
-from pen_plotter.hardware.streamer import GcodeStreamer, StreamState, executable_lines
+from pen_plotter.hardware.streamer import (
+    GcodeStreamer,
+    StreamError,
+    StreamState,
+    executable_lines,
+)
 from pen_plotter.hardware.transport import MockTransport
 from pen_plotter.profiles import get_profile
 
@@ -81,3 +86,39 @@ async def test_controller_jog_requires_connection() -> None:
     controller = PlotterController()
     with pytest.raises(RuntimeError):
         await controller.jog(1.0, 1.0, _profile())
+
+
+class _SilentTransport:
+    """Transport that records writes but never acknowledges, to test timeouts."""
+
+    def __init__(self) -> None:
+        self.written: list[str] = []
+
+    async def write_line(self, line: str) -> None:
+        self.written.append(line)
+
+    async def read_line(self) -> str:
+        await asyncio.sleep(3600)
+        return "ok"
+
+    async def close(self) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_streamer_times_out_without_ack() -> None:
+    streamer = GcodeStreamer(_SilentTransport(), ack_timeout_s=0.05)
+    with pytest.raises(StreamError):
+        await streamer.run("G0 X1\n")
+    assert streamer.progress.state == StreamState.ERROR
+
+
+@pytest.mark.asyncio
+async def test_controller_rejects_jog_during_job() -> None:
+    controller = PlotterController()
+    controller.attach(_SilentTransport())  # never acks, so the job stays running
+    await controller.run("G0 X1\nG0 X2\n")
+    await asyncio.sleep(0.01)
+    with pytest.raises(RuntimeError):
+        await controller.jog(1.0, 1.0, _profile())
+    controller.abort()

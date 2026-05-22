@@ -32,21 +32,17 @@ class JobRecord(SQLModel, table=True):
     created_at: datetime
 
 
-def _default_engine() -> Engine:
-    """Create the application's SQLite engine, ensuring its directory exists."""
-    _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{_DB_PATH}")
-
-
-engine: Engine = _default_engine()
+engine: Engine = create_engine(f"sqlite:///{_DB_PATH}")
 
 
 def init_db(target: Engine = engine) -> None:
-    """Create tables if they do not yet exist.
+    """Create the database directory and tables if they do not yet exist.
 
     Args:
         target: The engine to initialize.
     """
+    if target.url.database and target.url.database != ":memory:":
+        Path(target.url.database).parent.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(target)
 
 
