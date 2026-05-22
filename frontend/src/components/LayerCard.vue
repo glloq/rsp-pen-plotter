@@ -51,7 +51,7 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
 <template>
   <div class="rounded border border-slate-700 bg-slate-800 px-3 py-2 space-y-2">
     <div class="flex items-center gap-3">
-      <span class="cursor-grab text-slate-500 select-none" title="Drag to reorder">⠿</span>
+      <span class="cursor-grab text-slate-500 select-none" :title="t('layers.dragHint')">⠿</span>
       <input v-model="visible" type="checkbox" class="h-4 w-4 accent-emerald-500" />
       <span
         class="h-5 w-5 rounded border border-slate-600 shrink-0"

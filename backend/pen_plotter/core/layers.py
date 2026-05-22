@@ -129,6 +129,47 @@ def _group_to_svg(viewbox: str | None, group: ET.Element) -> str:
     return f"<svg {attrs}{vb}>{inner}</svg>"
 
 
+def _labeled_groups(root: ET.Element) -> list[ET.Element]:
+    """Return top-level ``<g>`` children carrying an ``inkscape:label``."""
+    return [
+        child
+        for child in root
+        if _local(child.tag) == "g" and child.get(_INKSCAPE_LABEL) is not None
+    ]
+
+
+def labeled_group_fragments(svg: str) -> list[tuple[str, str]]:
+    """Split a pivot SVG into ``(label, standalone-svg)`` fragments per layer.
+
+    Each labeled top-level group becomes its own standalone SVG (so it can be
+    measured or converted independently); when no labeled groups exist, the
+    whole document is returned as a single ``layer-1`` fragment. This is the
+    single source of truth for how the pipeline maps SVG groups to layers.
+
+    Args:
+        svg: The normalized SVG markup.
+
+    Returns:
+        Ordered ``(label, fragment)`` pairs in document order.
+
+    Raises:
+        ValueError: If the SVG cannot be parsed.
+    """
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError as exc:
+        raise ValueError(f"Could not parse SVG: {exc}") from exc
+
+    groups = _labeled_groups(root)
+    if not groups:
+        return [("layer-1", svg)]
+    viewbox = root.get("viewBox")
+    return [
+        (group.get(_INKSCAPE_LABEL) or f"layer-{i + 1}", _group_to_svg(viewbox, group))
+        for i, group in enumerate(groups)
+    ]
+
+
 def extract_layers(svg: str) -> list[LayerInfo]:
     """Extract layer descriptors from a pivot SVG document.
 
@@ -147,11 +188,7 @@ def extract_layers(svg: str) -> list[LayerInfo]:
         raise ValueError(f"Could not parse SVG: {exc}") from exc
 
     viewbox = root.get("viewBox")
-    groups = [
-        child
-        for child in root
-        if _local(child.tag) == "g" and child.get(_INKSCAPE_LABEL) is not None
-    ]
+    groups = _labeled_groups(root)
 
     if not groups:
         length, bbox = _measure(svg)

@@ -12,12 +12,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
-from xml.etree import ElementTree as ET
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from pen_plotter.core.arcs import ArcTo, fit_arcs
-from pen_plotter.core.layers import _INKSCAPE_LABEL, _group_to_svg, _local
+from pen_plotter.core.layers import labeled_group_fragments
 from pen_plotter.core.toolpath import _doc_from_svg
 from pen_plotter.models import MachineProfile
 
@@ -72,24 +71,8 @@ class _Layer:
 
 def _read_layers(svg: str) -> list[_Layer]:
     """Read per-layer polyline geometry from the pivot SVG, in user units."""
-    root = ET.fromstring(svg)
-    viewbox = root.get("viewBox")
-    groups = [
-        child
-        for child in root
-        if _local(child.tag) == "g" and child.get(_INKSCAPE_LABEL) is not None
-    ]
-    fragments: list[tuple[str, str]]
-    if groups:
-        fragments = [
-            (group.get(_INKSCAPE_LABEL) or f"layer-{i + 1}", _group_to_svg(viewbox, group))
-            for i, group in enumerate(groups)
-        ]
-    else:
-        fragments = [("layer-1", svg)]
-
     layers: list[_Layer] = []
-    for label, fragment in fragments:
+    for label, fragment in labeled_group_fragments(svg):
         doc = _doc_from_svg(fragment)
         layer = _Layer(label=label)
         for collection in doc.layers.values():
@@ -183,10 +166,7 @@ def generate_gcode(
     Raises:
         ValueError: If the SVG cannot be parsed.
     """
-    try:
-        layer_geometry = _read_layers(svg)
-    except ET.ParseError as exc:
-        raise ValueError(f"Could not parse SVG: {exc}") from exc
+    layer_geometry = _read_layers(svg)
 
     overrides = {item.layer_id: item for item in (layers or [])}
     bounds = _bounds_of(layer_geometry)

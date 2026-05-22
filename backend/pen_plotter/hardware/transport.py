@@ -9,6 +9,7 @@ and offline development.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import Protocol, runtime_checkable
 
 
@@ -107,5 +108,7 @@ class SerialTransport:
         return data.decode("ascii", errors="replace").strip()
 
     async def close(self) -> None:
-        """Close the serial writer."""
+        """Close the serial writer and wait for the transport to drain."""
         self._writer.close()
+        with contextlib.suppress(Exception):
+            await self._writer.wait_closed()

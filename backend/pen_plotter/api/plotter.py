@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from pen_plotter.hardware.controller import controller
+from pen_plotter.models import MachineProfile
 from pen_plotter.profiles import get_profile
 
 router = APIRouter()
@@ -61,7 +62,7 @@ def _status() -> StatusResponse:
     )
 
 
-def _profile_or_404(name: str):  # type: ignore[no-untyped-def]
+def _profile_or_404(name: str) -> MachineProfile:
     profile = get_profile(name)
     if profile is None:
         raise HTTPException(status_code=404, detail=f"Unknown profile: {name!r}")
