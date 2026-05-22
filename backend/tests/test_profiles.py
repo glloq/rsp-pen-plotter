@@ -61,3 +61,58 @@ async def test_import_invalid_returns_422() -> None:
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post("/profiles/import", json={"yaml": "name: x\nunits: bogus"})
     assert response.status_code == 422
+
+
+def _sample_profile(name: str) -> dict[str, object]:
+    return {
+        "name": name,
+        "units": "mm",
+        "workspace": {"x_min": 0.0, "y_min": 0.0, "x_max": 200.0, "y_max": 200.0},
+        "origin": "bottom_left",
+        "gcode_dialect": "grbl",
+        "pen_up_command": "M280 P0 S40",
+        "pen_down_command": "M280 P0 S90",
+        "tool_change_method": "manual_pause",
+        "tool_change_command": "M0",
+        "drawing_speed_mm_s": 50.0,
+        "travel_speed_mm_s": 100.0,
+        "acceleration_mm_s2": 1000.0,
+        "pen_slot_count": 3,
+    }
+
+
+@pytest.mark.asyncio
+async def test_create_get_and_delete_roundtrip() -> None:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        created = await client.post("/profiles", json=_sample_profile("UI Test Plotter"))
+        assert created.status_code == 200
+        assert created.json()["pen_slot_count"] == 3
+
+        fetched = await client.get("/profiles/UI Test Plotter")
+        assert fetched.status_code == 200
+
+        deleted = await client.request("DELETE", "/profiles/UI Test Plotter")
+        assert deleted.status_code == 200
+        assert deleted.json() == {"deleted": "UI Test Plotter"}
+
+        missing = await client.get("/profiles/UI Test Plotter")
+        assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_invalid_returns_422() -> None:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        bad = _sample_profile("Bad Plotter")
+        bad["units"] = "bogus"
+        response = await client.post("/profiles", json=bad)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_delete_unknown_returns_404() -> None:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.request("DELETE", "/profiles/does-not-exist")
+    assert response.status_code == 404

@@ -34,6 +34,40 @@
     "travelReduction": "Réduction du déplacement",
     "fillHint": "L'optimisation convertit les formes pleines en contours (un stylo trace des lignes, pas des remplissages)."
   },
+  "profile": {
+    "title": "Profil machine",
+    "name": "Nom",
+    "sheet": "Feuille / espace de travail",
+    "units": "Unités",
+    "origin": "Origine",
+    "motion": "Vitesses & accélération",
+    "drawingSpeed": "Vitesse de tracé (mm/s)",
+    "travelSpeed": "Vitesse de déplacement (mm/s)",
+    "acceleration": "Accélération (mm/s²)",
+    "pen": "Stylo & outil",
+    "penUp": "Commande lever stylo",
+    "penDown": "Commande baisser stylo",
+    "toolChangeMethod": "Changement d'outil",
+    "toolChangeCommand": "Commande changement d'outil",
+    "penSlots": "Emplacements stylos",
+    "advanced": "Avancé",
+    "dialect": "Dialecte G-code",
+    "supportsArcs": "Supporte les arcs (G2/G3)",
+    "arcTolerance": "Tolérance d'arc (mm)",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "duplicate": "Dupliquer",
+    "export": "Exporter YAML",
+    "delete": "Supprimer",
+    "saveFailed": "Impossible d'enregistrer le profil.",
+    "deleteFailed": "Impossible de supprimer le profil."
+  },
+  "job": {
+    "scaleMode": "Échelle",
+    "scaleFit": "Ajuster à la feuille",
+    "scaleActual": "Taille réelle",
+    "margin": "Marge (mm)"
+  },
   "preview": {
     "placeholder": "Importez un fichier pour l'aperçu ici"
   },

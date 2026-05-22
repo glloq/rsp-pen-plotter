@@ -98,3 +98,19 @@ def save_profile(profile: MachineProfile, directory: Path = USER_DIR) -> Path:
     path = directory / f"{_slug(profile.name)}.yaml"
     path.write_text(export_profile_yaml(profile))
     return path
+
+
+def delete_profile(name: str, directory: Path = USER_DIR) -> bool:
+    """Delete a user profile by name.
+
+    Only profiles stored in the user directory can be removed; bundled
+    profiles are read-only.
+
+    Returns:
+        ``True`` if a user profile file was removed, ``False`` otherwise.
+    """
+    path = directory / f"{_slug(name)}.yaml"
+    if path.is_file():
+        path.unlink()
+        return True
+    return False

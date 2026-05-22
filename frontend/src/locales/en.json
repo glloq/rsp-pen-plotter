@@ -34,6 +34,40 @@
     "travelReduction": "Travel reduction",
     "fillHint": "Optimization converts filled shapes to outline strokes (pens draw lines, not fills)."
   },
+  "profile": {
+    "title": "Machine profile",
+    "name": "Name",
+    "sheet": "Sheet / workspace",
+    "units": "Units",
+    "origin": "Origin",
+    "motion": "Speeds & acceleration",
+    "drawingSpeed": "Drawing speed (mm/s)",
+    "travelSpeed": "Travel speed (mm/s)",
+    "acceleration": "Acceleration (mm/s²)",
+    "pen": "Pen & tool",
+    "penUp": "Pen-up command",
+    "penDown": "Pen-down command",
+    "toolChangeMethod": "Tool change",
+    "toolChangeCommand": "Tool change command",
+    "penSlots": "Pen slots",
+    "advanced": "Advanced",
+    "dialect": "G-code dialect",
+    "supportsArcs": "Supports arcs (G2/G3)",
+    "arcTolerance": "Arc tolerance (mm)",
+    "save": "Save",
+    "saving": "Saving…",
+    "duplicate": "Duplicate",
+    "export": "Export YAML",
+    "delete": "Delete",
+    "saveFailed": "Could not save profile.",
+    "deleteFailed": "Could not delete profile."
+  },
+  "job": {
+    "scaleMode": "Scale",
+    "scaleFit": "Fit to sheet",
+    "scaleActual": "Actual size",
+    "margin": "Margin (mm)"
+  },
   "preview": {
     "placeholder": "Upload a file to preview it here"
   },

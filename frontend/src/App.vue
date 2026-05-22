@@ -7,6 +7,7 @@ import GcodePreview from './components/GcodePreview.vue'
 import JobHistory from './components/JobHistory.vue'
 import LayerPanel from './components/LayerPanel.vue'
 import PlotterPanel from './components/PlotterPanel.vue'
+import ProfileEditor from './components/ProfileEditor.vue'
 import Simulator from './components/Simulator.vue'
 import SvgPreview from './components/SvgPreview.vue'
 import { useJobStore } from './stores/job'
@@ -75,6 +76,7 @@ onMounted(async () => {
     <main class="grid grid-cols-1 gap-4 p-6 lg:grid-cols-[320px_1fr]">
       <aside class="space-y-4">
         <FileUpload />
+        <ProfileEditor />
         <LayerPanel />
         <PlotterPanel />
         <JobHistory />

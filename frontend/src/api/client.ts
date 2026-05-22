@@ -59,21 +59,60 @@ export async function getJobs(): Promise<JobRecord[]> {
   return response.data
 }
 
+export interface WorkspaceBounds {
+  x_min: number
+  y_min: number
+  x_max: number
+  y_max: number
+}
+
+export interface EbbConfig {
+  steps_per_mm: number
+  servo_up: number
+  servo_down: number
+  servo_rate: number
+  serial_terminator: 'cr' | 'lf' | 'crlf'
+}
+
+export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'
+export type Origin = 'top_left' | 'bottom_left' | 'center'
+export type ToolChangeMethod = 'manual_pause' | 'carousel' | 'rack' | 'none'
+
 export interface MachineProfile {
   name: string
-  units: string
-  origin: string
-  gcode_dialect: string
+  units: 'mm' | 'inch'
+  workspace: WorkspaceBounds
+  origin: Origin
+  gcode_dialect: GcodeDialect
   pen_up_command: string
   pen_down_command: string
+  tool_change_method: ToolChangeMethod
+  tool_change_command: string
   drawing_speed_mm_s: number
   travel_speed_mm_s: number
   acceleration_mm_s2: number
   pen_slot_count: number
+  supports_arcs: boolean
+  arc_tolerance_mm: number
+  ebb: EbbConfig | null
 }
 
 export async function getProfiles(): Promise<MachineProfile[]> {
   const response = await api.get<MachineProfile[]>('/profiles')
+  return response.data
+}
+
+export async function saveProfile(profile: MachineProfile): Promise<MachineProfile> {
+  const response = await api.post<MachineProfile>('/profiles', profile)
+  return response.data
+}
+
+export async function deleteProfile(name: string): Promise<void> {
+  await api.delete(`/profiles/${encodeURIComponent(name)}`)
+}
+
+export async function exportProfileYaml(name: string): Promise<string> {
+  const response = await api.get<string>(`/profiles/${encodeURIComponent(name)}/export`)
   return response.data
 }
 
@@ -154,12 +193,14 @@ export async function generateGcode(
   profileName: string,
   layers: GenerateLayer[],
   scaleMode: 'fit' | 'actual' = 'fit',
+  marginMm = 10,
 ): Promise<GenerateResponse> {
   const response = await api.post<GenerateResponse>('/generate', {
     svg,
     profile_name: profileName,
     layers,
     scale_mode: scaleMode,
+    margin_mm: marginMm,
   })
   return response.data
 }
