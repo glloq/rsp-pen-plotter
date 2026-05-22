@@ -176,6 +176,29 @@
     "save": "Enregistrer la macro",
     "clear": "Effacer"
   },
+  "queue": {
+    "title": "File d'impression",
+    "empty": "La file est vide.",
+    "add": "Ajouter le G-code courant",
+    "addHint": "Générez d'abord le G-code.",
+    "pause": "Pause",
+    "resume": "Reprendre",
+    "cancel": "Annuler",
+    "delete": "Retirer",
+    "cancelTitle": "Annuler le travail",
+    "cancelMsg": "Annuler « {name} » ? Un travail en cours s'arrêtera immédiatement.",
+    "loadFailed": "Impossible de charger la file d'impression.",
+    "enqueueFailed": "Impossible d'ajouter le travail à la file.",
+    "actionFailed": "Échec de l'action sur la file.",
+    "state": {
+      "queued": "En attente",
+      "running": "En cours",
+      "paused": "En pause",
+      "completed": "Terminé",
+      "failed": "Échec",
+      "canceled": "Annulé"
+    }
+  },
   "history": {
     "title": "Historique",
     "empty": "Aucun travail pour l'instant."

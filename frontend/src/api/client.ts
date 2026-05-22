@@ -282,6 +282,54 @@ export async function preflightCheck(
   return response.data
 }
 
+export type RunState = 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'canceled'
+
+export interface PrintRun {
+  id: string
+  name: string
+  profile_name: string
+  gcode: string
+  total_lines: number
+  acked_lines: number
+  state: RunState
+  priority: number
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export async function listQueue(): Promise<PrintRun[]> {
+  const response = await api.get<PrintRun[]>('/queue')
+  return response.data
+}
+
+export async function enqueuePrint(
+  name: string,
+  profileName: string,
+  gcode: string,
+  priority = 0,
+): Promise<PrintRun> {
+  const response = await api.post<PrintRun>('/queue', {
+    name,
+    profile_name: profileName,
+    gcode,
+    priority,
+  })
+  return response.data
+}
+
+export async function queueRunAction(
+  id: string,
+  action: 'pause' | 'resume' | 'cancel',
+): Promise<PrintRun> {
+  const response = await api.post<PrintRun>(`/queue/${encodeURIComponent(id)}/${action}`)
+  return response.data
+}
+
+export async function deleteQueuedRun(id: string): Promise<void> {
+  await api.delete(`/queue/${encodeURIComponent(id)}`)
+}
+
 export interface PlotterStatus {
   connected: boolean
   total: number

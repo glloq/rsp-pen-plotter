@@ -176,6 +176,29 @@
     "save": "Save macro",
     "clear": "Clear"
   },
+  "queue": {
+    "title": "Print queue",
+    "empty": "Queue is empty.",
+    "add": "Add current G-code",
+    "addHint": "Generate G-code first.",
+    "pause": "Pause",
+    "resume": "Resume",
+    "cancel": "Cancel",
+    "delete": "Remove",
+    "cancelTitle": "Cancel run",
+    "cancelMsg": "Cancel \"{name}\"? A running job will stop immediately.",
+    "loadFailed": "Could not load the print queue.",
+    "enqueueFailed": "Could not add the job to the queue.",
+    "actionFailed": "Queue action failed.",
+    "state": {
+      "queued": "Queued",
+      "running": "Running",
+      "paused": "Paused",
+      "completed": "Completed",
+      "failed": "Failed",
+      "canceled": "Canceled"
+    }
+  },
   "history": {
     "title": "History",
     "empty": "No jobs yet."

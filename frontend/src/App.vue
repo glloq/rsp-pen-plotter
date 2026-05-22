@@ -10,6 +10,7 @@ import LayerPanel from './components/LayerPanel.vue'
 import MacroPanel from './components/MacroPanel.vue'
 import PlotterPanel from './components/PlotterPanel.vue'
 import ProfileEditor from './components/ProfileEditor.vue'
+import QueuePanel from './components/QueuePanel.vue'
 import SheetPreview from './components/SheetPreview.vue'
 import Simulator from './components/Simulator.vue'
 import SvgPreview from './components/SvgPreview.vue'
@@ -90,6 +91,7 @@ onMounted(async () => {
         <ProfileEditor />
         <LayerPanel />
         <PlotterPanel />
+        <QueuePanel />
         <MacroPanel />
         <JobHistory />
       </aside>
