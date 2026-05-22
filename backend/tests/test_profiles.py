@@ -30,3 +30,34 @@ async def test_profiles_endpoint() -> None:
     assert response.status_code == 200
     names = {p["name"] for p in response.json()}
     assert "Custom CoreXY A3" in names
+
+
+@pytest.mark.asyncio
+async def test_get_export_and_import_roundtrip() -> None:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        single = await client.get("/profiles/Custom CoreXY A3")
+        assert single.status_code == 200
+        assert single.json()["pen_slot_count"] == 6
+
+        exported = await client.get("/profiles/Custom CoreXY A3/export")
+        assert exported.status_code == 200
+        yaml_text = exported.text.replace("Custom CoreXY A3", "Imported Test Plotter")
+
+        imported = await client.post("/profiles/import", json={"yaml": yaml_text})
+        assert imported.status_code == 200
+        assert imported.json()["name"] == "Imported Test Plotter"
+
+        listed = await client.get("/profiles")
+        assert "Imported Test Plotter" in {p["name"] for p in listed.json()}
+
+        missing = await client.get("/profiles/nope")
+        assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_import_invalid_returns_422() -> None:
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/profiles/import", json={"yaml": "name: x\nunits: bogus"})
+    assert response.status_code == 422

@@ -94,6 +94,7 @@ function formatDuration(seconds: number): string {
         <span>{{ t('layers.travelReduction') }}</span>
         <span class="font-mono">{{ store.metrics.reduction_pct.toFixed(1) }}%</span>
       </div>
+      <p class="mt-1 text-xs text-sky-400/80">{{ t('layers.fillHint') }}</p>
     </div>
   </div>
 </template>

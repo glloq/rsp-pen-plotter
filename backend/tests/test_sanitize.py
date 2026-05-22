@@ -7,10 +7,10 @@ from pen_plotter.main import app
 
 MALICIOUS = (
     '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)">'
-    '<script>alert(2)</script>'
+    "<script>alert(2)</script>"
     '<rect width="10" height="10" onclick="evil()"/>'
     '<a href="javascript:alert(3)">x</a>'
-    '<foreignObject><body>hi</body></foreignObject>'
+    "<foreignObject><body>hi</body></foreignObject>"
     "</svg>"
 )
 

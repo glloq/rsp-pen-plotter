@@ -79,6 +79,6 @@ function sendJob(): void {
       </div>
     </div>
 
-    <p v-if="error" class="text-sm text-red-400">{{ t('plotter.commandFailed') }}</p>
+    <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
   </div>
 </template>

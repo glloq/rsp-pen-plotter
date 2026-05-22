@@ -23,6 +23,7 @@ export const usePlotterStore = defineStore('plotter', () => {
   const baudrate = ref(115200)
   const error = ref<string | null>(null)
   let socket: WebSocket | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
   const progress = computed(() =>
     status.value.total > 0 ? status.value.acked / status.value.total : 0,
@@ -36,15 +37,27 @@ export const usePlotterStore = defineStore('plotter', () => {
     }
     socket.onclose = () => {
       socket = null
+      // Reconnect while we believe we're still connected to a device.
+      if (status.value.connected && reconnectTimer === null) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null
+          openSocket()
+        }, 2000)
+      }
     }
+  }
+
+  function withErrorDetail(err: unknown): string {
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    return detail ?? 'Plotter command failed (is a device connected?).'
   }
 
   async function withErrors(fn: () => Promise<PlotterStatus>): Promise<void> {
     error.value = null
     try {
       status.value = await fn()
-    } catch {
-      error.value = 'Plotter command failed (is a device connected?).'
+    } catch (err) {
+      error.value = withErrorDetail(err)
     }
   }
 
