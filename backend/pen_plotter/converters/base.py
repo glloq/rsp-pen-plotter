@@ -27,6 +27,7 @@ class ConversionResult(BaseModel):
     svg: str
     source_mime: str
     warnings: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Converter(ABC):

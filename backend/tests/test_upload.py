@@ -1,10 +1,19 @@
 import httpx
+import pymupdf
 import pytest
 from httpx import ASGITransport
 
 from pen_plotter.main import app
 
 SVG_SAMPLE = b'<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'
+
+
+def _one_page_pdf() -> bytes:
+    doc = pymupdf.open()
+    doc.new_page(width=100, height=100).draw_line((10, 10), (90, 90))
+    data = doc.tobytes()
+    doc.close()
+    return data
 
 
 def _client() -> httpx.AsyncClient:
@@ -54,6 +63,18 @@ async def test_upload_png_with_options_dispatches_to_bitmap(two_color_png: bytes
         )
     assert response.status_code == 200
     assert response.json()["source_mime"] == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_upload_pdf_resolves_mime_from_extension() -> None:
+    async with _client() as client:
+        response = await client.post(
+            "/upload",
+            files={"file": ("drawing.pdf", _one_page_pdf(), "application/octet-stream")},
+            data={"profile_name": "Custom CoreXY A3"},
+        )
+    assert response.status_code == 200
+    assert response.json()["source_mime"] == "application/pdf"
 
 
 @pytest.mark.asyncio

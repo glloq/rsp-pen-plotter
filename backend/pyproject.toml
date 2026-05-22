@@ -14,6 +14,8 @@ dependencies = [
     "pillow-heif>=0.18",
     "numpy>=2.0",
     "scikit-learn>=1.5",
+    "pymupdf>=1.24",
+    "ezdxf>=1.3",
 ]
 
 [project.optional-dependencies]
@@ -53,8 +55,9 @@ strict = true
 files = ["pen_plotter"]
 
 [[tool.mypy.overrides]]
-module = ["pillow_heif", "sklearn.*"]
+module = ["pillow_heif", "sklearn.*", "pymupdf", "ezdxf", "ezdxf.*"]
 ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
