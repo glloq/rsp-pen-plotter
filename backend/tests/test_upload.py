@@ -31,11 +31,13 @@ async def test_upload_svg_dispatches_to_svg_converter() -> None:
         )
     assert response.status_code == 200
     body = response.json()
-    assert body["source_mime"] == "image/svg+xml"
-    assert body["source_file"] == "drawing.svg"
-    assert body["profile_name"] == "Custom CoreXY A3"
-    assert body["status"] == "ready"
-    assert body["layers"] == []
+    assert body["svg"].startswith("<svg")
+    job = body["job"]
+    assert job["source_mime"] == "image/svg+xml"
+    assert job["source_file"] == "drawing.svg"
+    assert job["profile_name"] == "Custom CoreXY A3"
+    assert job["status"] == "ready"
+    assert len(job["layers"]) == 1
 
 
 @pytest.mark.asyncio
@@ -47,7 +49,7 @@ async def test_upload_resolves_mime_from_extension() -> None:
             data={"profile_name": "Custom CoreXY A3"},
         )
     assert response.status_code == 200
-    assert response.json()["source_mime"] == "image/svg+xml"
+    assert response.json()["job"]["source_mime"] == "image/svg+xml"
 
 
 @pytest.mark.asyncio
@@ -62,7 +64,7 @@ async def test_upload_png_with_options_dispatches_to_bitmap(two_color_png: bytes
             },
         )
     assert response.status_code == 200
-    assert response.json()["source_mime"] == "image/png"
+    assert response.json()["job"]["source_mime"] == "image/png"
 
 
 @pytest.mark.asyncio
@@ -74,7 +76,7 @@ async def test_upload_pdf_resolves_mime_from_extension() -> None:
             data={"profile_name": "Custom CoreXY A3"},
         )
     assert response.status_code == 200
-    assert response.json()["source_mime"] == "application/pdf"
+    assert response.json()["job"]["source_mime"] == "application/pdf"
 
 
 @pytest.mark.asyncio

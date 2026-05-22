@@ -8,12 +8,21 @@ from pathlib import PurePosixPath
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from pen_plotter.converters.base import UnsupportedFormatError
 from pen_plotter.converters.registry import registry
+from pen_plotter.core.layers import extract_layers
 from pen_plotter.models import Job
 
 router = APIRouter()
+
+
+class UploadResponse(BaseModel):
+    """Result of an upload: the created job and the normalized SVG pivot."""
+
+    job: Job
+    svg: str
 
 
 def _resolve_mime(upload: UploadFile) -> str | None:
@@ -62,8 +71,8 @@ async def upload(
     file: Annotated[UploadFile, File()],
     profile_name: Annotated[str, Form()],
     options: Annotated[str | None, Form()] = None,
-) -> Job:
-    """Accept a file, dispatch it to its converter, and create a job.
+) -> UploadResponse:
+    """Accept a file, normalize it to SVG, extract layers, and create a job.
 
     Args:
         file: The uploaded source file.
@@ -71,7 +80,8 @@ async def upload(
         options: Optional JSON object of converter-specific parameters.
 
     Returns:
-        A :class:`Job` describing the accepted upload after normalization.
+        An :class:`UploadResponse` with the created job (layers populated) and
+        the normalized SVG pivot.
 
     Raises:
         HTTPException: 400 for invalid options or input the converter rejects;
@@ -90,14 +100,16 @@ async def upload(
     parsed_options.setdefault("source_mime", mime)
     data = await file.read()
     try:
-        converter.convert(data, options=parsed_options)
+        result = converter.convert(data, options=parsed_options)
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     source_file = PurePosixPath(file.filename).name if file.filename else "upload"
-    return Job(
+    job = Job(
         source_file=source_file,
         source_mime=mime,
         profile_name=profile_name,
+        layers=extract_layers(result.svg),
         status="ready",
     )
+    return UploadResponse(job=job, svg=result.svg)
