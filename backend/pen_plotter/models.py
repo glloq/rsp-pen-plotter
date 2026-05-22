@@ -67,6 +67,8 @@ class MachineProfile(BaseModel):
     travel_speed_mm_s: float
     acceleration_mm_s2: float
     pen_slot_count: int
+    supports_arcs: bool = False
+    arc_tolerance_mm: float = 0.1
     ebb: EbbConfig | None = None
 
 
