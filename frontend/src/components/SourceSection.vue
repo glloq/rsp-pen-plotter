@@ -4,16 +4,19 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { getAlgorithms, getFonts, type AlgorithmInfo } from '../api/client'
 import { useJobStore } from '../stores/job'
+import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
 const store = useJobStore()
-const { profiles, selectedProfileName, presets, selectedPresetName } = storeToRefs(store)
+const ui = useUiStore()
+const { presets, selectedPresetName } = storeToRefs(store)
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const selectedFile = ref<File | null>(null)
 const algorithms = ref<AlgorithmInfo[]>([])
 const fonts = ref<string[]>([])
 const showOptions = ref(false)
+const dragOver = ref(false)
 
 const bitmap = ref({
   algorithm: 'direct',
@@ -39,6 +42,7 @@ const typo = ref({
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'tiff', 'webp', 'heic']
 const TEXT_EXT = ['txt', 'md', 'html', 'docx', 'odt', 'rtf']
+const ACCEPT = '.svg,.png,.jpg,.jpeg,.tiff,.webp,.heic,.pdf,.dxf,.eps,.ps,.ai,.txt,.md,.html,.docx,.odt,.rtf'
 
 const kind = computed<'bitmap' | 'typography' | 'none'>(() => {
   const ext = selectedFile.value?.name.split('.').pop()?.toLowerCase() ?? ''
@@ -55,7 +59,6 @@ onMounted(async () => {
   }
 })
 
-// When a bitmap preset is chosen, prefill the bitmap form from its options.
 watch(selectedPresetName, (name) => {
   const preset = presets.value.find((p) => p.name === name)
   if (!preset) return
@@ -74,6 +77,12 @@ function onFileChange(event: Event): void {
   const target = event.target as HTMLInputElement
   selectedFile.value = target.files?.[0] ?? null
   target.value = ''
+}
+
+function onDrop(event: DragEvent): void {
+  dragOver.value = false
+  const file = event.dataTransfer?.files?.[0] ?? null
+  if (file) selectedFile.value = file
 }
 
 function buildOptions(): Record<string, unknown> | undefined {
@@ -102,6 +111,7 @@ function buildOptions(): Record<string, unknown> | undefined {
 async function uploadSelected(): Promise<void> {
   if (!selectedFile.value) return
   await store.upload(selectedFile.value, buildOptions())
+  if (store.layers.length) ui.canvasTab = 'sheet'
 }
 
 function openPicker(): void {
@@ -110,51 +120,44 @@ function openPicker(): void {
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-3">
-    <label class="block text-sm text-slate-400">
-      {{ t('upload.profile') }}
-      <select
-        v-model="selectedProfileName"
-        class="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-100"
-      >
-        <option v-for="profile in profiles" :key="profile.name" :value="profile.name">
-          {{ profile.name }} ({{ profile.pen_slot_count }})
-        </option>
-      </select>
-    </label>
-
-    <label class="block text-sm text-slate-400">
-      {{ t('upload.preset') }}
-      <select
-        v-model="selectedPresetName"
-        class="mt-1 w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-100"
-      >
-        <option value="">{{ t('upload.presetNone') }}</option>
-        <option v-for="preset in presets" :key="preset.name" :value="preset.name">
-          {{ preset.name }}
-        </option>
-      </select>
-    </label>
+  <section class="space-y-2">
+    <h2 class="px-1 text-xs uppercase tracking-wider text-slate-500">{{ t('prepare.source') }}</h2>
 
     <input
       ref="fileInput"
       type="file"
       class="hidden"
-      accept=".svg,.png,.jpg,.jpeg,.tiff,.webp,.heic,.pdf,.dxf,.eps,.ps,.ai,.txt,.md,.html,.docx,.odt,.rtf"
+      :accept="ACCEPT"
       @change="onFileChange"
     />
-    <button
-      type="button"
-      class="w-full rounded bg-slate-700 hover:bg-slate-600 px-4 py-2 font-medium text-slate-100"
-      @click="openPicker"
-    >
-      {{ selectedFile ? selectedFile.name : t('upload.pick') }}
-    </button>
 
-    <div v-if="selectedFile && kind !== 'none'" class="rounded border border-slate-700">
+    <div
+      class="rounded-lg border-2 border-dashed px-3 py-4 text-center transition"
+      :class="dragOver ? 'border-emerald-500 bg-emerald-950/30' : 'border-slate-700 bg-slate-900/40'"
+      @dragenter.prevent="dragOver = true"
+      @dragover.prevent="dragOver = true"
+      @dragleave.prevent="dragOver = false"
+      @drop.prevent="onDrop"
+    >
+      <p v-if="selectedFile" class="truncate text-sm font-medium text-slate-100" :title="selectedFile.name">
+        {{ selectedFile.name }}
+      </p>
+      <p v-else class="text-sm text-slate-400">
+        {{ t('upload.dropHere') }}
+      </p>
       <button
         type="button"
-        class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400"
+        class="mt-2 rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
+        @click="openPicker"
+      >
+        {{ selectedFile ? t('upload.changeFile') : t('upload.pick') }}
+      </button>
+    </div>
+
+    <div v-if="selectedFile && kind !== 'none'" class="rounded-lg border border-slate-700 bg-slate-800">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
         :aria-expanded="showOptions"
         @click="showOptions = !showOptions"
       >
@@ -240,20 +243,20 @@ function openPicker(): void {
     <button
       v-if="selectedFile"
       type="button"
-      class="w-full rounded bg-emerald-600 hover:bg-emerald-500 px-4 py-2 font-medium text-white disabled:opacity-50"
+      class="w-full rounded bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
       :disabled="store.loading"
       @click="uploadSelected"
     >
       {{ store.loading ? t('upload.converting') : t('upload.choose') }}
     </button>
 
-    <p v-if="store.error && store.errorScope === 'upload'" class="text-sm text-red-400">
+    <p v-if="store.error && store.errorScope === 'upload'" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-xs text-red-300">
       {{ store.error }}
     </p>
-    <p v-else-if="store.job" class="text-sm text-slate-400">
+    <p v-else-if="store.job" class="px-1 text-xs text-slate-500">
       {{ t('upload.loaded') }}
-      <span class="font-mono text-slate-200">{{ store.job.source_file }}</span>
+      <span class="font-mono text-slate-300">{{ store.job.source_file }}</span>
       ({{ t('upload.layers', store.layers.length) }})
     </p>
-  </div>
+  </section>
 </template>

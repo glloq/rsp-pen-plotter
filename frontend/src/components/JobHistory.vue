@@ -25,14 +25,13 @@ watch(
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-2">
-    <h2 class="text-sm uppercase tracking-wide text-slate-400">{{ t('history.title') }}</h2>
+  <div class="space-y-2">
     <p v-if="!jobs.length" class="text-sm text-slate-500">{{ t('history.empty') }}</p>
-    <ul v-else class="space-y-1 max-h-48 overflow-auto">
+    <ul v-else class="space-y-1 max-h-[60vh] overflow-auto">
       <li
         v-for="job in jobs"
         :key="job.job_id"
-        class="flex items-center justify-between rounded bg-slate-900 px-2 py-1 text-xs"
+        class="flex items-center justify-between rounded bg-slate-800 px-2 py-1 text-xs"
       >
         <span class="truncate font-mono text-slate-200">{{ job.source_file }}</span>
         <span class="text-slate-500">{{ job.layer_count }}</span>

@@ -8,7 +8,6 @@ import { useJobStore } from '../stores/job'
 const { t } = useI18n()
 const store = useJobStore()
 
-const open = ref(false)
 const draft = ref<MachineProfile | null>(null)
 const saving = ref(false)
 const error = ref<string | null>(null)
@@ -121,18 +120,7 @@ async function downloadYaml(): Promise<void> {
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800">
-    <button
-      type="button"
-      class="flex w-full items-center justify-between px-4 py-3 text-sm uppercase tracking-wide text-slate-300"
-      :aria-expanded="open"
-      @click="open = !open"
-    >
-      {{ t('profile.title') }}
-      <span class="text-slate-500">{{ open ? '−' : '+' }}</span>
-    </button>
-
-    <div v-if="open && draft" class="space-y-4 border-t border-slate-700 p-4 text-sm">
+  <div v-if="draft" class="space-y-4 text-sm">
       <label class="block text-slate-400">
         {{ t('profile.name') }}
         <input v-model="draft.name" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
@@ -308,6 +296,5 @@ async function downloadYaml(): Promise<void> {
           {{ t('profile.delete') }}
         </button>
       </div>
-    </div>
   </div>
 </template>

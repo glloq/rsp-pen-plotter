@@ -31,7 +31,7 @@ const scaleLabel = computed(() => {
 <template>
   <div
     v-if="data"
-    class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3"
+    class="rounded-lg border border-slate-700 bg-slate-800/60 p-3"
   >
     <div class="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs">
       <h2 class="uppercase tracking-wide text-slate-400">{{ t('sheet.title') }}</h2>
