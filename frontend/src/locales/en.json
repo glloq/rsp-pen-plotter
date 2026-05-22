@@ -3,11 +3,68 @@
     "tagline": "Universal pen plotter studio",
     "apiUnreachable": "API unreachable"
   },
+  "header": {
+    "profile": "Profile",
+    "preset": "Preset",
+    "settings": "Settings"
+  },
+  "machine": {
+    "disconnected": "Offline",
+    "idle": "Ready",
+    "running": "Running",
+    "paused": "Paused",
+    "toolChange": "Pen change",
+    "error": "Error"
+  },
+  "prepare": {
+    "source": "Source",
+    "layout": "Layout",
+    "output": "Output"
+  },
+  "execute": {
+    "connection": "Connection",
+    "terminator": "Terminator",
+    "jog": "Manual jog",
+    "run": "Run",
+    "runHint": "Generate G-code to send it or add it to the queue.",
+    "queue": "Queue"
+  },
+  "canvas": {
+    "sheet": "Layout",
+    "svg": "SVG",
+    "simulator": "Simulator",
+    "gcode": "G-code",
+    "empty": "Upload a file to see the preview here.",
+    "simulatorUnavailable": "Simulator unavailable for this dialect.",
+    "gcodeEmpty": "No G-code generated yet."
+  },
+  "pens": {
+    "magazine": "Magazine",
+    "tooltip": "Slot {index} · {name} · {status}",
+    "installed": "installed",
+    "notInstalled": "missing"
+  },
+  "footer": {
+    "size": "Size",
+    "scale": "Scale",
+    "estimate": "Est.",
+    "penChanges": "Pen changes"
+  },
+  "settings": {
+    "title": "Settings",
+    "close": "Close",
+    "profile": "Machine profile",
+    "macros": "Macros",
+    "history": "History",
+    "audit": "Audit"
+  },
   "upload": {
     "profile": "Machine profile",
     "preset": "Preset",
     "presetNone": "None",
     "pick": "Choose a file…",
+    "changeFile": "Change file",
+    "dropHere": "Drop a file here or click to browse.",
     "choose": "Upload & convert",
     "converting": "Converting…",
     "failed": "Upload failed. Check the file type and that the API is running.",

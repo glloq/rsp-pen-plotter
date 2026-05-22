@@ -10,7 +10,6 @@ const { t } = useI18n()
 const store = useMacroStore()
 const plotter = usePlotterStore()
 
-const open = ref(false)
 const editName = ref('')
 const editDescription = ref('')
 const editCommands = ref('')
@@ -59,18 +58,7 @@ async function removeMacro(name: string): Promise<void> {
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800">
-    <button
-      type="button"
-      class="flex w-full items-center justify-between px-4 py-3 text-sm uppercase tracking-wide text-slate-300"
-      :aria-expanded="open"
-      @click="open = !open"
-    >
-      {{ t('macros.title') }}
-      <span class="text-slate-500">{{ open ? '−' : '+' }}</span>
-    </button>
-
-    <div v-if="open" class="space-y-3 border-t border-slate-700 p-4 text-sm">
+  <div class="space-y-3 text-sm">
       <p v-if="!store.macros.length" class="text-slate-500">{{ t('macros.empty') }}</p>
 
       <div
@@ -147,6 +135,5 @@ async function removeMacro(name: string): Promise<void> {
       </div>
 
       <p v-if="store.error" class="text-sm text-red-400">{{ store.error }}</p>
-    </div>
   </div>
 </template>

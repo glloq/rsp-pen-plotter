@@ -193,7 +193,7 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 </script>
 
 <template>
-  <section v-if="sim" class="mt-4 rounded-lg border border-slate-700 bg-slate-800">
+  <section v-if="sim" class="rounded-lg border border-slate-700 bg-slate-800/60">
     <div class="flex flex-wrap items-center gap-2 border-b border-slate-700 px-4 py-2">
       <h2 class="mr-auto text-sm uppercase tracking-wide text-slate-400">
         {{ t('simulator.title') }}

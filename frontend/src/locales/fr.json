@@ -3,11 +3,68 @@
     "tagline": "Studio universel de traceur à plume",
     "apiUnreachable": "API injoignable"
   },
+  "header": {
+    "profile": "Profil",
+    "preset": "Préréglage",
+    "settings": "Réglages"
+  },
+  "machine": {
+    "disconnected": "Déconnecté",
+    "idle": "Prêt",
+    "running": "En cours",
+    "paused": "En pause",
+    "toolChange": "Changement de stylo",
+    "error": "Erreur"
+  },
+  "prepare": {
+    "source": "Source",
+    "layout": "Mise en page",
+    "output": "Génération"
+  },
+  "execute": {
+    "connection": "Connexion",
+    "terminator": "Terminator",
+    "jog": "Déplacement manuel",
+    "run": "Exécution",
+    "runHint": "Générez le G-code pour l'envoyer ou le mettre en file.",
+    "queue": "File"
+  },
+  "canvas": {
+    "sheet": "Plan",
+    "svg": "SVG",
+    "simulator": "Simulation",
+    "gcode": "G-code",
+    "empty": "Importez un fichier pour voir l'aperçu ici.",
+    "simulatorUnavailable": "Le simulateur n'est pas disponible pour ce dialecte.",
+    "gcodeEmpty": "Aucun G-code généré pour le moment."
+  },
+  "pens": {
+    "magazine": "Magasin",
+    "tooltip": "Slot {index} · {name} · {status}",
+    "installed": "installé",
+    "notInstalled": "absent"
+  },
+  "footer": {
+    "size": "Taille",
+    "scale": "Échelle",
+    "estimate": "Estimé",
+    "penChanges": "Changements"
+  },
+  "settings": {
+    "title": "Réglages",
+    "close": "Fermer",
+    "profile": "Profil machine",
+    "macros": "Macros",
+    "history": "Historique",
+    "audit": "Audit"
+  },
   "upload": {
     "profile": "Profil machine",
     "preset": "Préréglage",
     "presetNone": "Aucun",
     "pick": "Choisir un fichier…",
+    "changeFile": "Changer de fichier",
+    "dropHere": "Glissez un fichier ici ou cliquez pour parcourir.",
     "choose": "Importer & convertir",
     "converting": "Conversion…",
     "failed": "Échec de l'envoi. Vérifiez le type de fichier et que l'API fonctionne.",
