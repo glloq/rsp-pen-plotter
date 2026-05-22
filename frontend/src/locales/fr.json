@@ -104,6 +104,8 @@
     "magazine": "Magasin",
     "installed": "Présent",
     "pickupPosition": "Position de prise",
+    "penUpOverride": "Lever stylo (override)",
+    "penDownOverride": "Baisser stylo (override)",
     "advanced": "Avancé",
     "dialect": "Dialecte G-code",
     "supportsArcs": "Supporte les arcs (G2/G3)",

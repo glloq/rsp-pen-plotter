@@ -203,12 +203,17 @@ def generate_gcode(
             speed = (setting.drawing_speed_mm_s if setting else None) or profile.drawing_speed_mm_s
             feed = speed * 60.0
 
+            # Per-slot calibration overrides the profile pen commands when set.
+            pen = pens.get(slot) if slot is not None else None
+            pen_up_line = (pen and pen.pen_up_command) or pen_up_t.render(profile=profile)
+            pen_down_line = (pen and pen.pen_down_command) or pen_down_t.render(profile=profile)
+
             for polyline in layer.polylines:
                 machine_points = [transform(px, py) for px, py in polyline]
                 start = machine_points[0]
-                out.append(pen_up_t.render(profile=profile))
+                out.append(pen_up_line)
                 out.append(travel_t.render(x=start[0], y=start[1]))
-                out.append(pen_down_t.render(profile=profile))
+                out.append(pen_down_line)
                 if profile.supports_arcs:
                     prev = start
                     for seg in fit_arcs(machine_points, profile.arc_tolerance_mm):

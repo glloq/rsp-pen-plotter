@@ -62,6 +62,27 @@ def test_tool_change_emitted_for_pen_slots() -> None:
     assert "M0" in gcode
 
 
+def test_per_slot_pen_command_override() -> None:
+    from pen_plotter.models import PenSlot
+
+    profile = _profile().model_copy(
+        update={
+            "pens": [
+                PenSlot(index=0, name="Deep", installed=True, pen_down_command="M280 P0 S110"),
+            ]
+        }
+    )
+    gcode = generate_gcode(
+        TWO_LAYERS,
+        profile,
+        layers=[LayerGeneration(layer_id="red", target_pen_slot=0)],
+    )
+    # The slot-0 layer uses its calibrated pen-down command...
+    assert "M280 P0 S110" in gcode
+    # ...while the unassigned "blue" layer keeps the profile default.
+    assert "M280 P0 S90" in gcode
+
+
 def test_tool_change_uses_configured_pen_name_and_warns_when_absent() -> None:
     from pen_plotter.models import PenSlot
 

@@ -115,6 +115,8 @@ export interface PenSlot {
   color: string
   installed: boolean
   position: Point | null
+  pen_up_command: string | null
+  pen_down_command: string | null
 }
 
 export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'

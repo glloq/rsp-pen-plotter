@@ -104,6 +104,8 @@
     "magazine": "Magazine",
     "installed": "Present",
     "pickupPosition": "Pickup position",
+    "penUpOverride": "Pen-up override",
+    "penDownOverride": "Pen-down override",
     "advanced": "Advanced",
     "dialect": "G-code dialect",
     "supportsArcs": "Supports arcs (G2/G3)",

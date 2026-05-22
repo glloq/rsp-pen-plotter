@@ -47,6 +47,11 @@ class PenSlot(BaseModel):
     color: str = "#000000"
     installed: bool = True
     position: Point | None = None
+    # Optional per-slot calibration: override the pen-up/pen-down commands for
+    # this pen (e.g. a different servo depth). Falls back to the profile when
+    # unset.
+    pen_up_command: str | None = None
+    pen_down_command: str | None = None
 
 
 class EbbConfig(BaseModel):
