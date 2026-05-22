@@ -7,14 +7,17 @@ engine so tests can use an isolated in-memory database.
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, inspect, text
 from sqlmodel import Field, Session, SQLModel, create_engine, desc, select
 
 from pen_plotter.models import Job
+
+_log = logging.getLogger(__name__)
 
 _DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "omniplot.db"
 _DB_PATH = Path(os.environ.get("OMNIPLOT_DB", _DEFAULT_DB))
@@ -35,8 +38,38 @@ class JobRecord(SQLModel, table=True):
 engine: Engine = create_engine(f"sqlite:///{_DB_PATH}")
 
 
+def _add_missing_columns(target: Engine) -> None:
+    """Add columns that exist on the models but not yet in the database.
+
+    A lightweight, additive-only migration so new nullable columns (e.g. queue
+    fields added in later versions) don't break an existing SQLite database.
+    Renames, drops and type changes are out of scope and still require a manual
+    migration.
+    """
+    inspector = inspect(target)
+    for table_name, table in SQLModel.metadata.tables.items():
+        if not inspector.has_table(table_name):
+            continue
+        existing = {col["name"] for col in inspector.get_columns(table_name)}
+        for column in table.columns:
+            if column.name in existing:
+                continue
+            if not column.nullable and column.default is None:
+                _log.warning(
+                    "Cannot auto-add non-nullable column %s.%s without a default; "
+                    "a manual migration is required.",
+                    table_name,
+                    column.name,
+                )
+                continue
+            col_type = column.type.compile(dialect=target.dialect)
+            with target.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column.name} {col_type}"))
+            _log.info("Added missing column %s.%s", table_name, column.name)
+
+
 def init_db(target: Engine = engine) -> None:
-    """Create the database directory and tables if they do not yet exist.
+    """Create the database directory and tables, then apply additive migrations.
 
     Args:
         target: The engine to initialize.
@@ -44,6 +77,7 @@ def init_db(target: Engine = engine) -> None:
     if target.url.database and target.url.database != ":memory:":
         Path(target.url.database).parent.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(target)
+    _add_missing_columns(target)
 
 
 def save_job(job: Job, target: Engine = engine) -> JobRecord:

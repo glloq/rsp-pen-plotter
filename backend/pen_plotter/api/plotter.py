@@ -8,6 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from pen_plotter.audit import record
 from pen_plotter.hardware.controller import controller
 from pen_plotter.models import MachineProfile
 from pen_plotter.profiles import get_profile
@@ -56,6 +57,7 @@ class StatusResponse(BaseModel):
     sent: int
     acked: int
     state: str
+    message: str | None = None
 
 
 def _status() -> StatusResponse:
@@ -67,6 +69,7 @@ def _status() -> StatusResponse:
         sent=p.sent,
         acked=p.acked,
         state=p.state.value,
+        message=p.message,
     )
 
 
@@ -96,6 +99,7 @@ async def connect(request: ConnectRequest) -> StatusResponse:
         )
     except Exception as exc:  # hardware/serial errors
         raise HTTPException(status_code=400, detail=f"Could not connect: {exc}") from exc
+    record("plotter.connect", f"{request.port} @ {request.baudrate}")
     return _status()
 
 
@@ -136,6 +140,7 @@ async def home(profile_name: str) -> StatusResponse:
         await controller.home(profile)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    record("plotter.home", profile_name)
     return _status()
 
 
@@ -146,6 +151,7 @@ async def run(request: RunRequest) -> StatusResponse:
         await controller.run(request.gcode)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    record("plotter.run", f"{request.gcode.count(chr(10)) + 1} lines")
     return _status()
 
 
@@ -167,6 +173,7 @@ async def resume() -> StatusResponse:
 async def abort() -> StatusResponse:
     """Abort the running job."""
     controller.abort()
+    record("plotter.abort")
     return _status()
 
 
@@ -186,6 +193,7 @@ async def plotter_ws(websocket: WebSocket) -> None:
                     "sent": progress.sent,
                     "acked": progress.acked,
                     "state": progress.state.value,
+                    "message": progress.message,
                 }
             )
     except WebSocketDisconnect:

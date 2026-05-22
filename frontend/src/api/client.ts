@@ -1,6 +1,9 @@
 import axios, { type AxiosInstance } from 'axios'
 
-const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+// Empty default = same origin, so the production appliance can serve the UI
+// and API from one host without baking in an address. Dev sets VITE_API_URL
+// (see .env.development) to reach the separate backend on port 8000.
+const baseURL = import.meta.env.VITE_API_URL ?? ''
 const apiKey = import.meta.env.VITE_API_KEY as string | undefined
 
 export const api: AxiosInstance = axios.create({ baseURL, timeout: 30000 })
@@ -10,7 +13,10 @@ if (apiKey) {
 }
 
 export function websocketUrl(path: string): string {
-  const url = baseURL.replace(/^http/, 'ws') + path
+  const origin = baseURL
+    ? baseURL.replace(/^http/, 'ws')
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
+  const url = origin + path
   return apiKey ? `${url}?token=${encodeURIComponent(apiKey)}` : url
 }
 
@@ -89,6 +95,18 @@ export async function getJobs(): Promise<JobRecord[]> {
   return response.data
 }
 
+export interface AuditEntry {
+  id: number
+  timestamp: string
+  action: string
+  detail: string
+}
+
+export async function getAudit(): Promise<AuditEntry[]> {
+  const response = await api.get<AuditEntry[]>('/audit')
+  return response.data
+}
+
 export interface WorkspaceBounds {
   x_min: number
   y_min: number
@@ -115,6 +133,8 @@ export interface PenSlot {
   color: string
   installed: boolean
   position: Point | null
+  pen_up_command: string | null
+  pen_down_command: string | null
 }
 
 export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'
@@ -282,12 +302,61 @@ export async function preflightCheck(
   return response.data
 }
 
+export type RunState = 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'canceled'
+
+export interface PrintRun {
+  id: string
+  name: string
+  profile_name: string
+  gcode: string
+  total_lines: number
+  acked_lines: number
+  state: RunState
+  priority: number
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export async function listQueue(): Promise<PrintRun[]> {
+  const response = await api.get<PrintRun[]>('/queue')
+  return response.data
+}
+
+export async function enqueuePrint(
+  name: string,
+  profileName: string,
+  gcode: string,
+  priority = 0,
+): Promise<PrintRun> {
+  const response = await api.post<PrintRun>('/queue', {
+    name,
+    profile_name: profileName,
+    gcode,
+    priority,
+  })
+  return response.data
+}
+
+export async function queueRunAction(
+  id: string,
+  action: 'pause' | 'resume' | 'cancel',
+): Promise<PrintRun> {
+  const response = await api.post<PrintRun>(`/queue/${encodeURIComponent(id)}/${action}`)
+  return response.data
+}
+
+export async function deleteQueuedRun(id: string): Promise<void> {
+  await api.delete(`/queue/${encodeURIComponent(id)}`)
+}
+
 export interface PlotterStatus {
   connected: boolean
   total: number
   sent: number
   acked: number
   state: string
+  message?: string | null
 }
 
 export async function plotterConnect(

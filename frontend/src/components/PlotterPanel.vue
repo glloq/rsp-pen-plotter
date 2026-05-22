@@ -80,6 +80,21 @@ async function sendJob(): Promise<void> {
         </button>
       </div>
 
+      <div
+        v-if="status.state === 'waiting'"
+        class="rounded border border-amber-600 bg-amber-950/50 p-3"
+      >
+        <p class="text-sm font-medium text-amber-200">{{ t('plotter.toolChange') }}</p>
+        <p class="mt-0.5 text-sm text-amber-100">{{ status.message }}</p>
+        <button
+          type="button"
+          class="mt-2 w-full rounded bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-500"
+          @click="plotter.resume()"
+        >
+          {{ t('plotter.continue') }}
+        </button>
+      </div>
+
       <JogControls />
 
       <div class="flex flex-wrap gap-2">

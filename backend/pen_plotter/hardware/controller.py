@@ -12,7 +12,12 @@ import contextlib
 import logging
 
 from pen_plotter.hardware.commands import goto_command, home_command, jog_command
-from pen_plotter.hardware.streamer import GcodeStreamer, StreamProgress, StreamState
+from pen_plotter.hardware.streamer import (
+    GcodeStreamer,
+    ProgressCallback,
+    StreamProgress,
+    StreamState,
+)
 from pen_plotter.hardware.transport import SerialTransport, Transport
 from pen_plotter.models import MachineProfile
 
@@ -136,6 +141,49 @@ class PlotterController:
         self._streamer = GcodeStreamer(transport, on_progress=self._broadcast)
         self._task = asyncio.create_task(self._streamer.run(gcode))
         self._task.add_done_callback(self._on_task_done)
+
+    async def stream(
+        self,
+        gcode: str,
+        on_progress: ProgressCallback | None = None,
+        pause_points: dict[int, str] | None = None,
+    ) -> StreamProgress:
+        """Stream a G-code program and await its completion.
+
+        Unlike :meth:`run` (fire-and-forget for the manual send path), this
+        awaits the streaming task and returns its final progress, so a queue
+        worker can drive jobs sequentially. Pause/resume/abort act on the
+        running stream as usual.
+
+        Args:
+            gcode: The G-code program to stream.
+            on_progress: Optional extra progress callback (in addition to the
+                broadcast to WebSocket subscribers).
+            pause_points: Optional ``{line_index: prompt}`` for guided
+                tool-change pauses (see :class:`GcodeStreamer`).
+
+        Returns:
+            The final :class:`StreamProgress`.
+
+        Raises:
+            RuntimeError: If disconnected or a job is already running.
+            StreamError: If the controller reports an error during streaming.
+        """
+        transport = self._require_transport()
+        if self._job_active:
+            raise RuntimeError("A job is already running.")
+
+        async def _combined(progress: StreamProgress) -> None:
+            await self._broadcast(progress)
+            if on_progress is not None:
+                await on_progress(progress)
+
+        self._streamer = GcodeStreamer(
+            transport, on_progress=_combined, pause_points=pause_points
+        )
+        self._task = asyncio.create_task(self._streamer.run(gcode))
+        self._task.add_done_callback(self._on_task_done)
+        return await self._task
 
     def _on_task_done(self, task: asyncio.Task[StreamProgress]) -> None:
         """Retrieve the streaming task's result so exceptions aren't lost."""

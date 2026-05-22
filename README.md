@@ -2,35 +2,111 @@
 
 > **Universal pen plotter studio** — drag, drop, plot anything.
 
-OmniPlot is an open-source web application that turns any file — images, PDFs, Word documents, SVG vectors, plain text, Markdown — into beautifully plotted output on any pen plotter, through a unified, intuitive interface.
+OmniPlot is an open-source web application that turns any file — images, PDFs,
+office documents, SVG vectors, plain text, Markdown — into beautifully plotted
+output on any pen plotter, through one unified interface.
 
 ![status](https://img.shields.io/badge/status-pre--alpha-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
 ---
 
-## Highlights
+## Install in two commands
 
-- **Universal input**: PNG, JPG, HEIC, TIFF, WebP, SVG, PDF, EPS, DXF, DOCX, ODT, HTML, Markdown, TXT, raw G-code
-- **Algorithm choice for raster art**: direct vectorization, stippling, hatching, halftone, flow imager, TSP art
-- **Color separation**: automatic detection from SVG layers, color attributes, or raster quantization
-- **Pen magazine support**: assign each layer to a physical pen slot, with optimized tool-change ordering
-- **Machine profiles**: target any plotter (custom DIY, AxiDraw, iDraw, …) via YAML configuration — no code changes required to add a new machine
-- **Visual simulator**: validate the full output without touching hardware
-- **Hershey single-stroke fonts**: text rendered as clean single-stroke output, ideal for plotting
-- **Multilingual UI**: i18n-ready from day one
+Prerequisites: a Linux host (Raspberry Pi 4/5 recommended) with Node.js 20+ and
+either [`uv`](https://docs.astral.sh/uv/) (preferred) or Python 3.12+.
+
+```bash
+git clone https://github.com/glloq/rsp-pen-plotter.git
+cd rsp-pen-plotter
+./install.sh        # backend deps + frontend build
+./start.sh          # one process serves UI + API on http://<host>:8000
+```
+
+Open `http://localhost:8000` (and `http://<host-ip>:8000` from any device on
+your LAN).
+
+To start on boot via systemd (Raspberry Pi or any systemd Linux):
+
+```bash
+sudo ./install-service.sh
+sudo systemctl status omniplot      # check state
+sudo journalctl -u omniplot -f      # follow logs
+```
+
+For development with hot reload:
+
+```bash
+./start.sh --dev   # backend --reload on :8000 + Vite on :5173
+```
+
+### Configuration
+
+`./install-service.sh` creates a `.env.service` (mode 600) with these
+overrides; for non-systemd use, set the same variables in the shell before
+`./start.sh`.
+
+| Variable             | Default      | Effect                                                                  |
+| -------------------- | ------------ | ----------------------------------------------------------------------- |
+| `HOST`               | `0.0.0.0`    | Interface to bind. Set to `127.0.0.1` to restrict to this machine only. |
+| `PORT`               | `8000`       | UI + API port.                                                          |
+| `OMNIPLOT_API_KEY`   | unset        | When set, machine-control endpoints require this key (header `X-API-Key` or `?token=` for WebSockets). Strongly recommended on a LAN. |
+| `OMNIPLOT_DB`        | `backend/data/omniplot.db` | SQLite database path. |
+| `OMNIPLOT_STATIC_DIR`| `frontend/dist` | Override where the built UI is served from. |
 
 ---
 
-## Why
+## What it does
 
-Existing pen plotter tools fall into two camps: powerful CLI tools (vpype, Inkscape extensions) that require expertise, or commercial software locked to one specific machine (AxiDraw, iDraw). OmniPlot is the missing middle: a friendly web interface that handles *any* input on *any* hardware.
+- **Universal input**: PNG, JPG, HEIC, TIFF, WebP, SVG, PDF, EPS, DXF, DOCX,
+  ODT, HTML, Markdown, TXT, raw G-code.
+- **Algorithm choice for raster art**: direct vectorization, stippling,
+  halftone, hatching, flow imager.
+- **Color separation**: from SVG layers, color attributes, or raster
+  quantization (k-means).
+- **Machine profiles**: any plotter (DIY CoreXY, AxiDraw, iDraw, EBB,
+  custom G-code dialect) via YAML — no code changes needed for a new machine.
+- **Sheet preview**: see the placed drawing on the workspace, with margin,
+  effective scale, dimensions in mm, and an out-of-bounds warning.
+- **Visual simulator**: validate the full output before touching hardware.
+- **Hershey single-stroke fonts**: clean text rendered for plotting.
+- **Multilingual UI** (French and English to start).
+
+### Production-grade operation
+
+- **Persistent print queue** with priorities, pause/resume/cancel, and
+  reboot recovery: a job interrupted by a crash or power loss can be safely
+  resumed from its checkpoint with a reconstructed modal-state preamble.
+- **Pre-flight check**: bounds, drawing dimensions, effective scale,
+  estimated drawing+travel time, pen-change count, missing pen slots —
+  surfaced in the UI before generation; generation is blocked if a layer is
+  assigned to a missing or out-of-range pen slot.
+- **Guided operator workflow** for manual pen changes: the queue replaces the
+  firmware pause with a software-guided pause that prompts the operator and
+  resumes on confirmation. The downloaded G-code keeps `M0` so it stays
+  portable to other senders.
+- **Pen-swap planner**: one-click layer reordering to minimize tool changes,
+  with the planner's effect surfaced through the preflight swap count.
+- **Per-slot calibration**: override the pen-up / pen-down commands per
+  magazine slot (e.g. different servo depths per pen).
+- **Idempotent job submission**: `POST /queue` honours an `Idempotency-Key`
+  header for safe automation retries.
+- **Audit trail**: append-only log of sensitive actions (plotter connect,
+  run, home, abort; queue enqueue, cancel; macro run) viewable from the UI
+  and via `GET /audit`.
+- **Optional API-key auth**: machine-control and macro-execution endpoints
+  can be gated by `OMNIPLOT_API_KEY`; disabled by default for local use.
+- **Additive schema migrations**: new nullable model columns are added to
+  existing SQLite databases on startup, so an upgrade doesn't break a Pi
+  that's been running for a while.
 
 ---
 
 ## Architecture
 
-Seven-layer architecture with a clean separation between the Raspberry Pi host and a real-time MCU for step generation. A converter plugin layer normalizes all inputs to a single SVG pivot format, after which the standard pipeline runs identically regardless of input type.
+A clean separation between the Linux host (user interface, orchestration,
+graphics pipeline) and a real-time MCU for step generation, with a converter
+plugin layer that normalizes every input to a single SVG pivot format.
 
 ```
  ┌─────────────────────────────────────────┐
@@ -44,7 +120,9 @@ Seven-layer architecture with a clean separation between the Raspberry Pi host a
  └─────────────────────────────────────────┘
 ```
 
-Real-time motion control is delegated to a microcontroller (Klipper on RP2040 recommended) because Linux on the Pi does not provide deterministic timing for step generation up to ~100 kHz.
+Real-time motion control is delegated to a microcontroller (Klipper on RP2040
+recommended) because Linux on the Pi does not provide deterministic timing for
+step generation up to ~100 kHz.
 
 ### Multi-format converter
 
@@ -55,12 +133,10 @@ Real-time motion control is delegated to a microcontroller (Klipper on RP2040 re
                   ▼
         ┌──────────────────────┐
         │ Conversion layer     │   ← one plugin per format
-        │ (plugin per format)  │
         └──────────────────────┘
                   ▼
         ┌──────────────────────┐
-        │ Normalized SVG       │   ← format pivot
-        │ (pivot format)       │
+        │ Normalized SVG       │   ← pivot format
         └──────────────────────┘
                   ▼
         ┌──────────────────────┐
@@ -72,250 +148,154 @@ Real-time motion control is delegated to a microcontroller (Klipper on RP2040 re
 
 ---
 
-## Tech Stack
+## Tech stack
 
-### Backend (Python on Raspberry Pi)
+### Backend (Python)
 
-| Concern | Library |
-| --- | --- |
-| Web framework | `fastapi` + `uvicorn[standard]` |
-| Models / validation | `pydantic` |
-| Plotter core | `vpype` + plugins (`vpype-gcode`, `vpype-occult`, `vpype-flow-imager`, `hatched`) |
-| Raster vectorization | `pypotrace` or `potrace` binary |
-| Image I/O | `Pillow`, `pillow-heif`, `scikit-image` |
-| Color quantization | `scikit-learn` (k-means) |
-| PDF | `pymupdf`, `pypdfium2`, `pdfplumber` |
-| DXF | `ezdxf` |
-| HTML → PDF | `weasyprint` |
-| Documents → PDF | `libreoffice --headless` subprocess |
-| EPS / AI → PDF | `ghostscript` subprocess |
-| Text rendering | `hersheyfonts`, `markdown-it-py`, `python-docx`, `beautifulsoup4` |
-| G-code templates | `Jinja2` |
-| Profile files | `PyYAML` |
-| Serial to MCU | `pyserial-asyncio` |
-| Persistence | `SQLModel` |
-| Tests | `pytest`, `httpx` |
-| Tooling | `uv`, `ruff`, `mypy` |
+| Concern                 | Library                                                |
+| ----------------------- | ------------------------------------------------------ |
+| Web framework           | `fastapi` + `uvicorn[standard]`                        |
+| Models / validation     | `pydantic`                                             |
+| Plotter core            | `vpype` + plugins                                      |
+| Raster vectorization    | `potrace`                                              |
+| Image I/O               | `Pillow`, `pillow-heif`                                |
+| Color quantization      | `scikit-learn` (k-means)                               |
+| PDF / DXF / EPS         | `pymupdf`, `ezdxf`, `ghostscript`                      |
+| HTML & documents → PDF  | `weasyprint`, `libreoffice --headless`                 |
+| Text                    | `hershey-fonts`, `markdown-it-py`, `beautifulsoup4`    |
+| G-code templates        | `Jinja2`                                               |
+| Profile files           | `PyYAML`                                               |
+| Serial to MCU           | `pyserial-asyncio`                                     |
+| Persistence             | `SQLModel` (SQLite)                                    |
+| Tests / lint            | `pytest`, `httpx`, `ruff`                              |
+| Tooling                 | `uv`                                                   |
 
 ### Frontend (Web UI)
 
-| Concern | Library |
-| --- | --- |
-| Framework | Vue 3 |
-| Build | Vite |
-| Language | TypeScript (strict) |
-| Styling | Tailwind CSS |
-| Components | Naive UI |
-| SVG | native DOM SVG + `svg-pan-zoom` |
-| Drag-and-drop | `vuedraggable` (SortableJS) |
-| State | Pinia |
-| HTTP | `axios` |
-| WebSocket | native browser API |
-| Color picker | `@simonwep/pickr` |
-| i18n | `vue-i18n` |
+| Concern        | Library                              |
+| -------------- | ------------------------------------ |
+| Framework      | Vue 3 + TypeScript (strict)          |
+| Build          | Vite                                 |
+| Styling        | Tailwind CSS                         |
+| State          | Pinia                                |
+| HTTP           | `axios`                              |
+| SVG            | native DOM + `svg-pan-zoom`          |
+| Drag-and-drop  | `vuedraggable`                       |
+| i18n           | `vue-i18n`                           |
+| Tests          | `vitest`                             |
 
 ### MCU (motion control)
 
-- **Firmware**: Klipper on RP2040 (recommended) or FluidNC on ESP32
-- **Recommended board**: BTT SKR Pico (RP2040 + 4× TMC2209 integrated)
+- **Firmware**: Klipper on RP2040 (recommended) or FluidNC on ESP32.
+- **Recommended board**: BTT SKR Pico (RP2040 + 4× TMC2209 integrated).
 
 ---
 
-## Project Structure
+## Project layout
 
 ```
 rsp-pen-plotter/
-├── backend/
-│   ├── pyproject.toml
-│   ├── pen_plotter/
-│   │   ├── main.py                 # FastAPI app, router wiring, /health
-│   │   ├── models.py               # Pydantic shared models
-│   │   ├── persistence.py          # SQLModel job-history storage
-│   │   ├── presets.py              # built-in parameter presets
-│   │   ├── api/
-│   │   │   ├── upload.py           # POST /upload
-│   │   │   ├── optimize.py         # POST /optimize
-│   │   │   ├── generate.py         # POST /generate
-│   │   │   ├── plotter.py          # /plotter/* control + /ws/plotter
-│   │   │   ├── profiles.py         # profile list/get/export/import
-│   │   │   ├── presets.py          # GET /presets
-│   │   │   ├── jobs.py             # job history
-│   │   │   ├── fonts.py            # GET /fonts (Hershey)
-│   │   │   └── algorithms.py       # GET /algorithms (raster art)
-│   │   ├── converters/
-│   │   │   ├── base.py             # Abstract Converter + ConversionResult
-│   │   │   ├── registry.py         # MIME → Converter
-│   │   │   ├── defaults.py         # registers the built-in converters
-│   │   │   ├── svg.py              # passthrough + sanitization
-│   │   │   ├── bitmap.py           # PNG/JPG/HEIC + algorithms
-│   │   │   ├── pdf.py              # pymupdf
-│   │   │   ├── dxf.py              # ezdxf
-│   │   │   ├── eps.py              # ghostscript subprocess
-│   │   │   ├── document.py         # docx/odt/rtf → libreoffice
-│   │   │   ├── html.py             # weasyprint
-│   │   │   ├── markdown.py         # md-it + Hershey
-│   │   │   ├── text.py             # txt + Hershey
-│   │   │   ├── gcode.py            # direct bypass
-│   │   │   └── algorithms/         # direct, halftone, stippling
-│   │   ├── core/
-│   │   │   ├── layers.py           # layer extraction + labeled_group_fragments
-│   │   │   ├── toolpath.py         # vpype wrapper
-│   │   │   ├── gcode.py            # Jinja2 G-code renderer
-│   │   │   ├── ebb.py              # native EiBotBoard generation
-│   │   │   ├── arcs.py             # optional G2/G3 arc fitting
-│   │   │   └── sanitize.py         # SVG hardening
-│   │   ├── typography/
-│   │   │   └── hershey.py          # single-stroke rendering + layout
-│   │   ├── profiles/
-│   │   │   ├── custom_plotter.yaml
-│   │   │   └── axidraw_v3.yaml
-│   │   ├── templates/              # Jinja2 G-code templates
-│   │   │   ├── header.j2  footer.j2  pen_up.j2  pen_down.j2
-│   │   │   └── travel.j2  line.j2  arc.j2  tool_change.j2
-│   │   └── hardware/
-│   │       ├── transport.py        # Transport protocol + Serial/Mock
-│   │       ├── streamer.py         # ok-acknowledged streaming
-│   │       ├── controller.py       # connection + job lifecycle
-│   │       └── commands.py         # jog / home builders
-│   └── tests/
-├── frontend/
-│   ├── package.json
-│   ├── vite.config.ts
+├── install.sh / start.sh / install-service.sh
+├── deploy/omniplot.service.in        # systemd unit template
+├── backend/                          # FastAPI app (Python)
+│   ├── pyproject.toml                # uv-managed
+│   └── pen_plotter/
+│       ├── main.py                   # router wiring, static frontend mount
+│       ├── auth.py                   # optional API-key dependency
+│       ├── audit.py                  # audit trail
+│       ├── persistence.py            # SQLite engine + additive migrations
+│       ├── queue.py                  # durable print queue + worker
+│       ├── api/                      # upload, optimize, generate, preflight,
+│       │                             # plotter, queue, audit, jobs, …
+│       ├── converters/               # one plugin per format (svg, bitmap,
+│       │                             # pdf, dxf, eps, html, markdown, …)
+│       ├── core/                     # gcode, ebb, arcs, sanitize, layers,
+│       │                             # toolpath, preflight, resume,
+│       │                             # toolchange
+│       ├── hardware/                 # Transport / Streamer / Controller
+│       ├── profiles/                 # example YAML machine profiles
+│       └── templates/                # Jinja2 G-code fragments
+├── frontend/                         # Vue 3 + TS + Tailwind (Vite)
 │   └── src/
-│       ├── App.vue
-│       ├── main.ts
-│       ├── i18n.ts
-│       ├── components/
-│       │   ├── FileUpload.vue
-│       │   ├── SvgPreview.vue
-│       │   ├── LayerPanel.vue
-│       │   ├── LayerCard.vue
-│       │   ├── GcodePreview.vue
-│       │   ├── Simulator.vue
-│       │   ├── JogControls.vue
-│       │   ├── PlotterPanel.vue
-│       │   └── JobHistory.vue
-│       ├── stores/
-│       │   ├── job.ts
-│       │   └── plotter.ts
-│       ├── lib/gcode.ts            # browser-side simulator parser
-│       ├── api/client.ts
-│       └── locales/
-│           ├── fr.json
-│           └── en.json
-├── docs/                           # see docs/README.md
-│   ├── architecture.md
-│   ├── getting_started.md
-│   ├── api_reference.md
-│   ├── converters.md
-│   ├── adding_a_converter.md
-│   ├── profile_format.md
-│   ├── hardware_streaming.md
-│   ├── frontend.md
-│   └── audit_report.md
-└── README.md
+│       ├── components/               # FileUpload, SheetPreview, SvgPreview,
+│       │                             # LayerPanel, Simulator, PlotterPanel,
+│       │                             # QueuePanel, AuditPanel, MacroPanel,
+│       │                             # ProfileEditor, ConfirmDialog, …
+│       ├── stores/                   # job, plotter, queue, macros (Pinia)
+│       ├── lib/                      # gcode parser, placement, penorder
+│       ├── api/client.ts             # axios + WS helpers
+│       └── locales/                  # fr.json, en.json
+└── docs/                             # architecture, API reference, profiles,
+                                      # converters, hardware streaming, …
 ```
 
 ---
 
-## Roadmap
+## Status
 
-The project is built in twelve phases. Each phase produces a testable deliverable. Estimates are for one developer working part-time.
+Built and tested end-to-end:
 
-### Phase 0 — Setup & contracts *(1-2 days)*
-Monorepo, scaffolding for backend (FastAPI + uv) and frontend (Vite + Vue + TS + Tailwind). Pydantic models for `Job`, `Layer`, `MachineProfile`. Example YAML profile. Health endpoint working end-to-end.
+- Full conversion pipeline (bitmap → vector, vector passthrough, PDF/EPS/DXF,
+  documents via LibreOffice, HTML via WeasyPrint, Markdown/TXT via Hershey).
+- Color separation, layer editor (reorder, visibility, pen-slot, speed,
+  simplification, optimize toggle).
+- G-code generation (multi-dialect) and native EBB output. Optional G2/G3
+  arc fitting.
+- Visual simulator with workspace framing and hi-DPI rendering.
+- Plotter connection (serial / mock transport), ok-acknowledged streamer,
+  jog / home / goto / send / pause / resume / abort, WebSocket progress.
+- Durable print queue with checkpoint/resume, idempotent enqueue, guided
+  tool-change pauses, audit trail.
+- Profile editor + import/export, presets, macros, optional API-key auth.
+- One-command appliance (`./start.sh`) and systemd auto-start.
 
-### Phase 1 — Conversion layer skeleton *(2-3 days)*
-Abstract `Converter` interface, MIME-based registry, `POST /upload` endpoint with dispatch. Only the SVG passthrough converter is implemented at this stage. Integration tests verify the dispatch routing.
+Backend currently ships ~145 unit and integration tests; the frontend ships
+unit tests for placement, pen ordering and the G-code simulator.
 
-### Phase 2 — Bitmap converters *(4-6 days)*
-PNG / JPG / TIFF / HEIC support via Pillow + pillow-heif. Color quantization (k-means), per-color masks, potrace. Algorithm options: direct vectorization, stippling, hatching, halftone, flow imager. UI exposes algorithm choice with preview.
+### Out of scope today, on the backlog
 
-### Phase 3 — Vector converters *(3-5 days)*
-PDF via pymupdf (vector extraction), DXF via ezdxf, EPS via ghostscript subprocess. Multi-page PDF with page selection in the UI.
-
-### Phase 4 — Document converters *(4-6 days)*
-TXT and Markdown rendered with Hershey single-stroke fonts. HTML via weasyprint. DOCX / ODT / RTF via libreoffice subprocess. Typography panel: font selection (~10 Hershey styles), size, margins, alignment.
-
-### Phase 5 — SVG viewer & layer toggles *(3-5 days)*
-File upload component, pan/zoom SVG viewer, layer panel with visibility toggles and color swatches. State management in Pinia.
-
-### Phase 6 — Layer manipulation *(3-4 days)*
-Drag-and-drop reordering, pen-slot dropdowns, per-layer parameters (speed, simplification), live statistics (length in mm, estimated duration).
-
-### Phase 7 — Toolpath optimization *(3-5 days)*
-`vpype linemerge` → `linesimplify` → `linesort` pipeline. Before/after metrics for travel reduction. Optimized paths previewed live in the SVG viewer.
-
-### Phase 8 — Machine profiles & G-code *(4-6 days)*
-YAML profile schema (Pydantic-validated). Jinja2 templates per command type (header, pen up/down, line, tool change, footer). Generation endpoint. Two example profiles (custom CoreXY + AxiDraw V3). Inline G-code preview panel.
-
-### Phase 9 — Visual simulator *(4-7 days)* **— key milestone**
-G-code parser (G0/G1 + pen up/down events), animated playback on a canvas, speed controls (1× / 5× / 100× / max), duration cross-validation. At the end of this phase, the entire software chain is validated without any hardware involvement.
-
-### Phase 10 — Plotter connection *(5-10 days)*
-pyserial link to the MCU, G-code streamer with buffer management (line-by-line with `ok` acknowledgment), WebSocket push of position and progress to the UI. Manual jog controls, home, pause / resume / abort. Pen-slot calibration routine.
-
-### Phase 11 — Polish *(ongoing)*
-Job queue with SQLite history, full i18n (French and English to start), error handling (jam detection, lost position, missing pen), profile import/export, parameter presets (fine line, dense hatching, stippling, halftone, …).
+- Outbound webhooks on run completion (would add an HTTP runtime dependency
+  and network policy concerns; deliberately deferred).
+- Full RBAC with operator/admin roles (the API-key + audit trail covers the
+  practical local-deployment threat model).
+- Multi-plotter print farm and predictive maintenance.
+- Hardware-in-the-loop endurance test suite.
 
 ---
 
-## Hardware Reference
+## Hardware reference
 
-The reference build for this project:
+The recommended build for this project:
 
 - **Frame**: CoreXY, ~A3 effective print area
 - **Steppers**: 2× NEMA 17 for X/Y, 1× NEMA 17 for the pen magazine carousel
 - **Drivers**: TMC2209 in StealthChop (integrated on the SKR Pico)
 - **Pen up/down**: SG90 servo driven by PCA9685
-- **Magazine**: rotating carousel with N slots (slot count is configurable per machine profile)
+- **Magazine**: rotating carousel with N slots (configurable per profile)
 - **Controller board**: BTT SKR Pico (RP2040 + 4× TMC2209)
 - **Host**: Raspberry Pi 4 (8 GB recommended)
 - **Firmware**: Klipper
 
-Any plotter with a documented G-code dialect can be supported by writing a new machine profile YAML — no code changes required.
+Any plotter with a documented G-code dialect can be supported by writing a
+new machine profile YAML — no code changes required.
 
 ---
 
-## Getting Started
+## Documentation
 
-> Full documentation lives in [`docs/`](docs/README.md) — architecture, API
-> reference, profile format, adding a converter, hardware streaming, and more.
-
-### Prerequisites
-
-- Raspberry Pi 4 or 5 (8 GB RAM recommended for development on-device)
-- Python 3.12+
-- Node.js 20+
-- `uv` for Python dependency management
-- A pen plotter (DIY CoreXY recommended; AxiDraw also supported via profile)
-
-### Quick setup
-
-```bash
-git clone https://github.com/glloq/rsp-pen-plotter.git
-cd rsp-pen-plotter
-
-# Backend
-cd backend
-uv sync
-uv run uvicorn pen_plotter.main:app --reload
-
-# Frontend (in another terminal)
-cd ../frontend
-npm install
-npm run dev
-```
-
-The UI will be available at `http://localhost:5173`, the API at `http://localhost:8000`.
+Full documentation lives in [`docs/`](docs/README.md): architecture, API
+reference, profile format, adding a converter, hardware streaming, and more.
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Each phase tracks a dedicated branch and milestone.
+Contributions are welcome.
 
-To add support for a new input format, see `docs/adding_a_converter.md`. To add a new machine profile, see `docs/profile_format.md`.
+- To add support for a new input format, see
+  [`docs/adding_a_converter.md`](docs/adding_a_converter.md).
+- To add a new machine profile, see
+  [`docs/profile_format.md`](docs/profile_format.md).
 
 ---
 
@@ -329,6 +309,9 @@ MIT.
 
 This project stands on the shoulders of:
 
-- **vpype** by Antoine Beyeler — the pen plotter pre-processing toolkit, central to everything OmniPlot does
-- **Klipper** by Kevin O'Connor — the firmware that makes Raspberry Pi-driven motion control reliable
-- **The plotter art community** on Reddit, Discord, and personal blogs — for years of generously shared techniques and tooling
+- **vpype** by Antoine Beyeler — the pen plotter pre-processing toolkit,
+  central to everything OmniPlot does.
+- **Klipper** by Kevin O'Connor — the firmware that makes Raspberry Pi-driven
+  motion control reliable.
+- **The plotter art community** on Reddit, Discord, and personal blogs — for
+  years of generously shared techniques and tooling.

@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getHealth } from './api/client'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import AuditPanel from './components/AuditPanel.vue'
 import FileUpload from './components/FileUpload.vue'
 import GcodePreview from './components/GcodePreview.vue'
 import JobHistory from './components/JobHistory.vue'
@@ -10,6 +11,7 @@ import LayerPanel from './components/LayerPanel.vue'
 import MacroPanel from './components/MacroPanel.vue'
 import PlotterPanel from './components/PlotterPanel.vue'
 import ProfileEditor from './components/ProfileEditor.vue'
+import QueuePanel from './components/QueuePanel.vue'
 import SheetPreview from './components/SheetPreview.vue'
 import Simulator from './components/Simulator.vue'
 import SvgPreview from './components/SvgPreview.vue'
@@ -90,8 +92,10 @@ onMounted(async () => {
         <ProfileEditor />
         <LayerPanel />
         <PlotterPanel />
+        <QueuePanel />
         <MacroPanel />
         <JobHistory />
+        <AuditPanel />
       </aside>
       <section>
         <SheetPreview />

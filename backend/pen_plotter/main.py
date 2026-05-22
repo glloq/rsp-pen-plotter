@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from pen_plotter import __version__
 from pen_plotter.api.algorithms import router as algorithms_router
+from pen_plotter.api.audit import router as audit_router
 from pen_plotter.api.fonts import router as fonts_router
 from pen_plotter.api.generate import router as generate_router
 from pen_plotter.api.jobs import router as jobs_router
@@ -20,19 +24,27 @@ from pen_plotter.api.plotter import router as plotter_router
 from pen_plotter.api.preflight import router as preflight_router
 from pen_plotter.api.presets import router as presets_router
 from pen_plotter.api.profiles import router as profiles_router
+from pen_plotter.api.queue import print_queue
+from pen_plotter.api.queue import router as queue_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.auth import require_api_key
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
 from pen_plotter.persistence import init_db
+from pen_plotter.queue import recover_interrupted
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Initialize converters and the database on startup."""
+    """Initialize converters and the database, then run the print-queue worker."""
     register_default_converters(registry)
     init_db()
-    yield
+    recover_interrupted()
+    print_queue.start()
+    try:
+        yield
+    finally:
+        await print_queue.stop()
 
 
 app = FastAPI(title="OmniPlot", version=__version__, lifespan=lifespan)
@@ -54,6 +66,8 @@ app.include_router(generate_router)
 app.include_router(preflight_router)
 # Machine-control endpoints are guarded when OMNIPLOT_API_KEY is set.
 app.include_router(plotter_router, dependencies=[Depends(require_api_key)])
+app.include_router(queue_router)
+app.include_router(audit_router)
 app.include_router(jobs_router)
 app.include_router(presets_router)
 app.include_router(macros_router)
@@ -74,3 +88,20 @@ async def health() -> HealthResponse:
         A payload with a fixed ``ok`` status and the package version.
     """
     return HealthResponse(status="ok", version=__version__)
+
+
+def _static_dir() -> Path | None:
+    """Locate the built frontend, if present (production appliance mode)."""
+    override = os.environ.get("OMNIPLOT_STATIC_DIR")
+    if override:
+        candidate = Path(override)
+    else:
+        candidate = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    return candidate if (candidate / "index.html").is_file() else None
+
+
+# Serve the built single-page app from the same origin when it exists, so one
+# process serves both the UI and the API. Mounted last so API routes win.
+_STATIC = _static_dir()
+if _STATIC is not None:
+    app.mount("/", StaticFiles(directory=_STATIC, html=True), name="frontend")

@@ -17,6 +17,7 @@
   "layers": {
     "title": "Calques",
     "dragHint": "glisser pour réordonner",
+    "groupByPen": "Grouper par stylo (moins de changements d'outil)",
     "empty": "Aucun calque pour l'instant.",
     "penSlot": "Emplacement stylo",
     "none": "aucun",
@@ -103,6 +104,8 @@
     "magazine": "Magasin",
     "installed": "Présent",
     "pickupPosition": "Position de prise",
+    "penUpOverride": "Lever stylo (override)",
+    "penDownOverride": "Baisser stylo (override)",
     "advanced": "Avancé",
     "dialect": "Dialecte G-code",
     "supportsArcs": "Supporte les arcs (G2/G3)",
@@ -161,6 +164,8 @@
     "pause": "Pause",
     "resume": "Reprendre",
     "abort": "Annuler",
+    "toolChange": "Changement de stylo requis",
+    "continue": "Fait — continuer",
     "commandFailed": "Échec de la commande du traceur (un appareil est-il connecté ?)."
   },
   "macros": {
@@ -176,8 +181,35 @@
     "save": "Enregistrer la macro",
     "clear": "Effacer"
   },
+  "queue": {
+    "title": "File d'impression",
+    "empty": "La file est vide.",
+    "add": "Ajouter le G-code courant",
+    "addHint": "Générez d'abord le G-code.",
+    "pause": "Pause",
+    "resume": "Reprendre",
+    "cancel": "Annuler",
+    "delete": "Retirer",
+    "cancelTitle": "Annuler le travail",
+    "cancelMsg": "Annuler « {name} » ? Un travail en cours s'arrêtera immédiatement.",
+    "loadFailed": "Impossible de charger la file d'impression.",
+    "enqueueFailed": "Impossible d'ajouter le travail à la file.",
+    "actionFailed": "Échec de l'action sur la file.",
+    "state": {
+      "queued": "En attente",
+      "running": "En cours",
+      "paused": "En pause",
+      "completed": "Terminé",
+      "failed": "Échec",
+      "canceled": "Annulé"
+    }
+  },
   "history": {
     "title": "Historique",
     "empty": "Aucun travail pour l'instant."
+  },
+  "audit": {
+    "title": "Journal d'audit",
+    "empty": "Aucune action enregistrée pour l'instant."
   }
 }

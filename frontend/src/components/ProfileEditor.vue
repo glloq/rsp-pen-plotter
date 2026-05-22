@@ -18,7 +18,15 @@ function defaultEbb(): EbbConfig {
 }
 
 function defaultPen(index: number): PenSlot {
-  return { index, name: `Pen ${index}`, color: '#000000', installed: true, position: null }
+  return {
+    index,
+    name: `Pen ${index}`,
+    color: '#000000',
+    installed: true,
+    position: null,
+    pen_up_command: null,
+    pen_down_command: null,
+  }
 }
 
 function normalizePens(profile: MachineProfile): void {
@@ -235,6 +243,14 @@ async function downloadYaml(): Promise<void> {
           <div v-if="pen.position" class="mt-1 grid grid-cols-2 gap-2">
             <input v-model.number="pen.position.x" type="number" step="any" placeholder="X" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
             <input v-model.number="pen.position.y" type="number" step="any" placeholder="Y" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </div>
+          <div class="mt-1 grid grid-cols-2 gap-2">
+            <label class="block text-slate-500">{{ t('profile.penUpOverride') }}
+              <input v-model="pen.pen_up_command" type="text" :placeholder="draft.pen_up_command" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+            </label>
+            <label class="block text-slate-500">{{ t('profile.penDownOverride') }}
+              <input v-model="pen.pen_down_command" type="text" :placeholder="draft.pen_down_command" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+            </label>
           </div>
         </div>
       </fieldset>
