@@ -13,3 +13,13 @@ export async function getHealth(): Promise<HealthResponse> {
   const response = await api.get<HealthResponse>('/health')
   return response.data
 }
+
+export interface AlgorithmInfo {
+  name: string
+  description: string
+}
+
+export async function getAlgorithms(): Promise<AlgorithmInfo[]> {
+  const response = await api.get<AlgorithmInfo[]>('/algorithms')
+  return response.data
+}

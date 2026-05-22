@@ -10,6 +10,10 @@ dependencies = [
     "pydantic>=2.9",
     "pyyaml>=6.0",
     "python-multipart>=0.0.12",
+    "pillow>=10.4",
+    "pillow-heif>=0.18",
+    "numpy>=2.0",
+    "scikit-learn>=1.5",
 ]
 
 [project.optional-dependencies]
@@ -47,6 +51,10 @@ convention = "google"
 python_version = "3.12"
 strict = true
 files = ["pen_plotter"]
+
+[[tool.mypy.overrides]]
+module = ["pillow_heif", "sklearn.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

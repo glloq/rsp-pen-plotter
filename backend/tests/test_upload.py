@@ -42,6 +42,32 @@ async def test_upload_resolves_mime_from_extension() -> None:
 
 
 @pytest.mark.asyncio
+async def test_upload_png_with_options_dispatches_to_bitmap(two_color_png: bytes) -> None:
+    async with _client() as client:
+        response = await client.post(
+            "/upload",
+            files={"file": ("photo.png", two_color_png, "image/png")},
+            data={
+                "profile_name": "Custom CoreXY A3",
+                "options": '{"algorithm": "halftone", "num_colors": 2}',
+            },
+        )
+    assert response.status_code == 200
+    assert response.json()["source_mime"] == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_upload_invalid_options_json_returns_400() -> None:
+    async with _client() as client:
+        response = await client.post(
+            "/upload",
+            files={"file": ("drawing.svg", SVG_SAMPLE, "image/svg+xml")},
+            data={"profile_name": "Custom CoreXY A3", "options": "not json"},
+        )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_upload_unsupported_format_returns_415() -> None:
     async with _client() as client:
         response = await client.post(
