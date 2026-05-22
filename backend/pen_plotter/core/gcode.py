@@ -181,6 +181,8 @@ def generate_gcode(
     arc_t = _env.get_template("arc.j2")
     tool_change_t = _env.get_template("tool_change.j2")
 
+    pens = {pen.index: pen for pen in profile.effective_pens()}
+
     out: list[str] = [header_t.render(profile=profile)]
     if not bounds.empty and _exceeds_workspace(bounds, transform, profile):
         out.append("; WARNING: drawing exceeds the workspace; coordinates may be out of bounds")
@@ -191,7 +193,11 @@ def generate_gcode(
             setting = overrides.get(layer.label)
             slot = setting.target_pen_slot if setting else None
             if profile.tool_change_method != "none" and slot is not None and slot != previous_slot:
-                out.append(tool_change_t.render(profile=profile, slot=slot))
+                pen = pens.get(slot)
+                if pen is not None and not pen.installed:
+                    out.append(f"; WARNING: pen slot {slot} is not installed in the magazine")
+                pen_name = pen.name if pen and pen.name else f"Pen {slot}"
+                out.append(tool_change_t.render(profile=profile, slot=slot, pen_name=pen_name))
                 previous_slot = slot
 
             speed = (setting.drawing_speed_mm_s if setting else None) or profile.drawing_speed_mm_s

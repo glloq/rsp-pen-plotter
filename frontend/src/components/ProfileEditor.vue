@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { exportProfileYaml, type EbbConfig, type MachineProfile } from '../api/client'
+import { exportProfileYaml, type EbbConfig, type MachineProfile, type PenSlot } from '../api/client'
 import { useJobStore } from '../stores/job'
 
 const { t } = useI18n()
@@ -16,8 +16,27 @@ function defaultEbb(): EbbConfig {
   return { steps_per_mm: 80, servo_up: 16000, servo_down: 12000, servo_rate: 400, serial_terminator: 'cr' }
 }
 
+function defaultPen(index: number): PenSlot {
+  return { index, name: `Pen ${index}`, color: '#000000', installed: true, position: null }
+}
+
+function normalizePens(profile: MachineProfile): void {
+  const existing = profile.pens ?? []
+  const count = Math.max(0, Math.floor(profile.pen_slot_count))
+  profile.pens = Array.from(
+    { length: count },
+    (_, i) => existing.find((p) => p.index === i) ?? defaultPen(i),
+  )
+}
+
 function syncDraft(): void {
-  draft.value = store.selectedProfile ? structuredClone(store.selectedProfile) : null
+  if (!store.selectedProfile) {
+    draft.value = null
+    return
+  }
+  const clone = structuredClone(store.selectedProfile)
+  normalizePens(clone)
+  draft.value = clone
 }
 
 watch(() => store.selectedProfileName, syncDraft, { immediate: true })
@@ -30,6 +49,13 @@ watch(
   (dialect) => {
     if (!draft.value) return
     if (dialect === 'ebb' && !draft.value.ebb) draft.value.ebb = defaultEbb()
+  },
+)
+
+watch(
+  () => draft.value?.pen_slot_count,
+  () => {
+    if (draft.value) normalizePens(draft.value)
   },
 )
 
@@ -163,6 +189,43 @@ async function downloadYaml(): Promise<void> {
           <label class="block text-slate-400">{{ t('profile.penSlots') }}
             <input v-model.number="draft.pen_slot_count" type="number" min="1" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
           </label>
+        </div>
+      </fieldset>
+
+      <fieldset v-if="draft.pens" class="space-y-2">
+        <legend class="text-xs uppercase tracking-wide text-slate-500">{{ t('profile.magazine') }}</legend>
+        <div
+          v-for="pen in draft.pens"
+          :key="pen.index"
+          class="rounded border border-slate-700 bg-slate-900/50 p-2"
+        >
+          <div class="flex items-center gap-2">
+            <span class="w-6 shrink-0 text-center font-mono text-slate-500">{{ pen.index }}</span>
+            <input v-model="pen.color" type="color" class="h-7 w-9 shrink-0 rounded border border-slate-700 bg-slate-900" />
+            <input
+              v-model="pen.name"
+              type="text"
+              :placeholder="`Pen ${pen.index}`"
+              class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            />
+            <label class="flex shrink-0 items-center gap-1 text-xs text-slate-400">
+              <input v-model="pen.installed" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
+              {{ t('profile.installed') }}
+            </label>
+          </div>
+          <label class="mt-1 flex items-center gap-2 text-xs text-slate-400">
+            <input
+              type="checkbox"
+              :checked="pen.position !== null"
+              class="rounded border-slate-600 bg-slate-900"
+              @change="(e) => (pen.position = (e.target as HTMLInputElement).checked ? { x: 0, y: 0 } : null)"
+            />
+            {{ t('profile.pickupPosition') }}
+          </label>
+          <div v-if="pen.position" class="mt-1 grid grid-cols-2 gap-2">
+            <input v-model.number="pen.position.x" type="number" step="any" placeholder="X" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            <input v-model.number="pen.position.y" type="number" step="any" placeholder="Y" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </div>
         </div>
       </fieldset>
 

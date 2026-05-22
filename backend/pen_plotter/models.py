@@ -32,6 +32,23 @@ class BoundingBox(BaseModel):
     y_max: float
 
 
+class Point(BaseModel):
+    """A point in the machine's coordinate space, in profile units."""
+
+    x: float
+    y: float
+
+
+class PenSlot(BaseModel):
+    """A physical pen position in the machine's magazine."""
+
+    index: int
+    name: str = ""
+    color: str = "#000000"
+    installed: bool = True
+    position: Point | None = None
+
+
 class EbbConfig(BaseModel):
     """EiBotBoard (AxiDraw-class) motion parameters.
 
@@ -82,6 +99,18 @@ class MachineProfile(BaseModel):
     supports_arcs: bool = False
     arc_tolerance_mm: float = 0.1
     ebb: EbbConfig | None = None
+    pens: list[PenSlot] | None = None
+
+    def effective_pens(self) -> list[PenSlot]:
+        """Return the configured magazine, deriving defaults when unset.
+
+        Profiles that predate per-slot configuration only carry
+        ``pen_slot_count``; in that case one default :class:`PenSlot` is
+        synthesized per slot so callers always get a consistent list.
+        """
+        if self.pens:
+            return self.pens
+        return [PenSlot(index=i, name=f"Pen {i}") for i in range(self.pen_slot_count)]
 
 
 class LayerInfo(BaseModel):

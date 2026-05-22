@@ -74,6 +74,19 @@ export interface EbbConfig {
   serial_terminator: 'cr' | 'lf' | 'crlf'
 }
 
+export interface Point {
+  x: number
+  y: number
+}
+
+export interface PenSlot {
+  index: number
+  name: string
+  color: string
+  installed: boolean
+  position: Point | null
+}
+
 export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'
 export type Origin = 'top_left' | 'bottom_left' | 'center'
 export type ToolChangeMethod = 'manual_pause' | 'carousel' | 'rack' | 'none'
@@ -95,6 +108,7 @@ export interface MachineProfile {
   supports_arcs: boolean
   arc_tolerance_mm: number
   ebb: EbbConfig | null
+  pens: PenSlot[] | null
 }
 
 export async function getProfiles(): Promise<MachineProfile[]> {
