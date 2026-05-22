@@ -194,7 +194,7 @@ def generate_gcode(
             slot = setting.target_pen_slot if setting else None
             if profile.tool_change_method != "none" and slot is not None and slot != previous_slot:
                 pen = pens.get(slot)
-                if pen is not None and not pen.installed:
+                if pen is None or not pen.installed:
                     out.append(f"; WARNING: pen slot {slot} is not installed in the magazine")
                 pen_name = pen.name if pen and pen.name else f"Pen {slot}"
                 out.append(tool_change_t.render(profile=profile, slot=slot, pen_name=pen_name))

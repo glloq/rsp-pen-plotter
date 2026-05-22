@@ -63,3 +63,12 @@ async def test_run_unknown_macro_returns_404() -> None:
     async with _client() as client:
         response = await client.post("/macros/nope/run")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_macro_name_with_slash_is_rejected() -> None:
+    async with _client() as client:
+        response = await client.post(
+            "/macros", json={"name": "home/park", "commands": ["$H"]}
+        )
+    assert response.status_code == 422

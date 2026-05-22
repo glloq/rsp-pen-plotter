@@ -131,7 +131,9 @@ class LayerInfo(BaseModel):
 class Macro(BaseModel):
     """A user-defined sequence of raw plotter commands triggerable as one action."""
 
-    name: str
+    # Names address the macro in the URL path (/macros/{name}/run), so they must
+    # stay within a single path segment: no slashes or control characters.
+    name: str = Field(min_length=1, pattern=r"^[\w \-.]+$")
     description: str = ""
     commands: list[str] = Field(default_factory=list)
 

@@ -116,3 +116,36 @@ async def test_delete_unknown_returns_404() -> None:
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.request("DELETE", "/profiles/does-not-exist")
     assert response.status_code == 404
+
+
+def test_slug_colliding_names_do_not_clobber(tmp_path: object) -> None:
+    from pathlib import Path
+
+    from pen_plotter.models import MachineProfile
+    from pen_plotter.profiles import delete_profile, load_profiles, save_profile
+
+    directory = Path(str(tmp_path))
+    base = _sample_profile("My Plotter")
+    other = {**base, "name": "my-plotter"}  # same slug as "My Plotter"
+
+    save_profile(MachineProfile.model_validate(base), directory=directory)
+    save_profile(MachineProfile.model_validate(other), directory=directory)
+
+    names = {p.name for p in load_profiles(directory=directory)}
+    assert names == {"My Plotter", "my-plotter"}  # neither overwrote the other
+
+    # Deleting one leaves the slug-colliding sibling intact.
+    assert delete_profile("My Plotter", directory=directory) is True
+    remaining = {p.name for p in load_profiles(directory=directory)}
+    assert remaining == {"my-plotter"}
+
+
+def test_delete_unicode_named_user_profile(tmp_path: object) -> None:
+    from pathlib import Path
+
+    from pen_plotter.models import MachineProfile
+    from pen_plotter.profiles import delete_profile, save_profile
+
+    directory = Path(str(tmp_path))
+    save_profile(MachineProfile.model_validate(_sample_profile("日本語")), directory=directory)
+    assert delete_profile("日本語", directory=directory) is True
