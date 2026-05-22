@@ -7,6 +7,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from pen_plotter import __version__
+from pen_plotter.api.upload import router as upload_router
+from pen_plotter.converters.defaults import register_default_converters
+from pen_plotter.converters.registry import registry
+
+register_default_converters(registry)
 
 app = FastAPI(title="OmniPlot", version=__version__)
 
@@ -17,6 +22,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(upload_router)
 
 
 class HealthResponse(BaseModel):
