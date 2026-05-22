@@ -22,6 +22,7 @@ class StreamState(StrEnum):
     IDLE = "idle"
     RUNNING = "running"
     PAUSED = "paused"
+    WAITING = "waiting"
     DONE = "done"
     ABORTED = "aborted"
     ERROR = "error"
@@ -35,6 +36,7 @@ class StreamProgress:
     sent: int
     acked: int
     state: StreamState
+    message: str | None = None
 
 
 class StreamError(Exception):
@@ -69,6 +71,7 @@ class GcodeStreamer:
         transport: Transport,
         on_progress: ProgressCallback | None = None,
         ack_timeout_s: float = 30.0,
+        pause_points: dict[int, str] | None = None,
     ) -> None:
         """Create a streamer.
 
@@ -78,10 +81,14 @@ class GcodeStreamer:
                 and on state changes.
             ack_timeout_s: Maximum time to wait for an ``ok`` before failing,
                 guarding against a stalled or disconnected controller.
+            pause_points: Optional ``{executable_line_index: prompt}`` mapping.
+                When streaming reaches such a line it is skipped and the stream
+                enters ``WAITING`` until resumed (a software-guided tool change).
         """
         self._transport = transport
         self._on_progress = on_progress
         self._ack_timeout_s = ack_timeout_s
+        self._pause_points = pause_points or {}
         self._resume = asyncio.Event()
         self._resume.set()
         self._aborted = False
@@ -146,12 +153,31 @@ class GcodeStreamer:
         )
         await self._emit()
 
-        for command in commands:
+        for index, command in enumerate(commands):
             await self._resume.wait()
             if self._aborted:
                 self.progress.state = StreamState.ABORTED
                 await self._emit()
                 return self.progress
+
+            if index in self._pause_points:
+                # Guided tool change: replace the firmware pause with a software
+                # one. Skip the line and wait for the operator to resume.
+                self.progress.state = StreamState.WAITING
+                self.progress.message = self._pause_points[index]
+                self._resume.clear()
+                await self._emit()
+                await self._resume.wait()
+                if self._aborted:
+                    self.progress.state = StreamState.ABORTED
+                    await self._emit()
+                    return self.progress
+                self.progress.state = StreamState.RUNNING
+                self.progress.message = None
+                self.progress.sent += 1
+                self.progress.acked += 1
+                await self._emit()
+                continue
 
             await self._transport.write_line(command)
             self.progress.sent += 1

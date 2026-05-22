@@ -338,6 +338,7 @@ export interface PlotterStatus {
   sent: number
   acked: number
   state: string
+  message?: string | null
 }
 
 export async function plotterConnect(

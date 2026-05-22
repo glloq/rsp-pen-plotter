@@ -17,10 +17,11 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import Engine
+from sqlalchemy import JSON, Column, Engine
 from sqlmodel import Field, Session, SQLModel, asc, desc, select
 
 from pen_plotter.core.resume import build_resume_program
+from pen_plotter.core.toolchange import guided_pause_points
 from pen_plotter.hardware.controller import PlotterController
 from pen_plotter.hardware.streamer import StreamError, StreamState, executable_lines
 from pen_plotter.persistence import engine as default_engine
@@ -55,6 +56,8 @@ class PrintRun(SQLModel, table=True):
     state: str = RunState.QUEUED
     priority: int = 0
     error: str | None = None
+    # {executable_line_index: operator prompt} for guided tool-change pauses.
+    pause_points: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -67,6 +70,8 @@ def enqueue(
     target: Engine = default_engine,
 ) -> PrintRun:
     """Add a run to the queue."""
+    profile = get_profile(profile_name)
+    pause_points = guided_pause_points(gcode, profile) if profile else {}
     run = PrintRun(
         id=str(uuid4()),
         name=name,
@@ -74,6 +79,7 @@ def enqueue(
         gcode=gcode,
         total_lines=len(executable_lines(gcode)),
         priority=priority,
+        pause_points={str(k): v for k, v in pause_points.items()},
     )
     with Session(target) as session:
         session.add(run)
@@ -218,6 +224,7 @@ class PrintQueue:
         if not self._controller.connected or self._controller.progress.state in (
             StreamState.RUNNING,
             StreamState.PAUSED,
+            StreamState.WAITING,
         ):
             return False
         run = next_queued(self._engine)
@@ -236,6 +243,13 @@ class PrintQueue:
         preamble_len = len(program) - (run.total_lines - run.acked_lines)
         start_checkpoint = run.acked_lines
 
+        # Remap absolute guided-pause indices onto the (possibly resumed) program.
+        pause_points = {
+            preamble_len + (int(idx) - start_checkpoint): prompt
+            for idx, prompt in (run.pause_points or {}).items()
+            if int(idx) >= start_checkpoint
+        }
+
         self._current_id = run.id
         self._cancel_requested = False
         _update(run.id, self._engine, state=RunState.RUNNING, error=None)
@@ -246,7 +260,9 @@ class PrintQueue:
             _update(run.id, self._engine, acked_lines=absolute)
 
         try:
-            final = await self._controller.stream("\n".join(program), on_progress=checkpoint)
+            final = await self._controller.stream(
+                "\n".join(program), on_progress=checkpoint, pause_points=pause_points
+            )
         except StreamError as exc:
             _update(run.id, self._engine, state=RunState.FAILED, error=str(exc))
             return True

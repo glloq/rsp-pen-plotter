@@ -146,6 +146,7 @@ class PlotterController:
         self,
         gcode: str,
         on_progress: ProgressCallback | None = None,
+        pause_points: dict[int, str] | None = None,
     ) -> StreamProgress:
         """Stream a G-code program and await its completion.
 
@@ -158,6 +159,8 @@ class PlotterController:
             gcode: The G-code program to stream.
             on_progress: Optional extra progress callback (in addition to the
                 broadcast to WebSocket subscribers).
+            pause_points: Optional ``{line_index: prompt}`` for guided
+                tool-change pauses (see :class:`GcodeStreamer`).
 
         Returns:
             The final :class:`StreamProgress`.
@@ -175,7 +178,9 @@ class PlotterController:
             if on_progress is not None:
                 await on_progress(progress)
 
-        self._streamer = GcodeStreamer(transport, on_progress=_combined)
+        self._streamer = GcodeStreamer(
+            transport, on_progress=_combined, pause_points=pause_points
+        )
         self._task = asyncio.create_task(self._streamer.run(gcode))
         self._task.add_done_callback(self._on_task_done)
         return await self._task

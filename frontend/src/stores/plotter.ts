@@ -21,6 +21,7 @@ export const usePlotterStore = defineStore('plotter', () => {
     sent: 0,
     acked: 0,
     state: 'idle',
+    message: null,
   })
   const port = ref('/dev/ttyUSB0')
   const baudrate = ref(115200)

@@ -56,6 +56,7 @@ class StatusResponse(BaseModel):
     sent: int
     acked: int
     state: str
+    message: str | None = None
 
 
 def _status() -> StatusResponse:
@@ -67,6 +68,7 @@ def _status() -> StatusResponse:
         sent=p.sent,
         acked=p.acked,
         state=p.state.value,
+        message=p.message,
     )
 
 
@@ -186,6 +188,7 @@ async def plotter_ws(websocket: WebSocket) -> None:
                     "sent": progress.sent,
                     "acked": progress.acked,
                     "state": progress.state.value,
+                    "message": progress.message,
                 }
             )
     except WebSocketDisconnect:

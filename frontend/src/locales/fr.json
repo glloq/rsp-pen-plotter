@@ -164,6 +164,8 @@
     "pause": "Pause",
     "resume": "Reprendre",
     "abort": "Annuler",
+    "toolChange": "Changement de stylo requis",
+    "continue": "Fait — continuer",
     "commandFailed": "Échec de la commande du traceur (un appareil est-il connecté ?)."
   },
   "macros": {

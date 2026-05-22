@@ -164,6 +164,8 @@
     "pause": "Pause",
     "resume": "Resume",
     "abort": "Abort",
+    "toolChange": "Pen change required",
+    "continue": "Done — continue",
     "commandFailed": "Plotter command failed (is a device connected?)."
   },
   "macros": {

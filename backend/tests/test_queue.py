@@ -106,6 +106,15 @@ def test_resume_requeues_paused_run() -> None:
     assert get_run(run.id, engine).state == RunState.QUEUED
 
 
+def test_enqueue_computes_guided_pause_points() -> None:
+    engine = _engine()
+    # A program with a tool-change comment + M0 yields one guided pause.
+    gcode = "G21\nG90\n; Change to pen slot 1 (Red)\nM0\nG1 X2 Y3 F600\n"
+    run = enqueue("job", PROFILE, gcode, target=engine)
+    # The M0 is the 3rd executable line (index 2).
+    assert run.pause_points == {"2": "Insert pen slot 1: Red"}
+
+
 def test_cancel_queued_run() -> None:
     engine = _engine()
     run = enqueue("job", PROFILE, GCODE, target=engine)
