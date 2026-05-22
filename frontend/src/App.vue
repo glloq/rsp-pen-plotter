@@ -6,6 +6,7 @@ import FileUpload from './components/FileUpload.vue'
 import GcodePreview from './components/GcodePreview.vue'
 import JobHistory from './components/JobHistory.vue'
 import LayerPanel from './components/LayerPanel.vue'
+import MacroPanel from './components/MacroPanel.vue'
 import PlotterPanel from './components/PlotterPanel.vue'
 import ProfileEditor from './components/ProfileEditor.vue'
 import Simulator from './components/Simulator.vue'
@@ -79,6 +80,7 @@ onMounted(async () => {
         <ProfileEditor />
         <LayerPanel />
         <PlotterPanel />
+        <MacroPanel />
         <JobHistory />
       </aside>
       <section>

@@ -128,6 +128,14 @@ class LayerInfo(BaseModel):
     drawing_speed_mm_s: float | None = None
 
 
+class Macro(BaseModel):
+    """A user-defined sequence of raw plotter commands triggerable as one action."""
+
+    name: str
+    description: str = ""
+    commands: list[str] = Field(default_factory=list)
+
+
 class Job(BaseModel):
     """Tracks a single file through the conversion-to-plot lifecycle."""
 

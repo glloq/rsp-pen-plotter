@@ -44,6 +44,30 @@ export async function getPresets(): Promise<Preset[]> {
   return response.data
 }
 
+export interface Macro {
+  name: string
+  description: string
+  commands: string[]
+}
+
+export async function getMacros(): Promise<Macro[]> {
+  const response = await api.get<Macro[]>('/macros')
+  return response.data
+}
+
+export async function saveMacro(macro: Macro): Promise<Macro> {
+  const response = await api.post<Macro>('/macros', macro)
+  return response.data
+}
+
+export async function deleteMacro(name: string): Promise<void> {
+  await api.delete(`/macros/${encodeURIComponent(name)}`)
+}
+
+export async function runMacro(name: string): Promise<void> {
+  await api.post(`/macros/${encodeURIComponent(name)}/run`)
+}
+
 export interface JobRecord {
   job_id: string
   source_file: string

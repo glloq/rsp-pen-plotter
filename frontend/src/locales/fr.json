@@ -103,6 +103,18 @@
     "abort": "Annuler",
     "commandFailed": "Échec de la commande du traceur (un appareil est-il connecté ?)."
   },
+  "macros": {
+    "title": "Macros",
+    "empty": "Aucune macro pour l'instant.",
+    "run": "Exécuter",
+    "runHint": "Connectez un traceur (et mettez en pause tout travail en cours) pour exécuter des macros.",
+    "edit": "Éditer",
+    "name": "Nom",
+    "description": "Description (facultatif)",
+    "commands": "Une commande par ligne",
+    "save": "Enregistrer la macro",
+    "clear": "Effacer"
+  },
   "history": {
     "title": "Historique",
     "empty": "Aucun travail pour l'instant."

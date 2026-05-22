@@ -7,6 +7,9 @@ os.environ.setdefault("OMNIPLOT_DB", os.path.join(tempfile.gettempdir(), "omnipl
 os.environ.setdefault(
     "OMNIPLOT_PROFILES_DIR", os.path.join(tempfile.gettempdir(), "omniplot_test_profiles")
 )
+os.environ.setdefault(
+    "OMNIPLOT_MACROS_FILE", os.path.join(tempfile.gettempdir(), "omniplot_test_macros.json")
+)
 
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402

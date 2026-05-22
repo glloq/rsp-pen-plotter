@@ -103,6 +103,18 @@
     "abort": "Abort",
     "commandFailed": "Plotter command failed (is a device connected?)."
   },
+  "macros": {
+    "title": "Macros",
+    "empty": "No macros yet.",
+    "run": "Run",
+    "runHint": "Connect a plotter (and pause any running job) to run macros.",
+    "edit": "Edit",
+    "name": "Name",
+    "description": "Description (optional)",
+    "commands": "One command per line",
+    "save": "Save macro",
+    "clear": "Clear"
+  },
   "history": {
     "title": "History",
     "empty": "No jobs yet."

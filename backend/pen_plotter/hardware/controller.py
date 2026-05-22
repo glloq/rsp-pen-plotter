@@ -112,6 +112,15 @@ class PlotterController:
         self._require_idle()
         await self._send_immediate(home_command(profile))
 
+    async def send_commands(self, lines: list[str]) -> None:
+        """Send raw control lines immediately, e.g. for a user macro.
+
+        Raises:
+            RuntimeError: If disconnected or a job currently owns the transport.
+        """
+        self._require_idle()
+        await self._send_immediate(lines)
+
     async def run(self, gcode: str) -> None:
         """Start streaming a G-code program in the background.
 
