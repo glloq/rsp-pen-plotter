@@ -311,6 +311,28 @@ on `http://localhost:5173` and the API on `http://localhost:8000`.
 The legacy manual flow (`uv sync` + `uv run uvicorn …` and `npm run dev` in
 another terminal) still works for development.
 
+### Start at boot (systemd)
+
+On a Raspberry Pi or any systemd-based Linux:
+
+```bash
+sudo ./install-service.sh   # uses $SUDO_USER, or: sudo ./install-service.sh <user>
+```
+
+This renders `deploy/omniplot.service.in`, installs it to
+`/etc/systemd/system/omniplot.service`, creates an editable `.env.service`
+(for `HOST`, `PORT`, `OMNIPLOT_API_KEY`, …), then enables and starts the
+service.
+
+```bash
+sudo systemctl status omniplot       # current state
+sudo journalctl -u omniplot -f       # follow logs
+sudo systemctl restart omniplot      # after editing .env.service
+```
+
+The service runs as the chosen user (typically `pi`) with the `dialout`
+supplementary group so it can open serial devices.
+
 ---
 
 ## Contributing

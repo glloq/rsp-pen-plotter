@@ -13,6 +13,10 @@
 #                                   the same key (recommended on a LAN).
 set -euo pipefail
 
+# systemd gives services a minimal PATH; make sure user-installed tools
+# (notably uv in ~/.local/bin) are reachable.
+export PATH="${HOME:-/root}/.local/bin:$PATH"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 MODE="prod"

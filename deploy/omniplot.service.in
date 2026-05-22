@@ -1,0 +1,25 @@
+[Unit]
+Description=OmniPlot pen plotter studio
+Documentation=https://github.com/glloq/rsp-pen-plotter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=__USER__
+Group=__USER__
+# Serial devices typically belong to the dialout group.
+SupplementaryGroups=dialout
+WorkingDirectory=__ROOT__
+# Optional overrides: HOST, PORT, OMNIPLOT_API_KEY, OMNIPLOT_DB, ...
+EnvironmentFile=-__ROOT__/.env.service
+ExecStart=__ROOT__/start.sh
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
