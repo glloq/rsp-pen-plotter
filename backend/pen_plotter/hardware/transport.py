@@ -59,23 +59,34 @@ class MockTransport:
 class SerialTransport:
     """A :class:`Transport` backed by ``pyserial-asyncio``."""
 
-    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    def __init__(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        terminator: str = "\n",
+    ) -> None:
         """Wrap an open reader/writer pair.
 
         Args:
             reader: The serial stream reader.
             writer: The serial stream writer.
+            terminator: Line terminator to append on write. GRBL/Marlin use a
+                line feed; EiBotBoard expects a carriage return.
         """
         self._reader = reader
         self._writer = writer
+        self._terminator = terminator
 
     @classmethod
-    async def open(cls, port: str, baudrate: int = 115200) -> SerialTransport:
+    async def open(
+        cls, port: str, baudrate: int = 115200, terminator: str = "\n"
+    ) -> SerialTransport:
         """Open a serial connection.
 
         Args:
             port: Serial device path, e.g. ``/dev/ttyUSB0``.
             baudrate: Connection baud rate.
+            terminator: Line terminator to append on write.
 
         Returns:
             A connected :class:`SerialTransport`.
@@ -83,11 +94,11 @@ class SerialTransport:
         import serial_asyncio  # noqa: PLC0415  (optional hardware dependency)
 
         reader, writer = await serial_asyncio.open_serial_connection(url=port, baudrate=baudrate)
-        return cls(reader, writer)
+        return cls(reader, writer, terminator)
 
     async def write_line(self, line: str) -> None:
-        """Write a line terminated with a newline and flush."""
-        self._writer.write((line + "\n").encode("ascii"))
+        """Write a line terminated per the configured terminator and flush."""
+        self._writer.write((line + self._terminator).encode("ascii"))
         await self._writer.drain()
 
     async def read_line(self) -> str:

@@ -2,7 +2,7 @@ import axios, { type AxiosInstance } from 'axios'
 
 const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
-export const api: AxiosInstance = axios.create({ baseURL })
+export const api: AxiosInstance = axios.create({ baseURL, timeout: 30000 })
 
 export function websocketUrl(path: string): string {
   return baseURL.replace(/^http/, 'ws') + path
@@ -172,8 +172,16 @@ export interface PlotterStatus {
   state: string
 }
 
-export async function plotterConnect(port: string, baudrate: number): Promise<PlotterStatus> {
-  const response = await api.post<PlotterStatus>('/plotter/connect', { port, baudrate })
+export async function plotterConnect(
+  port: string,
+  baudrate: number,
+  terminator: 'cr' | 'lf' | 'crlf' = 'lf',
+): Promise<PlotterStatus> {
+  const response = await api.post<PlotterStatus>('/plotter/connect', {
+    port,
+    baudrate,
+    terminator,
+  })
   return response.data
 }
 

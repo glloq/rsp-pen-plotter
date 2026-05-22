@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
+import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
@@ -8,7 +9,16 @@ import JogControls from './JogControls.vue'
 const { t } = useI18n()
 const plotter = usePlotterStore()
 const job = useJobStore()
-const { status, port, baudrate, error, progress } = storeToRefs(plotter)
+const { status, port, baudrate, terminator, error, progress } = storeToRefs(plotter)
+
+// EiBotBoard expects carriage-return terminated commands; default it for EBB profiles.
+watch(
+  () => job.selectedProfile?.gcode_dialect,
+  (dialect) => {
+    terminator.value = dialect === 'ebb' ? 'cr' : 'lf'
+  },
+  { immediate: true },
+)
 
 function sendJob(): void {
   if (job.gcode) plotter.run(job.gcode)
@@ -30,6 +40,14 @@ function sendJob(): void {
         type="number"
         class="w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-sm text-slate-100"
       />
+      <select
+        v-model="terminator"
+        class="w-full rounded bg-slate-900 border border-slate-700 px-2 py-1 text-sm text-slate-100"
+      >
+        <option value="lf">LF (GRBL / Marlin)</option>
+        <option value="cr">CR (EiBotBoard)</option>
+        <option value="crlf">CRLF</option>
+      </select>
       <button
         type="button"
         class="w-full rounded bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-medium text-white"
@@ -79,6 +97,6 @@ function sendJob(): void {
       </div>
     </div>
 
-    <p v-if="error" class="text-sm text-red-400">{{ t('plotter.commandFailed') }}</p>
+    <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
   </div>
 </template>

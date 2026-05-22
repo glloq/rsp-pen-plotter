@@ -1,6 +1,5 @@
-# AxiDraw V3 — A4 desktop pen plotter.
-# The genuine AxiDraw is driven by an EiBotBoard; this profile emits standard
-# G-code for the OmniPlot simulator and GRBL-compatible controllers.
+# AxiDraw V3 — A4 desktop pen plotter driven by an EiBotBoard (EBB).
+# Generation emits native EBB commands (SM/SP/EM/SC), not G-code.
 name: "AxiDraw V3"
 units: "mm"
 workspace:
@@ -10,11 +9,17 @@ workspace:
   y_max: 218.0
 origin: "top_left"
 gcode_dialect: "ebb"
-pen_up_command: "M280 P0 S20"
-pen_down_command: "M280 P0 S60"
+pen_up_command: "SP,1"
+pen_down_command: "SP,0"
 tool_change_method: "manual_pause"
 tool_change_command: "M0"
 drawing_speed_mm_s: 50.0
 travel_speed_mm_s: 130.0
 acceleration_mm_s2: 1000.0
 pen_slot_count: 1
+ebb:
+  steps_per_mm: 80.0
+  servo_up: 16000
+  servo_down: 12000
+  servo_rate: 400
+  serial_terminator: "cr"

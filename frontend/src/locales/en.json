@@ -31,7 +31,8 @@
     "generate": "Generate G-code",
     "generating": "Generating…",
     "penUpTravel": "Pen-up travel",
-    "travelReduction": "Travel reduction"
+    "travelReduction": "Travel reduction",
+    "fillHint": "Optimization converts filled shapes to outline strokes (pens draw lines, not fills)."
   },
   "gcode": {
     "title": "G-code",

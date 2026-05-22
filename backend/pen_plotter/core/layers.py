@@ -14,7 +14,7 @@ decided in a later phase.
 from __future__ import annotations
 
 import io
-import re
+from functools import lru_cache
 from xml.etree import ElementTree as ET
 
 from svgelements import SVG, Shape
@@ -25,7 +25,6 @@ _SVG_NS = "http://www.w3.org/2000/svg"
 _INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
 _INKSCAPE_LABEL = f"{{{_INKSCAPE_NS}}}label"
 _DRAWABLE = {"path", "polyline", "polygon", "line", "circle", "rect", "ellipse"}
-_SIZE_ATTR_RE = re.compile(r'\s(?:width|height)="[^"]*"')
 
 ET.register_namespace("", _SVG_NS)
 ET.register_namespace("inkscape", _INKSCAPE_NS)
@@ -34,6 +33,29 @@ ET.register_namespace("inkscape", _INKSCAPE_NS)
 def _local(tag: str) -> str:
     """Return an element's local name without its namespace."""
     return tag.rsplit("}", 1)[-1]
+
+
+def strip_root_size(svg: str) -> str:
+    """Remove ``width``/``height`` from the root ``<svg>`` element.
+
+    This forces measurement and geometry libraries to work in the document's
+    ``viewBox`` user units instead of scaling to physical pixels. Unlike a
+    regex, it only ever touches the root element's attributes.
+
+    Args:
+        svg: The SVG markup.
+
+    Returns:
+        The SVG with root size attributes removed, or the input unchanged if it
+        cannot be parsed.
+    """
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return svg
+    root.attrib.pop("width", None)
+    root.attrib.pop("height", None)
+    return ET.tostring(root, encoding="unicode")
 
 
 def _count_drawables(element: ET.Element) -> int:
@@ -58,11 +80,13 @@ def _group_color(group: ET.Element) -> str:
     return "#000000"
 
 
+@lru_cache(maxsize=256)
 def _measure(svg_markup: str) -> tuple[float, BoundingBox]:
     """Measure total path length and bounding box in user units.
 
     Physical ``width``/``height`` are stripped so svgelements reports lengths in
     the document's ``viewBox`` coordinate system rather than scaling to pixels.
+    Results are memoized since the same fragment may be measured repeatedly.
 
     Args:
         svg_markup: A self-contained SVG document.
@@ -70,7 +94,7 @@ def _measure(svg_markup: str) -> tuple[float, BoundingBox]:
     Returns:
         A ``(length, bbox)`` pair; zeros if the SVG has no measurable geometry.
     """
-    stripped = _SIZE_ATTR_RE.sub("", svg_markup, count=2)
+    stripped = strip_root_size(svg_markup)
     total = 0.0
     x_min = y_min = float("inf")
     x_max = y_max = float("-inf")

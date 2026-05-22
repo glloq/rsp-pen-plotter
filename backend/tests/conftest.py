@@ -2,12 +2,26 @@ import io
 import os
 import tempfile
 
-# Isolate the job-history database from the real one before pen_plotter imports.
+# Isolate the job-history database and user profiles dir before pen_plotter imports.
 os.environ.setdefault("OMNIPLOT_DB", os.path.join(tempfile.gettempdir(), "omniplot_test.db"))
+os.environ.setdefault(
+    "OMNIPLOT_PROFILES_DIR", os.path.join(tempfile.gettempdir(), "omniplot_test_profiles")
+)
 
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 from PIL import Image  # noqa: E402
+
+from pen_plotter.converters.defaults import register_default_converters  # noqa: E402
+from pen_plotter.converters.registry import registry  # noqa: E402
+from pen_plotter.persistence import init_db  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _app_setup() -> None:
+    """Prime the converter registry and database, mirroring the app lifespan."""
+    register_default_converters(registry)
+    init_db()
 
 
 @pytest.fixture

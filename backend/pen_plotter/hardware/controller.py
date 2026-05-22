@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 
 from pen_plotter.hardware.commands import home_command, jog_command
 from pen_plotter.hardware.streamer import GcodeStreamer, StreamProgress, StreamState
@@ -42,14 +43,16 @@ class PlotterController:
         """Attach an already-open transport (used in tests and after connect)."""
         self._transport = transport
 
-    async def open_serial(self, port: str, baudrate: int = 115200) -> None:
+    async def open_serial(self, port: str, baudrate: int = 115200, terminator: str = "\n") -> None:
         """Open and attach a real serial transport.
 
         Args:
             port: Serial device path.
             baudrate: Connection baud rate.
+            terminator: Line terminator (line feed for GRBL/Marlin, carriage
+                return for EBB).
         """
-        self.attach(await SerialTransport.open(port, baudrate))
+        self.attach(await SerialTransport.open(port, baudrate, terminator))
 
     async def disconnect(self) -> None:
         """Abort any running job and close the transport."""
@@ -69,13 +72,26 @@ class PlotterController:
             raise RuntimeError("Not connected to a plotter.")
         return self._transport
 
-    async def _send_immediate(self, lines: list[str]) -> None:
+    @property
+    def _job_active(self) -> bool:
+        """Whether a streaming job is currently running or paused."""
+        return self._task is not None and not self._task.done()
+
+    def _require_idle(self) -> None:
+        """Reject manual commands while a job owns the transport."""
+        if self._job_active:
+            raise RuntimeError("A job is running; pause or abort it before sending commands.")
+
+    async def _send_immediate(self, lines: list[str], timeout_s: float = 30.0) -> None:
         """Send control lines, waiting for an ``ok`` after each."""
         transport = self._require_transport()
         for line in lines:
             await transport.write_line(line)
             while True:
-                response = (await transport.read_line()).lower()
+                try:
+                    response = (await asyncio.wait_for(transport.read_line(), timeout_s)).lower()
+                except TimeoutError as exc:
+                    raise RuntimeError("Controller did not acknowledge in time.") from exc
                 if response.startswith("ok"):
                     break
                 if response.startswith(("error", "alarm", "!!")):
@@ -83,10 +99,12 @@ class PlotterController:
 
     async def jog(self, dx_mm: float, dy_mm: float, profile: MachineProfile) -> None:
         """Jog the head by a relative offset."""
+        self._require_idle()
         await self._send_immediate(jog_command(dx_mm, dy_mm, profile))
 
     async def home(self, profile: MachineProfile) -> None:
         """Home the machine."""
+        self._require_idle()
         await self._send_immediate(home_command(profile))
 
     async def run(self, gcode: str) -> None:
@@ -99,10 +117,19 @@ class PlotterController:
             RuntimeError: If disconnected or a job is already running.
         """
         transport = self._require_transport()
-        if self._task is not None and not self._task.done():
+        if self._job_active:
             raise RuntimeError("A job is already running.")
         self._streamer = GcodeStreamer(transport, on_progress=self._broadcast)
         self._task = asyncio.create_task(self._streamer.run(gcode))
+        self._task.add_done_callback(self._on_task_done)
+
+    def _on_task_done(self, task: asyncio.Task[StreamProgress]) -> None:
+        """Retrieve the streaming task's result so exceptions aren't lost."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logging.getLogger(__name__).error("Streaming job failed: %s", exc)
 
     def pause(self) -> None:
         """Pause the running job."""

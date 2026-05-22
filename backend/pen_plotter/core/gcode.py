@@ -16,6 +16,7 @@ from xml.etree import ElementTree as ET
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from pen_plotter.core.arcs import ArcTo, fit_arcs
 from pen_plotter.core.layers import _INKSCAPE_LABEL, _group_to_svg, _local
 from pen_plotter.core.toolpath import _doc_from_svg
 from pen_plotter.models import MachineProfile
@@ -138,6 +139,26 @@ def _make_transform(
     return transform
 
 
+def _exceeds_workspace(
+    bounds: _Bounds,
+    transform: Callable[[float, float], tuple[float, float]],
+    profile: MachineProfile,
+) -> bool:
+    """Whether the transformed drawing falls outside the workspace bounds."""
+    ws = profile.workspace
+    tol = 0.01
+    corners = [
+        transform(bounds.x_min, bounds.y_min),
+        transform(bounds.x_min, bounds.y_max),
+        transform(bounds.x_max, bounds.y_min),
+        transform(bounds.x_max, bounds.y_max),
+    ]
+    return any(
+        x < ws.x_min - tol or x > ws.x_max + tol or y < ws.y_min - tol or y > ws.y_max + tol
+        for x, y in corners
+    )
+
+
 def generate_gcode(
     svg: str,
     profile: MachineProfile,
@@ -177,9 +198,12 @@ def generate_gcode(
     pen_down_t = _env.get_template("pen_down.j2")
     line_t = _env.get_template("line.j2")
     travel_t = _env.get_template("travel.j2")
+    arc_t = _env.get_template("arc.j2")
     tool_change_t = _env.get_template("tool_change.j2")
 
     out: list[str] = [header_t.render(profile=profile)]
+    if not bounds.empty and _exceeds_workspace(bounds, transform, profile):
+        out.append("; WARNING: drawing exceeds the workspace; coordinates may be out of bounds")
     previous_slot: int | None = None
 
     if not bounds.empty:
@@ -194,13 +218,31 @@ def generate_gcode(
             feed = speed * 60.0
 
             for polyline in layer.polylines:
-                start = transform(*polyline[0])
+                machine_points = [transform(px, py) for px, py in polyline]
+                start = machine_points[0]
                 out.append(pen_up_t.render(profile=profile))
                 out.append(travel_t.render(x=start[0], y=start[1]))
                 out.append(pen_down_t.render(profile=profile))
-                for point in polyline[1:]:
-                    mx, my = transform(*point)
-                    out.append(line_t.render(x=mx, y=my, feed=feed))
+                if profile.supports_arcs:
+                    prev = start
+                    for seg in fit_arcs(machine_points, profile.arc_tolerance_mm):
+                        if isinstance(seg, ArcTo):
+                            out.append(
+                                arc_t.render(
+                                    x=seg.x,
+                                    y=seg.y,
+                                    i=seg.cx - prev[0],
+                                    j=seg.cy - prev[1],
+                                    clockwise=seg.clockwise,
+                                    feed=feed,
+                                )
+                            )
+                        else:
+                            out.append(line_t.render(x=seg.x, y=seg.y, feed=feed))
+                        prev = (seg.x, seg.y)
+                else:
+                    for mx, my in machine_points[1:]:
+                        out.append(line_t.render(x=mx, y=my, feed=feed))
 
     out.append(
         footer_t.render(

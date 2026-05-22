@@ -31,7 +31,8 @@
     "generate": "Générer le G-code",
     "generating": "Génération…",
     "penUpTravel": "Déplacement à vide",
-    "travelReduction": "Réduction du déplacement"
+    "travelReduction": "Réduction du déplacement",
+    "fillHint": "L'optimisation convertit les formes pleines en contours (un stylo trace des lignes, pas des remplissages)."
   },
   "gcode": {
     "title": "G-code",

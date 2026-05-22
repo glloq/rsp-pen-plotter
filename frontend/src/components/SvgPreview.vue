@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DOMPurify from 'dompurify'
 import svgPanZoom from 'svg-pan-zoom'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -32,7 +33,9 @@ function render(markup: string | null): void {
     panZoom = null
   }
   if (!container.value) return
-  container.value.innerHTML = markup ?? ''
+  container.value.innerHTML = markup
+    ? DOMPurify.sanitize(markup, { USE_PROFILES: { svg: true, svgFilters: true } })
+    : ''
   const root = container.value.querySelector('svg')
   if (!root) return
   root.setAttribute('width', '100%')

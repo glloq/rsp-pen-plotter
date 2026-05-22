@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -13,11 +14,15 @@ from pen_plotter.profiles import get_profile
 router = APIRouter()
 
 
+_TERMINATORS = {"cr": "\r", "lf": "\n", "crlf": "\r\n"}
+
+
 class ConnectRequest(BaseModel):
     """Serial connection parameters."""
 
     port: str
     baudrate: int = 115200
+    terminator: Literal["cr", "lf", "crlf"] = "lf"
 
 
 class JogRequest(BaseModel):
@@ -77,7 +82,9 @@ async def connect(request: ConnectRequest) -> StatusResponse:
         HTTPException: 400 if the serial port cannot be opened.
     """
     try:
-        await controller.open_serial(request.port, request.baudrate)
+        await controller.open_serial(
+            request.port, request.baudrate, _TERMINATORS[request.terminator]
+        )
     except Exception as exc:  # hardware/serial errors
         raise HTTPException(status_code=400, detail=f"Could not connect: {exc}") from exc
     return _status()

@@ -64,16 +64,24 @@ def executable_lines(gcode: str) -> list[str]:
 class GcodeStreamer:
     """Streams G-code to a transport with ``ok``-acknowledged flow control."""
 
-    def __init__(self, transport: Transport, on_progress: ProgressCallback | None = None) -> None:
+    def __init__(
+        self,
+        transport: Transport,
+        on_progress: ProgressCallback | None = None,
+        ack_timeout_s: float = 30.0,
+    ) -> None:
         """Create a streamer.
 
         Args:
             transport: The link to the controller.
             on_progress: Optional async callback invoked after each acknowledgment
                 and on state changes.
+            ack_timeout_s: Maximum time to wait for an ``ok`` before failing,
+                guarding against a stalled or disconnected controller.
         """
         self._transport = transport
         self._on_progress = on_progress
+        self._ack_timeout_s = ack_timeout_s
         self._resume = asyncio.Event()
         self._resume.set()
         self._aborted = False
@@ -102,13 +110,19 @@ class GcodeStreamer:
             await self._on_progress(self.progress)
 
     async def _wait_ok(self) -> None:
-        """Read responses until an ``ok`` is seen, raising on error.
+        """Read responses until an ``ok`` is seen, raising on error or timeout.
 
         Raises:
-            StreamError: If the controller reports an ``error``/``alarm``.
+            StreamError: If the controller reports an ``error``/``alarm`` or
+                fails to acknowledge within ``ack_timeout_s``.
         """
         while True:
-            response = (await self._transport.read_line()).lower()
+            try:
+                response = (
+                    await asyncio.wait_for(self._transport.read_line(), self._ack_timeout_s)
+                ).lower()
+            except TimeoutError as exc:
+                raise StreamError(f"No acknowledgment within {self._ack_timeout_s}s") from exc
             if response.startswith("ok"):
                 return
             if response.startswith(("error", "alarm", "!!")):
