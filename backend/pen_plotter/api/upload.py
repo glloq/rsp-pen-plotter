@@ -87,6 +87,7 @@ async def upload(
         raise HTTPException(status_code=415, detail=str(exc)) from exc
 
     parsed_options = _parse_options(options)
+    parsed_options.setdefault("source_mime", mime)
     data = await file.read()
     try:
         converter.convert(data, options=parsed_options)

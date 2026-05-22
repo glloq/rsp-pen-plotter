@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { getAlgorithms, getHealth, type AlgorithmInfo } from './api/client'
+import { getAlgorithms, getFonts, getHealth, type AlgorithmInfo } from './api/client'
 
 const status = ref<string | null>(null)
 const version = ref<string | null>(null)
 const error = ref<string | null>(null)
 const algorithms = ref<AlgorithmInfo[]>([])
+const fonts = ref<string[]>([])
 
 onMounted(async () => {
   try {
     const health = await getHealth()
     status.value = health.status
     version.value = health.version
-    algorithms.value = await getAlgorithms()
+    ;[algorithms.value, fonts.value] = await Promise.all([getAlgorithms(), getFonts()])
   } catch {
     error.value = 'API unreachable'
   }
@@ -50,6 +51,13 @@ onMounted(async () => {
           <span class="text-slate-400"> — {{ algo.description }}</span>
         </li>
       </ul>
+    </section>
+
+    <section v-if="fonts.length" class="w-full max-w-md">
+      <h2 class="text-sm uppercase tracking-wide text-slate-400 mb-2">
+        Hershey fonts ({{ fonts.length }})
+      </h2>
+      <p class="text-slate-400 font-mono text-sm break-words">{{ fonts.join(', ') }}</p>
     </section>
   </main>
 </template>

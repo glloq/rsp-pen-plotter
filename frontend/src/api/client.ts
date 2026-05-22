@@ -23,3 +23,8 @@ export async function getAlgorithms(): Promise<AlgorithmInfo[]> {
   const response = await api.get<AlgorithmInfo[]>('/algorithms')
   return response.data
 }
+
+export async function getFonts(): Promise<string[]> {
+  const response = await api.get<string[]>('/fonts')
+  return response.data
+}
