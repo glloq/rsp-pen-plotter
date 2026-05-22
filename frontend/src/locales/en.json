@@ -17,6 +17,7 @@
   "layers": {
     "title": "Layers",
     "dragHint": "drag to reorder",
+    "groupByPen": "Group by pen (fewer tool changes)",
     "empty": "No layers yet.",
     "penSlot": "Pen slot",
     "none": "none",

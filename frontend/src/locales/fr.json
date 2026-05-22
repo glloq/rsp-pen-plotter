@@ -17,6 +17,7 @@
   "layers": {
     "title": "Calques",
     "dragHint": "glisser pour réordonner",
+    "groupByPen": "Grouper par stylo (moins de changements d'outil)",
     "empty": "Aucun calque pour l'instant.",
     "penSlot": "Emplacement stylo",
     "none": "aucun",
