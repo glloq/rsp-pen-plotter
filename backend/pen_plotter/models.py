@@ -39,11 +39,23 @@ class EbbConfig(BaseModel):
     motors form an H-bot, so a Cartesian move maps to mixed motor steps.
     """
 
-    steps_per_mm: float = 80.0
-    servo_up: int = 16000
-    servo_down: int = 12000
-    servo_rate: int = 400
-    serial_terminator: Literal["cr", "lf", "crlf"] = "cr"
+    steps_per_mm: float = Field(
+        default=80.0, gt=0.0, description="Motor steps per millimeter of Cartesian travel."
+    )
+    servo_up: int = Field(
+        default=16000,
+        description="Servo pulse width for the pen-up position, in 83.3 ns units (EBB SP).",
+    )
+    servo_down: int = Field(
+        default=12000,
+        description="Servo pulse width for the pen-down position, in 83.3 ns units (EBB SP).",
+    )
+    servo_rate: int = Field(
+        default=400, gt=0, description="Servo travel rate between up/down, in EBB SC units."
+    )
+    serial_terminator: Literal["cr", "lf", "crlf"] = Field(
+        default="cr", description="Line terminator the board expects; EiBotBoard uses CR."
+    )
 
 
 class MachineProfile(BaseModel):

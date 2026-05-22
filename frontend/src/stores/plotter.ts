@@ -34,7 +34,11 @@ export const usePlotterStore = defineStore('plotter', () => {
     if (socket) return
     socket = new WebSocket(websocketUrl('/ws/plotter'))
     socket.onmessage = (event) => {
-      status.value = JSON.parse(event.data) as PlotterStatus
+      try {
+        status.value = JSON.parse(event.data) as PlotterStatus
+      } catch {
+        // Ignore malformed frames; keep the last known status.
+      }
     }
     socket.onclose = () => {
       socket = null

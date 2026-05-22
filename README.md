@@ -124,21 +124,29 @@ Real-time motion control is delegated to a microcontroller (Klipper on RP2040 re
 ## Project Structure
 
 ```
-omniplot/
+rsp-pen-plotter/
 ├── backend/
 │   ├── pyproject.toml
 │   ├── pen_plotter/
-│   │   ├── main.py                 # FastAPI app
+│   │   ├── main.py                 # FastAPI app, router wiring, /health
 │   │   ├── models.py               # Pydantic shared models
+│   │   ├── persistence.py          # SQLModel job-history storage
+│   │   ├── presets.py              # built-in parameter presets
 │   │   ├── api/
 │   │   │   ├── upload.py           # POST /upload
 │   │   │   ├── optimize.py         # POST /optimize
 │   │   │   ├── generate.py         # POST /generate
-│   │   │   └── plotter.py          # WebSocket + serial control
+│   │   │   ├── plotter.py          # /plotter/* control + /ws/plotter
+│   │   │   ├── profiles.py         # profile list/get/export/import
+│   │   │   ├── presets.py          # GET /presets
+│   │   │   ├── jobs.py             # job history
+│   │   │   ├── fonts.py            # GET /fonts (Hershey)
+│   │   │   └── algorithms.py       # GET /algorithms (raster art)
 │   │   ├── converters/
-│   │   │   ├── base.py             # Abstract Converter
+│   │   │   ├── base.py             # Abstract Converter + ConversionResult
 │   │   │   ├── registry.py         # MIME → Converter
-│   │   │   ├── svg.py              # passthrough
+│   │   │   ├── defaults.py         # registers the built-in converters
+│   │   │   ├── svg.py              # passthrough + sanitization
 │   │   │   ├── bitmap.py           # PNG/JPG/HEIC + algorithms
 │   │   │   ├── pdf.py              # pymupdf
 │   │   │   ├── dxf.py              # ezdxf
@@ -147,28 +155,28 @@ omniplot/
 │   │   │   ├── html.py             # weasyprint
 │   │   │   ├── markdown.py         # md-it + Hershey
 │   │   │   ├── text.py             # txt + Hershey
-│   │   │   └── gcode.py            # direct bypass
+│   │   │   ├── gcode.py            # direct bypass
+│   │   │   └── algorithms/         # direct, halftone, stippling
 │   │   ├── core/
-│   │   │   ├── layers.py           # layer extraction
+│   │   │   ├── layers.py           # layer extraction + labeled_group_fragments
 │   │   │   ├── toolpath.py         # vpype wrapper
-│   │   │   └── gcode.py            # Jinja2 renderer
+│   │   │   ├── gcode.py            # Jinja2 G-code renderer
+│   │   │   ├── ebb.py              # native EiBotBoard generation
+│   │   │   ├── arcs.py             # optional G2/G3 arc fitting
+│   │   │   └── sanitize.py         # SVG hardening
 │   │   ├── typography/
-│   │   │   ├── hershey.py          # rendering + layout
-│   │   │   └── fonts/              # Hershey font collection
+│   │   │   └── hershey.py          # single-stroke rendering + layout
 │   │   ├── profiles/
-│   │   │   ├── schema.py           # Pydantic
 │   │   │   ├── custom_plotter.yaml
 │   │   │   └── axidraw_v3.yaml
 │   │   ├── templates/              # Jinja2 G-code templates
-│   │   │   ├── header.j2
-│   │   │   ├── pen_up.j2
-│   │   │   ├── pen_down.j2
-│   │   │   ├── line.j2
-│   │   │   ├── tool_change.j2
-│   │   │   └── footer.j2
+│   │   │   ├── header.j2  footer.j2  pen_up.j2  pen_down.j2
+│   │   │   └── travel.j2  line.j2  arc.j2  tool_change.j2
 │   │   └── hardware/
-│   │       ├── serial_link.py
-│   │       └── streamer.py
+│   │       ├── transport.py        # Transport protocol + Serial/Mock
+│   │       ├── streamer.py         # ok-acknowledged streaming
+│   │       ├── controller.py       # connection + job lifecycle
+│   │       └── commands.py         # jog / home builders
 │   └── tests/
 ├── frontend/
 │   ├── package.json
@@ -176,30 +184,35 @@ omniplot/
 │   └── src/
 │       ├── App.vue
 │       ├── main.ts
+│       ├── i18n.ts
 │       ├── components/
 │       │   ├── FileUpload.vue
 │       │   ├── SvgPreview.vue
 │       │   ├── LayerPanel.vue
 │       │   ├── LayerCard.vue
-│       │   ├── PenMapping.vue
-│       │   ├── ProfileSelector.vue
 │       │   ├── GcodePreview.vue
 │       │   ├── Simulator.vue
-│       │   └── JogControls.vue
+│       │   ├── JogControls.vue
+│       │   ├── PlotterPanel.vue
+│       │   └── JobHistory.vue
 │       ├── stores/
 │       │   ├── job.ts
-│       │   ├── layers.ts
 │       │   └── plotter.ts
+│       ├── lib/gcode.ts            # browser-side simulator parser
 │       ├── api/client.ts
 │       └── locales/
 │           ├── fr.json
 │           └── en.json
-├── firmware/                       # Klipper config for reference build
-│   └── printer.cfg
-├── docs/
+├── docs/                           # see docs/README.md
 │   ├── architecture.md
+│   ├── getting_started.md
+│   ├── api_reference.md
+│   ├── converters.md
+│   ├── adding_a_converter.md
 │   ├── profile_format.md
-│   └── adding_a_converter.md
+│   ├── hardware_streaming.md
+│   ├── frontend.md
+│   └── audit_report.md
 └── README.md
 ```
 
@@ -266,7 +279,8 @@ Any plotter with a documented G-code dialect can be supported by writing a new m
 
 ## Getting Started
 
-> Documentation will expand as phases complete. The project is currently in Phase 0.
+> Full documentation lives in [`docs/`](docs/README.md) — architecture, API
+> reference, profile format, adding a converter, hardware streaming, and more.
 
 ### Prerequisites
 
@@ -276,11 +290,11 @@ Any plotter with a documented G-code dialect can be supported by writing a new m
 - `uv` for Python dependency management
 - A pen plotter (DIY CoreXY recommended; AxiDraw also supported via profile)
 
-### Quick setup (once Phase 0 is complete)
+### Quick setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/omniplot.git
-cd omniplot
+git clone https://github.com/glloq/rsp-pen-plotter.git
+cd rsp-pen-plotter
 
 # Backend
 cd backend

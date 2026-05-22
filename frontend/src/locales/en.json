@@ -34,6 +34,9 @@
     "travelReduction": "Travel reduction",
     "fillHint": "Optimization converts filled shapes to outline strokes (pens draw lines, not fills)."
   },
+  "preview": {
+    "placeholder": "Upload a file to preview it here"
+  },
   "gcode": {
     "title": "G-code",
     "lines": "lines",

@@ -3,8 +3,10 @@ import DOMPurify from 'dompurify'
 import svgPanZoom from 'svg-pan-zoom'
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 
+const { t } = useI18n()
 const store = useJobStore()
 const { svg, visibility } = storeToRefs(store)
 const container = ref<HTMLDivElement | null>(null)
@@ -65,6 +67,6 @@ onBeforeUnmount(() => panZoom?.destroy())
     v-else
     class="h-[70vh] w-full rounded-lg border border-dashed border-slate-700 flex items-center justify-center text-slate-500"
   >
-    Upload a file to preview it here
+    {{ t('preview.placeholder') }}
   </div>
 </template>

@@ -34,6 +34,9 @@
     "travelReduction": "Réduction du déplacement",
     "fillHint": "L'optimisation convertit les formes pleines en contours (un stylo trace des lignes, pas des remplissages)."
   },
+  "preview": {
+    "placeholder": "Importez un fichier pour l'aperçu ici"
+  },
   "gcode": {
     "title": "G-code",
     "lines": "lignes",
