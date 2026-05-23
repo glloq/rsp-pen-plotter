@@ -258,5 +258,12 @@ function openPicker(): void {
       <span class="font-mono text-slate-300">{{ store.job.source_file }}</span>
       ({{ t('upload.layers', store.layers.length) }})
     </p>
+
+    <ul
+      v-if="store.uploadWarnings.length"
+      class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1.5 text-xs text-amber-200 space-y-0.5"
+    >
+      <li v-for="(warning, i) in store.uploadWarnings" :key="i">⚠ {{ warning }}</li>
+    </ul>
   </section>
 </template>

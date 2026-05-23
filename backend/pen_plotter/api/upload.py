@@ -23,10 +23,13 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 class UploadResponse(BaseModel):
-    """Result of an upload: the created job and the normalized SVG pivot."""
+    """Result of an upload: the created job, the normalized SVG pivot, and
+    any non-fatal warnings emitted by the converter (e.g. a raster image
+    that could not be vectorized)."""
 
     job: Job
     svg: str
+    warnings: list[str] = []
 
 
 def _resolve_mime(upload: UploadFile) -> str | None:
@@ -124,4 +127,4 @@ async def upload(
         status="ready",
     )
     save_job(job)
-    return UploadResponse(job=job, svg=svg)
+    return UploadResponse(job=job, svg=svg, warnings=list(result.warnings))

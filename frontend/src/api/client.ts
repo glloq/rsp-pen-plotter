@@ -213,6 +213,7 @@ export interface Job {
 export interface UploadResponse {
   job: Job
   svg: string
+  warnings?: string[]
 }
 
 export interface ToolpathMetrics {

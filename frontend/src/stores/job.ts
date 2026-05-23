@@ -29,6 +29,7 @@ export const useJobStore = defineStore('job', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const errorScope = ref<'upload' | 'optimize' | 'generate' | null>(null)
+  const uploadWarnings = ref<string[]>([])
 
   const profiles = ref<MachineProfile[]>([])
   const selectedProfileName = ref('Custom CoreXY A3')
@@ -144,6 +145,7 @@ export const useJobStore = defineStore('job', () => {
     loading.value = true
     error.value = null
     errorScope.value = null
+    uploadWarnings.value = []
     metrics.value = null
     gcode.value = null
     preflight.value = null
@@ -152,6 +154,7 @@ export const useJobStore = defineStore('job', () => {
       job.value = result.job
       svg.value = result.svg
       layers.value = result.job.layers
+      uploadWarnings.value = result.warnings ?? []
       visibility.value = Object.fromEntries(
         result.job.layers.map((layer) => [layer.layer_id, true]),
       )
@@ -253,6 +256,7 @@ export const useJobStore = defineStore('job', () => {
     loading,
     error,
     errorScope,
+    uploadWarnings,
     profiles,
     selectedProfileName,
     selectedProfile,
