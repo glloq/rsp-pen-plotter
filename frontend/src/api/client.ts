@@ -596,6 +596,22 @@ export async function uploadFile(
 
 // --- File library ------------------------------------------------------
 
+// Fetch the original uploaded bytes for a library entry and wrap them
+// in a File object. Lets the editor re-attach a placement's source
+// after a refresh / drag-from-library — both flows lose the in-memory
+// File handle, but the bytes survive in the library on disk.
+export async function downloadOriginalFile(
+  fileId: string,
+  filename: string,
+  mime: string,
+): Promise<File> {
+  const response = await api.get<Blob>(`/files/${encodeURIComponent(fileId)}/original`, {
+    responseType: 'blob',
+    timeout: 30_000,
+  })
+  return new File([response.data], filename, { type: mime })
+}
+
 export interface LibraryFileRecord {
   file_id: string
   sha256: string

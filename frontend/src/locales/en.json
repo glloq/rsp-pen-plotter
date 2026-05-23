@@ -78,7 +78,8 @@
   },
   "source": {
     "perLayerHint": "Pick the rendering style and pen slot for each colour in the Layers tab.",
-    "applyChanges": "Re-convert with these settings"
+    "applyChanges": "Re-convert with these settings",
+    "waitingForFile": "Loading source file…"
   },
   "mono": {
     "pen": "Pen",
