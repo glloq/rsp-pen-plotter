@@ -1,7 +1,11 @@
 """EPS / PostScript converter.
 
 Rasterization-free path: convert EPS (or AI saved as EPS) to PDF via the
-ghostscript binary, then extract vector SVG with PyMuPDF.
+ghostscript binary, then extract vector SVG with PyMuPDF and run it through
+the same post-processing chain as :mod:`pen_plotter.converters.pdf` — inline
+``<use>`` text glyphs so they survive sanitization, vectorize any embedded
+raster ``<image>`` into its own labeled layer, and wrap remaining vector
+content into a ``text`` layer.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ from typing import Any, ClassVar
 
 from pen_plotter.converters.base import ConversionResult, Converter
 from pen_plotter.converters.pdf import pdf_bytes_to_svg
+from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
 
 
 def _eps_to_pdf(data: bytes) -> bytes:
@@ -62,15 +67,31 @@ class EpsConverter(Converter):
     )
 
     def convert(self, data: bytes, *, options: dict[str, Any] | None = None) -> ConversionResult:
-        """Convert EPS bytes to SVG.
+        """Convert EPS bytes to SVG with text inlined and rasters vectorized.
 
         Args:
             data: Raw EPS or PostScript file bytes.
-            options: Unused; accepted for interface compatibility.
+            options: Optional bitmap-converter options applied to embedded
+                raster images (``algorithm``, ``num_colors``, …).
 
         Returns:
-            A :class:`ConversionResult` containing the vector SVG.
+            A :class:`ConversionResult` containing the post-processed SVG
+            and any per-image vectorization warnings.
         """
+        opts = options or {}
+        bitmap_options = {
+            key: opts[key]
+            for key in (
+                "algorithm",
+                "num_colors",
+                "max_dimension_px",
+                "drop_background",
+                "background_luminance",
+                "algorithm_options",
+            )
+            if key in opts
+        } or None
         pdf_bytes = _eps_to_pdf(data)
-        svg, _ = pdf_bytes_to_svg(pdf_bytes, 0)
-        return ConversionResult(svg=svg, source_mime="image/svg+xml")
+        raw_svg, _ = pdf_bytes_to_svg(pdf_bytes, 0)
+        svg, warnings = postprocess_pdf_svg(raw_svg, bitmap_options=bitmap_options)
+        return ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings)

@@ -1,7 +1,11 @@
 """DXF converter.
 
 Renders DXF modelspace entities to SVG using the ezdxf drawing add-on with
-its native SVG backend.
+its native SVG backend, then runs :func:`postprocess_dxf_svg` to strip the
+editor-background ``<rect>`` (which would otherwise plot as a giant frame)
+and re-bucket drawables by colour class into ``<g inkscape:label="color-…">``
+groups so multi-colour DXF drawings keep their per-colour separation as
+distinct plotter layers.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from ezdxf.addons.drawing.layout import Page
 from ezdxf.addons.drawing.svg import SVGBackend
 
 from pen_plotter.converters.base import ConversionResult, Converter
+from pen_plotter.core.dxf_postprocess import postprocess_dxf_svg
 
 
 class DxfConverter(Converter):
@@ -32,7 +37,8 @@ class DxfConverter(Converter):
             options: Unused; accepted for interface compatibility.
 
         Returns:
-            A :class:`ConversionResult` containing the rendered SVG.
+            A :class:`ConversionResult` containing the post-processed SVG —
+            background rect removed, drawables grouped per colour class.
 
         Raises:
             ValueError: If the bytes are not a parseable DXF document.
@@ -49,5 +55,6 @@ class DxfConverter(Converter):
         msp = doc.modelspace()
         backend = SVGBackend()
         Frontend(RenderContext(doc), backend).draw_layout(msp)
-        svg = backend.get_string(Page(0, 0))
+        raw_svg = backend.get_string(Page(0, 0))
+        svg = postprocess_dxf_svg(raw_svg)
         return ConversionResult(svg=svg, source_mime="image/svg+xml")

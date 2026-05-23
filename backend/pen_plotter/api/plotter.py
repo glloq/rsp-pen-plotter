@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import contextlib
+import os
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from pen_plotter.audit import record
+from pen_plotter.auth import API_KEY_ENV
 from pen_plotter.hardware.controller import controller
 from pen_plotter.models import MachineProfile
 from pen_plotter.profiles import get_profile
@@ -107,6 +109,7 @@ async def connect(request: ConnectRequest) -> StatusResponse:
 async def disconnect() -> StatusResponse:
     """Disconnect from the plotter."""
     await controller.disconnect()
+    record("plotter.disconnect")
     return _status()
 
 
@@ -159,6 +162,7 @@ async def run(request: RunRequest) -> StatusResponse:
 async def pause() -> StatusResponse:
     """Pause the running job."""
     controller.pause()
+    record("plotter.pause")
     return _status()
 
 
@@ -166,6 +170,7 @@ async def pause() -> StatusResponse:
 async def resume() -> StatusResponse:
     """Resume a paused job."""
     controller.resume()
+    record("plotter.resume")
     return _status()
 
 
@@ -179,7 +184,19 @@ async def abort() -> StatusResponse:
 
 @router.websocket("/ws/plotter")
 async def plotter_ws(websocket: WebSocket) -> None:
-    """Push streaming progress to a connected client until it disconnects."""
+    """Push streaming progress to a connected client until it disconnects.
+
+    FastAPI router-level ``Depends(require_api_key)`` does not apply to
+    WebSocket routes, so this handler validates the optional API key itself
+    from the ``token`` query parameter (the only auth channel browsers can
+    use on a WebSocket).
+    """
+    expected = os.environ.get(API_KEY_ENV)
+    if expected:
+        token = websocket.query_params.get("token")
+        if token != expected:
+            await websocket.close(code=1008, reason="Invalid or missing API key.")
+            return
     await websocket.accept()
     queue = controller.subscribe()
     try:
