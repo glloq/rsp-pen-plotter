@@ -47,13 +47,17 @@
     "done": "Terminer",
     "tabSource": "Source",
     "tabLayers": "Calques",
-    "tabOutput": "Mise en page & sortie"
+    "tabOutput": "Mise en page & sortie",
+    "resizeHandle": "Glisser pour redimensionner · double-clic pour réinitialiser"
   },
   "editPreview": {
     "title": "Aperçu",
     "empty": "Dépose un fichier pour commencer",
     "emptyHint": "L'aperçu reflète chaque réglage à droite.",
-    "palette": "Palette"
+    "palette": "Palette",
+    "zoomIn": "Zoomer",
+    "zoomOut": "Dézoomer",
+    "resetView": "Réinitialiser la vue (clic) · molette pour zoomer · glisser pour déplacer"
   },
   "planRail": {
     "title": "Plan",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../../stores/job'
@@ -8,6 +8,90 @@ import { useEditState } from '../../composables/useEditState'
 const { t } = useI18n()
 const store = useJobStore()
 const edit = useEditState()
+
+// ============================== ZOOM & PAN ==============================
+// Wheel zooms around the cursor (so the user can dig into a detail);
+// drag pans. Both reset when the displayed source changes so the user
+// doesn't reopen the modal and find the previous file half-off-screen.
+const zoom = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+const panning = ref(false)
+let panStartX = 0
+let panStartY = 0
+let panInitX = 0
+let panInitY = 0
+const MIN_ZOOM = 0.1
+const MAX_ZOOM = 20
+
+const contentStyle = computed(() => ({
+  transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`,
+  transformOrigin: 'center center',
+  transition: panning.value ? 'none' : 'transform 0.08s ease-out',
+}))
+
+function clampZoom(value: number): number {
+  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value))
+}
+
+function isTransformable(): boolean {
+  // Text-only previews keep their own scroll behaviour and the empty
+  // hint has nothing to zoom; both opt out of pan/zoom.
+  return !showTextPreview.value && !showEmptyHint.value
+}
+
+function onWheel(event: WheelEvent): void {
+  if (!isTransformable()) return
+  event.preventDefault()
+  const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15
+  zoom.value = clampZoom(zoom.value * factor)
+}
+
+function onPanStart(event: PointerEvent): void {
+  if (!isTransformable()) return
+  // Left-click and middle-click both pan; right-click stays for the
+  // browser context menu in case the user wants to inspect.
+  if (event.button !== 0 && event.button !== 1) return
+  panning.value = true
+  panStartX = event.clientX
+  panStartY = event.clientY
+  panInitX = panX.value
+  panInitY = panY.value
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+
+function onPanMove(event: PointerEvent): void {
+  if (!panning.value) return
+  panX.value = panInitX + (event.clientX - panStartX)
+  panY.value = panInitY + (event.clientY - panStartY)
+}
+
+function onPanEnd(event: PointerEvent): void {
+  if (!panning.value) return
+  panning.value = false
+  ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
+}
+
+function resetView(): void {
+  zoom.value = 1
+  panX.value = 0
+  panY.value = 0
+}
+
+function zoomIn(): void {
+  zoom.value = clampZoom(zoom.value * 1.25)
+}
+
+function zoomOut(): void {
+  zoom.value = clampZoom(zoom.value / 1.25)
+}
+
+// Reset zoom/pan when the source content changes so a new file always
+// lands fit-to-view.
+watch(
+  [() => edit.selectedFile.value, () => edit.currentPage.value],
+  resetView,
+)
 
 // Variant chips in the toolbar mirror the right-pane VariantsCard for
 // quick switching while keeping eyes on the preview.
@@ -129,46 +213,99 @@ const statusLabel = computed(() => {
       </button>
     </nav>
 
-    <div class="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-white p-3">
-      <!-- Vectorised placement SVG: the post-upload state, updated by
-           /rerender when layer algorithms change. -->
+    <!-- Pannable / zoomable preview canvas. The wrapper captures pointer
+         events; the inner div applies the transform so the content
+         scales / translates as one. Text previews and the empty hint
+         opt out at the handler level — see isTransformable(). -->
+    <div
+      class="relative min-h-0 flex-1 overflow-hidden bg-white"
+      :style="{
+        cursor: showTextPreview || showEmptyHint
+          ? 'default'
+          : panning ? 'grabbing' : 'grab',
+        touchAction: 'none',
+      }"
+      @wheel="onWheel"
+      @pointerdown="onPanStart"
+      @pointermove="onPanMove"
+      @pointerup="onPanEnd"
+      @pointercancel="onPanEnd"
+      @dblclick="resetView"
+    >
       <div
-        v-if="showPlacementSvg"
-        class="flex h-full w-full items-center justify-center [&_svg]:max-h-full [&_svg]:max-w-full"
-        v-html="placementSvg"
-      />
-      <!-- Live /preview SVG: pre-upload state, fed by the draft settings
-           on the right pane. -->
-      <div
-        v-else-if="showLivePreview"
-        class="flex h-full w-full items-center justify-center [&_svg]:max-h-full [&_svg]:max-w-full"
-        v-html="edit!.previewSvg.value"
-      />
-      <!-- Local raster thumbnail: lowest-cost fallback for images that
-           haven't been uploaded or previewed yet. -->
-      <img
-        v-else-if="showThumbnail"
-        :src="edit!.previewUrl.value!"
-        :alt="edit!.selectedFile.value?.name ?? ''"
-        class="max-h-full max-w-full object-contain"
-      />
-      <pre
-        v-else-if="showTextPreview"
-        class="m-0 max-h-full w-full overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700"
-        >{{ edit!.textPreview.value }}</pre
+        class="absolute inset-0 flex items-center justify-center p-3"
+        :style="contentStyle"
       >
+        <!-- Vectorised placement SVG: the post-upload state, updated by
+             /rerender when layer algorithms change. -->
+        <div
+          v-if="showPlacementSvg"
+          class="flex h-full w-full items-center justify-center [&_svg]:max-h-full [&_svg]:max-w-full"
+          v-html="placementSvg"
+        />
+        <!-- Live /preview SVG: pre-upload state, fed by the draft
+             settings on the right pane. -->
+        <div
+          v-else-if="showLivePreview"
+          class="flex h-full w-full items-center justify-center [&_svg]:max-h-full [&_svg]:max-w-full"
+          v-html="edit!.previewSvg.value"
+        />
+        <!-- Local raster thumbnail: lowest-cost fallback for images
+             that haven't been uploaded or previewed yet. -->
+        <img
+          v-else-if="showThumbnail"
+          :src="edit!.previewUrl.value!"
+          :alt="edit!.selectedFile.value?.name ?? ''"
+          class="max-h-full max-w-full object-contain"
+          draggable="false"
+        />
+        <pre
+          v-else-if="showTextPreview"
+          class="m-0 max-h-full w-full overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700"
+          >{{ edit!.textPreview.value }}</pre
+        >
+        <div
+          v-else-if="showEmptyHint"
+          class="flex flex-col items-center gap-2 text-center text-slate-400"
+        >
+          <span class="text-5xl text-slate-300" aria-hidden="true">🖼</span>
+          <p class="text-sm">{{ t('editPreview.empty') }}</p>
+          <p class="text-xs text-slate-500">{{ t('editPreview.emptyHint') }}</p>
+        </div>
+      </div>
+
+      <!-- Floating zoom controls overlay the canvas; pointer-events on
+           the buttons themselves opt out of the pan capture above. -->
       <div
-        v-else-if="showEmptyHint"
-        class="flex flex-col items-center gap-2 text-center text-slate-400"
+        v-if="!showTextPreview && !showEmptyHint"
+        class="absolute right-2 top-2 flex flex-col gap-1 rounded bg-slate-900/70 p-1 text-xs text-slate-200"
+        @pointerdown.stop
+        @wheel.stop
+        @dblclick.stop
       >
-        <span class="text-5xl text-slate-300" aria-hidden="true">🖼</span>
-        <p class="text-sm">{{ t('editPreview.empty') }}</p>
-        <p class="text-xs text-slate-500">{{ t('editPreview.emptyHint') }}</p>
+        <button
+          type="button"
+          class="h-6 w-6 rounded bg-slate-800 hover:bg-slate-700"
+          :title="t('editPreview.zoomIn')"
+          @click="zoomIn"
+        >+</button>
+        <button
+          type="button"
+          class="h-6 w-6 rounded bg-slate-800 hover:bg-slate-700"
+          :title="t('editPreview.zoomOut')"
+          @click="zoomOut"
+        >−</button>
+        <button
+          type="button"
+          class="h-6 w-6 rounded bg-slate-800 text-[10px] hover:bg-slate-700"
+          :title="t('editPreview.resetView')"
+          @click="resetView"
+        >{{ Math.round(zoom * 100) }}</button>
       </div>
 
       <span
         v-if="edit?.previewLoading.value"
-        class="absolute inset-x-0 top-0 h-0.5 animate-pulse bg-emerald-400"
+        class="pointer-events-none absolute inset-x-0 top-0 h-0.5 animate-pulse bg-emerald-400"
       />
     </div>
 

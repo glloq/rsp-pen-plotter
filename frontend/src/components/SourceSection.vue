@@ -24,7 +24,10 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 const algorithms = ref<AlgorithmInfo[]>([])
 const fonts = ref<string[]>([])
-const showSegmentation = ref(false)
+// Segmentation knobs are open by default — they're the primary
+// controls users reach for after dropping an image. The typography
+// accordion stays collapsed since it only applies to .txt / .md files.
+const showSegmentation = ref(true)
 const showRender = ref(false)
 const dragOver = ref(false)
 
