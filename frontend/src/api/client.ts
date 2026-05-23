@@ -454,13 +454,18 @@ export interface SystemUpdateResponse {
   updated: boolean
   log: string
   needs_restart: boolean
+  forced: boolean
 }
 
-export async function systemUpdate(): Promise<SystemUpdateResponse> {
-  const response = await api.post<SystemUpdateResponse>('/system/update', null, {
-    // The update script can take a while (apt, npm install, build).
-    timeout: 5 * 60 * 1000,
-  })
+export async function systemUpdate(force = false): Promise<SystemUpdateResponse> {
+  const response = await api.post<SystemUpdateResponse>(
+    '/system/update',
+    { force },
+    {
+      // The update script can take a while (apt, npm install, build).
+      timeout: 5 * 60 * 1000,
+    },
+  )
   return response.data
 }
 
@@ -469,6 +474,7 @@ export interface SystemVersionResponse {
   commit: string | null
   branch: string | null
   dirty: boolean
+  dirty_files: string[]
 }
 
 export async function systemVersion(): Promise<SystemVersionResponse> {

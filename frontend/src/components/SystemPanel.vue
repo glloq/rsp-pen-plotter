@@ -28,12 +28,13 @@ async function loadVersion(): Promise<void> {
   }
 }
 
-async function runUpdate(): Promise<void> {
+async function runUpdate(force = false): Promise<void> {
   const confirmed = await confirmAction({
-    title: t('system.updateConfirmTitle'),
-    message: t('system.updateConfirmMsg'),
-    confirmLabel: t('system.updateNow'),
+    title: force ? t('system.forceUpdateConfirmTitle') : t('system.updateConfirmTitle'),
+    message: force ? t('system.forceUpdateConfirmMsg') : t('system.updateConfirmMsg'),
+    confirmLabel: force ? t('system.forceUpdate') : t('system.updateNow'),
     cancelLabel: t('confirm.cancel'),
+    danger: force,
   })
   if (!confirmed) return
 
@@ -41,7 +42,7 @@ async function runUpdate(): Promise<void> {
   updateError.value = null
   lastUpdate.value = null
   try {
-    const result = await systemUpdate()
+    const result = await systemUpdate(force)
     lastUpdate.value = result
     if (result.updated) {
       toasts.success(t('system.updateApplied'))
@@ -98,11 +99,31 @@ onMounted(loadVersion)
         type="button"
         class="w-full rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
         :disabled="updating || (version?.dirty ?? false)"
-        @click="runUpdate"
+        @click="runUpdate(false)"
       >
         {{ updating ? t('system.updating') : t('system.updateNow') }}
       </button>
-      <p v-if="version?.dirty" class="text-[11px] text-amber-300">{{ t('system.dirtyWarning') }}</p>
+
+      <div v-if="version?.dirty" class="space-y-2 rounded border border-amber-700 bg-amber-950/30 px-2 py-1.5 text-[11px]">
+        <p class="text-amber-200">⚠ {{ t('system.dirtyWarning') }}</p>
+        <details v-if="version.dirty_files.length" class="text-amber-100/80">
+          <summary class="cursor-pointer hover:text-amber-100">
+            {{ t('system.dirtyFilesCount', { count: version.dirty_files.length }) }}
+          </summary>
+          <ul class="mt-1 max-h-32 overflow-auto rounded bg-slate-900/60 p-1.5 font-mono text-[10px] leading-snug">
+            <li v-for="(line, i) in version.dirty_files" :key="i">{{ line }}</li>
+          </ul>
+        </details>
+        <button
+          type="button"
+          class="w-full rounded bg-amber-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+          :disabled="updating"
+          @click="runUpdate(true)"
+        >
+          {{ updating ? t('system.updating') : '⚠ ' + t('system.forceUpdate') }}
+        </button>
+        <p class="text-[10px] text-amber-100/70">{{ t('system.forceUpdateHint') }}</p>
+      </div>
 
       <div v-if="lastUpdate" class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs">
         <p v-if="lastUpdate.updated" class="text-emerald-300">
@@ -112,6 +133,9 @@ onMounted(loadVersion)
           </span>
         </p>
         <p v-else class="text-slate-300">✓ {{ t('system.upToDate') }}</p>
+        <p v-if="lastUpdate.forced" class="mt-1 text-amber-200">
+          ⚠ {{ t('system.forcedNotice') }}
+        </p>
         <p v-if="lastUpdate.needs_restart" class="mt-1 text-amber-300">⚠ {{ t('system.needsRestart') }}</p>
         <details v-if="lastUpdate.log" class="mt-1">
           <summary class="cursor-pointer text-slate-500 hover:text-slate-300">{{ t('system.viewLog') }}</summary>

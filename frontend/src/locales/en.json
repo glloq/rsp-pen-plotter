@@ -387,6 +387,12 @@
     "updateFailed": "Update failed.",
     "needsRestart": "Restart the service to load the new Python code.",
     "viewLog": "View log",
-    "dirtyWarning": "Uncommitted local changes — commit or revert before updating."
+    "dirtyWarning": "Uncommitted local changes detected on this host.",
+    "dirtyFilesCount": "{count} file(s) modified",
+    "forceUpdate": "Force update",
+    "forceUpdateHint": "Overwrites local changes then updates. Cannot be undone.",
+    "forceUpdateConfirmTitle": "Force update",
+    "forceUpdateConfirmMsg": "Local changes will be permanently discarded. Continue?",
+    "forcedNotice": "Forced update — local changes were discarded."
   }
 }
