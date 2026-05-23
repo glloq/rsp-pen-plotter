@@ -21,6 +21,22 @@ const canGroupByPen = computed(() => store.isMultiColor && canReduceSwaps(store.
 function groupLayersByPen(): void {
   store.reorderLayers(groupByPen(store.layers))
 }
+
+// One-click "single pen" remap: send every layer to pen slot 0 so the
+// whole drawing prints in one ink, without re-uploading. Useful when
+// the user picked multi-colour at upload but then realised they only
+// have one pen to swap manually.
+const canMergeToOnePen = computed(
+  () => store.layers.some((l) => l.target_pen_slot !== 0),
+)
+
+function mergeToOnePen(): void {
+  for (const layer of store.layers) {
+    if (layer.target_pen_slot !== 0) {
+      store.updateLayer(layer.layer_id, { target_pen_slot: 0 })
+    }
+  }
+}
 </script>
 
 <template>
@@ -42,14 +58,25 @@ function groupLayersByPen(): void {
       {{ t('layers.emptyHint') }}
     </p>
 
-    <button
-      v-if="canGroupByPen"
-      type="button"
-      class="w-full rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
-      @click="groupLayersByPen"
-    >
-      {{ t('layers.groupByPen') }}
-    </button>
+    <div v-if="store.layers.length" class="flex flex-wrap gap-1">
+      <button
+        v-if="canGroupByPen"
+        type="button"
+        class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800"
+        @click="groupLayersByPen"
+      >
+        {{ t('layers.groupByPen') }}
+      </button>
+      <button
+        v-if="canMergeToOnePen"
+        type="button"
+        class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800"
+        :title="t('layers.mergeToOnePenHint')"
+        @click="mergeToOnePen"
+      >
+        {{ t('layers.mergeToOnePen') }}
+      </button>
+    </div>
 
     <draggable
       v-if="store.layers.length"

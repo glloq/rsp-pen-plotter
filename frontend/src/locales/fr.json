@@ -85,6 +85,13 @@
     "remove": "Supprimer la variante",
     "hint": "Chaque variante capture les styles et la visibilité des calques pour ce fichier."
   },
+  "printMode": {
+    "title": "Sortie (SVG)",
+    "multicolor": "Multi-couleurs",
+    "multicolorHint": "Découper l'image en un calque par couleur détectée.",
+    "monochrome": "Mono-couleur (un pen)",
+    "monochromeHint": "Tramer toute l'image en pointillés/halftone avec une seule encre."
+  },
   "palette": {
     "title": "Palette",
     "followPens": "Suivre les pens installés",
@@ -192,6 +199,10 @@
     "kindText": "Calque texte",
     "kindImage": "Calque image (raster vectorisé)",
     "emptyHint": "Un calque par couleur apparaîtra ici après un clic sur « Importer & convertir » ci-dessus — choisis un style de tracé et un slot de pen pour chacun.",
+    "expand": "Déplier le calque",
+    "collapse": "Replier le calque",
+    "mergeToOnePen": "Tous sur un pen",
+    "mergeToOnePenHint": "Réaffecte chaque calque au slot 0 — pratique quand une seule encre est chargée.",
     "totalLength": "Longueur totale",
     "estimatedTime": "Durée estimée",
     "optimizeButton": "Optimiser les trajectoires",
