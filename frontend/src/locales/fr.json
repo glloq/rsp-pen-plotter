@@ -162,9 +162,6 @@
     "sheet": "Plan",
     "simulator": "Simulation",
     "gcode": "G-code",
-    "empty": "Importez un fichier pour voir l'aperçu ici.",
-    "emptyHint": "Glissez-déposez un fichier n'importe où ou cliquez sur « Ajouter un fichier » dans le panneau Fichiers.",
-    "emptyFormats": "SVG · PNG · JPG · PDF · DXF · EPS · DOCX · ODT · HTML · MD · TXT",
     "simulatorUnavailable": "Le simulateur n'est pas disponible pour ce dialecte.",
     "gcodeEmpty": "Aucun G-code généré pour le moment."
   },
@@ -328,10 +325,7 @@
     "centre": "Centrer",
     "useFullWorkspace": "Plein espace",
     "exceedsWarning": "La feuille dépasse la zone de travail.",
-    "dropToPosition": "Relâchez ici pour placer le dessin",
-    "dropToPlace": "Relâchez pour placer une autre instance",
     "placements": "{count} placement | {count} placements",
-    "emptyHint": "Glissez un fichier depuis le panneau Fichiers ou déposez-en un n'importe où pour démarrer.",
     "removePlacement": "Retirer du plan (Suppr)"
   },
   "convert": {

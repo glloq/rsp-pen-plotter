@@ -162,9 +162,6 @@
     "sheet": "Layout",
     "simulator": "Simulator",
     "gcode": "G-code",
-    "empty": "Upload a file to see the preview here.",
-    "emptyHint": "Drop a file anywhere on the window, or click \"Add a file\" in the Files panel.",
-    "emptyFormats": "SVG · PNG · JPG · PDF · DXF · EPS · DOCX · ODT · HTML · MD · TXT",
     "simulatorUnavailable": "Simulator unavailable for this dialect.",
     "gcodeEmpty": "No G-code generated yet."
   },
@@ -328,10 +325,7 @@
     "centre": "Centre",
     "useFullWorkspace": "Full workspace",
     "exceedsWarning": "Sheet exceeds the machine work area.",
-    "dropToPosition": "Drop to position the drawing here",
-    "dropToPlace": "Drop to place another instance",
     "placements": "{count} placement | {count} placements",
-    "emptyHint": "Drag a file from the Files panel or drop one anywhere to start.",
     "removePlacement": "Remove from plan (Del)"
   },
   "convert": {
