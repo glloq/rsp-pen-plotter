@@ -18,13 +18,13 @@ const offsetXDraft = ref(0)
 const offsetYDraft = ref(0)
 
 watch(
-  () => store.currentSheet,
-  (sheet) => {
-    if (!sheet) return
-    widthDraft.value = Number(sheet.width.toFixed(2))
-    heightDraft.value = Number(sheet.height.toFixed(2))
-    offsetXDraft.value = Number(sheet.offsetX.toFixed(2))
-    offsetYDraft.value = Number(sheet.offsetY.toFixed(2))
+  () => store.currentDrawing,
+  (drawing) => {
+    if (!drawing) return
+    widthDraft.value = Number(drawing.width_mm.toFixed(2))
+    heightDraft.value = Number(drawing.height_mm.toFixed(2))
+    offsetXDraft.value = Number(drawing.x_mm.toFixed(2))
+    offsetYDraft.value = Number(drawing.y_mm.toFixed(2))
   },
   { immediate: true, deep: true },
 )
@@ -88,16 +88,16 @@ function applySheet(): void {
     toasts.error(t('sheet.invalidSize'))
     return
   }
-  store.setSheet({
-    width: w,
-    height: h,
-    offsetX: Math.max(0, Number(offsetXDraft.value) || 0),
-    offsetY: Math.max(0, Number(offsetYDraft.value) || 0),
+  store.setDrawing({
+    width_mm: w,
+    height_mm: h,
+    x_mm: Math.max(0, Number(offsetXDraft.value) || 0),
+    y_mm: Math.max(0, Number(offsetYDraft.value) || 0),
   })
 }
 
 function resetToFullWorkspace(): void {
-  store.resetSheet()
+  store.resetDrawing()
 }
 </script>
 

@@ -10,7 +10,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from pen_plotter.api.rerender import remember_job
 from pen_plotter.converters.base import UnsupportedFormatError
+from pen_plotter.converters.bitmap import BitmapConverter, BitmapOptions
 from pen_plotter.converters.registry import registry
 from pen_plotter.core.layers import extract_layers
 from pen_plotter.core.sanitize import sanitize_svg
@@ -114,8 +116,16 @@ async def upload(
         raise HTTPException(
             status_code=413, detail=f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit"
         )
+    bitmap_segmentation = None
     try:
-        result = converter.convert(data, options=parsed_options)
+        if isinstance(converter, BitmapConverter):
+            # Use the cache-aware path so ``/rerender`` can swap layer
+            # algorithms later without re-segmenting.
+            result, bitmap_segmentation = converter.segment_and_render(
+                data, options=parsed_options
+            )
+        else:
+            result = converter.convert(data, options=parsed_options)
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # converter/subprocess/library failures
@@ -131,6 +141,12 @@ async def upload(
         status="ready",
     )
     save_job(job)
+    if bitmap_segmentation is not None:
+        remember_job(
+            job.job_id,
+            bitmap_segmentation,
+            BitmapOptions.model_validate(parsed_options),
+        )
     return UploadResponse(
         job=job,
         svg=svg,

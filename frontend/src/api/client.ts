@@ -490,6 +490,30 @@ export interface PreviewResponse {
   cached: boolean
 }
 
+export interface LayerAlgorithmOverride {
+  layer_id: string
+  algorithm: string
+  algorithm_options?: Record<string, unknown>
+}
+
+export interface RerenderResponse {
+  svg: string
+  warnings: string[]
+}
+
+export async function rerenderJob(
+  jobId: string,
+  layers: LayerAlgorithmOverride[],
+  signal?: AbortSignal,
+): Promise<RerenderResponse> {
+  const response = await api.post<RerenderResponse>(
+    '/rerender',
+    { job_id: jobId, layers },
+    { signal, timeout: 30_000 },
+  )
+  return response.data
+}
+
 export async function previewBitmap(
   file: File,
   algorithm: string,

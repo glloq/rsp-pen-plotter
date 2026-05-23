@@ -8,6 +8,7 @@ using a selectable raster algorithm.
 from __future__ import annotations
 
 import io
+from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
 
 import numpy as np
@@ -25,6 +26,21 @@ pillow_heif.register_heif_opener()
 _REC709 = np.array([0.2126, 0.7152, 0.0722])
 
 SegmentationMethod = Literal["kmeans", "luminance_bands", "thresholds", "fixed_palette"]
+
+
+@dataclass
+class SegmentationResult:
+    """The parts of a bitmap conversion that survive between requests.
+
+    Stored in the ``/rerender`` cache so the operator can swap a single
+    layer's rendering algorithm without paying for the k-means pass again
+    (which is the slow step on a Pi).
+    """
+
+    labels: NDArray[np.intp]
+    palette: NDArray[np.uint8]
+    width: int
+    height: int
 
 
 class BitmapOptions(BaseModel):
@@ -85,9 +101,23 @@ class BitmapConverter(Converter):
             A :class:`ConversionResult` whose SVG contains one labeled ``<g>``
             layer per detected color.
         """
-        opts = BitmapOptions.model_validate(options or {})
-        algorithm = get_algorithm(opts.algorithm)
+        result, _seg = self.segment_and_render(data, options=options, fast=fast)
+        return result
 
+    def segment_and_render(
+        self,
+        data: bytes,
+        *,
+        options: dict[str, Any] | None = None,
+        fast: bool = False,
+    ) -> tuple[ConversionResult, SegmentationResult]:
+        """Same as :meth:`convert` but also returns the segmentation result.
+
+        Used by ``/upload`` to feed the ``/rerender`` cache so the operator
+        can change a single layer's algorithm later without paying for the
+        segmentation pass again.
+        """
+        opts = BitmapOptions.model_validate(options or {})
         max_dim = 128 if fast else opts.max_dimension_px
         n_init = 1 if fast else 10
         image = self._load_rgb(data)
@@ -99,28 +129,56 @@ class BitmapConverter(Converter):
             labels, palette = segmentation.merge_similar_colours(
                 labels, palette, opts.merge_delta_e
             )
-
         height, width = labels.shape
+        seg = SegmentationResult(labels=labels, palette=palette, width=width, height=height)
+        svg, warnings = self.render_from_segmentation(seg, opts)
+        return (
+            ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings),
+            seg,
+        )
+
+    @classmethod
+    def render_from_segmentation(
+        cls,
+        seg: SegmentationResult,
+        opts: BitmapOptions,
+        *,
+        per_layer_overrides: dict[str, dict[str, Any]] | None = None,
+    ) -> tuple[str, list[str]]:
+        """Re-run only the rendering step against an existing segmentation.
+
+        ``per_layer_overrides`` maps a layer label (``f"color-{hex}"``) to a
+        dict with ``algorithm`` and/or ``algorithm_options`` keys, swapping
+        in a different algorithm just for that layer. Layers without an
+        override fall back to ``opts.algorithm`` + ``opts.algorithm_options``.
+        """
+        overrides = per_layer_overrides or {}
         warnings: list[str] = []
         groups: list[str] = []
-
-        for cluster in self._layer_order(labels, palette):
-            rgb = palette[cluster]
+        for cluster in cls._layer_order(seg.labels, seg.palette):
+            rgb = seg.palette[cluster]
             luminance = float(np.dot(rgb / 255.0, _REC709))
             if opts.drop_background and luminance >= opts.background_luminance:
                 continue
-            mask = labels == cluster
+            mask = seg.labels == cluster
             color_hex = "#{:02x}{:02x}{:02x}".format(*rgb.astype(int))
             label = f"color-{color_hex.lstrip('#')}"
-            groups.append(
-                algorithm.render_layer(mask, color_hex, label, options=opts.algorithm_options)
-            )
-
+            override = overrides.get(label, {})
+            algo_name = override.get("algorithm") or opts.algorithm
+            algo_options = override.get("algorithm_options") or opts.algorithm_options
+            try:
+                algorithm = get_algorithm(algo_name)
+            except KeyError:
+                # Unknown override → fall back to the default rather than
+                # 500'ing on the operator. Surface it as a warning instead.
+                warnings.append(
+                    f"Layer {label}: unknown algorithm {algo_name!r}, using {opts.algorithm!r}."
+                )
+                algorithm = get_algorithm(opts.algorithm)
+            groups.append(algorithm.render_layer(mask, color_hex, label, options=algo_options))
         if not groups:
             warnings.append("No drawable layers detected (image may be entirely background).")
-
-        svg = self._wrap_svg(width, height, groups)
-        return ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings)
+        return cls._wrap_svg(seg.width, seg.height, groups), warnings
 
     @staticmethod
     def _load_rgb(data: bytes) -> Image.Image:

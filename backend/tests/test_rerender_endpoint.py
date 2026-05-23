@@ -1,0 +1,151 @@
+"""Tests for the /rerender bitmap re-rendering endpoint."""
+
+from __future__ import annotations
+
+import io
+import json
+
+import numpy as np
+import pytest
+from fastapi.testclient import TestClient
+from PIL import Image
+
+from pen_plotter.api import rerender as rerender_module
+from pen_plotter.converters.bitmap import BitmapConverter, BitmapOptions, SegmentationResult
+from pen_plotter.main import app
+
+
+@pytest.fixture()
+def client():
+    # Re-rendering doesn't depend on the lifespan, so we skip it (avoids the
+    # cross-test event-loop leak around the print queue).
+    yield TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _reset_cache():
+    """Clear the in-memory segmentation cache between tests."""
+    rerender_module._clear_cache_for_tests()
+    yield
+    rerender_module._clear_cache_for_tests()
+
+
+def _seed_cache(job_id: str = "test-job") -> str:
+    """Insert a fake bitmap segmentation into the cache and return its job_id."""
+    # 8x8 image split in two halves: left = black (cluster 0), right = white (cluster 1).
+    labels = np.zeros((8, 8), dtype=np.intp)
+    labels[:, 4:] = 1
+    palette = np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8)
+    seg = SegmentationResult(labels=labels, palette=palette, width=8, height=8)
+    opts = BitmapOptions.model_validate(
+        {"algorithm": "halftone", "drop_background": False, "num_colors": 2}
+    )
+    rerender_module.remember_job(job_id, seg, opts)
+    return job_id
+
+
+def test_rerender_404_when_job_not_cached(client: TestClient) -> None:
+    response = client.post("/rerender", json={"job_id": "unknown", "layers": []})
+    assert response.status_code == 404
+
+
+def test_rerender_returns_svg_with_default_algorithm(client: TestClient) -> None:
+    job_id = _seed_cache()
+    response = client.post("/rerender", json={"job_id": job_id, "layers": []})
+    assert response.status_code == 200
+    body = response.json()
+    assert "<svg" in body["svg"]
+    # Default algorithm was halftone → expect circle elements.
+    assert "<circle" in body["svg"]
+
+
+def test_rerender_overrides_one_layer_algorithm(client: TestClient) -> None:
+    job_id = _seed_cache()
+    # Black layer label is "color-000000"; rerender it with crosshatch
+    # while the white layer stays on the default (halftone) — but white
+    # is dropped by the default ``drop_background=False`` we pin in the
+    # cache options, so output should only contain crosshatch lines.
+    response = client.post(
+        "/rerender",
+        json={
+            "job_id": job_id,
+            "layers": [
+                {
+                    "layer_id": "color-000000",
+                    "algorithm": "crosshatch",
+                    "algorithm_options": {"angle_deg": 0, "spacing_px": 2},
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # Crosshatch emits <line> elements.
+    assert "<line" in body["svg"]
+
+
+def test_rerender_unknown_algorithm_falls_back_with_warning(client: TestClient) -> None:
+    job_id = _seed_cache()
+    response = client.post(
+        "/rerender",
+        json={
+            "job_id": job_id,
+            "layers": [{"layer_id": "color-000000", "algorithm": "nope"}],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert any("nope" in w for w in body["warnings"])
+    # Falls back to the cached default algorithm (halftone → circles).
+    assert "<circle" in body["svg"]
+
+
+def test_upload_populates_cache_then_rerender_works(client: TestClient) -> None:
+    """End-to-end: upload a PNG, then immediately /rerender by job_id.
+
+    The lifespan-aware ``TestClient(app)`` context manager would normally
+    register the converters, but the print-queue's event leaks between
+    event loops when several test files share the same module ``app``.
+    We register the converters by hand instead so this test can use the
+    plain ``client`` fixture (no lifespan).
+    """
+    from pen_plotter.converters.defaults import register_default_converters
+    from pen_plotter.converters.registry import registry as _registry
+
+    register_default_converters(_registry)
+
+    image = Image.new("RGB", (32, 32), (255, 255, 255))
+    for y in range(32):
+        for x in range(32):
+            if x < 16:
+                image.putpixel((x, y), (0, 0, 0))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+
+    upload = client.post(
+        "/upload",
+        data={
+            "profile_name": "Custom CoreXY A3",
+            "options": json.dumps(
+                {
+                    "algorithm": "direct",
+                    "num_colors": 2,
+                    "drop_background": False,
+                }
+            ),
+        },
+        files={"file": ("dot.png", buf.getvalue(), "image/png")},
+    )
+    assert upload.status_code == 200, upload.text
+    job_id = upload.json()["job"]["job_id"]
+    assert job_id in rerender_module._CACHE
+
+    rerender = client.post(
+        "/rerender",
+        json={
+            "job_id": job_id,
+            "layers": [{"layer_id": "color-000000", "algorithm": "halftone"}],
+        },
+    )
+    assert rerender.status_code == 200, rerender.text
+    assert "<circle" in rerender.json()["svg"]
