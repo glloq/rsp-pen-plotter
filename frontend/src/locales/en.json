@@ -49,6 +49,69 @@
     "tabLayers": "Layers",
     "tabOutput": "Layout & output"
   },
+  "editPreview": {
+    "title": "Preview",
+    "empty": "Drop a file to start",
+    "emptyHint": "The preview reflects every setting on the right.",
+    "palette": "Palette"
+  },
+  "planRail": {
+    "title": "Plan",
+    "collapse": "Collapse panel",
+    "expand": "Expand panel"
+  },
+  "blockMap": {
+    "title": "Document blocks",
+    "loading": "analysing…",
+    "failed": "Block analysis failed",
+    "summary": "{text} text · {image} image",
+    "imageBlock": "Image region",
+    "chars": "chars",
+    "empty": "No blocks detected on this page.",
+    "hint": "Text and image regions detected on the current page."
+  },
+  "variants": {
+    "title": "Variants",
+    "default": "Default",
+    "untitled": "New variant",
+    "add": "Save as variant",
+    "update": "Update",
+    "updateHint": "Overwrite the active variant with current settings",
+    "rename": "Rename",
+    "remove": "Delete variant",
+    "hint": "Each variant snapshots the layer styles and visibility for this file."
+  },
+  "palette": {
+    "title": "Palette",
+    "followPens": "Follow installed pens",
+    "manual": "Manual",
+    "followHint": "Colours are locked to the pens installed in the machine profile.",
+    "noPensInstalled": "No pens are marked as installed in the active profile.",
+    "slotTooltip": "Slot {index} — {color}",
+    "manualSwap": "{count} of {total} colours have no pen slot — {count} manual swap(s) will be requested during the plot (only {slots} slots available)."
+  },
+  "printStyles": {
+    "default": "Default",
+    "defaultDesc": "Whatever the converter chose",
+    "direct": "Direct",
+    "directDesc": "One stroke per region, no fill",
+    "halftoneFine": "Halftone (fine)",
+    "halftoneFineDesc": "Dense dot grid, 4 px cells",
+    "halftoneCoarse": "Halftone (coarse)",
+    "halftoneCoarseDesc": "Loose dot grid, 10 px cells",
+    "stippling": "Stippling",
+    "stipplingDesc": "Scattered dots, portrait-friendly",
+    "crosshatch": "Crosshatch",
+    "crosshatchDesc": "Diagonal hatching, 45°",
+    "contours": "Contours",
+    "contoursDesc": "Concentric outlines",
+    "edges": "Edges",
+    "edgesDesc": "Edge detection only",
+    "spiral": "Spiral",
+    "spiralDesc": "Single continuous spiral",
+    "scanlines": "Scanlines",
+    "scanlinesDesc": "Horizontal lines"
+  },
   "execute": {
     "connection": "Connection",
     "terminator": "Terminator",
@@ -142,6 +205,9 @@
     "pauseNever": "never",
     "renderAlgorithm": "Style",
     "defaultAlgo": "default",
+    "printStyle": "Print style",
+    "advancedShow": "+ Advanced",
+    "advancedHide": "− Advanced",
     "rerenderFailed": "Layer re-render failed.",
     "rerenderUnavailable": "Re-rendering is unavailable; re-upload the file to apply the new style.",
     "generateMovedHint": "Generate G-code lives in the Plan header — close this dialog and click the green button on the top-right of the preview.",

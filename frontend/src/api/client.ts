@@ -533,6 +533,41 @@ export async function previewBitmap(
   return response.data
 }
 
+// Per-page text + image block analysis for a PDF document. The result
+// is read-only on the backend (no persistence) and feeds the editor's
+// BlockMapCard so the user can map a render preset onto each block.
+export interface AnalyzedBlock {
+  id: string
+  kind: 'text' | 'image'
+  bbox: [number, number, number, number]
+  text_sample?: string | null
+  char_count?: number | null
+}
+
+export interface AnalyzedPage {
+  page_index: number
+  width_mm: number
+  height_mm: number
+  blocks: AnalyzedBlock[]
+}
+
+export interface DocumentAnalysis {
+  pages: AnalyzedPage[]
+}
+
+export async function analyzeDocument(
+  file: File,
+  signal?: AbortSignal,
+): Promise<DocumentAnalysis> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await api.post<DocumentAnalysis>('/document/analyze', form, {
+    signal,
+    timeout: 30_000,
+  })
+  return response.data
+}
+
 export async function uploadFile(
   file: File,
   profileName: string,

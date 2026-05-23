@@ -49,6 +49,69 @@
     "tabLayers": "Calques",
     "tabOutput": "Mise en page & sortie"
   },
+  "editPreview": {
+    "title": "Aperçu",
+    "empty": "Dépose un fichier pour commencer",
+    "emptyHint": "L'aperçu reflète chaque réglage à droite.",
+    "palette": "Palette"
+  },
+  "planRail": {
+    "title": "Plan",
+    "collapse": "Réduire le panneau",
+    "expand": "Développer le panneau"
+  },
+  "blockMap": {
+    "title": "Blocs du document",
+    "loading": "analyse…",
+    "failed": "Échec de l'analyse",
+    "summary": "{text} texte · {image} image",
+    "imageBlock": "Zone image",
+    "chars": "car.",
+    "empty": "Aucun bloc détecté sur cette page.",
+    "hint": "Zones texte et image détectées sur la page courante."
+  },
+  "variants": {
+    "title": "Variantes",
+    "default": "Défaut",
+    "untitled": "Nouvelle variante",
+    "add": "Enregistrer comme variante",
+    "update": "Mettre à jour",
+    "updateHint": "Écraser la variante active avec les réglages actuels",
+    "rename": "Renommer",
+    "remove": "Supprimer la variante",
+    "hint": "Chaque variante capture les styles et la visibilité des calques pour ce fichier."
+  },
+  "palette": {
+    "title": "Palette",
+    "followPens": "Suivre les pens installés",
+    "manual": "Manuel",
+    "followHint": "Les couleurs sont verrouillées aux pens installés dans le profil machine.",
+    "noPensInstalled": "Aucun pen n'est marqué comme installé dans le profil actif.",
+    "slotTooltip": "Slot {index} — {color}",
+    "manualSwap": "{count} couleur(s) sur {total} n'ont pas de slot — {count} échange(s) manuel(s) seront demandés pendant le tracé ({slots} slots disponibles)."
+  },
+  "printStyles": {
+    "default": "Défaut",
+    "defaultDesc": "Choix du convertisseur",
+    "direct": "Direct",
+    "directDesc": "Un trait par région, sans remplissage",
+    "halftoneFine": "Tramage fin",
+    "halftoneFineDesc": "Grille de points dense, cellules 4 px",
+    "halftoneCoarse": "Tramage large",
+    "halftoneCoarseDesc": "Grille de points lâche, cellules 10 px",
+    "stippling": "Pointillisme",
+    "stipplingDesc": "Points dispersés, idéal portraits",
+    "crosshatch": "Hachures croisées",
+    "crosshatchDesc": "Hachures diagonales, 45°",
+    "contours": "Contours",
+    "contoursDesc": "Contours concentriques",
+    "edges": "Contours fins",
+    "edgesDesc": "Détection de contours uniquement",
+    "spiral": "Spirale",
+    "spiralDesc": "Spirale continue unique",
+    "scanlines": "Lignes",
+    "scanlinesDesc": "Lignes horizontales"
+  },
   "execute": {
     "connection": "Connexion",
     "terminator": "Terminator",
@@ -142,6 +205,9 @@
     "pauseNever": "jamais",
     "renderAlgorithm": "Style",
     "defaultAlgo": "défaut",
+    "printStyle": "Style d'impression",
+    "advancedShow": "+ Avancé",
+    "advancedHide": "− Avancé",
     "rerenderFailed": "Échec du re-rendu du calque.",
     "rerenderUnavailable": "Le re-rendu n'est pas disponible ; ré-importez le fichier pour appliquer le nouveau style.",
     "generateMovedHint": "Le bouton « Générer le G-code » est maintenant en haut à droite du Plan — fermez ce dialogue puis cliquez sur le bouton vert en haut de l'aperçu.",

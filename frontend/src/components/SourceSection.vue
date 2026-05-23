@@ -11,6 +11,7 @@ import {
   type PreviewResponse,
   type SegmentationMethod,
 } from '../api/client'
+import { useEditState } from '../composables/useEditState'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 
@@ -394,6 +395,64 @@ async function goToPage(page: number): Promise<void> {
 function openPicker(): void {
   fileInput.value?.click()
 }
+
+// ============================== PEN-DRIVEN PALETTE ==============================
+// When the active machine profile has installed pens with hex colours,
+// the editor follows them by default: palette = installed pen colours,
+// segmentation_method = fixed_palette. Toggling "manual" frees the
+// palette and the method picker. The manual-swap badge counts colours
+// beyond the available pen slots (those will trigger pause-for-swap).
+const paletteFollowsPens = ref(true)
+
+const installedPenColors = computed<string[]>(() => {
+  const pens = store.selectedProfile?.pens ?? []
+  return pens.filter((p) => p.installed && p.color).map((p) => p.color)
+})
+
+const penSlotCount = computed(() => store.selectedProfile?.pen_slot_count ?? 0)
+
+watch(
+  [paletteFollowsPens, installedPenColors],
+  ([follows, colors]) => {
+    if (follows && colors.length) {
+      bitmap.value.palette = [...colors]
+      bitmap.value.segmentation_method = 'fixed_palette'
+    }
+  },
+  { immediate: true },
+)
+
+const manualSwapCount = computed(() =>
+  Math.max(0, bitmap.value.palette.length - penSlotCount.value),
+)
+
+function setPaletteSource(follows: boolean): void {
+  paletteFollowsPens.value = follows
+  if (!follows && !bitmap.value.palette.length) {
+    // First switch to manual with an empty palette: seed it with the
+    // installed pens so the user has something to edit instead of a
+    // blank list.
+    bitmap.value.palette = [...installedPenColors.value]
+  }
+}
+
+// Mirror the preview-related local state into the shared edit-state
+// composable so EditPreviewPane (rendered as a sibling on the left side
+// of the modal) sees the same values. The composable holds its own refs
+// — we sync into them with watchEffect rather than rewiring SourceSection
+// to read/write the composable refs directly.
+const edit = useEditState()
+watch(selectedFile, (v) => { edit.selectedFile.value = v }, { immediate: true })
+watch(previewUrl, (v) => { edit.previewUrl.value = v }, { immediate: true })
+watch(textPreview, (v) => { edit.textPreview.value = v }, { immediate: true })
+watch(previewSvg, (v) => { edit.previewSvg.value = v }, { immediate: true })
+watch(previewLoading, (v) => { edit.previewLoading.value = v }, { immediate: true })
+watch(previewError, (v) => { edit.previewError.value = v }, { immediate: true })
+watch(previewResult, (v) => { edit.previewResult.value = v }, { immediate: true })
+watch(kind, (v) => { edit.kind.value = v }, { immediate: true })
+watch(() => Number(store.uploadMetadata.page_count ?? 0), (v) => { edit.pageCount.value = v }, { immediate: true })
+watch(() => Number(store.uploadMetadata.page ?? 0), (v) => { edit.currentPage.value = v }, { immediate: true })
+edit.setGoToPage(goToPage)
 </script>
 
 <template>
@@ -427,54 +486,7 @@ function openPicker(): void {
       @dragleave.prevent="dragOver = false"
       @drop.prevent="onDrop"
     >
-      <div v-if="selectedFile" class="space-y-2">
-        <div v-if="previewUrl" class="grid grid-cols-2 gap-2">
-          <div class="space-y-1">
-            <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('upload.original') }}</p>
-            <img
-              :src="previewUrl"
-              :alt="selectedFile.name"
-              class="mx-auto max-h-56 rounded border border-slate-700 bg-slate-800 object-contain"
-            />
-          </div>
-          <div class="space-y-1">
-            <p class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
-              <span>{{ t('upload.preview') }}</span>
-              <span v-if="previewLoading" class="text-slate-400">{{ t('upload.previewing') }}</span>
-              <span v-else-if="previewResult" class="text-slate-400">
-                {{ previewResult.elapsed_ms }} ms{{ previewResult.cached ? ' · ' + t('upload.cached') : '' }}
-              </span>
-            </p>
-            <div
-              class="mx-auto flex h-56 items-center justify-center rounded border border-slate-700 bg-white"
-            >
-              <div
-                v-if="previewSvg"
-                class="h-full w-full p-1 [&_svg]:h-full [&_svg]:w-full"
-                v-html="previewSvg"
-              />
-              <p v-else-if="previewError" class="px-2 text-center text-[10px] text-red-400">
-                {{ previewError }}
-              </p>
-              <p v-else class="text-[10px] text-slate-400">
-                {{ previewLoading ? t('upload.previewing') : t('upload.previewHint') }}
-              </p>
-            </div>
-            <div v-if="previewResult?.palette.length" class="flex flex-wrap gap-1">
-              <span
-                v-for="entry in previewResult.palette"
-                :key="entry.color"
-                class="inline-block h-3 w-3 rounded border border-slate-700"
-                :style="{ backgroundColor: entry.color }"
-                :title="entry.color"
-              />
-            </div>
-          </div>
-        </div>
-        <pre
-          v-else-if="kind === 'typography' && textPreview"
-          class="max-h-24 overflow-hidden rounded border border-slate-700 bg-slate-900 px-2 py-1 text-left text-[10px] leading-snug text-slate-300 whitespace-pre-wrap"
-          >{{ textPreview }}</pre>
+      <div v-if="selectedFile" class="space-y-1.5">
         <p class="truncate text-sm font-medium text-slate-100" :title="selectedFile.name">
           {{ selectedFile.name }}
         </p>
@@ -488,6 +500,9 @@ function openPicker(): void {
         >
           {{ t('upload.changeFile') }}
         </button>
+        <p v-if="previewError" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300">
+          {{ previewError }}
+        </p>
       </div>
       <div v-else>
         <p class="text-sm text-slate-400">{{ t('upload.dropHere') }}</p>
@@ -501,68 +516,123 @@ function openPicker(): void {
       </div>
     </div>
 
-    <!-- ============================== COLOURS (top-level) ============================== -->
-    <!-- Always-visible quick-pick for the number of colours + optional
-         pinned colours. Power-user knobs live in the "Segmentation"
-         accordion below. -->
+    <!-- ============================== PALETTE (pen-driven) ============================== -->
+    <!-- Default: palette follows the machine's installed pens (slot
+         colours, locked for editing). Override switches to manual mode
+         where the user can add colours beyond the available slots, which
+         will require a pause-for-swap during plotting. -->
     <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
       <div class="flex items-baseline justify-between">
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('convert.colorsHeader') }}</p>
-        <p class="text-[10px] text-slate-500">
-          {{ bitmap.segmentation_method === 'fixed_palette'
-            ? t('convert.colorsModeFixed', { count: bitmap.palette.length })
-            : t('convert.colorsModeAuto', { count: bitmap.num_colors }) }}
-        </p>
-      </div>
-
-      <label class="block text-slate-400">
-        {{ t('convert.numColors') }}
-        <input
-          v-model.number="bitmap.num_colors"
-          type="number"
-          min="1"
-          max="16"
-          :disabled="bitmap.segmentation_method === 'fixed_palette' && bitmap.palette.length > 0"
-          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 disabled:opacity-50"
-        />
-      </label>
-
-      <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <span class="text-slate-400">{{ t('convert.specificColors') }}</span>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('palette.title') }}</p>
+        <div class="flex overflow-hidden rounded border border-slate-700">
           <button
             type="button"
-            class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
-            @click="addPaletteColour"
+            class="px-2 py-0.5 text-[10px] transition"
+            :class="paletteFollowsPens
+              ? 'bg-slate-700 text-slate-100'
+              : 'text-slate-400 hover:bg-slate-800'"
+            :disabled="!installedPenColors.length"
+            @click="setPaletteSource(true)"
           >
-            + {{ t('convert.addColour') }}
+            {{ t('palette.followPens') }}
           </button>
-        </div>
-        <p v-if="!bitmap.palette.length" class="text-[10px] text-slate-500">
-          {{ t('convert.specificColorsHint') }}
-        </p>
-        <div v-for="(hex, i) in bitmap.palette" :key="i" class="flex items-center gap-1">
-          <input
-            type="color"
-            :value="hex"
-            class="h-7 w-12 cursor-pointer rounded border border-slate-700 bg-slate-900"
-            @input="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
-          />
-          <input
-            type="text"
-            :value="hex"
-            class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-            @change="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
-          />
           <button
             type="button"
-            class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
-            @click="removePaletteColour(i)"
+            class="px-2 py-0.5 text-[10px] transition"
+            :class="!paletteFollowsPens
+              ? 'bg-slate-700 text-slate-100'
+              : 'text-slate-400 hover:bg-slate-800'"
+            @click="setPaletteSource(false)"
           >
-            ✕
+            {{ t('palette.manual') }}
           </button>
         </div>
       </div>
+
+      <!-- Pen-following mode: chips locked to the installed pens, with
+           slot numbers so the user knows which pen will plot what. -->
+      <div v-if="paletteFollowsPens" class="space-y-1.5">
+        <p v-if="!installedPenColors.length" class="text-[10px] text-amber-300">
+          {{ t('palette.noPensInstalled') }}
+        </p>
+        <div v-else class="flex flex-wrap gap-1.5">
+          <span
+            v-for="(color, i) in installedPenColors"
+            :key="i"
+            class="inline-flex items-center gap-1 rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5"
+            :title="t('palette.slotTooltip', { index: i, color })"
+          >
+            <span
+              class="inline-block h-3 w-3 rounded border border-slate-600"
+              :style="{ backgroundColor: color }"
+            />
+            <span class="font-mono text-[10px] text-slate-400">#{{ i }}</span>
+            <span class="font-mono text-[10px] text-slate-200">{{ color }}</span>
+          </span>
+        </div>
+        <p class="text-[10px] text-slate-500">{{ t('palette.followHint') }}</p>
+      </div>
+
+      <!-- Manual mode: number-of-colours + freely editable palette + add. -->
+      <div v-else class="space-y-2">
+        <label class="block text-slate-400">
+          {{ t('convert.numColors') }}
+          <input
+            v-model.number="bitmap.num_colors"
+            type="number"
+            min="1"
+            max="16"
+            :disabled="bitmap.segmentation_method === 'fixed_palette' && bitmap.palette.length > 0"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 disabled:opacity-50"
+          />
+        </label>
+
+        <div class="space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">{{ t('convert.specificColors') }}</span>
+            <button
+              type="button"
+              class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
+              @click="addPaletteColour"
+            >
+              + {{ t('convert.addColour') }}
+            </button>
+          </div>
+          <p v-if="!bitmap.palette.length" class="text-[10px] text-slate-500">
+            {{ t('convert.specificColorsHint') }}
+          </p>
+          <div v-for="(hex, i) in bitmap.palette" :key="i" class="flex items-center gap-1">
+            <input
+              type="color"
+              :value="hex"
+              class="h-7 w-12 cursor-pointer rounded border border-slate-700 bg-slate-900"
+              @input="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
+            />
+            <input
+              type="text"
+              :value="hex"
+              class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+              @change="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
+            />
+            <button
+              type="button"
+              class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
+              @click="removePaletteColour(i)"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual-swap warning: the palette exceeds the available pen
+           slots, so the plotter will pause and prompt the operator. -->
+      <p
+        v-if="manualSwapCount > 0"
+        class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-[11px] text-amber-200"
+      >
+        ⚠ {{ t('palette.manualSwap', { count: manualSwapCount, total: bitmap.palette.length, slots: penSlotCount }) }}
+      </p>
     </div>
 
     <!-- ============================== SEGMENTATION ============================== -->
@@ -738,33 +808,6 @@ function openPicker(): void {
     >
       {{ store.loading ? t('upload.converting') : t('upload.choose') }}
     </button>
-
-    <div
-      v-if="pageCount > 1"
-      class="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs"
-    >
-      <button
-        type="button"
-        class="rounded bg-slate-700 px-2 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40"
-        :disabled="currentPage <= 0 || store.loading"
-        :aria-label="t('upload.prevPage')"
-        @click="goToPage(currentPage - 1)"
-      >
-        ←
-      </button>
-      <span class="text-slate-300">
-        {{ t('upload.pageOf', { current: currentPage + 1, total: pageCount }) }}
-      </span>
-      <button
-        type="button"
-        class="rounded bg-slate-700 px-2 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40"
-        :disabled="currentPage >= pageCount - 1 || store.loading"
-        :aria-label="t('upload.nextPage')"
-        @click="goToPage(currentPage + 1)"
-      >
-        →
-      </button>
-    </div>
 
     <p v-if="store.error && store.errorScope === 'upload'" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-xs text-red-300">
       {{ store.error }}

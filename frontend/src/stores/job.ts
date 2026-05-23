@@ -35,6 +35,18 @@ interface LayerAlgorithm {
   algorithm_options: Record<string, unknown>
 }
 
+// A variant is a named snapshot of the editor's per-layer choices for a
+// placement: which algorithm to render each layer with, and whether the
+// layer is currently visible. Switching variants pulls these into the
+// placement's live state and triggers /rerender. The placement always
+// has at least one variant; the active one IS the live state.
+export interface Variant {
+  id: string
+  name: string
+  layer_algorithms: Record<string, LayerAlgorithm>
+  visibility: Record<string, boolean>
+}
+
 export interface Placement {
   id: string
   source_file: string
@@ -53,6 +65,8 @@ export interface Placement {
   y_mm: number
   width_mm: number
   height_mm: number
+  variants: Variant[]
+  active_variant_id: string
 }
 
 let placementCounter = 0
@@ -109,8 +123,22 @@ export const useJobStore = defineStore('job', () => {
     return { x_mm: (wsW - w) / 2, y_mm: (wsH - h) / 2, width_mm: w, height_mm: h }
   }
 
+  function newVariantId(): string {
+    return `v${Date.now().toString(36)}${Math.floor(Math.random() * 1000).toString(36)}`
+  }
+
+  function defaultVariant(): Variant {
+    return {
+      id: newVariantId(),
+      name: i18n.global.t('variants.default'),
+      layer_algorithms: {},
+      visibility: {},
+    }
+  }
+
   function blankPlacement(): Placement {
     const size = defaultPlacementSize()
+    const variant = defaultVariant()
     return {
       id: newPlacementId(),
       source_file: '',
@@ -125,6 +153,8 @@ export const useJobStore = defineStore('job', () => {
       last_file: null,
       last_options: undefined,
       visibility: {},
+      variants: [variant],
+      active_variant_id: variant.id,
       ...size,
     }
   }
@@ -139,16 +169,26 @@ export const useJobStore = defineStore('job', () => {
   function duplicatePlacement(id: string, offsetMm = 15): string | null {
     const src = placements.value.find((p) => p.id === id)
     if (!src) return null
+    // Cloned placements get their own variant identities so renaming /
+    // updating one doesn't bleed into the other. Live state is also
+    // cloned so tweaks on one don't bleed into the other.
+    const clonedVariants = src.variants.map((v) => ({
+      ...v,
+      id: newVariantId(),
+      layer_algorithms: { ...v.layer_algorithms },
+      visibility: { ...v.visibility },
+    }))
+    const activeIdx = src.variants.findIndex((v) => v.id === src.active_variant_id)
     const clone: Placement = {
       ...src,
       id: newPlacementId(),
       x_mm: src.x_mm + offsetMm,
       y_mm: src.y_mm + offsetMm,
-      // Cloned placements get their own visibility + algorithm overrides
-      // so tweaks on one don't bleed into the other.
       visibility: { ...src.visibility },
       layer_algorithms: { ...src.layer_algorithms },
       layers: src.layers.map((l) => ({ ...l })),
+      variants: clonedVariants,
+      active_variant_id: clonedVariants[activeIdx >= 0 ? activeIdx : 0]?.id ?? clonedVariants[0]!.id,
     }
     placements.value = [...placements.value, clone]
     return clone.id
@@ -667,7 +707,91 @@ export const useJobStore = defineStore('job', () => {
   // are written to ``localStorage`` on a debounce so a tab refresh keeps
   // the scene intact. SVGs can be large — if quota is hit we fail
   // silently and the user simply doesn't get persistence that session.
-  const SCENE_KEY = 'omniplot.scene.v2'
+  // ====== Variants (named snapshots of layer choices on a placement) ====
+  const activeVariant = computed<Variant | null>(() => {
+    const p = selectedPlacement.value
+    if (!p) return null
+    return p.variants.find((v) => v.id === p.active_variant_id) ?? p.variants[0] ?? null
+  })
+
+  // Snapshot the placement's current live state (layer_algorithms +
+  // visibility) into a new variant. Returns the new variant id, or
+  // null if no placement is selected.
+  function addVariant(name: string): string | null {
+    const p = selectedPlacement.value
+    if (!p) return null
+    const variant: Variant = {
+      id: newVariantId(),
+      name: name.trim() || i18n.global.t('variants.untitled'),
+      layer_algorithms: { ...p.layer_algorithms },
+      visibility: { ...p.visibility },
+    }
+    patchSelected({
+      variants: [...p.variants, variant],
+      active_variant_id: variant.id,
+    })
+    return variant.id
+  }
+
+  // Overwrite the active variant with the placement's current live state.
+  function updateActiveVariant(): void {
+    const p = selectedPlacement.value
+    if (!p) return
+    const next = p.variants.map((v) =>
+      v.id === p.active_variant_id
+        ? { ...v, layer_algorithms: { ...p.layer_algorithms }, visibility: { ...p.visibility } }
+        : v,
+    )
+    patchSelected({ variants: next })
+  }
+
+  function renameVariant(variantId: string, name: string): void {
+    const p = selectedPlacement.value
+    if (!p) return
+    const trimmed = name.trim() || i18n.global.t('variants.untitled')
+    patchSelected({
+      variants: p.variants.map((v) => (v.id === variantId ? { ...v, name: trimmed } : v)),
+    })
+  }
+
+  function removeVariant(variantId: string): void {
+    const p = selectedPlacement.value
+    if (!p) return
+    // Never delete the last variant — keep at least one so the placement
+    // always has a tracked snapshot to roll back to.
+    if (p.variants.length <= 1) return
+    const next = p.variants.filter((v) => v.id !== variantId)
+    const newActive
+      = p.active_variant_id === variantId
+        ? (next[0]?.id ?? '')
+        : p.active_variant_id
+    patchSelected({ variants: next, active_variant_id: newActive })
+    // Loading the new active variant restores its snapshot into live state.
+    if (p.active_variant_id === variantId) loadVariantState(next[0])
+  }
+
+  // Load a variant's snapshot into the placement's live state and
+  // trigger a /rerender so the canvas reflects the swap.
+  function loadVariantState(variant: Variant | undefined): void {
+    if (!variant) return
+    patchSelected({
+      layer_algorithms: { ...variant.layer_algorithms },
+      visibility: { ...variant.visibility },
+    })
+    if (rerenderTimer) clearTimeout(rerenderTimer)
+    rerenderTimer = setTimeout(triggerRerender, 50)
+  }
+
+  function setActiveVariant(variantId: string): void {
+    const p = selectedPlacement.value
+    if (!p) return
+    const target = p.variants.find((v) => v.id === variantId)
+    if (!target) return
+    patchSelected({ active_variant_id: variantId })
+    loadVariantState(target)
+  }
+
+  const SCENE_KEY = 'omniplot.scene.v3'
 
   interface SerializableScene {
     placements: Placement[]
@@ -697,14 +821,32 @@ export const useJobStore = defineStore('job', () => {
 
   function hydrateScene(): void {
     try {
-      const raw = localStorage.getItem(SCENE_KEY)
-      if (!raw) return
+      // v3 first, then fall back to v2 for migration.
+      let raw = localStorage.getItem(SCENE_KEY)
+      let migrating = false
+      if (!raw) {
+        raw = localStorage.getItem('omniplot.scene.v2')
+        if (!raw) return
+        migrating = true
+      }
       const data = JSON.parse(raw) as Partial<SerializableScene>
       if (Array.isArray(data.placements)) {
-        placements.value = data.placements.map((p) => ({
-          ...p,
-          last_file: null,
-        }))
+        placements.value = data.placements.map((p) => {
+          const placement = { ...p, last_file: null } as Placement
+          // v2 → v3 migration: wrap legacy placement state in a default
+          // variant so the variant API has a snapshot to point at.
+          if (!Array.isArray(placement.variants) || !placement.variants.length) {
+            const variant: Variant = {
+              id: newVariantId(),
+              name: i18n.global.t('variants.default'),
+              layer_algorithms: { ...(placement.layer_algorithms ?? {}) },
+              visibility: { ...(placement.visibility ?? {}) },
+            }
+            placement.variants = [variant]
+            placement.active_variant_id = variant.id
+          }
+          return placement
+        })
       }
       if (data.selectedPlacementId !== undefined) {
         selectedPlacementId.value = data.selectedPlacementId
@@ -713,6 +855,11 @@ export const useJobStore = defineStore('job', () => {
       if (data.scaleMode) scaleMode.value = data.scaleMode
       if (typeof data.marginMm === 'number') marginMm.value = data.marginMm
       if (typeof data.autoOptimize === 'boolean') autoOptimize.value = data.autoOptimize
+      if (migrating) {
+        // Drop the legacy key once we've successfully imported it.
+        localStorage.removeItem('omniplot.scene.v2')
+        persistScene()
+      }
     } catch {
       // Malformed JSON / no localStorage — start fresh.
     }
@@ -792,6 +939,13 @@ export const useJobStore = defineStore('job', () => {
     optimize,
     runPreflight,
     generate,
+    // Variants
+    activeVariant,
+    addVariant,
+    updateActiveVariant,
+    renameVariant,
+    removeVariant,
+    setActiveVariant,
   }
 })
 
