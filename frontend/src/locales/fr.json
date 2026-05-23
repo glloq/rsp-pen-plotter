@@ -387,6 +387,12 @@
     "updateFailed": "Échec de la mise à jour.",
     "needsRestart": "Redémarrez le service pour charger le nouveau code Python.",
     "viewLog": "Voir le journal",
-    "dirtyWarning": "Modifications locales non commitées — committez ou annulez avant de mettre à jour."
+    "dirtyWarning": "Modifications locales non commitées détectées sur la machine.",
+    "dirtyFilesCount": "{count} fichier(s) modifié(s)",
+    "forceUpdate": "Forcer la mise à jour",
+    "forceUpdateHint": "Écrase les modifications locales puis met à jour. Irréversible.",
+    "forceUpdateConfirmTitle": "Forcer la mise à jour",
+    "forceUpdateConfirmMsg": "Les modifications locales seront définitivement perdues. Continuer ?",
+    "forcedNotice": "Mise à jour forcée — les modifications locales ont été écrasées."
   }
 }

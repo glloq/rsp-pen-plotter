@@ -5,9 +5,10 @@
 # not killed, but it needs to be restarted to pick up new code.
 #
 # Usage:
-#   ./update.sh             # pull, install, build
+#   ./update.sh             # pull, install, build (refuses if tree is dirty)
 #   ./update.sh --restart   # also restart the omniplot systemd service
 #   ./update.sh --check     # print whether updates are available, do nothing
+#   ./update.sh --force     # discard local changes (git reset --hard) then pull
 #
 # Exits non-zero on any failure. All output is captured for the UI to display.
 set -euo pipefail
@@ -17,10 +18,12 @@ cd "$ROOT"
 
 RESTART=0
 CHECK_ONLY=0
+FORCE=0
 for arg in "$@"; do
   case "$arg" in
     --restart)    RESTART=1 ;;
     --check)      CHECK_ONLY=1 ;;
+    --force)      FORCE=1 ;;
     --help|-h)
       awk '
         NR == 1 { next }
@@ -44,12 +47,17 @@ if [ ! -d .git ]; then
   exit 1
 fi
 
-# Refuse to update on top of uncommitted changes — otherwise the merge can
-# leave the tree in a half-broken state with no easy recovery.
+# Refuse to update on top of uncommitted changes — unless --force is set,
+# in which case we discard them before pulling.
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Error: working tree has uncommitted changes. Commit, stash or revert them first." >&2
+  if [ "$FORCE" -eq 0 ]; then
+    echo "Error: working tree has uncommitted changes. Re-run with --force to discard them, or commit/stash first." >&2
+    git status --short
+    exit 3
+  fi
+  step "Discarding local changes (--force)"
   git status --short
-  exit 3
+  git reset --hard HEAD
 fi
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -71,7 +79,15 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
 fi
 
 step "Updating $PREV_COMMIT → $NEW_COMMIT"
-git merge --ff-only "origin/$BRANCH"
+# --force already did a hard reset to local HEAD, which can lag behind the
+# remote. Use --ff-only as the default safe path; on --force we additionally
+# allow a hard reset to the remote so divergent local commits (rare in
+# practice) don't block the update.
+if [ "$FORCE" -eq 1 ]; then
+  git reset --hard "origin/$BRANCH"
+else
+  git merge --ff-only "origin/$BRANCH"
+fi
 
 # Run install with --no-system-deps: a self-update should never silently apt-get.
 # If new system deps are required, the operator can rerun install.sh manually.
