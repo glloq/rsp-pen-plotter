@@ -30,10 +30,15 @@ export async function getHealth(): Promise<HealthResponse> {
   return response.data
 }
 
+export type AlgorithmKind = 'fill' | 'lines' | 'mono_stroke'
+
 export interface AlgorithmInfo {
   name: string
   description: string
+  kind: AlgorithmKind
 }
+
+export type SegmentationMethod = 'kmeans' | 'luminance_bands' | 'thresholds' | 'fixed_palette'
 
 export async function getAlgorithms(): Promise<AlgorithmInfo[]> {
   const response = await api.get<AlgorithmInfo[]>('/algorithms')

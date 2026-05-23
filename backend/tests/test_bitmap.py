@@ -19,7 +19,11 @@ def _square_mask() -> np.ndarray:
 
 def test_registered_algorithm_names() -> None:
     names = {algo.name for algo in available_algorithms()}
-    assert names == {"direct", "halftone", "stippling"}
+    # The original trio plus the 2024 expansion (crosshatch/contours/edges/
+    # spiral/scanlines/tsp). The exhaustive list lives in
+    # ``test_new_algorithms.test_registry_lists_all_nine_algorithms`` — this
+    # assertion just guards the legacy set so old callers keep finding them.
+    assert names >= {"direct", "halftone", "stippling"}
 
 
 def test_get_unknown_algorithm_raises() -> None:

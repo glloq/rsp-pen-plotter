@@ -1,0 +1,174 @@
+"""Tests for the segmentation ("decoupage") module.
+
+Each method is exercised on a tiny synthetic image so we can assert exact
+cluster counts and label assignments — the cheap way to catch regressions
+in the dispatcher in ``bitmap.py``.
+"""
+
+from __future__ import annotations
+
+import io
+
+import numpy as np
+from PIL import Image
+
+from pen_plotter.converters import segmentation
+from pen_plotter.converters.bitmap import BitmapConverter, BitmapOptions
+
+
+def _gradient_image(width: int = 16, height: int = 16) -> Image.Image:
+    """Horizontal greyscale gradient from black (left) to white (right)."""
+    arr = np.tile(np.linspace(0, 255, width, dtype=np.uint8), (height, 1))
+    rgb = np.stack([arr, arr, arr], axis=-1)
+    return Image.fromarray(rgb, mode="RGB")
+
+
+def _png_bytes(image: Image.Image) -> bytes:
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_luminance_bands_creates_expected_cluster_count() -> None:
+    image = _gradient_image(width=32, height=4)
+    labels, palette = segmentation.luminance_bands(image, num_bands=4)
+    # Exactly 4 distinct labels expected on a smooth gradient.
+    assert len(np.unique(labels)) == 4
+    # Palette greyscale from dark to light.
+    assert palette[0, 0] < palette[-1, 0]
+
+
+def test_thresholds_partition_by_breakpoints() -> None:
+    image = _gradient_image(width=32, height=2)
+    # Two cuts → three bands.
+    labels, palette = segmentation.thresholds(image, levels=[0.33, 0.66])
+    assert len(np.unique(labels)) == 3
+    assert palette.shape == (3, 3)
+
+
+def test_thresholds_empty_falls_back_to_single_layer() -> None:
+    image = _gradient_image()
+    labels, palette = segmentation.thresholds(image, levels=[])
+    assert np.unique(labels).tolist() == [0]
+    assert palette.shape == (1, 3)
+
+
+def test_fixed_palette_snaps_to_nearest_colour() -> None:
+    image = _gradient_image(width=8, height=1)
+    labels, palette = segmentation.fixed_palette(
+        image, palette_hex=["#000000", "#ffffff"]
+    )
+    # 8 pixels going dark→light: roughly half go to black, half to white.
+    assert sorted(np.unique(labels).tolist()) == [0, 1]
+    assert np.array_equal(palette, np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8))
+
+
+def test_fixed_palette_rejects_empty() -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        segmentation.fixed_palette(_gradient_image(), palette_hex=[])
+
+
+def test_drop_small_regions_repaints_isolated_specks() -> None:
+    # A 4×4 sea of zeros with a single isolated speck of "1" — that's a
+    # 1-pixel region that should be repainted to its neighbours (all 0s).
+    labels = np.zeros((4, 4), dtype=np.intp)
+    labels[1, 1] = 1
+    cleaned = segmentation.drop_small_regions(labels, min_pixels=2)
+    assert cleaned[1, 1] == 0
+    assert not np.any(cleaned == 1)
+
+
+def test_drop_small_regions_preserves_large_components() -> None:
+    labels = np.zeros((8, 8), dtype=np.intp)
+    labels[2:6, 2:6] = 1  # 16-pixel block
+    cleaned = segmentation.drop_small_regions(labels, min_pixels=4)
+    assert np.array_equal(cleaned, labels)
+
+
+def test_merge_similar_colours_collapses_near_duplicates() -> None:
+    labels = np.array([[0, 1], [2, 0]], dtype=np.intp)
+    palette = np.array(
+        [
+            [255, 0, 0],    # red
+            [254, 1, 1],    # very near red → should merge with 0
+            [0, 0, 255],    # blue (well apart)
+        ],
+        dtype=np.uint8,
+    )
+    new_labels, new_palette = segmentation.merge_similar_colours(
+        labels, palette, threshold=2.0
+    )
+    # Three clusters → two after collapse.
+    assert len(new_palette) == 2
+    # Labels 0 and 1 merged into the lowest-indexed root.
+    assert new_labels[0, 0] == new_labels[0, 1]
+
+
+def test_merge_similar_colours_noop_under_threshold() -> None:
+    labels = np.array([[0, 1]], dtype=np.intp)
+    palette = np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8)
+    new_labels, new_palette = segmentation.merge_similar_colours(
+        labels, palette, threshold=1.0
+    )
+    assert np.array_equal(new_labels, labels)
+    assert np.array_equal(new_palette, palette)
+
+
+def test_bitmap_converter_routes_through_luminance_bands() -> None:
+    """End-to-end: BitmapConverter respects the segmentation method choice."""
+    image = _gradient_image(width=16, height=16)
+    result = BitmapConverter().convert(
+        _png_bytes(image),
+        options={
+            "algorithm": "direct",
+            "segmentation_method": "luminance_bands",
+            "segmentation_options": {"num_bands": 3},
+            "drop_background": False,
+        },
+        fast=True,
+    )
+    # Three layers (one per band) — labelled by their hex colour by the
+    # converter, so the SVG should carry three distinct fill colours.
+    assert result.svg.count('inkscape:label="color-') == 3
+
+
+def test_bitmap_converter_fixed_palette_via_options() -> None:
+    image = _gradient_image(width=16, height=16)
+    result = BitmapConverter().convert(
+        _png_bytes(image),
+        options={
+            "algorithm": "direct",
+            "segmentation_method": "fixed_palette",
+            "segmentation_options": {"palette": ["#ff0000", "#0000ff"]},
+            "drop_background": False,
+        },
+        fast=True,
+    )
+    assert 'color-ff0000' in result.svg or 'color-0000ff' in result.svg
+
+
+def test_bitmap_converter_rejects_bad_segmentation_args() -> None:
+    """Missing/wrong-shaped segmentation_options surface as ValueError."""
+    import pytest
+
+    image = _gradient_image()
+    with pytest.raises(ValueError):
+        BitmapConverter().convert(
+            _png_bytes(image),
+            options={
+                "algorithm": "direct",
+                "segmentation_method": "fixed_palette",
+                "segmentation_options": {},  # missing 'palette'
+            },
+            fast=True,
+        )
+
+
+def test_options_validate_defaults() -> None:
+    """BitmapOptions defaults match the legacy contract — old callers OK."""
+    opts = BitmapOptions.model_validate({})
+    assert opts.segmentation_method == "kmeans"
+    assert opts.min_region_pixels == 0
+    assert opts.merge_delta_e == 0.0

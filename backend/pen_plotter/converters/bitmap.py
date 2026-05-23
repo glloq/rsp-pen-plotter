@@ -8,21 +8,23 @@ using a selectable raster algorithm.
 from __future__ import annotations
 
 import io
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 import pillow_heif
 from numpy.typing import NDArray
 from PIL import Image
 from pydantic import BaseModel, Field
-from sklearn.cluster import KMeans
 
+from pen_plotter.converters import segmentation
 from pen_plotter.converters.algorithms import get_algorithm
 from pen_plotter.converters.base import ConversionResult, Converter
 
 pillow_heif.register_heif_opener()
 
 _REC709 = np.array([0.2126, 0.7152, 0.0722])
+
+SegmentationMethod = Literal["kmeans", "luminance_bands", "thresholds", "fixed_palette"]
 
 
 class BitmapOptions(BaseModel):
@@ -34,6 +36,19 @@ class BitmapOptions(BaseModel):
     drop_background: bool = True
     background_luminance: float = Field(default=0.92, ge=0.0, le=1.0)
     algorithm_options: dict[str, Any] = Field(default_factory=dict)
+    # Segmentation ("decoupage") configuration. ``kmeans`` keeps the prior
+    # behaviour; the other methods plug in via
+    # :mod:`pen_plotter.converters.segmentation`. Method-specific arguments
+    # ride along in ``segmentation_options`` (e.g. ``num_bands``,
+    # ``levels``, ``palette``) — see that module's docstrings.
+    segmentation_method: SegmentationMethod = "kmeans"
+    segmentation_options: dict[str, Any] = Field(default_factory=dict)
+    # Post-processing applied after segmentation regardless of method.
+    # ``min_region_pixels`` reassigns connected components below the
+    # threshold to their dominant neighbour (anti-noise). ``merge_delta_e``
+    # collapses palette entries closer than ``threshold`` in CIE Lab.
+    min_region_pixels: int = Field(default=0, ge=0)
+    merge_delta_e: float = Field(default=0.0, ge=0.0)
 
 
 class BitmapConverter(Converter):
@@ -77,7 +92,13 @@ class BitmapConverter(Converter):
         n_init = 1 if fast else 10
         image = self._load_rgb(data)
         image = self._fit_within(image, max_dim)
-        labels, palette = self._quantize(image, opts.num_colors, n_init=n_init)
+        labels, palette = self._segment(image, opts, n_init=n_init)
+        if opts.min_region_pixels > 0:
+            labels = segmentation.drop_small_regions(labels, opts.min_region_pixels)
+        if opts.merge_delta_e > 0:
+            labels, palette = segmentation.merge_similar_colours(
+                labels, palette, opts.merge_delta_e
+            )
 
         height, width = labels.shape
         warnings: list[str] = []
@@ -117,27 +138,36 @@ class BitmapConverter(Converter):
         return image.resize(size, Image.Resampling.LANCZOS)
 
     @staticmethod
-    def _quantize(
-        image: Image.Image, num_colors: int, *, n_init: int = 10
+    def _segment(
+        image: Image.Image, opts: BitmapOptions, *, n_init: int = 10
     ) -> tuple[NDArray[np.intp], NDArray[np.uint8]]:
-        """Cluster pixels into ``num_colors`` colors via k-means.
+        """Dispatch to the segmentation method selected in ``opts``.
 
         Args:
-            n_init: Number of k-means restarts. The preview path drops this to
-                1 to avoid paying ~10× the runtime for a frame the user will
-                replace seconds later.
+            n_init: K-means restarts. Only consumed when ``segmentation_method``
+                is ``kmeans``; the preview path drops it to 1 for speed.
 
         Returns:
-            A ``(labels, palette)`` pair: ``labels`` is a (height, width) array
-            of cluster indices, ``palette`` is a (k, 3) array of RGB centroids.
+            ``(labels, palette)``: ``labels`` is a (height, width) array of
+            cluster indices, ``palette`` is a (k, 3) array of RGB centroids.
         """
-        arr = np.asarray(image, dtype=np.float64).reshape(-1, 3)
-        k = min(num_colors, max(1, np.unique(arr, axis=0).shape[0]))
-        model = KMeans(n_clusters=k, n_init=n_init, random_state=0)
-        flat_labels = model.fit_predict(arr)
-        palette = model.cluster_centers_.round().astype(np.uint8)
-        labels = flat_labels.reshape(image.height, image.width).astype(np.intp)
-        return labels, palette
+        seg = opts.segmentation_options
+        if opts.segmentation_method == "luminance_bands":
+            num_bands = int(seg.get("num_bands", opts.num_colors))
+            return segmentation.luminance_bands(image, num_bands=num_bands)
+        if opts.segmentation_method == "thresholds":
+            levels = seg.get("levels", [])
+            if not isinstance(levels, list):
+                raise ValueError("segmentation_options.levels must be a list of floats")
+            return segmentation.thresholds(image, levels=levels)
+        if opts.segmentation_method == "fixed_palette":
+            palette_hex = seg.get("palette", [])
+            if not isinstance(palette_hex, list) or not palette_hex:
+                raise ValueError(
+                    "segmentation_options.palette must be a non-empty list of hex colours"
+                )
+            return segmentation.fixed_palette(image, palette_hex=palette_hex)
+        return segmentation.kmeans(image, num_colors=opts.num_colors, n_init=n_init)
 
     @staticmethod
     def _layer_order(labels: NDArray[np.intp], palette: NDArray[np.uint8]) -> list[int]:
