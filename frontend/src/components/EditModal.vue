@@ -6,11 +6,21 @@ import { resetEditState } from '../composables/useEditState'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import BlockMapCard from './edit/BlockMapCard.vue'
+import EditFileActions from './edit/EditFileActions.vue'
 import EditPreviewPane from './edit/EditPreviewPane.vue'
 import EditTabs, { type EditTabId } from './edit/EditTabs.vue'
 import VariantsCard from './edit/VariantsCard.vue'
 import SourceSection from './SourceSection.vue'
 import LayersSection from './LayersSection.vue'
+
+// Header-level file actions: replaces the bulky file picker that used
+// to live at the top of the Source tab. The modal opens with a file
+// already selected 100% of the time (Edit button on a library entry),
+// so the picker was redundant; "Change file" and "Clear" now live
+// here as a compact dropdown next to the file name.
+const sourceRef = ref<InstanceType<typeof SourceSection> | null>(null)
+function onChangeFile(): void { sourceRef.value?.openPicker() }
+function onClearAll(): void { sourceRef.value?.clearAll() }
 
 const { t } = useI18n()
 const ui = useUiStore()
@@ -162,17 +172,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       class="flex h-full max-h-[95vh] w-full max-w-[1600px] flex-col rounded-lg border border-slate-700 bg-slate-900 shadow-2xl"
       :style="{ width: '95vw' }"
     >
-      <header class="flex items-center justify-between border-b border-slate-700 px-4 py-3">
-        <h2 class="truncate text-base font-semibold text-slate-100" :title="headerTitle">
+      <header class="flex items-center justify-between gap-3 border-b border-slate-700 px-4 py-3">
+        <h2 class="min-w-0 truncate text-base font-semibold text-slate-100" :title="headerTitle">
           {{ headerTitle }}
         </h2>
-        <button
-          type="button"
-          class="ml-4 shrink-0 rounded bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700"
-          @click="ui.closeEditModal()"
-        >
-          {{ t('editModal.done') }}
-        </button>
+        <div class="flex shrink-0 items-center gap-1">
+          <EditFileActions
+            :has-file="Boolean(store.lastFile || store.job)"
+            @change="onChangeFile"
+            @clear="onClearAll"
+          />
+          <button
+            type="button"
+            class="rounded bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700"
+            @click="ui.closeEditModal()"
+          >
+            {{ t('editModal.done') }}
+          </button>
+        </div>
       </header>
 
       <!-- Split-pane: preview on the left, scrollable settings on the
