@@ -292,7 +292,8 @@
     "dropToPosition": "Drop to position the drawing here",
     "dropToPlace": "Drop to place another instance",
     "placements": "{count} placement | {count} placements",
-    "emptyHint": "Drag a file from the Files panel or drop one anywhere to start."
+    "emptyHint": "Drag a file from the Files panel or drop one anywhere to start.",
+    "removePlacement": "Remove from plan (Del)"
   },
   "convert": {
     "options": "Conversion options",

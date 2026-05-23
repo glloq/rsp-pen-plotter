@@ -292,7 +292,8 @@
     "dropToPosition": "Relâchez ici pour placer le dessin",
     "dropToPlace": "Relâchez pour placer une autre instance",
     "placements": "{count} placement | {count} placements",
-    "emptyHint": "Glissez un fichier depuis le panneau Fichiers ou déposez-en un n'importe où pour démarrer."
+    "emptyHint": "Glissez un fichier depuis le panneau Fichiers ou déposez-en un n'importe où pour démarrer.",
+    "removePlacement": "Retirer du plan (Suppr)"
   },
   "convert": {
     "options": "Options de conversion",

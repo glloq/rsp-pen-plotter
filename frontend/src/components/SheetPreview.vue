@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { useJobStore } from '../stores/job'
@@ -345,7 +345,34 @@ async function generateAndShow(): Promise<void> {
 
 const placementCount = computed(() => store.placements.filter((p) => p.svg).length)
 
-onMounted(resetView)
+// Delete / Backspace removes the currently selected placement from the
+// plan when the canvas has focus. We ignore the shortcut while the user
+// is typing in a field or has a modal/drawer open, since those own their
+// own keyboard handling.
+function onKey(event: KeyboardEvent): void {
+  if (event.key !== 'Delete' && event.key !== 'Backspace') return
+  const target = event.target as HTMLElement | null
+  if (
+    target &&
+    (target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.tagName === 'SELECT' ||
+      target.isContentEditable)
+  ) {
+    return
+  }
+  if (ui.editModalOpen || ui.settingsOpen || ui.plotterDrawerOpen) return
+  const id = store.selectedPlacementId
+  if (!id) return
+  event.preventDefault()
+  store.removePlacement(id)
+}
+
+onMounted(() => {
+  resetView()
+  window.addEventListener('keydown', onKey)
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
@@ -544,6 +571,24 @@ onMounted(resetView)
                 />
               </template>
             </g>
+            <foreignObject
+              v-if="store.selectedPlacementId === rp.placement.id"
+              :x="rp.footprint.x_max + 2"
+              :y="rp.footprint.y_min - 18"
+              width="22"
+              height="22"
+            >
+              <button
+                xmlns="http://www.w3.org/1999/xhtml"
+                type="button"
+                class="flex h-5 w-5 items-center justify-center rounded bg-red-600 text-[11px] font-bold text-white shadow hover:bg-red-500"
+                :title="t('sheet.removePlacement')"
+                @click.stop="store.removePlacement(rp.placement.id)"
+                @pointerdown.stop
+              >
+                ✕
+              </button>
+            </foreignObject>
           </template>
         </svg>
       </div>
