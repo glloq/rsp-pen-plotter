@@ -221,6 +221,11 @@ function onResetStyle(): void {
 
 // Toggle to expose the schema-driven advanced form behind the picker.
 const showAdvanced = ref(false)
+// Collapse the whole card body so a many-layer placement (e.g. 8-colour
+// segmentation) is scannable. The header — visibility checkbox, swatch,
+// label, path stats — stays visible so the layer can still be
+// reordered and toggled on/off while collapsed.
+const collapsed = ref(false)
 
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60)
@@ -264,9 +269,18 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
           {{ layer.total_length_mm.toFixed(1) }} mm · {{ duration }}
         </p>
       </div>
+      <button
+        type="button"
+        class="shrink-0 rounded bg-slate-700 px-1.5 py-0.5 text-[11px] text-slate-200 hover:bg-slate-600"
+        :title="collapsed ? t('layers.expand') : t('layers.collapse')"
+        :aria-expanded="!collapsed"
+        @click="collapsed = !collapsed"
+      >
+        {{ collapsed ? '▸' : '▾' }}
+      </button>
     </div>
 
-    <div class="grid grid-cols-2 gap-2 text-xs">
+    <div v-if="!collapsed" class="grid grid-cols-2 gap-2 text-xs">
       <!-- Multi-pen machines: explicit slot assignment. -->
       <label v-if="store.isMultiColor" class="text-slate-400">
         <span class="flex items-center gap-1">
@@ -341,7 +355,7 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
 
     <!-- Print-style picker: tile grid for bitmap-derived layers. The
          schema-driven advanced form below is gated behind "Advanced". -->
-    <div v-if="isBitmapLayer" class="space-y-1.5">
+    <div v-if="!collapsed && isBitmapLayer" class="space-y-1.5">
       <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
         <span>{{ t('layers.printStyle') }}</span>
         <button
@@ -360,7 +374,7 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       />
     </div>
 
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-500">
+    <div v-if="!collapsed" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-500">
       <!-- Power-user algorithm dropdown stays available for non-bitmap
            layers (no print-style picker) and behind "Advanced" otherwise. -->
       <label v-if="isBitmapLayer && showAdvanced" class="flex items-center gap-1.5">
@@ -403,7 +417,7 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
          advanced drawer. The schema is hardcoded to match the backend's
          algorithm signatures. -->
     <div
-      v-if="isBitmapLayer && showAdvanced && currentAlgoSpec && currentAlgoSpec.schema.length"
+      v-if="!collapsed && isBitmapLayer && showAdvanced && currentAlgoSpec && currentAlgoSpec.schema.length"
       class="rounded border border-slate-700 bg-slate-900/50 p-2"
     >
       <p class="mb-1.5 text-[10px] uppercase tracking-wider text-slate-500">

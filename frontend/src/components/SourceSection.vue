@@ -488,6 +488,42 @@ function openPicker(): void {
   fileInput.value?.click()
 }
 
+// ============================== PRINT MODE (SVG OUTPUT) ==============================
+// "Single colour" mode rewrites the SVG output to a single layer drawn
+// with one pen: no segmentation, just a density-based rendering of the
+// luminance into one ink. It pins num_colors=1 and a one-entry palette
+// so the converter falls back to a halftone/stippling-style render.
+// printMode is derived from num_colors so changes elsewhere stay in sync.
+const printMode = computed<'multicolor' | 'monochrome'>(() =>
+  bitmap.value.num_colors === 1 ? 'monochrome' : 'multicolor',
+)
+
+function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
+  if (mode === 'monochrome') {
+    bitmap.value.segmentation_method = 'fixed_palette'
+    bitmap.value.num_colors = 1
+    const monoInk = installedPenColors.value[0] ?? '#000000'
+    bitmap.value.palette = [monoInk]
+    paletteFollowsPens.value = false
+    // A density-based algorithm makes monochrome look like an actual
+    // image, not a flat fill. Halftone is the most universally
+    // recognisable; the user can switch to stippling per-layer later.
+    if (bitmap.value.algorithm === 'direct') {
+      bitmap.value.algorithm = 'halftone'
+    }
+  } else {
+    // Back to multi-colour: restore the default kmeans / 4-colour
+    // segmentation. If the user had pen-following enabled before
+    // monochrome, the palette watch will repopulate from installed pens.
+    bitmap.value.segmentation_method = 'kmeans'
+    bitmap.value.num_colors = 4
+    if (bitmap.value.algorithm === 'halftone') {
+      bitmap.value.algorithm = 'direct'
+    }
+    paletteFollowsPens.value = true
+  }
+}
+
 // ============================== PEN-DRIVEN PALETTE ==============================
 // When the active machine profile has installed pens with hex colours,
 // the editor follows them by default: palette = installed pen colours,
@@ -624,12 +660,48 @@ edit.setGoToPage(goToPage)
       {{ previewError }}
     </p>
 
+    <!-- ============================== PRINT MODE ==============================
+         The output SVG is the seed of everything downstream (preview,
+         layers, gcode) so we expose a top-level mode picker here: split
+         the image into N colour layers, or collapse it into a single
+         ink rendered with halftone / stippling. Single-colour is the
+         "one pen" workflow people ask for when the plotter has only
+         one ink loaded.  -->
+    <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('printMode.title') }}</p>
+      <div class="grid grid-cols-2 gap-1">
+        <button
+          type="button"
+          class="rounded border px-2 py-1.5 text-left text-[11px] transition"
+          :class="printMode === 'multicolor'
+            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+          @click="setPrintMode('multicolor')"
+        >
+          <span class="block font-medium">{{ t('printMode.multicolor') }}</span>
+          <span class="block text-[9px] text-slate-500">{{ t('printMode.multicolorHint') }}</span>
+        </button>
+        <button
+          type="button"
+          class="rounded border px-2 py-1.5 text-left text-[11px] transition"
+          :class="printMode === 'monochrome'
+            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+          @click="setPrintMode('monochrome')"
+        >
+          <span class="block font-medium">{{ t('printMode.monochrome') }}</span>
+          <span class="block text-[9px] text-slate-500">{{ t('printMode.monochromeHint') }}</span>
+        </button>
+      </div>
+    </div>
+
     <!-- ============================== PALETTE (pen-driven) ============================== -->
     <!-- Default: palette follows the machine's installed pens (slot
          colours, locked for editing). Override switches to manual mode
          where the user can add colours beyond the available slots, which
-         will require a pause-for-swap during plotting. -->
-    <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+         will require a pause-for-swap during plotting. Hidden in
+         monochrome mode since there's only one ink to choose. -->
+    <div v-if="selectedFile && showsBitmapForm && printMode === 'multicolor'" class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
       <div class="flex items-baseline justify-between">
         <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('palette.title') }}</p>
         <div class="flex overflow-hidden rounded border border-slate-700">
@@ -743,8 +815,10 @@ edit.setGoToPage(goToPage)
       </p>
     </div>
 
-    <!-- ============================== SEGMENTATION ============================== -->
-    <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800">
+    <!-- ============================== SEGMENTATION ==============================
+         Hidden in monochrome mode — there's nothing to segment when the
+         output is a single layer drawn with one ink. -->
+    <div v-if="selectedFile && showsBitmapForm && printMode === 'multicolor'" class="rounded-lg border border-slate-700 bg-slate-800">
       <button
         type="button"
         class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"

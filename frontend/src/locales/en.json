@@ -85,6 +85,13 @@
     "remove": "Delete variant",
     "hint": "Each variant snapshots the layer styles and visibility for this file."
   },
+  "printMode": {
+    "title": "Output (SVG)",
+    "multicolor": "Multi-colour",
+    "multicolorHint": "Split the image into one layer per detected colour.",
+    "monochrome": "Single colour (one pen)",
+    "monochromeHint": "Render the whole image as halftone / stippling in one ink."
+  },
   "palette": {
     "title": "Palette",
     "followPens": "Follow installed pens",
@@ -192,6 +199,10 @@
     "kindText": "Text layer",
     "kindImage": "Image layer (vectorized raster)",
     "emptyHint": "One layer per colour will appear here after you click \"Upload & convert\" above — pick a plotting style and a pen slot for each.",
+    "expand": "Expand layer",
+    "collapse": "Collapse layer",
+    "mergeToOnePen": "All to one pen",
+    "mergeToOnePenHint": "Reassign every layer to pen slot 0 — useful when only one ink is loaded.",
     "totalLength": "Total length",
     "estimatedTime": "Estimated time",
     "optimizeButton": "Optimize toolpaths",
