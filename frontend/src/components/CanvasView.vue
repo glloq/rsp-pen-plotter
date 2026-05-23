@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import { useUiStore, type CanvasTab } from '../stores/ui'
 import SheetPreview from './SheetPreview.vue'
-import SvgPreview from './SvgPreview.vue'
 import Simulator from './Simulator.vue'
 import GcodePreview from './GcodePreview.vue'
 import PenStrip from './PenStrip.vue'
@@ -19,7 +18,6 @@ const canSimulate = computed(() => job.selectedProfile?.gcode_dialect !== 'ebb')
 
 const tabs = computed<Array<{ id: CanvasTab; label: string; available: boolean; hint?: string }>>(() => [
   { id: 'sheet', label: t('canvas.sheet'), available: job.layers.length > 0 },
-  { id: 'svg', label: t('canvas.svg'), available: Boolean(job.svg) },
   { id: 'simulator', label: t('canvas.simulator'), available: Boolean(job.gcode) && canSimulate.value },
   { id: 'gcode', label: t('canvas.gcode'), available: Boolean(job.gcode) },
 ])
@@ -66,9 +64,6 @@ function select(tab: CanvasTab): void {
              their own scroll behaviour. -->
         <div v-show="canvasTab === 'sheet'" class="flex h-full min-h-0">
           <SheetPreview />
-        </div>
-        <div v-if="canvasTab === 'svg'" class="h-full">
-          <SvgPreview />
         </div>
         <div v-show="canvasTab === 'simulator'">
           <Simulator v-if="canSimulate" />

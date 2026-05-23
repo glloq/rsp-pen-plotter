@@ -198,10 +198,17 @@ export const useJobStore = defineStore('job', () => {
       preflight.value = null
     } catch (err) {
       if (controller.signal.aborted) return
-      // 404 means the cache evicted the job (LRU or backend restart).
-      // We tolerate it silently — the operator can re-upload to refresh.
-      const detail = (err as { response?: { status?: number } })?.response?.status
-      if (detail !== 404) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      // 404 = cache evicted (LRU / backend restart). Tolerate silently —
+      // re-uploading refreshes the cache. 405 = the /rerender route isn't
+      // reachable on this deployment (e.g. a static-mount or reverse-proxy
+      // ate the POST); show a clear hint instead of the cryptic axios error.
+      if (status === 404) {
+        // silent
+      } else if (status === 405) {
+        const toasts = useToastStore()
+        toasts.warning(i18n.global.t('layers.rerenderUnavailable'))
+      } else {
         const toasts = useToastStore()
         toasts.warning((err as Error).message || i18n.global.t('layers.rerenderFailed'))
       }
@@ -493,6 +500,7 @@ export const useJobStore = defineStore('job', () => {
     errorScope,
     uploadWarnings,
     uploadMetadata,
+    lastFile,
     changePage,
     profiles,
     selectedProfileName,

@@ -28,6 +28,21 @@
     "layout": "Layout",
     "output": "Output"
   },
+  "files": {
+    "title": "Files",
+    "addFile": "Add a file",
+    "edit": "Edit",
+    "editTitle": "Open conversion settings",
+    "remove": "Remove file",
+    "empty": "No file loaded.",
+    "emptyHint": "Drop a file anywhere on the window or click \"Add a file\" to start.",
+    "noLayers": "no layers"
+  },
+  "editModal": {
+    "title": "File settings",
+    "close": "Close",
+    "done": "Done"
+  },
   "execute": {
     "connection": "Connection",
     "terminator": "Terminator",
@@ -38,11 +53,10 @@
   },
   "canvas": {
     "sheet": "Layout",
-    "svg": "SVG",
     "simulator": "Simulator",
     "gcode": "G-code",
     "empty": "Upload a file to see the preview here.",
-    "emptyHint": "Drop a file anywhere on the window, or use the \"Source\" panel on the left.",
+    "emptyHint": "Drop a file anywhere on the window, or click \"Add a file\" in the Files panel.",
     "emptyFormats": "SVG · PNG · JPG · PDF · DXF · EPS · DOCX · ODT · HTML · MD · TXT",
     "simulatorUnavailable": "Simulator unavailable for this dialect.",
     "gcodeEmpty": "No G-code generated yet."
@@ -122,7 +136,8 @@
     "pauseNever": "never",
     "renderAlgorithm": "Style",
     "defaultAlgo": "default",
-    "rerenderFailed": "Layer re-render failed."
+    "rerenderFailed": "Layer re-render failed.",
+    "rerenderUnavailable": "Re-rendering is unavailable; re-upload the file to apply the new style."
   },
   "confirm": {
     "cancel": "Cancel",
@@ -173,7 +188,13 @@
     "embeddedImageOptions": "Embedded image vectorization",
     "embeddedImageHint": "These options only apply to raster images embedded in the document. Text and vector content are not affected.",
     "algorithm": "Algorithm",
-    "numColors": "Colors",
+    "numColors": "Number of colors",
+    "colorsHeader": "Colors",
+    "colorsModeAuto": "auto · {count} colors",
+    "colorsModeFixed": "{count} fixed color(s)",
+    "specificColors": "Specific colors",
+    "specificColorsHint": "Optional. Pin exact colors to use; the image will snap to them.",
+    "fixedPaletteRefHint": "Edit the pinned colours in the Colours block above.",
     "maxDim": "Max size (px)",
     "dropBackground": "Drop background",
     "bgLuminance": "Background threshold",
