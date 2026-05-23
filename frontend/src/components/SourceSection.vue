@@ -447,8 +447,24 @@ function buildOptions(): Record<string, unknown> | undefined {
   return undefined
 }
 
+// Count layers in the active placement that carry a multi-pass stack
+// — re-uploading the file would discard those configurations along
+// with the layer ids, so we surface a banner + confirmation before the
+// operator loses work they spent time tuning.
+const multiPassLayerCount = computed(() =>
+  Object.values(store.layerAlgorithms).filter(
+    (spec) => Array.isArray((spec as { passes?: unknown[] }).passes) && (spec as { passes: unknown[] }).passes.length > 0,
+  ).length,
+)
+
 async function uploadSelected(): Promise<void> {
   if (!selectedFile.value) return
+  if (multiPassLayerCount.value > 0) {
+    const ok = window.confirm(
+      t('passes.reuploadWarning', { count: multiPassLayerCount.value }),
+    )
+    if (!ok) return
+  }
   await store.upload(selectedFile.value, buildOptions())
   // Drop the stale draft preview now that the placement carries its own
   // committed SVG. Otherwise the live preview would shadow the
@@ -1002,6 +1018,18 @@ edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
         </div>
       </div>
     </div>
+
+    <!-- Re-upload warning: the placement currently has layers with
+         configured multi-pass stacks; running upload again will reset
+         them along with the layer ids. The button itself is also
+         gated by a window.confirm — this banner just makes the cost
+         visible before the click. -->
+    <p
+      v-if="selectedFile && multiPassLayerCount > 0 && store.job"
+      class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1.5 text-[11px] text-amber-200"
+    >
+      ⚠ {{ t('passes.reuploadHint', { count: multiPassLayerCount }) }}
+    </p>
 
     <button
       v-if="selectedFile"

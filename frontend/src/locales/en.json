@@ -72,6 +72,7 @@
     "tabSource": "Source",
     "tabLayers": "Layers",
     "tabOutput": "Layout & output",
+    "tabShortcut": "Press {key} to jump to this tab",
     "resizeHandle": "Drag to resize · double-click to reset"
   },
   "editPreview": {
@@ -274,7 +275,11 @@
     "badgeHint": "Multi-pass — this colour is drawn with several stacked algorithms.",
     "presetOutlineFill": "Outline + fill",
     "presetCrossedHatch": "Crossed hatch",
-    "presetContourStipple": "Contours + stipple"
+    "presetContourStipple": "Contours + stipple",
+    "toggleOptions": "Show / hide options",
+    "or": "or",
+    "reuploadHint": "Re-uploading will reset the {count} multi-pass layer(s) you've configured.",
+    "reuploadWarning": "Re-uploading will reset {count} multi-pass layer(s). Continue?"
   },
   "confirm": {
     "cancel": "Cancel",

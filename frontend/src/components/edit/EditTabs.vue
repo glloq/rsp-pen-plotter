@@ -24,14 +24,17 @@ const { t } = useI18n()
 interface TabSpec {
   id: EditTabId
   labelKey: string
+  shortcut: string
   count?: number
-  hint?: string
 }
 
+// Shortcut keys mirror the global handler in EditModal.vue (the digits
+// 1/2/3). The labelled <kbd> badge below makes them discoverable
+// without forcing the operator to memorise an undocumented binding.
 const tabs = computed<TabSpec[]>(() => [
-  { id: 'source', labelKey: 'editModal.tabSource' },
-  { id: 'layers', labelKey: 'editModal.tabLayers', count: props.layerCount },
-  { id: 'variants', labelKey: 'variants.title', count: props.variantCount },
+  { id: 'source', labelKey: 'editModal.tabSource', shortcut: '1' },
+  { id: 'layers', labelKey: 'editModal.tabLayers', shortcut: '2', count: props.layerCount },
+  { id: 'variants', labelKey: 'variants.title', shortcut: '3', count: props.variantCount },
 ])
 
 function select(id: EditTabId): void {
@@ -50,7 +53,8 @@ function select(id: EditTabId): void {
       type="button"
       role="tab"
       :aria-selected="modelValue === tab.id"
-      class="flex items-center gap-1 rounded border px-2.5 py-1 text-[11px] transition"
+      :title="t('editModal.tabShortcut', { key: tab.shortcut })"
+      class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] transition"
       :class="modelValue === tab.id
         ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
         : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-slate-100'"
@@ -61,6 +65,10 @@ function select(id: EditTabId): void {
         v-if="tab.count !== undefined && tab.count > 0"
         class="rounded-sm bg-slate-800 px-1 py-px font-mono text-[9px] text-slate-400"
       >{{ tab.count }}</span>
+      <kbd
+        class="hidden rounded border border-slate-700 bg-slate-950 px-1 font-mono text-[9px] text-slate-500 sm:inline"
+        aria-hidden="true"
+      >{{ tab.shortcut }}</kbd>
     </button>
   </div>
 </template>

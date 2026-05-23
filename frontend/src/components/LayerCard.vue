@@ -11,6 +11,8 @@ import { formatLayerLabel } from '../lib/labels'
 import { useJobStore, type LayerPass } from '../stores/job'
 import PrintStylePicker from './edit/PrintStylePicker.vue'
 import PassList from './edit/PassList.vue'
+import AlgoParamsForm from './edit/AlgoParamsForm.vue'
+import { defaultsFor, getAlgoSpec } from '../data/algorithmSchemas'
 import type { PrintStyle, PrintStyleKind } from '../data/printStyles'
 
 const { t } = useI18n()
@@ -21,82 +23,6 @@ const algorithms = ref<AlgorithmInfo[]>([])
 onMounted(async () => {
   try { algorithms.value = await getAlgorithms() } catch { /* keep [] */ }
 })
-
-// Per-algorithm option schemas: each entry is the set of knobs the
-// backend's renderer accepts, plus their defaults. The schema drives
-// the inline form rendered below the algorithm selector.
-interface AlgoOption {
-  key: string
-  label: string
-  type: 'number' | 'boolean'
-  min?: number
-  max?: number
-  step?: number
-}
-interface AlgoSpec {
-  defaults: Record<string, unknown>
-  schema: AlgoOption[]
-}
-const ALGO_OPTIONS: Record<string, AlgoSpec> = {
-  direct: { defaults: {}, schema: [] },
-  halftone: {
-    defaults: { cell_size_px: 6 },
-    schema: [
-      { key: 'cell_size_px', label: 'convert.cellSize', type: 'number', min: 1, max: 64, step: 1 },
-    ],
-  },
-  stippling: {
-    defaults: { density: 0.02, dot_radius_px: 0.6, seed: 0 },
-    schema: [
-      { key: 'density', label: 'convert.density', type: 'number', min: 0.001, max: 0.5, step: 0.001 },
-      { key: 'dot_radius_px', label: 'convert.dotRadius', type: 'number', min: 0.1, max: 5, step: 0.1 },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
-    ],
-  },
-  crosshatch: {
-    defaults: { angle_deg: 45, spacing_px: 4, crossed: false },
-    schema: [
-      { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
-    ],
-  },
-  contours: {
-    defaults: { spacing_px: 4, max_rings: 20 },
-    schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'max_rings', label: 'convert.maxRings', type: 'number', min: 1, max: 100, step: 1 },
-    ],
-  },
-  edges: {
-    defaults: { stroke_width: 0.8 },
-    schema: [
-      { key: 'stroke_width', label: 'convert.strokeWidthPx', type: 'number', min: 0.1, max: 5, step: 0.1 },
-    ],
-  },
-  spiral: {
-    defaults: { spacing_px: 4, samples_per_turn: 64 },
-    schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'samples_per_turn', label: 'convert.samplesPerTurn', type: 'number', min: 16, max: 256, step: 1 },
-    ],
-  },
-  scanlines: {
-    defaults: { spacing_px: 4, wave_amp_px: 0, wave_period_px: 12 },
-    schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'wave_amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 20, step: 0.5 },
-      { key: 'wave_period_px', label: 'convert.wavePeriod', type: 'number', min: 2, max: 50, step: 0.5 },
-    ],
-  },
-  tsp: {
-    defaults: { density: 0.02, seed: 0 },
-    schema: [
-      { key: 'density', label: 'convert.density', type: 'number', min: 0.001, max: 0.5, step: 0.001 },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
-    ],
-  },
-}
 
 // Only bitmap-derived layers (label like ``color-XXXXXX``) can be
 // re-rendered with a different algorithm — that's what the /rerender
@@ -131,9 +57,7 @@ function enableMultiPass(): void {
   ])
 }
 
-const currentAlgoSpec = computed<AlgoSpec | null>(
-  () => (currentAlgorithm.value ? (ALGO_OPTIONS[currentAlgorithm.value] ?? null) : null),
-)
+const currentAlgoSpec = computed(() => getAlgoSpec(currentAlgorithm.value))
 
 async function onAlgorithm(event: Event): Promise<void> {
   const value = (event.target as HTMLSelectElement).value
@@ -145,20 +69,13 @@ async function onAlgorithm(event: Event): Promise<void> {
   }
   // Seed the option payload with the schema defaults so the very first
   // `/rerender` call already exercises the algorithm with sensible knobs.
-  const defaults = { ...(ALGO_OPTIONS[value]?.defaults ?? {}) }
-  await store.applyLayerAlgorithm(props.layer.layer_id, value, defaults)
+  await store.applyLayerAlgorithm(props.layer.layer_id, value, defaultsFor(value))
 }
 
 async function onAlgoOption(key: string, value: unknown): Promise<void> {
   if (!currentAlgorithm.value) return
   const merged = { ...currentAlgoOptions.value, [key]: value }
   await store.applyLayerAlgorithm(props.layer.layer_id, currentAlgorithm.value, merged)
-}
-
-function optionValue(opt: AlgoOption): unknown {
-  const stored = currentAlgoOptions.value[opt.key]
-  if (stored !== undefined) return stored
-  return currentAlgoSpec.value?.defaults[opt.key]
 }
 
 const visible = computed({
@@ -479,42 +396,22 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       </div>
     </div>
 
-    <!-- Per-algorithm settings: appear inline whenever a non-default
-         renderer is selected for this layer AND the user opened the
-         advanced drawer. The schema is hardcoded to match the backend's
-         algorithm signatures. -->
+    <!-- Per-algorithm settings: schema-driven inline form, shared with
+         PassList so the same knobs appear wherever an algorithm is
+         editable. Hidden unless the user opens "Advanced" AND the
+         selected algorithm actually has options. -->
     <div
-      v-if="!collapsed && isBitmapLayer && showAdvanced && currentAlgoSpec && currentAlgoSpec.schema.length"
+      v-if="!collapsed && isBitmapLayer && !isMultiPass && showAdvanced && currentAlgoSpec && currentAlgoSpec.schema.length"
       class="rounded border border-slate-700 bg-slate-900/50 p-2"
     >
       <p class="mb-1.5 text-[10px] uppercase tracking-wider text-slate-500">
         {{ t('layers.algoSettings', { algorithm: currentAlgorithm }) }}
       </p>
-      <div class="grid grid-cols-2 gap-2 text-[11px]">
-        <template v-for="opt in currentAlgoSpec.schema" :key="opt.key">
-          <label v-if="opt.type === 'boolean'" class="flex items-center gap-1.5 text-slate-400">
-            <input
-              type="checkbox"
-              :checked="Boolean(optionValue(opt))"
-              class="h-3.5 w-3.5 accent-emerald-500"
-              @change="(e) => onAlgoOption(opt.key, (e.target as HTMLInputElement).checked)"
-            />
-            {{ t(opt.label) }}
-          </label>
-          <label v-else class="block text-slate-400">
-            {{ t(opt.label) }}
-            <input
-              type="number"
-              :min="opt.min"
-              :max="opt.max"
-              :step="opt.step"
-              :value="optionValue(opt)"
-              class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100"
-              @change="(e) => onAlgoOption(opt.key, Number((e.target as HTMLInputElement).value))"
-            />
-          </label>
-        </template>
-      </div>
+      <AlgoParamsForm
+        :algorithm="currentAlgorithm"
+        :values="currentAlgoOptions"
+        @update="onAlgoOption"
+      />
     </div>
   </div>
 </template>
