@@ -9,6 +9,8 @@ import {
 } from '../api/client'
 import { formatLayerLabel } from '../lib/labels'
 import { useJobStore } from '../stores/job'
+import PrintStylePicker from './edit/PrintStylePicker.vue'
+import type { PrintStyle, PrintStyleKind } from '../data/printStyles'
 
 const { t } = useI18n()
 const props = defineProps<{ layer: LayerInfo }>()
@@ -201,6 +203,25 @@ const pauseChoices: Array<{ value: PausePolicy; icon: string; key: string }> = [
   { value: 'never', icon: '▶', key: 'layers.pauseNever' },
 ]
 
+// Print-style picker drives the algorithm + options in one click. The
+// "kind" classifies the layer for the picker's thumbnail filter; we
+// don't have a schematic detector yet so colour-derived layers are
+// treated as image-content while text layers are explicit.
+const styleKind = computed<PrintStyleKind>(() =>
+  label.value.kind === 'text' ? 'text' : 'image',
+)
+
+function onPickStyle(style: PrintStyle): void {
+  store.applyLayerAlgorithm(props.layer.layer_id, style.algorithm, { ...style.algorithm_options })
+}
+
+function onResetStyle(): void {
+  store.clearLayerAlgorithm(props.layer.layer_id)
+}
+
+// Toggle to expose the schema-driven advanced form behind the picker.
+const showAdvanced = ref(false)
+
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = Math.round(seconds % 60)
@@ -318,9 +339,31 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       </label>
     </div>
 
+    <!-- Print-style picker: tile grid for bitmap-derived layers. The
+         schema-driven advanced form below is gated behind "Advanced". -->
+    <div v-if="isBitmapLayer" class="space-y-1.5">
+      <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
+        <span>{{ t('layers.printStyle') }}</span>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
+          @click="showAdvanced = !showAdvanced"
+        >
+          {{ showAdvanced ? t('layers.advancedHide') : t('layers.advancedShow') }}
+        </button>
+      </div>
+      <PrintStylePicker
+        :kind="styleKind"
+        :current-algorithm="currentAlgorithm"
+        @select="onPickStyle"
+        @reset="onResetStyle"
+      />
+    </div>
+
     <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-500">
-      <!-- Render algorithm: only meaningful for bitmap-derived layers. -->
-      <label v-if="isBitmapLayer" class="flex items-center gap-1.5">
+      <!-- Power-user algorithm dropdown stays available for non-bitmap
+           layers (no print-style picker) and behind "Advanced" otherwise. -->
+      <label v-if="isBitmapLayer && showAdvanced" class="flex items-center gap-1.5">
         <span>{{ t('layers.renderAlgorithm') }}</span>
         <select
           :value="currentAlgorithm"
@@ -356,10 +399,11 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
     </div>
 
     <!-- Per-algorithm settings: appear inline whenever a non-default
-         renderer is selected for this layer. The schema is hardcoded to
-         match the backend's algorithm signatures. -->
+         renderer is selected for this layer AND the user opened the
+         advanced drawer. The schema is hardcoded to match the backend's
+         algorithm signatures. -->
     <div
-      v-if="isBitmapLayer && currentAlgoSpec && currentAlgoSpec.schema.length"
+      v-if="isBitmapLayer && showAdvanced && currentAlgoSpec && currentAlgoSpec.schema.length"
       class="rounded border border-slate-700 bg-slate-900/50 p-2"
     >
       <p class="mb-1.5 text-[10px] uppercase tracking-wider text-slate-500">

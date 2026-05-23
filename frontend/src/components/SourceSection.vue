@@ -396,6 +396,46 @@ function openPicker(): void {
   fileInput.value?.click()
 }
 
+// ============================== PEN-DRIVEN PALETTE ==============================
+// When the active machine profile has installed pens with hex colours,
+// the editor follows them by default: palette = installed pen colours,
+// segmentation_method = fixed_palette. Toggling "manual" frees the
+// palette and the method picker. The manual-swap badge counts colours
+// beyond the available pen slots (those will trigger pause-for-swap).
+const paletteFollowsPens = ref(true)
+
+const installedPenColors = computed<string[]>(() => {
+  const pens = store.selectedProfile?.pens ?? []
+  return pens.filter((p) => p.installed && p.color).map((p) => p.color)
+})
+
+const penSlotCount = computed(() => store.selectedProfile?.pen_slot_count ?? 0)
+
+watch(
+  [paletteFollowsPens, installedPenColors],
+  ([follows, colors]) => {
+    if (follows && colors.length) {
+      bitmap.value.palette = [...colors]
+      bitmap.value.segmentation_method = 'fixed_palette'
+    }
+  },
+  { immediate: true },
+)
+
+const manualSwapCount = computed(() =>
+  Math.max(0, bitmap.value.palette.length - penSlotCount.value),
+)
+
+function setPaletteSource(follows: boolean): void {
+  paletteFollowsPens.value = follows
+  if (!follows && !bitmap.value.palette.length) {
+    // First switch to manual with an empty palette: seed it with the
+    // installed pens so the user has something to edit instead of a
+    // blank list.
+    bitmap.value.palette = [...installedPenColors.value]
+  }
+}
+
 // Mirror the preview-related local state into the shared edit-state
 // composable so EditPreviewPane (rendered as a sibling on the left side
 // of the modal) sees the same values. The composable holds its own refs
@@ -476,68 +516,123 @@ edit.setGoToPage(goToPage)
       </div>
     </div>
 
-    <!-- ============================== COLOURS (top-level) ============================== -->
-    <!-- Always-visible quick-pick for the number of colours + optional
-         pinned colours. Power-user knobs live in the "Segmentation"
-         accordion below. -->
+    <!-- ============================== PALETTE (pen-driven) ============================== -->
+    <!-- Default: palette follows the machine's installed pens (slot
+         colours, locked for editing). Override switches to manual mode
+         where the user can add colours beyond the available slots, which
+         will require a pause-for-swap during plotting. -->
     <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
       <div class="flex items-baseline justify-between">
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('convert.colorsHeader') }}</p>
-        <p class="text-[10px] text-slate-500">
-          {{ bitmap.segmentation_method === 'fixed_palette'
-            ? t('convert.colorsModeFixed', { count: bitmap.palette.length })
-            : t('convert.colorsModeAuto', { count: bitmap.num_colors }) }}
-        </p>
-      </div>
-
-      <label class="block text-slate-400">
-        {{ t('convert.numColors') }}
-        <input
-          v-model.number="bitmap.num_colors"
-          type="number"
-          min="1"
-          max="16"
-          :disabled="bitmap.segmentation_method === 'fixed_palette' && bitmap.palette.length > 0"
-          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 disabled:opacity-50"
-        />
-      </label>
-
-      <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <span class="text-slate-400">{{ t('convert.specificColors') }}</span>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('palette.title') }}</p>
+        <div class="flex overflow-hidden rounded border border-slate-700">
           <button
             type="button"
-            class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
-            @click="addPaletteColour"
+            class="px-2 py-0.5 text-[10px] transition"
+            :class="paletteFollowsPens
+              ? 'bg-slate-700 text-slate-100'
+              : 'text-slate-400 hover:bg-slate-800'"
+            :disabled="!installedPenColors.length"
+            @click="setPaletteSource(true)"
           >
-            + {{ t('convert.addColour') }}
+            {{ t('palette.followPens') }}
           </button>
-        </div>
-        <p v-if="!bitmap.palette.length" class="text-[10px] text-slate-500">
-          {{ t('convert.specificColorsHint') }}
-        </p>
-        <div v-for="(hex, i) in bitmap.palette" :key="i" class="flex items-center gap-1">
-          <input
-            type="color"
-            :value="hex"
-            class="h-7 w-12 cursor-pointer rounded border border-slate-700 bg-slate-900"
-            @input="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
-          />
-          <input
-            type="text"
-            :value="hex"
-            class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-            @change="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
-          />
           <button
             type="button"
-            class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
-            @click="removePaletteColour(i)"
+            class="px-2 py-0.5 text-[10px] transition"
+            :class="!paletteFollowsPens
+              ? 'bg-slate-700 text-slate-100'
+              : 'text-slate-400 hover:bg-slate-800'"
+            @click="setPaletteSource(false)"
           >
-            ✕
+            {{ t('palette.manual') }}
           </button>
         </div>
       </div>
+
+      <!-- Pen-following mode: chips locked to the installed pens, with
+           slot numbers so the user knows which pen will plot what. -->
+      <div v-if="paletteFollowsPens" class="space-y-1.5">
+        <p v-if="!installedPenColors.length" class="text-[10px] text-amber-300">
+          {{ t('palette.noPensInstalled') }}
+        </p>
+        <div v-else class="flex flex-wrap gap-1.5">
+          <span
+            v-for="(color, i) in installedPenColors"
+            :key="i"
+            class="inline-flex items-center gap-1 rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5"
+            :title="t('palette.slotTooltip', { index: i, color })"
+          >
+            <span
+              class="inline-block h-3 w-3 rounded border border-slate-600"
+              :style="{ backgroundColor: color }"
+            />
+            <span class="font-mono text-[10px] text-slate-400">#{{ i }}</span>
+            <span class="font-mono text-[10px] text-slate-200">{{ color }}</span>
+          </span>
+        </div>
+        <p class="text-[10px] text-slate-500">{{ t('palette.followHint') }}</p>
+      </div>
+
+      <!-- Manual mode: number-of-colours + freely editable palette + add. -->
+      <div v-else class="space-y-2">
+        <label class="block text-slate-400">
+          {{ t('convert.numColors') }}
+          <input
+            v-model.number="bitmap.num_colors"
+            type="number"
+            min="1"
+            max="16"
+            :disabled="bitmap.segmentation_method === 'fixed_palette' && bitmap.palette.length > 0"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 disabled:opacity-50"
+          />
+        </label>
+
+        <div class="space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">{{ t('convert.specificColors') }}</span>
+            <button
+              type="button"
+              class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
+              @click="addPaletteColour"
+            >
+              + {{ t('convert.addColour') }}
+            </button>
+          </div>
+          <p v-if="!bitmap.palette.length" class="text-[10px] text-slate-500">
+            {{ t('convert.specificColorsHint') }}
+          </p>
+          <div v-for="(hex, i) in bitmap.palette" :key="i" class="flex items-center gap-1">
+            <input
+              type="color"
+              :value="hex"
+              class="h-7 w-12 cursor-pointer rounded border border-slate-700 bg-slate-900"
+              @input="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
+            />
+            <input
+              type="text"
+              :value="hex"
+              class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+              @change="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
+            />
+            <button
+              type="button"
+              class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
+              @click="removePaletteColour(i)"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual-swap warning: the palette exceeds the available pen
+           slots, so the plotter will pause and prompt the operator. -->
+      <p
+        v-if="manualSwapCount > 0"
+        class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-[11px] text-amber-200"
+      >
+        ⚠ {{ t('palette.manualSwap', { count: manualSwapCount, total: bitmap.palette.length, slots: penSlotCount }) }}
+      </p>
     </div>
 
     <!-- ============================== SEGMENTATION ============================== -->
