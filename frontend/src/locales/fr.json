@@ -139,7 +139,8 @@
     "defaultAlgo": "défaut",
     "rerenderFailed": "Échec du re-rendu du calque.",
     "rerenderUnavailable": "Le re-rendu n'est pas disponible ; ré-importez le fichier pour appliquer le nouveau style.",
-    "generateMovedHint": "Le bouton « Générer le G-code » est maintenant en haut à droite du Plan — fermez ce dialogue puis cliquez sur le bouton vert en haut de l'aperçu."
+    "generateMovedHint": "Le bouton « Générer le G-code » est maintenant en haut à droite du Plan — fermez ce dialogue puis cliquez sur le bouton vert en haut de l'aperçu.",
+    "algoSettings": "Réglages {algorithm}"
   },
   "confirm": {
     "cancel": "Annuler",

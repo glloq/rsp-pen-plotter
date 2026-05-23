@@ -139,7 +139,8 @@
     "defaultAlgo": "default",
     "rerenderFailed": "Layer re-render failed.",
     "rerenderUnavailable": "Re-rendering is unavailable; re-upload the file to apply the new style.",
-    "generateMovedHint": "Generate G-code lives in the Plan header — close this dialog and click the green button on the top-right of the preview."
+    "generateMovedHint": "Generate G-code lives in the Plan header — close this dialog and click the green button on the top-right of the preview.",
+    "algoSettings": "{algorithm} settings"
   },
   "confirm": {
     "cancel": "Cancel",
