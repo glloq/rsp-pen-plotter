@@ -8,7 +8,9 @@ import {
   getFonts,
   previewBitmap,
   type AlgorithmInfo,
+  type AlgorithmKind,
   type PreviewResponse,
+  type SegmentationMethod,
 } from '../api/client'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
@@ -22,20 +24,53 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 const algorithms = ref<AlgorithmInfo[]>([])
 const fonts = ref<string[]>([])
-const showOptions = ref(false)
+const showSegmentation = ref(false)
+const showRender = ref(false)
 const dragOver = ref(false)
 
+// Editable state for bitmap conversion. Grouped by concern so the
+// template can show only the section the chosen segmentation method or
+// algorithm needs.
 const bitmap = ref({
-  algorithm: 'direct',
-  num_colors: 4,
+  // -- Segmentation ("decoupage") --
+  segmentation_method: 'kmeans' as SegmentationMethod,
+  num_colors: 4,              // kmeans
+  num_bands: 4,               // luminance_bands
+  thresholds: [0.33, 0.66] as number[], // thresholds
+  palette: ['#000000', '#ff0000', '#0000ff'] as string[], // fixed_palette
+  // -- Post-processing --
+  min_region_pixels: 0,
+  merge_delta_e: 0,
+  // -- Common input options --
   max_dimension_px: 800,
   drop_background: true,
   background_luminance: 0.92,
+  // -- Render algorithm --
+  algorithm: 'direct',
+  // halftone
   cell_size_px: 6,
+  // stippling + tsp
   density: 0.02,
   dot_radius_px: 0.6,
   seed: 0,
+  // crosshatch
+  crosshatch_angle_deg: 45,
+  crosshatch_spacing_px: 4,
+  crosshatch_crossed: false,
+  // contours
+  contours_spacing_px: 4,
+  contours_max_rings: 20,
+  // edges
+  edges_stroke_width: 0.8,
+  // spiral
+  spiral_spacing_px: 4,
+  spiral_samples_per_turn: 64,
+  // scanlines
+  scanlines_spacing_px: 4,
+  scanlines_wave_amp_px: 0,
+  scanlines_wave_period_px: 12,
 })
+
 const typo = ref({
   font: 'futural',
   font_size_mm: 4.0,
@@ -62,8 +97,8 @@ const kind = computed<'bitmap' | 'typography' | 'document' | 'none'>(() => {
 
 const showsBitmapForm = computed(() => kind.value === 'bitmap' || kind.value === 'document')
 
-// Local thumbnail for raster images: gives an instant preview before paying
-// the round-trip + vectorization cost. ObjectURL is revoked on file change.
+// Local thumbnail for raster images: instant preview before paying the
+// round-trip + vectorisation cost. ObjectURL is revoked on file change.
 const previewUrl = ref<string | null>(null)
 function refreshPreview(): void {
   if (previewUrl.value) {
@@ -94,15 +129,34 @@ watch(selectedFile, async (file) => {
   }
 })
 
-const algoDescriptions: Record<string, { label: string; hint: string }> = {
-  direct: { label: 'convert.algoDirect', hint: 'convert.algoDirectHint' },
-  halftone: { label: 'convert.algoHalftone', hint: 'convert.algoHalftoneHint' },
-  stippling: { label: 'convert.algoStippling', hint: 'convert.algoStipplingHint' },
+interface AlgoMeta {
+  label: string
+  hint: string
+  icon: string
+}
+const algoMeta: Record<string, AlgoMeta> = {
+  direct:     { label: 'convert.algoDirect',     hint: 'convert.algoDirectHint',     icon: '▣' },
+  halftone:   { label: 'convert.algoHalftone',   hint: 'convert.algoHalftoneHint',   icon: '◌' },
+  stippling:  { label: 'convert.algoStippling',  hint: 'convert.algoStipplingHint',  icon: '⋮⋮' },
+  crosshatch: { label: 'convert.algoCrosshatch', hint: 'convert.algoCrosshatchHint', icon: '⫽' },
+  contours:   { label: 'convert.algoContours',   hint: 'convert.algoContoursHint',   icon: '◎' },
+  edges:      { label: 'convert.algoEdges',      hint: 'convert.algoEdgesHint',      icon: '◯' },
+  spiral:     { label: 'convert.algoSpiral',     hint: 'convert.algoSpiralHint',     icon: '◉' },
+  scanlines:  { label: 'convert.algoScanlines',  hint: 'convert.algoScanlinesHint',  icon: '≡' },
+  tsp:        { label: 'convert.algoTsp',        hint: 'convert.algoTspHint',        icon: '⇝' },
 }
 
-// Fast preview: hit POST /preview when the user is tweaking params on an
-// image, debounced + cancellable. The result is a tiny rasterised-to-vector
-// SVG shown next to the original thumbnail.
+const algorithmsByKind = computed<Record<AlgorithmKind, AlgorithmInfo[]>>(() => {
+  const groups: Record<AlgorithmKind, AlgorithmInfo[]> = {
+    fill: [],
+    lines: [],
+    mono_stroke: [],
+  }
+  for (const algo of algorithms.value) groups[algo.kind].push(algo)
+  return groups
+})
+
+// Live preview: debounced /preview round-trip on parameter changes.
 const previewResult = ref<PreviewResponse | null>(null)
 const previewLoading = ref(false)
 const previewError = ref<string | null>(null)
@@ -136,13 +190,9 @@ async function runPreview(): Promise<void> {
       buildOptions(),
       controller.signal,
     )
-    // Late response from a superseded request → discard.
     if (controller.signal.aborted) return
     previewResult.value = result
   } catch (err) {
-    // Aborted requests come through as ``CanceledError`` from axios; the
-    // signal check above also covers it, but axios may resolve the abort
-    // path through the catch.
     if (controller.signal.aborted) return
     previewError.value = (err as Error).message || t('upload.failed')
   } finally {
@@ -153,18 +203,34 @@ async function runPreview(): Promise<void> {
   }
 }
 
-// Recompute preview whenever the file or any algorithm-affecting option moves.
 watch(
   [
     selectedFile,
     () => bitmap.value.algorithm,
+    () => bitmap.value.segmentation_method,
     () => bitmap.value.num_colors,
+    () => bitmap.value.num_bands,
+    () => bitmap.value.thresholds,
+    () => bitmap.value.palette,
     () => bitmap.value.drop_background,
     () => bitmap.value.background_luminance,
+    () => bitmap.value.min_region_pixels,
+    () => bitmap.value.merge_delta_e,
     () => bitmap.value.cell_size_px,
     () => bitmap.value.density,
     () => bitmap.value.dot_radius_px,
     () => bitmap.value.seed,
+    () => bitmap.value.crosshatch_angle_deg,
+    () => bitmap.value.crosshatch_spacing_px,
+    () => bitmap.value.crosshatch_crossed,
+    () => bitmap.value.contours_spacing_px,
+    () => bitmap.value.contours_max_rings,
+    () => bitmap.value.edges_stroke_width,
+    () => bitmap.value.spiral_spacing_px,
+    () => bitmap.value.spiral_samples_per_turn,
+    () => bitmap.value.scanlines_spacing_px,
+    () => bitmap.value.scanlines_wave_amp_px,
+    () => bitmap.value.scanlines_wave_period_px,
   ],
   () => {
     if (selectedFile.value && kind.value === 'bitmap') {
@@ -174,6 +240,7 @@ watch(
       previewError.value = null
     }
   },
+  { deep: true },
 )
 
 onBeforeUnmount(() => {
@@ -185,7 +252,7 @@ onMounted(async () => {
   try {
     ;[algorithms.value, fonts.value] = await Promise.all([getAlgorithms(), getFonts()])
   } catch {
-    // Options forms still work with their defaults if metadata fails to load.
+    // Defaults still work if metadata fetch fails.
   }
 })
 
@@ -215,6 +282,46 @@ function onDrop(event: DragEvent): void {
   if (file) selectedFile.value = file
 }
 
+function buildSegmentationOptions(): Record<string, unknown> {
+  const b = bitmap.value
+  if (b.segmentation_method === 'luminance_bands') return { num_bands: b.num_bands }
+  if (b.segmentation_method === 'thresholds') return { levels: b.thresholds }
+  if (b.segmentation_method === 'fixed_palette') return { palette: b.palette }
+  return {}
+}
+
+function buildAlgorithmOptions(): Record<string, unknown> {
+  const b = bitmap.value
+  switch (b.algorithm) {
+    case 'halftone':
+      return { cell_size_px: b.cell_size_px }
+    case 'stippling':
+      return { density: b.density, dot_radius_px: b.dot_radius_px, seed: b.seed }
+    case 'crosshatch':
+      return {
+        angle_deg: b.crosshatch_angle_deg,
+        spacing_px: b.crosshatch_spacing_px,
+        crossed: b.crosshatch_crossed,
+      }
+    case 'contours':
+      return { spacing_px: b.contours_spacing_px, max_rings: b.contours_max_rings }
+    case 'edges':
+      return { stroke_width: b.edges_stroke_width }
+    case 'spiral':
+      return { spacing_px: b.spiral_spacing_px, samples_per_turn: b.spiral_samples_per_turn }
+    case 'scanlines':
+      return {
+        spacing_px: b.scanlines_spacing_px,
+        wave_amp_px: b.scanlines_wave_amp_px,
+        wave_period_px: b.scanlines_wave_period_px,
+      }
+    case 'tsp':
+      return { density: b.density, seed: b.seed }
+    default:
+      return {}
+  }
+}
+
 function buildOptions(): Record<string, unknown> | undefined {
   if (showsBitmapForm.value) {
     const b = bitmap.value
@@ -224,12 +331,11 @@ function buildOptions(): Record<string, unknown> | undefined {
       max_dimension_px: b.max_dimension_px,
       drop_background: b.drop_background,
       background_luminance: b.background_luminance,
-      algorithm_options:
-        b.algorithm === 'halftone'
-          ? { cell_size_px: b.cell_size_px }
-          : b.algorithm === 'stippling'
-            ? { density: b.density, dot_radius_px: b.dot_radius_px, seed: b.seed }
-            : {},
+      segmentation_method: b.segmentation_method,
+      segmentation_options: buildSegmentationOptions(),
+      min_region_pixels: b.min_region_pixels,
+      merge_delta_e: b.merge_delta_e,
+      algorithm_options: buildAlgorithmOptions(),
     }
   }
   if (kind.value === 'typography') {
@@ -247,6 +353,32 @@ async function uploadSelected(): Promise<void> {
 function clearAll(): void {
   selectedFile.value = null
   store.clearJob()
+}
+
+// Threshold / palette editing helpers — the bitmap state's lists need
+// add/remove + per-cell editing.
+function addThreshold(): void {
+  bitmap.value.thresholds = [...bitmap.value.thresholds, 0.5].sort((a, b) => a - b)
+}
+function removeThreshold(i: number): void {
+  bitmap.value.thresholds = bitmap.value.thresholds.filter((_, idx) => idx !== i)
+}
+function updateThreshold(i: number, value: number): void {
+  const clamped = Math.max(0, Math.min(1, value))
+  const next = [...bitmap.value.thresholds]
+  next[i] = clamped
+  bitmap.value.thresholds = next.sort((a, b) => a - b)
+}
+function addPaletteColour(): void {
+  bitmap.value.palette = [...bitmap.value.palette, '#888888']
+}
+function removePaletteColour(i: number): void {
+  bitmap.value.palette = bitmap.value.palette.filter((_, idx) => idx !== i)
+}
+function updatePaletteColour(i: number, value: string): void {
+  const next = [...bitmap.value.palette]
+  next[i] = value
+  bitmap.value.palette = next
 }
 
 const pageCount = computed(() => Number(store.uploadMetadata.page_count ?? 0))
@@ -368,49 +500,134 @@ function openPicker(): void {
       </div>
     </div>
 
-    <div v-if="selectedFile && kind !== 'none'" class="rounded-lg border border-slate-700 bg-slate-800">
+    <!-- ============================== SEGMENTATION ============================== -->
+    <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800">
       <button
         type="button"
         class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
-        :aria-expanded="showOptions"
-        @click="showOptions = !showOptions"
+        :aria-expanded="showSegmentation"
+        @click="showSegmentation = !showSegmentation"
       >
-        {{ kind === 'document' ? t('convert.embeddedImageOptions') : t('convert.options') }}
-        <span class="text-slate-500">{{ showOptions ? '−' : '+' }}</span>
+        {{ t('convert.segmentation') }}
+        <span class="text-slate-500">{{ showSegmentation ? '−' : '+' }}</span>
       </button>
-
-      <div v-if="showOptions" class="space-y-2 border-t border-slate-700 p-3 text-xs">
+      <div v-if="showSegmentation" class="space-y-2 border-t border-slate-700 p-3 text-xs">
         <p v-if="kind === 'document'" class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400">
           {{ t('convert.embeddedImageHint') }}
         </p>
 
-        <template v-if="showsBitmapForm">
-          <div class="space-y-1">
-            <p class="text-slate-400">{{ t('convert.algorithm') }}</p>
-            <div class="grid grid-cols-3 gap-1">
-              <button
-                v-for="algo in algorithms"
-                :key="algo.name"
-                type="button"
-                class="rounded border px-2 py-1.5 text-left text-[11px] transition"
-                :class="bitmap.algorithm === algo.name
-                  ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-                  : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
-                :title="t(algoDescriptions[algo.name]?.hint ?? '') || algo.description"
-                @click="bitmap.algorithm = algo.name"
-              >
-                <span class="block font-medium">{{ t(algoDescriptions[algo.name]?.label ?? '') || algo.name }}</span>
-                <span class="block text-[9px] text-slate-500">{{ t(algoDescriptions[algo.name]?.hint ?? '') || algo.description }}</span>
-              </button>
-            </div>
+        <!-- Method picker -->
+        <div class="space-y-1">
+          <p class="text-slate-400">{{ t('convert.segmentationMethod') }}</p>
+          <div class="grid grid-cols-2 gap-1">
+            <button
+              v-for="method in (['kmeans', 'luminance_bands', 'thresholds', 'fixed_palette'] as SegmentationMethod[])"
+              :key="method"
+              type="button"
+              class="rounded border px-2 py-1.5 text-left text-[11px] transition"
+              :class="bitmap.segmentation_method === method
+                ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+              :title="t(`convert.seg_${method}_hint`)"
+              @click="bitmap.segmentation_method = method"
+            >
+              <span class="block font-medium">{{ t(`convert.seg_${method}`) }}</span>
+              <span class="block text-[9px] text-slate-500">{{ t(`convert.seg_${method}_hint`) }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Method-specific params -->
+        <label v-if="bitmap.segmentation_method === 'kmeans'" class="block text-slate-400">
+          {{ t('convert.numColors') }}
+          <input v-model.number="bitmap.num_colors" type="number" min="1" max="32" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+        </label>
+
+        <label v-else-if="bitmap.segmentation_method === 'luminance_bands'" class="block text-slate-400">
+          {{ t('convert.numBands') }}
+          <input v-model.number="bitmap.num_bands" type="number" min="2" max="16" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+        </label>
+
+        <div v-else-if="bitmap.segmentation_method === 'thresholds'" class="space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">{{ t('convert.thresholds') }}</span>
+            <button
+              type="button"
+              class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
+              @click="addThreshold"
+            >
+              + {{ t('convert.addThreshold') }}
+            </button>
+          </div>
+          <div v-for="(value, i) in bitmap.thresholds" :key="i" class="flex items-center gap-1">
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="0.01"
+              :value="value"
+              class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              @change="(e) => updateThreshold(i, Number((e.target as HTMLInputElement).value))"
+            />
+            <button
+              type="button"
+              class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
+              @click="removeThreshold(i)"
+            >
+              ✕
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-500">{{ t('convert.thresholdsHint') }}</p>
+        </div>
+
+        <div v-else-if="bitmap.segmentation_method === 'fixed_palette'" class="space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-400">{{ t('convert.palette') }}</span>
+            <button
+              type="button"
+              class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
+              @click="addPaletteColour"
+            >
+              + {{ t('convert.addColour') }}
+            </button>
+          </div>
+          <div v-for="(hex, i) in bitmap.palette" :key="i" class="flex items-center gap-1">
+            <input
+              type="color"
+              :value="hex"
+              class="h-7 w-12 cursor-pointer rounded border border-slate-700 bg-slate-900"
+              @input="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
+            />
+            <input
+              type="text"
+              :value="hex"
+              class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+              @change="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
+            />
+            <button
+              type="button"
+              class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
+              @click="removePaletteColour(i)"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <!-- Post-processing -->
+        <div class="border-t border-slate-700 pt-2 space-y-2">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('convert.postProcess') }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="block text-slate-400">
+              {{ t('convert.minRegion') }}
+              <input v-model.number="bitmap.min_region_pixels" type="number" min="0" max="1000" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            </label>
+            <label class="block text-slate-400">
+              {{ t('convert.mergeDeltaE') }}
+              <input v-model.number="bitmap.merge_delta_e" type="number" min="0" max="50" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            </label>
           </div>
           <div class="grid grid-cols-2 gap-2">
-            <label class="block text-slate-400">{{ t('convert.numColors') }}
-              <input v-model.number="bitmap.num_colors" type="number" min="1" max="32" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.maxDim') }}
-              <input v-model.number="bitmap.max_dimension_px" type="number" min="16" max="4096" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
             <label class="flex items-center gap-2 self-end text-slate-400">
               <input v-model="bitmap.drop_background" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
               {{ t('convert.dropBackground') }}
@@ -419,56 +636,159 @@ function openPicker(): void {
               <input v-model.number="bitmap.background_luminance" type="number" min="0" max="1" step="0.01" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
             </label>
           </div>
+          <label class="block text-slate-400">{{ t('convert.maxDim') }}
+            <input v-model.number="bitmap.max_dimension_px" type="number" min="16" max="4096" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- =============================== RENDER ALGO ============================== -->
+    <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
+        :aria-expanded="showRender"
+        @click="showRender = !showRender"
+      >
+        {{ t('convert.render') }}
+        <span class="text-slate-500">{{ showRender ? '−' : '+' }}</span>
+      </button>
+      <div v-if="showRender" class="space-y-2 border-t border-slate-700 p-3 text-xs">
+        <!-- Algorithm cards, grouped by family -->
+        <template v-for="(group, kindKey) in algorithmsByKind" :key="kindKey">
+          <div v-if="group.length" class="space-y-1">
+            <p class="text-[10px] uppercase tracking-wider text-slate-500">
+              {{ t(`convert.kind_${kindKey}`) }}
+            </p>
+            <div class="grid grid-cols-3 gap-1">
+              <button
+                v-for="algo in group"
+                :key="algo.name"
+                type="button"
+                class="rounded border px-2 py-1.5 text-left text-[11px] transition"
+                :class="bitmap.algorithm === algo.name
+                  ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+                  : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+                :title="t(algoMeta[algo.name]?.hint ?? '') || algo.description"
+                @click="bitmap.algorithm = algo.name"
+              >
+                <span class="flex items-center gap-1 font-medium">
+                  <span aria-hidden="true">{{ algoMeta[algo.name]?.icon ?? '·' }}</span>
+                  <span>{{ t(algoMeta[algo.name]?.label ?? '') || algo.name }}</span>
+                </span>
+                <span class="block text-[9px] text-slate-500">{{ t(algoMeta[algo.name]?.hint ?? '') || algo.description }}</span>
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- Per-algorithm parameters -->
+        <div class="border-t border-slate-700 pt-2 space-y-2">
           <label v-if="bitmap.algorithm === 'halftone'" class="block text-slate-400">{{ t('convert.cellSize') }}
             <input v-model.number="bitmap.cell_size_px" type="number" min="2" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
           </label>
-          <div v-if="bitmap.algorithm === 'stippling'" class="grid grid-cols-3 gap-2">
+          <div v-if="bitmap.algorithm === 'stippling' || bitmap.algorithm === 'tsp'" class="grid grid-cols-3 gap-2">
             <label class="block text-slate-400">{{ t('convert.density') }}
-              <input v-model.number="bitmap.density" type="number" step="0.001" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+              <input v-model.number="bitmap.density" type="number" min="0" max="1" step="0.005" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
             </label>
-            <label class="block text-slate-400">{{ t('convert.dotRadius') }}
+            <label v-if="bitmap.algorithm === 'stippling'" class="block text-slate-400">{{ t('convert.dotRadius') }}
               <input v-model.number="bitmap.dot_radius_px" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
             </label>
             <label class="block text-slate-400">{{ t('convert.seed') }}
               <input v-model.number="bitmap.seed" type="number" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
             </label>
           </div>
-        </template>
-
-        <template v-else-if="kind === 'typography'">
-          <div class="grid grid-cols-2 gap-2">
-            <label class="block text-slate-400">{{ t('convert.font') }}
-              <select v-model="typo.font" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-                <option v-for="font in fonts" :key="font" :value="font">{{ font }}</option>
-              </select>
+          <div v-if="bitmap.algorithm === 'crosshatch'" class="grid grid-cols-3 gap-2">
+            <label class="block text-slate-400">{{ t('convert.angleDeg') }}
+              <input v-model.number="bitmap.crosshatch_angle_deg" type="number" step="1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
             </label>
-            <label class="block text-slate-400">{{ t('convert.alignment') }}
-              <select v-model="typo.alignment" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-                <option value="left">left</option>
-                <option value="center">center</option>
-                <option value="right">right</option>
-              </select>
+            <label class="block text-slate-400">{{ t('convert.spacing') }}
+              <input v-model.number="bitmap.crosshatch_spacing_px" type="number" min="1" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
             </label>
-            <label class="block text-slate-400">{{ t('convert.fontSize') }}
-              <input v-model.number="typo.font_size_mm" type="number" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.lineSpacing') }}
-              <input v-model.number="typo.line_spacing" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.strokeWidth') }}
-              <input v-model.number="typo.stroke_width_mm" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.margin') }}
-              <input v-model.number="typo.margin_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.pageWidth') }}
-              <input v-model.number="typo.page_width_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.pageHeight') }}
-              <input v-model.number="typo.page_height_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            <label class="flex items-end gap-1 text-slate-400">
+              <input v-model="bitmap.crosshatch_crossed" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
+              {{ t('convert.crossed') }}
             </label>
           </div>
-        </template>
+          <div v-if="bitmap.algorithm === 'contours'" class="grid grid-cols-2 gap-2">
+            <label class="block text-slate-400">{{ t('convert.spacing') }}
+              <input v-model.number="bitmap.contours_spacing_px" type="number" min="1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            </label>
+            <label class="block text-slate-400">{{ t('convert.maxRings') }}
+              <input v-model.number="bitmap.contours_max_rings" type="number" min="1" max="100" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            </label>
+          </div>
+          <label v-if="bitmap.algorithm === 'edges'" class="block text-slate-400">{{ t('convert.strokeWidthPx') }}
+            <input v-model.number="bitmap.edges_stroke_width" type="number" min="0.1" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </label>
+          <div v-if="bitmap.algorithm === 'spiral'" class="grid grid-cols-2 gap-2">
+            <label class="block text-slate-400">{{ t('convert.spacing') }}
+              <input v-model.number="bitmap.spiral_spacing_px" type="number" min="1" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            </label>
+            <label class="block text-slate-400">{{ t('convert.samplesPerTurn') }}
+              <input v-model.number="bitmap.spiral_samples_per_turn" type="number" min="16" step="8" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            </label>
+          </div>
+          <div v-if="bitmap.algorithm === 'scanlines'" class="grid grid-cols-3 gap-2">
+            <label class="block text-slate-400">{{ t('convert.spacing') }}
+              <input v-model.number="bitmap.scanlines_spacing_px" type="number" min="1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            </label>
+            <label class="block text-slate-400">{{ t('convert.waveAmp') }}
+              <input v-model.number="bitmap.scanlines_wave_amp_px" type="number" min="0" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            </label>
+            <label class="block text-slate-400">{{ t('convert.wavePeriod') }}
+              <input v-model.number="bitmap.scanlines_wave_period_px" type="number" min="1" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================ TYPOGRAPHY (unchanged) ========================== -->
+    <div v-if="selectedFile && kind === 'typography'" class="rounded-lg border border-slate-700 bg-slate-800">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
+        :aria-expanded="showRender"
+        @click="showRender = !showRender"
+      >
+        {{ t('convert.options') }}
+        <span class="text-slate-500">{{ showRender ? '−' : '+' }}</span>
+      </button>
+      <div v-if="showRender" class="space-y-2 border-t border-slate-700 p-3 text-xs">
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block text-slate-400">{{ t('convert.font') }}
+            <select v-model="typo.font" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+              <option v-for="font in fonts" :key="font" :value="font">{{ font }}</option>
+            </select>
+          </label>
+          <label class="block text-slate-400">{{ t('convert.alignment') }}
+            <select v-model="typo.alignment" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+              <option value="left">left</option>
+              <option value="center">center</option>
+              <option value="right">right</option>
+            </select>
+          </label>
+          <label class="block text-slate-400">{{ t('convert.fontSize') }}
+            <input v-model.number="typo.font_size_mm" type="number" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </label>
+          <label class="block text-slate-400">{{ t('convert.lineSpacing') }}
+            <input v-model.number="typo.line_spacing" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </label>
+          <label class="block text-slate-400">{{ t('convert.strokeWidth') }}
+            <input v-model.number="typo.stroke_width_mm" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </label>
+          <label class="block text-slate-400">{{ t('convert.margin') }}
+            <input v-model.number="typo.margin_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </label>
+          <label class="block text-slate-400">{{ t('convert.pageWidth') }}
+            <input v-model.number="typo.page_width_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </label>
+          <label class="block text-slate-400">{{ t('convert.pageHeight') }}
+            <input v-model.number="typo.page_height_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          </label>
+        </div>
       </div>
     </div>
 

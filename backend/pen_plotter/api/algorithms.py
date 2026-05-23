@@ -5,7 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from pen_plotter.converters.algorithms import available_algorithms
+from pen_plotter.converters.algorithms import (
+    AlgorithmKind,
+    algorithm_kind,
+    available_algorithms,
+)
 
 router = APIRouter()
 
@@ -15,6 +19,10 @@ class AlgorithmInfo(BaseModel):
 
     name: str
     description: str
+    # Family the UI uses to group cards: "fill" packs ink across the region,
+    # "lines" emits discrete outlines, "mono_stroke" produces a single
+    # continuous polyline (spiral / scanlines / TSP).
+    kind: AlgorithmKind = "fill"
 
 
 @router.get("/algorithms")
@@ -25,6 +33,10 @@ async def list_algorithms() -> list[AlgorithmInfo]:
         One entry per registered algorithm, for the UI to offer as choices.
     """
     return [
-        AlgorithmInfo(name=algo.name, description=algo.description)
+        AlgorithmInfo(
+            name=algo.name,
+            description=algo.description,
+            kind=algorithm_kind(algo.name),
+        )
         for algo in available_algorithms()
     ]
