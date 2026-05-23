@@ -24,7 +24,7 @@ function download(): void {
 </script>
 
 <template>
-  <section v-if="gcode" class="rounded-lg border border-slate-700 bg-slate-800/60">
+  <section v-if="gcode" class="flex h-full min-h-0 flex-col rounded-lg border border-slate-700 bg-slate-800/60">
     <div class="flex items-center justify-between border-b border-slate-700 px-4 py-2">
       <h2 class="text-sm uppercase tracking-wide text-slate-400">
         {{ t('gcode.title') }} ({{ lineCount }} {{ t('gcode.lines') }})
@@ -38,7 +38,7 @@ function download(): void {
       </button>
     </div>
     <pre
-      class="max-h-64 overflow-auto p-4 text-xs font-mono text-emerald-200 whitespace-pre"
+      class="min-h-0 flex-1 overflow-auto p-4 text-xs font-mono text-emerald-200 whitespace-pre"
     >{{ gcode }}</pre>
   </section>
 </template>

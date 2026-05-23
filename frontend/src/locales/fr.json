@@ -245,6 +245,10 @@
     "outOfBounds": "Le dessin dépasse l'espace de travail ; il pourrait être tronqué ou hors limites.",
     "view": "Vue",
     "resetView": "Recentrer",
+    "zoomIn": "Zoom +",
+    "zoomOut": "Zoom −",
+    "snap": "Aimanter",
+    "snapOff": "Aucun",
     "viewHint": "Molette pour zoomer · glisser pour déplacer",
     "width": "Largeur (mm)",
     "height": "Hauteur (mm)",
@@ -405,7 +409,12 @@
     "totalSim": "Total (sim)",
     "layerEstimate": "Estimation calques",
     "dimensions": "Dimensions",
-    "end": "Fin"
+    "end": "Fin",
+    "zoomIn": "Zoom +",
+    "zoomOut": "Zoom −",
+    "resetView": "Recentrer",
+    "manualPenChange": "Changement stylo manuel",
+    "manualPenChangeHint": "Pause avant chaque calque pour permuter le stylo à la main."
   },
   "plotter": {
     "title": "Traceur",
@@ -478,6 +487,9 @@
   "system": {
     "title": "Système",
     "subtitle": "Informations de version et mise à jour depuis GitHub.",
+    "language": "Langue",
+    "languageEn": "English",
+    "languageFr": "Français",
     "installed": "Installé",
     "version": "Version",
     "branch": "Branche",

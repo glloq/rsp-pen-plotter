@@ -23,6 +23,49 @@ let last = 0
 
 const speeds = [1, 5, 100]
 
+// View transform (zoom/pan) — applied on top of the fit-to-canvas projection.
+const viewZoom = ref(1)
+const viewPanX = ref(0)
+const viewPanY = ref(0)
+function resetView(): void {
+  viewZoom.value = 1
+  viewPanX.value = 0
+  viewPanY.value = 0
+  draw()
+}
+function zoomIn(): void {
+  viewZoom.value = Math.min(viewZoom.value * 1.25, 12)
+  draw()
+}
+function zoomOut(): void {
+  viewZoom.value = Math.max(viewZoom.value / 1.25, 0.2)
+  draw()
+}
+
+// Manual pen change: only relevant on single-pen machines. When enabled,
+// every layer is marked ``pause_before='always'`` so the operator gets
+// prompted before each colour transition.
+const isMultiColor = computed(() => store.isMultiColor)
+const allLayers = computed(() => store.placements.flatMap((p) => p.layers))
+const manualPenChange = computed<boolean>({
+  get: () => allLayers.value.length > 0 && allLayers.value.every((l) => l.pause_before === 'always'),
+  set: (value) => {
+    const target = value ? 'always' : 'auto'
+    const prev = store.selectedPlacementId
+    for (const placement of store.placements) {
+      const needsChange = placement.layers.some((l) => l.pause_before !== target)
+      if (!needsChange) continue
+      store.selectPlacement(placement.id)
+      for (const layer of placement.layers) {
+        if (layer.pause_before !== target) {
+          store.updateLayer(layer.layer_id, { pause_before: target })
+        }
+      }
+    }
+    if (prev) store.selectPlacement(prev)
+  },
+})
+
 const frameBounds = computed<SimBounds>(() => {
   const ws = store.selectedProfile?.workspace
   if (ws && ws.x_max > ws.x_min && ws.y_max > ws.y_min) {
@@ -57,7 +100,10 @@ function project(x: number, y: number, b: SimBounds): [number, number] {
   const flip = store.selectedProfile?.origin !== 'top_left'
   const cx = PAD + (x - b.minX) * s
   const cy = flip ? PAD + (b.maxY - y) * s : PAD + (y - b.minY) * s
-  return [cx, cy]
+  // Apply view transform: zoom around the canvas centre, then translate.
+  const zx = (cx - WIDTH / 2) * viewZoom.value + WIDTH / 2 + viewPanX.value
+  const zy = (cy - HEIGHT / 2) * viewZoom.value + HEIGHT / 2 + viewPanY.value
+  return [zx, zy]
 }
 
 function draw(): void {
@@ -187,13 +233,49 @@ function reparse(): void {
   draw()
 }
 
+// Pan/zoom interaction on the canvas.
+const isPanning = ref(false)
+let panStartX = 0
+let panStartY = 0
+let panOriginX = 0
+let panOriginY = 0
+
+function onCanvasWheel(event: WheelEvent): void {
+  event.preventDefault()
+  const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15
+  viewZoom.value = Math.max(0.2, Math.min(viewZoom.value * factor, 12))
+  draw()
+}
+
+function onCanvasPointerDown(event: PointerEvent): void {
+  if (event.button !== 0 && event.button !== 1) return
+  isPanning.value = true
+  panStartX = event.clientX
+  panStartY = event.clientY
+  panOriginX = viewPanX.value
+  panOriginY = viewPanY.value
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+
+function onCanvasPointerMove(event: PointerEvent): void {
+  if (!isPanning.value) return
+  viewPanX.value = panOriginX + (event.clientX - panStartX)
+  viewPanY.value = panOriginY + (event.clientY - panStartY)
+  draw()
+}
+
+function onCanvasPointerUp(event: PointerEvent): void {
+  isPanning.value = false
+  ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
+}
+
 watch(gcode, () => reparse())
 onMounted(() => reparse())
 onBeforeUnmount(() => cancelAnimationFrame(raf))
 </script>
 
 <template>
-  <section v-if="sim" class="rounded-lg border border-slate-700 bg-slate-800/60">
+  <section v-if="sim" class="flex h-full min-h-0 flex-col rounded-lg border border-slate-700 bg-slate-800/60">
     <div class="flex flex-wrap items-center gap-2 border-b border-slate-700 px-4 py-2">
       <h2 class="mr-auto text-sm uppercase tracking-wide text-slate-400">
         {{ t('simulator.title') }}
@@ -231,7 +313,57 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
       </button>
     </div>
 
-    <canvas ref="canvas" :width="WIDTH" :height="HEIGHT" class="w-full bg-white" />
+    <div class="flex flex-wrap items-center gap-2 border-b border-slate-700 px-4 py-1.5 text-xs">
+      <div class="flex items-center gap-1">
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800"
+          :title="t('simulator.zoomOut')"
+          @click="zoomOut"
+        >−</button>
+        <span class="w-12 text-center font-mono text-slate-300">{{ Math.round(viewZoom * 100) }}%</span>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800"
+          :title="t('simulator.zoomIn')"
+          @click="zoomIn"
+        >+</button>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:bg-slate-800"
+          @click="resetView"
+        >
+          {{ t('simulator.resetView') }}
+        </button>
+      </div>
+
+      <label
+        v-if="!isMultiColor"
+        class="ml-auto flex items-center gap-2 text-slate-300"
+        :title="t('simulator.manualPenChangeHint')"
+      >
+        <input
+          type="checkbox"
+          :checked="manualPenChange"
+          class="h-4 w-4 accent-emerald-500"
+          @change="(e) => (manualPenChange = (e.target as HTMLInputElement).checked)"
+        />
+        {{ t('simulator.manualPenChange') }}
+      </label>
+    </div>
+
+    <canvas
+      ref="canvas"
+      :width="WIDTH"
+      :height="HEIGHT"
+      class="w-full bg-white"
+      :style="{ touchAction: 'none', cursor: isPanning ? 'grabbing' : 'grab' }"
+      @wheel="onCanvasWheel"
+      @pointerdown="onCanvasPointerDown"
+      @pointermove="onCanvasPointerMove"
+      @pointerup="onCanvasPointerUp"
+      @pointercancel="onCanvasPointerUp"
+    />
 
     <div class="px-4 py-2">
       <div class="h-1.5 w-full overflow-hidden rounded bg-slate-700">

@@ -7,7 +7,6 @@ import { useUiStore, type CanvasTab } from '../stores/ui'
 import SheetPreview from './SheetPreview.vue'
 import Simulator from './Simulator.vue'
 import GcodePreview from './GcodePreview.vue'
-import PenStrip from './PenStrip.vue'
 import PlanRail from './PlanRail.vue'
 
 const { t } = useI18n()
@@ -69,17 +68,15 @@ function select(tab: CanvasTab): void {
           </div>
           <PlanRail />
         </div>
-        <div v-show="canvasTab === 'simulator'">
+        <div v-show="canvasTab === 'simulator'" class="flex h-full min-h-0 flex-col">
           <Simulator v-if="canSimulate" />
           <p v-else class="text-sm text-slate-500">{{ t('canvas.simulatorUnavailable') }}</p>
         </div>
-        <div v-show="canvasTab === 'gcode'">
+        <div v-show="canvasTab === 'gcode'" class="flex h-full min-h-0 flex-col">
           <GcodePreview />
           <p v-if="!job.gcode" class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
         </div>
       </template>
     </div>
-
-    <PenStrip />
   </section>
 </template>

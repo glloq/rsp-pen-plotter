@@ -245,6 +245,10 @@
     "outOfBounds": "The drawing exceeds the workspace; it may be clipped or out of bounds.",
     "view": "View",
     "resetView": "Reset view",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "snap": "Snap",
+    "snapOff": "Off",
     "viewHint": "Wheel to zoom · drag to pan",
     "width": "Width (mm)",
     "height": "Height (mm)",
@@ -405,7 +409,12 @@
     "totalSim": "Total (sim)",
     "layerEstimate": "Layer estimate",
     "dimensions": "Size",
-    "end": "End"
+    "end": "End",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "resetView": "Reset view",
+    "manualPenChange": "Manual pen change",
+    "manualPenChangeHint": "Pause before each layer so you can swap the pen by hand."
   },
   "plotter": {
     "title": "Plotter",
@@ -478,6 +487,9 @@
   "system": {
     "title": "System",
     "subtitle": "Version info and GitHub self-update.",
+    "language": "Language",
+    "languageEn": "English",
+    "languageFr": "Français",
     "installed": "Installed",
     "version": "Version",
     "branch": "Branch",
