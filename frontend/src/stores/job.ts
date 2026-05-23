@@ -661,6 +661,76 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
+  // ====== Scene persistence =============================================
+  // Placements (sans the un-serializable ``last_file`` File handle), the
+  // current selection, profile, scale settings and auto-optimize toggle
+  // are written to ``localStorage`` on a debounce so a tab refresh keeps
+  // the scene intact. SVGs can be large — if quota is hit we fail
+  // silently and the user simply doesn't get persistence that session.
+  const SCENE_KEY = 'omniplot.scene.v2'
+
+  interface SerializableScene {
+    placements: Placement[]
+    selectedPlacementId: string | null
+    selectedProfileName: string
+    scaleMode: 'fit' | 'actual'
+    marginMm: number
+    autoOptimize: boolean
+  }
+
+  function persistScene(): void {
+    try {
+      const data: SerializableScene = {
+        // ``last_file`` is a File handle — can't survive JSON.
+        placements: placements.value.map((p) => ({ ...p, last_file: null })),
+        selectedPlacementId: selectedPlacementId.value,
+        selectedProfileName: selectedProfileName.value,
+        scaleMode: scaleMode.value,
+        marginMm: marginMm.value,
+        autoOptimize: autoOptimize.value,
+      }
+      localStorage.setItem(SCENE_KEY, JSON.stringify(data))
+    } catch {
+      // localStorage may be unavailable (private browsing) or full.
+    }
+  }
+
+  function hydrateScene(): void {
+    try {
+      const raw = localStorage.getItem(SCENE_KEY)
+      if (!raw) return
+      const data = JSON.parse(raw) as Partial<SerializableScene>
+      if (Array.isArray(data.placements)) {
+        placements.value = data.placements.map((p) => ({
+          ...p,
+          last_file: null,
+        }))
+      }
+      if (data.selectedPlacementId !== undefined) {
+        selectedPlacementId.value = data.selectedPlacementId
+      }
+      if (data.selectedProfileName) selectedProfileName.value = data.selectedProfileName
+      if (data.scaleMode) scaleMode.value = data.scaleMode
+      if (typeof data.marginMm === 'number') marginMm.value = data.marginMm
+      if (typeof data.autoOptimize === 'boolean') autoOptimize.value = data.autoOptimize
+    } catch {
+      // Malformed JSON / no localStorage — start fresh.
+    }
+  }
+
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+  function schedulePersist(): void {
+    if (persistTimer) clearTimeout(persistTimer)
+    persistTimer = setTimeout(persistScene, 300)
+  }
+
+  hydrateScene()
+  watch(
+    [placements, selectedPlacementId, selectedProfileName, scaleMode, marginMm, autoOptimize],
+    schedulePersist,
+    { deep: true },
+  )
+
   return {
     // Placements API
     placements,

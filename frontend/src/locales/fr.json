@@ -44,7 +44,10 @@
   "editModal": {
     "title": "Réglages du fichier",
     "close": "Fermer",
-    "done": "Terminer"
+    "done": "Terminer",
+    "tabSource": "Source",
+    "tabLayers": "Calques",
+    "tabOutput": "Mise en page & sortie"
   },
   "execute": {
     "connection": "Connexion",

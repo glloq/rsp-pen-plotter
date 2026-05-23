@@ -44,7 +44,10 @@
   "editModal": {
     "title": "File settings",
     "close": "Close",
-    "done": "Done"
+    "done": "Done",
+    "tabSource": "Source",
+    "tabLayers": "Layers",
+    "tabOutput": "Layout & output"
   },
   "execute": {
     "connection": "Connection",
