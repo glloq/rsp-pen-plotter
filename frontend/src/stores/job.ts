@@ -174,6 +174,18 @@ export const useJobStore = defineStore('job', () => {
     rerenderTimer = setTimeout(triggerRerender, 250)
   }
 
+  // Drop the override for a layer and re-render with the original
+  // algorithm baked in at upload time. Reassigning the ref (rather than
+  // ``delete``) keeps Vue's reactivity in the loop.
+  async function clearLayerAlgorithm(layerId: string): Promise<void> {
+    if (!(layerId in layerAlgorithms.value)) return
+    const next = { ...layerAlgorithms.value }
+    delete next[layerId]
+    layerAlgorithms.value = next
+    if (rerenderTimer) clearTimeout(rerenderTimer)
+    rerenderTimer = setTimeout(triggerRerender, 250)
+  }
+
   async function triggerRerender(): Promise<void> {
     const jobId = job.value?.job_id
     if (!jobId || !svg.value) return
@@ -523,6 +535,7 @@ export const useJobStore = defineStore('job', () => {
     resetDrawing,
     layerAlgorithms,
     applyLayerAlgorithm,
+    clearLayerAlgorithm,
     clearJob,
     totalLengthMm,
     totalDurationSeconds,

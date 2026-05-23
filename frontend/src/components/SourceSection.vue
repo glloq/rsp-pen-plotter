@@ -425,7 +425,7 @@ function openPicker(): void {
             <img
               :src="previewUrl"
               :alt="selectedFile.name"
-              class="mx-auto max-h-32 rounded border border-slate-700 bg-slate-800 object-contain"
+              class="mx-auto max-h-56 rounded border border-slate-700 bg-slate-800 object-contain"
             />
           </div>
           <div class="space-y-1">
@@ -437,7 +437,7 @@ function openPicker(): void {
               </span>
             </p>
             <div
-              class="mx-auto flex h-32 items-center justify-center rounded border border-slate-700 bg-white"
+              class="mx-auto flex h-56 items-center justify-center rounded border border-slate-700 bg-white"
             >
               <div
                 v-if="previewSvg"
