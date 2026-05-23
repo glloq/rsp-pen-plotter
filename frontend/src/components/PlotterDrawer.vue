@@ -19,9 +19,19 @@ const { plotterDrawerOpen } = storeToRefs(ui)
 const { status, port, baudrate, terminator, error, progress } = storeToRefs(plotter)
 
 watch(
-  () => job.selectedProfile?.gcode_dialect,
-  (dialect) => {
-    terminator.value = dialect === 'ebb' ? 'cr' : 'lf'
+  // Re-derive the default serial terminator whenever the active profile
+  // (or its EBB config) changes. The drawer still lets the operator
+  // override it on-the-fly for debugging — we only seed the default here.
+  () => [
+    job.selectedProfile?.gcode_dialect,
+    job.selectedProfile?.ebb?.serial_terminator,
+  ] as const,
+  ([dialect, ebbTerminator]) => {
+    if (dialect === 'ebb') {
+      terminator.value = ebbTerminator ?? 'cr'
+    } else {
+      terminator.value = 'lf'
+    }
   },
   { immediate: true },
 )

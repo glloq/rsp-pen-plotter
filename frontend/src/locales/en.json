@@ -10,8 +10,6 @@
     "moreWarnings": "+{count} more warnings."
   },
   "header": {
-    "profile": "Profile",
-    "preset": "Preset",
     "settings": "Settings",
     "plotter": "Plotter"
   },
@@ -269,7 +267,13 @@
     "export": "Export YAML",
     "delete": "Delete",
     "saveFailed": "Could not save profile.",
-    "deleteFailed": "Could not delete profile."
+    "deleteFailed": "Could not delete profile.",
+    "select": "Active machine profile",
+    "preset": "Conversion preset",
+    "newProfile": "New",
+    "newProfileDefault": "New profile",
+    "serialTerminator": "Serial terminator",
+    "unsavedDraft": "Unsaved draft — click Save to persist it."
   },
   "job": {
     "scaleMode": "Scale",

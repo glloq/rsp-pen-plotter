@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, toRaw, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { exportProfileYaml, type EbbConfig, type MachineProfile, type PenSlot } from '../api/client'
 import { confirmAction } from '../composables/confirm'
@@ -7,10 +8,15 @@ import { useJobStore } from '../stores/job'
 
 const { t } = useI18n()
 const store = useJobStore()
+const { profiles, selectedProfileName, presets, selectedPresetName } = storeToRefs(store)
 
 const draft = ref<MachineProfile | null>(null)
 const saving = ref(false)
 const error = ref<string | null>(null)
+// True when the active draft is an in-memory "+ New" profile that has never
+// been persisted. Save POSTs it; until then it's not in ``store.profiles``,
+// so we must not let ``syncDraft`` overwrite it on a profile-list reload.
+const isUnsavedDraft = ref(false)
 
 function defaultEbb(): EbbConfig {
   return { steps_per_mm: 80, servo_up: 16000, servo_down: 12000, servo_rate: 400, serial_terminator: 'cr' }
@@ -37,14 +43,51 @@ function normalizePens(profile: MachineProfile): void {
   )
 }
 
+function newBlankProfile(): MachineProfile {
+  // Sensible GRBL/A4-landscape defaults. The operator immediately edits these,
+  // so the goal is "valid + visibly placeholder" rather than "optimal".
+  return {
+    name: t('profile.newProfileDefault'),
+    units: 'mm',
+    workspace: { x_min: 0, y_min: 0, x_max: 297, y_max: 210 },
+    origin: 'top_left',
+    gcode_dialect: 'grbl',
+    pen_up_command: 'M5',
+    pen_down_command: 'M3 S1000',
+    tool_change_method: 'manual_pause',
+    tool_change_command: 'M0',
+    drawing_speed_mm_s: 50,
+    travel_speed_mm_s: 100,
+    acceleration_mm_s2: 1000,
+    pen_slot_count: 1,
+    supports_arcs: false,
+    arc_tolerance_mm: 0.1,
+    ebb: null,
+    pens: null,
+  }
+}
+
 function syncDraft(): void {
+  // While an unsaved draft is in flight, the profile-list watch shouldn't
+  // wipe it just because /profiles re-loaded.
+  if (isUnsavedDraft.value) return
   if (!store.selectedProfile) {
     draft.value = null
     return
   }
-  const clone = structuredClone(store.selectedProfile)
+  // ``toRaw`` peels off Pinia's reactive Proxy; otherwise ``structuredClone``
+  // raises DataCloneError on Chromium for any reactive object, which used to
+  // leave ``draft`` null and silently hide the EBB fieldset on profile switch.
+  const clone = structuredClone(toRaw(store.selectedProfile))
   normalizePens(clone)
   draft.value = clone
+}
+
+function startNewProfile(): void {
+  const blank = newBlankProfile()
+  normalizePens(blank)
+  draft.value = blank
+  isUnsavedDraft.value = true
 }
 
 watch(() => store.selectedProfileName, syncDraft, { immediate: true })
@@ -73,7 +116,11 @@ async function save(): Promise<void> {
   error.value = null
   try {
     if (!isEbb.value) draft.value.ebb = null
-    await store.saveProfile(structuredClone(draft.value))
+    await store.saveProfile(structuredClone(toRaw(draft.value)))
+    // Successful POST → the new profile is now in the store. Drop the
+    // "unsaved" guard so subsequent profile-list updates can re-sync the
+    // draft from the canonical version.
+    isUnsavedDraft.value = false
   } catch (err) {
     error.value = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       ?? t('profile.saveFailed')
@@ -84,7 +131,9 @@ async function save(): Promise<void> {
 
 function duplicate(): void {
   if (!draft.value) return
-  draft.value = { ...structuredClone(draft.value), name: `${draft.value.name} copy` }
+  const clone = structuredClone(toRaw(draft.value))
+  draft.value = { ...clone, name: `${draft.value.name} copy` }
+  isUnsavedDraft.value = true
 }
 
 async function remove(): Promise<void> {
@@ -120,7 +169,48 @@ async function downloadYaml(): Promise<void> {
 </script>
 
 <template>
-  <div v-if="draft" class="space-y-4 text-sm">
+  <div class="space-y-4 text-sm">
+    <!-- Profile + preset pickers (moved here from the AppHeader) -->
+    <div class="space-y-2 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+      <label class="block text-xs text-slate-400">
+        {{ t('profile.select') }}
+        <div class="mt-1 flex gap-2">
+          <select
+            v-model="selectedProfileName"
+            class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+          >
+            <option v-for="profile in profiles" :key="profile.name" :value="profile.name">
+              {{ profile.name }} ({{ profile.pen_slot_count }})
+            </option>
+          </select>
+          <button
+            type="button"
+            class="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500"
+            :title="t('profile.newProfile')"
+            @click="startNewProfile"
+          >
+            + {{ t('profile.newProfile') }}
+          </button>
+        </div>
+      </label>
+      <label class="block text-xs text-slate-400">
+        {{ t('profile.preset') }}
+        <select
+          v-model="selectedPresetName"
+          class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+        >
+          <option value="">{{ t('upload.presetNone') }}</option>
+          <option v-for="preset in presets" :key="preset.name" :value="preset.name">
+            {{ preset.name }}
+          </option>
+        </select>
+      </label>
+      <p v-if="isUnsavedDraft" class="text-[11px] text-amber-300">
+        ⚠ {{ t('profile.unsavedDraft') }}
+      </p>
+    </div>
+
+    <div v-if="draft" class="space-y-4">
       <label class="block text-slate-400">
         {{ t('profile.name') }}
         <input v-model="draft.name" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
@@ -277,6 +367,16 @@ async function downloadYaml(): Promise<void> {
           <label class="block text-slate-400">servo down
             <input v-model.number="draft.ebb.servo_down" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
           </label>
+          <label class="block text-slate-400">{{ t('profile.serialTerminator') }}
+            <select
+              v-model="draft.ebb.serial_terminator"
+              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            >
+              <option value="cr">CR</option>
+              <option value="lf">LF</option>
+              <option value="crlf">CRLF</option>
+            </select>
+          </label>
         </div>
       </fieldset>
 
@@ -296,5 +396,6 @@ async function downloadYaml(): Promise<void> {
           {{ t('profile.delete') }}
         </button>
       </div>
+    </div>
   </div>
 </template>
