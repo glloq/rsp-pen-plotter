@@ -30,61 +30,141 @@ const dragOver = ref(false)
 
 // Editable state for bitmap conversion. Grouped by concern so the
 // template can show only the section the chosen segmentation method or
-// algorithm needs.
-const bitmap = ref({
-  // -- Segmentation ("decoupage") --
-  segmentation_method: 'kmeans' as SegmentationMethod,
-  num_colors: 4,              // kmeans
-  num_bands: 4,               // luminance_bands
-  thresholds: [0.33, 0.66] as number[], // thresholds
-  // Specific colours the user pins via the top-level "Colours" block.
-  // When non-empty, the segmentation switches to ``fixed_palette`` and
-  // snaps the image to exactly these colours; when empty, kmeans picks
-  // ``num_colors`` colours automatically.
-  palette: [] as string[],
-  // -- Post-processing --
-  min_region_pixels: 0,
-  merge_delta_e: 0,
-  // -- Common input options --
-  max_dimension_px: 800,
-  drop_background: true,
-  background_luminance: 0.92,
-  // -- Render algorithm --
-  algorithm: 'direct',
-  // halftone
-  cell_size_px: 6,
-  // stippling + tsp
-  density: 0.02,
-  dot_radius_px: 0.6,
-  seed: 0,
-  // crosshatch
-  crosshatch_angle_deg: 45,
-  crosshatch_spacing_px: 4,
-  crosshatch_crossed: false,
-  // contours
-  contours_spacing_px: 4,
-  contours_max_rings: 20,
-  // edges
-  edges_stroke_width: 0.8,
-  // spiral
-  spiral_spacing_px: 4,
-  spiral_samples_per_turn: 64,
-  // scanlines
-  scanlines_spacing_px: 4,
-  scanlines_wave_amp_px: 0,
-  scanlines_wave_period_px: 12,
-})
+// algorithm needs. Factored into a default-builder so the
+// placement-switch watcher (below) can reset the draft state cleanly.
+type BitmapDraft = {
+  segmentation_method: SegmentationMethod
+  num_colors: number
+  num_bands: number
+  thresholds: number[]
+  palette: string[]
+  min_region_pixels: number
+  merge_delta_e: number
+  max_dimension_px: number
+  drop_background: boolean
+  background_luminance: number
+  algorithm: string
+  cell_size_px: number
+  density: number
+  dot_radius_px: number
+  seed: number
+  crosshatch_angle_deg: number
+  crosshatch_spacing_px: number
+  crosshatch_crossed: boolean
+  contours_spacing_px: number
+  contours_max_rings: number
+  edges_stroke_width: number
+  spiral_spacing_px: number
+  spiral_samples_per_turn: number
+  scanlines_spacing_px: number
+  scanlines_wave_amp_px: number
+  scanlines_wave_period_px: number
+}
 
-const typo = ref({
-  font: 'futural',
-  font_size_mm: 4.0,
-  line_spacing: 1.5,
-  alignment: 'left' as 'left' | 'center' | 'right',
-  stroke_width_mm: 0.3,
-  margin_mm: 15.0,
-  page_width_mm: 210.0,
-  page_height_mm: 297.0,
-})
+function defaultBitmap(): BitmapDraft {
+  return {
+    segmentation_method: 'kmeans',
+    num_colors: 4,
+    num_bands: 4,
+    thresholds: [0.33, 0.66],
+    // Specific colours the user pins via the top-level "Colours" block.
+    // When non-empty, the segmentation switches to ``fixed_palette`` and
+    // snaps the image to exactly these colours; when empty, kmeans picks
+    // ``num_colors`` colours automatically.
+    palette: [],
+    min_region_pixels: 0,
+    merge_delta_e: 0,
+    max_dimension_px: 800,
+    drop_background: true,
+    background_luminance: 0.92,
+    algorithm: 'direct',
+    cell_size_px: 6,
+    density: 0.02,
+    dot_radius_px: 0.6,
+    seed: 0,
+    crosshatch_angle_deg: 45,
+    crosshatch_spacing_px: 4,
+    crosshatch_crossed: false,
+    contours_spacing_px: 4,
+    contours_max_rings: 20,
+    edges_stroke_width: 0.8,
+    spiral_spacing_px: 4,
+    spiral_samples_per_turn: 64,
+    scanlines_spacing_px: 4,
+    scanlines_wave_amp_px: 0,
+    scanlines_wave_period_px: 12,
+  }
+}
+
+const bitmap = ref<BitmapDraft>(defaultBitmap())
+
+type TypographyDraft = {
+  font: string
+  font_size_mm: number
+  line_spacing: number
+  alignment: 'left' | 'center' | 'right'
+  stroke_width_mm: number
+  margin_mm: number
+  page_width_mm: number
+  page_height_mm: number
+}
+
+function defaultTypography(): TypographyDraft {
+  return {
+    font: 'futural',
+    font_size_mm: 4.0,
+    line_spacing: 1.5,
+    alignment: 'left',
+    stroke_width_mm: 0.3,
+    margin_mm: 15.0,
+    page_width_mm: 210.0,
+    page_height_mm: 297.0,
+  }
+}
+
+const typo = ref<TypographyDraft>(defaultTypography())
+
+// Restore the draft form to defaults, then overlay any options the
+// placement was actually uploaded with so re-opening the modal on an
+// already-converted file shows the parameters that produced it.
+function rehydrateDraftFromPlacement(): void {
+  bitmap.value = defaultBitmap()
+  typo.value = defaultTypography()
+  paletteFollowsPens.value = true
+  const opts = store.selectedPlacement?.last_options
+  if (!opts || typeof opts !== 'object') return
+  const target = bitmap.value as Record<string, unknown>
+  for (const key of Object.keys(target)) {
+    if (key in opts) target[key] = (opts as Record<string, unknown>)[key]
+  }
+  const algoOpts = (opts as Record<string, unknown>).algorithm_options as
+    | Record<string, unknown>
+    | undefined
+  if (algoOpts) {
+    for (const key of ['cell_size_px', 'density', 'dot_radius_px', 'seed']) {
+      if (key in algoOpts) target[key] = algoOpts[key]
+    }
+  }
+  const segOpts = (opts as Record<string, unknown>).segmentation_options as
+    | Record<string, unknown>
+    | undefined
+  if (segOpts && 'palette' in segOpts && Array.isArray(segOpts.palette)) {
+    bitmap.value.palette = [...(segOpts.palette as string[])]
+    // If the stored palette doesn't match the currently installed pens,
+    // the upload used a manual palette — surface that as the editor mode.
+    const installed = (store.selectedProfile?.pens ?? [])
+      .filter((p) => p.installed && p.color)
+      .map((p) => p.color)
+    const sameAsPens
+      = bitmap.value.palette.length === installed.length
+      && bitmap.value.palette.every((c, i) => c === installed[i])
+    paletteFollowsPens.value = sameAsPens
+  }
+  const typoTarget = typo.value as Record<string, unknown>
+  for (const key of Object.keys(typoTarget)) {
+    if (key in opts) typoTarget[key] = (opts as Record<string, unknown>)[key]
+  }
+}
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'tiff', 'webp', 'heic']
 const TYPOGRAPHY_EXT = ['txt', 'md']
@@ -242,12 +322,16 @@ onMounted(async () => {
   }
 })
 
-// Switching placements (via FilesPane) refreshes the local file ref so
-// the modal mirrors the newly-selected placement's source.
+// Switching placements (via FilesPane) refreshes the local file ref AND
+// the draft form so the modal mirrors the newly-selected placement's
+// source. Without the rehydrate, the previous placement's bitmap /
+// typography knobs would silently feed into the next /preview call and
+// next upload — see audit findings #2 and #3.
 watch(
   () => store.selectedPlacementId,
   () => {
     selectedFile.value = store.lastFile
+    rehydrateDraftFromPlacement()
   },
 )
 
@@ -342,6 +426,11 @@ function buildOptions(): Record<string, unknown> | undefined {
 async function uploadSelected(): Promise<void> {
   if (!selectedFile.value) return
   await store.upload(selectedFile.value, buildOptions())
+  // Drop the stale draft preview now that the placement carries its own
+  // committed SVG. Otherwise the live preview would shadow the
+  // committed SVG in EditPreviewPane.
+  previewResult.value = null
+  previewError.value = null
   if (store.layers.length) ui.canvasTab = 'sheet'
 }
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { resetEditState } from '../composables/useEditState'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import BlockMapCard from './edit/BlockMapCard.vue'
@@ -23,6 +24,21 @@ const headerTitle = computed(() => {
 function onKey(event: KeyboardEvent): void {
   if (event.key === 'Escape' && editModalOpen.value) ui.closeEditModal()
 }
+
+// Wipe the singleton edit-state composable whenever the modal closes
+// or its selected placement changes, so the preview pane never renders
+// the previous session's stale file / SVG / palette before the mirror
+// watches in SourceSection (which only mount when the modal opens) get
+// a chance to write fresh values.
+watch(editModalOpen, (open) => {
+  if (!open) resetEditState()
+})
+watch(
+  () => store.selectedPlacementId,
+  () => {
+    if (editModalOpen.value) resetEditState()
+  },
+)
 
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
@@ -54,10 +70,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </header>
 
       <!-- Split-pane: preview locks to the left at all times, every
-           settings card stacks in the scrollable right pane. SourceSection
-           owns the preview state and ``provide``s it to EditPreviewPane
-           via useEditState — it must therefore be mounted as a sibling
-           inside the same parent so the injection key is in scope. -->
+           settings card stacks in the scrollable right pane. The two
+           panes communicate via the module-level useEditState singleton
+           (see composables/useEditState.ts) which SourceSection mirrors
+           its local state into. -->
       <main class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(360px,42%)] overflow-hidden">
         <div class="min-h-0 overflow-hidden border-r border-slate-700 bg-slate-950/60">
           <EditPreviewPane />

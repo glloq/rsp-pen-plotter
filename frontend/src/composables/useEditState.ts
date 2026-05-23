@@ -59,6 +59,24 @@ export interface EditState {
   setGoToPage: (fn: (page: number) => Promise<void>) => void
 }
 
+// Wipe every shared ref back to its empty/initial state. Called when
+// the modal closes or the selected placement changes — otherwise the
+// singleton would surface the previous session's preview SVG / palette
+// before the new mount's mirror watches have caught up.
+export function resetEditState(): void {
+  _selectedFile.value = null
+  _previewUrl.value = null
+  _textPreview.value = ''
+  _previewSvg.value = ''
+  _previewLoading.value = false
+  _previewError.value = null
+  _previewResult.value = null
+  _kind.value = 'none'
+  _pageCount.value = 0
+  _currentPage.value = 0
+  _goToPage = async () => {}
+}
+
 export function useEditState(): EditState {
   return {
     selectedFile: _selectedFile,

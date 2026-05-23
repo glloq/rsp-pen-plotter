@@ -761,13 +761,13 @@ export const useJobStore = defineStore('job', () => {
     // always has a tracked snapshot to roll back to.
     if (p.variants.length <= 1) return
     const next = p.variants.filter((v) => v.id !== variantId)
-    const newActive
-      = p.active_variant_id === variantId
-        ? (next[0]?.id ?? '')
-        : p.active_variant_id
+    const wasActive = p.active_variant_id === variantId
+    const newActive = wasActive ? (next[0]?.id ?? '') : p.active_variant_id
     patchSelected({ variants: next, active_variant_id: newActive })
-    // Loading the new active variant restores its snapshot into live state.
-    if (p.active_variant_id === variantId) loadVariantState(next[0])
+    // Loading the new active variant restores its snapshot into live
+    // state. Look up by id (not next[0]) so the load matches newActive
+    // even when the deleted variant wasn't at index 0.
+    if (wasActive) loadVariantState(next.find((v) => v.id === newActive))
   }
 
   // Load a variant's snapshot into the placement's live state and
