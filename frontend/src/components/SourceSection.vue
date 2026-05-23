@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { getAlgorithms, getFonts, type AlgorithmInfo } from '../api/client'
@@ -41,14 +41,7 @@ const typo = ref({
 })
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'tiff', 'webp', 'heic']
-// Files that genuinely hit the Hershey typography pipeline. DOCX / ODT / RTF
-// and HTML used to be classed here, but they actually go through LibreOffice /
-// WeasyPrint → PDF → PyMuPDF, so the typography options were silently ignored.
 const TYPOGRAPHY_EXT = ['txt', 'md']
-// Files that pass through the PDF-style post-processing chain: their
-// ``options`` control how embedded raster ``<image>`` elements are
-// vectorized (algorithm, palette size, background drop), not the source
-// itself.
 const DOCUMENT_EXT = ['pdf', 'svg', 'eps', 'ps', 'ai', 'docx', 'odt', 'rtf', 'html']
 const ACCEPT = '.svg,.png,.jpg,.jpeg,.tiff,.webp,.heic,.pdf,.dxf,.eps,.ps,.ai,.txt,.md,.html,.docx,.odt,.rtf'
 
@@ -60,11 +53,45 @@ const kind = computed<'bitmap' | 'typography' | 'document' | 'none'>(() => {
   return 'none'
 })
 
-// The bitmap form drives two distinct flows: vectorizing a standalone
-// raster image (kind === 'bitmap') and configuring how rasters embedded
-// in a document/SVG/EPS are vectorized (kind === 'document'). Either way
-// the same backend options apply.
 const showsBitmapForm = computed(() => kind.value === 'bitmap' || kind.value === 'document')
+
+// Local thumbnail for raster images: gives an instant preview before paying
+// the round-trip + vectorization cost. ObjectURL is revoked on file change.
+const previewUrl = ref<string | null>(null)
+function refreshPreview(): void {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = null
+  }
+  if (selectedFile.value && kind.value === 'bitmap') {
+    previewUrl.value = URL.createObjectURL(selectedFile.value)
+  }
+}
+watch(selectedFile, refreshPreview)
+onBeforeUnmount(() => {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+})
+
+// Plain-text inline preview for txt / md so the user knows what they're about
+// to convert. Capped at a few KB so large files don't hang the UI.
+const textPreview = ref<string>('')
+watch(selectedFile, async (file) => {
+  textPreview.value = ''
+  if (file && kind.value === 'typography') {
+    try {
+      const blob = file.slice(0, 4096)
+      textPreview.value = await blob.text()
+    } catch {
+      textPreview.value = ''
+    }
+  }
+})
+
+const algoDescriptions: Record<string, { label: string; hint: string }> = {
+  direct: { label: 'convert.algoDirect', hint: 'convert.algoDirectHint' },
+  halftone: { label: 'convert.algoHalftone', hint: 'convert.algoHalftoneHint' },
+  stippling: { label: 'convert.algoStippling', hint: 'convert.algoStipplingHint' },
+}
 
 onMounted(async () => {
   try {
@@ -129,6 +156,11 @@ async function uploadSelected(): Promise<void> {
   if (store.layers.length) ui.canvasTab = 'sheet'
 }
 
+function clearAll(): void {
+  selectedFile.value = null
+  store.clearJob()
+}
+
 const pageCount = computed(() => Number(store.uploadMetadata.page_count ?? 0))
 const currentPage = computed(() => Number(store.uploadMetadata.page ?? 0))
 
@@ -145,7 +177,18 @@ function openPicker(): void {
 
 <template>
   <section class="space-y-2">
-    <h2 class="px-1 text-xs uppercase tracking-wider text-slate-500">{{ t('prepare.source') }}</h2>
+    <div class="flex items-baseline justify-between px-1">
+      <h2 class="text-xs uppercase tracking-wider text-slate-500">{{ t('prepare.source') }}</h2>
+      <button
+        v-if="selectedFile || store.job"
+        type="button"
+        class="text-[10px] uppercase tracking-wider text-slate-500 hover:text-red-300"
+        :title="t('upload.clear')"
+        @click="clearAll"
+      >
+        ✕ {{ t('upload.clear') }}
+      </button>
+    </div>
 
     <input
       ref="fileInput"
@@ -156,26 +199,48 @@ function openPicker(): void {
     />
 
     <div
-      class="rounded-lg border-2 border-dashed px-3 py-4 text-center transition"
+      class="rounded-lg border-2 border-dashed px-3 py-3 text-center transition"
       :class="dragOver ? 'border-emerald-500 bg-emerald-950/30' : 'border-slate-700 bg-slate-900/40'"
       @dragenter.prevent="dragOver = true"
       @dragover.prevent="dragOver = true"
       @dragleave.prevent="dragOver = false"
       @drop.prevent="onDrop"
     >
-      <p v-if="selectedFile" class="truncate text-sm font-medium text-slate-100" :title="selectedFile.name">
-        {{ selectedFile.name }}
-      </p>
-      <p v-else class="text-sm text-slate-400">
-        {{ t('upload.dropHere') }}
-      </p>
-      <button
-        type="button"
-        class="mt-2 rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
-        @click="openPicker"
-      >
-        {{ selectedFile ? t('upload.changeFile') : t('upload.pick') }}
-      </button>
+      <div v-if="selectedFile" class="space-y-2">
+        <img
+          v-if="previewUrl"
+          :src="previewUrl"
+          :alt="selectedFile.name"
+          class="mx-auto max-h-32 rounded border border-slate-700 bg-slate-800 object-contain"
+        />
+        <pre
+          v-else-if="kind === 'typography' && textPreview"
+          class="max-h-24 overflow-hidden rounded border border-slate-700 bg-slate-900 px-2 py-1 text-left text-[10px] leading-snug text-slate-300 whitespace-pre-wrap"
+          >{{ textPreview }}</pre>
+        <p class="truncate text-sm font-medium text-slate-100" :title="selectedFile.name">
+          {{ selectedFile.name }}
+        </p>
+        <p class="text-[10px] text-slate-500">
+          {{ (selectedFile.size / 1024).toFixed(1) }} KB · {{ kind }}
+        </p>
+        <button
+          type="button"
+          class="rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
+          @click="openPicker"
+        >
+          {{ t('upload.changeFile') }}
+        </button>
+      </div>
+      <div v-else>
+        <p class="text-sm text-slate-400">{{ t('upload.dropHere') }}</p>
+        <button
+          type="button"
+          class="mt-2 rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
+          @click="openPicker"
+        >
+          {{ t('upload.pick') }}
+        </button>
+      </div>
     </div>
 
     <div v-if="selectedFile && kind !== 'none'" class="rounded-lg border border-slate-700 bg-slate-800">
@@ -195,11 +260,25 @@ function openPicker(): void {
         </p>
 
         <template v-if="showsBitmapForm">
-          <label class="block text-slate-400">{{ t('convert.algorithm') }}
-            <select v-model="bitmap.algorithm" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-              <option v-for="algo in algorithms" :key="algo.name" :value="algo.name">{{ algo.name }}</option>
-            </select>
-          </label>
+          <div class="space-y-1">
+            <p class="text-slate-400">{{ t('convert.algorithm') }}</p>
+            <div class="grid grid-cols-3 gap-1">
+              <button
+                v-for="algo in algorithms"
+                :key="algo.name"
+                type="button"
+                class="rounded border px-2 py-1.5 text-left text-[11px] transition"
+                :class="bitmap.algorithm === algo.name
+                  ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+                  : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+                :title="t(algoDescriptions[algo.name]?.hint ?? '') || algo.description"
+                @click="bitmap.algorithm = algo.name"
+              >
+                <span class="block font-medium">{{ t(algoDescriptions[algo.name]?.label ?? '') || algo.name }}</span>
+                <span class="block text-[9px] text-slate-500">{{ t(algoDescriptions[algo.name]?.hint ?? '') || algo.description }}</span>
+              </button>
+            </div>
+          </div>
           <div class="grid grid-cols-2 gap-2">
             <label class="block text-slate-400">{{ t('convert.numColors') }}
               <input v-model.number="bitmap.num_colors" type="number" min="1" max="32" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />

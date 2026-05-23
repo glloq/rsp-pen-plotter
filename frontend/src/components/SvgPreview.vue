@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify'
 import svgPanZoom from 'svg-pan-zoom'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
@@ -76,7 +76,16 @@ function render(markup: string | null): void {
   applyPenColors()
 }
 
-watch(svg, (markup) => render(markup), { immediate: true })
+// ``svg`` may turn truthy before the v-if-rendered container is in the DOM
+// (Vue's flush isn't post by default), so defer rendering one tick to ensure
+// ``container.value`` is bound — otherwise the SVG tab stays blank.
+async function rerender(markup: string | null): Promise<void> {
+  await nextTick()
+  render(markup)
+}
+
+onMounted(() => rerender(svg.value))
+watch(svg, (markup) => rerender(markup))
 watch(visibility, () => applyVisibility(), { deep: true })
 watch(
   () => store.layers.map((l) => l.target_pen_slot),

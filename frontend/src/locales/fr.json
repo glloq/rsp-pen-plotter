@@ -12,7 +12,8 @@
   "header": {
     "profile": "Profil",
     "preset": "Préréglage",
-    "settings": "Réglages"
+    "settings": "Réglages",
+    "plotter": "Traceur"
   },
   "machine": {
     "disconnected": "Déconnecté",
@@ -66,7 +67,8 @@
     "profile": "Profil machine",
     "macros": "Macros",
     "history": "Historique",
-    "audit": "Audit"
+    "audit": "Audit",
+    "system": "Système"
   },
   "upload": {
     "profile": "Profil machine",
@@ -82,7 +84,8 @@
     "layers": "calque | calques",
     "pageOf": "Page {current} / {total}",
     "prevPage": "Page précédente",
-    "nextPage": "Page suivante"
+    "nextPage": "Page suivante",
+    "clear": "Retirer"
   },
   "layers": {
     "title": "Calques",
@@ -135,7 +138,17 @@
     "sheet": "Feuille",
     "drawing": "Dessin",
     "scale": "Échelle",
-    "outOfBounds": "Le dessin dépasse l'espace de travail ; il pourrait être tronqué ou hors limites."
+    "outOfBounds": "Le dessin dépasse l'espace de travail ; il pourrait être tronqué ou hors limites.",
+    "view": "Vue",
+    "resetView": "Recentrer",
+    "viewHint": "Molette pour zoomer · glisser pour déplacer",
+    "width": "Largeur (mm)",
+    "height": "Hauteur (mm)",
+    "applySize": "Appliquer la taille",
+    "sizeHint": "Sauvegardé sur le profil machine. Les anciens dessins seront recadrés.",
+    "saved": "Taille de feuille mise à jour.",
+    "invalidSize": "Dimensions invalides.",
+    "swap": "Permuter L/H"
   },
   "convert": {
     "options": "Options de conversion",
@@ -157,7 +170,13 @@
     "strokeWidth": "Épaisseur de trait (mm)",
     "margin": "Marge (mm)",
     "pageWidth": "Largeur de page (mm)",
-    "pageHeight": "Hauteur de page (mm)"
+    "pageHeight": "Hauteur de page (mm)",
+    "algoDirect": "Direct",
+    "algoDirectHint": "Trace les contours tels quels.",
+    "algoHalftone": "Tramage",
+    "algoHalftoneHint": "Lignes ondulées par cellule.",
+    "algoStippling": "Pointillé",
+    "algoStipplingHint": "Nuage de points selon la densité."
   },
   "profile": {
     "title": "Profil machine",
@@ -285,5 +304,29 @@
   "audit": {
     "title": "Journal d'audit",
     "empty": "Aucune action enregistrée pour l'instant."
+  },
+  "system": {
+    "title": "Système",
+    "subtitle": "Informations de version et mise à jour depuis GitHub.",
+    "installed": "Installé",
+    "version": "Version",
+    "branch": "Branche",
+    "commit": "Commit",
+    "workingTree": "Arbre de travail",
+    "dirty": "modifications locales non commitées",
+    "loading": "Chargement…",
+    "versionError": "Impossible de lire les informations de version.",
+    "update": "Mise à jour",
+    "updateHint": "Récupère le dernier commit, réinstalle les dépendances et reconstruit l'interface.",
+    "updateNow": "Mettre à jour maintenant",
+    "updating": "Mise à jour en cours…",
+    "updateConfirmTitle": "Mettre à jour le système",
+    "updateConfirmMsg": "Récupérer le dernier code depuis GitHub et reconstruire ? Annulez tout travail en cours avant.",
+    "updateApplied": "Mise à jour appliquée.",
+    "upToDate": "Déjà à jour.",
+    "updateFailed": "Échec de la mise à jour.",
+    "needsRestart": "Redémarrez le service pour charger le nouveau code Python.",
+    "viewLog": "Voir le journal",
+    "dirtyWarning": "Modifications locales non commitées — committez ou annulez avant de mettre à jour."
   }
 }

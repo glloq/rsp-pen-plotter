@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
+import { usePlotterStore } from '../stores/plotter'
 import { useUiStore } from '../stores/ui'
 import MachineStatusPill from './MachineStatusPill.vue'
 
@@ -14,7 +15,9 @@ defineProps<{
 const { t, locale } = useI18n()
 const job = useJobStore()
 const ui = useUiStore()
+const plotter = usePlotterStore()
 const { profiles, selectedProfileName, presets, selectedPresetName } = storeToRefs(job)
+const { status: plotterStatus } = storeToRefs(plotter)
 
 function setLocale(value: string): void {
   locale.value = value
@@ -58,7 +61,25 @@ function setLocale(value: string): void {
     </div>
 
     <div class="ml-auto flex items-center gap-3">
-      <MachineStatusPill />
+      <button
+        type="button"
+        class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition"
+        :class="plotterStatus.connected
+          ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-900/40'
+          : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'"
+        :title="t('header.plotter')"
+        :aria-label="t('header.plotter')"
+        @click="ui.openPlotterDrawer()"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+          <rect x="3" y="6" width="18" height="12" rx="1" />
+          <path d="M7 10h10" />
+          <path d="M12 14v4" />
+          <circle cx="7" cy="14" r="0.5" />
+        </svg>
+        <span class="hidden sm:inline">{{ t('header.plotter') }}</span>
+        <MachineStatusPill />
+      </button>
 
       <button
         type="button"

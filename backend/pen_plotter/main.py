@@ -26,6 +26,7 @@ from pen_plotter.api.presets import router as presets_router
 from pen_plotter.api.profiles import router as profiles_router
 from pen_plotter.api.queue import print_queue
 from pen_plotter.api.queue import router as queue_router
+from pen_plotter.api.system import router as system_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.auth import require_api_key
 from pen_plotter.converters.defaults import register_default_converters
@@ -71,6 +72,7 @@ app.include_router(audit_router)
 app.include_router(jobs_router)
 app.include_router(presets_router)
 app.include_router(macros_router)
+app.include_router(system_router)
 
 
 class HealthResponse(BaseModel):

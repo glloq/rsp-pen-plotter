@@ -19,12 +19,11 @@ from __future__ import annotations
 import re
 from xml.etree import ElementTree as ET
 
-_SVG_NS = "http://www.w3.org/2000/svg"
-_INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
-_INKSCAPE_LABEL = f"{{{_INKSCAPE_NS}}}label"
+from pen_plotter.core.svg_ns import INKSCAPE_NS as _INKSCAPE_NS
+from pen_plotter.core.svg_ns import SVG_NS as _SVG_NS
+from pen_plotter.core.svg_ns import svg_tostring
 
-ET.register_namespace("", _SVG_NS)
-ET.register_namespace("inkscape", _INKSCAPE_NS)
+_INKSCAPE_LABEL = f"{{{_INKSCAPE_NS}}}label"
 
 
 def _local(tag: str) -> str:
@@ -184,7 +183,7 @@ def postprocess_dxf_svg(svg: str) -> str:
             root.remove(elem)
 
     if not drawables:
-        return ET.tostring(root, encoding="unicode")
+        return svg_tostring(root)
 
     # Bucket by `class` attribute (ezdxf assigns one CSS class per colour);
     # entries with no class fall into a default bucket.
@@ -227,4 +226,4 @@ def postprocess_dxf_svg(svg: str) -> str:
         if width_mm is not None and height_mm is not None:
             root.set("viewBox", f"0 0 {width_mm} {height_mm}")
 
-    return ET.tostring(root, encoding="unicode")
+    return svg_tostring(root)

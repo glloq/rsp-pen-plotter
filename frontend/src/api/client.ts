@@ -424,6 +424,35 @@ export async function plotterCommand(
   return response.data
 }
 
+export interface SystemUpdateResponse {
+  ok: boolean
+  previous_commit: string | null
+  new_commit: string | null
+  updated: boolean
+  log: string
+  needs_restart: boolean
+}
+
+export async function systemUpdate(): Promise<SystemUpdateResponse> {
+  const response = await api.post<SystemUpdateResponse>('/system/update', null, {
+    // The update script can take a while (apt, npm install, build).
+    timeout: 5 * 60 * 1000,
+  })
+  return response.data
+}
+
+export interface SystemVersionResponse {
+  version: string
+  commit: string | null
+  branch: string | null
+  dirty: boolean
+}
+
+export async function systemVersion(): Promise<SystemVersionResponse> {
+  const response = await api.get<SystemVersionResponse>('/system/version')
+  return response.data
+}
+
 export async function uploadFile(
   file: File,
   profileName: string,

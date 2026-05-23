@@ -103,8 +103,11 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-2 text-xs">
-      <label class="text-slate-400">
+    <div
+      class="grid gap-2 text-xs"
+      :class="store.isMultiColor ? 'grid-cols-2' : 'grid-cols-2'"
+    >
+      <label v-if="store.isMultiColor" class="text-slate-400">
         <span class="flex items-center gap-1">
           {{ t('layers.penSlot') }}
           <span

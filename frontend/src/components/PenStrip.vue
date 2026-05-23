@@ -10,7 +10,8 @@ const ui = useUiStore()
 
 const slots = computed(() => {
   const profile = job.selectedProfile
-  if (!profile) return []
+  // Single-pen plotters: no magazine UI — there's nothing to assign or swap.
+  if (!profile || !job.isMultiColor) return []
   const pens = profile.pens ?? []
   const used = new Set(job.layers.map((l) => l.target_pen_slot).filter((s): s is number => s !== null))
   return Array.from({ length: profile.pen_slot_count }, (_, i) => {

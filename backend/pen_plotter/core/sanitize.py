@@ -14,11 +14,10 @@ from __future__ import annotations
 
 from xml.etree import ElementTree as ET
 
+from pen_plotter.core.svg_ns import svg_tostring
+
 _DANGEROUS_TAGS = {"script", "foreignobject", "iframe", "object", "embed", "animate", "set"}
 _URL_ATTRS = {"href", "{http://www.w3.org/1999/xlink}href", "xlink:href"}
-
-ET.register_namespace("", "http://www.w3.org/2000/svg")
-ET.register_namespace("inkscape", "http://www.inkscape.org/namespaces/inkscape")
 
 
 def _local(tag: str) -> str:
@@ -72,6 +71,8 @@ def sanitize_svg(svg: str) -> str:
     except ET.ParseError:
         return svg
     if _local(root.tag) in _DANGEROUS_TAGS:
-        return '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+        # Build via Element to make sure the same NS plumbing produces it.
+        empty = ET.Element("{http://www.w3.org/2000/svg}svg")
+        return svg_tostring(empty)
     _clean(root)
-    return ET.tostring(root, encoding="unicode")
+    return svg_tostring(root)
