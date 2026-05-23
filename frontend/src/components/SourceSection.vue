@@ -14,6 +14,11 @@ import {
 import { useEditState } from '../composables/useEditState'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
+import FileSourceCard from './edit/source/FileSourceCard.vue'
+import PrintModeCard from './edit/source/PrintModeCard.vue'
+import PaletteCard from './edit/source/PaletteCard.vue'
+import SegmentationCard from './edit/source/SegmentationCard.vue'
+import TypographyCard from './edit/source/TypographyCard.vue'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -24,11 +29,9 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 const algorithms = ref<AlgorithmInfo[]>([])
 const fonts = ref<string[]>([])
-// Segmentation knobs are open by default — they're the primary
-// controls users reach for after dropping an image. The typography
-// accordion stays collapsed since it only applies to .txt / .md files.
-const showSegmentation = ref(true)
-const showRender = ref(false)
+// SegmentationCard and TypographyCard own their own collapsed state
+// now; we only keep the drag-over flag here because the parent owns
+// the dropzone-vs-file-row layout decision (passed to FileSourceCard).
 const dragOver = ref(false)
 
 // Editable state for bitmap conversion. Grouped by concern so the
@@ -386,12 +389,6 @@ function onFileChange(event: Event): void {
   target.value = ''
 }
 
-function onDrop(event: DragEvent): void {
-  dragOver.value = false
-  const file = event.dataTransfer?.files?.[0] ?? null
-  if (file) selectedFile.value = file
-}
-
 function buildSegmentationOptions(): Record<string, unknown> {
   const b = bitmap.value
   if (b.segmentation_method === 'luminance_bands') return { num_bands: b.num_bands }
@@ -486,38 +483,9 @@ function clearAll(): void {
   store.clearJob()
 }
 
-// Threshold / palette editing helpers — the bitmap state's lists need
-// add/remove + per-cell editing.
-function addThreshold(): void {
-  bitmap.value.thresholds = [...bitmap.value.thresholds, 0.5].sort((a, b) => a - b)
-}
-function removeThreshold(i: number): void {
-  bitmap.value.thresholds = bitmap.value.thresholds.filter((_, idx) => idx !== i)
-}
-function updateThreshold(i: number, value: number): void {
-  const clamped = Math.max(0, Math.min(1, value))
-  const next = [...bitmap.value.thresholds]
-  next[i] = clamped
-  bitmap.value.thresholds = next.sort((a, b) => a - b)
-}
-function addPaletteColour(): void {
-  bitmap.value.palette = [...bitmap.value.palette, '#888888']
-  // Pinning a colour implies fixed_palette mode — kmeans would ignore
-  // the palette entry, which is confusing UX.
-  bitmap.value.segmentation_method = 'fixed_palette'
-}
-function removePaletteColour(i: number): void {
-  bitmap.value.palette = bitmap.value.palette.filter((_, idx) => idx !== i)
-  // No more pinned colours → fall back to automatic kmeans on ``num_colors``.
-  if (!bitmap.value.palette.length && bitmap.value.segmentation_method === 'fixed_palette') {
-    bitmap.value.segmentation_method = 'kmeans'
-  }
-}
-function updatePaletteColour(i: number, value: string): void {
-  const next = [...bitmap.value.palette]
-  next[i] = value
-  bitmap.value.palette = next
-}
+// Threshold and palette editing helpers used to live here; they're now
+// in the sub-components (SegmentationCard / PaletteCard) that own the
+// matching UI, so SourceSection stays as the orchestrator.
 
 const pageCount = computed(() => Number(store.uploadMetadata.page_count ?? 0))
 const currentPage = computed(() => Number(store.uploadMetadata.page ?? 0))
@@ -598,14 +566,10 @@ const manualSwapCount = computed(() =>
   Math.max(0, bitmap.value.palette.length - penSlotCount.value),
 )
 
-function setPaletteSource(follows: boolean): void {
-  paletteFollowsPens.value = follows
-  if (!follows && !bitmap.value.palette.length) {
-    // First switch to manual with an empty palette: seed it with the
-    // installed pens so the user has something to edit instead of a
-    // blank list.
-    bitmap.value.palette = [...installedPenColors.value]
-  }
+// PaletteCard owns the "switch to manual + seed from pens" logic now;
+// the parent only needs to mirror the boolean back into local state.
+function setPaletteFollowsPens(value: boolean): void {
+  paletteFollowsPens.value = value
 }
 
 // Mirror the preview-related local state into the shared edit-state
@@ -629,20 +593,12 @@ edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
 </script>
 
 <template>
+  <!-- Orchestrator. State (drafts, watchers, /preview cancel/retry,
+       upload guard) lives in script setup; the visual sections are
+       implemented in dedicated cards under ./edit/source/ so each
+       concern is editable in isolation. Conditional rendering still
+       happens here so subcomponents stay agnostic of the workflow. -->
   <section class="space-y-2">
-    <div class="flex items-baseline justify-between px-1">
-      <h2 class="text-xs uppercase tracking-wider text-slate-500">{{ t('prepare.source') }}</h2>
-      <button
-        v-if="selectedFile || store.job"
-        type="button"
-        class="text-[10px] uppercase tracking-wider text-slate-500 hover:text-red-300"
-        :title="t('upload.clear')"
-        @click="clearAll"
-      >
-        ✕ {{ t('upload.clear') }}
-      </button>
-    </div>
-
     <input
       ref="fileInput"
       type="file"
@@ -651,52 +607,15 @@ edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
       @change="onFileChange"
     />
 
-    <!-- Compact file row when a file is already attached: no dropzone
-         since the modal opens with a file 100% of the time (FilesPane
-         / App drop). The dashed dropzone only renders for the edge
-         case of an empty placement awaiting a first file. -->
-    <div
-      v-if="selectedFile"
-      class="flex items-center gap-2 rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs"
-    >
-      <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-800 text-[10px] text-slate-400" aria-hidden="true">
-        {{ kind === 'bitmap' ? '🖼' : kind === 'typography' ? 'Aa' : '📄' }}
-      </span>
-      <div class="min-w-0 flex-1">
-        <p class="truncate font-medium text-slate-100" :title="selectedFile.name">
-          {{ selectedFile.name }}
-        </p>
-        <p class="text-[10px] text-slate-500">
-          {{ (selectedFile.size / 1024).toFixed(1) }} KB · {{ kind }}
-        </p>
-      </div>
-      <button
-        type="button"
-        class="shrink-0 rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-100 hover:bg-slate-600"
-        :title="t('upload.changeFile')"
-        @click="openPicker"
-      >
-        {{ t('upload.changeFile') }}
-      </button>
-    </div>
-    <div
-      v-else
-      class="rounded-lg border-2 border-dashed px-3 py-3 text-center transition"
-      :class="dragOver ? 'border-emerald-500 bg-emerald-950/30' : 'border-slate-700 bg-slate-900/40'"
-      @dragenter.prevent="dragOver = true"
-      @dragover.prevent="dragOver = true"
-      @dragleave.prevent="dragOver = false"
-      @drop.prevent="onDrop"
-    >
-      <p class="text-sm text-slate-400">{{ t('upload.dropHere') }}</p>
-      <button
-        type="button"
-        class="mt-2 rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
-        @click="openPicker"
-      >
-        {{ t('upload.pick') }}
-      </button>
-    </div>
+    <FileSourceCard
+      :selected-file="selectedFile"
+      :kind="kind"
+      :has-job="Boolean(store.job)"
+      v-model:drag-over="dragOver"
+      @pick="openPicker"
+      @clear="clearAll"
+      @drop="(file) => (selectedFile = file)"
+    />
 
     <p
       v-if="selectedFile && previewError"
@@ -705,332 +624,34 @@ edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
       {{ previewError }}
     </p>
 
-    <!-- ============================== PRINT MODE ==============================
-         The output SVG is the seed of everything downstream (preview,
-         layers, gcode) so we expose a top-level mode picker here: split
-         the image into N colour layers, or collapse it into a single
-         ink rendered with halftone / stippling. Single-colour is the
-         "one pen" workflow people ask for when the plotter has only
-         one ink loaded.  -->
-    <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
-      <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('printMode.title') }}</p>
-      <div class="grid grid-cols-2 gap-1">
-        <button
-          type="button"
-          class="rounded border px-2 py-1.5 text-left text-[11px] transition"
-          :class="printMode === 'multicolor'
-            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
-          @click="setPrintMode('multicolor')"
-        >
-          <span class="block font-medium">{{ t('printMode.multicolor') }}</span>
-          <span class="block text-[9px] text-slate-500">{{ t('printMode.multicolorHint') }}</span>
-        </button>
-        <button
-          type="button"
-          class="rounded border px-2 py-1.5 text-left text-[11px] transition"
-          :class="printMode === 'monochrome'
-            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
-          @click="setPrintMode('monochrome')"
-        >
-          <span class="block font-medium">{{ t('printMode.monochrome') }}</span>
-          <span class="block text-[9px] text-slate-500">{{ t('printMode.monochromeHint') }}</span>
-        </button>
-      </div>
-    </div>
+    <PrintModeCard
+      v-if="selectedFile && showsBitmapForm"
+      :mode="printMode"
+      @update:mode="setPrintMode"
+    />
 
-    <!-- ============================== PALETTE (pen-driven) ============================== -->
-    <!-- Default: palette follows the machine's installed pens (slot
-         colours, locked for editing). Override switches to manual mode
-         where the user can add colours beyond the available slots, which
-         will require a pause-for-swap during plotting. Hidden in
-         monochrome mode since there's only one ink to choose. -->
-    <div v-if="selectedFile && showsBitmapForm && printMode === 'multicolor'" class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
-      <div class="flex items-baseline justify-between">
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('palette.title') }}</p>
-        <div class="flex overflow-hidden rounded border border-slate-700">
-          <button
-            type="button"
-            class="px-2 py-0.5 text-[10px] transition"
-            :class="paletteFollowsPens
-              ? 'bg-slate-700 text-slate-100'
-              : 'text-slate-400 hover:bg-slate-800'"
-            :disabled="!installedPenColors.length"
-            @click="setPaletteSource(true)"
-          >
-            {{ t('palette.followPens') }}
-          </button>
-          <button
-            type="button"
-            class="px-2 py-0.5 text-[10px] transition"
-            :class="!paletteFollowsPens
-              ? 'bg-slate-700 text-slate-100'
-              : 'text-slate-400 hover:bg-slate-800'"
-            @click="setPaletteSource(false)"
-          >
-            {{ t('palette.manual') }}
-          </button>
-        </div>
-      </div>
+    <PaletteCard
+      v-if="selectedFile && showsBitmapForm && printMode === 'multicolor'"
+      :bitmap="bitmap"
+      :palette-follows-pens="paletteFollowsPens"
+      :installed-pen-colors="installedPenColors"
+      :pen-slot-count="penSlotCount"
+      :manual-swap-count="manualSwapCount"
+      @update:palette-follows-pens="setPaletteFollowsPens"
+    />
 
-      <!-- Pen-following mode: chips locked to the installed pens, with
-           slot numbers so the user knows which pen will plot what. -->
-      <div v-if="paletteFollowsPens" class="space-y-1.5">
-        <p v-if="!installedPenColors.length" class="text-[10px] text-amber-300">
-          {{ t('palette.noPensInstalled') }}
-        </p>
-        <div v-else class="flex flex-wrap gap-1.5">
-          <span
-            v-for="(color, i) in installedPenColors"
-            :key="i"
-            class="inline-flex items-center gap-1 rounded border border-slate-600 bg-slate-900 px-1.5 py-0.5"
-            :title="t('palette.slotTooltip', { index: i, color })"
-          >
-            <span
-              class="inline-block h-3 w-3 rounded border border-slate-600"
-              :style="{ backgroundColor: color }"
-            />
-            <span class="font-mono text-[10px] text-slate-400">#{{ i }}</span>
-            <span class="font-mono text-[10px] text-slate-200">{{ color }}</span>
-          </span>
-        </div>
-        <p class="text-[10px] text-slate-500">{{ t('palette.followHint') }}</p>
-      </div>
+    <SegmentationCard
+      v-if="selectedFile && showsBitmapForm && printMode === 'multicolor'"
+      :bitmap="bitmap"
+      :is-document="kind === 'document'"
+    />
 
-      <!-- Manual mode: number-of-colours + freely editable palette + add. -->
-      <div v-else class="space-y-2">
-        <label class="block text-slate-400">
-          {{ t('convert.numColors') }}
-          <input
-            v-model.number="bitmap.num_colors"
-            type="number"
-            min="1"
-            max="16"
-            :disabled="bitmap.segmentation_method === 'fixed_palette' && bitmap.palette.length > 0"
-            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 disabled:opacity-50"
-          />
-        </label>
+    <TypographyCard
+      v-if="selectedFile && kind === 'typography'"
+      :typo="typo"
+      :fonts="fonts"
+    />
 
-        <div class="space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">{{ t('convert.specificColors') }}</span>
-            <button
-              type="button"
-              class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
-              @click="addPaletteColour"
-            >
-              + {{ t('convert.addColour') }}
-            </button>
-          </div>
-          <p v-if="!bitmap.palette.length" class="text-[10px] text-slate-500">
-            {{ t('convert.specificColorsHint') }}
-          </p>
-          <div v-for="(hex, i) in bitmap.palette" :key="i" class="flex items-center gap-1">
-            <input
-              type="color"
-              :value="hex"
-              class="h-7 w-12 cursor-pointer rounded border border-slate-700 bg-slate-900"
-              @input="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
-            />
-            <input
-              type="text"
-              :value="hex"
-              class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-              @change="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
-            />
-            <button
-              type="button"
-              class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
-              @click="removePaletteColour(i)"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Manual-swap warning: the palette exceeds the available pen
-           slots, so the plotter will pause and prompt the operator. -->
-      <p
-        v-if="manualSwapCount > 0"
-        class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-[11px] text-amber-200"
-      >
-        ⚠ {{ t('palette.manualSwap', { count: manualSwapCount, total: bitmap.palette.length, slots: penSlotCount }) }}
-      </p>
-    </div>
-
-    <!-- ============================== SEGMENTATION ==============================
-         Hidden in monochrome mode — there's nothing to segment when the
-         output is a single layer drawn with one ink. -->
-    <div v-if="selectedFile && showsBitmapForm && printMode === 'multicolor'" class="rounded-lg border border-slate-700 bg-slate-800">
-      <button
-        type="button"
-        class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
-        :aria-expanded="showSegmentation"
-        @click="showSegmentation = !showSegmentation"
-      >
-        {{ t('convert.segmentation') }}
-        <span class="text-slate-500">{{ showSegmentation ? '−' : '+' }}</span>
-      </button>
-      <div v-if="showSegmentation" class="space-y-2 border-t border-slate-700 p-3 text-xs">
-        <p v-if="kind === 'document'" class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400">
-          {{ t('convert.embeddedImageHint') }}
-        </p>
-
-        <!-- Method picker -->
-        <div class="space-y-1">
-          <p class="text-slate-400">{{ t('convert.segmentationMethod') }}</p>
-          <div class="grid grid-cols-2 gap-1">
-            <button
-              v-for="method in (['kmeans', 'luminance_bands', 'thresholds', 'fixed_palette'] as SegmentationMethod[])"
-              :key="method"
-              type="button"
-              class="rounded border px-2 py-1.5 text-left text-[11px] transition"
-              :class="bitmap.segmentation_method === method
-                ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
-              :title="t(`convert.seg_${method}_hint`)"
-              @click="bitmap.segmentation_method = method"
-            >
-              <span class="block font-medium">{{ t(`convert.seg_${method}`) }}</span>
-              <span class="block text-[9px] text-slate-500">{{ t(`convert.seg_${method}_hint`) }}</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Method-specific params -->
-        <label v-if="bitmap.segmentation_method === 'kmeans'" class="block text-slate-400">
-          {{ t('convert.numColors') }}
-          <input v-model.number="bitmap.num_colors" type="number" min="1" max="32" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-        </label>
-
-        <label v-else-if="bitmap.segmentation_method === 'luminance_bands'" class="block text-slate-400">
-          {{ t('convert.numBands') }}
-          <input v-model.number="bitmap.num_bands" type="number" min="2" max="16" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-        </label>
-
-        <div v-else-if="bitmap.segmentation_method === 'thresholds'" class="space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">{{ t('convert.thresholds') }}</span>
-            <button
-              type="button"
-              class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
-              @click="addThreshold"
-            >
-              + {{ t('convert.addThreshold') }}
-            </button>
-          </div>
-          <div v-for="(value, i) in bitmap.thresholds" :key="i" class="flex items-center gap-1">
-            <input
-              type="number"
-              min="0"
-              max="1"
-              step="0.01"
-              :value="value"
-              class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-              @change="(e) => updateThreshold(i, Number((e.target as HTMLInputElement).value))"
-            />
-            <button
-              type="button"
-              class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
-              @click="removeThreshold(i)"
-            >
-              ✕
-            </button>
-          </div>
-          <p class="text-[10px] text-slate-500">{{ t('convert.thresholdsHint') }}</p>
-        </div>
-
-        <p v-else-if="bitmap.segmentation_method === 'fixed_palette'" class="text-[10px] text-slate-500">
-          {{ t('convert.fixedPaletteRefHint') }}
-        </p>
-
-        <!-- Post-processing -->
-        <div class="border-t border-slate-700 pt-2 space-y-2">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('convert.postProcess') }}</p>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="block text-slate-400">
-              {{ t('convert.minRegion') }}
-              <input v-model.number="bitmap.min_region_pixels" type="number" min="0" max="1000" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">
-              {{ t('convert.mergeDeltaE') }}
-              <input v-model.number="bitmap.merge_delta_e" type="number" min="0" max="50" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="flex items-center gap-2 self-end text-slate-400">
-              <input v-model="bitmap.drop_background" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
-              {{ t('convert.dropBackground') }}
-            </label>
-            <label class="block text-slate-400">{{ t('convert.bgLuminance') }}
-              <input v-model.number="bitmap.background_luminance" type="number" min="0" max="1" step="0.01" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-          </div>
-          <label class="block text-slate-400">{{ t('convert.maxDim') }}
-            <input v-model.number="bitmap.max_dimension_px" type="number" min="16" max="4096" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-        </div>
-      </div>
-    </div>
-
-    <!-- Render algorithm has moved into each LayerCard — operators pick a
-         style per colour layer in the "Layers" panel rather than choosing
-         one algorithm for the whole image here. -->
-
-    <!-- ============================ TYPOGRAPHY (unchanged) ========================== -->
-    <div v-if="selectedFile && kind === 'typography'" class="rounded-lg border border-slate-700 bg-slate-800">
-      <button
-        type="button"
-        class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
-        :aria-expanded="showRender"
-        @click="showRender = !showRender"
-      >
-        {{ t('convert.options') }}
-        <span class="text-slate-500">{{ showRender ? '−' : '+' }}</span>
-      </button>
-      <div v-if="showRender" class="space-y-2 border-t border-slate-700 p-3 text-xs">
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-slate-400">{{ t('convert.font') }}
-            <select v-model="typo.font" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-              <option v-for="font in fonts" :key="font" :value="font">{{ font }}</option>
-            </select>
-          </label>
-          <label class="block text-slate-400">{{ t('convert.alignment') }}
-            <select v-model="typo.alignment" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-              <option value="left">left</option>
-              <option value="center">center</option>
-              <option value="right">right</option>
-            </select>
-          </label>
-          <label class="block text-slate-400">{{ t('convert.fontSize') }}
-            <input v-model.number="typo.font_size_mm" type="number" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('convert.lineSpacing') }}
-            <input v-model.number="typo.line_spacing" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('convert.strokeWidth') }}
-            <input v-model.number="typo.stroke_width_mm" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('convert.margin') }}
-            <input v-model.number="typo.margin_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('convert.pageWidth') }}
-            <input v-model.number="typo.page_width_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('convert.pageHeight') }}
-            <input v-model.number="typo.page_height_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-        </div>
-      </div>
-    </div>
-
-    <!-- Re-upload warning: the placement currently has layers with
-         configured multi-pass stacks; running upload again will reset
-         them along with the layer ids. The button itself is also
-         gated by a window.confirm — this banner just makes the cost
-         visible before the click. -->
     <p
       v-if="selectedFile && multiPassLayerCount > 0 && store.job"
       class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1.5 text-[11px] text-amber-200"
