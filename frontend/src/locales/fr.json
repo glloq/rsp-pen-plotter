@@ -28,6 +28,21 @@
     "layout": "Mise en page",
     "output": "Génération"
   },
+  "files": {
+    "title": "Fichiers",
+    "addFile": "Ajouter un fichier",
+    "edit": "Éditer",
+    "editTitle": "Ouvrir les réglages de conversion",
+    "remove": "Retirer le fichier",
+    "empty": "Aucun fichier chargé.",
+    "emptyHint": "Glissez un fichier n'importe où sur la fenêtre ou cliquez sur « Ajouter un fichier » pour démarrer.",
+    "noLayers": "aucun calque"
+  },
+  "editModal": {
+    "title": "Réglages du fichier",
+    "close": "Fermer",
+    "done": "Terminer"
+  },
   "execute": {
     "connection": "Connexion",
     "terminator": "Terminator",
@@ -38,11 +53,10 @@
   },
   "canvas": {
     "sheet": "Plan",
-    "svg": "SVG",
     "simulator": "Simulation",
     "gcode": "G-code",
     "empty": "Importez un fichier pour voir l'aperçu ici.",
-    "emptyHint": "Glissez-déposez un fichier n'importe où, ou utilisez le panneau « Source » à gauche.",
+    "emptyHint": "Glissez-déposez un fichier n'importe où ou cliquez sur « Ajouter un fichier » dans le panneau Fichiers.",
     "emptyFormats": "SVG · PNG · JPG · PDF · DXF · EPS · DOCX · ODT · HTML · MD · TXT",
     "simulatorUnavailable": "Le simulateur n'est pas disponible pour ce dialecte.",
     "gcodeEmpty": "Aucun G-code généré pour le moment."
@@ -122,7 +136,8 @@
     "pauseNever": "jamais",
     "renderAlgorithm": "Style",
     "defaultAlgo": "défaut",
-    "rerenderFailed": "Échec du re-rendu du calque."
+    "rerenderFailed": "Échec du re-rendu du calque.",
+    "rerenderUnavailable": "Le re-rendu n'est pas disponible ; ré-importez le fichier pour appliquer le nouveau style."
   },
   "confirm": {
     "cancel": "Annuler",
@@ -173,7 +188,13 @@
     "embeddedImageOptions": "Vectorisation des images intégrées",
     "embeddedImageHint": "Ces options ne s'appliquent qu'aux images raster intégrées dans le document. Le texte et les vecteurs ne sont pas affectés.",
     "algorithm": "Algorithme",
-    "numColors": "Couleurs",
+    "numColors": "Nombre de couleurs",
+    "colorsHeader": "Couleurs",
+    "colorsModeAuto": "auto · {count} couleurs",
+    "colorsModeFixed": "{count} couleur(s) imposée(s)",
+    "specificColors": "Couleurs spécifiques",
+    "specificColorsHint": "Optionnel. Forcez certaines couleurs précises ; l'image sera ramenée à ces couleurs.",
+    "fixedPaletteRefHint": "Modifiez les couleurs imposées dans le bloc Couleurs ci-dessus.",
     "maxDim": "Taille max (px)",
     "dropBackground": "Retirer le fond",
     "bgLuminance": "Seuil de fond",

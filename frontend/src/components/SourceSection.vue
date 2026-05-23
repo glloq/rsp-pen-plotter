@@ -36,7 +36,11 @@ const bitmap = ref({
   num_colors: 4,              // kmeans
   num_bands: 4,               // luminance_bands
   thresholds: [0.33, 0.66] as number[], // thresholds
-  palette: ['#000000', '#ff0000', '#0000ff'] as string[], // fixed_palette
+  // Specific colours the user pins via the top-level "Colours" block.
+  // When non-empty, the segmentation switches to ``fixed_palette`` and
+  // snaps the image to exactly these colours; when empty, kmeans picks
+  // ``num_colors`` colours automatically.
+  palette: [] as string[],
   // -- Post-processing --
   min_region_pixels: 0,
   merge_delta_e: 0,
@@ -224,6 +228,12 @@ onBeforeUnmount(() => {
 })
 
 onMounted(async () => {
+  // When the modal reopens after a drop-anywhere upload, the local file
+  // ref is unset. Seed it from the store so the user lands on the file
+  // info + conversion options instead of an empty drop zone.
+  if (!selectedFile.value && store.lastFile) {
+    selectedFile.value = store.lastFile
+  }
   try {
     ;[algorithms.value, fonts.value] = await Promise.all([getAlgorithms(), getFonts()])
   } catch {
@@ -346,9 +356,16 @@ function updateThreshold(i: number, value: number): void {
 }
 function addPaletteColour(): void {
   bitmap.value.palette = [...bitmap.value.palette, '#888888']
+  // Pinning a colour implies fixed_palette mode — kmeans would ignore
+  // the palette entry, which is confusing UX.
+  bitmap.value.segmentation_method = 'fixed_palette'
 }
 function removePaletteColour(i: number): void {
   bitmap.value.palette = bitmap.value.palette.filter((_, idx) => idx !== i)
+  // No more pinned colours → fall back to automatic kmeans on ``num_colors``.
+  if (!bitmap.value.palette.length && bitmap.value.segmentation_method === 'fixed_palette') {
+    bitmap.value.segmentation_method = 'kmeans'
+  }
 }
 function updatePaletteColour(i: number, value: string): void {
   const next = [...bitmap.value.palette]
@@ -475,6 +492,70 @@ function openPicker(): void {
       </div>
     </div>
 
+    <!-- ============================== COLOURS (top-level) ============================== -->
+    <!-- Always-visible quick-pick for the number of colours + optional
+         pinned colours. Power-user knobs live in the "Segmentation"
+         accordion below. -->
+    <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+      <div class="flex items-baseline justify-between">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('convert.colorsHeader') }}</p>
+        <p class="text-[10px] text-slate-500">
+          {{ bitmap.segmentation_method === 'fixed_palette'
+            ? t('convert.colorsModeFixed', { count: bitmap.palette.length })
+            : t('convert.colorsModeAuto', { count: bitmap.num_colors }) }}
+        </p>
+      </div>
+
+      <label class="block text-slate-400">
+        {{ t('convert.numColors') }}
+        <input
+          v-model.number="bitmap.num_colors"
+          type="number"
+          min="1"
+          max="16"
+          :disabled="bitmap.segmentation_method === 'fixed_palette' && bitmap.palette.length > 0"
+          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 disabled:opacity-50"
+        />
+      </label>
+
+      <div class="space-y-1">
+        <div class="flex items-center justify-between">
+          <span class="text-slate-400">{{ t('convert.specificColors') }}</span>
+          <button
+            type="button"
+            class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
+            @click="addPaletteColour"
+          >
+            + {{ t('convert.addColour') }}
+          </button>
+        </div>
+        <p v-if="!bitmap.palette.length" class="text-[10px] text-slate-500">
+          {{ t('convert.specificColorsHint') }}
+        </p>
+        <div v-for="(hex, i) in bitmap.palette" :key="i" class="flex items-center gap-1">
+          <input
+            type="color"
+            :value="hex"
+            class="h-7 w-12 cursor-pointer rounded border border-slate-700 bg-slate-900"
+            @input="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
+          />
+          <input
+            type="text"
+            :value="hex"
+            class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+            @change="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
+          />
+          <button
+            type="button"
+            class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
+            @click="removePaletteColour(i)"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ============================== SEGMENTATION ============================== -->
     <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800">
       <button
@@ -555,39 +636,9 @@ function openPicker(): void {
           <p class="text-[10px] text-slate-500">{{ t('convert.thresholdsHint') }}</p>
         </div>
 
-        <div v-else-if="bitmap.segmentation_method === 'fixed_palette'" class="space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">{{ t('convert.palette') }}</span>
-            <button
-              type="button"
-              class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
-              @click="addPaletteColour"
-            >
-              + {{ t('convert.addColour') }}
-            </button>
-          </div>
-          <div v-for="(hex, i) in bitmap.palette" :key="i" class="flex items-center gap-1">
-            <input
-              type="color"
-              :value="hex"
-              class="h-7 w-12 cursor-pointer rounded border border-slate-700 bg-slate-900"
-              @input="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
-            />
-            <input
-              type="text"
-              :value="hex"
-              class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-              @change="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
-            />
-            <button
-              type="button"
-              class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
-              @click="removePaletteColour(i)"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
+        <p v-else-if="bitmap.segmentation_method === 'fixed_palette'" class="text-[10px] text-slate-500">
+          {{ t('convert.fixedPaletteRefHint') }}
+        </p>
 
         <!-- Post-processing -->
         <div class="border-t border-slate-700 pt-2 space-y-2">

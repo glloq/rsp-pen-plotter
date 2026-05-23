@@ -6,16 +6,19 @@ import AppHeader from './components/AppHeader.vue'
 import AppFooter from './components/AppFooter.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import EditModal from './components/EditModal.vue'
+import FilesPane from './components/FilesPane.vue'
 import PlotterDrawer from './components/PlotterDrawer.vue'
-import PreparePane from './components/PreparePane.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import { useJobStore } from './stores/job'
 import { useToastStore } from './stores/toasts'
+import { useUiStore } from './stores/ui'
 
 const { t, locale } = useI18n()
 const store = useJobStore()
 const toasts = useToastStore()
+const ui = useUiStore()
 const status = ref<string | null>(null)
 const version = ref<string | null>(null)
 const apiError = ref(false)
@@ -62,6 +65,9 @@ async function onWindowDrop(event: DragEvent): Promise<void> {
       t('toast.uploaded', { name: file.name, count: store.layers.length }),
       4000,
     )
+    // Land the operator straight in the conversion settings modal so the
+    // drop-anywhere workflow matches the "Edit" button workflow.
+    ui.openEditModal()
   }
 }
 
@@ -93,15 +99,16 @@ onBeforeUnmount(() => {
     <AppHeader :status="status" :version="version" :api-error="apiError" />
 
     <main
-      class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)]"
+      class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]"
     >
-      <PreparePane />
+      <FilesPane />
       <CanvasView />
     </main>
 
     <AppFooter />
     <SettingsDrawer />
     <PlotterDrawer />
+    <EditModal />
     <ConfirmDialog />
     <Toasts />
 
