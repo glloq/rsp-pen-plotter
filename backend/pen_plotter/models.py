@@ -23,6 +23,22 @@ class WorkspaceBounds(BaseModel):
     y_max: float
 
 
+class Placement(BaseModel):
+    """Sheet placement inside the machine workspace.
+
+    The sheet is the physical paper the operator has loaded; it can be smaller
+    than the machine workspace. ``offset_x_mm`` / ``offset_y_mm`` position the
+    sheet's top-left corner inside the workspace (relative to ``workspace.x_min``
+    / ``y_min``). When omitted from the API, generation falls back to using the
+    workspace itself as the drawable region — preserves backwards compat.
+    """
+
+    sheet_width_mm: float = Field(gt=0.0)
+    sheet_height_mm: float = Field(gt=0.0)
+    offset_x_mm: float = 0.0
+    offset_y_mm: float = 0.0
+
+
 class BoundingBox(BaseModel):
     """Axis-aligned bounding box of a layer's geometry, in millimeters."""
 
@@ -131,6 +147,18 @@ class LayerInfo(BaseModel):
     optimize: bool = True
     simplify_tolerance_mm: float = 0.05
     drawing_speed_mm_s: float | None = None
+    # Editable operator label for the colour, surfaced in the pause prompt
+    # ("Change pen to {color_label}"). Falls back to ``source_color`` when
+    # ``None`` so legacy jobs deserialize cleanly.
+    color_label: str | None = None
+    # Pause policy for the *beginning* of this layer:
+    #   - "auto": pause if the slot/colour differs from the previous layer
+    #     (the existing default behaviour, plus colour-change tracking for
+    #     mono-pen machines);
+    #   - "always": always insert a pause (useful when an operator wants a
+    #     break on a layer of the same colour);
+    #   - "never": never pause, even if the slot or colour changed.
+    pause_before: Literal["auto", "always", "never"] = "auto"
 
 
 class PreflightReport(BaseModel):

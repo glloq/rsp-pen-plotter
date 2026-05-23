@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LayerInfo } from '../api/client'
+import type { LayerInfo, PausePolicy } from '../api/client'
 import { formatLayerLabel } from '../lib/labels'
 import { useJobStore } from '../stores/job'
 
@@ -59,6 +59,21 @@ function onOptimize(event: Event): void {
   })
 }
 
+function onColorLabel(event: Event): void {
+  const raw = (event.target as HTMLInputElement).value.trim()
+  store.updateLayer(props.layer.layer_id, { color_label: raw || null })
+}
+
+function setPause(policy: PausePolicy): void {
+  store.updateLayer(props.layer.layer_id, { pause_before: policy })
+}
+
+const pauseChoices: Array<{ value: PausePolicy; icon: string; key: string }> = [
+  { value: 'auto', icon: '⏸', key: 'layers.pauseAuto' },
+  { value: 'always', icon: '✋', key: 'layers.pauseAlways' },
+  { value: 'never', icon: '▶', key: 'layers.pauseNever' },
+]
+
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = Math.round(seconds % 60)
@@ -103,10 +118,8 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       </div>
     </div>
 
-    <div
-      class="grid gap-2 text-xs"
-      :class="store.isMultiColor ? 'grid-cols-2' : 'grid-cols-2'"
-    >
+    <div class="grid grid-cols-2 gap-2 text-xs">
+      <!-- Multi-pen machines: explicit slot assignment. -->
       <label v-if="store.isMultiColor" class="text-slate-400">
         <span class="flex items-center gap-1">
           {{ t('layers.penSlot') }}
@@ -127,6 +140,24 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
           </option>
         </select>
       </label>
+      <!-- Mono-pen machines: colour label used in the pause prompt. -->
+      <label v-else class="text-slate-400">
+        <span class="flex items-center gap-1">
+          {{ t('layers.colorLabel') }}
+          <span
+            class="inline-block h-3 w-3 rounded-full border border-slate-600"
+            :style="{ backgroundColor: swatchColor }"
+          />
+        </span>
+        <input
+          type="text"
+          :value="layer.color_label ?? ''"
+          :placeholder="layer.source_color"
+          class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
+          @change="onColorLabel"
+        />
+      </label>
+
       <label class="text-slate-400">
         {{ t('layers.speed') }}
         <input
@@ -158,6 +189,26 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
         />
         {{ t('layers.optimize') }}
       </label>
+    </div>
+
+    <div class="flex items-center gap-1.5 text-[10px] text-slate-500">
+      <span>{{ t('layers.pauseBefore') }}</span>
+      <div class="flex overflow-hidden rounded border border-slate-700">
+        <button
+          v-for="choice in pauseChoices"
+          :key="choice.value"
+          type="button"
+          class="px-2 py-0.5 transition"
+          :class="layer.pause_before === choice.value
+            ? 'bg-slate-700 text-slate-100'
+            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+          :title="t(choice.key)"
+          @click="setPause(choice.value)"
+        >
+          <span aria-hidden="true">{{ choice.icon }}</span>
+          <span class="ml-1">{{ t(choice.key) }}</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>

@@ -17,8 +17,9 @@ from pen_plotter.core.gcode import (
     _exceeds_workspace,
     _make_transform,
     _read_layers,
+    sheet_exceeds_workspace,
 )
-from pen_plotter.models import MachineProfile, PreflightReport
+from pen_plotter.models import MachineProfile, Placement, PreflightReport
 
 
 def _polyline_length(points: list[tuple[float, float]]) -> float:
@@ -35,6 +36,7 @@ def preflight_report(
     layers: list[LayerGeneration] | None = None,
     scale_mode: ScaleMode = "fit",
     margin_mm: float = 10.0,
+    placement: Placement | None = None,
 ) -> PreflightReport:
     """Build a :class:`PreflightReport` for a pivot SVG and target profile.
 
@@ -51,13 +53,15 @@ def preflight_report(
     geometry = _read_layers(svg)
     overrides = {item.layer_id: item for item in (layers or [])}
     bounds = _bounds_of(geometry)
-    transform = _make_transform(bounds, profile, scale_mode, margin_mm)
+    transform = _make_transform(bounds, profile, scale_mode, margin_mm, placement)
     pens = {pen.index: pen for pen in profile.effective_pens()}
 
     warnings: list[str] = []
     within_bounds = bounds.empty or not _exceeds_workspace(bounds, transform, profile)
     if not within_bounds:
         warnings.append("The drawing exceeds the workspace; coordinates may be out of bounds.")
+    if placement is not None and sheet_exceeds_workspace(profile, placement):
+        warnings.append("Sheet exceeds the workspace; check sheet size and offset.")
 
     drawing_length = 0.0
     travel_length = 0.0
@@ -67,21 +71,43 @@ def preflight_report(
     path_count = 0
     missing: list[int] = []
     previous_slot: int | None = None
+    previous_color: str | None = None
     previous_end: tuple[float, float] | None = None
     travel_speed = max(profile.travel_speed_mm_s, 1e-9)
+    mono_pen = profile.pen_slot_count <= 1
 
     for layer in geometry:
         setting = overrides.get(layer.label)
         slot = setting.target_pen_slot if setting else None
+        source_color = setting.source_color if setting else None
+        pause_before = setting.pause_before if setting else "auto"
 
         if slot is not None and slot not in missing:
             pen = pens.get(slot)
             if pen is None or not pen.installed:
                 missing.append(slot)
 
-        if profile.tool_change_method != "none" and slot is not None and slot != previous_slot:
+        # Mirror the pause logic in ``generate_gcode`` so the count matches the
+        # number of operator prompts the streamer will actually surface.
+        slot_changed = slot is not None and slot != previous_slot
+        color_changed = (
+            mono_pen and source_color is not None and source_color != previous_color
+        )
+        first_pose = (
+            mono_pen
+            and previous_color is None
+            and previous_slot is None
+            and source_color is not None
+        )
+        will_pause = profile.tool_change_method != "none" and pause_before != "never" and (
+            pause_before == "always" or slot_changed or color_changed or first_pose
+        )
+        if will_pause:
             pen_changes += 1
+        if slot is not None:
             previous_slot = slot
+        if source_color is not None:
+            previous_color = source_color
 
         override_speed = setting.drawing_speed_mm_s if setting else None
         speed = max(override_speed or profile.drawing_speed_mm_s, 1e-9)

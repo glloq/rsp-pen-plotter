@@ -50,12 +50,21 @@ class BitmapConverter(Converter):
         }
     )
 
-    def convert(self, data: bytes, *, options: dict[str, Any] | None = None) -> ConversionResult:
+    def convert(
+        self,
+        data: bytes,
+        *,
+        options: dict[str, Any] | None = None,
+        fast: bool = False,
+    ) -> ConversionResult:
         """Convert image bytes into a layered SVG pivot document.
 
         Args:
             data: Raw image file bytes.
             options: Optional parameters validated against :class:`BitmapOptions`.
+            fast: When ``True``, force a small ``max_dimension_px`` and a single
+                k-means initialisation. Used by the ``/preview`` endpoint to
+                trade quality for sub-second turnaround.
 
         Returns:
             A :class:`ConversionResult` whose SVG contains one labeled ``<g>``
@@ -64,9 +73,11 @@ class BitmapConverter(Converter):
         opts = BitmapOptions.model_validate(options or {})
         algorithm = get_algorithm(opts.algorithm)
 
+        max_dim = 128 if fast else opts.max_dimension_px
+        n_init = 1 if fast else 10
         image = self._load_rgb(data)
-        image = self._fit_within(image, opts.max_dimension_px)
-        labels, palette = self._quantize(image, opts.num_colors)
+        image = self._fit_within(image, max_dim)
+        labels, palette = self._quantize(image, opts.num_colors, n_init=n_init)
 
         height, width = labels.shape
         warnings: list[str] = []
@@ -107,9 +118,14 @@ class BitmapConverter(Converter):
 
     @staticmethod
     def _quantize(
-        image: Image.Image, num_colors: int
+        image: Image.Image, num_colors: int, *, n_init: int = 10
     ) -> tuple[NDArray[np.intp], NDArray[np.uint8]]:
         """Cluster pixels into ``num_colors`` colors via k-means.
+
+        Args:
+            n_init: Number of k-means restarts. The preview path drops this to
+                1 to avoid paying ~10× the runtime for a frame the user will
+                replace seconds later.
 
         Returns:
             A ``(labels, palette)`` pair: ``labels`` is a (height, width) array
@@ -117,7 +133,7 @@ class BitmapConverter(Converter):
         """
         arr = np.asarray(image, dtype=np.float64).reshape(-1, 3)
         k = min(num_colors, max(1, np.unique(arr, axis=0).shape[0]))
-        model = KMeans(n_clusters=k, n_init=10, random_state=0)
+        model = KMeans(n_clusters=k, n_init=n_init, random_state=0)
         flat_labels = model.fit_predict(arr)
         palette = model.cluster_centers_.round().astype(np.uint8)
         labels = flat_labels.reshape(image.height, image.width).astype(np.intp)

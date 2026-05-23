@@ -31,20 +31,34 @@ export function unionBounds(boxes: BoundingBox[]): BoundingBox | null {
   return Number.isFinite(u.x_min) ? u : null
 }
 
+/** A rectangle in workspace millimetres. */
+export interface DrawableRegion {
+  x_min: number
+  y_min: number
+  x_max: number
+  y_max: number
+}
+
 /**
  * Mirror of the backend `_make_transform` / `_exceeds_workspace` logic
  * (backend/pen_plotter/core/gcode.py), so the preview shows the same
  * placement, scale and out-of-bounds state the generator will produce.
+ *
+ * ``region`` (the sheet rectangle) is where the drawing is centred and
+ * scaled to fit; when omitted, the workspace itself is used (legacy).
+ * ``exceeds`` is still checked against the workspace bounds.
  */
 export function computePlacement(
   bounds: BoundingBox,
   profile: MachineProfile,
   scaleMode: 'fit' | 'actual',
   marginMm: number,
+  region?: DrawableRegion,
 ): Placement {
   const ws = profile.workspace
-  const wsW = ws.x_max - ws.x_min
-  const wsH = ws.y_max - ws.y_min
+  const drawable = region ?? ws
+  const regionW = drawable.x_max - drawable.x_min
+  const regionH = drawable.y_max - drawable.y_min
   const bboxW = Math.max(bounds.x_max - bounds.x_min, 1e-9)
   const bboxH = Math.max(bounds.y_max - bounds.y_min, 1e-9)
 
@@ -52,20 +66,20 @@ export function computePlacement(
   if (scaleMode === 'actual') {
     scale = 1.0
   } else {
-    const usableW = Math.max(wsW - 2 * marginMm, 1e-9)
-    const usableH = Math.max(wsH - 2 * marginMm, 1e-9)
+    const usableW = Math.max(regionW - 2 * marginMm, 1e-9)
+    const usableH = Math.max(regionH - 2 * marginMm, 1e-9)
     scale = Math.min(usableW / bboxW, usableH / bboxH)
   }
 
   const bboxCx = (bounds.x_min + bounds.x_max) / 2
   const bboxCy = (bounds.y_min + bounds.y_max) / 2
-  const wsCx = (ws.x_min + ws.x_max) / 2
-  const wsCy = (ws.y_min + ws.y_max) / 2
+  const regionCx = (drawable.x_min + drawable.x_max) / 2
+  const regionCy = (drawable.y_min + drawable.y_max) / 2
   const yUp = profile.origin === 'bottom_left' || profile.origin === 'center'
 
   const transform = (x: number, y: number): [number, number] => [
-    wsCx + (x - bboxCx) * scale,
-    wsCy + (y - bboxCy) * scale * (yUp ? -1 : 1),
+    regionCx + (x - bboxCx) * scale,
+    regionCy + (y - bboxCy) * scale * (yUp ? -1 : 1),
   ]
 
   const corners: [number, number][] = [

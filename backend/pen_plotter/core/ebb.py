@@ -20,7 +20,7 @@ from pen_plotter.core.gcode import (
     _make_transform,
     _read_layers,
 )
-from pen_plotter.models import EbbConfig, MachineProfile
+from pen_plotter.models import EbbConfig, MachineProfile, Placement
 
 
 def generate_ebb(
@@ -30,6 +30,7 @@ def generate_ebb(
     layers: list[LayerGeneration] | None = None,
     scale_mode: ScaleMode = "fit",
     margin_mm: float = 10.0,
+    placement: Placement | None = None,
 ) -> str:
     """Generate an EBB command program for a pivot SVG.
 
@@ -57,7 +58,7 @@ def generate_ebb(
 
     overrides = {item.layer_id: item for item in (layers or [])}
     bounds = _bounds_of(layer_geometry)
-    transform = _make_transform(bounds, profile, scale_mode, margin_mm)
+    transform = _make_transform(bounds, profile, scale_mode, margin_mm, placement)
 
     out: list[str] = [
         f"; OmniPlot EBB program for {profile.name}",
@@ -88,12 +89,43 @@ def generate_ebb(
         cur_x, cur_y = x_mm, y_mm
         return f"SM,{duration_ms},{da},{db}"
 
+    mono_pen = profile.pen_slot_count <= 1
+    previous_color: str | None = None
+
     if not bounds.empty:
         for layer in layer_geometry:
             setting = overrides.get(layer.label)
             draw_speed = (
                 setting.drawing_speed_mm_s if setting else None
             ) or profile.drawing_speed_mm_s
+
+            # Mono-pen colour-change prompt: emit the same comment + pause
+            # command used by the G-code path so the streamer can intercept
+            # it via ``guided_pause_points``. The pause command never reaches
+            # the EBB board (the streamer skips it).
+            source_color = setting.source_color if setting else None
+            color_label = setting.color_label if setting else None
+            pause_before = setting.pause_before if setting else "auto"
+            color_changed = (
+                mono_pen and source_color is not None and source_color != previous_color
+            )
+            first_pose = (
+                mono_pen and previous_color is None and source_color is not None
+            )
+            should_pause = (
+                profile.tool_change_method == "manual_pause"
+                and profile.tool_change_command.strip()
+                and pause_before != "never"
+                and (pause_before == "always" or color_changed or first_pose)
+            )
+            if should_pause:
+                label = color_label or source_color or "#000000"
+                color = source_color or "#000000"
+                out.append(f"; Change pen: {label} ({color})")
+                out.append(profile.tool_change_command)
+            if source_color is not None:
+                previous_color = source_color
+
             for polyline in layer.polylines:
                 sx, sy = transform(*polyline[0])
                 travel = move(sx, sy, profile.travel_speed_mm_s)

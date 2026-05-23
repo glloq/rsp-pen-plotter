@@ -14,6 +14,8 @@ function layer(id: string, slot: number | null): LayerInfo {
     optimize: true,
     simplify_tolerance_mm: 0.05,
     drawing_speed_mm_s: null,
+    color_label: null,
+    pause_before: 'auto',
   }
 }
 
