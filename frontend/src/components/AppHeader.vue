@@ -11,14 +11,10 @@ defineProps<{
   apiError: boolean
 }>()
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const ui = useUiStore()
 const plotter = usePlotterStore()
 const { status: plotterStatus } = storeToRefs(plotter)
-
-function setLocale(value: string): void {
-  locale.value = value
-}
 </script>
 
 <template>
@@ -64,23 +60,6 @@ function setLocale(value: string): void {
         </svg>
         <span class="hidden sm:inline">{{ t('header.settings') }}</span>
       </button>
-
-      <div class="flex overflow-hidden rounded border border-slate-700 text-xs">
-        <button
-          class="px-2 py-1"
-          :class="locale === 'en' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
-          @click="setLocale('en')"
-        >
-          EN
-        </button>
-        <button
-          class="px-2 py-1"
-          :class="locale === 'fr' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'"
-          @click="setLocale('fr')"
-        >
-          FR
-        </button>
-      </div>
 
       <span
         v-if="apiError"

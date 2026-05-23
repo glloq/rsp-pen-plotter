@@ -96,7 +96,21 @@ function resetView(): void {
   panX.value = 0
   panY.value = 0
 }
+function zoomIn(): void {
+  zoom.value = Math.min(zoom.value * 1.25, 12)
+}
+function zoomOut(): void {
+  zoom.value = Math.max(zoom.value / 1.25, 0.2)
+}
 watch(() => store.selectedProfileName, () => resetView())
+
+// Snap-to-grid: 0 = off, otherwise grid step in mm.
+const snapMm = ref(0)
+const snapOptions = [0, 1, 5, 10]
+function snap(value: number): number {
+  if (snapMm.value <= 0) return value
+  return Math.round(value / snapMm.value) * snapMm.value
+}
 
 // Pointer interaction state. The active gesture is bound to whichever
 // placement the user grabbed (recorded in ``activePlacementId``).
@@ -151,8 +165,8 @@ function onPointerMove(event: PointerEvent): void {
   const dyMm = dyPx / k
   if (mode.value === 'move-drawing') {
     updatePlacementRect(activePlacementId.value, {
-      x_mm: startRegion.x_mm + dxMm,
-      y_mm: startRegion.y_mm + dyMm,
+      x_mm: snap(startRegion.x_mm + dxMm),
+      y_mm: snap(startRegion.y_mm + dyMm),
       width_mm: startRegion.width_mm,
       height_mm: startRegion.height_mm,
     })
@@ -178,7 +192,12 @@ function onPointerMove(event: PointerEvent): void {
     } else if (handle.value.includes('s')) {
       h = Math.max(minSize, startRegion.height_mm + dyMm)
     }
-    updatePlacementRect(activePlacementId.value, { x_mm: x, y_mm: y, width_mm: w, height_mm: h })
+    updatePlacementRect(activePlacementId.value, {
+      x_mm: snap(x),
+      y_mm: snap(y),
+      width_mm: snapMm.value > 0 ? Math.max(minSize, snap(w)) : w,
+      height_mm: snapMm.value > 0 ? Math.max(minSize, snap(h)) : h,
+    })
   }
 }
 
@@ -310,28 +329,59 @@ onMounted(resetView)
 
 <template>
   <div v-if="workspace" class="flex h-full w-full min-h-0 flex-col gap-2">
-    <header class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs">
-      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 class="uppercase tracking-wide text-slate-400">{{ t('sheet.title') }}</h2>
-        <span class="font-mono text-slate-300">
-          {{ t('sheet.workArea') }}: {{ workspace.wsW.toFixed(0) }}×{{ workspace.wsH.toFixed(0) }} mm
-        </span>
-        <span v-if="placementCount" class="font-mono text-slate-300">
-          {{ t('sheet.placements', { count: placementCount }) }}
-        </span>
-        <span class="font-mono text-slate-400">{{ t('sheet.view') }}: {{ Math.round(zoom * 100) }}%</span>
-      </div>
+    <header
+      class="flex flex-wrap items-center gap-1 rounded border border-slate-700 bg-slate-900/40 px-2 py-1.5 text-xs"
+    >
       <div class="flex items-center gap-1">
         <button
           type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800"
+          :title="t('sheet.zoomOut')"
+          @click="zoomOut"
+        >−</button>
+        <span class="w-12 text-center font-mono text-slate-300">{{ Math.round(zoom * 100) }}%</span>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800"
+          :title="t('sheet.zoomIn')"
+          @click="zoomIn"
+        >+</button>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:bg-slate-800"
           @click="resetView"
         >
           {{ t('sheet.resetView') }}
         </button>
+      </div>
+
+      <div class="h-5 w-px bg-slate-700 mx-1" />
+
+      <div class="flex items-center gap-1">
+        <span class="text-slate-500">{{ t('sheet.snap') }}</span>
+        <div class="flex overflow-hidden rounded border border-slate-700">
+          <button
+            v-for="opt in snapOptions"
+            :key="opt"
+            type="button"
+            class="px-2 py-1 transition"
+            :class="snapMm === opt
+              ? 'bg-slate-700 text-white'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+            @click="snapMm = opt"
+          >
+            {{ opt === 0 ? t('sheet.snapOff') : `${opt} mm` }}
+          </button>
+        </div>
+      </div>
+
+      <div class="ml-auto flex items-center gap-2">
+        <span v-if="placementCount" class="font-mono text-slate-400">
+          {{ t('sheet.placements', { count: placementCount }) }}
+        </span>
         <button
           type="button"
-          class="ml-2 rounded bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!canGenerate"
           :title="store.missingPenSlots.length ? t('preflight.missingPens', { slots: store.missingPenSlots.join(', ') }) : ''"
           @click="generateAndShow"

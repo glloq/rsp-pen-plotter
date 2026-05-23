@@ -10,8 +10,12 @@ import {
 import { confirmAction } from '../composables/confirm'
 import { useToastStore } from '../stores/toasts'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const toasts = useToastStore()
+
+function setLocale(value: 'en' | 'fr'): void {
+  locale.value = value
+}
 
 const version = ref<SystemVersionResponse | null>(null)
 const versionError = ref<string | null>(null)
@@ -67,6 +71,28 @@ onMounted(loadVersion)
       <h2 class="text-base font-semibold text-slate-100">{{ t('system.title') }}</h2>
       <p class="mt-1 text-xs text-slate-400">{{ t('system.subtitle') }}</p>
     </header>
+
+    <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 text-xs">
+      <h3 class="mb-2 text-[11px] uppercase tracking-wider text-slate-500">{{ t('system.language') }}</h3>
+      <div class="flex overflow-hidden rounded border border-slate-700 text-xs">
+        <button
+          type="button"
+          class="flex-1 px-3 py-1.5"
+          :class="locale === 'en' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+          @click="setLocale('en')"
+        >
+          {{ t('system.languageEn') }}
+        </button>
+        <button
+          type="button"
+          class="flex-1 px-3 py-1.5"
+          :class="locale === 'fr' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+          @click="setLocale('fr')"
+        >
+          {{ t('system.languageFr') }}
+        </button>
+      </div>
+    </div>
 
     <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 text-xs">
       <h3 class="mb-2 text-[11px] uppercase tracking-wider text-slate-500">{{ t('system.installed') }}</h3>
