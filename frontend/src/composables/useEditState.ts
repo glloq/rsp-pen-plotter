@@ -29,6 +29,11 @@ const _kind = ref<EditFileKind>('none')
 const _pageCount = ref<number>(0)
 const _currentPage = ref<number>(0)
 let _goToPage: (page: number) => Promise<void> = async () => {}
+// Callbacks installed by SourceSection so the preview pane can cancel
+// or retry the in-flight /preview round-trip without reaching across to
+// SourceSection internals.
+let _cancelPreview: () => void = () => {}
+let _retryPreview: () => void = () => {}
 
 // Derived read-only views surfaced to the preview pane.
 const _previewElapsedMs: ComputedRef<number | null> = computed(
@@ -57,6 +62,9 @@ export interface EditState {
   currentPage: Ref<number>
   goToPage: (page: number) => Promise<void>
   setGoToPage: (fn: (page: number) => Promise<void>) => void
+  cancelPreview: () => void
+  retryPreview: () => void
+  setPreviewCallbacks: (fns: { cancel: () => void; retry: () => void }) => void
 }
 
 // Wipe every shared ref back to its empty/initial state. Called when
@@ -75,6 +83,8 @@ export function resetEditState(): void {
   _pageCount.value = 0
   _currentPage.value = 0
   _goToPage = async () => {}
+  _cancelPreview = () => {}
+  _retryPreview = () => {}
 }
 
 export function useEditState(): EditState {
@@ -95,6 +105,12 @@ export function useEditState(): EditState {
     goToPage: (page) => _goToPage(page),
     setGoToPage: (fn) => {
       _goToPage = fn
+    },
+    cancelPreview: () => _cancelPreview(),
+    retryPreview: () => _retryPreview(),
+    setPreviewCallbacks: ({ cancel, retry }) => {
+      _cancelPreview = cancel
+      _retryPreview = retry
     },
   }
 }

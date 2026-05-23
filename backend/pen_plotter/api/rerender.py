@@ -59,12 +59,32 @@ def _clear_cache_for_tests() -> None:
     _CACHE.clear()
 
 
-class LayerAlgorithm(BaseModel):
-    """A per-layer algorithm override applied on top of the cached defaults."""
+class LayerPass(BaseModel):
+    """One rendering pass within a multi-pass layer override.
 
-    layer_id: str
+    A single colour can be drawn with several stacked algorithms — e.g.
+    ``contours`` for the outline followed by ``crosshatch`` for the fill
+    — so the operator gets the visual effect of multiple inks while
+    keeping the layer on one physical pen.
+    """
+
     algorithm: str
     algorithm_options: dict[str, Any] = Field(default_factory=dict)
+
+
+class LayerAlgorithm(BaseModel):
+    """A per-layer algorithm override applied on top of the cached defaults.
+
+    Backwards compatible: callers can still pass a single ``algorithm`` /
+    ``algorithm_options`` pair (the legacy shape). When ``passes`` is set
+    and non-empty, it overrides the single-algorithm fields and the layer
+    is rendered as the stack of passes in order.
+    """
+
+    layer_id: str
+    algorithm: str = ""
+    algorithm_options: dict[str, Any] = Field(default_factory=dict)
+    passes: list[LayerPass] = Field(default_factory=list)
 
 
 class RerenderRequest(BaseModel):
@@ -105,13 +125,19 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
     # Refresh LRU position so frequently-tweaked jobs stay hot.
     _CACHE.move_to_end(request.job_id)
 
-    overrides: dict[str, dict[str, Any]] = {
-        item.layer_id: {
-            "algorithm": item.algorithm,
-            "algorithm_options": item.algorithm_options,
-        }
-        for item in request.layers
-    }
+    overrides: dict[str, dict[str, Any]] = {}
+    for item in request.layers:
+        spec: dict[str, Any] = {}
+        if item.passes:
+            spec["passes"] = [
+                {"algorithm": p.algorithm, "algorithm_options": p.algorithm_options}
+                for p in item.passes
+            ]
+        if item.algorithm:
+            spec["algorithm"] = item.algorithm
+            spec["algorithm_options"] = item.algorithm_options
+        if spec:
+            overrides[item.layer_id] = spec
     try:
         svg, warnings = BitmapConverter.render_from_segmentation(
             entry.segmentation, entry.options, per_layer_overrides=overrides

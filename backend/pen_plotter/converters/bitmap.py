@@ -164,6 +164,18 @@ class BitmapConverter(Converter):
             color_hex = "#{:02x}{:02x}{:02x}".format(*rgb.astype(int))
             label = f"color-{color_hex.lstrip('#')}"
             override = overrides.get(label, {})
+            # Multi-pass: stack several algorithms in the same labeled
+            # group so the layer is drawn with multiple visual effects
+            # (e.g. contours + crosshatch fill) using a single ink. Each
+            # pass renders against the same mask; their inner fragments
+            # are wrapped in one outer ``<g inkscape:label="color-…">`` so
+            # extract_layers still reports one layer per colour.
+            passes = override.get("passes") or []
+            if passes:
+                groups.append(
+                    cls._render_passes(mask, color_hex, label, passes, opts, warnings)
+                )
+                continue
             algo_name = override.get("algorithm") or opts.algorithm
             algo_options = override.get("algorithm_options") or opts.algorithm_options
             try:
@@ -179,6 +191,47 @@ class BitmapConverter(Converter):
         if not groups:
             warnings.append("No drawable layers detected (image may be entirely background).")
         return cls._wrap_svg(seg.width, seg.height, groups), warnings
+
+    @classmethod
+    def _render_passes(
+        cls,
+        mask: NDArray[np.bool_],
+        color_hex: str,
+        label: str,
+        passes: list[dict[str, Any]],
+        opts: BitmapOptions,
+        warnings: list[str],
+    ) -> str:
+        """Render a stack of passes against the same mask, wrapped in one labeled group.
+
+        Each pass produces its own ``<g inkscape:label="…">…</g>`` fragment;
+        we strip those inner labels (they'd otherwise confuse downstream
+        consumers that expect one labeled group per colour) and re-nest the
+        bodies under a single outer group carrying the colour label.
+        """
+        from xml.sax.saxutils import quoteattr
+
+        fragments: list[str] = []
+        for idx, raw in enumerate(passes):
+            algo_name = (raw.get("algorithm") if isinstance(raw, dict) else None) or opts.algorithm
+            algo_options = (raw.get("algorithm_options") if isinstance(raw, dict) else None) or {}
+            try:
+                algorithm = get_algorithm(algo_name)
+            except KeyError:
+                warnings.append(
+                    f"Layer {label} pass {idx}: unknown algorithm {algo_name!r}, "
+                    f"falling back to {opts.algorithm!r}."
+                )
+                algorithm = get_algorithm(opts.algorithm)
+            pass_label = f"{label}-pass-{idx}"
+            fragments.append(
+                algorithm.render_layer(mask, color_hex, pass_label, options=algo_options)
+            )
+        if not fragments:
+            return f"<g inkscape:label={quoteattr(label)}></g>"
+        return (
+            f"<g inkscape:label={quoteattr(label)}>" + "".join(fragments) + "</g>"
+        )
 
     @staticmethod
     def _load_rgb(data: bytes) -> Image.Image:

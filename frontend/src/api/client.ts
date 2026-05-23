@@ -490,10 +490,21 @@ export interface PreviewResponse {
   cached: boolean
 }
 
-export interface LayerAlgorithmOverride {
-  layer_id: string
+// One pass within a multi-pass layer override: a single colour can be
+// drawn as the stack of several algorithms (e.g. contours outline +
+// crosshatch fill) using a single ink.
+export interface LayerPass {
   algorithm: string
   algorithm_options?: Record<string, unknown>
+}
+
+export interface LayerAlgorithmOverride {
+  layer_id: string
+  // Legacy single-algorithm shape. Kept for back-compat; ``passes`` (when
+  // non-empty) takes precedence on the backend.
+  algorithm?: string
+  algorithm_options?: Record<string, unknown>
+  passes?: LayerPass[]
 }
 
 export interface RerenderResponse {

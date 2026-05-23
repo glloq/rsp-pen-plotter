@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, provide, ref } from 'vue'
 import draggable from 'vuedraggable'
 import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../api/client'
@@ -37,6 +37,39 @@ function mergeToOnePen(): void {
     }
   }
 }
+
+// Collapse-all toggle: 8+ layer placements are unscannable when every
+// card is expanded. The cards read this injected ref and start
+// collapsed when ``true``. ``null`` means each card keeps its own
+// local toggle (the default before the section had this control).
+const collapseAll = ref<boolean | null>(null)
+provide<typeof collapseAll>('layersCollapseAll', collapseAll)
+
+function setCollapseAll(value: boolean): void {
+  collapseAll.value = value
+}
+
+// Estimation footer for the layer set: total path length + duration so
+// the operator sees the cost of the current layer choices at a glance.
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.round(seconds % 60)
+  if (mins >= 60) {
+    const hours = Math.floor(mins / 60)
+    return `${hours}h ${(mins % 60).toString().padStart(2, '0')}m`
+  }
+  return `${mins}m ${secs.toString().padStart(2, '0')}s`
+}
+
+const totalLength = computed(() =>
+  store.layers.reduce((s, l) => s + l.total_length_mm, 0),
+)
+const totalDuration = computed(() =>
+  store.layers.reduce((s, l) => s + store.layerDurationSeconds(l), 0),
+)
+const totalPaths = computed(() =>
+  store.layers.reduce((s, l) => s + l.path_count, 0),
+)
 </script>
 
 <template>
@@ -76,6 +109,24 @@ function mergeToOnePen(): void {
       >
         {{ t('layers.mergeToOnePen') }}
       </button>
+      <button
+        v-if="store.layers.length > 1"
+        type="button"
+        class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800"
+        :title="t('layers.expandAllHint')"
+        @click="setCollapseAll(false)"
+      >
+        ▾ {{ t('layers.expandAll') }}
+      </button>
+      <button
+        v-if="store.layers.length > 1"
+        type="button"
+        class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800"
+        :title="t('layers.collapseAllHint')"
+        @click="setCollapseAll(true)"
+      >
+        ▸ {{ t('layers.collapseAll') }}
+      </button>
     </div>
 
     <draggable
@@ -89,5 +140,20 @@ function mergeToOnePen(): void {
         <LayerCard :layer="element" />
       </template>
     </draggable>
+
+    <!-- Summary footer: aggregated path count + length + duration for
+         the active variant's visible layers. Lets the operator see the
+         cost of their layer choices without leaving the modal. -->
+    <div
+      v-if="store.layers.length"
+      class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-slate-700 bg-slate-900/50 px-2 py-1.5 text-[10px] text-slate-400"
+    >
+      <span class="uppercase tracking-wider text-slate-500">{{ t('layers.summary') }}</span>
+      <span>{{ totalPaths }} {{ t('layers.paths') }}</span>
+      <span>·</span>
+      <span>{{ totalLength.toFixed(0) }} mm</span>
+      <span>·</span>
+      <span>≈ {{ formatDuration(totalDuration) }}</span>
+    </div>
   </section>
 </template>

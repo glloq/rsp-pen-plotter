@@ -72,6 +72,7 @@
     "tabSource": "Source",
     "tabLayers": "Calques",
     "tabOutput": "Mise en page & sortie",
+    "tabShortcut": "Appuyer sur {key} pour ouvrir cet onglet",
     "resizeHandle": "Glisser pour redimensionner · double-clic pour réinitialiser"
   },
   "editPreview": {
@@ -81,7 +82,9 @@
     "palette": "Palette",
     "zoomIn": "Zoomer",
     "zoomOut": "Dézoomer",
-    "resetView": "Réinitialiser la vue (clic) · molette pour zoomer · glisser pour déplacer"
+    "resetView": "Réinitialiser la vue (clic) · molette pour zoomer · glisser pour déplacer",
+    "cancelPreview": "Annuler l'aperçu",
+    "retry": "Réessayer"
   },
   "planRail": {
     "title": "Plan",
@@ -251,7 +254,32 @@
     "rerenderFailed": "Échec du re-rendu du calque.",
     "rerenderUnavailable": "Le re-rendu n'est pas disponible ; ré-importez le fichier pour appliquer le nouveau style.",
     "generateMovedHint": "Le bouton « Générer le G-code » est maintenant en haut à droite du Plan — fermez ce dialogue puis cliquez sur le bouton vert en haut de l'aperçu.",
-    "algoSettings": "Réglages {algorithm}"
+    "algoSettings": "Réglages {algorithm}",
+    "expandAll": "Tout déplier",
+    "expandAllHint": "Déplier toutes les cartes calque",
+    "collapseAll": "Tout replier",
+    "collapseAllHint": "Réduire chaque carte calque à son en-tête",
+    "summary": "Total"
+  },
+  "passes": {
+    "title": "Passes",
+    "enable": "Multi-passes",
+    "enableHint": "Empile plusieurs algorithmes sur la même couleur (ex. contour + remplissage).",
+    "add": "Ajouter une passe",
+    "remove": "Supprimer la passe",
+    "moveUp": "Monter la passe",
+    "moveDown": "Descendre la passe",
+    "clear": "Style unique",
+    "applyPreset": "Appliquer un preset",
+    "emptyHint": "Ajoute une passe pour dessiner cette couleur avec plusieurs algorithmes empilés.",
+    "badgeHint": "Multi-passes — cette couleur est dessinée avec plusieurs algorithmes empilés.",
+    "presetOutlineFill": "Contour + remplissage",
+    "presetCrossedHatch": "Hachures croisées",
+    "presetContourStipple": "Contours + pointillé",
+    "toggleOptions": "Afficher / masquer les options",
+    "or": "ou",
+    "reuploadHint": "Ré-importer va réinitialiser les {count} calque(s) multi-passes que tu as configurés.",
+    "reuploadWarning": "Ré-importer va réinitialiser {count} calque(s) multi-passes. Continuer ?"
   },
   "confirm": {
     "cancel": "Annuler",
