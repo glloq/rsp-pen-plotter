@@ -49,6 +49,17 @@
     "tabLayers": "Calques",
     "tabOutput": "Mise en page & sortie"
   },
+  "editPreview": {
+    "title": "Aperçu",
+    "empty": "Dépose un fichier pour commencer",
+    "emptyHint": "L'aperçu reflète chaque réglage à droite.",
+    "palette": "Palette"
+  },
+  "planRail": {
+    "title": "Plan",
+    "collapse": "Réduire le panneau",
+    "expand": "Développer le panneau"
+  },
   "execute": {
     "connection": "Connexion",
     "terminator": "Terminator",

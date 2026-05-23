@@ -49,6 +49,17 @@
     "tabLayers": "Layers",
     "tabOutput": "Layout & output"
   },
+  "editPreview": {
+    "title": "Preview",
+    "empty": "Drop a file to start",
+    "emptyHint": "The preview reflects every setting on the right.",
+    "palette": "Palette"
+  },
+  "planRail": {
+    "title": "Plan",
+    "collapse": "Collapse panel",
+    "expand": "Expand panel"
+  },
   "execute": {
     "connection": "Connection",
     "terminator": "Terminator",

@@ -8,6 +8,7 @@ import SheetPreview from './SheetPreview.vue'
 import Simulator from './Simulator.vue'
 import GcodePreview from './GcodePreview.vue'
 import PenStrip from './PenStrip.vue'
+import PlanRail from './PlanRail.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
@@ -63,7 +64,10 @@ function select(tab: CanvasTab): void {
              canvas pane without an outer scrollbar. The other tabs keep
              their own scroll behaviour. -->
         <div v-show="canvasTab === 'sheet'" class="flex h-full min-h-0">
-          <SheetPreview />
+          <div class="flex min-h-0 flex-1">
+            <SheetPreview />
+          </div>
+          <PlanRail />
         </div>
         <div v-show="canvasTab === 'simulator'">
           <Simulator v-if="canSimulate" />

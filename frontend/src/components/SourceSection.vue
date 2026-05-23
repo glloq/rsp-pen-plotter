@@ -11,6 +11,7 @@ import {
   type PreviewResponse,
   type SegmentationMethod,
 } from '../api/client'
+import { useEditState } from '../composables/useEditState'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 
@@ -394,6 +395,24 @@ async function goToPage(page: number): Promise<void> {
 function openPicker(): void {
   fileInput.value?.click()
 }
+
+// Mirror the preview-related local state into the shared edit-state
+// composable so EditPreviewPane (rendered as a sibling on the left side
+// of the modal) sees the same values. The composable holds its own refs
+// — we sync into them with watchEffect rather than rewiring SourceSection
+// to read/write the composable refs directly.
+const edit = useEditState()
+watch(selectedFile, (v) => { edit.selectedFile.value = v }, { immediate: true })
+watch(previewUrl, (v) => { edit.previewUrl.value = v }, { immediate: true })
+watch(textPreview, (v) => { edit.textPreview.value = v }, { immediate: true })
+watch(previewSvg, (v) => { edit.previewSvg.value = v }, { immediate: true })
+watch(previewLoading, (v) => { edit.previewLoading.value = v }, { immediate: true })
+watch(previewError, (v) => { edit.previewError.value = v }, { immediate: true })
+watch(previewResult, (v) => { edit.previewResult.value = v }, { immediate: true })
+watch(kind, (v) => { edit.kind.value = v }, { immediate: true })
+watch(() => Number(store.uploadMetadata.page_count ?? 0), (v) => { edit.pageCount.value = v }, { immediate: true })
+watch(() => Number(store.uploadMetadata.page ?? 0), (v) => { edit.currentPage.value = v }, { immediate: true })
+edit.setGoToPage(goToPage)
 </script>
 
 <template>
@@ -427,54 +446,7 @@ function openPicker(): void {
       @dragleave.prevent="dragOver = false"
       @drop.prevent="onDrop"
     >
-      <div v-if="selectedFile" class="space-y-2">
-        <div v-if="previewUrl" class="grid grid-cols-2 gap-2">
-          <div class="space-y-1">
-            <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('upload.original') }}</p>
-            <img
-              :src="previewUrl"
-              :alt="selectedFile.name"
-              class="mx-auto max-h-56 rounded border border-slate-700 bg-slate-800 object-contain"
-            />
-          </div>
-          <div class="space-y-1">
-            <p class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
-              <span>{{ t('upload.preview') }}</span>
-              <span v-if="previewLoading" class="text-slate-400">{{ t('upload.previewing') }}</span>
-              <span v-else-if="previewResult" class="text-slate-400">
-                {{ previewResult.elapsed_ms }} ms{{ previewResult.cached ? ' · ' + t('upload.cached') : '' }}
-              </span>
-            </p>
-            <div
-              class="mx-auto flex h-56 items-center justify-center rounded border border-slate-700 bg-white"
-            >
-              <div
-                v-if="previewSvg"
-                class="h-full w-full p-1 [&_svg]:h-full [&_svg]:w-full"
-                v-html="previewSvg"
-              />
-              <p v-else-if="previewError" class="px-2 text-center text-[10px] text-red-400">
-                {{ previewError }}
-              </p>
-              <p v-else class="text-[10px] text-slate-400">
-                {{ previewLoading ? t('upload.previewing') : t('upload.previewHint') }}
-              </p>
-            </div>
-            <div v-if="previewResult?.palette.length" class="flex flex-wrap gap-1">
-              <span
-                v-for="entry in previewResult.palette"
-                :key="entry.color"
-                class="inline-block h-3 w-3 rounded border border-slate-700"
-                :style="{ backgroundColor: entry.color }"
-                :title="entry.color"
-              />
-            </div>
-          </div>
-        </div>
-        <pre
-          v-else-if="kind === 'typography' && textPreview"
-          class="max-h-24 overflow-hidden rounded border border-slate-700 bg-slate-900 px-2 py-1 text-left text-[10px] leading-snug text-slate-300 whitespace-pre-wrap"
-          >{{ textPreview }}</pre>
+      <div v-if="selectedFile" class="space-y-1.5">
         <p class="truncate text-sm font-medium text-slate-100" :title="selectedFile.name">
           {{ selectedFile.name }}
         </p>
@@ -488,6 +460,9 @@ function openPicker(): void {
         >
           {{ t('upload.changeFile') }}
         </button>
+        <p v-if="previewError" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300">
+          {{ previewError }}
+        </p>
       </div>
       <div v-else>
         <p class="text-sm text-slate-400">{{ t('upload.dropHere') }}</p>
@@ -738,33 +713,6 @@ function openPicker(): void {
     >
       {{ store.loading ? t('upload.converting') : t('upload.choose') }}
     </button>
-
-    <div
-      v-if="pageCount > 1"
-      class="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs"
-    >
-      <button
-        type="button"
-        class="rounded bg-slate-700 px-2 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40"
-        :disabled="currentPage <= 0 || store.loading"
-        :aria-label="t('upload.prevPage')"
-        @click="goToPage(currentPage - 1)"
-      >
-        ←
-      </button>
-      <span class="text-slate-300">
-        {{ t('upload.pageOf', { current: currentPage + 1, total: pageCount }) }}
-      </span>
-      <button
-        type="button"
-        class="rounded bg-slate-700 px-2 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40"
-        :disabled="currentPage >= pageCount - 1 || store.loading"
-        :aria-label="t('upload.nextPage')"
-        @click="goToPage(currentPage + 1)"
-      >
-        →
-      </button>
-    </div>
 
     <p v-if="store.error && store.errorScope === 'upload'" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-xs text-red-300">
       {{ store.error }}
