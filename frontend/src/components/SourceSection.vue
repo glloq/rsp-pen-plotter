@@ -356,6 +356,13 @@ watch(
   () => {
     selectedFile.value = store.lastFile
     rehydrateDraftFromPlacement()
+    // EditModal calls resetEditState() on placement switch, which
+    // wipes the goToPage / cancel / retry callbacks back to no-ops.
+    // Re-register them so the preview pane's controls keep working
+    // after the operator hops between placements without closing the
+    // modal.
+    edit.setGoToPage(goToPage)
+    edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
   },
 )
 
