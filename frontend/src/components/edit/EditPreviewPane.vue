@@ -8,8 +8,6 @@ import { useEditState } from '../../composables/useEditState'
 const { t } = useI18n()
 const store = useJobStore()
 const edit = useEditState()
-// (Singleton composable: always defined; null-checks below are leftover
-// guards from the provide/inject design and are kept for safety.)
 
 // Variant chips in the toolbar mirror the right-pane VariantsCard for
 // quick switching while keeping eyes on the preview.
@@ -17,41 +15,43 @@ const variants = computed(() => store.selectedPlacement?.variants ?? [])
 const activeVariantId = computed(() => store.selectedPlacement?.active_variant_id ?? '')
 
 // Render order:
-//   1. If a placement is already committed (job_id + svg present), show
-//      its vectorised SVG — that one updates as the user tweaks per-layer
-//      algorithms via /rerender.
-//   2. Else if /preview returned an SVG for the current draft settings,
-//      show that.
-//   3. Else fall back to the local raster thumbnail (bitmap) or the text
-//      sample (typography).
+//   1. If /preview returned an SVG for the current draft settings,
+//      show that — it reflects the user's in-flight edits. The
+//      previewResult is cleared after a successful upload so this
+//      only wins while the user is drafting.
+//   2. Else if a placement is already committed (job_id + svg present),
+//      show its vectorised SVG — updated by /rerender on layer algo
+//      changes.
+//   3. Else fall back to the local raster thumbnail (bitmap) or the
+//      text sample (typography).
 const placementSvg = computed(() => {
   const svg = store.svg
   if (!svg) return ''
   return DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
 })
 
-const showPlacementSvg = computed(() => Boolean(placementSvg.value))
-const showLivePreview = computed(
-  () => !showPlacementSvg.value && Boolean(edit?.previewSvg.value),
+const showLivePreview = computed(() => Boolean(edit?.previewSvg.value))
+const showPlacementSvg = computed(
+  () => !showLivePreview.value && Boolean(placementSvg.value),
 )
 const showThumbnail = computed(
   () =>
-    !showPlacementSvg.value
-    && !showLivePreview.value
+    !showLivePreview.value
+    && !showPlacementSvg.value
     && edit?.kind.value === 'bitmap'
     && Boolean(edit?.previewUrl.value),
 )
 const showTextPreview = computed(
   () =>
-    !showPlacementSvg.value
-    && !showLivePreview.value
+    !showLivePreview.value
+    && !showPlacementSvg.value
     && edit?.kind.value === 'typography'
     && Boolean(edit?.textPreview.value),
 )
 const showEmptyHint = computed(
   () =>
-    !showPlacementSvg.value
-    && !showLivePreview.value
+    !showLivePreview.value
+    && !showPlacementSvg.value
     && !showThumbnail.value
     && !showTextPreview.value,
 )

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { analyzeDocument, type DocumentAnalysis } from '../../api/client'
 import { useEditState } from '../../composables/useEditState'
@@ -22,25 +22,42 @@ const isPdf = computed(() => {
 const analysis = ref<DocumentAnalysis | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+// Track the in-flight request so a fast file switch cancels the
+// pending analysis — otherwise PDF A's response can land after PDF B's
+// and overwrite the displayed blocks.
+let analyzeController: AbortController | null = null
 
 // Auto-run analysis when the selected file changes to a PDF.
 watch(
   () => edit.selectedFile.value,
   async (file) => {
+    if (analyzeController) analyzeController.abort()
     analysis.value = null
     error.value = null
     if (!file || !isPdf.value) return
+    const controller = new AbortController()
+    analyzeController = controller
     loading.value = true
     try {
-      analysis.value = await analyzeDocument(file)
+      const result = await analyzeDocument(file, controller.signal)
+      if (controller.signal.aborted) return
+      analysis.value = result
     } catch (err) {
+      if (controller.signal.aborted) return
       error.value = (err as Error).message || t('blockMap.failed')
     } finally {
-      loading.value = false
+      if (analyzeController === controller) {
+        analyzeController = null
+        loading.value = false
+      }
     }
   },
   { immediate: true },
 )
+
+onBeforeUnmount(() => {
+  if (analyzeController) analyzeController.abort()
+})
 
 // Single-page view: PDF uploads land on one page at a time via the
 // existing pageCount / currentPage navigation, so we only show the
