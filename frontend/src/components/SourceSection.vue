@@ -18,6 +18,7 @@ import FileSourceCard from './edit/source/FileSourceCard.vue'
 import PrintModeCard from './edit/source/PrintModeCard.vue'
 import PaletteCard from './edit/source/PaletteCard.vue'
 import SegmentationCard from './edit/source/SegmentationCard.vue'
+import MonochromeCard from './edit/source/MonochromeCard.vue'
 import TypographyCard from './edit/source/TypographyCard.vue'
 
 const { t } = useI18n()
@@ -469,12 +470,23 @@ async function uploadSelected(): Promise<void> {
     )
     if (!ok) return
   }
+  const wasMono = printMode.value === 'monochrome'
   await store.upload(selectedFile.value, buildOptions())
   // Drop the stale draft preview now that the placement carries its own
   // committed SVG. Otherwise the live preview would shadow the
   // committed SVG in EditPreviewPane.
   previewResult.value = null
   previewError.value = null
+  // Mono mode: every produced band-layer plots with the same pen, so
+  // pre-assign them to the slot the operator picked in MonochromeCard
+  // (saves a "All to one pen" click + spares the manual swap warning).
+  if (wasMono && store.layers.length) {
+    for (const layer of store.layers) {
+      if (layer.target_pen_slot !== monoPenSlot.value) {
+        store.updateLayer(layer.layer_id, { target_pen_slot: monoPenSlot.value })
+      }
+    }
+  }
   if (store.layers.length) ui.canvasTab = 'sheet'
 }
 
@@ -502,26 +514,52 @@ function openPicker(): void {
 
 // ============================== PRINT MODE (SVG OUTPUT) ==============================
 // "Single colour" mode rewrites the SVG output to a single layer drawn
-// with one pen: no segmentation, just a density-based rendering of the
-// luminance into one ink. It pins num_colors=1 and a one-entry palette
-// so the converter falls back to a halftone/stippling-style render.
-// printMode is derived from num_colors so changes elsewhere stay in sync.
+// Mono splits the image into luminance bands rendered with a single
+// ink (every band → one pen slot). Multi-colour runs kmeans / a fixed
+// palette and assigns each colour to a different pen slot. The mode
+// is derived from the segmentation method so the toggle stays in
+// sync if some other path mutates the draft (preset apply,
+// rehydrate, …).
 const printMode = computed<'multicolor' | 'monochrome'>(() =>
-  bitmap.value.num_colors === 1 ? 'monochrome' : 'multicolor',
+  bitmap.value.segmentation_method === 'luminance_bands' ? 'monochrome' : 'multicolor',
 )
+
+// Mono ink slot — which pen the operator wants to use for the
+// monochrome plot. Defaults to slot 0; the post-upload step assigns
+// every produced layer to this slot so the entire drawing prints in
+// one ink without manual reassignment.
+const monoPenSlot = ref(0)
+function setMonoPenSlot(value: number): void {
+  monoPenSlot.value = value
+}
 
 function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
   if (mode === 'monochrome') {
-    bitmap.value.segmentation_method = 'fixed_palette'
-    bitmap.value.num_colors = 1
-    const monoInk = installedPenColors.value[0] ?? '#000000'
-    bitmap.value.palette = [monoInk]
+    // Mono = luminance bands rendered with a single ink. The previous
+    // implementation pinned ``fixed_palette`` to ['#000000'], which
+    // produced ONE cluster covering every pixel; halftone then dot-
+    // filled the whole image uniformly, losing the photograph's
+    // content. Using ``luminance_bands`` instead splits the image into
+    // N grey shades that the renderer treats as separate masks — each
+    // becomes its own layer, all assigned to the same pen slot, so the
+    // final plot reads as a real shaded monochrome drawing.
+    bitmap.value.segmentation_method = 'luminance_bands'
+    bitmap.value.num_bands = bitmap.value.num_bands >= 2 ? bitmap.value.num_bands : 3
+    bitmap.value.drop_background = true
+    // Use a luminance cutoff that drops the brightest band (paper
+    // white) without dropping anything mid-tone — 0.85 worked across
+    // tested samples; the user can still override via the segmentation
+    // post-process knobs if needed.
+    if (bitmap.value.background_luminance > 0.92) {
+      bitmap.value.background_luminance = 0.85
+    }
     paletteFollowsPens.value = false
-    // A density-based algorithm makes monochrome look like an actual
-    // image, not a flat fill. Halftone is the most universally
-    // recognisable; the user can switch to stippling per-layer later.
-    if (bitmap.value.algorithm === 'direct') {
-      bitmap.value.algorithm = 'halftone'
+    // Crosshatch reads as a pencil-shaded drawing; halftone reads as
+    // newspaper dots. Both work; crosshatch is the friendlier default
+    // for photographs. ``direct`` would just outline the bands as
+    // filled regions which doesn't suit mono.
+    if (bitmap.value.algorithm === 'direct' || bitmap.value.algorithm === 'halftone') {
+      bitmap.value.algorithm = 'crosshatch'
     }
   } else {
     // Back to multi-colour: restore the default kmeans / 4-colour
@@ -529,7 +567,8 @@ function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
     // monochrome, the palette watch will repopulate from installed pens.
     bitmap.value.segmentation_method = 'kmeans'
     bitmap.value.num_colors = 4
-    if (bitmap.value.algorithm === 'halftone') {
+    bitmap.value.background_luminance = 0.92
+    if (bitmap.value.algorithm === 'crosshatch') {
       bitmap.value.algorithm = 'direct'
     }
     paletteFollowsPens.value = true
@@ -652,6 +691,13 @@ defineExpose({ openPicker, clearAll })
         />
         <SegmentationCard :bitmap="bitmap" :is-document="kind === 'document'" />
       </template>
+
+      <MonochromeCard
+        v-else
+        :bitmap="bitmap"
+        :mono-pen-slot="monoPenSlot"
+        @update:mono-pen-slot="setMonoPenSlot"
+      />
 
       <p
         v-if="store.layers.length"

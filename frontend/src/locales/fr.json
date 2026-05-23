@@ -80,6 +80,20 @@
     "perLayerHint": "Choisis le style de rendu et le stylo pour chaque couleur dans l'onglet Calques.",
     "applyChanges": "Re-convertir avec ces réglages"
   },
+  "mono": {
+    "pen": "Stylo",
+    "penNotInstalled": "Slot non marqué comme installé",
+    "shades": "Nombre de nuances",
+    "shadesHint": "Découpe l'image en N bandes de gris dessinées avec le même stylo.",
+    "detail": "Niveau de détail",
+    "detailFast": "Rapide",
+    "detailStandard": "Standard",
+    "detailHigh": "Élevé",
+    "detailUltra": "Ultra",
+    "detailHint": "Une plus grande résolution source capture plus de détails fins mais ralentit la conversion.",
+    "style": "Style de rendu",
+    "layersHint": "Chaque nuance devient un calque — ouvre l'onglet Calques pour affiner (algo différent par nuance, multi-passes, etc.)."
+  },
   "editPreview": {
     "title": "Aperçu",
     "empty": "Dépose un fichier pour commencer",
