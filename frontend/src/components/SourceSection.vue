@@ -241,6 +241,15 @@ onMounted(async () => {
   }
 })
 
+// Switching placements (via FilesPane) refreshes the local file ref so
+// the modal mirrors the newly-selected placement's source.
+watch(
+  () => store.selectedPlacementId,
+  () => {
+    selectedFile.value = store.lastFile
+  },
+)
+
 watch(selectedPresetName, (name) => {
   const preset = presets.value.find((p) => p.name === name)
   if (!preset) return

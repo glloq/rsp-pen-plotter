@@ -4,15 +4,14 @@ import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
-import { computePlacement, unionBounds } from '../lib/placement'
+import type { Placement } from '../stores/job'
 
 const { t } = useI18n()
 const store = useJobStore()
 const ui = useUiStore()
 
-// Workspace data is always available as long as a profile is selected,
-// even before any file has been uploaded — so the plan view shows the
-// machine envelope and lets the user drop a file straight onto it.
+// Workspace data — always available as long as a profile is selected so
+// the plan stays visible even without any imported file.
 const workspace = computed(() => {
   const profile = store.selectedProfile
   if (!profile) return null
@@ -24,49 +23,44 @@ const workspace = computed(() => {
   return { profile, ws, wsW, wsH, pad }
 })
 
-// Drawing data is rebuilt whenever the upload, profile, scale-mode,
-// margin or user-defined drawing region changes. Null when no file is
-// loaded — the workspace + grid still render.
-const drawing = computed(() => {
+// Each placement gets its own rendering rect on the plan. We project
+// workspace-relative ``x/y/width/height`` onto absolute machine coords
+// using the active profile's origin.
+interface RenderedPlacement {
+  placement: Placement
+  footprint: { x_min: number; y_min: number; x_max: number; y_max: number }
+  exceeds: boolean
+  cleanSvg: string
+}
+
+const renderedPlacements = computed<RenderedPlacement[]>(() => {
   const w = workspace.value
-  if (!w || store.layers.length === 0) return null
-  const bounds = unionBounds(store.layers.map((l) => l.bbox))
-  if (!bounds) return null
-  const userRegion = store.currentDrawing
-  let footprint: { x_min: number; y_min: number; x_max: number; y_max: number }
-  let widthMm: number
-  let heightMm: number
-  let scale: number
-  let exceeds: boolean
-  if (userRegion) {
-    footprint = {
-      x_min: w.ws.x_min + userRegion.x_mm,
-      y_min: w.ws.y_min + userRegion.y_mm,
-      x_max: w.ws.x_min + userRegion.x_mm + userRegion.width_mm,
-      y_max: w.ws.y_min + userRegion.y_mm + userRegion.height_mm,
+  if (!w) return []
+  return store.placements.map((p) => {
+    const x_min = w.ws.x_min + p.x_mm
+    const y_min = w.ws.y_min + p.y_mm
+    const x_max = x_min + p.width_mm
+    const y_max = y_min + p.height_mm
+    const exceeds
+      = x_min < w.ws.x_min - 0.01
+      || y_min < w.ws.y_min - 0.01
+      || x_max > w.ws.x_max + 0.01
+      || y_max > w.ws.y_max + 0.01
+    const cleanSvg = p.svg
+      ? DOMPurify.sanitize(p.svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+      : ''
+    return {
+      placement: p,
+      footprint: { x_min, y_min, x_max, y_max },
+      exceeds,
+      cleanSvg,
     }
-    widthMm = userRegion.width_mm
-    heightMm = userRegion.height_mm
-    const span = Math.max(bounds.x_max - bounds.x_min, 1e-9)
-    scale = widthMm / span
-    exceeds
-      = footprint.x_min < w.ws.x_min - 0.01
-      || footprint.y_min < w.ws.y_min - 0.01
-      || footprint.x_max > w.ws.x_max + 0.01
-      || footprint.y_max > w.ws.y_max + 0.01
-  } else {
-    const placement = computePlacement(bounds, w.profile, store.scaleMode, store.marginMm)
-    footprint = placement.footprint
-    widthMm = placement.widthMm
-    heightMm = placement.heightMm
-    scale = placement.scale
-    exceeds = placement.exceeds
-  }
-  return { footprint, widthMm, heightMm, scale, exceeds, userRegion, bounds }
+  })
 })
 
-// Grid spacing: minor lines every 10 mm (1 cm), major every 50 mm (5 cm),
-// labels every 50 mm showing the value in cm.
+const anyExceeds = computed(() => renderedPlacements.value.some((r) => r.exceeds))
+
+// Grid: minor lines every 10 mm (1 cm), major every 50 mm (5 cm).
 const grid = computed(() => {
   const w = workspace.value
   if (!w) return null
@@ -93,31 +87,23 @@ const grid = computed(() => {
   return { xs, ys, majorXs, majorYs, labelsX, labelsY }
 })
 
-const scaleLabel = computed(() => {
-  if (!drawing.value) return ''
-  if (store.scaleMode === 'actual' && !drawing.value.userRegion) return '1:1'
-  return `${(drawing.value.scale * 100).toFixed(0)}%`
-})
-
-// View transform — independent from the drawing scale; this is just how the
-// user is looking at the workspace (zoom/pan inside the preview pane).
+// View transform (zoom/pan) is independent of placement scale.
 const zoom = ref(1)
 const panX = ref(0)
 const panY = ref(0)
-
 function resetView(): void {
   zoom.value = 1
   panX.value = 0
   panY.value = 0
 }
-
-watch(() => store.job?.job_id, () => resetView())
 watch(() => store.selectedProfileName, () => resetView())
 
-// Pointer interaction state.
+// Pointer interaction state. The active gesture is bound to whichever
+// placement the user grabbed (recorded in ``activePlacementId``).
 type Mode = 'idle' | 'pan-view' | 'move-drawing' | 'resize'
 const mode = ref<Mode>('idle')
 const handle = ref<'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | null>(null)
+const activePlacementId = ref<string | null>(null)
 const container = ref<HTMLDivElement | null>(null)
 const svgEl = ref<SVGSVGElement | null>(null)
 let startPxX = 0
@@ -128,19 +114,6 @@ function pxPerMm(): number {
   const w = workspace.value
   if (!w || !container.value) return 1
   return container.value.clientWidth / (w.wsW + 2 * w.pad)
-}
-
-function regionFromData() {
-  const d = drawing.value
-  const w = workspace.value
-  if (!d || !w) return null
-  if (d.userRegion) return { ...d.userRegion }
-  return {
-    x_mm: d.footprint.x_min - w.ws.x_min,
-    y_mm: d.footprint.y_min - w.ws.y_min,
-    width_mm: d.widthMm,
-    height_mm: d.heightMm,
-  }
 }
 
 function onWheel(event: WheelEvent): void {
@@ -154,9 +127,12 @@ function onPointerDown(event: PointerEvent): void {
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   startPxX = event.clientX
   startPxY = event.clientY
-  startRegion = regionFromData()
-  if (mode.value === 'idle') {
-    mode.value = 'pan-view'
+  if (mode.value === 'idle') mode.value = 'pan-view'
+  else {
+    // A placement gesture was pre-armed by its handler — record its
+    // current position so the move/resize can compute deltas from it.
+    const p = store.placements.find((pl) => pl.id === activePlacementId.value)
+    if (p) startRegion = { x_mm: p.x_mm, y_mm: p.y_mm, width_mm: p.width_mm, height_mm: p.height_mm }
   }
 }
 
@@ -169,13 +145,12 @@ function onPointerMove(event: PointerEvent): void {
     panY.value += event.movementY
     return
   }
-  const d = drawing.value
-  if (!d || !startRegion) return
+  if (!startRegion || !activePlacementId.value) return
   const k = zoom.value * pxPerMm()
   const dxMm = dxPx / k
   const dyMm = dyPx / k
   if (mode.value === 'move-drawing') {
-    store.setDrawing({
+    updatePlacementRect(activePlacementId.value, {
       x_mm: startRegion.x_mm + dxMm,
       y_mm: startRegion.y_mm + dyMm,
       width_mm: startRegion.width_mm,
@@ -203,37 +178,45 @@ function onPointerMove(event: PointerEvent): void {
     } else if (handle.value.includes('s')) {
       h = Math.max(minSize, startRegion.height_mm + dyMm)
     }
-    store.setDrawing({ x_mm: x, y_mm: y, width_mm: w, height_mm: h })
+    updatePlacementRect(activePlacementId.value, { x_mm: x, y_mm: y, width_mm: w, height_mm: h })
   }
 }
 
 function onPointerUp(event: PointerEvent): void {
   mode.value = 'idle'
   handle.value = null
+  activePlacementId.value = null
+  startRegion = null
   ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
 }
 
-function startMoveDrawing(event: PointerEvent): void {
-  if (event.button !== 0) return
-  mode.value = 'move-drawing'
+function updatePlacementRect(
+  _id: string,
+  patch: { x_mm: number; y_mm: number; width_mm: number; height_mm: number },
+): void {
+  // ``setDrawing`` always edits the selected placement — startMove /
+  // startResize already selected the right one on pointer-down.
+  store.setDrawing(patch)
 }
 
-function startResize(h: typeof handle.value, event: PointerEvent): void {
+function startMoveDrawing(event: PointerEvent, id: string): void {
+  if (event.button !== 0) return
+  mode.value = 'move-drawing'
+  activePlacementId.value = id
+  store.selectPlacement(id)
+}
+
+function startResize(h: typeof handle.value, event: PointerEvent, id: string): void {
   if (event.button !== 0) return
   mode.value = 'resize'
   handle.value = h
+  activePlacementId.value = id
+  store.selectPlacement(id)
 }
 
-function autoFit(): void {
-  store.resetDrawing()
-}
-
-// Drag-and-drop from the FilesPane: the file row sets a custom MIME type
-// in dataTransfer so we can recognise it here and centre the drawing on
-// the drop point. If the drop happens before a file is loaded, we just
-// pop the edit modal so the user can pick a file.
+// Drag-and-drop from FilesPane: drop on plan = duplicate the placement
+// (or, if the dragged placement has no svg yet, move it there).
 const dragOver = ref(false)
-
 function onDragEnter(event: DragEvent): void {
   if (event.dataTransfer?.types.includes('application/x-omniplot-file')) {
     event.preventDefault()
@@ -251,8 +234,6 @@ function onDragLeave(event: DragEvent): void {
 }
 
 function clientToSvgMm(clientX: number, clientY: number): { x: number; y: number } | null {
-  // Translate a screen pixel into workspace mm using the SVG's CTM, so
-  // the drop point is exact regardless of zoom/pan state.
   const svg = svgEl.value
   if (!svg) return null
   const pt = svg.createSVGPoint()
@@ -267,38 +248,41 @@ function clientToSvgMm(clientX: number, clientY: number): { x: number; y: number
 function onDrop(event: DragEvent): void {
   event.preventDefault()
   dragOver.value = false
-  if (!event.dataTransfer?.types.includes('application/x-omniplot-file')) return
-  const d = drawing.value
+  const sourceId = event.dataTransfer?.getData('application/x-omniplot-file')
+  if (!sourceId) return
   const w = workspace.value
-  if (!w) {
-    // No workspace yet — just open the modal so user can upload.
-    ui.openEditModal()
-    return
-  }
-  if (!d) {
-    // File hasn't been converted yet — open the modal so user can finish.
-    ui.openEditModal()
-    return
-  }
-  // Centre the drawing on the drop point, in workspace-relative mm.
+  if (!w) return
   const local = clientToSvgMm(event.clientX, event.clientY)
   if (!local) return
-  const newCx = local.x
-  const newCy = local.y
-  const region = regionFromData()
-  if (!region) return
+  const src = store.placements.find((p) => p.id === sourceId)
+  if (!src) return
+  // If the source placement has no svg yet, the user is just positioning
+  // the (empty) draft. Otherwise duplicate it at the drop position.
+  if (!src.svg || !src.layers.length) {
+    const prev = store.selectedPlacementId
+    store.selectPlacement(sourceId)
+    store.setDrawing({
+      x_mm: Math.max(0, local.x - src.width_mm / 2 - w.ws.x_min),
+      y_mm: Math.max(0, local.y - src.height_mm / 2 - w.ws.y_min),
+      width_mm: src.width_mm,
+      height_mm: src.height_mm,
+    })
+    if (prev) store.selectPlacement(prev)
+    return
+  }
+  // Duplicate at the drop point, centred on the cursor.
+  const newId = store.duplicatePlacement(sourceId)
+  if (!newId) return
+  const prev = store.selectedPlacementId
+  store.selectPlacement(newId)
   store.setDrawing({
-    x_mm: Math.max(0, newCx - region.width_mm / 2 - w.ws.x_min),
-    y_mm: Math.max(0, newCy - region.height_mm / 2 - w.ws.y_min),
-    width_mm: region.width_mm,
-    height_mm: region.height_mm,
+    x_mm: Math.max(0, local.x - src.width_mm / 2 - w.ws.x_min),
+    y_mm: Math.max(0, local.y - src.height_mm / 2 - w.ws.y_min),
+    width_mm: src.width_mm,
+    height_mm: src.height_mm,
   })
+  if (prev) store.selectPlacement(prev)
 }
-
-const cleanSvg = computed(() => {
-  if (!store.svg) return ''
-  return DOMPurify.sanitize(store.svg, { USE_PROFILES: { svg: true, svgFilters: true } })
-})
 
 const containerCursor = computed(() => {
   if (mode.value === 'pan-view') return 'grabbing'
@@ -307,16 +291,10 @@ const containerCursor = computed(() => {
   return 'grab'
 })
 
-// Header Generate button — wires into the same store action as the
-// modal's Generate section but lives in the plan header so the operator
-// can fire G-code without reopening the modal.
-const canGenerate = computed(
-  () =>
-    Boolean(store.svg)
-    && store.layers.length > 0
-    && store.missingPenSlots.length === 0
-    && !store.generating,
-)
+const canGenerate = computed(() => {
+  const ready = store.placements.some((p) => p.svg && p.layers.length)
+  return ready && store.missingPenSlots.length === 0 && !store.generating
+})
 
 async function generateAndShow(): Promise<void> {
   await store.generate()
@@ -324,6 +302,8 @@ async function generateAndShow(): Promise<void> {
     ui.canvasTab = store.selectedProfile?.gcode_dialect === 'ebb' ? 'gcode' : 'simulator'
   }
 }
+
+const placementCount = computed(() => store.placements.filter((p) => p.svg).length)
 
 onMounted(resetView)
 </script>
@@ -336,10 +316,9 @@ onMounted(resetView)
         <span class="font-mono text-slate-300">
           {{ t('sheet.workArea') }}: {{ workspace.wsW.toFixed(0) }}×{{ workspace.wsH.toFixed(0) }} mm
         </span>
-        <span v-if="drawing" class="font-mono text-slate-300">
-          {{ t('sheet.drawing') }}: {{ drawing.widthMm.toFixed(0) }}×{{ drawing.heightMm.toFixed(0) }} mm
+        <span v-if="placementCount" class="font-mono text-slate-300">
+          {{ t('sheet.placements', { count: placementCount }) }}
         </span>
-        <span v-if="drawing" class="font-mono text-slate-300">{{ t('sheet.scale') }}: {{ scaleLabel }}</span>
         <span class="font-mono text-slate-400">{{ t('sheet.view') }}: {{ Math.round(zoom * 100) }}%</span>
       </div>
       <div class="flex items-center gap-1">
@@ -349,15 +328,6 @@ onMounted(resetView)
           @click="resetView"
         >
           {{ t('sheet.resetView') }}
-        </button>
-        <button
-          v-if="drawing"
-          type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800"
-          :title="t('sheet.autoFitHint')"
-          @click="autoFit"
-        >
-          {{ t('sheet.autoFit') }}
         </button>
         <button
           type="button"
@@ -398,7 +368,6 @@ onMounted(resetView)
           role="img"
           :aria-label="t('sheet.title')"
         >
-          <!-- Workspace = the machine's physical drawable envelope. -->
           <rect
             :x="workspace.ws.x_min"
             :y="workspace.ws.y_min"
@@ -409,7 +378,6 @@ onMounted(resetView)
             stroke-width="1.5"
             vector-effect="non-scaling-stroke"
           />
-          <!-- Grid (minor every 1 cm, major every 5 cm). Labels show cm. -->
           <g v-if="grid" pointer-events="none">
             <line
               v-for="x in grid.xs"
@@ -433,7 +401,6 @@ onMounted(resetView)
               :stroke-width="grid.majorYs.includes(y) ? 0.8 : 0.5"
               vector-effect="non-scaling-stroke"
             />
-            <!-- cm labels along the top and left edges -->
             <text
               v-for="label in grid.labelsX"
               :key="`lx-${label.x}`"
@@ -460,56 +427,49 @@ onMounted(resetView)
               {{ label.cm }}
             </text>
           </g>
-          <!-- Margin guide (only meaningful when auto-fit is on). -->
-          <rect
-            v-if="drawing && !drawing.userRegion && store.scaleMode === 'fit' && store.marginMm > 0"
-            :x="workspace.ws.x_min + store.marginMm"
-            :y="workspace.ws.y_min + store.marginMm"
-            :width="Math.max(workspace.wsW - 2 * store.marginMm, 0)"
-            :height="Math.max(workspace.wsH - 2 * store.marginMm, 0)"
-            fill="none"
-            stroke="#94a3b8"
-            stroke-width="1"
-            stroke-dasharray="4 3"
-            vector-effect="non-scaling-stroke"
-          />
-          <!-- Drawing preview inside its placement bbox. -->
-          <foreignObject
-            v-if="drawing && cleanSvg"
-            :x="drawing.footprint.x_min"
-            :y="drawing.footprint.y_min"
-            :width="Math.max(drawing.footprint.x_max - drawing.footprint.x_min, 0.01)"
-            :height="Math.max(drawing.footprint.y_max - drawing.footprint.y_min, 0.01)"
-          >
-            <div
-              xmlns="http://www.w3.org/1999/xhtml"
-              class="h-full w-full overflow-hidden pointer-events-none"
-              v-html="cleanSvg"
-            />
-          </foreignObject>
-          <!-- Interactive bbox + handles. -->
-          <template v-if="drawing">
+
+          <!-- Each placement: drawing content + interactive bbox + handles. -->
+          <template v-for="rp in renderedPlacements" :key="rp.placement.id">
+            <foreignObject
+              v-if="rp.cleanSvg"
+              :x="rp.footprint.x_min"
+              :y="rp.footprint.y_min"
+              :width="Math.max(rp.footprint.x_max - rp.footprint.x_min, 0.01)"
+              :height="Math.max(rp.footprint.y_max - rp.footprint.y_min, 0.01)"
+            >
+              <div
+                xmlns="http://www.w3.org/1999/xhtml"
+                class="h-full w-full overflow-hidden pointer-events-none"
+                v-html="rp.cleanSvg"
+              />
+            </foreignObject>
             <rect
-              :x="drawing.footprint.x_min"
-              :y="drawing.footprint.y_min"
-              :width="drawing.footprint.x_max - drawing.footprint.x_min"
-              :height="drawing.footprint.y_max - drawing.footprint.y_min"
+              :x="rp.footprint.x_min"
+              :y="rp.footprint.y_min"
+              :width="rp.footprint.x_max - rp.footprint.x_min"
+              :height="rp.footprint.y_max - rp.footprint.y_min"
               fill="transparent"
-              :stroke="drawing.exceeds ? '#dc2626' : '#10b981'"
-              stroke-width="1.5"
+              :stroke="rp.exceeds ? '#dc2626' : store.selectedPlacementId === rp.placement.id ? '#10b981' : '#475569'"
+              :stroke-width="store.selectedPlacementId === rp.placement.id ? 2 : 1"
+              :stroke-dasharray="store.selectedPlacementId === rp.placement.id ? undefined : '4 3'"
               vector-effect="non-scaling-stroke"
               style="cursor: grab;"
-              @pointerdown="startMoveDrawing"
+              @pointerdown="(e) => startMoveDrawing(e, rp.placement.id)"
             />
-            <g :stroke="drawing.exceeds ? '#dc2626' : '#10b981'" fill="#0f172a" stroke-width="1.5">
+            <g
+              v-if="store.selectedPlacementId === rp.placement.id"
+              :stroke="rp.exceeds ? '#dc2626' : '#10b981'"
+              fill="#0f172a"
+              stroke-width="1.5"
+            >
               <template v-for="h in (['nw','n','ne','e','se','s','sw','w'] as const)" :key="h">
                 <circle
-                  :cx="h.includes('w') ? drawing.footprint.x_min : h.includes('e') ? drawing.footprint.x_max : (drawing.footprint.x_min + drawing.footprint.x_max) / 2"
-                  :cy="h.includes('n') ? drawing.footprint.y_min : h.includes('s') ? drawing.footprint.y_max : (drawing.footprint.y_min + drawing.footprint.y_max) / 2"
+                  :cx="h.includes('w') ? rp.footprint.x_min : h.includes('e') ? rp.footprint.x_max : (rp.footprint.x_min + rp.footprint.x_max) / 2"
+                  :cy="h.includes('n') ? rp.footprint.y_min : h.includes('s') ? rp.footprint.y_max : (rp.footprint.y_min + rp.footprint.y_max) / 2"
                   r="5"
                   vector-effect="non-scaling-stroke"
                   :style="{ cursor: (h === 'n' || h === 's') ? 'ns-resize' : (h === 'e' || h === 'w') ? 'ew-resize' : (h === 'nw' || h === 'se') ? 'nwse-resize' : 'nesw-resize' }"
-                  @pointerdown="(e) => startResize(h, e)"
+                  @pointerdown="(e) => startResize(h, e, rp.placement.id)"
                 />
               </template>
             </g>
@@ -524,17 +484,17 @@ onMounted(resetView)
         v-if="dragOver"
         class="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-medium text-emerald-300"
       >
-        {{ t('sheet.dropToPosition') }}
+        {{ t('sheet.dropToPlace') }}
       </p>
       <p
-        v-if="!drawing && !dragOver"
+        v-if="!renderedPlacements.length && !dragOver"
         class="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-slate-500"
       >
         {{ t('sheet.emptyHint') }}
       </p>
     </div>
 
-    <p v-if="drawing && drawing.exceeds" class="text-xs text-red-400">
+    <p v-if="anyExceeds" class="text-xs text-red-400">
       {{ t('sheet.outOfBounds') }}
     </p>
   </div>
