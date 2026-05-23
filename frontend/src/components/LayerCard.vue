@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../api/client'
+import { formatLayerLabel } from '../lib/labels'
 import { useJobStore } from '../stores/job'
 
 const { t } = useI18n()
@@ -12,6 +13,10 @@ const visible = computed({
   get: () => store.isVisible(props.layer.layer_id),
   set: (value: boolean) => store.setVisibility(props.layer.layer_id, value),
 })
+
+const label = computed(() => formatLayerLabel(props.layer.layer_id))
+
+const swatchColor = computed(() => label.value.color ?? props.layer.source_color)
 
 const penSlotCount = computed(() => store.selectedProfile?.pen_slot_count ?? 0)
 
@@ -68,12 +73,29 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
     <div class="flex items-center gap-3">
       <span class="cursor-grab text-slate-500 select-none" :title="t('layers.dragHint')" aria-hidden="true">⠿</span>
       <input v-model="visible" type="checkbox" class="h-4 w-4 accent-emerald-500" />
+
       <span
+        v-if="label.kind === 'image'"
+        class="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-600 bg-slate-900 text-[10px]"
+        :title="t('layers.kindImage')"
+        aria-hidden="true"
+      >🖼</span>
+      <span
+        v-else-if="label.kind === 'text'"
+        class="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-600 bg-slate-900 font-serif text-xs text-slate-300"
+        :title="t('layers.kindText')"
+        aria-hidden="true"
+      >Aa</span>
+      <span
+        v-else
         class="h-5 w-5 rounded border border-slate-600 shrink-0"
-        :style="{ backgroundColor: layer.source_color }"
+        :style="{ backgroundColor: swatchColor }"
       />
+
       <div class="min-w-0 flex-1">
-        <p class="truncate font-mono text-sm text-slate-200">{{ layer.layer_id }}</p>
+        <p class="truncate text-sm text-slate-200" :class="label.kind === 'color' ? 'font-mono' : ''">
+          {{ label.display }}
+        </p>
         <p class="text-xs text-slate-500">
           {{ layer.path_count }} {{ t('layers.paths') }} ·
           {{ layer.total_length_mm.toFixed(1) }} mm · {{ duration }}

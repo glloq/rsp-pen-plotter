@@ -33,6 +33,7 @@ class HtmlConverter(Converter):
             a sibling labeled layer.
         """
         opts = options or {}
+        page_index = int(opts.get("page", 0))
         bitmap_options = {
             key: opts[key]
             for key in (
@@ -47,6 +48,11 @@ class HtmlConverter(Converter):
         } or None
         html = data.decode("utf-8", errors="replace")
         pdf_bytes = HTML(string=html).write_pdf()
-        raw_svg, _ = pdf_bytes_to_svg(pdf_bytes, 0)
+        raw_svg, page_count = pdf_bytes_to_svg(pdf_bytes, page_index)
         svg, warnings = postprocess_pdf_svg(raw_svg, bitmap_options=bitmap_options)
-        return ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings)
+        return ConversionResult(
+            svg=svg,
+            source_mime="image/svg+xml",
+            warnings=warnings,
+            metadata={"page_count": page_count, "page": page_index},
+        )

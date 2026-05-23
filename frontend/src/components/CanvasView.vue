@@ -50,8 +50,14 @@ function select(tab: CanvasTab): void {
     </nav>
 
     <div class="relative min-h-0 flex-1 overflow-auto p-3">
-      <div v-if="!job.layers.length" class="flex h-full items-center justify-center text-slate-500">
-        {{ t('canvas.empty') }}
+      <div
+        v-if="!job.layers.length"
+        class="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500"
+      >
+        <div class="text-5xl text-slate-700" aria-hidden="true">⤵</div>
+        <p class="text-base text-slate-300">{{ t('canvas.empty') }}</p>
+        <p class="max-w-sm text-xs text-slate-600">{{ t('canvas.emptyHint') }}</p>
+        <p class="text-[10px] uppercase tracking-wider text-slate-700">{{ t('canvas.emptyFormats') }}</p>
       </div>
 
       <template v-else>

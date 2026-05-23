@@ -214,6 +214,7 @@ export interface UploadResponse {
   job: Job
   svg: string
   warnings?: string[]
+  metadata?: Record<string, unknown>
 }
 
 export interface ToolpathMetrics {

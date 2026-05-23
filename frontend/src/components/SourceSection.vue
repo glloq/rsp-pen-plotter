@@ -114,6 +114,15 @@ async function uploadSelected(): Promise<void> {
   if (store.layers.length) ui.canvasTab = 'sheet'
 }
 
+const pageCount = computed(() => Number(store.uploadMetadata.page_count ?? 0))
+const currentPage = computed(() => Number(store.uploadMetadata.page ?? 0))
+
+async function goToPage(page: number): Promise<void> {
+  if (page < 0 || page >= pageCount.value || page === currentPage.value) return
+  await store.changePage(page)
+  if (store.layers.length) ui.canvasTab = 'sheet'
+}
+
 function openPicker(): void {
   fileInput.value?.click()
 }
@@ -249,6 +258,33 @@ function openPicker(): void {
     >
       {{ store.loading ? t('upload.converting') : t('upload.choose') }}
     </button>
+
+    <div
+      v-if="pageCount > 1"
+      class="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs"
+    >
+      <button
+        type="button"
+        class="rounded bg-slate-700 px-2 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40"
+        :disabled="currentPage <= 0 || store.loading"
+        :aria-label="t('upload.prevPage')"
+        @click="goToPage(currentPage - 1)"
+      >
+        ←
+      </button>
+      <span class="text-slate-300">
+        {{ t('upload.pageOf', { current: currentPage + 1, total: pageCount }) }}
+      </span>
+      <button
+        type="button"
+        class="rounded bg-slate-700 px-2 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40"
+        :disabled="currentPage >= pageCount - 1 || store.loading"
+        :aria-label="t('upload.nextPage')"
+        @click="goToPage(currentPage + 1)"
+      >
+        →
+      </button>
+    </div>
 
     <p v-if="store.error && store.errorScope === 'upload'" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-xs text-red-300">
       {{ store.error }}

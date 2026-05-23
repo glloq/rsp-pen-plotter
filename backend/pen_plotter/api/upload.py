@@ -23,13 +23,14 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 class UploadResponse(BaseModel):
-    """Result of an upload: the created job, the normalized SVG pivot, and
-    any non-fatal warnings emitted by the converter (e.g. a raster image
-    that could not be vectorized)."""
+    """Result of an upload: the created job, the normalized SVG pivot, any
+    non-fatal warnings, and converter-specific metadata (e.g. ``page_count``
+    and the selected ``page`` for multi-page PDF / DOCX / HTML inputs)."""
 
     job: Job
     svg: str
     warnings: list[str] = []
+    metadata: dict[str, Any] = {}
 
 
 def _resolve_mime(upload: UploadFile) -> str | None:
@@ -127,4 +128,9 @@ async def upload(
         status="ready",
     )
     save_job(job)
-    return UploadResponse(job=job, svg=svg, warnings=list(result.warnings))
+    return UploadResponse(
+        job=job,
+        svg=svg,
+        warnings=list(result.warnings),
+        metadata=dict(result.metadata),
+    )
