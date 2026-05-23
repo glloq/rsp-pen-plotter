@@ -17,7 +17,7 @@ const { canvasTab } = storeToRefs(ui)
 const canSimulate = computed(() => job.selectedProfile?.gcode_dialect !== 'ebb')
 
 const tabs = computed<Array<{ id: CanvasTab; label: string; available: boolean; hint?: string }>>(() => [
-  { id: 'sheet', label: t('canvas.sheet'), available: job.layers.length > 0 },
+  { id: 'sheet', label: t('canvas.sheet'), available: true },
   { id: 'simulator', label: t('canvas.simulator'), available: Boolean(job.gcode) && canSimulate.value },
   { id: 'gcode', label: t('canvas.gcode'), available: Boolean(job.gcode) },
 ])
@@ -48,35 +48,24 @@ function select(tab: CanvasTab): void {
     </nav>
 
     <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3">
-      <div
-        v-if="!job.layers.length"
-        class="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500"
-      >
-        <div class="text-5xl text-slate-700" aria-hidden="true">⤵</div>
-        <p class="text-base text-slate-300">{{ t('canvas.empty') }}</p>
-        <p class="max-w-sm text-xs text-slate-600">{{ t('canvas.emptyHint') }}</p>
-        <p class="text-[10px] uppercase tracking-wider text-slate-700">{{ t('canvas.emptyFormats') }}</p>
+      <!-- The sheet tab is always mounted so the workspace grid stays
+           visible and the drop target exists even before any file is
+           imported. Other tabs keep their own empty-state messaging. -->
+      <div v-show="canvasTab === 'sheet'" class="flex h-full min-h-0">
+        <div class="flex min-h-0 flex-1">
+          <SheetPreview />
+        </div>
+        <PlanRail />
       </div>
-
-      <template v-else>
-        <!-- Sheet tab uses ``flex h-full`` so SheetPreview can fill the
-             canvas pane without an outer scrollbar. The other tabs keep
-             their own scroll behaviour. -->
-        <div v-show="canvasTab === 'sheet'" class="flex h-full min-h-0">
-          <div class="flex min-h-0 flex-1">
-            <SheetPreview />
-          </div>
-          <PlanRail />
-        </div>
-        <div v-show="canvasTab === 'simulator'" class="flex h-full min-h-0 flex-col">
-          <Simulator v-if="canSimulate" />
-          <p v-else class="text-sm text-slate-500">{{ t('canvas.simulatorUnavailable') }}</p>
-        </div>
-        <div v-show="canvasTab === 'gcode'" class="flex h-full min-h-0 flex-col">
-          <GcodePreview />
-          <p v-if="!job.gcode" class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
-        </div>
-      </template>
+      <div v-show="canvasTab === 'simulator'" class="flex h-full min-h-0 flex-col">
+        <Simulator v-if="canSimulate && job.gcode" />
+        <p v-else-if="!canSimulate" class="text-sm text-slate-500">{{ t('canvas.simulatorUnavailable') }}</p>
+        <p v-else class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
+      </div>
+      <div v-show="canvasTab === 'gcode'" class="flex h-full min-h-0 flex-col">
+        <GcodePreview v-if="job.gcode" />
+        <p v-else class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
+      </div>
     </div>
   </section>
 </template>

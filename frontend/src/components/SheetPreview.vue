@@ -33,10 +33,19 @@ interface RenderedPlacement {
   cleanSvg: string
 }
 
+// DOMPurify.sanitize is expensive on large SVGs; without memoization it
+// runs for every placement on every pointer-move during drag, which
+// chokes the tab. Cache by placement id + raw svg so unchanged SVGs are
+// reused across recomputations. Entries are evicted for placements that
+// disappear from the plan.
+const sanitizedCache = new Map<string, { svg: string; clean: string }>()
+
 const renderedPlacements = computed<RenderedPlacement[]>(() => {
   const w = workspace.value
   if (!w) return []
-  return store.placements.map((p) => {
+  const seen = new Set<string>()
+  const out = store.placements.map((p) => {
+    seen.add(p.id)
     const x_min = w.ws.x_min + p.x_mm
     const y_min = w.ws.y_min + p.y_mm
     const x_max = x_min + p.width_mm
@@ -46,9 +55,18 @@ const renderedPlacements = computed<RenderedPlacement[]>(() => {
       || y_min < w.ws.y_min - 0.01
       || x_max > w.ws.x_max + 0.01
       || y_max > w.ws.y_max + 0.01
-    const cleanSvg = p.svg
-      ? DOMPurify.sanitize(p.svg, { USE_PROFILES: { svg: true, svgFilters: true } })
-      : ''
+    let cleanSvg = ''
+    if (p.svg) {
+      const cached = sanitizedCache.get(p.id)
+      if (cached && cached.svg === p.svg) {
+        cleanSvg = cached.clean
+      } else {
+        cleanSvg = DOMPurify.sanitize(p.svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+        sanitizedCache.set(p.id, { svg: p.svg, clean: cleanSvg })
+      }
+    } else {
+      sanitizedCache.delete(p.id)
+    }
     return {
       placement: p,
       footprint: { x_min, y_min, x_max, y_max },
@@ -56,6 +74,10 @@ const renderedPlacements = computed<RenderedPlacement[]>(() => {
       cleanSvg,
     }
   })
+  for (const id of sanitizedCache.keys()) {
+    if (!seen.has(id)) sanitizedCache.delete(id)
+  }
+  return out
 })
 
 const anyExceeds = computed(() => renderedPlacements.value.some((r) => r.exceeds))
@@ -595,18 +617,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
       <p class="pointer-events-none absolute bottom-1 right-2 text-[10px] text-slate-500">
         {{ t('sheet.viewHint') }}
-      </p>
-      <p
-        v-if="dragOver"
-        class="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-medium text-emerald-300"
-      >
-        {{ t('sheet.dropToPlace') }}
-      </p>
-      <p
-        v-if="!renderedPlacements.length && !dragOver"
-        class="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-slate-500"
-      >
-        {{ t('sheet.emptyHint') }}
       </p>
     </div>
 
