@@ -12,7 +12,8 @@
   "header": {
     "profile": "Profile",
     "preset": "Preset",
-    "settings": "Settings"
+    "settings": "Settings",
+    "plotter": "Plotter"
   },
   "machine": {
     "disconnected": "Offline",
@@ -66,7 +67,8 @@
     "profile": "Machine profile",
     "macros": "Macros",
     "history": "History",
-    "audit": "Audit"
+    "audit": "Audit",
+    "system": "System"
   },
   "upload": {
     "profile": "Machine profile",
@@ -82,7 +84,8 @@
     "layers": "layer | layers",
     "pageOf": "Page {current} / {total}",
     "prevPage": "Previous page",
-    "nextPage": "Next page"
+    "nextPage": "Next page",
+    "clear": "Clear"
   },
   "layers": {
     "title": "Layers",
@@ -135,7 +138,17 @@
     "sheet": "Sheet",
     "drawing": "Drawing",
     "scale": "Scale",
-    "outOfBounds": "The drawing exceeds the workspace; it may be clipped or out of bounds."
+    "outOfBounds": "The drawing exceeds the workspace; it may be clipped or out of bounds.",
+    "view": "View",
+    "resetView": "Reset view",
+    "viewHint": "Wheel to zoom · drag to pan",
+    "width": "Width (mm)",
+    "height": "Height (mm)",
+    "applySize": "Apply size",
+    "sizeHint": "Saved on the machine profile. Existing drawings will be refit.",
+    "saved": "Sheet size updated.",
+    "invalidSize": "Invalid dimensions.",
+    "swap": "Swap W/H"
   },
   "convert": {
     "options": "Conversion options",
@@ -157,7 +170,13 @@
     "strokeWidth": "Stroke width (mm)",
     "margin": "Margin (mm)",
     "pageWidth": "Page width (mm)",
-    "pageHeight": "Page height (mm)"
+    "pageHeight": "Page height (mm)",
+    "algoDirect": "Direct",
+    "algoDirectHint": "Trace contours as-is.",
+    "algoHalftone": "Halftone",
+    "algoHalftoneHint": "Wavy lines per cell.",
+    "algoStippling": "Stippling",
+    "algoStipplingHint": "Cloud of dots by density."
   },
   "profile": {
     "title": "Machine profile",
@@ -285,5 +304,29 @@
   "audit": {
     "title": "Audit log",
     "empty": "No actions recorded yet."
+  },
+  "system": {
+    "title": "System",
+    "subtitle": "Version info and GitHub self-update.",
+    "installed": "Installed",
+    "version": "Version",
+    "branch": "Branch",
+    "commit": "Commit",
+    "workingTree": "Working tree",
+    "dirty": "uncommitted local changes",
+    "loading": "Loading…",
+    "versionError": "Could not read version info.",
+    "update": "Update",
+    "updateHint": "Pulls the latest commit, reinstalls dependencies and rebuilds the UI.",
+    "updateNow": "Update now",
+    "updating": "Updating…",
+    "updateConfirmTitle": "Update system",
+    "updateConfirmMsg": "Pull the latest code from GitHub and rebuild? Cancel any running job first.",
+    "updateApplied": "Update applied.",
+    "upToDate": "Already up to date.",
+    "updateFailed": "Update failed.",
+    "needsRestart": "Restart the service to load the new Python code.",
+    "viewLog": "View log",
+    "dirtyWarning": "Uncommitted local changes — commit or revert before updating."
   }
 }

@@ -15,7 +15,8 @@ const draggableLayers = computed<LayerInfo[]>({
   set: (value) => store.reorderLayers(value),
 })
 
-const canGroupByPen = computed(() => canReduceSwaps(store.layers))
+// Grouping by pen only matters when the machine has multiple pens to swap.
+const canGroupByPen = computed(() => store.isMultiColor && canReduceSwaps(store.layers))
 
 function groupLayersByPen(): void {
   store.reorderLayers(groupByPen(store.layers))

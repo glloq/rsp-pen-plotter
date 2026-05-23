@@ -56,9 +56,25 @@ export const useJobStore = defineStore('job', () => {
 
   const scaleMode = ref<'fit' | 'actual'>('fit')
   const marginMm = ref(10)
+  // Drawing offset on the sheet, in mm. (0,0) = upper-left of the workspace.
+  // Used by SheetPreview for placement; backend ignores it for now (drawings
+  // are still emitted at the workspace origin), but it gives the user a
+  // mental model of where the print will land.
+  const offsetXMm = ref(0)
+  const offsetYMm = ref(0)
+  // When true, every new layer added by an upload is created with
+  // ``optimize: true`` so users get optimized toolpaths by default.
+  const autoOptimize = ref(true)
 
   const selectedProfile = computed(
     () => profiles.value.find((p) => p.name === selectedProfileName.value) ?? null,
+  )
+
+  // A machine has a colour magazine when it physically holds more than one
+  // pen. Single-pen plotters get a simplified UI that hides per-layer pen
+  // assignment, "group by pen" and the magazine strip.
+  const isMultiColor = computed<boolean>(
+    () => (selectedProfile.value?.pen_slot_count ?? 1) > 1,
   )
 
   // Pen slots assigned to a layer that are out of range or not installed,
@@ -165,7 +181,11 @@ export const useJobStore = defineStore('job', () => {
       const result = await uploadFile(file, selectedProfileName.value, options)
       job.value = result.job
       svg.value = result.svg
-      layers.value = result.job.layers
+      // Apply ``autoOptimize`` to every freshly-imported layer so the default
+      // experience produces optimized toolpaths without an extra click.
+      layers.value = result.job.layers.map((layer) =>
+        autoOptimize.value ? { ...layer, optimize: true } : layer,
+      )
       uploadWarnings.value = result.warnings ?? []
       uploadMetadata.value = result.metadata ?? {}
       visibility.value = Object.fromEntries(
@@ -191,6 +211,22 @@ export const useJobStore = defineStore('job', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  function clearJob(): void {
+    job.value = null
+    svg.value = null
+    layers.value = []
+    visibility.value = {}
+    uploadWarnings.value = []
+    uploadMetadata.value = {}
+    lastFile.value = null
+    lastOptions.value = undefined
+    metrics.value = null
+    gcode.value = null
+    preflight.value = null
+    error.value = null
+    errorScope.value = null
   }
 
   async function changePage(page: number): Promise<void> {
@@ -305,8 +341,13 @@ export const useJobStore = defineStore('job', () => {
     preflighting,
     preflight,
     missingPenSlots,
+    isMultiColor,
     scaleMode,
     marginMm,
+    offsetXMm,
+    offsetYMm,
+    autoOptimize,
+    clearJob,
     totalLengthMm,
     totalDurationSeconds,
     effectiveSpeed,

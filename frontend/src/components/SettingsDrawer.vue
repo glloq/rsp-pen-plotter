@@ -7,6 +7,7 @@ import ProfileEditor from './ProfileEditor.vue'
 import MacroPanel from './MacroPanel.vue'
 import JobHistory from './JobHistory.vue'
 import AuditPanel from './AuditPanel.vue'
+import SystemPanel from './SystemPanel.vue'
 
 const { t } = useI18n()
 const ui = useUiStore()
@@ -17,6 +18,7 @@ const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'macros', label: 'settings.macros' },
   { id: 'history', label: 'settings.history' },
   { id: 'audit', label: 'settings.audit' },
+  { id: 'system', label: 'settings.system' },
 ]
 
 function select(tab: SettingsTab): void {
@@ -74,6 +76,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <div v-show="settingsTab === 'macros'"><MacroPanel /></div>
         <div v-show="settingsTab === 'history'"><JobHistory /></div>
         <div v-show="settingsTab === 'audit'"><AuditPanel /></div>
+        <div v-show="settingsTab === 'system'"><SystemPanel /></div>
       </div>
     </div>
   </div>
