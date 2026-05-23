@@ -590,15 +590,25 @@ watch(() => Number(store.uploadMetadata.page_count ?? 0), (v) => { edit.pageCoun
 watch(() => Number(store.uploadMetadata.page ?? 0), (v) => { edit.currentPage.value = v }, { immediate: true })
 edit.setGoToPage(goToPage)
 edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
+
+// Surfaced to EditModal so the header's file-action dropdown can
+// trigger the hidden <input type=file> and the clear flow without
+// reaching into SourceSection internals.
+defineExpose({ openPicker, clearAll })
 </script>
 
 <template>
   <!-- Orchestrator. State (drafts, watchers, /preview cancel/retry,
        upload guard) lives in script setup; the visual sections are
-       implemented in dedicated cards under ./edit/source/ so each
-       concern is editable in isolation. Conditional rendering still
-       happens here so subcomponents stay agnostic of the workflow. -->
-  <section class="space-y-2">
+       implemented in dedicated cards under ./edit/source/. The file
+       row used to live here too but the modal opens with a file
+       already attached 100% of the time (Edit button on a library
+       entry), so it was screen-real-estate for nothing. File actions
+       (change / clear) live in the modal header now — see
+       EditFileActions.vue. The dropzone below is only rendered for
+       the rare edge case of an empty placement awaiting a first
+       file. -->
+  <section class="space-y-3">
     <input
       ref="fileInput"
       type="file"
@@ -607,8 +617,14 @@ edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
       @change="onFileChange"
     />
 
+    <!-- Edge case: empty placement (no file yet). Show the dropzone
+         so the operator has somewhere to drop a file. The compact file
+         row that used to sit here when ``selectedFile`` was set is
+         gone — its content (name + size) duplicates the modal title,
+         and its actions moved to the header dropdown. -->
     <FileSourceCard
-      :selected-file="selectedFile"
+      v-if="!selectedFile"
+      :selected-file="null"
       :kind="kind"
       :has-job="Boolean(store.job)"
       v-model:drag-over="dragOver"
@@ -617,40 +633,46 @@ edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
       @drop="(file) => (selectedFile = file)"
     />
 
-    <p
-      v-if="selectedFile && previewError"
-      class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300"
-    >
-      {{ previewError }}
-    </p>
+    <!-- Bitmap / document conversion settings: print mode first (it
+         drives whether palette + segmentation render at all), then
+         colours, then segmentation details. Per-layer algorithm
+         choice lives in the Layers tab — surface a hint so the
+         operator knows where to go. -->
+    <template v-if="selectedFile && showsBitmapForm">
+      <PrintModeCard :mode="printMode" @update:mode="setPrintMode" />
 
-    <PrintModeCard
-      v-if="selectedFile && showsBitmapForm"
-      :mode="printMode"
-      @update:mode="setPrintMode"
-    />
+      <template v-if="printMode === 'multicolor'">
+        <PaletteCard
+          :bitmap="bitmap"
+          :palette-follows-pens="paletteFollowsPens"
+          :installed-pen-colors="installedPenColors"
+          :pen-slot-count="penSlotCount"
+          :manual-swap-count="manualSwapCount"
+          @update:palette-follows-pens="setPaletteFollowsPens"
+        />
+        <SegmentationCard :bitmap="bitmap" :is-document="kind === 'document'" />
+      </template>
 
-    <PaletteCard
-      v-if="selectedFile && showsBitmapForm && printMode === 'multicolor'"
-      :bitmap="bitmap"
-      :palette-follows-pens="paletteFollowsPens"
-      :installed-pen-colors="installedPenColors"
-      :pen-slot-count="penSlotCount"
-      :manual-swap-count="manualSwapCount"
-      @update:palette-follows-pens="setPaletteFollowsPens"
-    />
-
-    <SegmentationCard
-      v-if="selectedFile && showsBitmapForm && printMode === 'multicolor'"
-      :bitmap="bitmap"
-      :is-document="kind === 'document'"
-    />
+      <p
+        v-if="store.layers.length"
+        class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1.5 text-[11px] text-slate-400"
+      >
+        {{ t('source.perLayerHint') }}
+      </p>
+    </template>
 
     <TypographyCard
       v-if="selectedFile && kind === 'typography'"
       :typo="typo"
       :fonts="fonts"
     />
+
+    <p
+      v-if="selectedFile && previewError"
+      class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300"
+    >
+      {{ previewError }}
+    </p>
 
     <p
       v-if="selectedFile && multiPassLayerCount > 0 && store.job"
@@ -666,16 +688,15 @@ edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
       :disabled="store.loading"
       @click="uploadSelected"
     >
-      {{ store.loading ? t('upload.converting') : t('upload.choose') }}
+      {{ store.loading
+        ? t('upload.converting')
+        : store.job
+          ? t('source.applyChanges')
+          : t('upload.choose') }}
     </button>
 
     <p v-if="store.error && store.errorScope === 'upload'" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-xs text-red-300">
       {{ store.error }}
-    </p>
-    <p v-else-if="store.job" class="px-1 text-xs text-slate-500">
-      {{ t('upload.loaded') }}
-      <span class="font-mono text-slate-300">{{ store.job.source_file }}</span>
-      ({{ t('upload.layers', store.layers.length) }})
     </p>
 
     <ul

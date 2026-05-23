@@ -73,7 +73,12 @@
     "tabLayers": "Layers",
     "tabOutput": "Layout & output",
     "tabShortcut": "Press {key} to jump to this tab",
+    "fileActions": "File actions",
     "resizeHandle": "Drag to resize · double-click to reset"
+  },
+  "source": {
+    "perLayerHint": "Pick the rendering style and pen slot for each colour in the Layers tab.",
+    "applyChanges": "Re-convert with these settings"
   },
   "editPreview": {
     "title": "Preview",

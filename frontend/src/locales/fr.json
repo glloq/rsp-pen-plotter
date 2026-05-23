@@ -73,7 +73,12 @@
     "tabLayers": "Calques",
     "tabOutput": "Mise en page & sortie",
     "tabShortcut": "Appuyer sur {key} pour ouvrir cet onglet",
+    "fileActions": "Actions sur le fichier",
     "resizeHandle": "Glisser pour redimensionner · double-clic pour réinitialiser"
+  },
+  "source": {
+    "perLayerHint": "Choisis le style de rendu et le stylo pour chaque couleur dans l'onglet Calques.",
+    "applyChanges": "Re-convertir avec ces réglages"
   },
   "editPreview": {
     "title": "Aperçu",
