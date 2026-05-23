@@ -41,15 +41,30 @@ const typo = ref({
 })
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'tiff', 'webp', 'heic']
-const TEXT_EXT = ['txt', 'md', 'html', 'docx', 'odt', 'rtf']
+// Files that genuinely hit the Hershey typography pipeline. DOCX / ODT / RTF
+// and HTML used to be classed here, but they actually go through LibreOffice /
+// WeasyPrint → PDF → PyMuPDF, so the typography options were silently ignored.
+const TYPOGRAPHY_EXT = ['txt', 'md']
+// Files that pass through the PDF-style post-processing chain: their
+// ``options`` control how embedded raster ``<image>`` elements are
+// vectorized (algorithm, palette size, background drop), not the source
+// itself.
+const DOCUMENT_EXT = ['pdf', 'svg', 'eps', 'ps', 'ai', 'docx', 'odt', 'rtf', 'html']
 const ACCEPT = '.svg,.png,.jpg,.jpeg,.tiff,.webp,.heic,.pdf,.dxf,.eps,.ps,.ai,.txt,.md,.html,.docx,.odt,.rtf'
 
-const kind = computed<'bitmap' | 'typography' | 'none'>(() => {
+const kind = computed<'bitmap' | 'typography' | 'document' | 'none'>(() => {
   const ext = selectedFile.value?.name.split('.').pop()?.toLowerCase() ?? ''
   if (IMAGE_EXT.includes(ext)) return 'bitmap'
-  if (TEXT_EXT.includes(ext)) return 'typography'
+  if (TYPOGRAPHY_EXT.includes(ext)) return 'typography'
+  if (DOCUMENT_EXT.includes(ext)) return 'document'
   return 'none'
 })
+
+// The bitmap form drives two distinct flows: vectorizing a standalone
+// raster image (kind === 'bitmap') and configuring how rasters embedded
+// in a document/SVG/EPS are vectorized (kind === 'document'). Either way
+// the same backend options apply.
+const showsBitmapForm = computed(() => kind.value === 'bitmap' || kind.value === 'document')
 
 onMounted(async () => {
   try {
@@ -86,7 +101,7 @@ function onDrop(event: DragEvent): void {
 }
 
 function buildOptions(): Record<string, unknown> | undefined {
-  if (kind.value === 'bitmap') {
+  if (showsBitmapForm.value) {
     const b = bitmap.value
     return {
       algorithm: b.algorithm,
@@ -170,12 +185,16 @@ function openPicker(): void {
         :aria-expanded="showOptions"
         @click="showOptions = !showOptions"
       >
-        {{ t('convert.options') }}
+        {{ kind === 'document' ? t('convert.embeddedImageOptions') : t('convert.options') }}
         <span class="text-slate-500">{{ showOptions ? '−' : '+' }}</span>
       </button>
 
       <div v-if="showOptions" class="space-y-2 border-t border-slate-700 p-3 text-xs">
-        <template v-if="kind === 'bitmap'">
+        <p v-if="kind === 'document'" class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400">
+          {{ t('convert.embeddedImageHint') }}
+        </p>
+
+        <template v-if="showsBitmapForm">
           <label class="block text-slate-400">{{ t('convert.algorithm') }}
             <select v-model="bitmap.algorithm" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
               <option v-for="algo in algorithms" :key="algo.name" :value="algo.name">{{ algo.name }}</option>

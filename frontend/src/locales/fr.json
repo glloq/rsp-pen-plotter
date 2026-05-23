@@ -139,6 +139,8 @@
   },
   "convert": {
     "options": "Options de conversion",
+    "embeddedImageOptions": "Vectorisation des images intégrées",
+    "embeddedImageHint": "Ces options ne s'appliquent qu'aux images raster intégrées dans le document. Le texte et les vecteurs ne sont pas affectés.",
     "algorithm": "Algorithme",
     "numColors": "Couleurs",
     "maxDim": "Taille max (px)",
