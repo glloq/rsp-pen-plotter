@@ -13,6 +13,7 @@ import {
   preflightCheck,
   rerenderJob,
   uploadFile,
+  type BoundingBox,
   type Job,
   type LayerInfo,
   type MachineProfile,
@@ -20,25 +21,204 @@ import {
   type PreflightReport,
   type ToolpathMetrics,
 } from '../api/client'
+import { buildComposite } from '../lib/composite'
 
 const DEFAULT_SPEED_MM_S = 60
 
+// A placement is a fully self-contained snapshot: source file metadata,
+// the rendered SVG, the per-layer config, and the position/size on the
+// machine workspace. Multiple placements live side-by-side on the plan
+// (different files OR multiple instances of the same file). The modal
+// edits one at a time — ``selectedPlacementId``.
+interface LayerAlgorithm {
+  algorithm: string
+  algorithm_options: Record<string, unknown>
+}
+
+export interface Placement {
+  id: string
+  source_file: string
+  source_mime: string
+  job_id: string | null
+  svg: string
+  layers: LayerInfo[]
+  source_bbox: BoundingBox
+  layer_algorithms: Record<string, LayerAlgorithm>
+  upload_warnings: string[]
+  upload_metadata: Record<string, unknown>
+  last_file: File | null
+  last_options: Record<string, unknown> | undefined
+  visibility: Record<string, boolean>
+  x_mm: number
+  y_mm: number
+  width_mm: number
+  height_mm: number
+}
+
+let placementCounter = 0
+function newPlacementId(): string {
+  placementCounter += 1
+  return `p${Date.now().toString(36)}${placementCounter.toString(36)}`
+}
+
+function emptyBbox(): BoundingBox {
+  return { x_min: 0, y_min: 0, x_max: 0, y_max: 0 }
+}
+
 export const useJobStore = defineStore('job', () => {
-  const job = ref<Job | null>(null)
-  const svg = ref<string | null>(null)
-  const layers = ref<LayerInfo[]>([])
-  const visibility = ref<Record<string, boolean>>({})
+  // ====== Placements ====================================================
+  const placements = ref<Placement[]>([])
+  const selectedPlacementId = ref<string | null>(null)
+
+  const selectedPlacement = computed<Placement | null>(() => {
+    const id = selectedPlacementId.value
+    if (!id) return null
+    return placements.value.find((p) => p.id === id) ?? null
+  })
+
+  function patchPlacement(id: string, patch: Partial<Placement>): void {
+    placements.value = placements.value.map((p) => (p.id === id ? { ...p, ...patch } : p))
+  }
+  function patchSelected(patch: Partial<Placement>): void {
+    const id = selectedPlacementId.value
+    if (!id) return
+    patchPlacement(id, patch)
+    preflight.value = null
+  }
+
+  function selectPlacement(id: string | null): void {
+    selectedPlacementId.value = id
+  }
+
+  function removePlacement(id: string): void {
+    placements.value = placements.value.filter((p) => p.id !== id)
+    if (selectedPlacementId.value === id) {
+      selectedPlacementId.value = placements.value[0]?.id ?? null
+    }
+    preflight.value = null
+    gcode.value = null
+  }
+
+  function defaultPlacementSize(): { x_mm: number; y_mm: number; width_mm: number; height_mm: number } {
+    const ws = selectedProfile.value?.workspace
+    if (!ws) return { x_mm: 0, y_mm: 0, width_mm: 100, height_mm: 100 }
+    const wsW = ws.x_max - ws.x_min
+    const wsH = ws.y_max - ws.y_min
+    const w = Math.max(wsW * 0.6, 10)
+    const h = Math.max(wsH * 0.6, 10)
+    return { x_mm: (wsW - w) / 2, y_mm: (wsH - h) / 2, width_mm: w, height_mm: h }
+  }
+
+  function blankPlacement(): Placement {
+    const size = defaultPlacementSize()
+    return {
+      id: newPlacementId(),
+      source_file: '',
+      source_mime: '',
+      job_id: null,
+      svg: '',
+      layers: [],
+      source_bbox: emptyBbox(),
+      layer_algorithms: {},
+      upload_warnings: [],
+      upload_metadata: {},
+      last_file: null,
+      last_options: undefined,
+      visibility: {},
+      ...size,
+    }
+  }
+
+  function addEmptyPlacement(): string {
+    const placement = blankPlacement()
+    placements.value = [...placements.value, placement]
+    selectedPlacementId.value = placement.id
+    return placement.id
+  }
+
+  function duplicatePlacement(id: string, offsetMm = 15): string | null {
+    const src = placements.value.find((p) => p.id === id)
+    if (!src) return null
+    const clone: Placement = {
+      ...src,
+      id: newPlacementId(),
+      x_mm: src.x_mm + offsetMm,
+      y_mm: src.y_mm + offsetMm,
+      // Cloned placements get their own visibility + algorithm overrides
+      // so tweaks on one don't bleed into the other.
+      visibility: { ...src.visibility },
+      layer_algorithms: { ...src.layer_algorithms },
+      layers: src.layers.map((l) => ({ ...l })),
+    }
+    placements.value = [...placements.value, clone]
+    return clone.id
+  }
+
+  // ====== Backward-compat shims (read-only views into selected) ==========
+  // These mirror the old single-job state so existing components keep
+  // reading ``store.svg`` / ``store.layers`` / ``store.job`` without
+  // knowing about placements. Mutations go through the helper functions
+  // below, which act on ``selectedPlacement``.
+  const job = computed<Job | null>(() => {
+    const p = selectedPlacement.value
+    if (!p || !p.source_file) return null
+    return {
+      job_id: p.job_id ?? '',
+      source_file: p.source_file,
+      source_mime: p.source_mime,
+      profile_name: selectedProfileName.value,
+      layers: p.layers,
+      created_at: '',
+      status: 'ready',
+    }
+  })
+  const svg = computed<string | null>(() => selectedPlacement.value?.svg || null)
+  const layers = computed<LayerInfo[]>(() => selectedPlacement.value?.layers ?? [])
+  const lastFile = computed<File | null>(() => selectedPlacement.value?.last_file ?? null)
+  const uploadWarnings = computed<string[]>(() => selectedPlacement.value?.upload_warnings ?? [])
+  const uploadMetadata = computed<Record<string, unknown>>(
+    () => selectedPlacement.value?.upload_metadata ?? {},
+  )
+  const layerAlgorithms = computed<Record<string, LayerAlgorithm>>(
+    () => selectedPlacement.value?.layer_algorithms ?? {},
+  )
+  const visibility = computed<Record<string, boolean>>(
+    () => selectedPlacement.value?.visibility ?? {},
+  )
+
+  interface DrawingRegion {
+    x_mm: number
+    y_mm: number
+    width_mm: number
+    height_mm: number
+  }
+  const currentDrawing = computed<DrawingRegion | null>(() => {
+    const p = selectedPlacement.value
+    if (!p || !p.source_file) return null
+    return { x_mm: p.x_mm, y_mm: p.y_mm, width_mm: p.width_mm, height_mm: p.height_mm }
+  })
+
+  function setDrawing(patch: Partial<DrawingRegion>): void {
+    const p = selectedPlacement.value
+    if (!p) return
+    patchSelected({
+      x_mm: patch.x_mm ?? p.x_mm,
+      y_mm: patch.y_mm ?? p.y_mm,
+      width_mm: patch.width_mm ?? p.width_mm,
+      height_mm: patch.height_mm ?? p.height_mm,
+    })
+  }
+
+  function resetDrawing(): void {
+    const p = selectedPlacement.value
+    if (!p) return
+    patchSelected(defaultPlacementSize())
+  }
+
+  // ====== Misc state ====================================================
   const loading = ref(false)
   const error = ref<string | null>(null)
   const errorScope = ref<'upload' | 'optimize' | 'generate' | null>(null)
-  const uploadWarnings = ref<string[]>([])
-  // Converter-provided metadata, e.g. ``page_count`` and the current ``page``
-  // for multi-page PDF / DOCX / HTML inputs. Empty otherwise.
-  const uploadMetadata = ref<Record<string, unknown>>({})
-  // Remembers the most recently uploaded File so we can re-upload it with a
-  // different ``page`` option without asking the user to pick it again.
-  const lastFile = ref<File | null>(null)
-  const lastOptions = ref<Record<string, unknown> | undefined>(undefined)
 
   const profiles = ref<MachineProfile[]>([])
   const selectedProfileName = ref('Custom CoreXY A3')
@@ -57,105 +237,17 @@ export const useJobStore = defineStore('job', () => {
 
   const scaleMode = ref<'fit' | 'actual'>('fit')
   const marginMm = ref(10)
-  // When true, every new layer added by an upload is created with
-  // ``optimize: true`` so users get optimized toolpaths by default.
   const autoOptimize = ref(true)
 
   const selectedProfile = computed(
     () => profiles.value.find((p) => p.name === selectedProfileName.value) ?? null,
   )
 
-  // A machine has a colour magazine when it physically holds more than one
-  // pen. Single-pen plotters get a simplified UI that hides per-layer pen
-  // assignment, "group by pen" and the magazine strip.
   const isMultiColor = computed<boolean>(
     () => (selectedProfile.value?.pen_slot_count ?? 1) > 1,
   )
 
-  // Per-profile drawing region on the machine workspace, persisted in
-  // localStorage. The drawing is the thing the user is plotting; this
-  // record stores where on the workspace it sits and at what size. ``null``
-  // (unset) means "auto-fit": center the drawing in the workspace minus
-  // margins (the legacy behaviour). Keyed by profile name so each machine
-  // remembers its last placement independently.
-  interface DrawingRegion {
-    x_mm: number
-    y_mm: number
-    width_mm: number
-    height_mm: number
-  }
-  const DRAWINGS_KEY = 'omniplot.drawings.v1'
-  function readDrawings(): Record<string, DrawingRegion> {
-    try {
-      const raw = localStorage.getItem(DRAWINGS_KEY)
-      if (!raw) return {}
-      const parsed = JSON.parse(raw)
-      return typeof parsed === 'object' && parsed !== null ? parsed : {}
-    } catch {
-      return {}
-    }
-  }
-  const drawingByProfile = ref<Record<string, DrawingRegion>>(readDrawings())
-  watch(
-    drawingByProfile,
-    (value) => {
-      try {
-        localStorage.setItem(DRAWINGS_KEY, JSON.stringify(value))
-      } catch {
-        // localStorage may be unavailable (e.g. private mode); failing here
-        // is non-fatal — the in-memory placement still works for the session.
-      }
-    },
-    { deep: true },
-  )
-
-  // ``null`` means "auto-fit" — the SheetPreview and the backend will scale
-  // the drawing to the workspace with the configured margin.
-  const currentDrawing = computed<DrawingRegion | null>(() => {
-    const profile = selectedProfile.value
-    if (!profile) return null
-    return drawingByProfile.value[profile.name] ?? null
-  })
-
-  function setDrawing(patch: Partial<DrawingRegion>): void {
-    const profile = selectedProfile.value
-    if (!profile) return
-    const ws = profile.workspace
-    const wsW = ws.x_max - ws.x_min
-    const wsH = ws.y_max - ws.y_min
-    const previous =
-      drawingByProfile.value[profile.name] ?? {
-        x_mm: 0,
-        y_mm: 0,
-        width_mm: wsW,
-        height_mm: wsH,
-      }
-    drawingByProfile.value = {
-      ...drawingByProfile.value,
-      [profile.name]: { ...previous, ...patch },
-    }
-    preflight.value = null
-  }
-
-  function resetDrawing(): void {
-    const profile = selectedProfile.value
-    if (!profile) return
-    const next = { ...drawingByProfile.value }
-    delete next[profile.name]
-    drawingByProfile.value = next
-    preflight.value = null
-  }
-
-  // Per-layer render-algorithm overrides. Keyed by ``layer_id`` (e.g.
-  // ``color-ff0000`` for a bitmap colour layer). Lives in memory only —
-  // a fresh upload wipes it. Each entry holds the override algorithm
-  // and per-algo options; the backend ``/rerender`` endpoint applies it
-  // against the cached segmentation and returns a new SVG.
-  interface LayerAlgorithm {
-    algorithm: string
-    algorithm_options: Record<string, unknown>
-  }
-  const layerAlgorithms = ref<Record<string, LayerAlgorithm>>({})
+  // ====== /rerender ======================================================
   let rerenderController: AbortController | null = null
   let rerenderTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -164,59 +256,55 @@ export const useJobStore = defineStore('job', () => {
     algorithm: string,
     algorithmOptions: Record<string, unknown> = {},
   ): Promise<void> {
-    layerAlgorithms.value = {
-      ...layerAlgorithms.value,
-      [layerId]: { algorithm, algorithm_options: algorithmOptions },
-    }
-    // Debounce the network round-trip so a slider drag doesn't fire a
-    // request on every tick.
+    const p = selectedPlacement.value
+    if (!p) return
+    patchSelected({
+      layer_algorithms: {
+        ...p.layer_algorithms,
+        [layerId]: { algorithm, algorithm_options: algorithmOptions },
+      },
+    })
     if (rerenderTimer) clearTimeout(rerenderTimer)
     rerenderTimer = setTimeout(triggerRerender, 250)
   }
 
-  // Drop the override for a layer and re-render with the original
-  // algorithm baked in at upload time. Reassigning the ref (rather than
-  // ``delete``) keeps Vue's reactivity in the loop.
   async function clearLayerAlgorithm(layerId: string): Promise<void> {
-    if (!(layerId in layerAlgorithms.value)) return
-    const next = { ...layerAlgorithms.value }
+    const p = selectedPlacement.value
+    if (!p) return
+    if (!(layerId in p.layer_algorithms)) return
+    const next = { ...p.layer_algorithms }
     delete next[layerId]
-    layerAlgorithms.value = next
+    patchSelected({ layer_algorithms: next })
     if (rerenderTimer) clearTimeout(rerenderTimer)
     rerenderTimer = setTimeout(triggerRerender, 250)
   }
 
   async function triggerRerender(): Promise<void> {
-    const jobId = job.value?.job_id
-    if (!jobId || !svg.value) return
+    const p = selectedPlacement.value
+    if (!p || !p.job_id || !p.svg) return
     if (rerenderController) rerenderController.abort()
     const controller = new AbortController()
     rerenderController = controller
     try {
-      const layersPayload = Object.entries(layerAlgorithms.value).map(
+      const layersPayload = Object.entries(p.layer_algorithms).map(
         ([layer_id, spec]) => ({
           layer_id,
           algorithm: spec.algorithm,
           algorithm_options: spec.algorithm_options,
         }),
       )
-      const result = await rerenderJob(jobId, layersPayload, controller.signal)
+      const result = await rerenderJob(p.job_id, layersPayload, controller.signal)
       if (controller.signal.aborted) return
-      svg.value = result.svg
-      // The toolpath metrics / G-code are now stale — drop them so the
-      // operator doesn't ship a G-code that doesn't match the preview.
+      patchPlacement(p.id, { svg: result.svg })
+      // Generation needs to be redone for the new SVG.
       metrics.value = null
       gcode.value = null
       preflight.value = null
     } catch (err) {
       if (controller.signal.aborted) return
       const status = (err as { response?: { status?: number } })?.response?.status
-      // 404 = cache evicted (LRU / backend restart). Tolerate silently —
-      // re-uploading refreshes the cache. 405 = the /rerender route isn't
-      // reachable on this deployment (e.g. a static-mount or reverse-proxy
-      // ate the POST); show a clear hint instead of the cryptic axios error.
       if (status === 404) {
-        // silent
+        // silent — cache evicted; re-upload to refresh
       } else if (status === 405) {
         const toasts = useToastStore()
         toasts.warning(i18n.global.t('layers.rerenderUnavailable'))
@@ -229,8 +317,7 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
-  // Pen slots assigned to a layer that are out of range or not installed,
-  // mirroring the backend magazine check so generation can be gated.
+  // ====== Per-layer utilities (act on selected) ==========================
   const missingPenSlots = computed<number[]>(() => {
     const profile = selectedProfile.value
     if (!profile) return []
@@ -239,11 +326,13 @@ export const useJobStore = defineStore('job', () => {
       (profile.pens ?? []).filter((p) => p.installed).map((p) => p.index),
     )
     const missing = new Set<number>()
-    for (const layer of layers.value) {
-      const slot = layer.target_pen_slot
-      if (slot === null) continue
-      if (slot < 0 || slot >= profile.pen_slot_count) missing.add(slot)
-      else if (hasExplicit && !installed.has(slot)) missing.add(slot)
+    for (const placement of placements.value) {
+      for (const layer of placement.layers) {
+        const slot = layer.target_pen_slot
+        if (slot === null) continue
+        if (slot < 0 || slot >= profile.pen_slot_count) missing.add(slot)
+        else if (hasExplicit && !installed.has(slot)) missing.add(slot)
+      }
     }
     return [...missing].sort((a, b) => a - b)
   })
@@ -258,34 +347,46 @@ export const useJobStore = defineStore('job', () => {
   }
 
   const totalLengthMm = computed(() =>
-    layers.value.reduce((sum, layer) => sum + layer.total_length_mm, 0),
+    placements.value.reduce(
+      (sum, p) => sum + p.layers.reduce((s, l) => s + l.total_length_mm, 0),
+      0,
+    ),
   )
 
   const totalDurationSeconds = computed(() =>
-    layers.value.reduce((sum, layer) => sum + layerDurationSeconds(layer), 0),
+    placements.value.reduce(
+      (sum, p) => sum + p.layers.reduce((s, l) => s + layerDurationSeconds(l), 0),
+      0,
+    ),
   )
 
   function setVisibility(layerId: string, visible: boolean): void {
-    visibility.value = { ...visibility.value, [layerId]: visible }
+    const p = selectedPlacement.value
+    if (!p) return
+    patchSelected({ visibility: { ...p.visibility, [layerId]: visible } })
   }
-
   function isVisible(layerId: string): boolean {
     return visibility.value[layerId] ?? true
   }
 
   function updateLayer(layerId: string, patch: Partial<LayerInfo>): void {
-    layers.value = layers.value.map((layer) =>
-      layer.layer_id === layerId ? { ...layer, ...patch } : layer,
-    )
-    preflight.value = null
+    const p = selectedPlacement.value
+    if (!p) return
+    patchSelected({
+      layers: p.layers.map((layer) =>
+        layer.layer_id === layerId ? { ...layer, ...patch } : layer,
+      ),
+    })
   }
 
   function reorderLayers(ordered: LayerInfo[]): void {
-    layers.value = ordered.map((layer, index) => ({ ...layer, draw_order: index }))
-    preflight.value = null
+    patchSelected({ layers: ordered.map((layer, index) => ({ ...layer, draw_order: index })) })
   }
 
-  watch([scaleMode, marginMm, selectedProfileName, drawingByProfile], () => {
+  watch([scaleMode, marginMm, selectedProfileName], () => {
+    preflight.value = null
+  })
+  watch(placements, () => {
     preflight.value = null
   }, { deep: true })
 
@@ -314,105 +415,150 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
+  // ====== Upload ========================================================
+  // Upload populates the SELECTED placement; if none exists, a fresh one
+  // is created and selected before the conversion runs.
   async function upload(file: File, optionsOverride?: Record<string, unknown>): Promise<void> {
     const preset = presets.value.find((p) => p.name === selectedPresetName.value)
     const options =
       preset?.options || optionsOverride ? { ...preset?.options, ...optionsOverride } : undefined
+    if (!selectedPlacement.value) {
+      addEmptyPlacement()
+    }
+    const targetId = selectedPlacementId.value!
     loading.value = true
     error.value = null
     errorScope.value = null
-    uploadWarnings.value = []
-    uploadMetadata.value = {}
+    patchPlacement(targetId, {
+      upload_warnings: [],
+      upload_metadata: {},
+      layer_algorithms: {},
+      last_file: file,
+      last_options: options,
+    })
     metrics.value = null
     gcode.value = null
     preflight.value = null
-    // A new upload invalidates the per-layer algorithm overrides — they
-    // reference layer ids from the previous job.
-    layerAlgorithms.value = {}
-    lastFile.value = file
-    lastOptions.value = options
     const toasts = useToastStore()
     try {
       const result = await uploadFile(file, selectedProfileName.value, options)
-      job.value = result.job
-      svg.value = result.svg
-      // Apply ``autoOptimize`` to every freshly-imported layer so the default
-      // experience produces optimized toolpaths without an extra click.
-      layers.value = result.job.layers.map((layer) =>
-        autoOptimize.value ? { ...layer, optimize: true } : layer,
-      )
-      uploadWarnings.value = result.warnings ?? []
-      uploadMetadata.value = result.metadata ?? {}
-      visibility.value = Object.fromEntries(
-        result.job.layers.map((layer) => [layer.layer_id, true]),
-      )
-      // Surface upload warnings as toasts; the inline list in SourceSection
-      // stays as the durable reference, the toast is the attention grabber.
-      for (const warning of uploadWarnings.value.slice(0, 3)) {
+      // Compute source bbox from union of layer bboxes.
+      const bboxes = result.job.layers.map((l) => l.bbox)
+      const sourceBbox = unionBoxes(bboxes) ?? emptyBbox()
+      // Initial position: if placement is fresh (default size), centre
+      // the source bbox aspect on the workspace; else keep its position
+      // but refit the size to the new source aspect.
+      const layoutPatch = computeInitialLayout(sourceBbox, targetId)
+      patchPlacement(targetId, {
+        source_file: result.job.source_file,
+        source_mime: result.job.source_mime,
+        job_id: result.job.job_id,
+        svg: result.svg,
+        layers: result.job.layers.map((layer) =>
+          autoOptimize.value ? { ...layer, optimize: true } : layer,
+        ),
+        source_bbox: sourceBbox,
+        upload_warnings: result.warnings ?? [],
+        upload_metadata: result.metadata ?? {},
+        visibility: Object.fromEntries(result.job.layers.map((l) => [l.layer_id, true])),
+        ...layoutPatch,
+      })
+      for (const warning of (result.warnings ?? []).slice(0, 3)) {
         toasts.warning(warning)
       }
-      if (uploadWarnings.value.length > 3) {
+      if ((result.warnings ?? []).length > 3) {
         toasts.warning(
-          i18n.global.t('toast.moreWarnings', { count: uploadWarnings.value.length - 3 }),
+          i18n.global.t('toast.moreWarnings', { count: (result.warnings ?? []).length - 3 }),
         )
       }
     } catch (err) {
       const message = errorDetail(err, i18n.global.t('upload.failed'))
       error.value = message
       errorScope.value = 'upload'
-      svg.value = null
-      layers.value = []
+      // Reset svg/layers on the target placement so the UI shows the
+      // drop-zone again instead of stale content.
+      patchPlacement(targetId, { svg: '', layers: [] })
       toasts.error(message)
     } finally {
       loading.value = false
     }
   }
 
+  function computeInitialLayout(
+    sourceBbox: BoundingBox,
+    placementId: string,
+  ): Partial<Placement> {
+    const profile = selectedProfile.value
+    if (!profile) return {}
+    const ws = profile.workspace
+    const wsW = ws.x_max - ws.x_min
+    const wsH = ws.y_max - ws.y_min
+    const bboxW = Math.max(sourceBbox.x_max - sourceBbox.x_min, 1e-6)
+    const bboxH = Math.max(sourceBbox.y_max - sourceBbox.y_min, 1e-6)
+    const usableW = Math.max(wsW - 2 * marginMm.value, wsW * 0.5)
+    const usableH = Math.max(wsH - 2 * marginMm.value, wsH * 0.5)
+    const scale = Math.min(usableW / bboxW, usableH / bboxH)
+    const width = bboxW * scale
+    const height = bboxH * scale
+    // Preserve existing x/y if the placement already had real content;
+    // otherwise centre. We detect "fresh" by checking source_file empty
+    // before this upload mutated it — but at this point we've already
+    // overwritten metadata, so use width_mm check on the prior state.
+    const prior = placements.value.find((p) => p.id === placementId)
+    const wasFresh = !prior?.source_file
+    if (wasFresh) {
+      return {
+        x_mm: (wsW - width) / 2,
+        y_mm: (wsH - height) / 2,
+        width_mm: width,
+        height_mm: height,
+      }
+    }
+    return { width_mm: width, height_mm: height }
+  }
+
   function clearJob(): void {
-    job.value = null
-    svg.value = null
-    layers.value = []
-    visibility.value = {}
-    uploadWarnings.value = []
-    uploadMetadata.value = {}
-    lastFile.value = null
-    lastOptions.value = undefined
+    placements.value = []
+    selectedPlacementId.value = null
     metrics.value = null
     gcode.value = null
     preflight.value = null
     error.value = null
     errorScope.value = null
-    // Stale per-layer overrides would point at a job_id that's gone.
-    layerAlgorithms.value = {}
   }
 
   async function changePage(page: number): Promise<void> {
-    // Re-upload the same source file with a different ``page`` option;
-    // useful for multi-page PDF / DOCX / HTML inputs where the converter
-    // returns a ``page_count`` greater than 1.
-    if (!lastFile.value) return
-    const next = { ...(lastOptions.value ?? {}), page }
-    await upload(lastFile.value, next)
+    const p = selectedPlacement.value
+    if (!p?.last_file) return
+    const next = { ...(p.last_options ?? {}), page }
+    await upload(p.last_file, next)
   }
 
+  // ====== Optimize / Preflight / Generate (composite) ====================
+  // Optimize still operates on a single placement (only the selected one),
+  // since the optimizer is local to a drawing. Preflight + generate fold
+  // ALL placements into one composite SVG sent to the backend.
   async function optimize(): Promise<void> {
-    if (!svg.value) return
+    const p = selectedPlacement.value
+    if (!p?.svg) return
     optimizing.value = true
     error.value = null
     errorScope.value = null
     try {
       const result = await optimizeToolpaths(
-        svg.value,
-        layers.value.map((layer) => ({
+        p.svg,
+        p.layers.map((layer) => ({
           layer_id: layer.layer_id,
           optimize: layer.optimize,
           simplify_tolerance_mm: layer.simplify_tolerance_mm,
         })),
       )
-      svg.value = result.svg
-      layers.value = result.layers
+      patchPlacement(p.id, {
+        svg: result.svg,
+        layers: result.layers,
+        visibility: Object.fromEntries(result.layers.map((l) => [l.layer_id, true])),
+      })
       metrics.value = result.metrics
-      visibility.value = Object.fromEntries(result.layers.map((layer) => [layer.layer_id, true]))
       gcode.value = null
       preflight.value = null
     } catch (err) {
@@ -423,17 +569,47 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
+  function compositePayload(): {
+    svg: string
+    layers: LayerInfo[]
+    placement: { sheet_width_mm: number; sheet_height_mm: number; offset_x_mm: number; offset_y_mm: number } | null
+  } | null {
+    const profile = selectedProfile.value
+    if (!profile) return null
+    const ready = placements.value.filter((p) => p.svg && p.layers.length)
+    if (!ready.length) return null
+    const result = buildComposite(ready, profile)
+    // The backend ``_make_transform`` centres the drawing on the
+    // drawable region. To preserve the absolute workspace coordinates
+    // we baked into the composite, define the region to be exactly the
+    // union of the rendered layer bboxes — region_center then matches
+    // bbox_center and the transform collapses to identity.
+    const bbox = unionBoxes(result.layers.map((l) => l.bbox))
+    let placement: ReturnType<typeof compositePayload> extends infer R
+      ? R extends { placement: infer P } ? P : never : never = null
+    if (bbox) {
+      const ws = profile.workspace
+      placement = {
+        offset_x_mm: Math.max(0, bbox.x_min - ws.x_min),
+        offset_y_mm: Math.max(0, bbox.y_min - ws.y_min),
+        sheet_width_mm: Math.max(1e-3, bbox.x_max - bbox.x_min),
+        sheet_height_mm: Math.max(1e-3, bbox.y_max - bbox.y_min),
+      }
+    }
+    return { svg: result.svg, layers: result.layers, placement }
+  }
+
   async function runPreflight(): Promise<void> {
-    if (!svg.value) return
+    const payload = compositePayload()
+    if (!payload) return
     preflighting.value = true
     error.value = null
     errorScope.value = null
     try {
-      const drawing = currentDrawing.value
       preflight.value = await preflightCheck(
-        svg.value,
+        payload.svg,
         selectedProfileName.value,
-        layers.value.map((layer) => ({
+        payload.layers.map((layer) => ({
           layer_id: layer.layer_id,
           target_pen_slot: layer.target_pen_slot,
           drawing_speed_mm_s: layer.drawing_speed_mm_s,
@@ -441,19 +617,9 @@ export const useJobStore = defineStore('job', () => {
           color_label: layer.color_label,
           pause_before: layer.pause_before,
         })),
-        scaleMode.value,
-        marginMm.value,
-        // Map the drawing region onto the backend's ``Placement`` payload.
-        // The payload's "sheet" fields are interpreted by the generator as
-        // the drawing area: same maths, clearer UI naming.
-        drawing
-          ? {
-              sheet_width_mm: drawing.width_mm,
-              sheet_height_mm: drawing.height_mm,
-              offset_x_mm: drawing.x_mm,
-              offset_y_mm: drawing.y_mm,
-            }
-          : null,
+        'actual',
+        0,
+        payload.placement,
       )
     } catch (err) {
       preflight.value = null
@@ -465,16 +631,16 @@ export const useJobStore = defineStore('job', () => {
   }
 
   async function generate(): Promise<void> {
-    if (!svg.value) return
+    const payload = compositePayload()
+    if (!payload) return
     generating.value = true
     error.value = null
     errorScope.value = null
     try {
-      const drawing = currentDrawing.value
       const result = await generateGcode(
-        svg.value,
+        payload.svg,
         selectedProfileName.value,
-        layers.value.map((layer) => ({
+        payload.layers.map((layer) => ({
           layer_id: layer.layer_id,
           target_pen_slot: layer.target_pen_slot,
           drawing_speed_mm_s: layer.drawing_speed_mm_s,
@@ -482,16 +648,9 @@ export const useJobStore = defineStore('job', () => {
           color_label: layer.color_label,
           pause_before: layer.pause_before,
         })),
-        scaleMode.value,
-        marginMm.value,
-        drawing
-          ? {
-              sheet_width_mm: drawing.width_mm,
-              sheet_height_mm: drawing.height_mm,
-              offset_x_mm: drawing.x_mm,
-              offset_y_mm: drawing.y_mm,
-            }
-          : null,
+        'actual',
+        0,
+        payload.placement,
       )
       gcode.value = result.gcode
     } catch (err) {
@@ -502,17 +661,99 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
+  // ====== Scene persistence =============================================
+  // Placements (sans the un-serializable ``last_file`` File handle), the
+  // current selection, profile, scale settings and auto-optimize toggle
+  // are written to ``localStorage`` on a debounce so a tab refresh keeps
+  // the scene intact. SVGs can be large — if quota is hit we fail
+  // silently and the user simply doesn't get persistence that session.
+  const SCENE_KEY = 'omniplot.scene.v2'
+
+  interface SerializableScene {
+    placements: Placement[]
+    selectedPlacementId: string | null
+    selectedProfileName: string
+    scaleMode: 'fit' | 'actual'
+    marginMm: number
+    autoOptimize: boolean
+  }
+
+  function persistScene(): void {
+    try {
+      const data: SerializableScene = {
+        // ``last_file`` is a File handle — can't survive JSON.
+        placements: placements.value.map((p) => ({ ...p, last_file: null })),
+        selectedPlacementId: selectedPlacementId.value,
+        selectedProfileName: selectedProfileName.value,
+        scaleMode: scaleMode.value,
+        marginMm: marginMm.value,
+        autoOptimize: autoOptimize.value,
+      }
+      localStorage.setItem(SCENE_KEY, JSON.stringify(data))
+    } catch {
+      // localStorage may be unavailable (private browsing) or full.
+    }
+  }
+
+  function hydrateScene(): void {
+    try {
+      const raw = localStorage.getItem(SCENE_KEY)
+      if (!raw) return
+      const data = JSON.parse(raw) as Partial<SerializableScene>
+      if (Array.isArray(data.placements)) {
+        placements.value = data.placements.map((p) => ({
+          ...p,
+          last_file: null,
+        }))
+      }
+      if (data.selectedPlacementId !== undefined) {
+        selectedPlacementId.value = data.selectedPlacementId
+      }
+      if (data.selectedProfileName) selectedProfileName.value = data.selectedProfileName
+      if (data.scaleMode) scaleMode.value = data.scaleMode
+      if (typeof data.marginMm === 'number') marginMm.value = data.marginMm
+      if (typeof data.autoOptimize === 'boolean') autoOptimize.value = data.autoOptimize
+    } catch {
+      // Malformed JSON / no localStorage — start fresh.
+    }
+  }
+
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+  function schedulePersist(): void {
+    if (persistTimer) clearTimeout(persistTimer)
+    persistTimer = setTimeout(persistScene, 300)
+  }
+
+  hydrateScene()
+  watch(
+    [placements, selectedPlacementId, selectedProfileName, scaleMode, marginMm, autoOptimize],
+    schedulePersist,
+    { deep: true },
+  )
+
   return {
+    // Placements API
+    placements,
+    selectedPlacementId,
+    selectedPlacement,
+    selectPlacement,
+    addEmptyPlacement,
+    duplicatePlacement,
+    removePlacement,
+    // Backward-compat views
     job,
     svg,
     layers,
     visibility,
+    lastFile,
+    uploadWarnings,
+    uploadMetadata,
+    layerAlgorithms,
+    currentDrawing,
+    // Misc state
     loading,
     error,
     errorScope,
-    uploadWarnings,
-    uploadMetadata,
-    lastFile,
     changePage,
     profiles,
     selectedProfileName,
@@ -530,10 +771,8 @@ export const useJobStore = defineStore('job', () => {
     scaleMode,
     marginMm,
     autoOptimize,
-    currentDrawing,
     setDrawing,
     resetDrawing,
-    layerAlgorithms,
     applyLayerAlgorithm,
     clearLayerAlgorithm,
     clearJob,
@@ -555,3 +794,15 @@ export const useJobStore = defineStore('job', () => {
     generate,
   }
 })
+
+function unionBoxes(boxes: BoundingBox[]): BoundingBox | null {
+  if (!boxes.length) return null
+  const u: BoundingBox = { x_min: Infinity, y_min: Infinity, x_max: -Infinity, y_max: -Infinity }
+  for (const b of boxes) {
+    u.x_min = Math.min(u.x_min, b.x_min)
+    u.y_min = Math.min(u.y_min, b.y_min)
+    u.x_max = Math.max(u.x_max, b.x_max)
+    u.y_max = Math.max(u.y_max, b.y_max)
+  }
+  return Number.isFinite(u.x_min) ? u : null
+}

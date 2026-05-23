@@ -37,12 +37,17 @@
     "empty": "Aucun fichier chargé.",
     "emptyHint": "Glissez un fichier n'importe où sur la fenêtre ou cliquez sur « Ajouter un fichier » pour démarrer.",
     "noLayers": "aucun calque",
-    "dragHint": "Glissez sur le plan pour positionner le dessin"
+    "dragHint": "Glissez sur le plan pour ajouter une instance",
+    "duplicate": "Dupliquer (ajouter une instance)",
+    "untitled": "(emplacement vide)"
   },
   "editModal": {
     "title": "Réglages du fichier",
     "close": "Fermer",
-    "done": "Terminer"
+    "done": "Terminer",
+    "tabSource": "Source",
+    "tabLayers": "Calques",
+    "tabOutput": "Mise en page & sortie"
   },
   "execute": {
     "connection": "Connexion",
@@ -186,6 +191,8 @@
     "useFullWorkspace": "Plein espace",
     "exceedsWarning": "La feuille dépasse la zone de travail.",
     "dropToPosition": "Relâchez ici pour placer le dessin",
+    "dropToPlace": "Relâchez pour placer une autre instance",
+    "placements": "{count} placement | {count} placements",
     "emptyHint": "Glissez un fichier depuis le panneau Fichiers ou déposez-en un n'importe où pour démarrer."
   },
   "convert": {

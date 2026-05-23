@@ -59,6 +59,10 @@ async function onWindowDrop(event: DragEvent): Promise<void> {
   const file = event.dataTransfer?.files?.[0]
   if (!file) return
   event.preventDefault()
+  // Each global drop creates a fresh placement so multi-file mixing
+  // works out of the box: drop file A, drop file B → both end up on
+  // the plan with independent configs.
+  store.addEmptyPlacement()
   await store.upload(file)
   if (store.layers.length) {
     toasts.success(
