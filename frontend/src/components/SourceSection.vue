@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import {
+  downloadOriginalFile,
   getAlgorithms,
   getFonts,
   previewBitmap,
@@ -178,8 +179,18 @@ const TYPOGRAPHY_EXT = ['txt', 'md']
 const DOCUMENT_EXT = ['pdf', 'svg', 'eps', 'ps', 'ai', 'docx', 'odt', 'rtf', 'html']
 const ACCEPT = '.svg,.png,.jpg,.jpeg,.tiff,.webp,.heic,.pdf,.dxf,.eps,.ps,.ai,.txt,.md,.html,.docx,.odt,.rtf'
 
+// File kind is derived from the selectedFile when present, otherwise
+// from the placement's source_file metadata. Without this fallback,
+// placements created via the library (createPlacementFromLibrary
+// doesn't set last_file) would land on the modal with kind='none' and
+// every conversion section hidden — the operator would only see the
+// dropzone, even though a file is clearly attached.
+const sourceName = computed<string>(() =>
+  selectedFile.value?.name ?? store.selectedPlacement?.source_file ?? '',
+)
+
 const kind = computed<'bitmap' | 'typography' | 'document' | 'none'>(() => {
-  const ext = selectedFile.value?.name.split('.').pop()?.toLowerCase() ?? ''
+  const ext = sourceName.value.split('.').pop()?.toLowerCase() ?? ''
   if (IMAGE_EXT.includes(ext)) return 'bitmap'
   if (TYPOGRAPHY_EXT.includes(ext)) return 'typography'
   if (DOCUMENT_EXT.includes(ext)) return 'document'
@@ -187,6 +198,15 @@ const kind = computed<'bitmap' | 'typography' | 'document' | 'none'>(() => {
 })
 
 const showsBitmapForm = computed(() => kind.value === 'bitmap' || kind.value === 'document')
+
+// Has a file attached either in memory (selectedFile) or via the
+// placement's library entry. Drives whether the conversion settings
+// are shown at all — without this, the modal would fall back to the
+// dropzone for any placement that came from the library or survived
+// a page refresh (File handles can't be persisted to localStorage).
+const hasSource = computed<boolean>(
+  () => Boolean(selectedFile.value || store.selectedPlacement?.source_file),
+)
 
 // Local thumbnail for raster images: instant preview before paying the
 // round-trip + vectorisation cost. ObjectURL is revoked on file change.
@@ -336,18 +356,49 @@ onBeforeUnmount(() => {
   if (previewController) previewController.abort()
 })
 
-onMounted(async () => {
-  // When the modal reopens after a drop-anywhere upload, the local file
-  // ref is unset. Seed it from the store so the user lands on the file
-  // info + conversion options instead of an empty drop zone.
-  if (!selectedFile.value && store.lastFile) {
+// Try to restore the placement's source as a File object. Two paths:
+//   1. ``store.lastFile`` is set when the placement was created via
+//      drop-anywhere or the upload form (the bytes live in memory).
+//   2. Library placements + post-refresh placements have no in-memory
+//      file — but they hold a ``library_file_id`` pointing at the
+//      backend's persistent store; ``/files/{id}/original`` streams the
+//      bytes back so we can rehydrate the File on demand.
+// Without this, the modal could only show the dropzone for any
+// placement coming from the library or surviving a page refresh.
+async function ensureSelectedFile(): Promise<void> {
+  if (selectedFile.value) return
+  if (store.lastFile) {
     selectedFile.value = store.lastFile
+    return
   }
+  const placement = store.selectedPlacement
+  if (!placement?.library_file_id || !placement.source_file) return
   try {
-    ;[algorithms.value, fonts.value] = await Promise.all([getAlgorithms(), getFonts()])
+    selectedFile.value = await downloadOriginalFile(
+      placement.library_file_id,
+      placement.source_file,
+      placement.source_mime || 'application/octet-stream',
+    )
   } catch {
-    // Defaults still work if metadata fetch fails.
+    // Bytes evicted / network error — UI stays usable in read-only
+    // mode (settings visible, /preview disabled until re-attach via
+    // the header menu).
   }
+}
+
+onMounted(async () => {
+  // Promise.all so the algos + fonts metadata fetch doesn't block the
+  // (potentially much larger) original-file download — but both run.
+  await Promise.all([
+    ensureSelectedFile(),
+    (async () => {
+      try {
+        ;[algorithms.value, fonts.value] = await Promise.all([getAlgorithms(), getFonts()])
+      } catch {
+        // Defaults still work if metadata fetch fails.
+      }
+    })(),
+  ])
 })
 
 // Switching placements (via FilesPane) refreshes the local file ref AND
@@ -357,8 +408,11 @@ onMounted(async () => {
 // next upload — see audit findings #2 and #3.
 watch(
   () => store.selectedPlacementId,
-  () => {
-    selectedFile.value = store.lastFile
+  async () => {
+    // Clear the local File first so ensureSelectedFile() doesn't
+    // surface the previous placement's bytes while the new one's
+    // fetch is in flight.
+    selectedFile.value = null
     rehydrateDraftFromPlacement()
     // EditModal calls resetEditState() on placement switch, which
     // wipes the goToPage / cancel / retry callbacks back to no-ops.
@@ -367,6 +421,7 @@ watch(
     // modal.
     edit.setGoToPage(goToPage)
     edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
+    await ensureSelectedFile()
   },
 )
 
@@ -656,13 +711,13 @@ defineExpose({ openPicker, clearAll })
       @change="onFileChange"
     />
 
-    <!-- Edge case: empty placement (no file yet). Show the dropzone
-         so the operator has somewhere to drop a file. The compact file
-         row that used to sit here when ``selectedFile`` was set is
-         gone — its content (name + size) duplicates the modal title,
-         and its actions moved to the header dropdown. -->
+    <!-- Edge case: truly empty placement (no file + no library entry).
+         Show the dropzone so the operator has somewhere to drop a
+         file. Library/persisted placements take the settings branch
+         below; ensureSelectedFile() rehydrates their File handle in
+         the background. -->
     <FileSourceCard
-      v-if="!selectedFile"
+      v-if="!hasSource"
       :selected-file="null"
       :kind="kind"
       :has-job="Boolean(store.job)"
@@ -677,7 +732,7 @@ defineExpose({ openPicker, clearAll })
          colours, then segmentation details. Per-layer algorithm
          choice lives in the Layers tab — surface a hint so the
          operator knows where to go. -->
-    <template v-if="selectedFile && showsBitmapForm">
+    <template v-if="hasSource && showsBitmapForm">
       <PrintModeCard :mode="printMode" @update:mode="setPrintMode" />
 
       <template v-if="printMode === 'multicolor'">
@@ -708,37 +763,40 @@ defineExpose({ openPicker, clearAll })
     </template>
 
     <TypographyCard
-      v-if="selectedFile && kind === 'typography'"
+      v-if="hasSource && kind === 'typography'"
       :typo="typo"
       :fonts="fonts"
     />
 
     <p
-      v-if="selectedFile && previewError"
+      v-if="hasSource && previewError"
       class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300"
     >
       {{ previewError }}
     </p>
 
     <p
-      v-if="selectedFile && multiPassLayerCount > 0 && store.job"
+      v-if="hasSource && multiPassLayerCount > 0 && store.job"
       class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1.5 text-[11px] text-amber-200"
     >
       ⚠ {{ t('passes.reuploadHint', { count: multiPassLayerCount }) }}
     </p>
 
     <button
-      v-if="selectedFile"
+      v-if="hasSource"
       type="button"
       class="w-full rounded bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-      :disabled="store.loading"
+      :disabled="store.loading || !selectedFile"
+      :title="!selectedFile ? t('source.waitingForFile') : ''"
       @click="uploadSelected"
     >
-      {{ store.loading
-        ? t('upload.converting')
-        : store.job
-          ? t('source.applyChanges')
-          : t('upload.choose') }}
+      {{ !selectedFile
+        ? t('source.waitingForFile')
+        : store.loading
+          ? t('upload.converting')
+          : store.job
+            ? t('source.applyChanges')
+            : t('upload.choose') }}
     </button>
 
     <p v-if="store.error && store.errorScope === 'upload'" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-xs text-red-300">

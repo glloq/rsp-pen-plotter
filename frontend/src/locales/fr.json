@@ -78,7 +78,8 @@
   },
   "source": {
     "perLayerHint": "Choisis le style de rendu et le stylo pour chaque couleur dans l'onglet Calques.",
-    "applyChanges": "Re-convertir avec ces réglages"
+    "applyChanges": "Re-convertir avec ces réglages",
+    "waitingForFile": "Chargement du fichier source…"
   },
   "mono": {
     "pen": "Stylo",
