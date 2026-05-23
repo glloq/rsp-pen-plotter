@@ -60,6 +60,16 @@
     "collapse": "Réduire le panneau",
     "expand": "Développer le panneau"
   },
+  "blockMap": {
+    "title": "Blocs du document",
+    "loading": "analyse…",
+    "failed": "Échec de l'analyse",
+    "summary": "{text} texte · {image} image",
+    "imageBlock": "Zone image",
+    "chars": "car.",
+    "empty": "Aucun bloc détecté sur cette page.",
+    "hint": "Zones texte et image détectées sur la page courante."
+  },
   "variants": {
     "title": "Variantes",
     "default": "Défaut",

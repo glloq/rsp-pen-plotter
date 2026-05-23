@@ -60,6 +60,16 @@
     "collapse": "Collapse panel",
     "expand": "Expand panel"
   },
+  "blockMap": {
+    "title": "Document blocks",
+    "loading": "analysing…",
+    "failed": "Block analysis failed",
+    "summary": "{text} text · {image} image",
+    "imageBlock": "Image region",
+    "chars": "chars",
+    "empty": "No blocks detected on this page.",
+    "hint": "Text and image regions detected on the current page."
+  },
   "variants": {
     "title": "Variants",
     "default": "Default",

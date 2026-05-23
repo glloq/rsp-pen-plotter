@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
+import BlockMapCard from './edit/BlockMapCard.vue'
 import EditPreviewPane from './edit/EditPreviewPane.vue'
 import VariantsCard from './edit/VariantsCard.vue'
 import SourceSection from './SourceSection.vue'
@@ -63,6 +64,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </div>
         <div class="min-h-0 space-y-3 overflow-y-auto p-4">
           <SourceSection />
+          <BlockMapCard />
           <VariantsCard />
           <LayersSection />
         </div>
