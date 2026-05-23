@@ -87,6 +87,25 @@ function updateThreshold(i: number, value: number): void {
         </div>
       </div>
 
+      <!-- Image detail: promoted out of the post-process accordion
+           because operators reach for "more detail" often. Higher =
+           more visible features in the segmentation, slower preview. -->
+      <div class="space-y-1">
+        <div class="flex items-center justify-between">
+          <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.detail') }}</p>
+          <span class="font-mono text-[10px] text-slate-400">{{ bitmap.max_dimension_px }}px</span>
+        </div>
+        <input
+          v-model.number="bitmap.max_dimension_px"
+          type="range"
+          min="200"
+          max="2400"
+          step="100"
+          class="w-full accent-emerald-500"
+        />
+        <p class="text-[10px] text-slate-500">{{ t('mono.detailHint') }}</p>
+      </div>
+
       <label v-if="bitmap.segmentation_method === 'kmeans'" class="block text-slate-400">
         {{ t('convert.numColors') }}
         <input v-model.number="bitmap.num_colors" type="number" min="1" max="32" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />

@@ -80,6 +80,20 @@
     "perLayerHint": "Pick the rendering style and pen slot for each colour in the Layers tab.",
     "applyChanges": "Re-convert with these settings"
   },
+  "mono": {
+    "pen": "Pen",
+    "penNotInstalled": "Slot not marked as installed",
+    "shades": "Number of shades",
+    "shadesHint": "Splits the image into N grey bands rendered with the same pen.",
+    "detail": "Image detail",
+    "detailFast": "Fast",
+    "detailStandard": "Standard",
+    "detailHigh": "High",
+    "detailUltra": "Ultra",
+    "detailHint": "Larger source resolution captures finer features but slows down conversion.",
+    "style": "Render style",
+    "layersHint": "Each shade becomes one layer — open the Layers tab to fine-tune (different algorithm per shade, multi-pass effects, etc.)."
+  },
   "editPreview": {
     "title": "Preview",
     "empty": "Drop a file to start",
