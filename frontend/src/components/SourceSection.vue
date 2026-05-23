@@ -570,7 +570,36 @@ edit.setGoToPage(goToPage)
       @change="onFileChange"
     />
 
+    <!-- Compact file row when a file is already attached: no dropzone
+         since the modal opens with a file 100% of the time (FilesPane
+         / App drop). The dashed dropzone only renders for the edge
+         case of an empty placement awaiting a first file. -->
     <div
+      v-if="selectedFile"
+      class="flex items-center gap-2 rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs"
+    >
+      <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-800 text-[10px] text-slate-400" aria-hidden="true">
+        {{ kind === 'bitmap' ? '🖼' : kind === 'typography' ? 'Aa' : '📄' }}
+      </span>
+      <div class="min-w-0 flex-1">
+        <p class="truncate font-medium text-slate-100" :title="selectedFile.name">
+          {{ selectedFile.name }}
+        </p>
+        <p class="text-[10px] text-slate-500">
+          {{ (selectedFile.size / 1024).toFixed(1) }} KB · {{ kind }}
+        </p>
+      </div>
+      <button
+        type="button"
+        class="shrink-0 rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-100 hover:bg-slate-600"
+        :title="t('upload.changeFile')"
+        @click="openPicker"
+      >
+        {{ t('upload.changeFile') }}
+      </button>
+    </div>
+    <div
+      v-else
       class="rounded-lg border-2 border-dashed px-3 py-3 text-center transition"
       :class="dragOver ? 'border-emerald-500 bg-emerald-950/30' : 'border-slate-700 bg-slate-900/40'"
       @dragenter.prevent="dragOver = true"
@@ -578,35 +607,22 @@ edit.setGoToPage(goToPage)
       @dragleave.prevent="dragOver = false"
       @drop.prevent="onDrop"
     >
-      <div v-if="selectedFile" class="space-y-1.5">
-        <p class="truncate text-sm font-medium text-slate-100" :title="selectedFile.name">
-          {{ selectedFile.name }}
-        </p>
-        <p class="text-[10px] text-slate-500">
-          {{ (selectedFile.size / 1024).toFixed(1) }} KB · {{ kind }}
-        </p>
-        <button
-          type="button"
-          class="rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
-          @click="openPicker"
-        >
-          {{ t('upload.changeFile') }}
-        </button>
-        <p v-if="previewError" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300">
-          {{ previewError }}
-        </p>
-      </div>
-      <div v-else>
-        <p class="text-sm text-slate-400">{{ t('upload.dropHere') }}</p>
-        <button
-          type="button"
-          class="mt-2 rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
-          @click="openPicker"
-        >
-          {{ t('upload.pick') }}
-        </button>
-      </div>
+      <p class="text-sm text-slate-400">{{ t('upload.dropHere') }}</p>
+      <button
+        type="button"
+        class="mt-2 rounded bg-slate-700 px-3 py-1 text-xs text-slate-100 hover:bg-slate-600"
+        @click="openPicker"
+      >
+        {{ t('upload.pick') }}
+      </button>
     </div>
+
+    <p
+      v-if="selectedFile && previewError"
+      class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300"
+    >
+      {{ previewError }}
+    </p>
 
     <!-- ============================== PALETTE (pen-driven) ============================== -->
     <!-- Default: palette follows the machine's installed pens (slot

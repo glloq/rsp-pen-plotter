@@ -24,13 +24,23 @@ function groupLayersByPen(): void {
 </script>
 
 <template>
-  <section v-if="store.layers.length" class="space-y-2">
+  <section class="space-y-2">
     <div class="flex items-baseline justify-between px-1">
       <h2 class="text-xs uppercase tracking-wider text-slate-500">
-        {{ t('layers.title') }} ({{ store.layers.length }})
+        {{ t('layers.title') }}<span v-if="store.layers.length"> ({{ store.layers.length }})</span>
       </h2>
-      <span class="text-[10px] text-slate-600">{{ t('layers.dragHint') }}</span>
+      <span v-if="store.layers.length" class="text-[10px] text-slate-600">{{ t('layers.dragHint') }}</span>
     </div>
+
+    <!-- Empty state: the section stays visible before conversion so the
+         user knows where per-colour layer styles will land once the
+         file is converted. -->
+    <p
+      v-if="!store.layers.length"
+      class="rounded border border-dashed border-slate-700 bg-slate-900/40 px-3 py-2 text-[11px] text-slate-500"
+    >
+      {{ t('layers.emptyHint') }}
+    </p>
 
     <button
       v-if="canGroupByPen"
@@ -42,6 +52,7 @@ function groupLayersByPen(): void {
     </button>
 
     <draggable
+      v-if="store.layers.length"
       v-model="draggableLayers"
       item-key="layer_id"
       handle=".cursor-grab"
