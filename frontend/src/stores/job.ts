@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
+import { useLibraryStore } from './library'
 import { useToastStore } from './toasts'
 import {
   deleteProfile as apiDeleteProfile,
@@ -49,6 +50,10 @@ export interface Variant {
 
 export interface Placement {
   id: string
+  // Identifier of the library entry this placement draws from. Set whenever
+  // the placement was created via the library (the canonical path); legacy
+  // placements loaded from older localStorage scenes may have it ``null``.
+  library_file_id: string | null
   source_file: string
   source_mime: string
   job_id: string | null
@@ -141,6 +146,7 @@ export const useJobStore = defineStore('job', () => {
     const variant = defaultVariant()
     return {
       id: newPlacementId(),
+      library_file_id: null,
       source_file: '',
       source_mime: '',
       job_id: null,
@@ -182,6 +188,8 @@ export const useJobStore = defineStore('job', () => {
     const clone: Placement = {
       ...src,
       id: newPlacementId(),
+      // ``library_file_id`` is intentionally preserved — both placements
+      // draw from the same library entry.
       x_mm: src.x_mm + offsetMm,
       y_mm: src.y_mm + offsetMm,
       visibility: { ...src.visibility },
@@ -456,8 +464,10 @@ export const useJobStore = defineStore('job', () => {
   }
 
   // ====== Upload ========================================================
-  // Upload populates the SELECTED placement; if none exists, a fresh one
-  // is created and selected before the conversion runs.
+  // Upload routes through the library store: the file is stored on the
+  // backend (deduplicated by SHA-256) and the selected placement is then
+  // populated from the library entry. If no placement exists yet, a fresh
+  // one is created so the rest of the editor has something to act on.
   async function upload(file: File, optionsOverride?: Record<string, unknown>): Promise<void> {
     const preset = presets.value.find((p) => p.name === selectedPresetName.value)
     const options =
@@ -480,37 +490,32 @@ export const useJobStore = defineStore('job', () => {
     gcode.value = null
     preflight.value = null
     const toasts = useToastStore()
+    const library = useLibraryStore()
     try {
-      const result = await uploadFile(file, selectedProfileName.value, options)
-      // Compute source bbox from union of layer bboxes.
-      const bboxes = result.job.layers.map((l) => l.bbox)
+      const result = await library.upload(file, { convertOptions: options })
+      if (!result) {
+        throw new Error(i18n.global.t('upload.failed'))
+      }
+      const detail = result.file
+      const bboxes = detail.layers.map((l) => l.bbox)
       const sourceBbox = unionBoxes(bboxes) ?? emptyBbox()
-      // Initial position: if placement is fresh (default size), centre
-      // the source bbox aspect on the workspace; else keep its position
-      // but refit the size to the new source aspect.
       const layoutPatch = computeInitialLayout(sourceBbox, targetId)
       patchPlacement(targetId, {
-        source_file: result.job.source_file,
-        source_mime: result.job.source_mime,
-        job_id: result.job.job_id,
-        svg: result.svg,
-        layers: result.job.layers.map((layer) =>
+        library_file_id: detail.file_id,
+        source_file: detail.source_file,
+        source_mime: detail.source_mime,
+        // ``file_id`` doubles as the cache key for /rerender (see api/files.py).
+        job_id: detail.file_id,
+        svg: detail.svg,
+        layers: detail.layers.map((layer) =>
           autoOptimize.value ? { ...layer, optimize: true } : layer,
         ),
         source_bbox: sourceBbox,
-        upload_warnings: result.warnings ?? [],
-        upload_metadata: result.metadata ?? {},
-        visibility: Object.fromEntries(result.job.layers.map((l) => [l.layer_id, true])),
+        upload_warnings: detail.warnings ?? [],
+        upload_metadata: detail.upload_metadata ?? {},
+        visibility: Object.fromEntries(detail.layers.map((l) => [l.layer_id, true])),
         ...layoutPatch,
       })
-      for (const warning of (result.warnings ?? []).slice(0, 3)) {
-        toasts.warning(warning)
-      }
-      if ((result.warnings ?? []).length > 3) {
-        toasts.warning(
-          i18n.global.t('toast.moreWarnings', { count: (result.warnings ?? []).length - 3 }),
-        )
-      }
     } catch (err) {
       const message = errorDetail(err, i18n.global.t('upload.failed'))
       error.value = message
@@ -522,6 +527,50 @@ export const useJobStore = defineStore('job', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  // Create a new placement on the plan from an existing library entry.
+  // ``position`` (workspace mm) centres the placement on that point; when
+  // omitted, the placement is centred on the workspace.
+  async function createPlacementFromLibrary(
+    fileId: string,
+    position?: { x: number; y: number },
+  ): Promise<string | null> {
+    const library = useLibraryStore()
+    const detail = await library.ensureDetail(fileId)
+    if (!detail) return null
+    const placement = blankPlacement()
+    const bboxes = detail.layers.map((l) => l.bbox)
+    const sourceBbox = unionBoxes(bboxes) ?? emptyBbox()
+    placements.value = [...placements.value, placement]
+    selectedPlacementId.value = placement.id
+    const layoutPatch = computeInitialLayout(sourceBbox, placement.id)
+    patchPlacement(placement.id, {
+      library_file_id: detail.file_id,
+      source_file: detail.source_file,
+      source_mime: detail.source_mime,
+      job_id: detail.file_id,
+      svg: detail.svg,
+      layers: detail.layers.map((layer) =>
+        autoOptimize.value ? { ...layer, optimize: true } : layer,
+      ),
+      source_bbox: sourceBbox,
+      upload_warnings: detail.warnings ?? [],
+      upload_metadata: detail.upload_metadata ?? {},
+      visibility: Object.fromEntries(detail.layers.map((l) => [l.layer_id, true])),
+      ...layoutPatch,
+    })
+    if (position) {
+      const ws = selectedProfile.value?.workspace
+      const fresh = placements.value.find((p) => p.id === placement.id)
+      if (ws && fresh) {
+        patchPlacement(placement.id, {
+          x_mm: Math.max(0, position.x - fresh.width_mm / 2 - ws.x_min),
+          y_mm: Math.max(0, position.y - fresh.height_mm / 2 - ws.y_min),
+        })
+      }
+    }
+    return placement.id
   }
 
   function computeInitialLayout(
@@ -567,11 +616,47 @@ export const useJobStore = defineStore('job', () => {
     errorScope.value = null
   }
 
+  // Re-converts the SELECTED placement's source file with a new ``page``
+  // option. Uses the legacy /upload path directly so we don't add a second
+  // library entry every time the operator flips pages on a multi-page PDF;
+  // the library entry that backs this placement keeps the originally
+  // uploaded bytes, only the rendered SVG / layers change here.
   async function changePage(page: number): Promise<void> {
     const p = selectedPlacement.value
     if (!p?.last_file) return
+    const targetId = p.id
     const next = { ...(p.last_options ?? {}), page }
-    await upload(p.last_file, next)
+    loading.value = true
+    error.value = null
+    errorScope.value = null
+    patchPlacement(targetId, { last_options: next })
+    try {
+      const result = await uploadFile(p.last_file, selectedProfileName.value, next)
+      const bboxes = result.job.layers.map((l) => l.bbox)
+      const sourceBbox = unionBoxes(bboxes) ?? emptyBbox()
+      const layoutPatch = computeInitialLayout(sourceBbox, targetId)
+      patchPlacement(targetId, {
+        source_file: result.job.source_file,
+        source_mime: result.job.source_mime,
+        job_id: result.job.job_id,
+        svg: result.svg,
+        layers: result.job.layers.map((layer) =>
+          autoOptimize.value ? { ...layer, optimize: true } : layer,
+        ),
+        source_bbox: sourceBbox,
+        upload_warnings: result.warnings ?? [],
+        upload_metadata: result.metadata ?? {},
+        visibility: Object.fromEntries(result.job.layers.map((l) => [l.layer_id, true])),
+        ...layoutPatch,
+      })
+    } catch (err) {
+      const message = errorDetail(err, i18n.global.t('upload.failed'))
+      error.value = message
+      errorScope.value = 'upload'
+      useToastStore().error(message)
+    } finally {
+      loading.value = false
+    }
   }
 
   // ====== Optimize / Preflight / Generate (composite) ====================
@@ -791,7 +876,8 @@ export const useJobStore = defineStore('job', () => {
     loadVariantState(target)
   }
 
-  const SCENE_KEY = 'omniplot.scene.v3'
+  const SCENE_KEY = 'omniplot.scene.v4'
+  const LEGACY_SCENE_KEYS = ['omniplot.scene.v3', 'omniplot.scene.v2']
 
   interface SerializableScene {
     placements: Placement[]
@@ -821,18 +907,29 @@ export const useJobStore = defineStore('job', () => {
 
   function hydrateScene(): void {
     try {
-      // v3 first, then fall back to v2 for migration.
       let raw = localStorage.getItem(SCENE_KEY)
-      let migrating = false
+      let migratingFrom: string | null = null
       if (!raw) {
-        raw = localStorage.getItem('omniplot.scene.v2')
+        for (const legacy of LEGACY_SCENE_KEYS) {
+          const legacyRaw = localStorage.getItem(legacy)
+          if (legacyRaw) {
+            raw = legacyRaw
+            migratingFrom = legacy
+            break
+          }
+        }
         if (!raw) return
-        migrating = true
       }
       const data = JSON.parse(raw) as Partial<SerializableScene>
       if (Array.isArray(data.placements)) {
         placements.value = data.placements.map((p) => {
-          const placement = { ...p, last_file: null } as Placement
+          // Default the new ``library_file_id`` field for placements
+          // persisted before the library existed.
+          const placement = {
+            ...({ library_file_id: null } as Pick<Placement, 'library_file_id'>),
+            ...p,
+            last_file: null,
+          } as Placement
           // v2 → v3 migration: wrap legacy placement state in a default
           // variant so the variant API has a snapshot to point at.
           if (!Array.isArray(placement.variants) || !placement.variants.length) {
@@ -855,9 +952,8 @@ export const useJobStore = defineStore('job', () => {
       if (data.scaleMode) scaleMode.value = data.scaleMode
       if (typeof data.marginMm === 'number') marginMm.value = data.marginMm
       if (typeof data.autoOptimize === 'boolean') autoOptimize.value = data.autoOptimize
-      if (migrating) {
-        // Drop the legacy key once we've successfully imported it.
-        localStorage.removeItem('omniplot.scene.v2')
+      if (migratingFrom) {
+        for (const legacy of LEGACY_SCENE_KEYS) localStorage.removeItem(legacy)
         persistScene()
       }
     } catch {
@@ -936,6 +1032,7 @@ export const useJobStore = defineStore('job', () => {
     saveProfile,
     deleteProfile,
     upload,
+    createPlacementFromLibrary,
     optimize,
     runPreflight,
     generate,

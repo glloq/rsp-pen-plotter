@@ -582,3 +582,92 @@ export async function uploadFile(
   const response = await api.post<UploadResponse>('/upload', form)
   return response.data
 }
+
+// --- File library ------------------------------------------------------
+
+export interface LibraryFileRecord {
+  file_id: string
+  sha256: string
+  source_file: string
+  source_mime: string
+  size_bytes: number
+  layer_count: number
+  folder: string
+  created_at: string
+}
+
+export interface LibraryFileDetail extends LibraryFileRecord {
+  svg: string
+  layers: LayerInfo[]
+  warnings: string[]
+  upload_metadata: Record<string, unknown>
+}
+
+export interface LibraryUploadResponse {
+  file: LibraryFileDetail
+  existing: boolean
+}
+
+export type LibrarySortKey = 'name' | 'date' | 'type'
+export type LibrarySortOrder = 'asc' | 'desc'
+
+export async function uploadToLibrary(
+  file: File,
+  folder = '',
+  options?: Record<string, unknown>,
+): Promise<LibraryUploadResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('folder', folder)
+  if (options) {
+    form.append('options', JSON.stringify(options))
+  }
+  const response = await api.post<LibraryUploadResponse>('/files', form)
+  return response.data
+}
+
+export interface ListLibraryParams {
+  folder?: string | null
+  search?: string | null
+  sort?: LibrarySortKey
+  order?: LibrarySortOrder
+}
+
+export async function listLibraryFiles(
+  params: ListLibraryParams = {},
+): Promise<LibraryFileRecord[]> {
+  const response = await api.get<LibraryFileRecord[]>('/files', {
+    params: {
+      folder: params.folder ?? undefined,
+      search: params.search ?? undefined,
+      sort: params.sort ?? 'date',
+      order: params.order ?? 'desc',
+    },
+  })
+  return response.data
+}
+
+export async function getLibraryFile(fileId: string): Promise<LibraryFileDetail> {
+  const response = await api.get<LibraryFileDetail>(`/files/${encodeURIComponent(fileId)}`)
+  return response.data
+}
+
+export async function listLibraryFolders(): Promise<string[]> {
+  const response = await api.get<string[]>('/files/folders')
+  return response.data
+}
+
+export async function patchLibraryFile(
+  fileId: string,
+  patch: { source_file?: string; folder?: string },
+): Promise<LibraryFileRecord> {
+  const response = await api.patch<LibraryFileRecord>(
+    `/files/${encodeURIComponent(fileId)}`,
+    patch,
+  )
+  return response.data
+}
+
+export async function deleteLibraryFile(fileId: string): Promise<void> {
+  await api.delete(`/files/${encodeURIComponent(fileId)}`)
+}

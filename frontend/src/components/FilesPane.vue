@@ -1,86 +1,205 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
 import { useJobStore } from '../stores/job'
+import { useLibraryStore } from '../stores/library'
 import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
 const store = useJobStore()
+const library = useLibraryStore()
 const ui = useUiStore()
 
-interface FileRow {
-  id: string
-  name: string
-  size: number | null
-  layerCount: number
-  visible: boolean
-  ready: boolean
+onMounted(() => {
+  void library.refresh()
+})
+
+// Lightweight projection used by the template — keeps the row markup
+// terse and lets us count plan placements per library entry once.
+interface Row {
+  file: LibraryFileRecord
+  placementCount: number
 }
 
-const files = computed<FileRow[]>(() =>
-  store.placements.map((p) => ({
-    id: p.id,
-    name: p.source_file || t('files.untitled'),
-    size: p.last_file?.size ?? null,
-    layerCount: p.layers.length,
-    visible: true,
-    ready: Boolean(p.svg && p.layers.length),
-  })),
-)
+const rows = computed<Row[]>(() => {
+  const counts = new Map<string, number>()
+  for (const p of store.placements) {
+    if (p.library_file_id) {
+      counts.set(p.library_file_id, (counts.get(p.library_file_id) ?? 0) + 1)
+    }
+  }
+  return library.filteredSorted.map((file) => ({
+    file,
+    placementCount: counts.get(file.file_id) ?? 0,
+  }))
+})
+
+const searchInput = ref(library.search)
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+function onSearchInput(): void {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    library.search = searchInput.value
+  }, 180)
+}
+
+function onSortChange(event: Event): void {
+  library.sortKey = (event.target as HTMLSelectElement).value as LibrarySortKey
+}
+
+function onOrderToggle(): void {
+  library.sortOrder = library.sortOrder === 'asc' ? 'desc' : 'asc'
+}
+
+function onFolderChange(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value
+  if (value === '__all__') {
+    library.folderFilter = null
+  } else if (value === '__new__') {
+    const name = window.prompt(t('files.newFolderPrompt'))?.trim()
+    if (name) {
+      if (!library.folders.includes(name)) {
+        library.folders = [...library.folders, name].sort()
+      }
+      library.folderFilter = name
+    }
+    // Reset the <select> back to the current filter regardless of result.
+    ;(event.target as HTMLSelectElement).value =
+      library.folderFilter === null ? '__all__' : library.folderFilter
+  } else {
+    library.folderFilter = value
+  }
+}
 
 function addFile(): void {
   store.addEmptyPlacement()
   ui.openEditModal()
 }
 
-function editFile(id: string): void {
-  store.selectPlacement(id)
+async function placeOnPlan(fileId: string): Promise<void> {
+  const placementId = await store.createPlacementFromLibrary(fileId)
+  if (placementId) store.selectPlacement(placementId)
+}
+
+async function editFile(fileId: string): Promise<void> {
+  // Reuse the most recent placement of this file if there is one;
+  // otherwise create a new placement and open it for editing.
+  const existing = store.placements.find((p) => p.library_file_id === fileId)
+  if (existing) {
+    store.selectPlacement(existing.id)
+  } else {
+    const newId = await store.createPlacementFromLibrary(fileId)
+    if (!newId) return
+    store.selectPlacement(newId)
+  }
   ui.openEditModal()
 }
 
-function removeFile(id: string): void {
-  store.removePlacement(id)
+async function renameFile(file: LibraryFileRecord): Promise<void> {
+  const next = window.prompt(t('files.renamePrompt'), file.source_file)?.trim()
+  if (next && next !== file.source_file) {
+    await library.rename(file.file_id, next)
+  }
 }
 
-function duplicateFile(id: string): void {
-  const newId = store.duplicatePlacement(id)
-  if (newId) store.selectPlacement(newId)
+async function moveFile(file: LibraryFileRecord): Promise<void> {
+  const existing = library.folders.join(', ')
+  const next = window
+    .prompt(`${t('files.moveTo')}${existing ? ` (${existing})` : ''}`, file.folder)
+    ?.trim()
+  if (next !== undefined && next !== file.folder) {
+    await library.setFolder(file.file_id, next)
+  }
 }
 
-function formatSize(bytes: number | null): string {
-  if (bytes === null) return ''
+async function removeFile(file: LibraryFileRecord): Promise<void> {
+  if (!window.confirm(t('files.deleteConfirm', { name: file.source_file }))) return
+  await library.remove(file.file_id)
+}
+
+function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function onDragStart(event: DragEvent, file: FileRow): void {
+function shortMime(mime: string): string {
+  // Render compact: "image/svg+xml" → "SVG", "application/pdf" → "PDF".
+  const subtype = mime.split('/')[1] ?? mime
+  return subtype.replace(/\+.*$/, '').replace(/^vnd\..+\./, '').toUpperCase()
+}
+
+function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
   if (!event.dataTransfer) return
-  event.dataTransfer.setData('application/x-omniplot-file', file.id)
-  event.dataTransfer.setData('text/plain', file.name)
-  event.dataTransfer.effectAllowed = 'copyMove'
+  event.dataTransfer.setData('application/x-omniplot-library', file.file_id)
+  event.dataTransfer.setData('text/plain', file.source_file)
+  event.dataTransfer.effectAllowed = 'copy'
 }
 </script>
 
 <template>
   <aside class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900/40">
-    <header class="flex items-center justify-between border-b border-slate-700 px-3 py-2">
-      <h2 class="text-xs uppercase tracking-wider text-slate-500">
-        {{ t('files.title') }}
-        <span v-if="files.length" class="ml-1 text-slate-600">({{ files.length }})</span>
-      </h2>
-      <button
-        type="button"
-        class="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500"
-        @click="addFile"
-      >
-        + {{ t('files.addFile') }}
-      </button>
+    <header class="border-b border-slate-700 px-3 py-2">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs uppercase tracking-wider text-slate-500">
+          {{ t('files.title') }}
+          <span v-if="rows.length" class="ml-1 text-slate-600">({{ rows.length }})</span>
+        </h2>
+        <button
+          type="button"
+          class="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500"
+          @click="addFile"
+        >
+          + {{ t('files.addFile') }}
+        </button>
+      </div>
+
+      <div class="mt-2 space-y-1">
+        <input
+          v-model="searchInput"
+          type="search"
+          :placeholder="t('files.search')"
+          class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+          @input="onSearchInput"
+        />
+        <div class="flex items-center gap-1 text-[11px]">
+          <select
+            :value="library.sortKey"
+            class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-1 py-1 text-slate-100"
+            :title="t('files.sort')"
+            @change="onSortChange"
+          >
+            <option value="name">{{ t('files.sortName') }}</option>
+            <option value="date">{{ t('files.sortDate') }}</option>
+            <option value="type">{{ t('files.sortType') }}</option>
+          </select>
+          <button
+            type="button"
+            class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 hover:border-slate-500"
+            :title="library.sortOrder === 'asc' ? t('files.sortAsc') : t('files.sortDesc')"
+            @click="onOrderToggle"
+          >
+            {{ library.sortOrder === 'asc' ? '▲' : '▼' }}
+          </button>
+          <select
+            :value="library.folderFilter === null ? '__all__' : library.folderFilter"
+            class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-1 py-1 text-slate-100"
+            :title="t('files.folder')"
+            @change="onFolderChange"
+          >
+            <option value="__all__">{{ t('files.allFolders') }}</option>
+            <option value="">{{ t('files.rootFolder') }}</option>
+            <option v-for="f in library.folders" :key="f" :value="f">{{ f }}</option>
+            <option value="__new__">{{ t('files.newFolder') }}</option>
+          </select>
+        </div>
+      </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-3">
+    <div class="flex-1 overflow-y-auto p-2">
       <div
-        v-if="!files.length"
+        v-if="!rows.length"
         class="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-500"
       >
         <div class="text-4xl text-slate-700" aria-hidden="true">📄</div>
@@ -88,60 +207,79 @@ function onDragStart(event: DragEvent, file: FileRow): void {
         <p class="max-w-[220px] text-xs text-slate-600">{{ t('files.emptyHint') }}</p>
       </div>
 
-      <ul v-else class="space-y-2">
+      <ul v-else class="space-y-1">
         <li
-          v-for="file in files"
-          :key="file.id"
-          class="rounded border px-3 py-2 cursor-grab active:cursor-grabbing"
-          :class="store.selectedPlacementId === file.id
-            ? 'border-emerald-600 bg-slate-800'
-            : 'border-slate-700 bg-slate-800 hover:border-slate-600'"
+          v-for="row in rows"
+          :key="row.file.file_id"
+          class="group flex items-center gap-2 rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs cursor-grab hover:border-slate-500 active:cursor-grabbing"
           draggable="true"
           :title="t('files.dragHint')"
-          @dragstart="(e) => onDragStart(e, file)"
-          @click="store.selectPlacement(file.id)"
+          @dragstart="(e) => onDragStart(e, row.file)"
+          @dblclick="placeOnPlan(row.file.file_id)"
         >
-          <div class="flex items-start gap-2">
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-slate-100" :title="file.name">
-                {{ file.name }}
-              </p>
-              <p class="text-[10px] text-slate-500">
-                <span v-if="file.size !== null">{{ formatSize(file.size) }}</span>
-                <span v-if="file.size !== null" class="text-slate-700"> · </span>
-                <span v-if="file.layerCount">
-                  {{ file.layerCount }} {{ t('upload.layers', file.layerCount) }}
-                </span>
-                <span v-else class="italic text-slate-600">{{ t('files.noLayers') }}</span>
-              </p>
-            </div>
-            <div class="flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                class="rounded bg-slate-700 px-2 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
-                :title="t('files.editTitle')"
-                @click.stop="editFile(file.id)"
-              >
-                ✎
-              </button>
-              <button
-                v-if="file.ready"
-                type="button"
-                class="rounded bg-slate-700 px-2 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
-                :title="t('files.duplicate')"
-                @click.stop="duplicateFile(file.id)"
-              >
-                ⧉
-              </button>
-              <button
-                type="button"
-                class="rounded text-slate-500 hover:text-red-300 px-1"
-                :title="t('files.remove')"
-                @click.stop="removeFile(file.id)"
-              >
-                ✕
-              </button>
-            </div>
+          <span
+            class="shrink-0 rounded bg-slate-700 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider text-slate-300"
+            :title="row.file.source_mime"
+          >
+            {{ shortMime(row.file.source_mime) }}
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm text-slate-100" :title="row.file.source_file">
+              {{ row.file.source_file }}
+            </p>
+            <p class="truncate text-[10px] text-slate-500">
+              {{ formatSize(row.file.size_bytes) }}
+              <span class="text-slate-700"> · </span>
+              {{ row.file.layer_count }} {{ t('upload.layers', row.file.layer_count) }}
+              <span v-if="row.placementCount" class="text-slate-700"> · </span>
+              <span v-if="row.placementCount" class="text-emerald-400">
+                {{ t('files.placements', { count: row.placementCount }) }}
+              </span>
+              <span v-if="row.file.folder" class="text-slate-700"> · </span>
+              <span v-if="row.file.folder" class="text-slate-400">📁 {{ row.file.folder }}</span>
+            </p>
+          </div>
+          <div class="flex shrink-0 items-center gap-0.5 opacity-60 group-hover:opacity-100">
+            <button
+              type="button"
+              class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
+              :title="t('files.editTitle')"
+              @click.stop="editFile(row.file.file_id)"
+            >
+              ✎
+            </button>
+            <button
+              type="button"
+              class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
+              :title="t('files.duplicate')"
+              @click.stop="placeOnPlan(row.file.file_id)"
+            >
+              ＋
+            </button>
+            <button
+              type="button"
+              class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
+              :title="t('files.rename')"
+              @click.stop="renameFile(row.file)"
+            >
+              ✏
+            </button>
+            <button
+              type="button"
+              class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
+              :title="t('files.moveTo')"
+              @click.stop="moveFile(row.file)"
+            >
+              📁
+            </button>
+            <button
+              type="button"
+              class="rounded text-slate-500 hover:text-red-300 px-1"
+              :title="t('files.remove')"
+              @click.stop="removeFile(row.file)"
+            >
+              ✕
+            </button>
           </div>
         </li>
       </ul>
