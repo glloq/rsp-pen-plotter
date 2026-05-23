@@ -8,7 +8,6 @@ import {
   getFonts,
   previewBitmap,
   type AlgorithmInfo,
-  type AlgorithmKind,
   type PreviewResponse,
   type SegmentationMethod,
 } from '../api/client'
@@ -129,32 +128,8 @@ watch(selectedFile, async (file) => {
   }
 })
 
-interface AlgoMeta {
-  label: string
-  hint: string
-  icon: string
-}
-const algoMeta: Record<string, AlgoMeta> = {
-  direct:     { label: 'convert.algoDirect',     hint: 'convert.algoDirectHint',     icon: '▣' },
-  halftone:   { label: 'convert.algoHalftone',   hint: 'convert.algoHalftoneHint',   icon: '◌' },
-  stippling:  { label: 'convert.algoStippling',  hint: 'convert.algoStipplingHint',  icon: '⋮⋮' },
-  crosshatch: { label: 'convert.algoCrosshatch', hint: 'convert.algoCrosshatchHint', icon: '⫽' },
-  contours:   { label: 'convert.algoContours',   hint: 'convert.algoContoursHint',   icon: '◎' },
-  edges:      { label: 'convert.algoEdges',      hint: 'convert.algoEdgesHint',      icon: '◯' },
-  spiral:     { label: 'convert.algoSpiral',     hint: 'convert.algoSpiralHint',     icon: '◉' },
-  scanlines:  { label: 'convert.algoScanlines',  hint: 'convert.algoScanlinesHint',  icon: '≡' },
-  tsp:        { label: 'convert.algoTsp',        hint: 'convert.algoTspHint',        icon: '⇝' },
-}
-
-const algorithmsByKind = computed<Record<AlgorithmKind, AlgorithmInfo[]>>(() => {
-  const groups: Record<AlgorithmKind, AlgorithmInfo[]> = {
-    fill: [],
-    lines: [],
-    mono_stroke: [],
-  }
-  for (const algo of algorithms.value) groups[algo.kind].push(algo)
-  return groups
-})
+// (The per-algorithm card grid + ``algorithmsByKind`` helper that used to
+//  live here moved into LayerCard when render became a per-layer choice.)
 
 // Live preview: debounced /preview round-trip on parameter changes.
 const previewResult = ref<PreviewResponse | null>(null)
@@ -643,107 +618,9 @@ function openPicker(): void {
       </div>
     </div>
 
-    <!-- =============================== RENDER ALGO ============================== -->
-    <div v-if="selectedFile && showsBitmapForm" class="rounded-lg border border-slate-700 bg-slate-800">
-      <button
-        type="button"
-        class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
-        :aria-expanded="showRender"
-        @click="showRender = !showRender"
-      >
-        {{ t('convert.render') }}
-        <span class="text-slate-500">{{ showRender ? '−' : '+' }}</span>
-      </button>
-      <div v-if="showRender" class="space-y-2 border-t border-slate-700 p-3 text-xs">
-        <!-- Algorithm cards, grouped by family -->
-        <template v-for="(group, kindKey) in algorithmsByKind" :key="kindKey">
-          <div v-if="group.length" class="space-y-1">
-            <p class="text-[10px] uppercase tracking-wider text-slate-500">
-              {{ t(`convert.kind_${kindKey}`) }}
-            </p>
-            <div class="grid grid-cols-3 gap-1">
-              <button
-                v-for="algo in group"
-                :key="algo.name"
-                type="button"
-                class="rounded border px-2 py-1.5 text-left text-[11px] transition"
-                :class="bitmap.algorithm === algo.name
-                  ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-                  : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
-                :title="t(algoMeta[algo.name]?.hint ?? '') || algo.description"
-                @click="bitmap.algorithm = algo.name"
-              >
-                <span class="flex items-center gap-1 font-medium">
-                  <span aria-hidden="true">{{ algoMeta[algo.name]?.icon ?? '·' }}</span>
-                  <span>{{ t(algoMeta[algo.name]?.label ?? '') || algo.name }}</span>
-                </span>
-                <span class="block text-[9px] text-slate-500">{{ t(algoMeta[algo.name]?.hint ?? '') || algo.description }}</span>
-              </button>
-            </div>
-          </div>
-        </template>
-
-        <!-- Per-algorithm parameters -->
-        <div class="border-t border-slate-700 pt-2 space-y-2">
-          <label v-if="bitmap.algorithm === 'halftone'" class="block text-slate-400">{{ t('convert.cellSize') }}
-            <input v-model.number="bitmap.cell_size_px" type="number" min="2" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <div v-if="bitmap.algorithm === 'stippling' || bitmap.algorithm === 'tsp'" class="grid grid-cols-3 gap-2">
-            <label class="block text-slate-400">{{ t('convert.density') }}
-              <input v-model.number="bitmap.density" type="number" min="0" max="1" step="0.005" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label v-if="bitmap.algorithm === 'stippling'" class="block text-slate-400">{{ t('convert.dotRadius') }}
-              <input v-model.number="bitmap.dot_radius_px" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.seed') }}
-              <input v-model.number="bitmap.seed" type="number" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-          </div>
-          <div v-if="bitmap.algorithm === 'crosshatch'" class="grid grid-cols-3 gap-2">
-            <label class="block text-slate-400">{{ t('convert.angleDeg') }}
-              <input v-model.number="bitmap.crosshatch_angle_deg" type="number" step="1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.spacing') }}
-              <input v-model.number="bitmap.crosshatch_spacing_px" type="number" min="1" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="flex items-end gap-1 text-slate-400">
-              <input v-model="bitmap.crosshatch_crossed" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
-              {{ t('convert.crossed') }}
-            </label>
-          </div>
-          <div v-if="bitmap.algorithm === 'contours'" class="grid grid-cols-2 gap-2">
-            <label class="block text-slate-400">{{ t('convert.spacing') }}
-              <input v-model.number="bitmap.contours_spacing_px" type="number" min="1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.maxRings') }}
-              <input v-model.number="bitmap.contours_max_rings" type="number" min="1" max="100" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-          </div>
-          <label v-if="bitmap.algorithm === 'edges'" class="block text-slate-400">{{ t('convert.strokeWidthPx') }}
-            <input v-model.number="bitmap.edges_stroke_width" type="number" min="0.1" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <div v-if="bitmap.algorithm === 'spiral'" class="grid grid-cols-2 gap-2">
-            <label class="block text-slate-400">{{ t('convert.spacing') }}
-              <input v-model.number="bitmap.spiral_spacing_px" type="number" min="1" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.samplesPerTurn') }}
-              <input v-model.number="bitmap.spiral_samples_per_turn" type="number" min="16" step="8" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-          </div>
-          <div v-if="bitmap.algorithm === 'scanlines'" class="grid grid-cols-3 gap-2">
-            <label class="block text-slate-400">{{ t('convert.spacing') }}
-              <input v-model.number="bitmap.scanlines_spacing_px" type="number" min="1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.waveAmp') }}
-              <input v-model.number="bitmap.scanlines_wave_amp_px" type="number" min="0" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-            <label class="block text-slate-400">{{ t('convert.wavePeriod') }}
-              <input v-model.number="bitmap.scanlines_wave_period_px" type="number" min="1" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            </label>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Render algorithm has moved into each LayerCard — operators pick a
+         style per colour layer in the "Layers" panel rather than choosing
+         one algorithm for the whole image here. -->
 
     <!-- ============================ TYPOGRAPHY (unchanged) ========================== -->
     <div v-if="selectedFile && kind === 'typography'" class="rounded-lg border border-slate-700 bg-slate-800">

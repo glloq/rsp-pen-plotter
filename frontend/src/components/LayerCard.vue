@@ -1,13 +1,38 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LayerInfo, PausePolicy } from '../api/client'
+import {
+  getAlgorithms,
+  type AlgorithmInfo,
+  type LayerInfo,
+  type PausePolicy,
+} from '../api/client'
 import { formatLayerLabel } from '../lib/labels'
 import { useJobStore } from '../stores/job'
 
 const { t } = useI18n()
 const props = defineProps<{ layer: LayerInfo }>()
 const store = useJobStore()
+
+const algorithms = ref<AlgorithmInfo[]>([])
+onMounted(async () => {
+  try { algorithms.value = await getAlgorithms() } catch { /* keep [] */ }
+})
+
+// Only bitmap-derived layers (label like ``color-XXXXXX``) can be
+// re-rendered with a different algorithm — that's what the /rerender
+// cache holds. SVG / DXF / text / document layers come straight from
+// the converter as vector groups and have nothing to re-render.
+const isBitmapLayer = computed(() => /^color-/.test(props.layer.layer_id))
+const currentAlgorithm = computed(
+  () => store.layerAlgorithms[props.layer.layer_id]?.algorithm ?? '',
+)
+
+async function onAlgorithm(event: Event): Promise<void> {
+  const value = (event.target as HTMLSelectElement).value
+  if (!value) return
+  await store.applyLayerAlgorithm(props.layer.layer_id, value)
+}
 
 const visible = computed({
   get: () => store.isVisible(props.layer.layer_id),
@@ -191,23 +216,40 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       </label>
     </div>
 
-    <div class="flex items-center gap-1.5 text-[10px] text-slate-500">
-      <span>{{ t('layers.pauseBefore') }}</span>
-      <div class="flex overflow-hidden rounded border border-slate-700">
-        <button
-          v-for="choice in pauseChoices"
-          :key="choice.value"
-          type="button"
-          class="px-2 py-0.5 transition"
-          :class="layer.pause_before === choice.value
-            ? 'bg-slate-700 text-slate-100'
-            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
-          :title="t(choice.key)"
-          @click="setPause(choice.value)"
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-500">
+      <!-- Render algorithm: only meaningful for bitmap-derived layers. -->
+      <label v-if="isBitmapLayer" class="flex items-center gap-1.5">
+        <span>{{ t('layers.renderAlgorithm') }}</span>
+        <select
+          :value="currentAlgorithm"
+          class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100"
+          @change="onAlgorithm"
         >
-          <span aria-hidden="true">{{ choice.icon }}</span>
-          <span class="ml-1">{{ t(choice.key) }}</span>
-        </button>
+          <option value="">{{ t('layers.defaultAlgo') }}</option>
+          <option v-for="algo in algorithms" :key="algo.name" :value="algo.name">
+            {{ algo.name }}
+          </option>
+        </select>
+      </label>
+
+      <div class="flex items-center gap-1.5">
+        <span>{{ t('layers.pauseBefore') }}</span>
+        <div class="flex overflow-hidden rounded border border-slate-700">
+          <button
+            v-for="choice in pauseChoices"
+            :key="choice.value"
+            type="button"
+            class="px-2 py-0.5 transition"
+            :class="layer.pause_before === choice.value
+              ? 'bg-slate-700 text-slate-100'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+            :title="t(choice.key)"
+            @click="setPause(choice.value)"
+          >
+            <span aria-hidden="true">{{ choice.icon }}</span>
+            <span class="ml-1">{{ t(choice.key) }}</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

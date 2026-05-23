@@ -11,6 +11,7 @@ import {
   getProfiles,
   optimizeToolpaths,
   preflightCheck,
+  rerenderJob,
   uploadFile,
   type Job,
   type LayerInfo,
@@ -71,20 +72,22 @@ export const useJobStore = defineStore('job', () => {
     () => (selectedProfile.value?.pen_slot_count ?? 1) > 1,
   )
 
-  // Per-profile sheet placement, persisted in localStorage. The sheet is the
-  // physical paper the operator has loaded; it can be smaller than (and
-  // offset within) the machine workspace. Keyed by profile name so each
-  // machine remembers its last-used paper independently.
-  interface SheetState {
-    width: number
-    height: number
-    offsetX: number
-    offsetY: number
+  // Per-profile drawing region on the machine workspace, persisted in
+  // localStorage. The drawing is the thing the user is plotting; this
+  // record stores where on the workspace it sits and at what size. ``null``
+  // (unset) means "auto-fit": center the drawing in the workspace minus
+  // margins (the legacy behaviour). Keyed by profile name so each machine
+  // remembers its last placement independently.
+  interface DrawingRegion {
+    x_mm: number
+    y_mm: number
+    width_mm: number
+    height_mm: number
   }
-  const SHEETS_KEY = 'omniplot.sheets.v1'
-  function readSheets(): Record<string, SheetState> {
+  const DRAWINGS_KEY = 'omniplot.drawings.v1'
+  function readDrawings(): Record<string, DrawingRegion> {
     try {
-      const raw = localStorage.getItem(SHEETS_KEY)
+      const raw = localStorage.getItem(DRAWINGS_KEY)
       if (!raw) return {}
       const parsed = JSON.parse(raw)
       return typeof parsed === 'object' && parsed !== null ? parsed : {}
@@ -92,58 +95,119 @@ export const useJobStore = defineStore('job', () => {
       return {}
     }
   }
-  const sheetByProfile = ref<Record<string, SheetState>>(readSheets())
+  const drawingByProfile = ref<Record<string, DrawingRegion>>(readDrawings())
   watch(
-    sheetByProfile,
+    drawingByProfile,
     (value) => {
       try {
-        localStorage.setItem(SHEETS_KEY, JSON.stringify(value))
+        localStorage.setItem(DRAWINGS_KEY, JSON.stringify(value))
       } catch {
         // localStorage may be unavailable (e.g. private mode); failing here
-        // is non-fatal — the in-memory sheet still works for the session.
+        // is non-fatal — the in-memory placement still works for the session.
       }
     },
     { deep: true },
   )
 
-  // Default sheet = full workspace (until the user picks a paper size).
-  const currentSheet = computed<SheetState | null>(() => {
+  // ``null`` means "auto-fit" — the SheetPreview and the backend will scale
+  // the drawing to the workspace with the configured margin.
+  const currentDrawing = computed<DrawingRegion | null>(() => {
     const profile = selectedProfile.value
     if (!profile) return null
-    const saved = sheetByProfile.value[profile.name]
-    if (saved) return saved
-    return {
-      width: profile.workspace.x_max - profile.workspace.x_min,
-      height: profile.workspace.y_max - profile.workspace.y_min,
-      offsetX: 0,
-      offsetY: 0,
-    }
+    return drawingByProfile.value[profile.name] ?? null
   })
 
-  function setSheet(patch: Partial<SheetState>): void {
+  function setDrawing(patch: Partial<DrawingRegion>): void {
     const profile = selectedProfile.value
     if (!profile) return
+    const ws = profile.workspace
+    const wsW = ws.x_max - ws.x_min
+    const wsH = ws.y_max - ws.y_min
     const previous =
-      sheetByProfile.value[profile.name] ?? {
-        width: profile.workspace.x_max - profile.workspace.x_min,
-        height: profile.workspace.y_max - profile.workspace.y_min,
-        offsetX: 0,
-        offsetY: 0,
+      drawingByProfile.value[profile.name] ?? {
+        x_mm: 0,
+        y_mm: 0,
+        width_mm: wsW,
+        height_mm: wsH,
       }
-    sheetByProfile.value = {
-      ...sheetByProfile.value,
+    drawingByProfile.value = {
+      ...drawingByProfile.value,
       [profile.name]: { ...previous, ...patch },
     }
     preflight.value = null
   }
 
-  function resetSheet(): void {
+  function resetDrawing(): void {
     const profile = selectedProfile.value
     if (!profile) return
-    const next = { ...sheetByProfile.value }
+    const next = { ...drawingByProfile.value }
     delete next[profile.name]
-    sheetByProfile.value = next
+    drawingByProfile.value = next
     preflight.value = null
+  }
+
+  // Per-layer render-algorithm overrides. Keyed by ``layer_id`` (e.g.
+  // ``color-ff0000`` for a bitmap colour layer). Lives in memory only —
+  // a fresh upload wipes it. Each entry holds the override algorithm
+  // and per-algo options; the backend ``/rerender`` endpoint applies it
+  // against the cached segmentation and returns a new SVG.
+  interface LayerAlgorithm {
+    algorithm: string
+    algorithm_options: Record<string, unknown>
+  }
+  const layerAlgorithms = ref<Record<string, LayerAlgorithm>>({})
+  let rerenderController: AbortController | null = null
+  let rerenderTimer: ReturnType<typeof setTimeout> | null = null
+
+  async function applyLayerAlgorithm(
+    layerId: string,
+    algorithm: string,
+    algorithmOptions: Record<string, unknown> = {},
+  ): Promise<void> {
+    layerAlgorithms.value = {
+      ...layerAlgorithms.value,
+      [layerId]: { algorithm, algorithm_options: algorithmOptions },
+    }
+    // Debounce the network round-trip so a slider drag doesn't fire a
+    // request on every tick.
+    if (rerenderTimer) clearTimeout(rerenderTimer)
+    rerenderTimer = setTimeout(triggerRerender, 250)
+  }
+
+  async function triggerRerender(): Promise<void> {
+    const jobId = job.value?.job_id
+    if (!jobId || !svg.value) return
+    if (rerenderController) rerenderController.abort()
+    const controller = new AbortController()
+    rerenderController = controller
+    try {
+      const layersPayload = Object.entries(layerAlgorithms.value).map(
+        ([layer_id, spec]) => ({
+          layer_id,
+          algorithm: spec.algorithm,
+          algorithm_options: spec.algorithm_options,
+        }),
+      )
+      const result = await rerenderJob(jobId, layersPayload, controller.signal)
+      if (controller.signal.aborted) return
+      svg.value = result.svg
+      // The toolpath metrics / G-code are now stale — drop them so the
+      // operator doesn't ship a G-code that doesn't match the preview.
+      metrics.value = null
+      gcode.value = null
+      preflight.value = null
+    } catch (err) {
+      if (controller.signal.aborted) return
+      // 404 means the cache evicted the job (LRU or backend restart).
+      // We tolerate it silently — the operator can re-upload to refresh.
+      const detail = (err as { response?: { status?: number } })?.response?.status
+      if (detail !== 404) {
+        const toasts = useToastStore()
+        toasts.warning((err as Error).message || i18n.global.t('layers.rerenderFailed'))
+      }
+    } finally {
+      if (rerenderController === controller) rerenderController = null
+    }
   }
 
   // Pen slots assigned to a layer that are out of range or not installed,
@@ -202,7 +266,7 @@ export const useJobStore = defineStore('job', () => {
     preflight.value = null
   }
 
-  watch([scaleMode, marginMm, selectedProfileName, sheetByProfile], () => {
+  watch([scaleMode, marginMm, selectedProfileName, drawingByProfile], () => {
     preflight.value = null
   }, { deep: true })
 
@@ -243,6 +307,9 @@ export const useJobStore = defineStore('job', () => {
     metrics.value = null
     gcode.value = null
     preflight.value = null
+    // A new upload invalidates the per-layer algorithm overrides — they
+    // reference layer ids from the previous job.
+    layerAlgorithms.value = {}
     lastFile.value = file
     lastOptions.value = options
     const toasts = useToastStore()
@@ -296,6 +363,8 @@ export const useJobStore = defineStore('job', () => {
     preflight.value = null
     error.value = null
     errorScope.value = null
+    // Stale per-layer overrides would point at a job_id that's gone.
+    layerAlgorithms.value = {}
   }
 
   async function changePage(page: number): Promise<void> {
@@ -341,7 +410,7 @@ export const useJobStore = defineStore('job', () => {
     error.value = null
     errorScope.value = null
     try {
-      const sheet = currentSheet.value
+      const drawing = currentDrawing.value
       preflight.value = await preflightCheck(
         svg.value,
         selectedProfileName.value,
@@ -355,12 +424,15 @@ export const useJobStore = defineStore('job', () => {
         })),
         scaleMode.value,
         marginMm.value,
-        sheet
+        // Map the drawing region onto the backend's ``Placement`` payload.
+        // The payload's "sheet" fields are interpreted by the generator as
+        // the drawing area: same maths, clearer UI naming.
+        drawing
           ? {
-              sheet_width_mm: sheet.width,
-              sheet_height_mm: sheet.height,
-              offset_x_mm: sheet.offsetX,
-              offset_y_mm: sheet.offsetY,
+              sheet_width_mm: drawing.width_mm,
+              sheet_height_mm: drawing.height_mm,
+              offset_x_mm: drawing.x_mm,
+              offset_y_mm: drawing.y_mm,
             }
           : null,
       )
@@ -379,7 +451,7 @@ export const useJobStore = defineStore('job', () => {
     error.value = null
     errorScope.value = null
     try {
-      const sheet = currentSheet.value
+      const drawing = currentDrawing.value
       const result = await generateGcode(
         svg.value,
         selectedProfileName.value,
@@ -393,12 +465,12 @@ export const useJobStore = defineStore('job', () => {
         })),
         scaleMode.value,
         marginMm.value,
-        sheet
+        drawing
           ? {
-              sheet_width_mm: sheet.width,
-              sheet_height_mm: sheet.height,
-              offset_x_mm: sheet.offsetX,
-              offset_y_mm: sheet.offsetY,
+              sheet_width_mm: drawing.width_mm,
+              sheet_height_mm: drawing.height_mm,
+              offset_x_mm: drawing.x_mm,
+              offset_y_mm: drawing.y_mm,
             }
           : null,
       )
@@ -438,9 +510,11 @@ export const useJobStore = defineStore('job', () => {
     scaleMode,
     marginMm,
     autoOptimize,
-    currentSheet,
-    setSheet,
-    resetSheet,
+    currentDrawing,
+    setDrawing,
+    resetDrawing,
+    layerAlgorithms,
+    applyLayerAlgorithm,
     clearJob,
     totalLengthMm,
     totalDurationSeconds,

@@ -119,7 +119,10 @@
     "pauseBefore": "Pause before",
     "pauseAuto": "auto",
     "pauseAlways": "always",
-    "pauseNever": "never"
+    "pauseNever": "never",
+    "renderAlgorithm": "Style",
+    "defaultAlgo": "default",
+    "rerenderFailed": "Layer re-render failed."
   },
   "confirm": {
     "cancel": "Cancel",

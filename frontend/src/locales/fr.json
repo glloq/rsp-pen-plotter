@@ -119,7 +119,10 @@
     "pauseBefore": "Pause avant",
     "pauseAuto": "auto",
     "pauseAlways": "toujours",
-    "pauseNever": "jamais"
+    "pauseNever": "jamais",
+    "renderAlgorithm": "Style",
+    "defaultAlgo": "défaut",
+    "rerenderFailed": "Échec du re-rendu du calque."
   },
   "confirm": {
     "cancel": "Annuler",

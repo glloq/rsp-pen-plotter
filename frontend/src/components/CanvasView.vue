@@ -49,7 +49,7 @@ function select(tab: CanvasTab): void {
       </button>
     </nav>
 
-    <div class="relative min-h-0 flex-1 overflow-auto p-3">
+    <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3">
       <div
         v-if="!job.layers.length"
         class="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500"
@@ -61,7 +61,10 @@ function select(tab: CanvasTab): void {
       </div>
 
       <template v-else>
-        <div v-show="canvasTab === 'sheet'">
+        <!-- Sheet tab uses ``flex h-full`` so SheetPreview can fill the
+             canvas pane without an outer scrollbar. The other tabs keep
+             their own scroll behaviour. -->
+        <div v-show="canvasTab === 'sheet'" class="flex h-full min-h-0">
           <SheetPreview />
         </div>
         <div v-if="canvasTab === 'svg'" class="h-full">
