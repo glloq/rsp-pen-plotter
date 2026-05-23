@@ -28,16 +28,13 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from pen_plotter.converters.base import ConversionResult
+from pen_plotter.core.svg_ns import INKSCAPE_NS as _INKSCAPE_NS
+from pen_plotter.core.svg_ns import SVG_NS as _SVG_NS
+from pen_plotter.core.svg_ns import XLINK_NS as _XLINK_NS
+from pen_plotter.core.svg_ns import svg_tostring
 
-_SVG_NS = "http://www.w3.org/2000/svg"
-_INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
-_XLINK_NS = "http://www.w3.org/1999/xlink"
 _INKSCAPE_LABEL = f"{{{_INKSCAPE_NS}}}label"
 _XLINK_HREF = f"{{{_XLINK_NS}}}href"
-
-ET.register_namespace("", _SVG_NS)
-ET.register_namespace("inkscape", _INKSCAPE_NS)
-ET.register_namespace("xlink", _XLINK_NS)
 
 
 def _local(tag: str) -> str:
@@ -419,4 +416,4 @@ def postprocess_pdf_svg(
     if root.get(f"{{{_INKSCAPE_NS}}}__placeholder__") is None:
         pass  # ElementTree manages xmlns via register_namespace
 
-    return ET.tostring(root, encoding="unicode"), image_warnings
+    return svg_tostring(root), image_warnings

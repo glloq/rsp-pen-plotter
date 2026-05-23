@@ -19,15 +19,13 @@ from xml.etree import ElementTree as ET
 
 from svgelements import SVG, Shape
 
+from pen_plotter.core.svg_ns import INKSCAPE_NS as _INKSCAPE_NS
+from pen_plotter.core.svg_ns import SVG_NS as _SVG_NS
+from pen_plotter.core.svg_ns import svg_tostring
 from pen_plotter.models import BoundingBox, LayerInfo
 
-_SVG_NS = "http://www.w3.org/2000/svg"
-_INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
 _INKSCAPE_LABEL = f"{{{_INKSCAPE_NS}}}label"
 _DRAWABLE = {"path", "polyline", "polygon", "line", "circle", "rect", "ellipse"}
-
-ET.register_namespace("", _SVG_NS)
-ET.register_namespace("inkscape", _INKSCAPE_NS)
 
 
 def _local(tag: str) -> str:
@@ -55,7 +53,7 @@ def strip_root_size(svg: str) -> str:
         return svg
     root.attrib.pop("width", None)
     root.attrib.pop("height", None)
-    return ET.tostring(root, encoding="unicode")
+    return svg_tostring(root)
 
 
 def _count_drawables(element: ET.Element) -> int:
@@ -123,7 +121,7 @@ def _measure(svg_markup: str) -> tuple[float, BoundingBox]:
 
 def _group_to_svg(viewbox: str | None, group: ET.Element) -> str:
     """Wrap a single group as a standalone SVG for measurement."""
-    inner = ET.tostring(group, encoding="unicode")
+    inner = svg_tostring(group)
     attrs = f'xmlns="{_SVG_NS}" xmlns:inkscape="{_INKSCAPE_NS}"'
     vb = f' viewBox="{viewbox}"' if viewbox else ""
     return f"<svg {attrs}{vb}>{inner}</svg>"
