@@ -1,23 +1,14 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
-import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
 const store = useJobStore()
-const ui = useUiStore()
 
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = Math.round(seconds % 60)
   return `${mins}m ${secs.toString().padStart(2, '0')}s`
-}
-
-async function generate(): Promise<void> {
-  await store.generate()
-  if (store.gcode) {
-    ui.canvasTab = store.selectedProfile?.gcode_dialect === 'ebb' ? 'gcode' : 'simulator'
-  }
 }
 </script>
 
@@ -88,15 +79,9 @@ async function generate(): Promise<void> {
         </ul>
       </div>
 
-      <button
-        type="button"
-        class="w-full rounded bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-        :disabled="store.generating || store.missingPenSlots.length > 0"
-        :title="store.missingPenSlots.length ? t('preflight.missingPens', { slots: store.missingPenSlots.join(', ') }) : ''"
-        @click="generate"
-      >
-        {{ store.generating ? t('layers.generating') : t('layers.generate') }}
-      </button>
+      <p class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400">
+        {{ t('layers.generateMovedHint') }}
+      </p>
 
       <p
         v-if="store.error && (store.errorScope === 'optimize' || store.errorScope === 'generate')"
