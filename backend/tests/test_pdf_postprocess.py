@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import io
 import re
+from xml.etree import ElementTree as ET
 
 import pymupdf
-import pytest
 from PIL import Image
 
 from pen_plotter.converters.pdf import PdfConverter
@@ -27,7 +27,6 @@ from pen_plotter.core.pdf_postprocess import (
 )
 from pen_plotter.core.sanitize import sanitize_svg
 from pen_plotter.core.toolpath import optimize_svg
-from xml.etree import ElementTree as ET
 
 _SVG_NS = "http://www.w3.org/2000/svg"
 _INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
@@ -159,7 +158,7 @@ def test_pdf_converter_preserves_text_through_sanitize() -> None:
     clean = sanitize_svg(svg)
     layers = extract_layers(clean)
     assert layers, "post-processed PDF must produce at least one layer"
-    text_layer = next((l for l in layers if l.layer_id == "text"), None)
+    text_layer = next((layer for layer in layers if layer.layer_id == "text"), None)
     assert text_layer is not None
     # Five glyphs in "Hello" → at least one stroke segment per glyph
     assert text_layer.path_count >= 5
@@ -222,7 +221,7 @@ def test_html_with_text_produces_text_layer() -> None:
     result = HtmlConverter().convert(b"<h1>Title</h1><p>Body text.</p>")
     clean = sanitize_svg(result.svg)
     layers = extract_layers(clean)
-    text_layer = next((l for l in layers if l.layer_id == "text"), None)
+    text_layer = next((layer for layer in layers if layer.layer_id == "text"), None)
     assert text_layer is not None
     assert text_layer.path_count > 0
     assert text_layer.total_length_mm > 0.0

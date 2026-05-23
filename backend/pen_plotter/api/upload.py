@@ -23,9 +23,12 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 class UploadResponse(BaseModel):
-    """Result of an upload: the created job, the normalized SVG pivot, any
-    non-fatal warnings, and converter-specific metadata (e.g. ``page_count``
-    and the selected ``page`` for multi-page PDF / DOCX / HTML inputs)."""
+    """Result of an upload.
+
+    Carries the created job, the normalized SVG pivot, any non-fatal
+    warnings, and converter-specific metadata (e.g. ``page_count`` and the
+    selected ``page`` for multi-page PDF / DOCX / HTML inputs).
+    """
 
     job: Job
     svg: str

@@ -351,12 +351,12 @@ def wrap_text_layer(root: ET.Element, label: str = "text") -> bool:
     text/vector content of a PyMuPDF document appear as a sibling layer
     to the ``image-N`` groups produced by :func:`vectorize_embedded_images`.
     """
-    DRAWABLE_LOCAL = {"g", "path", "polyline", "polygon", "line", "circle", "rect", "ellipse"}
+    drawable_local = {"g", "path", "polyline", "polygon", "line", "circle", "rect", "ellipse"}
     children = list(root)
     loose: list[ET.Element] = []
     for child in children:
         local = _local(child.tag)
-        if local not in DRAWABLE_LOCAL:
+        if local not in drawable_local:
             continue
         # Already a labeled layer? Leave it alone.
         if local == "g" and child.get(_INKSCAPE_LABEL):
@@ -367,7 +367,7 @@ def wrap_text_layer(root: ET.Element, label: str = "text") -> bool:
     wrapper = ET.Element(f"{{{_SVG_NS}}}g")
     wrapper.set(_INKSCAPE_LABEL, label)
     for element in loose:
-        index = list(root).index(element)
+        list(root).index(element)
         root.remove(element)
         wrapper.append(element)
     # Insert the text wrapper before any image-N groups so it lives at
@@ -407,7 +407,7 @@ def postprocess_pdf_svg(
     try:
         root = ET.fromstring(svg)
     except ET.ParseError:
-        return svg, [f"Could not parse SVG for post-processing."]
+        return svg, ["Could not parse SVG for post-processing."]
 
     expand_use_refs(root)
     _, image_warnings = vectorize_embedded_images(root, bitmap_options=bitmap_options)

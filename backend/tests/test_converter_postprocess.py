@@ -83,6 +83,34 @@ def test_dxf_converter_produces_labeled_layer() -> None:
     assert optimized.svg.count("<path") >= 1, "vpype should produce drawable paths"
 
 
+def test_dxf_postprocess_rebases_viewbox_to_mm() -> None:
+    """ezdxf renders into a million-unit canvas; without rebasing, vpype's
+    mm-tolerance simplification (0.05) operates on user units and produces
+    no simplification at all — exploding a single circle into thousands of
+    near-collinear segments."""
+    doc = ezdxf.new(setup=True)
+    doc.modelspace().add_line((0, 0), (50, 50))
+    doc.modelspace().add_circle((25, 25), 10)
+    buf = io.StringIO()
+    doc.write(buf)
+
+    result = DxfConverter().convert(buf.getvalue().encode("utf-8"))
+    viewbox = re.search(r'viewBox="([^"]+)"', result.svg)
+    assert viewbox is not None
+    parts = [float(v) for v in viewbox.group(1).split()]
+    # Drawing is 50×50 mm; viewBox should match, not the 1 000 000-unit canvas.
+    assert parts[2] < 1000 and parts[3] < 1000, (
+        f"viewBox not rebased to mm: {viewbox.group(1)}"
+    )
+
+    # Optimized polyline count must be modest, not thousands of points.
+    from pen_plotter.core.sanitize import sanitize_svg
+
+    optimized = optimize_svg(sanitize_svg(result.svg))
+    total_l = sum(p.count("L") for p in re.findall(r'd="([^"]+)"', optimized.svg))
+    assert total_l < 500, f"too many segments: {total_l} (simplify probably broken)"
+
+
 def test_dxf_converter_does_not_plot_background() -> None:
     """The background rect must be gone before vpype sees it."""
     doc = ezdxf.new(setup=True)
@@ -117,8 +145,8 @@ def test_svg_converter_expands_local_use_references() -> None:
     result = SvgConverter().convert(svg)
     clean = sanitize_svg(result.svg)
     layers = extract_layers(clean)
-    assert any(l.layer_id == "grid" for l in layers)
-    grid = next(l for l in layers if l.layer_id == "grid")
+    assert any(layer.layer_id == "grid" for layer in layers)
+    grid = next(layer for layer in layers if layer.layer_id == "grid")
     assert grid.path_count >= 2  # two expanded copies
     optimized = optimize_svg(clean)
     assert optimized.svg.count("<path") >= 1
@@ -159,7 +187,7 @@ def test_svg_converter_vectorizes_embedded_image() -> None:
     result = SvgConverter().convert(svg)
     clean = sanitize_svg(result.svg)
     layers = extract_layers(clean)
-    assert any(l.layer_id.startswith("image-") for l in layers)
+    assert any(layer.layer_id.startswith("image-") for layer in layers)
 
 
 @needs_gs
@@ -176,7 +204,7 @@ showpage
     result = EpsConverter().convert(eps)
     clean = sanitize_svg(result.svg)
     layers = extract_layers(clean)
-    text_layer = next((l for l in layers if l.layer_id == "text"), None)
+    text_layer = next((layer for layer in layers if layer.layer_id == "text"), None)
     assert text_layer is not None
     assert text_layer.path_count > 1  # glyphs + the diagonal stroke
     assert text_layer.total_length_mm > 0.0

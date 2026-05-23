@@ -25,8 +25,10 @@ def _text_elements_present(svg: str) -> int:
 
 
 class SvgConverter(Converter):
-    """Normalizes SVG input to the pivot format with ``<use>`` and ``<image>``
-    expanded and any embedded raster vectorized as a separate labeled layer.
+    """Normalizes SVG input to the pivot format.
+
+    Inlines local ``<use>`` references and vectorizes embedded raster
+    ``<image>`` elements into their own labeled layers.
     """
 
     supported_mimes: ClassVar[frozenset[str]] = frozenset({"image/svg+xml"})

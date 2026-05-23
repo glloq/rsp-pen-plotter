@@ -83,6 +83,57 @@ def _is_background_rect(rect: ET.Element) -> bool:
     return x == 0.0 and y == 0.0
 
 
+_MM_RE = re.compile(r"^([0-9.+\-eE]+)\s*mm$")
+
+
+def _mm_value(raw: str | None) -> float | None:
+    """Parse an SVG length attribute that ends in ``mm``."""
+    if not raw:
+        return None
+    match = _MM_RE.match(raw.strip())
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+
+def _mm_scale(root: ET.Element) -> tuple[float, float] | None:
+    """Compute the ``(sx, sy)`` to rebase the SVG into mm user units.
+
+    ezdxf renders into an internal ~1 000 000-unit canvas regardless of the
+    drawing's physical size. The placement step in :mod:`gcode` scales the
+    final output back to the workspace, so the produced G-code is
+    geometrically correct, *but* vpype's ``linesimplify --tolerance 0.05``
+    (which we treat as 0.05 mm) is interpreted in those user units —
+    becoming 0.05 / 20 000 mm of tolerance on a 50 mm drawing, i.e. no
+    simplification at all. The result is an exploded polyline with
+    thousands of nearly-collinear points and a G-code file 1000× larger
+    than necessary.
+
+    Returns ``(scale_x, scale_y)`` to apply to children so that 1 user
+    unit equals 1 mm, or ``None`` if the SVG already uses mm-aligned
+    units (no rebasing needed).
+    """
+    width_mm = _mm_value(root.get("width"))
+    height_mm = _mm_value(root.get("height"))
+    viewbox = (root.get("viewBox") or "").split()
+    if width_mm is None or height_mm is None or len(viewbox) != 4:
+        return None
+    try:
+        _vx, _vy, vw, vh = (float(v) for v in viewbox)
+    except ValueError:
+        return None
+    if vw <= 0 or vh <= 0:
+        return None
+    scale_x = width_mm / vw
+    scale_y = height_mm / vh
+    if abs(scale_x - 1.0) < 1e-6 and abs(scale_y - 1.0) < 1e-6:
+        return None
+    return scale_x, scale_y
+
+
 def postprocess_dxf_svg(svg: str) -> str:
     """Strip the ezdxf background and group drawables into labeled layers.
 
@@ -98,6 +149,11 @@ def postprocess_dxf_svg(svg: str) -> str:
         root = ET.fromstring(svg)
     except ET.ParseError:
         return svg
+
+    # If ezdxf used a million-unit canvas for what's really a small drawing,
+    # capture the mm-per-unit scale before we re-bucket so we can preserve
+    # geometry while moving the document into mm coordinates.
+    mm_scale = _mm_scale(root)
 
     style_text = ""
     for elem in root.iter():
@@ -118,8 +174,9 @@ def postprocess_dxf_svg(svg: str) -> str:
         if local == "g":
             # Flatten one level: move children of the wrapping group up so
             # we can re-group by class.
+            drawable_tags = {"path", "polyline", "polygon", "line", "circle", "rect", "ellipse"}
             for child in list(elem):
-                if _local(child.tag) in {"path", "polyline", "polygon", "line", "circle", "rect", "ellipse"}:
+                if _local(child.tag) in drawable_tags:
                     drawables.append(child)
             root.remove(elem)
         elif local in {"path", "polyline", "polygon", "line", "circle", "rect", "ellipse"}:
@@ -138,15 +195,36 @@ def postprocess_dxf_svg(svg: str) -> str:
 
     # Sort buckets for deterministic output: classes alphabetical, no-class last.
     keys = sorted(buckets.keys(), key=lambda k: (k == "", k))
+    transform = None
+    if mm_scale is not None:
+        sx, sy = mm_scale
+        transform = (
+            f"scale({sx})" if abs(sx - sy) < 1e-9 else f"scale({sx} {sy})"
+        )
     for cls in keys:
         color = class_map.get(cls, "#000000") if cls else "#000000"
-        label = f"color-{color.lstrip('#')}" if color.startswith("#") else f"class-{cls or 'default'}"
+        label = (
+            f"color-{color.lstrip('#')}"
+            if color.startswith("#")
+            else f"class-{cls or 'default'}"
+        )
         group = ET.Element(f"{{{_SVG_NS}}}g")
         group.set(_INKSCAPE_LABEL, label)
         group.set("stroke", color)
         group.set("fill", "none")
+        if transform:
+            group.set("transform", transform)
         for drawable in buckets[cls]:
             group.append(drawable)
         root.append(group)
+
+    if mm_scale is not None:
+        # Rebase the viewBox so subsequent stages (placement, vpype) see
+        # the drawing in millimetres rather than in ezdxf's internal
+        # million-unit canvas.
+        width_mm = _mm_value(root.get("width"))
+        height_mm = _mm_value(root.get("height"))
+        if width_mm is not None and height_mm is not None:
+            root.set("viewBox", f"0 0 {width_mm} {height_mm}")
 
     return ET.tostring(root, encoding="unicode")
