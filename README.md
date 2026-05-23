@@ -11,33 +11,67 @@ output on any pen plotter, through one unified interface.
 
 ---
 
-## Install in two commands
+## Install in one command
 
-Prerequisites: a Linux host (Raspberry Pi 4/5 recommended) with Node.js 20+ and
-either [`uv`](https://docs.astral.sh/uv/) (preferred) or Python 3.12+.
+On a fresh Debian / Ubuntu / Raspberry Pi OS host, paste this in a terminal —
+it clones the repo, installs every system package, Node.js, the Python
+toolchain (`uv`), builds the frontend, and (with `--service`) enables a
+systemd unit that survives reboots:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/glloq/rsp-pen-plotter/main/bootstrap.sh) --service
+```
+
+That's it. Open `http://<pi-ip>:8000` from any device on your LAN.
+
+The same script without `--service` installs everything but lets you launch
+manually with `./start.sh`:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/glloq/rsp-pen-plotter/main/bootstrap.sh)
+cd ~/rsp-pen-plotter && ./start.sh
+```
+
+For development with hot reload after install:
+
+```bash
+cd ~/rsp-pen-plotter && ./start.sh --dev   # backend --reload on :8000 + Vite on :5173
+```
+
+### Already have a clone?
+
+If you've cloned the repo manually, `install.sh` works the same way:
 
 ```bash
 git clone https://github.com/glloq/rsp-pen-plotter.git
 cd rsp-pen-plotter
-./install.sh        # backend deps + frontend build
-./start.sh          # one process serves UI + API on http://<host>:8000
+./install.sh --service     # or just ./install.sh
 ```
 
-Open `http://localhost:8000` (and `http://<host-ip>:8000` from any device on
-your LAN).
+### What `install.sh` actually does
 
-To start on boot via systemd (Raspberry Pi or any systemd Linux):
+Idempotent and re-runnable. Each step is skipped when already satisfied:
+
+1. installs `potrace`, `ghostscript`, `libreoffice-writer` via apt
+   (needed by the bitmap, EPS and DOCX converters)
+2. installs Node.js 20 via NodeSource if missing
+3. installs `uv` (the Python toolchain) into `~/.local/bin` if missing
+4. `uv sync` for the backend deps
+5. `npm ci && npm run build` for the frontend
+6. on `--service`: writes the systemd unit, adds the user to `dialout`
+   (for `/dev/ttyUSB*` access), enables and starts `omniplot.service`
+
+Flags:
+
+- `--service` — also install + enable the systemd unit
+- `--no-system-deps` — skip the apt steps (custom Python / Node setups)
+
+### Managing the service
 
 ```bash
-sudo ./install-service.sh
 sudo systemctl status omniplot      # check state
 sudo journalctl -u omniplot -f      # follow logs
-```
-
-For development with hot reload:
-
-```bash
-./start.sh --dev   # backend --reload on :8000 + Vite on :5173
+sudo systemctl restart omniplot     # after editing .env.service
 ```
 
 ### Configuration
