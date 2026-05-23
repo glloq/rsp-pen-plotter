@@ -15,6 +15,7 @@ from typing import Any, ClassVar
 
 from pen_plotter.converters.base import ConversionResult, Converter
 from pen_plotter.converters.pdf import pdf_bytes_to_svg
+from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
 
 _EXTENSION_BY_MIME = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
@@ -89,6 +90,25 @@ class DocumentConverter(Converter):
         opts = options or {}
         mime = str(opts.get("source_mime", ""))
         extension = _EXTENSION_BY_MIME.get(mime, "docx")
+        page_index = int(opts.get("page", 0))
+        bitmap_options = {
+            key: opts[key]
+            for key in (
+                "algorithm",
+                "num_colors",
+                "max_dimension_px",
+                "drop_background",
+                "background_luminance",
+                "algorithm_options",
+            )
+            if key in opts
+        } or None
         pdf_bytes = _office_to_pdf(data, extension)
-        svg, _ = pdf_bytes_to_svg(pdf_bytes, 0)
-        return ConversionResult(svg=svg, source_mime="image/svg+xml")
+        raw_svg, page_count = pdf_bytes_to_svg(pdf_bytes, page_index)
+        svg, warnings = postprocess_pdf_svg(raw_svg, bitmap_options=bitmap_options)
+        return ConversionResult(
+            svg=svg,
+            source_mime="image/svg+xml",
+            warnings=warnings,
+            metadata={"page_count": page_count, "page": page_index},
+        )

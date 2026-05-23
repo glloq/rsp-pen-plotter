@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
+import { useToastStore } from './toasts'
 import {
   deleteProfile as apiDeleteProfile,
   saveProfile as apiSaveProfile,
@@ -29,6 +30,14 @@ export const useJobStore = defineStore('job', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const errorScope = ref<'upload' | 'optimize' | 'generate' | null>(null)
+  const uploadWarnings = ref<string[]>([])
+  // Converter-provided metadata, e.g. ``page_count`` and the current ``page``
+  // for multi-page PDF / DOCX / HTML inputs. Empty otherwise.
+  const uploadMetadata = ref<Record<string, unknown>>({})
+  // Remembers the most recently uploaded File so we can re-upload it with a
+  // different ``page`` option without asking the user to pick it again.
+  const lastFile = ref<File | null>(null)
+  const lastOptions = ref<Record<string, unknown> | undefined>(undefined)
 
   const profiles = ref<MachineProfile[]>([])
   const selectedProfileName = ref('Custom CoreXY A3')
@@ -144,25 +153,53 @@ export const useJobStore = defineStore('job', () => {
     loading.value = true
     error.value = null
     errorScope.value = null
+    uploadWarnings.value = []
+    uploadMetadata.value = {}
     metrics.value = null
     gcode.value = null
     preflight.value = null
+    lastFile.value = file
+    lastOptions.value = options
+    const toasts = useToastStore()
     try {
       const result = await uploadFile(file, selectedProfileName.value, options)
       job.value = result.job
       svg.value = result.svg
       layers.value = result.job.layers
+      uploadWarnings.value = result.warnings ?? []
+      uploadMetadata.value = result.metadata ?? {}
       visibility.value = Object.fromEntries(
         result.job.layers.map((layer) => [layer.layer_id, true]),
       )
+      // Surface upload warnings as toasts; the inline list in SourceSection
+      // stays as the durable reference, the toast is the attention grabber.
+      for (const warning of uploadWarnings.value.slice(0, 3)) {
+        toasts.warning(warning)
+      }
+      if (uploadWarnings.value.length > 3) {
+        toasts.warning(
+          i18n.global.t('toast.moreWarnings', { count: uploadWarnings.value.length - 3 }),
+        )
+      }
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('upload.failed'))
+      const message = errorDetail(err, i18n.global.t('upload.failed'))
+      error.value = message
       errorScope.value = 'upload'
       svg.value = null
       layers.value = []
+      toasts.error(message)
     } finally {
       loading.value = false
     }
+  }
+
+  async function changePage(page: number): Promise<void> {
+    // Re-upload the same source file with a different ``page`` option;
+    // useful for multi-page PDF / DOCX / HTML inputs where the converter
+    // returns a ``page_count`` greater than 1.
+    if (!lastFile.value) return
+    const next = { ...(lastOptions.value ?? {}), page }
+    await upload(lastFile.value, next)
   }
 
   async function optimize(): Promise<void> {
@@ -253,6 +290,9 @@ export const useJobStore = defineStore('job', () => {
     loading,
     error,
     errorScope,
+    uploadWarnings,
+    uploadMetadata,
+    changePage,
     profiles,
     selectedProfileName,
     selectedProfile,

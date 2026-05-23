@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
+import { useToastStore } from './toasts'
 import {
   plotterCommand,
   plotterConnect,
@@ -61,7 +62,9 @@ export const usePlotterStore = defineStore('plotter', () => {
     try {
       status.value = await fn()
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('plotter.commandFailed'))
+      const message = errorDetail(err, i18n.global.t('plotter.commandFailed'))
+      error.value = message
+      useToastStore().error(message)
     }
   }
 

@@ -79,3 +79,68 @@ async def test_preflight_not_guarded(api_key: str) -> None:
             "/preflight", json={"svg": svg, "profile_name": PROFILE}
         )
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_queue_get_guarded_when_key_set(api_key: str) -> None:
+    """PrintRun.pause_points contains operator-facing prompts that should
+    not leak when an API key is configured."""
+    async with _client() as client:
+        no_key = await client.get("/queue")
+    assert no_key.status_code == 401
+    async with _client() as client:
+        with_key = await client.get("/queue", headers={"X-API-Key": api_key})
+    assert with_key.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_queue_get_open_without_configured_key() -> None:
+    """Backwards-compatible: with no key configured, GET /queue stays open."""
+    async with _client() as client:
+        response = await client.get("/queue")
+    assert response.status_code == 200
+
+
+def test_websocket_rejects_missing_token(api_key: str) -> None:
+    """The /ws/plotter WebSocket validates the ``token`` query param itself
+    because FastAPI router-level dependencies don't apply to WS routes."""
+    # Use the WebSocket handler directly without going through the full
+    # ASGI lifespan, which would start the queue worker on this event loop
+    # and conflict with other async fixtures.
+    from starlette.routing import WebSocketRoute
+
+    ws_route = next(
+        r for r in app.router.routes
+        if isinstance(r, WebSocketRoute) and r.path == "/ws/plotter"
+    )
+    closes: list[tuple[int, str]] = []
+    accepts: list[bool] = []
+
+    class FakeWebSocket:
+        def __init__(self, query: str = "") -> None:
+            self.query_params = {
+                k: v for k, v in (kv.split("=", 1) for kv in query.split("&") if kv)
+            }
+
+        async def accept(self) -> None:
+            accepts.append(True)
+
+        async def close(self, code: int = 1000, reason: str = "") -> None:
+            closes.append((code, reason))
+
+        async def send_json(self, data: dict) -> None:  # noqa: ARG002
+            pass
+
+    import asyncio
+
+    # No token → close 1008.
+    asyncio.run(ws_route.endpoint(FakeWebSocket("")))
+    assert (1008, "Invalid or missing API key.") in closes
+    assert not accepts
+
+    # Wrong token → close 1008.
+    closes.clear()
+    accepts.clear()
+    asyncio.run(ws_route.endpoint(FakeWebSocket("token=wrong")))
+    assert (1008, "Invalid or missing API key.") in closes
+    assert not accepts

@@ -1,7 +1,13 @@
 {
   "app": {
     "tagline": "Studio universel de traceur à plume",
-    "apiUnreachable": "API injoignable"
+    "apiUnreachable": "API injoignable",
+    "dropToImport": "Déposer pour importer",
+    "dropHint": "Le fichier sera converti immédiatement."
+  },
+  "toast": {
+    "uploaded": "« {name} » importé ({count} calques).",
+    "moreWarnings": "+{count} avertissements supplémentaires."
   },
   "header": {
     "profile": "Profil",
@@ -37,6 +43,8 @@
     "simulator": "Simulation",
     "gcode": "G-code",
     "empty": "Importez un fichier pour voir l'aperçu ici.",
+    "emptyHint": "Glissez-déposez un fichier n'importe où, ou utilisez le panneau « Source » à gauche.",
+    "emptyFormats": "SVG · PNG · JPG · PDF · DXF · EPS · DOCX · ODT · HTML · MD · TXT",
     "simulatorUnavailable": "Le simulateur n'est pas disponible pour ce dialecte.",
     "gcodeEmpty": "Aucun G-code généré pour le moment."
   },
@@ -71,7 +79,10 @@
     "converting": "Conversion…",
     "failed": "Échec de l'envoi. Vérifiez le type de fichier et que l'API fonctionne.",
     "loaded": "Chargé",
-    "layers": "calque | calques"
+    "layers": "calque | calques",
+    "pageOf": "Page {current} / {total}",
+    "prevPage": "Page précédente",
+    "nextPage": "Page suivante"
   },
   "layers": {
     "title": "Calques",
@@ -85,6 +96,8 @@
     "simplify": "Simplifier (mm)",
     "optimize": "Optimiser",
     "paths": "tracés",
+    "kindText": "Calque texte",
+    "kindImage": "Calque image (raster vectorisé)",
     "totalLength": "Longueur totale",
     "estimatedTime": "Durée estimée",
     "optimizeButton": "Optimiser les trajectoires",
@@ -126,6 +139,8 @@
   },
   "convert": {
     "options": "Options de conversion",
+    "embeddedImageOptions": "Vectorisation des images intégrées",
+    "embeddedImageHint": "Ces options ne s'appliquent qu'aux images raster intégrées dans le document. Le texte et les vecteurs ne sont pas affectés.",
     "algorithm": "Algorithme",
     "numColors": "Couleurs",
     "maxDim": "Taille max (px)",

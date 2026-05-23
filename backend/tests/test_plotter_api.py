@@ -2,6 +2,7 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
+from pen_plotter.audit import list_entries
 from pen_plotter.hardware.controller import controller
 from pen_plotter.hardware.transport import MockTransport
 from pen_plotter.main import app
@@ -81,3 +82,18 @@ async def test_disconnect_clears_connection(connected: MockTransport) -> None:
     assert response.status_code == 200
     assert response.json()["connected"] is False
     assert connected.closed is True
+
+
+@pytest.mark.asyncio
+async def test_pause_resume_disconnect_are_audited(connected: MockTransport) -> None:
+    """Regression: pause / resume / disconnect used to bypass the audit log
+    even though they're machine-state changes operators want recorded."""
+    async with _client() as client:
+        await client.post("/plotter/pause")
+        await client.post("/plotter/resume")
+        await client.post("/plotter/disconnect")
+
+    recent_actions = {e.action for e in list_entries(limit=20)}
+    assert "plotter.pause" in recent_actions
+    assert "plotter.resume" in recent_actions
+    assert "plotter.disconnect" in recent_actions

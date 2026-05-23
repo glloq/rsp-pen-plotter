@@ -33,13 +33,18 @@ def _run_or_404(run_id: str) -> q.PrintRun:
     return run
 
 
-@router.get("/queue")
+@router.get("/queue", dependencies=[Depends(require_api_key)])
 async def list_queue() -> list[q.PrintRun]:
-    """List print runs, active ones first."""
+    """List print runs, active ones first.
+
+    Protected because ``PrintRun.pause_points`` carries operator-facing
+    prompts (e.g. "Insert pen slot 1: Red") that reveal the pen carousel
+    configuration when an API key is configured.
+    """
     return q.list_runs()
 
 
-@router.get("/queue/{run_id}")
+@router.get("/queue/{run_id}", dependencies=[Depends(require_api_key)])
 async def get_one(run_id: str) -> q.PrintRun:
     """Return a single print run.
 
