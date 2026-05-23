@@ -10,8 +10,6 @@
     "moreWarnings": "+{count} avertissements supplémentaires."
   },
   "header": {
-    "profile": "Profil",
-    "preset": "Préréglage",
     "settings": "Réglages",
     "plotter": "Traceur"
   },
@@ -269,7 +267,13 @@
     "export": "Exporter YAML",
     "delete": "Supprimer",
     "saveFailed": "Impossible d'enregistrer le profil.",
-    "deleteFailed": "Impossible de supprimer le profil."
+    "deleteFailed": "Impossible de supprimer le profil.",
+    "select": "Profil machine actif",
+    "preset": "Préréglage de conversion",
+    "newProfile": "Nouveau",
+    "newProfileDefault": "Nouveau profil",
+    "serialTerminator": "Terminateur série",
+    "unsavedDraft": "Brouillon non enregistré — cliquez sur Enregistrer pour le sauver."
   },
   "job": {
     "scaleMode": "Échelle",

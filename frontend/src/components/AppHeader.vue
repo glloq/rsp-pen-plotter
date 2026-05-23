@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useUiStore } from '../stores/ui'
 import MachineStatusPill from './MachineStatusPill.vue'
@@ -13,10 +12,8 @@ defineProps<{
 }>()
 
 const { t, locale } = useI18n()
-const job = useJobStore()
 const ui = useUiStore()
 const plotter = usePlotterStore()
-const { profiles, selectedProfileName, presets, selectedPresetName } = storeToRefs(job)
 const { status: plotterStatus } = storeToRefs(plotter)
 
 function setLocale(value: string): void {
@@ -31,33 +28,6 @@ function setLocale(value: string): void {
     <div class="mr-2 flex items-baseline gap-2">
       <h1 class="text-lg font-bold tracking-tight">OmniPlot</h1>
       <p class="hidden text-xs text-slate-500 lg:block">{{ t('app.tagline') }}</p>
-    </div>
-
-    <div class="flex items-center gap-2">
-      <label class="flex items-center gap-1.5 text-xs text-slate-400">
-        <span class="hidden sm:inline">{{ t('header.profile') }}</span>
-        <select
-          v-model="selectedProfileName"
-          class="min-w-[10rem] max-w-[16rem] rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
-        >
-          <option v-for="profile in profiles" :key="profile.name" :value="profile.name">
-            {{ profile.name }} ({{ profile.pen_slot_count }})
-          </option>
-        </select>
-      </label>
-
-      <label class="flex items-center gap-1.5 text-xs text-slate-400">
-        <span class="hidden sm:inline">{{ t('header.preset') }}</span>
-        <select
-          v-model="selectedPresetName"
-          class="min-w-[8rem] max-w-[12rem] rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100"
-        >
-          <option value="">{{ t('upload.presetNone') }}</option>
-          <option v-for="preset in presets" :key="preset.name" :value="preset.name">
-            {{ preset.name }}
-          </option>
-        </select>
-      </label>
     </div>
 
     <div class="ml-auto flex items-center gap-3">
