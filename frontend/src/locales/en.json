@@ -60,6 +60,17 @@
     "collapse": "Collapse panel",
     "expand": "Expand panel"
   },
+  "variants": {
+    "title": "Variants",
+    "default": "Default",
+    "untitled": "New variant",
+    "add": "Save as variant",
+    "update": "Update",
+    "updateHint": "Overwrite the active variant with current settings",
+    "rename": "Rename",
+    "remove": "Delete variant",
+    "hint": "Each variant snapshots the layer styles and visibility for this file."
+  },
   "palette": {
     "title": "Palette",
     "followPens": "Follow installed pens",

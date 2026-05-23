@@ -11,6 +11,11 @@ const edit = useEditState()
 // (Singleton composable: always defined; null-checks below are leftover
 // guards from the provide/inject design and are kept for safety.)
 
+// Variant chips in the toolbar mirror the right-pane VariantsCard for
+// quick switching while keeping eyes on the preview.
+const variants = computed(() => store.selectedPlacement?.variants ?? [])
+const activeVariantId = computed(() => store.selectedPlacement?.active_variant_id ?? '')
+
 // Render order:
 //   1. If a placement is already committed (job_id + svg present), show
 //      its vectorised SVG — that one updates as the user tweaks per-layer
@@ -74,6 +79,27 @@ const statusLabel = computed(() => {
       </div>
       <span class="text-slate-400">{{ statusLabel }}</span>
     </header>
+
+    <!-- Variant chips: quick switch + reflect the active variant
+         currently shown by the preview. -->
+    <nav
+      v-if="variants.length > 1"
+      class="flex flex-wrap items-center gap-1 border-b border-slate-700 bg-slate-900/40 px-3 py-1.5 text-[11px]"
+    >
+      <span class="uppercase tracking-wider text-slate-500">{{ t('variants.title') }}</span>
+      <button
+        v-for="variant in variants"
+        :key="variant.id"
+        type="button"
+        class="rounded border px-2 py-0.5 text-[11px] transition"
+        :class="variant.id === activeVariantId
+          ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+        @click="store.setActiveVariant(variant.id)"
+      >
+        {{ variant.name }}
+      </button>
+    </nav>
 
     <!-- Page selector for PDFs and other multi-page documents. -->
     <nav

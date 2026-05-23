@@ -60,6 +60,17 @@
     "collapse": "Réduire le panneau",
     "expand": "Développer le panneau"
   },
+  "variants": {
+    "title": "Variantes",
+    "default": "Défaut",
+    "untitled": "Nouvelle variante",
+    "add": "Enregistrer comme variante",
+    "update": "Mettre à jour",
+    "updateHint": "Écraser la variante active avec les réglages actuels",
+    "rename": "Renommer",
+    "remove": "Supprimer la variante",
+    "hint": "Chaque variante capture les styles et la visibilité des calques pour ce fichier."
+  },
   "palette": {
     "title": "Palette",
     "followPens": "Suivre les pens installés",
