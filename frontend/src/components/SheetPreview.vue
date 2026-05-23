@@ -233,17 +233,26 @@ function startResize(h: typeof handle.value, event: PointerEvent, id: string): v
   store.selectPlacement(id)
 }
 
-// Drag-and-drop from FilesPane: drop on plan = duplicate the placement
-// (or, if the dragged placement has no svg yet, move it there).
+// Drag-and-drop from FilesPane: a drag carries either a library file id
+// (``application/x-omniplot-library``) — which creates a new placement
+// on the plan referencing that library entry — or a placement id
+// (``application/x-omniplot-file``) for in-plan duplication / repositioning.
 const dragOver = ref(false)
+function hasDropPayload(types?: readonly string[]): boolean {
+  if (!types) return false
+  return (
+    types.includes('application/x-omniplot-file') ||
+    types.includes('application/x-omniplot-library')
+  )
+}
 function onDragEnter(event: DragEvent): void {
-  if (event.dataTransfer?.types.includes('application/x-omniplot-file')) {
+  if (hasDropPayload(event.dataTransfer?.types)) {
     event.preventDefault()
     dragOver.value = true
   }
 }
 function onDragOver(event: DragEvent): void {
-  if (event.dataTransfer?.types.includes('application/x-omniplot-file')) {
+  if (hasDropPayload(event.dataTransfer?.types)) {
     event.preventDefault()
     dragOver.value = true
   }
@@ -264,15 +273,27 @@ function clientToSvgMm(clientX: number, clientY: number): { x: number; y: number
   return { x: local.x, y: local.y }
 }
 
-function onDrop(event: DragEvent): void {
+async function onDrop(event: DragEvent): Promise<void> {
   event.preventDefault()
   dragOver.value = false
-  const sourceId = event.dataTransfer?.getData('application/x-omniplot-file')
-  if (!sourceId) return
   const w = workspace.value
   if (!w) return
   const local = clientToSvgMm(event.clientX, event.clientY)
   if (!local) return
+
+  // Drop from the library: spawn a new placement bound to that file id.
+  const libraryId = event.dataTransfer?.getData('application/x-omniplot-library')
+  if (libraryId) {
+    const newId = await store.createPlacementFromLibrary(libraryId, {
+      x: local.x,
+      y: local.y,
+    })
+    if (newId) store.selectPlacement(newId)
+    return
+  }
+
+  const sourceId = event.dataTransfer?.getData('application/x-omniplot-file')
+  if (!sourceId) return
   const src = store.placements.find((p) => p.id === sourceId)
   if (!src) return
   // If the source placement has no svg yet, the user is just positioning

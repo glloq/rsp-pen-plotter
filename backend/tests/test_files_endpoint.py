@@ -1,0 +1,132 @@
+"""Tests for the /files library endpoints (dedup, list, sort, search, CRUD)."""
+
+import os
+import tempfile
+
+# Isolate the library storage dir before importing the app.
+os.environ.setdefault(
+    "OMNIPLOT_FILES_DIR", os.path.join(tempfile.gettempdir(), "omniplot_test_files")
+)
+
+import shutil  # noqa: E402
+
+import httpx  # noqa: E402
+import pytest  # noqa: E402
+from httpx import ASGITransport  # noqa: E402
+
+from pen_plotter.api.files import FILES_DIR  # noqa: E402
+from pen_plotter.main import app  # noqa: E402
+from pen_plotter.persistence import FileRecord, engine  # noqa: E402
+from sqlmodel import Session, delete  # noqa: E402
+
+NS = (
+    'xmlns="http://www.w3.org/2000/svg" '
+    'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"'
+)
+SVG_A = (
+    f'<svg {NS} viewBox="0 0 100 100">'
+    '<g inkscape:label="red" stroke="#ff0000"><path d="M0 0 L50 0 L50 50"/></g></svg>'
+).encode()
+SVG_B = (
+    f'<svg {NS} viewBox="0 0 50 50">'
+    '<g inkscape:label="blue" stroke="#0000ff"><path d="M0 0 L25 25"/></g></svg>'
+).encode()
+
+
+def _client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+
+@pytest.fixture(autouse=True)
+def _clean_library():
+    """Wipe the library DB rows + on-disk storage between tests."""
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
+    if FILES_DIR.exists():
+        shutil.rmtree(FILES_DIR, ignore_errors=True)
+    yield
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
+    if FILES_DIR.exists():
+        shutil.rmtree(FILES_DIR, ignore_errors=True)
+
+
+def _upload_form(content: bytes, name: str, folder: str = "") -> dict:
+    return {
+        "files": {"file": (name, content, "image/svg+xml")},
+        "data": {"folder": folder},
+    }
+
+
+@pytest.mark.asyncio
+async def test_upload_creates_library_entry() -> None:
+    async with _client() as client:
+        response = await client.post("/files", **_upload_form(SVG_A, "a.svg"))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["existing"] is False
+    file = body["file"]
+    assert file["source_file"] == "a.svg"
+    assert file["size_bytes"] == len(SVG_A)
+    assert file["layer_count"] >= 1
+    assert file["svg"]
+    assert file["sha256"]
+
+
+@pytest.mark.asyncio
+async def test_upload_same_content_dedups() -> None:
+    async with _client() as client:
+        first = await client.post("/files", **_upload_form(SVG_A, "a.svg"))
+        second = await client.post("/files", **_upload_form(SVG_A, "renamed.svg"))
+    assert first.status_code == 200 and second.status_code == 200
+    assert second.json()["existing"] is True
+    assert first.json()["file"]["file_id"] == second.json()["file"]["file_id"]
+    # Listing still shows a single entry.
+    async with _client() as client:
+        listed = await client.get("/files")
+    assert len(listed.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_filters_and_sorts() -> None:
+    async with _client() as client:
+        await client.post("/files", **_upload_form(SVG_A, "alpha.svg", folder="tests"))
+        await client.post("/files", **_upload_form(SVG_B, "bravo.svg"))
+        # Folder filter.
+        in_folder = await client.get("/files", params={"folder": "tests"})
+        assert [f["source_file"] for f in in_folder.json()] == ["alpha.svg"]
+        # Substring search.
+        searched = await client.get("/files", params={"search": "brav"})
+        assert [f["source_file"] for f in searched.json()] == ["bravo.svg"]
+        # Sort by name asc.
+        sorted_asc = await client.get("/files", params={"sort": "name", "order": "asc"})
+        assert [f["source_file"] for f in sorted_asc.json()] == ["alpha.svg", "bravo.svg"]
+
+
+@pytest.mark.asyncio
+async def test_patch_and_delete() -> None:
+    async with _client() as client:
+        created = await client.post("/files", **_upload_form(SVG_A, "a.svg"))
+        file_id = created.json()["file"]["file_id"]
+        patched = await client.patch(
+            f"/files/{file_id}",
+            json={"source_file": "new-name.svg", "folder": "moved"},
+        )
+        assert patched.status_code == 200
+        assert patched.json()["source_file"] == "new-name.svg"
+        assert patched.json()["folder"] == "moved"
+        folders = await client.get("/files/folders")
+        assert folders.json() == ["moved"]
+        deleted = await client.delete(f"/files/{file_id}")
+        assert deleted.status_code == 200
+        missing = await client.get(f"/files/{file_id}")
+        assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_rejects_bad_sort() -> None:
+    async with _client() as client:
+        response = await client.get("/files", params={"sort": "bogus"})
+    assert response.status_code == 400

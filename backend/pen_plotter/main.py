@@ -16,6 +16,7 @@ from pen_plotter import __version__
 from pen_plotter.api.algorithms import router as algorithms_router
 from pen_plotter.api.analyze import router as analyze_router
 from pen_plotter.api.audit import router as audit_router
+from pen_plotter.api.files import router as files_router
 from pen_plotter.api.fonts import router as fonts_router
 from pen_plotter.api.generate import router as generate_router
 from pen_plotter.api.jobs import router as jobs_router
@@ -62,6 +63,7 @@ app.add_middleware(
 )
 
 app.include_router(upload_router)
+app.include_router(files_router)
 app.include_router(algorithms_router)
 app.include_router(fonts_router)
 app.include_router(profiles_router)

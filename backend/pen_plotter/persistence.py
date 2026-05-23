@@ -35,6 +35,24 @@ class JobRecord(SQLModel, table=True):
     created_at: datetime
 
 
+class FileRecord(SQLModel, table=True):
+    """A persisted, dedup-by-hash entry in the file library.
+
+    One row per unique uploaded source (keyed by ``sha256``). The actual
+    bytes and the normalized SVG live on disk under ``data/files/<file_id>/``;
+    this table only carries the metadata needed by the file-list UI.
+    """
+
+    file_id: str = Field(primary_key=True)
+    sha256: str = Field(index=True, unique=True)
+    source_file: str
+    source_mime: str
+    size_bytes: int
+    layer_count: int
+    folder: str = Field(default="", index=True)
+    created_at: datetime
+
+
 engine: Engine = create_engine(f"sqlite:///{_DB_PATH}")
 
 
@@ -118,6 +136,76 @@ def list_jobs(target: Engine = engine, limit: int = 50) -> list[JobRecord]:
     with Session(target) as session:
         statement = select(JobRecord).order_by(desc(JobRecord.created_at)).limit(limit)
         return list(session.exec(statement).all())
+
+
+def save_file_record(record: FileRecord, target: Engine = engine) -> FileRecord:
+    """Insert or update a :class:`FileRecord` (upsert by ``file_id``)."""
+    with Session(target) as session:
+        session.merge(record)
+        session.commit()
+    return record
+
+
+def get_file_record(file_id: str, target: Engine = engine) -> FileRecord | None:
+    """Return a file record by id, or ``None``."""
+    with Session(target) as session:
+        return session.get(FileRecord, file_id)
+
+
+def get_file_record_by_hash(sha256: str, target: Engine = engine) -> FileRecord | None:
+    """Return the file record whose content hash matches, or ``None``."""
+    with Session(target) as session:
+        statement = select(FileRecord).where(FileRecord.sha256 == sha256)
+        return session.exec(statement).first()
+
+
+def list_file_records(
+    target: Engine = engine,
+    folder: str | None = None,
+    search: str | None = None,
+    sort: str = "date",
+    order: str = "desc",
+) -> list[FileRecord]:
+    """List file records with optional folder filter, name search, and sort.
+
+    Args:
+        target: SQLAlchemy engine to read from.
+        folder: If provided, restrict to entries in this folder (``""`` = root).
+        search: Case-insensitive substring match on ``source_file``.
+        sort: ``"name"``, ``"date"`` (``created_at``), or ``"type"`` (``source_mime``).
+        order: ``"asc"`` or ``"desc"``.
+    """
+    with Session(target) as session:
+        statement = select(FileRecord)
+        if folder is not None:
+            statement = statement.where(FileRecord.folder == folder)
+        if search:
+            statement = statement.where(FileRecord.source_file.ilike(f"%{search}%"))
+        column = {
+            "name": FileRecord.source_file,
+            "date": FileRecord.created_at,
+            "type": FileRecord.source_mime,
+        }.get(sort, FileRecord.created_at)
+        statement = statement.order_by(desc(column) if order == "desc" else column)
+        return list(session.exec(statement).all())
+
+
+def list_file_folders(target: Engine = engine) -> list[str]:
+    """Return the distinct, non-empty folder names in use."""
+    with Session(target) as session:
+        statement = select(FileRecord.folder).distinct()
+        return sorted({f for f in session.exec(statement).all() if f})
+
+
+def delete_file_record(file_id: str, target: Engine = engine) -> bool:
+    """Delete a file record. Returns True if a row was removed."""
+    with Session(target) as session:
+        record = session.get(FileRecord, file_id)
+        if record is None:
+            return False
+        session.delete(record)
+        session.commit()
+        return True
 
 
 def get_job(job_id: str, target: Engine = engine) -> JobRecord | None:
