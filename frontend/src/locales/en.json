@@ -36,7 +36,8 @@
     "remove": "Remove file",
     "empty": "No file loaded.",
     "emptyHint": "Drop a file anywhere on the window or click \"Add a file\" to start.",
-    "noLayers": "no layers"
+    "noLayers": "no layers",
+    "dragHint": "Drag onto the plan to position the drawing"
   },
   "editModal": {
     "title": "File settings",
@@ -137,7 +138,8 @@
     "renderAlgorithm": "Style",
     "defaultAlgo": "default",
     "rerenderFailed": "Layer re-render failed.",
-    "rerenderUnavailable": "Re-rendering is unavailable; re-upload the file to apply the new style."
+    "rerenderUnavailable": "Re-rendering is unavailable; re-upload the file to apply the new style.",
+    "generateMovedHint": "Generate G-code lives in the Plan header — close this dialog and click the green button on the top-right of the preview."
   },
   "confirm": {
     "cancel": "Cancel",
@@ -181,7 +183,9 @@
     "offsetY": "Offset Y (mm)",
     "centre": "Centre",
     "useFullWorkspace": "Full workspace",
-    "exceedsWarning": "Sheet exceeds the machine work area."
+    "exceedsWarning": "Sheet exceeds the machine work area.",
+    "dropToPosition": "Drop to position the drawing here",
+    "emptyHint": "Drag a file from the Files panel or drop one anywhere to start."
   },
   "convert": {
     "options": "Conversion options",

@@ -9,6 +9,7 @@ const store = useJobStore()
 const ui = useUiStore()
 
 interface FileRow {
+  id: string
   name: string
   size: number | null
   layerCount: number
@@ -23,6 +24,7 @@ const files = computed<FileRow[]>(() => {
   if (!name) return []
   return [
     {
+      id: store.job?.job_id ?? 'draft',
       name,
       size: store.lastFile?.size ?? null,
       layerCount: store.layers.length,
@@ -43,6 +45,16 @@ function formatSize(bytes: number | null): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+// Mark a file row as a drag source for the plan. The custom MIME tag
+// lets SheetPreview distinguish file-row drags from OS file drops
+// without leaking through to the window-level "import" handler.
+function onDragStart(event: DragEvent, file: FileRow): void {
+  if (!event.dataTransfer) return
+  event.dataTransfer.setData('application/x-omniplot-file', file.id)
+  event.dataTransfer.setData('text/plain', file.name)
+  event.dataTransfer.effectAllowed = 'copyMove'
 }
 </script>
 
@@ -72,8 +84,11 @@ function formatSize(bytes: number | null): string {
       <ul v-else class="space-y-2">
         <li
           v-for="file in files"
-          :key="file.name"
-          class="rounded border border-slate-700 bg-slate-800 px-3 py-2"
+          :key="file.id"
+          class="rounded border border-slate-700 bg-slate-800 px-3 py-2 cursor-grab active:cursor-grabbing"
+          draggable="true"
+          :title="t('files.dragHint')"
+          @dragstart="(e) => onDragStart(e, file)"
         >
           <div class="flex items-start gap-2">
             <div class="min-w-0 flex-1">

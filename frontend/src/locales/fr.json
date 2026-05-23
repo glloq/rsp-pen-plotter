@@ -36,7 +36,8 @@
     "remove": "Retirer le fichier",
     "empty": "Aucun fichier chargé.",
     "emptyHint": "Glissez un fichier n'importe où sur la fenêtre ou cliquez sur « Ajouter un fichier » pour démarrer.",
-    "noLayers": "aucun calque"
+    "noLayers": "aucun calque",
+    "dragHint": "Glissez sur le plan pour positionner le dessin"
   },
   "editModal": {
     "title": "Réglages du fichier",
@@ -137,7 +138,8 @@
     "renderAlgorithm": "Style",
     "defaultAlgo": "défaut",
     "rerenderFailed": "Échec du re-rendu du calque.",
-    "rerenderUnavailable": "Le re-rendu n'est pas disponible ; ré-importez le fichier pour appliquer le nouveau style."
+    "rerenderUnavailable": "Le re-rendu n'est pas disponible ; ré-importez le fichier pour appliquer le nouveau style.",
+    "generateMovedHint": "Le bouton « Générer le G-code » est maintenant en haut à droite du Plan — fermez ce dialogue puis cliquez sur le bouton vert en haut de l'aperçu."
   },
   "confirm": {
     "cancel": "Annuler",
@@ -181,7 +183,9 @@
     "offsetY": "Décalage Y (mm)",
     "centre": "Centrer",
     "useFullWorkspace": "Plein espace",
-    "exceedsWarning": "La feuille dépasse la zone de travail."
+    "exceedsWarning": "La feuille dépasse la zone de travail.",
+    "dropToPosition": "Relâchez ici pour placer le dessin",
+    "emptyHint": "Glissez un fichier depuis le panneau Fichiers ou déposez-en un n'importe où pour démarrer."
   },
   "convert": {
     "options": "Options de conversion",
