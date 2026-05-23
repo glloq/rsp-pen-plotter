@@ -100,6 +100,63 @@ def test_rerender_unknown_algorithm_falls_back_with_warning(client: TestClient) 
     assert "<circle" in body["svg"]
 
 
+def test_rerender_with_multipass_stacks_algorithms(client: TestClient) -> None:
+    """Multi-pass: one colour drawn with several stacked algorithms.
+
+    The black layer is rendered first with crosshatch (lines) then
+    contours (path strokes), both wrapped in a single ``color-000000``
+    group so downstream consumers still see one layer per colour.
+    """
+    job_id = _seed_cache()
+    response = client.post(
+        "/rerender",
+        json={
+            "job_id": job_id,
+            "layers": [
+                {
+                    "layer_id": "color-000000",
+                    "passes": [
+                        {"algorithm": "crosshatch", "algorithm_options": {"angle_deg": 0, "spacing_px": 2}},
+                        {"algorithm": "contours", "algorithm_options": {"spacing_px": 1, "max_rings": 3}},
+                    ],
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    svg = response.json()["svg"]
+    # Crosshatch emits <line>, contours emit <polygon> (closed rings) or
+    # <path>. Both pass-marker groups must be present and wrapped under a
+    # single labeled outer group.
+    assert "<line" in svg
+    assert "<polygon" in svg or "<path" in svg
+    assert svg.count('inkscape:label="color-000000"') == 1
+    assert 'inkscape:label="color-000000-pass-0"' in svg
+    assert 'inkscape:label="color-000000-pass-1"' in svg
+
+
+def test_rerender_multipass_unknown_algorithm_falls_back(client: TestClient) -> None:
+    job_id = _seed_cache()
+    response = client.post(
+        "/rerender",
+        json={
+            "job_id": job_id,
+            "layers": [
+                {
+                    "layer_id": "color-000000",
+                    "passes": [
+                        {"algorithm": "nope"},
+                        {"algorithm": "crosshatch"},
+                    ],
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert any("nope" in w for w in body["warnings"])
+
+
 def test_upload_populates_cache_then_rerender_works(client: TestClient) -> None:
     """End-to-end: upload a PNG, then immediately /rerender by job_id.
 

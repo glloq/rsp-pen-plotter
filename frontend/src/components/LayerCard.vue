@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   getAlgorithms,
@@ -8,8 +8,9 @@ import {
   type PausePolicy,
 } from '../api/client'
 import { formatLayerLabel } from '../lib/labels'
-import { useJobStore } from '../stores/job'
+import { useJobStore, type LayerPass } from '../stores/job'
 import PrintStylePicker from './edit/PrintStylePicker.vue'
+import PassList from './edit/PassList.vue'
 import type { PrintStyle, PrintStyleKind } from '../data/printStyles'
 
 const { t } = useI18n()
@@ -108,6 +109,28 @@ const currentAlgorithm = computed(
 const currentAlgoOptions = computed(
   () => store.layerAlgorithms[props.layer.layer_id]?.algorithm_options ?? {},
 )
+// Multi-pass stack for this layer (when set). The PrintStylePicker still
+// drives the single-style choice; toggling multi-pass mode opens the
+// passes editor below and disables the single-style highlight.
+const currentPasses = computed<LayerPass[]>(
+  () => store.layerAlgorithms[props.layer.layer_id]?.passes ?? [],
+)
+const isMultiPass = computed(() => currentPasses.value.length > 0)
+
+function onUpdatePasses(passes: LayerPass[]): void {
+  store.applyLayerPasses(props.layer.layer_id, passes)
+}
+
+// Promote the currently-selected single style to a one-pass stack so
+// the operator can start adding more passes without losing the choice.
+function enableMultiPass(): void {
+  const algo = currentAlgorithm.value || 'crosshatch'
+  const opts = { ...currentAlgoOptions.value }
+  store.applyLayerPasses(props.layer.layer_id, [
+    { algorithm: algo, algorithm_options: opts },
+  ])
+}
+
 const currentAlgoSpec = computed<AlgoSpec | null>(
   () => (currentAlgorithm.value ? (ALGO_OPTIONS[currentAlgorithm.value] ?? null) : null),
 )
@@ -227,6 +250,18 @@ const showAdvanced = ref(false)
 // reordered and toggled on/off while collapsed.
 const collapsed = ref(false)
 
+// LayersSection broadcasts an "expand all" / "collapse all" signal via
+// provide; honour it whenever it flips so the bulk toggle takes effect
+// without overriding the per-card toggle the rest of the time.
+const sectionCollapseAll = inject<Ref<boolean | null>>(
+  'layersCollapseAll',
+  ref<boolean | null>(null),
+)
+watch(sectionCollapseAll, (value) => {
+  if (value === null) return
+  collapsed.value = value
+})
+
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = Math.round(seconds % 60)
@@ -261,8 +296,13 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       />
 
       <div class="min-w-0 flex-1">
-        <p class="truncate text-sm text-slate-200" :class="label.kind === 'color' ? 'font-mono' : ''">
-          {{ label.display }}
+        <p class="flex items-center gap-1.5 truncate text-sm text-slate-200" :class="label.kind === 'color' ? 'font-mono' : ''">
+          <span class="truncate">{{ label.display }}</span>
+          <span
+            v-if="isMultiPass"
+            class="shrink-0 rounded-sm border border-emerald-700 bg-emerald-950/60 px-1 py-px text-[9px] font-semibold tracking-wider text-emerald-300"
+            :title="t('passes.badgeHint')"
+          >×{{ currentPasses.length }}</span>
         </p>
         <p class="text-xs text-slate-500">
           {{ layer.path_count }} {{ t('layers.paths') }} ·
@@ -354,23 +394,50 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
     </div>
 
     <!-- Print-style picker: tile grid for bitmap-derived layers. The
-         schema-driven advanced form below is gated behind "Advanced". -->
+         schema-driven advanced form below is gated behind "Advanced".
+         Multi-pass mode lifts the layer into a stacked-algorithms editor
+         so the same colour can be drawn with several visual effects in
+         one ink. -->
     <div v-if="!collapsed && isBitmapLayer" class="space-y-1.5">
       <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
         <span>{{ t('layers.printStyle') }}</span>
-        <button
-          type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
-          @click="showAdvanced = !showAdvanced"
-        >
-          {{ showAdvanced ? t('layers.advancedHide') : t('layers.advancedShow') }}
-        </button>
+        <div class="flex items-center gap-1">
+          <button
+            v-if="!isMultiPass"
+            type="button"
+            class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300 hover:border-emerald-600 hover:text-emerald-200"
+            :title="t('passes.enableHint')"
+            @click="enableMultiPass"
+          >
+            + {{ t('passes.enable') }}
+          </button>
+          <button
+            type="button"
+            class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
+            @click="showAdvanced = !showAdvanced"
+          >
+            {{ showAdvanced ? t('layers.advancedHide') : t('layers.advancedShow') }}
+          </button>
+        </div>
       </div>
+
+      <!-- Single-style picker: hidden while multi-pass is active so the
+           operator isn't editing two sources of truth at once. -->
       <PrintStylePicker
+        v-if="!isMultiPass"
         :kind="styleKind"
         :current-algorithm="currentAlgorithm"
         @select="onPickStyle"
         @reset="onResetStyle"
+      />
+
+      <!-- Multi-pass stack: ordered list of algorithms drawn against the
+           same colour mask. Order matters — the first pass plots first,
+           the last on top. -->
+      <PassList
+        v-else
+        :passes="currentPasses"
+        @update="onUpdatePasses"
       />
     </div>
 

@@ -303,10 +303,38 @@ const statusLabel = computed(() => {
         >{{ Math.round(zoom * 100) }}</button>
       </div>
 
-      <span
+      <!-- Loading bar + cancel button overlay. The animated bar at the
+           top is purely cosmetic; the centred badge lets the operator
+           bail on a long-running /preview call instead of waiting. -->
+      <div
         v-if="edit?.previewLoading.value"
         class="pointer-events-none absolute inset-x-0 top-0 h-0.5 animate-pulse bg-emerald-400"
       />
+      <button
+        v-if="edit?.previewLoading.value"
+        type="button"
+        class="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-slate-900/90 px-3 py-1 text-[11px] text-slate-100 shadow-lg hover:bg-slate-800"
+        :title="t('editPreview.cancelPreview')"
+        @click="edit?.cancelPreview()"
+      >
+        ⏸ {{ t('editPreview.cancelPreview') }}
+      </button>
+
+      <!-- Failed preview: surface error + one-click retry instead of
+           leaving the operator wondering why the canvas is stale. -->
+      <div
+        v-if="edit?.previewError.value && !edit?.previewLoading.value"
+        class="absolute left-1/2 top-3 -translate-x-1/2 flex max-w-md items-center gap-2 rounded-md border border-red-700 bg-red-950/90 px-3 py-1.5 text-[11px] text-red-200 shadow-lg"
+      >
+        <span class="truncate">{{ edit?.previewError.value }}</span>
+        <button
+          type="button"
+          class="shrink-0 rounded bg-red-900 px-2 py-0.5 text-[10px] text-red-100 hover:bg-red-800"
+          @click="edit?.retryPreview()"
+        >
+          ↻ {{ t('editPreview.retry') }}
+        </button>
+      </div>
     </div>
 
     <!-- Palette swatches from the live /preview, when available. -->

@@ -31,9 +31,21 @@ const DEFAULT_SPEED_MM_S = 60
 // machine workspace. Multiple placements live side-by-side on the plan
 // (different files OR multiple instances of the same file). The modal
 // edits one at a time — ``selectedPlacementId``.
+// One pass within a multi-pass layer override.
+export interface LayerPass {
+  algorithm: string
+  algorithm_options: Record<string, unknown>
+}
+
 interface LayerAlgorithm {
   algorithm: string
   algorithm_options: Record<string, unknown>
+  // Optional multi-pass stack. When present and non-empty, the backend
+  // renders this layer as the ordered sequence of passes (each pass is
+  // an algorithm + options pair drawn against the same colour mask),
+  // letting a single ink show several visual treatments at once. Empty
+  // / missing → legacy single-algorithm behaviour.
+  passes?: LayerPass[]
 }
 
 // A variant is a named snapshot of the editor's per-layer choices for a
@@ -327,6 +339,38 @@ export const useJobStore = defineStore('job', () => {
     rerenderTimer = setTimeout(triggerRerender, 250)
   }
 
+  // Apply a multi-pass stack to one layer: ``passes`` is the ordered list
+  // of algorithms (with options) drawn against the same colour mask. The
+  // first pass plots first, the last on top — order is preserved in the
+  // toolpath. An empty list clears the override (same as clearLayerAlgorithm).
+  async function applyLayerPasses(layerId: string, passes: LayerPass[]): Promise<void> {
+    const p = selectedPlacement.value
+    if (!p) return
+    if (!passes.length) {
+      await clearLayerAlgorithm(layerId)
+      return
+    }
+    // Mirror the first pass into the legacy algorithm/options fields so
+    // existing UI that reads ``layer_algorithms[id].algorithm`` (e.g.
+    // PrintStylePicker highlighting) still surfaces the dominant pass.
+    const first = passes[0]!
+    patchSelected({
+      layer_algorithms: {
+        ...p.layer_algorithms,
+        [layerId]: {
+          algorithm: first.algorithm,
+          algorithm_options: { ...first.algorithm_options },
+          passes: passes.map((pass) => ({
+            algorithm: pass.algorithm,
+            algorithm_options: { ...pass.algorithm_options },
+          })),
+        },
+      },
+    })
+    if (rerenderTimer) clearTimeout(rerenderTimer)
+    rerenderTimer = setTimeout(triggerRerender, 250)
+  }
+
   async function triggerRerender(): Promise<void> {
     const p = selectedPlacement.value
     if (!p || !p.job_id || !p.svg) return
@@ -335,11 +379,25 @@ export const useJobStore = defineStore('job', () => {
     rerenderController = controller
     try {
       const layersPayload = Object.entries(p.layer_algorithms).map(
-        ([layer_id, spec]) => ({
-          layer_id,
-          algorithm: spec.algorithm,
-          algorithm_options: spec.algorithm_options,
-        }),
+        ([layer_id, spec]) => {
+          // Multi-pass stack: send ``passes`` so the backend stacks the
+          // algorithms; the legacy single-algorithm fields stay populated
+          // for back-compat but the backend prefers ``passes`` when set.
+          if (spec.passes && spec.passes.length) {
+            return {
+              layer_id,
+              passes: spec.passes.map((p) => ({
+                algorithm: p.algorithm,
+                algorithm_options: p.algorithm_options,
+              })),
+            }
+          }
+          return {
+            layer_id,
+            algorithm: spec.algorithm,
+            algorithm_options: spec.algorithm_options,
+          }
+        },
       )
       const result = await rerenderJob(p.job_id, layersPayload, controller.signal)
       if (controller.signal.aborted) return
@@ -1017,6 +1075,7 @@ export const useJobStore = defineStore('job', () => {
     setDrawing,
     resetDrawing,
     applyLayerAlgorithm,
+    applyLayerPasses,
     clearLayerAlgorithm,
     clearJob,
     totalLengthMm,

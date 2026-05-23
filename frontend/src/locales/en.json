@@ -81,7 +81,9 @@
     "palette": "Palette",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "resetView": "Reset view (click) · scroll to zoom · drag to pan"
+    "resetView": "Reset view (click) · scroll to zoom · drag to pan",
+    "cancelPreview": "Cancel preview",
+    "retry": "Retry"
   },
   "planRail": {
     "title": "Plan",
@@ -251,7 +253,28 @@
     "rerenderFailed": "Layer re-render failed.",
     "rerenderUnavailable": "Re-rendering is unavailable; re-upload the file to apply the new style.",
     "generateMovedHint": "Generate G-code lives in the Plan header — close this dialog and click the green button on the top-right of the preview.",
-    "algoSettings": "{algorithm} settings"
+    "algoSettings": "{algorithm} settings",
+    "expandAll": "Expand all",
+    "expandAllHint": "Open every layer card",
+    "collapseAll": "Collapse all",
+    "collapseAllHint": "Reduce every layer card to its header",
+    "summary": "Total"
+  },
+  "passes": {
+    "title": "Passes",
+    "enable": "Multi-pass",
+    "enableHint": "Stack several algorithms on the same colour (e.g. outline + fill).",
+    "add": "Add pass",
+    "remove": "Remove pass",
+    "moveUp": "Move pass up",
+    "moveDown": "Move pass down",
+    "clear": "Single style",
+    "applyPreset": "Apply preset",
+    "emptyHint": "Add a pass to draw this colour with several stacked algorithms.",
+    "badgeHint": "Multi-pass — this colour is drawn with several stacked algorithms.",
+    "presetOutlineFill": "Outline + fill",
+    "presetCrossedHatch": "Crossed hatch",
+    "presetContourStipple": "Contours + stipple"
   },
   "confirm": {
     "cancel": "Cancel",

@@ -7,6 +7,7 @@ import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import BlockMapCard from './edit/BlockMapCard.vue'
 import EditPreviewPane from './edit/EditPreviewPane.vue'
+import EditTabs, { type EditTabId } from './edit/EditTabs.vue'
 import VariantsCard from './edit/VariantsCard.vue'
 import SourceSection from './SourceSection.vue'
 import LayersSection from './LayersSection.vue'
@@ -21,8 +22,50 @@ const headerTitle = computed(() => {
   return name ? `${t('editModal.title')} — ${name}` : t('editModal.title')
 })
 
+// ============================== TABS ==============================
+// Right pane is split into Source / Layers / Variants tabs so the long
+// scroll is broken into focused contexts. Tab choice persists across
+// reopens via localStorage. Auto-jumps to "layers" once a placement
+// actually has layers so the operator lands on the per-colour controls
+// instead of the (often blank) Source tab.
+const TAB_KEY = 'omniplot.editModal.activeTab'
+const activeTab = ref<EditTabId>(loadInitialTab())
+
+function loadInitialTab(): EditTabId {
+  try {
+    const stored = localStorage.getItem(TAB_KEY)
+    if (stored === 'source' || stored === 'layers' || stored === 'variants') return stored
+  } catch {
+    // localStorage unavailable
+  }
+  return 'source'
+}
+
+watch(activeTab, (tab) => {
+  try { localStorage.setItem(TAB_KEY, tab) } catch { /* ignore */ }
+})
+
+const layerCount = computed(() => store.layers.length)
+const variantCount = computed(() => store.selectedPlacement?.variants.length ?? 0)
+
+// Number keys 1-3 jump to tabs; Escape closes (handled below). Avoid
+// hijacking the shortcuts while the user is typing into an input.
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
+}
+
 function onKey(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && editModalOpen.value) ui.closeEditModal()
+  if (!editModalOpen.value) return
+  if (event.key === 'Escape') {
+    ui.closeEditModal()
+    return
+  }
+  if (isTypingTarget(event.target)) return
+  if (event.key === '1') { activeTab.value = 'source'; event.preventDefault() }
+  else if (event.key === '2') { activeTab.value = 'layers'; event.preventDefault() }
+  else if (event.key === '3') { activeTab.value = 'variants'; event.preventDefault() }
 }
 
 // ============================== RESIZABLE SPLIT ==============================
@@ -163,16 +206,29 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <span class="text-[10px] leading-none text-slate-500 group-hover:text-white">⋮</span>
         </div>
         <div
-          class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
+          class="flex min-h-0 flex-1 flex-col"
           :style="{ minWidth: SETTINGS_MIN_PX + 'px' }"
         >
-          <SourceSection />
-          <BlockMapCard />
-          <!-- Layers come right after the source/palette so the per-
-               colour layer assignments and plotting-style picker are the
-               next thing the user reaches once a conversion ran. -->
-          <LayersSection />
-          <VariantsCard />
+          <EditTabs
+            v-model="activeTab"
+            :layer-count="layerCount"
+            :variant-count="variantCount"
+          />
+          <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+            <!-- v-show keeps each tab's component mounted so internal
+                 state (drafts, scroll, dropdown open/closed) isn't lost
+                 when the operator hops between tabs. -->
+            <div v-show="activeTab === 'source'" class="space-y-3">
+              <SourceSection />
+              <BlockMapCard />
+            </div>
+            <div v-show="activeTab === 'layers'" class="space-y-3">
+              <LayersSection />
+            </div>
+            <div v-show="activeTab === 'variants'" class="space-y-3">
+              <VariantsCard />
+            </div>
+          </div>
         </div>
       </main>
     </div>

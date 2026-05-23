@@ -266,6 +266,27 @@ async function runPreview(): Promise<void> {
   }
 }
 
+// Cancellation + retry exposed to the preview pane (via useEditState).
+// Cancel aborts the in-flight controller AND clears any pending debounce,
+// so a long /preview round-trip doesn't keep eating CPU after the user
+// gives up on it.
+function cancelPreview(): void {
+  if (previewTimer) {
+    clearTimeout(previewTimer)
+    previewTimer = null
+  }
+  if (previewController) {
+    previewController.abort()
+    previewController = null
+  }
+  previewLoading.value = false
+}
+
+function retryPreview(): void {
+  previewError.value = null
+  runPreview()
+}
+
 watch(
   [
     selectedFile,
@@ -581,6 +602,7 @@ watch(kind, (v) => { edit.kind.value = v }, { immediate: true })
 watch(() => Number(store.uploadMetadata.page_count ?? 0), (v) => { edit.pageCount.value = v }, { immediate: true })
 watch(() => Number(store.uploadMetadata.page ?? 0), (v) => { edit.currentPage.value = v }, { immediate: true })
 edit.setGoToPage(goToPage)
+edit.setPreviewCallbacks({ cancel: cancelPreview, retry: retryPreview })
 </script>
 
 <template>
