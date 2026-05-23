@@ -191,6 +191,7 @@
     "paths": "tracés",
     "kindText": "Calque texte",
     "kindImage": "Calque image (raster vectorisé)",
+    "emptyHint": "Un calque par couleur apparaîtra ici après un clic sur « Importer & convertir » ci-dessus — choisis un style de tracé et un slot de pen pour chacun.",
     "totalLength": "Longueur totale",
     "estimatedTime": "Durée estimée",
     "optimizeButton": "Optimiser les trajectoires",

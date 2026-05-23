@@ -191,6 +191,7 @@
     "paths": "paths",
     "kindText": "Text layer",
     "kindImage": "Image layer (vectorized raster)",
+    "emptyHint": "One layer per colour will appear here after you click \"Upload & convert\" above — pick a plotting style and a pen slot for each.",
     "totalLength": "Total length",
     "estimatedTime": "Estimated time",
     "optimizeButton": "Optimize toolpaths",

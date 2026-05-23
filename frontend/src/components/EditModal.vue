@@ -168,8 +168,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         >
           <SourceSection />
           <BlockMapCard />
-          <VariantsCard />
+          <!-- Layers come right after the source/palette so the per-
+               colour layer assignments and plotting-style picker are the
+               next thing the user reaches once a conversion ran. -->
           <LayersSection />
+          <VariantsCard />
         </div>
       </main>
     </div>
