@@ -85,7 +85,12 @@
     "pageOf": "Page {current} / {total}",
     "prevPage": "Previous page",
     "nextPage": "Next page",
-    "clear": "Clear"
+    "clear": "Clear",
+    "original": "Original",
+    "preview": "Quick preview",
+    "previewing": "Computing…",
+    "previewHint": "Pick an algorithm to see the preview.",
+    "cached": "cached"
   },
   "layers": {
     "title": "Layers",
@@ -111,7 +116,12 @@
     "travelReduction": "Travel reduction",
     "fillHint": "Optimization converts filled shapes to outline strokes (pens draw lines, not fills).",
     "optimizeFailed": "Optimization failed.",
-    "generateFailed": "G-code generation failed."
+    "generateFailed": "G-code generation failed.",
+    "colorLabel": "Colour name",
+    "pauseBefore": "Pause before",
+    "pauseAuto": "auto",
+    "pauseAlways": "always",
+    "pauseNever": "never"
   },
   "confirm": {
     "cancel": "Cancel",
@@ -148,7 +158,14 @@
     "sizeHint": "Saved on the machine profile. Existing drawings will be refit.",
     "saved": "Sheet size updated.",
     "invalidSize": "Invalid dimensions.",
-    "swap": "Swap W/H"
+    "swap": "Swap W/H",
+    "workArea": "Work area",
+    "workAreaHint": "(machine max — edit in Settings › Profile)",
+    "offsetX": "Offset X (mm)",
+    "offsetY": "Offset Y (mm)",
+    "centre": "Centre",
+    "useFullWorkspace": "Full workspace",
+    "exceedsWarning": "Sheet exceeds the machine work area."
   },
   "convert": {
     "options": "Conversion options",

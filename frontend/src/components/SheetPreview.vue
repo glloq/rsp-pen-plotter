@@ -13,13 +13,38 @@ const data = computed(() => {
   if (!profile || store.layers.length === 0) return null
   const bounds = unionBounds(store.layers.map((l) => l.bbox))
   if (!bounds) return null
-  const placement = computePlacement(bounds, profile, store.scaleMode, store.marginMm)
   const ws = profile.workspace
   const wsW = ws.x_max - ws.x_min
   const wsH = ws.y_max - ws.y_min
   if (wsW <= 0 || wsH <= 0) return null
+  // The sheet is the actual paper; the drawing is centred inside the sheet,
+  // not the workspace. Default sheet = full workspace (a fresh profile).
+  const sheet = store.currentSheet ?? {
+    width: wsW,
+    height: wsH,
+    offsetX: 0,
+    offsetY: 0,
+  }
+  const sheetRect = {
+    x_min: ws.x_min + sheet.offsetX,
+    y_min: ws.y_min + sheet.offsetY,
+    x_max: ws.x_min + sheet.offsetX + sheet.width,
+    y_max: ws.y_min + sheet.offsetY + sheet.height,
+  }
+  const placement = computePlacement(
+    bounds,
+    profile,
+    store.scaleMode,
+    store.marginMm,
+    sheetRect,
+  )
   const pad = Math.max(wsW, wsH) * 0.04
-  return { profile, placement, ws, wsW, wsH, pad }
+  const sheetExceedsWorkspace
+    = sheet.offsetX < -0.01
+    || sheet.offsetY < -0.01
+    || sheet.offsetX + sheet.width > wsW + 0.01
+    || sheet.offsetY + sheet.height > wsH + 0.01
+  return { profile, placement, ws, wsW, wsH, pad, sheet, sheetRect, sheetExceedsWorkspace }
 })
 
 const scaleLabel = computed(() => {
@@ -106,7 +131,8 @@ onBeforeUnmount(() => {
     <div class="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs">
       <h2 class="uppercase tracking-wide text-slate-400">{{ t('sheet.title') }}</h2>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-slate-300">
-        <span>{{ t('sheet.sheet') }}: {{ data.wsW.toFixed(0) }}×{{ data.wsH.toFixed(0) }} mm</span>
+        <span>{{ t('sheet.workArea') }}: {{ data.wsW.toFixed(0) }}×{{ data.wsH.toFixed(0) }} mm</span>
+        <span>{{ t('sheet.sheet') }}: {{ data.sheet.width.toFixed(0) }}×{{ data.sheet.height.toFixed(0) }} mm</span>
         <span>
           {{ t('sheet.drawing') }}:
           {{ data.placement.widthMm.toFixed(0) }}×{{ data.placement.heightMm.toFixed(0) }} mm
@@ -144,22 +170,38 @@ onBeforeUnmount(() => {
           role="img"
           :aria-label="t('sheet.title')"
         >
+          <!-- Workspace = machine's physical drawable envelope. Greyed out so
+               the user can see how much room they're leaving on the bed. -->
           <rect
             :x="data.ws.x_min"
             :y="data.ws.y_min"
             :width="data.wsW"
             :height="data.wsH"
+            fill="#475569"
+            fill-opacity="0.15"
+            stroke="#64748b"
+            stroke-width="1"
+            stroke-dasharray="6 4"
+            vector-effect="non-scaling-stroke"
+          />
+          <!-- Sheet = actual paper loaded. White, with a red outline if it
+               exceeds the workspace (impossible to plot). -->
+          <rect
+            :x="data.sheetRect.x_min"
+            :y="data.sheetRect.y_min"
+            :width="Math.max(data.sheet.width, 0)"
+            :height="Math.max(data.sheet.height, 0)"
             fill="#ffffff"
-            stroke="#475569"
+            :stroke="data.sheetExceedsWorkspace ? '#dc2626' : '#475569'"
             stroke-width="1"
             vector-effect="non-scaling-stroke"
           />
           <rect
             v-if="store.scaleMode === 'fit' && store.marginMm > 0"
-            :x="data.ws.x_min + store.marginMm"
-            :y="data.ws.y_min + store.marginMm"
-            :width="Math.max(data.wsW - 2 * store.marginMm, 0)"
-            :height="Math.max(data.wsH - 2 * store.marginMm, 0)"
+            :x="data.sheetRect.x_min + store.marginMm"
+            :y="data.sheetRect.y_min + store.marginMm"
+            :width="Math.max(data.sheet.width - 2 * store.marginMm, 0)"
+            :height="Math.max(data.sheet.height - 2 * store.marginMm, 0)"
             fill="none"
             stroke="#94a3b8"
             stroke-width="1"
@@ -201,6 +243,9 @@ onBeforeUnmount(() => {
 
     <p v-if="data.placement.exceeds" class="mt-2 text-xs text-red-400">
       {{ t('sheet.outOfBounds') }}
+    </p>
+    <p v-if="data.sheetExceedsWorkspace" class="mt-2 text-xs text-amber-300">
+      ⚠ {{ t('sheet.exceedsWarning') }}
     </p>
   </div>
 </template>

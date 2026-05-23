@@ -1,8 +1,15 @@
 <script setup lang="ts">
+import DOMPurify from 'dompurify'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { getAlgorithms, getFonts, type AlgorithmInfo } from '../api/client'
+import {
+  getAlgorithms,
+  getFonts,
+  previewBitmap,
+  type AlgorithmInfo,
+  type PreviewResponse,
+} from '../api/client'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 
@@ -92,6 +99,87 @@ const algoDescriptions: Record<string, { label: string; hint: string }> = {
   halftone: { label: 'convert.algoHalftone', hint: 'convert.algoHalftoneHint' },
   stippling: { label: 'convert.algoStippling', hint: 'convert.algoStipplingHint' },
 }
+
+// Fast preview: hit POST /preview when the user is tweaking params on an
+// image, debounced + cancellable. The result is a tiny rasterised-to-vector
+// SVG shown next to the original thumbnail.
+const previewResult = ref<PreviewResponse | null>(null)
+const previewLoading = ref(false)
+const previewError = ref<string | null>(null)
+let previewController: AbortController | null = null
+let previewTimer: ReturnType<typeof setTimeout> | null = null
+
+const previewSvg = computed(() => {
+  if (!previewResult.value) return ''
+  return DOMPurify.sanitize(previewResult.value.svg, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+  })
+})
+
+function schedulePreview(): void {
+  if (!selectedFile.value || kind.value !== 'bitmap') return
+  if (previewTimer) clearTimeout(previewTimer)
+  previewTimer = setTimeout(runPreview, 500)
+}
+
+async function runPreview(): Promise<void> {
+  if (!selectedFile.value || kind.value !== 'bitmap') return
+  if (previewController) previewController.abort()
+  const controller = new AbortController()
+  previewController = controller
+  previewLoading.value = true
+  previewError.value = null
+  try {
+    const result = await previewBitmap(
+      selectedFile.value,
+      bitmap.value.algorithm,
+      buildOptions(),
+      controller.signal,
+    )
+    // Late response from a superseded request → discard.
+    if (controller.signal.aborted) return
+    previewResult.value = result
+  } catch (err) {
+    // Aborted requests come through as ``CanceledError`` from axios; the
+    // signal check above also covers it, but axios may resolve the abort
+    // path through the catch.
+    if (controller.signal.aborted) return
+    previewError.value = (err as Error).message || t('upload.failed')
+  } finally {
+    if (previewController === controller) {
+      previewController = null
+      previewLoading.value = false
+    }
+  }
+}
+
+// Recompute preview whenever the file or any algorithm-affecting option moves.
+watch(
+  [
+    selectedFile,
+    () => bitmap.value.algorithm,
+    () => bitmap.value.num_colors,
+    () => bitmap.value.drop_background,
+    () => bitmap.value.background_luminance,
+    () => bitmap.value.cell_size_px,
+    () => bitmap.value.density,
+    () => bitmap.value.dot_radius_px,
+    () => bitmap.value.seed,
+  ],
+  () => {
+    if (selectedFile.value && kind.value === 'bitmap') {
+      schedulePreview()
+    } else {
+      previewResult.value = null
+      previewError.value = null
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  if (previewTimer) clearTimeout(previewTimer)
+  if (previewController) previewController.abort()
+})
 
 onMounted(async () => {
   try {
@@ -207,12 +295,49 @@ function openPicker(): void {
       @drop.prevent="onDrop"
     >
       <div v-if="selectedFile" class="space-y-2">
-        <img
-          v-if="previewUrl"
-          :src="previewUrl"
-          :alt="selectedFile.name"
-          class="mx-auto max-h-32 rounded border border-slate-700 bg-slate-800 object-contain"
-        />
+        <div v-if="previewUrl" class="grid grid-cols-2 gap-2">
+          <div class="space-y-1">
+            <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('upload.original') }}</p>
+            <img
+              :src="previewUrl"
+              :alt="selectedFile.name"
+              class="mx-auto max-h-32 rounded border border-slate-700 bg-slate-800 object-contain"
+            />
+          </div>
+          <div class="space-y-1">
+            <p class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
+              <span>{{ t('upload.preview') }}</span>
+              <span v-if="previewLoading" class="text-slate-400">{{ t('upload.previewing') }}</span>
+              <span v-else-if="previewResult" class="text-slate-400">
+                {{ previewResult.elapsed_ms }} ms{{ previewResult.cached ? ' · ' + t('upload.cached') : '' }}
+              </span>
+            </p>
+            <div
+              class="mx-auto flex h-32 items-center justify-center rounded border border-slate-700 bg-white"
+            >
+              <div
+                v-if="previewSvg"
+                class="h-full w-full p-1 [&_svg]:h-full [&_svg]:w-full"
+                v-html="previewSvg"
+              />
+              <p v-else-if="previewError" class="px-2 text-center text-[10px] text-red-400">
+                {{ previewError }}
+              </p>
+              <p v-else class="text-[10px] text-slate-400">
+                {{ previewLoading ? t('upload.previewing') : t('upload.previewHint') }}
+              </p>
+            </div>
+            <div v-if="previewResult?.palette.length" class="flex flex-wrap gap-1">
+              <span
+                v-for="entry in previewResult.palette"
+                :key="entry.color"
+                class="inline-block h-3 w-3 rounded border border-slate-700"
+                :style="{ backgroundColor: entry.color }"
+                :title="entry.color"
+              />
+            </div>
+          </div>
+        </div>
         <pre
           v-else-if="kind === 'typography' && textPreview"
           class="max-h-24 overflow-hidden rounded border border-slate-700 bg-slate-900 px-2 py-1 text-left text-[10px] leading-snug text-slate-300 whitespace-pre-wrap"

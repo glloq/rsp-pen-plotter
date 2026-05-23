@@ -85,7 +85,12 @@
     "pageOf": "Page {current} / {total}",
     "prevPage": "Page précédente",
     "nextPage": "Page suivante",
-    "clear": "Retirer"
+    "clear": "Retirer",
+    "original": "Original",
+    "preview": "Aperçu rapide",
+    "previewing": "Calcul…",
+    "previewHint": "Choisissez un algorithme pour voir l'aperçu.",
+    "cached": "cache"
   },
   "layers": {
     "title": "Calques",
@@ -111,7 +116,12 @@
     "travelReduction": "Réduction du déplacement",
     "fillHint": "L'optimisation convertit les formes pleines en contours (un stylo trace des lignes, pas des remplissages).",
     "optimizeFailed": "Échec de l'optimisation.",
-    "generateFailed": "Échec de la génération du G-code."
+    "generateFailed": "Échec de la génération du G-code.",
+    "colorLabel": "Nom de la couleur",
+    "pauseBefore": "Pause avant",
+    "pauseAuto": "auto",
+    "pauseAlways": "toujours",
+    "pauseNever": "jamais"
   },
   "confirm": {
     "cancel": "Annuler",
@@ -148,7 +158,14 @@
     "sizeHint": "Sauvegardé sur le profil machine. Les anciens dessins seront recadrés.",
     "saved": "Taille de feuille mise à jour.",
     "invalidSize": "Dimensions invalides.",
-    "swap": "Permuter L/H"
+    "swap": "Permuter L/H",
+    "workArea": "Zone de travail",
+    "workAreaHint": "(max machine — éditable dans Réglages › Profil)",
+    "offsetX": "Décalage X (mm)",
+    "offsetY": "Décalage Y (mm)",
+    "centre": "Centrer",
+    "useFullWorkspace": "Plein espace",
+    "exceedsWarning": "La feuille dépasse la zone de travail."
   },
   "convert": {
     "options": "Options de conversion",

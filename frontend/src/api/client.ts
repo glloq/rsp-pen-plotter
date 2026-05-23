@@ -187,6 +187,8 @@ export interface BoundingBox {
   y_max: number
 }
 
+export type PausePolicy = 'auto' | 'always' | 'never'
+
 export interface LayerInfo {
   layer_id: string
   source_color: string
@@ -198,6 +200,8 @@ export interface LayerInfo {
   optimize: boolean
   simplify_tolerance_mm: number
   drawing_speed_mm_s: number | null
+  color_label: string | null
+  pause_before: PausePolicy
 }
 
 export interface Job {
@@ -247,6 +251,16 @@ export interface GenerateLayer {
   layer_id: string
   target_pen_slot: number | null
   drawing_speed_mm_s: number | null
+  source_color?: string | null
+  color_label?: string | null
+  pause_before?: PausePolicy
+}
+
+export interface Placement {
+  sheet_width_mm: number
+  sheet_height_mm: number
+  offset_x_mm: number
+  offset_y_mm: number
 }
 
 export interface GenerateResponse {
@@ -260,6 +274,7 @@ export async function generateGcode(
   layers: GenerateLayer[],
   scaleMode: 'fit' | 'actual' = 'fit',
   marginMm = 10,
+  placement?: Placement | null,
 ): Promise<GenerateResponse> {
   const response = await api.post<GenerateResponse>('/generate', {
     svg,
@@ -267,6 +282,7 @@ export async function generateGcode(
     layers,
     scale_mode: scaleMode,
     margin_mm: marginMm,
+    placement: placement ?? null,
   })
   return response.data
 }
@@ -293,6 +309,7 @@ export async function preflightCheck(
   layers: GenerateLayer[],
   scaleMode: 'fit' | 'actual' = 'fit',
   marginMm = 10,
+  placement?: Placement | null,
 ): Promise<PreflightReport> {
   const response = await api.post<PreflightReport>('/preflight', {
     svg,
@@ -300,6 +317,7 @@ export async function preflightCheck(
     layers,
     scale_mode: scaleMode,
     margin_mm: marginMm,
+    placement: placement ?? null,
   })
   return response.data
 }
@@ -450,6 +468,33 @@ export interface SystemVersionResponse {
 
 export async function systemVersion(): Promise<SystemVersionResponse> {
   const response = await api.get<SystemVersionResponse>('/system/version')
+  return response.data
+}
+
+export interface PreviewResponse {
+  svg: string
+  elapsed_ms: number
+  palette: Array<{ color: string; coverage: number }>
+  warnings: string[]
+  cached: boolean
+}
+
+export async function previewBitmap(
+  file: File,
+  algorithm: string,
+  options: Record<string, unknown> | undefined,
+  signal?: AbortSignal,
+): Promise<PreviewResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('algorithm', algorithm)
+  if (options) form.append('options', JSON.stringify(options))
+  const response = await api.post<PreviewResponse>('/preview', form, {
+    signal,
+    // The fast path should answer well under a second on a Pi, but keep a
+    // generous ceiling so slow first-time runs don't surface as errors.
+    timeout: 15_000,
+  })
   return response.data
 }
 

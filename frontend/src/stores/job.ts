@@ -56,12 +56,6 @@ export const useJobStore = defineStore('job', () => {
 
   const scaleMode = ref<'fit' | 'actual'>('fit')
   const marginMm = ref(10)
-  // Drawing offset on the sheet, in mm. (0,0) = upper-left of the workspace.
-  // Used by SheetPreview for placement; backend ignores it for now (drawings
-  // are still emitted at the workspace origin), but it gives the user a
-  // mental model of where the print will land.
-  const offsetXMm = ref(0)
-  const offsetYMm = ref(0)
   // When true, every new layer added by an upload is created with
   // ``optimize: true`` so users get optimized toolpaths by default.
   const autoOptimize = ref(true)
@@ -76,6 +70,81 @@ export const useJobStore = defineStore('job', () => {
   const isMultiColor = computed<boolean>(
     () => (selectedProfile.value?.pen_slot_count ?? 1) > 1,
   )
+
+  // Per-profile sheet placement, persisted in localStorage. The sheet is the
+  // physical paper the operator has loaded; it can be smaller than (and
+  // offset within) the machine workspace. Keyed by profile name so each
+  // machine remembers its last-used paper independently.
+  interface SheetState {
+    width: number
+    height: number
+    offsetX: number
+    offsetY: number
+  }
+  const SHEETS_KEY = 'omniplot.sheets.v1'
+  function readSheets(): Record<string, SheetState> {
+    try {
+      const raw = localStorage.getItem(SHEETS_KEY)
+      if (!raw) return {}
+      const parsed = JSON.parse(raw)
+      return typeof parsed === 'object' && parsed !== null ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+  const sheetByProfile = ref<Record<string, SheetState>>(readSheets())
+  watch(
+    sheetByProfile,
+    (value) => {
+      try {
+        localStorage.setItem(SHEETS_KEY, JSON.stringify(value))
+      } catch {
+        // localStorage may be unavailable (e.g. private mode); failing here
+        // is non-fatal — the in-memory sheet still works for the session.
+      }
+    },
+    { deep: true },
+  )
+
+  // Default sheet = full workspace (until the user picks a paper size).
+  const currentSheet = computed<SheetState | null>(() => {
+    const profile = selectedProfile.value
+    if (!profile) return null
+    const saved = sheetByProfile.value[profile.name]
+    if (saved) return saved
+    return {
+      width: profile.workspace.x_max - profile.workspace.x_min,
+      height: profile.workspace.y_max - profile.workspace.y_min,
+      offsetX: 0,
+      offsetY: 0,
+    }
+  })
+
+  function setSheet(patch: Partial<SheetState>): void {
+    const profile = selectedProfile.value
+    if (!profile) return
+    const previous =
+      sheetByProfile.value[profile.name] ?? {
+        width: profile.workspace.x_max - profile.workspace.x_min,
+        height: profile.workspace.y_max - profile.workspace.y_min,
+        offsetX: 0,
+        offsetY: 0,
+      }
+    sheetByProfile.value = {
+      ...sheetByProfile.value,
+      [profile.name]: { ...previous, ...patch },
+    }
+    preflight.value = null
+  }
+
+  function resetSheet(): void {
+    const profile = selectedProfile.value
+    if (!profile) return
+    const next = { ...sheetByProfile.value }
+    delete next[profile.name]
+    sheetByProfile.value = next
+    preflight.value = null
+  }
 
   // Pen slots assigned to a layer that are out of range or not installed,
   // mirroring the backend magazine check so generation can be gated.
@@ -133,9 +202,9 @@ export const useJobStore = defineStore('job', () => {
     preflight.value = null
   }
 
-  watch([scaleMode, marginMm, selectedProfileName], () => {
+  watch([scaleMode, marginMm, selectedProfileName, sheetByProfile], () => {
     preflight.value = null
-  })
+  }, { deep: true })
 
   async function loadProfiles(): Promise<void> {
     profiles.value = await getProfiles()
@@ -272,6 +341,7 @@ export const useJobStore = defineStore('job', () => {
     error.value = null
     errorScope.value = null
     try {
+      const sheet = currentSheet.value
       preflight.value = await preflightCheck(
         svg.value,
         selectedProfileName.value,
@@ -279,9 +349,20 @@ export const useJobStore = defineStore('job', () => {
           layer_id: layer.layer_id,
           target_pen_slot: layer.target_pen_slot,
           drawing_speed_mm_s: layer.drawing_speed_mm_s,
+          source_color: layer.source_color,
+          color_label: layer.color_label,
+          pause_before: layer.pause_before,
         })),
         scaleMode.value,
         marginMm.value,
+        sheet
+          ? {
+              sheet_width_mm: sheet.width,
+              sheet_height_mm: sheet.height,
+              offset_x_mm: sheet.offsetX,
+              offset_y_mm: sheet.offsetY,
+            }
+          : null,
       )
     } catch (err) {
       preflight.value = null
@@ -298,6 +379,7 @@ export const useJobStore = defineStore('job', () => {
     error.value = null
     errorScope.value = null
     try {
+      const sheet = currentSheet.value
       const result = await generateGcode(
         svg.value,
         selectedProfileName.value,
@@ -305,9 +387,20 @@ export const useJobStore = defineStore('job', () => {
           layer_id: layer.layer_id,
           target_pen_slot: layer.target_pen_slot,
           drawing_speed_mm_s: layer.drawing_speed_mm_s,
+          source_color: layer.source_color,
+          color_label: layer.color_label,
+          pause_before: layer.pause_before,
         })),
         scaleMode.value,
         marginMm.value,
+        sheet
+          ? {
+              sheet_width_mm: sheet.width,
+              sheet_height_mm: sheet.height,
+              offset_x_mm: sheet.offsetX,
+              offset_y_mm: sheet.offsetY,
+            }
+          : null,
       )
       gcode.value = result.gcode
     } catch (err) {
@@ -344,9 +437,10 @@ export const useJobStore = defineStore('job', () => {
     isMultiColor,
     scaleMode,
     marginMm,
-    offsetXMm,
-    offsetYMm,
     autoOptimize,
+    currentSheet,
+    setSheet,
+    resetSheet,
     clearJob,
     totalLengthMm,
     totalDurationSeconds,

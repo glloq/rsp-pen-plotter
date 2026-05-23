@@ -23,6 +23,7 @@ from pen_plotter.api.optimize import router as optimize_router
 from pen_plotter.api.plotter import router as plotter_router
 from pen_plotter.api.preflight import router as preflight_router
 from pen_plotter.api.presets import router as presets_router
+from pen_plotter.api.preview import router as preview_router
 from pen_plotter.api.profiles import router as profiles_router
 from pen_plotter.api.queue import print_queue
 from pen_plotter.api.queue import router as queue_router
@@ -72,6 +73,7 @@ app.include_router(audit_router)
 app.include_router(jobs_router)
 app.include_router(presets_router)
 app.include_router(macros_router)
+app.include_router(preview_router)
 app.include_router(system_router)
 
 

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from pen_plotter.core.ebb import generate_ebb
 from pen_plotter.core.gcode import LayerGeneration, generate_gcode
+from pen_plotter.models import Placement
 from pen_plotter.profiles import get_profile
 
 router = APIRouter()
@@ -20,6 +21,12 @@ class GenerateLayer(BaseModel):
     layer_id: str
     target_pen_slot: int | None = None
     drawing_speed_mm_s: float | None = None
+    # Pause-prompt metadata. ``source_color`` is required for mono-pen colour
+    # changes; ``color_label`` is the operator-friendly name surfaced in the
+    # prompt; ``pause_before`` lets the operator force or skip a pause.
+    source_color: str | None = None
+    color_label: str | None = None
+    pause_before: Literal["auto", "always", "never"] = "auto"
 
 
 class GenerateRequest(BaseModel):
@@ -30,6 +37,7 @@ class GenerateRequest(BaseModel):
     layers: list[GenerateLayer] = Field(default_factory=list)
     scale_mode: Literal["fit", "actual"] = "fit"
     margin_mm: float = 10.0
+    placement: Placement | None = None
 
 
 class GenerateResponse(BaseModel):
@@ -62,6 +70,9 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
             layer_id=layer.layer_id,
             target_pen_slot=layer.target_pen_slot,
             drawing_speed_mm_s=layer.drawing_speed_mm_s,
+            source_color=layer.source_color,
+            color_label=layer.color_label,
+            pause_before=layer.pause_before,
         )
         for layer in request.layers
     ]
@@ -72,6 +83,7 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
             layers=layer_settings,
             scale_mode=request.scale_mode,
             margin_mm=request.margin_mm,
+            placement=request.placement,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

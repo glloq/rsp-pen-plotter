@@ -18,7 +18,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from pen_plotter.core.arcs import ArcTo, fit_arcs
 from pen_plotter.core.layers import labeled_group_fragments
 from pen_plotter.core.toolpath import _doc_from_svg
-from pen_plotter.models import MachineProfile
+from pen_plotter.models import MachineProfile, Placement
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 _env = Environment(
@@ -39,6 +39,13 @@ class LayerGeneration:
     layer_id: str
     target_pen_slot: int | None = None
     drawing_speed_mm_s: float | None = None
+    # Pause-prompt metadata (see ``LayerInfo``). ``source_color`` and
+    # ``color_label`` drive the operator message emitted by
+    # ``pen_color_change.j2`` for mono-pen machines; ``pause_before``
+    # overrides the auto policy on a per-layer basis.
+    source_color: str | None = None
+    color_label: str | None = None
+    pause_before: Literal["auto", "always", "never"] = "auto"
 
 
 @dataclass
@@ -93,30 +100,58 @@ def _bounds_of(layers: list[_Layer]) -> _Bounds:
     return bounds
 
 
-def _make_transform(
-    bounds: _Bounds, profile: MachineProfile, scale_mode: ScaleMode, margin_mm: float
-) -> Callable[[float, float], tuple[float, float]]:
-    """Build a function mapping user-unit points to workspace millimeters."""
+def _drawable_region(
+    profile: MachineProfile, placement: Placement | None
+) -> tuple[float, float, float, float]:
+    """Return ``(x_min, y_min, width, height)`` of the area to fit the drawing in.
+
+    Without ``placement`` we draw across the whole workspace (backwards compat).
+    With ``placement`` we restrict to the sheet rectangle, positioned at the
+    supplied offset inside the workspace.
+    """
     ws = profile.workspace
-    ws_w, ws_h = ws.x_max - ws.x_min, ws.y_max - ws.y_min
+    if placement is None:
+        return ws.x_min, ws.y_min, ws.x_max - ws.x_min, ws.y_max - ws.y_min
+    return (
+        ws.x_min + placement.offset_x_mm,
+        ws.y_min + placement.offset_y_mm,
+        placement.sheet_width_mm,
+        placement.sheet_height_mm,
+    )
+
+
+def _make_transform(
+    bounds: _Bounds,
+    profile: MachineProfile,
+    scale_mode: ScaleMode,
+    margin_mm: float,
+    placement: Placement | None = None,
+) -> Callable[[float, float], tuple[float, float]]:
+    """Build a function mapping user-unit points to workspace millimeters.
+
+    The drawing is centred in the *drawable region* — either the workspace
+    (default) or the sheet rectangle when ``placement`` is supplied.
+    """
+    region_x, region_y, region_w, region_h = _drawable_region(profile, placement)
     bbox_w = max(bounds.x_max - bounds.x_min, 1e-9)
     bbox_h = max(bounds.y_max - bounds.y_min, 1e-9)
 
     if scale_mode == "actual":
         scale = 1.0
     else:
-        usable_w = max(ws_w - 2 * margin_mm, 1e-9)
-        usable_h = max(ws_h - 2 * margin_mm, 1e-9)
+        usable_w = max(region_w - 2 * margin_mm, 1e-9)
+        usable_h = max(region_h - 2 * margin_mm, 1e-9)
         scale = min(usable_w / bbox_w, usable_h / bbox_h)
 
     bbox_cx = (bounds.x_min + bounds.x_max) / 2
     bbox_cy = (bounds.y_min + bounds.y_max) / 2
-    ws_cx, ws_cy = (ws.x_min + ws.x_max) / 2, (ws.y_min + ws.y_max) / 2
+    region_cx = region_x + region_w / 2
+    region_cy = region_y + region_h / 2
     y_up = profile.origin in ("bottom_left", "center")
 
     def transform(x: float, y: float) -> tuple[float, float]:
-        mx = ws_cx + (x - bbox_cx) * scale
-        my = ws_cy + (y - bbox_cy) * scale * (-1 if y_up else 1)
+        mx = region_cx + (x - bbox_cx) * scale
+        my = region_cy + (y - bbox_cy) * scale * (-1 if y_up else 1)
         return mx, my
 
     return transform
@@ -142,6 +177,18 @@ def _exceeds_workspace(
     )
 
 
+def sheet_exceeds_workspace(profile: MachineProfile, placement: Placement) -> bool:
+    """Whether the sheet rectangle falls outside the workspace bounds."""
+    ws = profile.workspace
+    tol = 0.01
+    return (
+        placement.offset_x_mm < -tol
+        or placement.offset_y_mm < -tol
+        or placement.offset_x_mm + placement.sheet_width_mm > (ws.x_max - ws.x_min) + tol
+        or placement.offset_y_mm + placement.sheet_height_mm > (ws.y_max - ws.y_min) + tol
+    )
+
+
 def generate_gcode(
     svg: str,
     profile: MachineProfile,
@@ -149,6 +196,7 @@ def generate_gcode(
     layers: list[LayerGeneration] | None = None,
     scale_mode: ScaleMode = "fit",
     margin_mm: float = 10.0,
+    placement: Placement | None = None,
 ) -> str:
     """Generate G-code for a pivot SVG targeting a machine profile.
 
@@ -170,7 +218,7 @@ def generate_gcode(
 
     overrides = {item.layer_id: item for item in (layers or [])}
     bounds = _bounds_of(layer_geometry)
-    transform = _make_transform(bounds, profile, scale_mode, margin_mm)
+    transform = _make_transform(bounds, profile, scale_mode, margin_mm, placement)
 
     header_t = _env.get_template("header.j2")
     footer_t = _env.get_template("footer.j2")
@@ -180,25 +228,68 @@ def generate_gcode(
     travel_t = _env.get_template("travel.j2")
     arc_t = _env.get_template("arc.j2")
     tool_change_t = _env.get_template("tool_change.j2")
+    pen_color_change_t = _env.get_template("pen_color_change.j2")
 
     pens = {pen.index: pen for pen in profile.effective_pens()}
+    mono_pen = profile.pen_slot_count <= 1
 
     out: list[str] = [header_t.render(profile=profile)]
+    if placement is not None and sheet_exceeds_workspace(profile, placement):
+        out.append("; WARNING: sheet exceeds the workspace; check sheet size and offset")
     if not bounds.empty and _exceeds_workspace(bounds, transform, profile):
         out.append("; WARNING: drawing exceeds the workspace; coordinates may be out of bounds")
     previous_slot: int | None = None
+    previous_color: str | None = None
 
     if not bounds.empty:
         for layer in layer_geometry:
             setting = overrides.get(layer.label)
             slot = setting.target_pen_slot if setting else None
-            if profile.tool_change_method != "none" and slot is not None and slot != previous_slot:
-                pen = pens.get(slot)
-                if pen is None or not pen.installed:
-                    out.append(f"; WARNING: pen slot {slot} is not installed in the magazine")
-                pen_name = pen.name if pen and pen.name else f"Pen {slot}"
-                out.append(tool_change_t.render(profile=profile, slot=slot, pen_name=pen_name))
+            source_color = setting.source_color if setting else None
+            color_label = setting.color_label if setting else None
+            pause_before = setting.pause_before if setting else "auto"
+
+            slot_changed = slot is not None and slot != previous_slot
+            color_changed = (
+                mono_pen
+                and source_color is not None
+                and source_color != previous_color
+            )
+            # First pose on a mono-pen machine: ask the operator to install the
+            # initial pen before drawing anything. Multi-pen profiles still
+            # rely on the slot-change check above (covered by ``slot_changed``).
+            first_pose = (
+                mono_pen
+                and previous_color is None
+                and previous_slot is None
+                and source_color is not None
+            )
+
+            should_pause = profile.tool_change_method != "none" and pause_before != "never" and (
+                pause_before == "always" or slot_changed or color_changed or first_pose
+            )
+            if should_pause:
+                if slot_changed:
+                    pen = pens.get(slot)  # type: ignore[arg-type]
+                    if pen is None or not pen.installed:
+                        out.append(f"; WARNING: pen slot {slot} is not installed in the magazine")
+                    pen_name = pen.name if pen and pen.name else f"Pen {slot}"
+                    out.append(
+                        tool_change_t.render(profile=profile, slot=slot, pen_name=pen_name)
+                    )
+                else:
+                    # Mono-pen path (or "always"/initial pause without slot): emit
+                    # a colour-themed prompt so the streamer can guide the swap.
+                    color = source_color or "#000000"
+                    label = color_label or color
+                    out.append(
+                        pen_color_change_t.render(profile=profile, color=color, label=label)
+                    )
+
+            if slot is not None:
                 previous_slot = slot
+            if source_color is not None:
+                previous_color = source_color
 
             speed = (setting.drawing_speed_mm_s if setting else None) or profile.drawing_speed_mm_s
             feed = speed * 60.0

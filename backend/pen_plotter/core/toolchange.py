@@ -15,6 +15,27 @@ import re
 from pen_plotter.models import MachineProfile
 
 _CHANGE_RE = re.compile(r"Change to pen slot (\d+) \((.*)\)\s*$")
+# Mono-pen colour-change format emitted by ``pen_color_change.j2``. Kept as a
+# separate regex from ``_CHANGE_RE`` so older G-code in the persisted queue
+# (slot-based prompts) keeps deserialising correctly after the upgrade.
+_COLOR_RE = re.compile(r"Change pen:\s*(.+?)\s*\((#[0-9a-fA-F]{3,8})\)\s*$")
+
+
+def _prompt(comment: str) -> str | None:
+    """Return the operator prompt for a recognised tool-change comment, or None."""
+    match = _CHANGE_RE.search(comment)
+    if match:
+        slot, name = match.group(1), match.group(2)
+        return f"Insert pen slot {slot}: {name}"
+    match = _COLOR_RE.search(comment)
+    if match:
+        label, color = match.group(1), match.group(2)
+        # If the label is identical to the hex (no human label was provided),
+        # show the hex only — avoids "Change pen to #ff0000 (#ff0000)".
+        if label.strip().lower() == color.strip().lower():
+            return f"Change pen to {color}"
+        return f"Change pen to {label} ({color})"
+    return None
 
 
 def guided_pause_points(gcode: str, profile: MachineProfile) -> dict[int, str]:
@@ -42,10 +63,9 @@ def guided_pause_points(gcode: str, profile: MachineProfile) -> dict[int, str]:
         comment = raw.split(";", 1)[1].strip() if ";" in raw else ""
         code = raw.split(";", 1)[0].strip()
         if comment and pending is None:
-            match = _CHANGE_RE.search(comment)
-            if match:
-                slot, name = match.group(1), match.group(2)
-                pending = f"Insert pen slot {slot}: {name}"
+            prompt = _prompt(comment)
+            if prompt is not None:
+                pending = prompt
         if not code:
             continue
         if pending is not None:
