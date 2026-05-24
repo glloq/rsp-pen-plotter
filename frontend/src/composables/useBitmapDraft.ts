@@ -346,6 +346,27 @@ export function buildTypographyOptions(): Record<string, unknown> {
   return { ..._typo.value }
 }
 
+// Predicted number of layers the next /upload will produce. Drives the
+// inline "→ N calques" badges next to the sliders that change it
+// (bands, num_colors, palette length). Keeps the operator from
+// having to commit and then count cards in the Layers tab to
+// understand the cost of a tweak.
+const _expectedLayerCount = computed<number>(() => {
+  const b = _bitmap.value
+  if (_printMode.value === 'monochrome') {
+    if (b.segmentation_method === 'luminance_bands') return b.num_bands
+    if (b.segmentation_method === 'thresholds') {
+      // drop_background removes the lightest band, so N thresholds
+      // produce N rendered layers. Binary mono modes ship a single
+      // threshold → 1 layer.
+      return b.thresholds.length
+    }
+    return 1
+  }
+  if (b.segmentation_method === 'fixed_palette') return b.palette.length
+  return b.num_colors
+})
+
 // ---- Dirty tracking ----
 // Snapshot of "what we last committed" — set by ``markCommitted`` after
 // a successful /upload and by ``rehydrateDraft`` when loading an
@@ -397,6 +418,7 @@ export function useBitmapDraft() {
     committed: _committed,
     isDirty: _isDirty,
     printMode: _printMode,
+    expectedLayerCount: _expectedLayerCount,
     setPrintMode,
     rehydrateDraft: rehydrateDraftAndMark,
     applyPresetOptions,

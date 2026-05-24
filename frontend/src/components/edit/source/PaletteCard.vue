@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import LayerCountBadge from '../shared/LayerCountBadge.vue'
 
 // Palette card: pen-following vs manual mode plus the editable colour
 // list (manual mode). The ``bitmap`` reactive object is passed by
@@ -32,6 +34,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const draft = useBitmapDraft()
 
 function setPaletteSource(follows: boolean): void {
   emit('update:paletteFollowsPens', follows)
@@ -130,7 +133,13 @@ function updatePaletteColour(i: number, value: string): void {
 
       <div class="space-y-1">
         <div class="flex items-center justify-between">
-          <span class="text-slate-400">{{ t('convert.specificColors') }}</span>
+          <span class="inline-flex items-center text-slate-400">
+            {{ t('convert.specificColors') }}
+            <LayerCountBadge
+              v-if="bitmap.segmentation_method === 'fixed_palette' && bitmap.palette.length > 0"
+              :count="draft.expectedLayerCount.value"
+            />
+          </span>
           <button
             type="button"
             class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"

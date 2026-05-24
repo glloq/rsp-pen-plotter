@@ -3,7 +3,9 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SegmentationMethod } from '../../../api/client'
 import DetailPicker from '../shared/DetailPicker.vue'
+import LayerCountBadge from '../shared/LayerCountBadge.vue'
 import { useAccordionPersistence } from '../../../composables/useAccordionPersistence'
+import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 
 // Segmentation card: how the bitmap is split into colour layers
 // (kmeans / luminance_bands / thresholds / fixed_palette) plus the
@@ -35,6 +37,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const draft = useBitmapDraft()
 
 const expanded = useAccordionPersistence('segmentation', true)
 const SEG_METHODS: SegmentationMethod[] = ['kmeans', 'luminance_bands', 'thresholds', 'fixed_palette']
@@ -107,18 +110,27 @@ function updateThreshold(i: number, value: number): void {
       <DetailPicker v-model="detailValue" />
 
       <label v-if="bitmap.segmentation_method === 'kmeans'" class="block text-slate-400">
-        {{ t('convert.numColors') }}
+        <span class="inline-flex items-center">
+          {{ t('convert.numColors') }}
+          <LayerCountBadge :count="draft.expectedLayerCount.value" />
+        </span>
         <input v-model.number="bitmap.num_colors" type="number" min="1" max="32" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
       </label>
 
       <label v-else-if="bitmap.segmentation_method === 'luminance_bands'" class="block text-slate-400">
-        {{ t('convert.numBands') }}
+        <span class="inline-flex items-center">
+          {{ t('convert.numBands') }}
+          <LayerCountBadge :count="draft.expectedLayerCount.value" />
+        </span>
         <input v-model.number="bitmap.num_bands" type="number" min="2" max="16" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
       </label>
 
       <div v-else-if="bitmap.segmentation_method === 'thresholds'" class="space-y-1">
         <div class="flex items-center justify-between">
-          <span class="text-slate-400">{{ t('convert.thresholds') }}</span>
+          <span class="inline-flex items-center text-slate-400">
+            {{ t('convert.thresholds') }}
+            <LayerCountBadge :count="draft.expectedLayerCount.value" />
+          </span>
           <button
             type="button"
             class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"

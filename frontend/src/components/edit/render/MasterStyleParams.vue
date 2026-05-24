@@ -5,6 +5,8 @@ import {
   resolveMasterStyle,
   type SegmentationMethod,
 } from '../../../data/printRegistry'
+import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import LayerCountBadge from '../shared/LayerCountBadge.vue'
 
 // Per-style knobs exposed by the active master style. Two paths:
 //   - shaded styles (luminance_bands)   → bands slider (2..6)
@@ -28,6 +30,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const draft = useBitmapDraft()
 
 const style = computed(() => resolveMasterStyle(props.styleId))
 const usesBands = computed(
@@ -47,6 +50,7 @@ const thresholdValue = computed({
     <div class="flex items-center justify-between">
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
         {{ t('mono.shades') }}
+        <LayerCountBadge :count="draft.expectedLayerCount.value" />
       </p>
       <span class="font-mono text-[11px] text-slate-300">{{ bitmap.num_bands }}</span>
     </div>
@@ -65,6 +69,7 @@ const thresholdValue = computed({
     <div class="flex items-center justify-between">
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
         {{ t('mono.threshold') }}
+        <LayerCountBadge :count="draft.expectedLayerCount.value" />
       </p>
       <span class="font-mono text-[11px] text-slate-300">{{ thresholdValue.toFixed(2) }}</span>
     </div>

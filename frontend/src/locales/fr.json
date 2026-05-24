@@ -343,7 +343,8 @@
     "expandAllHint": "Déplier toutes les cartes calque",
     "collapseAll": "Tout replier",
     "collapseAllHint": "Réduire chaque carte calque à son en-tête",
-    "summary": "Total"
+    "summary": "Total",
+    "expectedHint": "Nombre de calques que cette image produira au moment d'Appliquer"
   },
   "passes": {
     "title": "Passes",

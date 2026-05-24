@@ -1,16 +1,30 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFileManager } from '../../composables/useFileManager'
+import { useBitmapDraft } from '../../composables/useBitmapDraft'
 import { useJobStore } from '../../stores/job'
 
 // Sticky bottom bar with the apply / upload button + preview-error /
 // multipass-reupload warnings. Lives outside the tabs so the operator
-// can apply changes from any tab — they're rarely back on the Source
-// tab when the conversion settings they tuned live in Colors / Render.
+// can apply changes from any tab — they're rarely back on the Colors
+// tab when the conversion settings they tuned live in Render.
+//
+// The Apply button also surfaces the expected layer count so the
+// operator knows the cost of their changes before committing.
 
 const { t } = useI18n()
 const fm = useFileManager(t)
+const draft = useBitmapDraft()
 const store = useJobStore()
+
+// Only show the layer-count hint on the button when we're about to
+// produce something (a bitmap source the operator hasn't applied yet)
+// — adding it to the "Loading source file…" or "Converting…" states
+// would be noise.
+const showExpectedCount = computed(() =>
+  fm.showsBitmapForm.value && !store.loading && Boolean(fm.selectedFile.value),
+)
 </script>
 
 <template>
@@ -44,6 +58,10 @@ const store = useJobStore()
           : store.job
             ? t('source.applyChanges')
             : t('upload.choose') }}
+      <span
+        v-if="showExpectedCount"
+        class="ml-2 inline-block rounded-sm bg-emerald-800/80 px-1.5 py-px font-mono text-[10px] text-emerald-100"
+      >→ {{ draft.expectedLayerCount.value }} {{ t('upload.layers', draft.expectedLayerCount.value) }}</span>
     </button>
 
     <p
