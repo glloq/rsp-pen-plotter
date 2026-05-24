@@ -90,9 +90,8 @@
     "done": "Done",
     "tabSource": "Source",
     "tabImage": "Image",
-    "tabCurves": "Curves",
-    "tabColors": "Colors",
-    "tabRender": "Render",
+    "tabSvg": "SVG",
+    "tabStyle": "Style",
     "tabLayers": "Layers",
     "tabOutput": "Layout & output",
     "tabShortcut": "Press {key} to jump to this tab",
@@ -110,8 +109,8 @@
     "noSource": "Attach a file on the Source tab to choose colour settings.",
     "notApplicable": "This file type doesn't use colour segmentation."
   },
-  "curves": {
-    "title": "Path simplification",
+  "svg": {
+    "pathTitle": "Path treatments",
     "centerline": "Line-tracing mode (centerline)",
     "centerlineDesc": "Trace the medial skeleton instead of region outlines. Best for schematics and line art. Thick filled areas collapse to a single line at the centre, which is intentional.",
     "simplify": "Douglas-Peucker tolerance",
@@ -120,7 +119,10 @@
     "curveFitDesc": "Convert simplified polylines into cubic Bézier paths for smoother plotter motion.",
     "curveFitTodo": "Coming soon",
     "noSource": "Attach a file first.",
-    "notApplicable": "This file type doesn't use curve simplification."
+    "notApplicable": "This file type doesn't use SVG conversion controls."
+  },
+  "style": {
+    "notApplicable": "This file type doesn't use the style controls."
   },
   "preprocess": {
     "intro": "Prepare the source image before it's segmented into colour layers.",

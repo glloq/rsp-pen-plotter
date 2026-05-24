@@ -13,9 +13,8 @@ import VariantsBar from './edit/VariantsBar.vue'
 import UploadFooter from './edit/UploadFooter.vue'
 import EmptyPlacementDropzone from './edit/EmptyPlacementDropzone.vue'
 import ImageTab from './edit/tabs/ImageTab.vue'
-import CurvesTab from './edit/tabs/CurvesTab.vue'
-import ColorsTab from './edit/tabs/ColorsTab.vue'
-import RenderTab from './edit/tabs/RenderTab.vue'
+import SvgTab from './edit/tabs/SvgTab.vue'
+import StyleTab from './edit/tabs/StyleTab.vue'
 import LayersTab from './edit/tabs/LayersTab.vue'
 
 const { t } = useI18n()
@@ -55,15 +54,14 @@ const activeTab = ref<EditTabId>(loadInitialTab())
 function loadInitialTab(): EditTabId {
   try {
     const stored = localStorage.getItem(TAB_KEY)
-    if (
-      stored === 'image'
-      || stored === 'curves'
-      || stored === 'colors'
-      || stored === 'render'
-      || stored === 'layers'
-    ) return stored
-    // Legacy ids ('source' and 'variants') from earlier iterations
-    // fall back to 'image' — the new first step of the workflow.
+    if (stored === 'image' || stored === 'svg' || stored === 'style' || stored === 'layers') {
+      return stored
+    }
+    // Legacy ids from earlier iterations migrate forward: the SVG tab
+    // absorbed the Curves tab; the Style tab absorbed Colors + Render.
+    if (stored === 'curves') return 'svg'
+    if (stored === 'colors' || stored === 'render') return 'style'
+    // Legacy 'source' / 'variants' fall back to 'image'.
   } catch {
     // localStorage unavailable
   }
@@ -106,10 +104,9 @@ function onKey(event: KeyboardEvent): void {
   }
   if (isTypingTarget(event.target)) return
   if (event.key === '1') { activeTab.value = 'image'; event.preventDefault() }
-  else if (event.key === '2') { activeTab.value = 'curves'; event.preventDefault() }
-  else if (event.key === '3') { activeTab.value = 'colors'; event.preventDefault() }
-  else if (event.key === '4') { activeTab.value = 'render'; event.preventDefault() }
-  else if (event.key === '5') { activeTab.value = 'layers'; event.preventDefault() }
+  else if (event.key === '2') { activeTab.value = 'svg'; event.preventDefault() }
+  else if (event.key === '3') { activeTab.value = 'style'; event.preventDefault() }
+  else if (event.key === '4') { activeTab.value = 'layers'; event.preventDefault() }
 }
 
 // ============================== RESIZABLE SPLIT ==============================
@@ -294,14 +291,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               <div v-show="activeTab === 'image'" class="space-y-3">
                 <ImageTab />
               </div>
-              <div v-show="activeTab === 'curves'" class="space-y-3">
-                <CurvesTab />
+              <div v-show="activeTab === 'svg'" class="space-y-3">
+                <SvgTab />
               </div>
-              <div v-show="activeTab === 'colors'" class="space-y-3">
-                <ColorsTab />
-              </div>
-              <div v-show="activeTab === 'render'" class="space-y-3">
-                <RenderTab />
+              <div v-show="activeTab === 'style'" class="space-y-3">
+                <StyleTab />
               </div>
               <div v-show="activeTab === 'layers'" class="space-y-3">
                 <LayersTab />

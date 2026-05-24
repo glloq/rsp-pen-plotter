@@ -90,9 +90,8 @@
     "done": "Terminer",
     "tabSource": "Source",
     "tabImage": "Image",
-    "tabCurves": "Courbes",
-    "tabColors": "Couleurs",
-    "tabRender": "Rendu",
+    "tabSvg": "SVG",
+    "tabStyle": "Style",
     "tabLayers": "Calques",
     "tabOutput": "Mise en page & sortie",
     "tabShortcut": "Appuyer sur {key} pour ouvrir cet onglet",
@@ -110,8 +109,8 @@
     "noSource": "Attache un fichier dans l'onglet Source pour régler les couleurs.",
     "notApplicable": "Ce type de fichier n'utilise pas de segmentation couleur."
   },
-  "curves": {
-    "title": "Simplification des courbes",
+  "svg": {
+    "pathTitle": "Traitements des tracés",
     "centerline": "Mode trait (centerline)",
     "centerlineDesc": "Trace le squelette médian au lieu des contours fermés. Idéal pour les schémas et dessins au trait. Les zones remplies épaisses sont réduites à un seul trait au centre, c'est voulu.",
     "simplify": "Tolérance Douglas-Peucker",
@@ -120,7 +119,10 @@
     "curveFitDesc": "Convertit les polylignes simplifiées en courbes de Bézier cubiques pour des mouvements de plotter plus doux.",
     "curveFitTodo": "Bientôt",
     "noSource": "Attache d'abord un fichier.",
-    "notApplicable": "Ce type de fichier n'utilise pas la simplification de courbes."
+    "notApplicable": "Ce type de fichier n'utilise pas les contrôles de conversion SVG."
+  },
+  "style": {
+    "notApplicable": "Ce type de fichier n'utilise pas les contrôles de style."
   },
   "preprocess": {
     "intro": "Prépare l'image source avant son découpage en couches de couleur.",
