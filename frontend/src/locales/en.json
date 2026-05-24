@@ -176,7 +176,7 @@
     "penNotInstalled": "Slot not marked as installed",
     "modeLabel": "Render mode",
     "shades": "Number of shades",
-    "shadesHint": "Splits the image into N grey bands; each band carries its own algorithm tuned by the chosen mode.",
+    "shadesHint": "1 = a single layer (default). Raise to slice the image into grey bands; each band becomes its own layer with an algorithm tuned by the chosen mode.",
     "threshold": "Binarisation threshold",
     "thresholdHint": "Pixels darker than this become the rendered region; lighter pixels are dropped.",
     "detail": "SVG detail",
@@ -187,7 +187,7 @@
     "detailUltra": "Ultra",
     "detailHint": "Higher detail rebuilds the SVG from the image at a larger source canvas — finer features survive (small text, table grids, dense schematics), conversion takes longer.",
     "style": "Render style",
-    "layersHint": "Each band becomes one layer — open the Layers tab to fine-tune any band, swap its algorithm, or stack multi-pass effects.",
+    "layersHint": "Mono prints to a single layer by default. The Layers tab is where you fine-tune, swap algorithms, stack multi-pass effects, or overlay extra print styles.",
     "modes": {
       "pencil": "Pencil sketch",
       "pencilDesc": "Layered cross-hatching at varying angles for a hand-drawn feel.",

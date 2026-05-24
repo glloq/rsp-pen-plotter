@@ -156,7 +156,7 @@ export function defaultBitmap(): BitmapDraft {
     preprocess: defaultPreprocess(),
     segmentation_method: 'kmeans',
     num_colors: 4,
-    num_bands: 4,
+    num_bands: 1,
     thresholds: [0.33, 0.66],
     palette: [],
     min_region_pixels: 0,
@@ -376,8 +376,11 @@ export function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
       _bitmap.value.algorithm = style.defaultAlgorithm
       _bitmap.value.algorithm_options = { ...style.defaultAlgorithmOptions }
       if (seg.method === 'luminance_bands') {
-        if (_bitmap.value.num_bands < 2 || _bitmap.value.num_bands > 6) {
-          _bitmap.value.num_bands = seg.default_num_bands ?? 4
+        // Mono defaults to a single layer; the operator opts into
+        // multi-band shading by raising the slider in MasterStyleParams
+        // (or by adding overlays in the Layers tab afterwards).
+        if (_bitmap.value.num_bands < 1 || _bitmap.value.num_bands > 6) {
+          _bitmap.value.num_bands = seg.default_num_bands ?? 1
         }
       } else if (seg.method === 'thresholds') {
         _bitmap.value.thresholds = [seg.default_threshold ?? 0.5]

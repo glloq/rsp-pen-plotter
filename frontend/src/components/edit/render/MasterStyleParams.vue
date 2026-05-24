@@ -57,7 +57,7 @@ const thresholdValue = computed({
     <input
       v-model.number="bitmap.num_bands"
       type="range"
-      min="2"
+      min="1"
       max="6"
       step="1"
       class="w-full accent-emerald-500"

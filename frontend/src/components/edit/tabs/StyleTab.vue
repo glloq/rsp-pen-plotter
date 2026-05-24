@@ -95,8 +95,8 @@ async function onMasterStyleChange(id: string): Promise<void> {
     bitmap.value.algorithm = style.defaultAlgorithm
     bitmap.value.algorithm_options = { ...style.defaultAlgorithmOptions }
     if (seg.method === 'luminance_bands') {
-      if (bitmap.value.num_bands < 2 || bitmap.value.num_bands > 6) {
-        bitmap.value.num_bands = seg.default_num_bands ?? 4
+      if (bitmap.value.num_bands < 1 || bitmap.value.num_bands > 6) {
+        bitmap.value.num_bands = seg.default_num_bands ?? 1
       }
     } else if (seg.method === 'thresholds') {
       bitmap.value.thresholds = [seg.default_threshold ?? 0.5]
