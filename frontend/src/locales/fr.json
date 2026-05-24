@@ -389,7 +389,15 @@
     "useFullWorkspace": "Plein espace",
     "exceedsWarning": "La feuille dépasse la zone de travail.",
     "placements": "{count} placement | {count} placements",
-    "removePlacement": "Retirer du plan (Suppr)"
+    "removePlacement": "Retirer du plan (Suppr)",
+    "rotateLeft": "Rotation −90°",
+    "rotateRight": "Rotation +90°",
+    "flipH": "Miroir horizontal",
+    "flipV": "Miroir vertical",
+    "centerPlacement": "Centrer sur la feuille",
+    "duplicatePlacement": "Dupliquer",
+    "resetTransform": "Réinitialiser rotation et miroir",
+    "resetTransformShort": "Réinit."
   },
   "convert": {
     "options": "Options de conversion",

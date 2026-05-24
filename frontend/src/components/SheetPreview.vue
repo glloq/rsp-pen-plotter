@@ -380,6 +380,63 @@ async function generateAndShow(): Promise<void> {
 
 const placementCount = computed(() => store.placements.filter((p) => p.svg).length)
 
+// Image editing tools act on the currently-selected placement. Buttons
+// are disabled when nothing is selected so the header buttons can't fire
+// store mutations against ``null``.
+const hasSelection = computed(() => store.selectedPlacementId !== null)
+
+function rotateSelected(deltaDeg: number): void {
+  const id = store.selectedPlacementId
+  if (id) store.rotatePlacement(id, deltaDeg)
+}
+function flipSelected(axis: 'h' | 'v'): void {
+  const id = store.selectedPlacementId
+  if (id) store.flipPlacement(id, axis)
+}
+function centerSelected(): void {
+  const id = store.selectedPlacementId
+  if (id) store.centerPlacement(id)
+}
+function duplicateSelected(): void {
+  const id = store.selectedPlacementId
+  if (!id) return
+  const newId = store.duplicatePlacement(id)
+  if (newId) store.selectPlacement(newId)
+}
+function resetSelected(): void {
+  const id = store.selectedPlacementId
+  if (id) store.resetPlacementTransform(id)
+}
+
+// CSS transform applied to the foreignObject content so the previewed
+// drawing matches the placement's rotation / mirror state. The inner
+// box's width / height are swapped for a quarter-turn so the SVG renders
+// at its post-rotation aspect ratio inside the placement footprint;
+// ``transform-origin: 50% 50%`` keeps the rotation centred.
+function placementInnerStyle(rp: RenderedPlacement): Record<string, string> {
+  const p = rp.placement
+  const rotated = p.rotation % 180 !== 0
+  const parts: string[] = ['translate(-50%, -50%)']
+  if (p.rotation) parts.push(`rotate(${p.rotation}deg)`)
+  if (p.flip_h) parts.push('scaleX(-1)')
+  if (p.flip_v) parts.push('scaleY(-1)')
+  // When rotated 90°/270° the inner box is sized to the footprint's
+  // (height, width) so a CSS rotate brings it to the footprint extent.
+  const fpW = rp.footprint.x_max - rp.footprint.x_min
+  const fpH = rp.footprint.y_max - rp.footprint.y_min
+  const innerW = rotated ? fpH : fpW
+  const innerH = rotated ? fpW : fpH
+  return {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    width: `${innerW}px`,
+    height: `${innerH}px`,
+    transform: parts.join(' '),
+    transformOrigin: '50% 50%',
+  }
+}
+
 // Delete / Backspace removes the currently selected placement from the
 // plan when the canvas has focus. We ignore the shortcut while the user
 // is typing in a field or has a modal/drawer open, since those own their
@@ -435,6 +492,104 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           @click="resetView"
         >
           {{ t('sheet.resetView') }}
+        </button>
+      </div>
+
+      <div class="h-5 w-px bg-slate-700 mx-1" />
+
+      <div class="flex items-center gap-1">
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!hasSelection"
+          :title="t('sheet.rotateLeft')"
+          :aria-label="t('sheet.rotateLeft')"
+          @click="rotateSelected(-90)"
+        >
+          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 8a5 5 0 1 0 5-5" />
+            <polyline points="3 3 3 7 7 7" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!hasSelection"
+          :title="t('sheet.rotateRight')"
+          :aria-label="t('sheet.rotateRight')"
+          @click="rotateSelected(90)"
+        >
+          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M13 8a5 5 0 1 1-5-5" />
+            <polyline points="13 3 13 7 9 7" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!hasSelection"
+          :title="t('sheet.flipH')"
+          :aria-label="t('sheet.flipH')"
+          @click="flipSelected('h')"
+        >
+          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="8" y1="2" x2="8" y2="14" stroke-dasharray="1.5 1.5" />
+            <polygon points="3 4 6.5 8 3 12" fill="currentColor" />
+            <polygon points="13 4 9.5 8 13 12" fill="currentColor" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!hasSelection"
+          :title="t('sheet.flipV')"
+          :aria-label="t('sheet.flipV')"
+          @click="flipSelected('v')"
+        >
+          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="2" y1="8" x2="14" y2="8" stroke-dasharray="1.5 1.5" />
+            <polygon points="4 3 8 6.5 12 3" fill="currentColor" />
+            <polygon points="4 13 8 9.5 12 13" fill="currentColor" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!hasSelection"
+          :title="t('sheet.centerPlacement')"
+          :aria-label="t('sheet.centerPlacement')"
+          @click="centerSelected"
+        >
+          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="2" width="12" height="12" />
+            <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
+            <line x1="8" y1="2" x2="8" y2="4" />
+            <line x1="8" y1="12" x2="8" y2="14" />
+            <line x1="2" y1="8" x2="4" y2="8" />
+            <line x1="12" y1="8" x2="14" y2="8" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!hasSelection"
+          :title="t('sheet.duplicatePlacement')"
+          :aria-label="t('sheet.duplicatePlacement')"
+          @click="duplicateSelected"
+        >
+          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="5" y="5" width="9" height="9" />
+            <path d="M2 11V2h9" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!hasSelection"
+          :title="t('sheet.resetTransform')"
+          @click="resetSelected"
+        >
+          {{ t('sheet.resetTransformShort') }}
         </button>
       </div>
 
@@ -589,7 +744,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             >
               <div
                 xmlns="http://www.w3.org/1999/xhtml"
-                class="h-full w-full overflow-hidden pointer-events-none"
+                class="pointer-events-none overflow-hidden"
+                :style="placementInnerStyle(rp)"
                 v-html="rp.cleanSvg"
               />
             </foreignObject>

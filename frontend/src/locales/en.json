@@ -389,7 +389,15 @@
     "useFullWorkspace": "Full workspace",
     "exceedsWarning": "Sheet exceeds the machine work area.",
     "placements": "{count} placement | {count} placements",
-    "removePlacement": "Remove from plan (Del)"
+    "removePlacement": "Remove from plan (Del)",
+    "rotateLeft": "Rotate −90°",
+    "rotateRight": "Rotate +90°",
+    "flipH": "Mirror horizontally",
+    "flipV": "Mirror vertically",
+    "centerPlacement": "Center on sheet",
+    "duplicatePlacement": "Duplicate",
+    "resetTransform": "Reset rotation and mirror",
+    "resetTransformShort": "Reset"
   },
   "convert": {
     "options": "Conversion options",

@@ -26,6 +26,12 @@ export interface PlacementSnapshot {
   y_mm: number
   width_mm: number
   height_mm: number
+  // Optional rigid-body transforms applied to the placement content
+  // before it lands at (x_mm, y_mm). Default 0 / false for legacy
+  // snapshots that pre-date the editing tools.
+  rotation?: number
+  flip_h?: boolean
+  flip_v?: boolean
 }
 
 export interface CompositeResult {
@@ -65,12 +71,7 @@ export function buildComposite(
         layer_id: compositeLayerId(p.id, layer.layer_id),
         draw_order: order++,
         total_length_mm: layer.total_length_mm * inner.scaleAvg,
-        bbox: {
-          x_min: inner.tx + layer.bbox.x_min * inner.sx,
-          y_min: inner.ty + layer.bbox.y_min * inner.sy,
-          x_max: inner.tx + layer.bbox.x_max * inner.sx,
-          y_max: inner.ty + layer.bbox.y_max * inner.sy,
-        },
+        bbox: transformBbox(layer.bbox, inner),
       })
     }
   }
@@ -83,11 +84,49 @@ export function buildComposite(
 
 interface PlacementChunk {
   svgChunk: string
-  sx: number
-  sy: number
-  tx: number
-  ty: number
+  // 2×3 affine matrix [a b c d e f] mapping a point (vx, vy) in the
+  // placement's intrinsic viewBox to workspace mm:
+  //   x_mm = a*vx + c*vy + e
+  //   y_mm = b*vx + d*vy + f
+  // The matrix bakes scale + rotation + flip + translate so the gcode
+  // backend sees the same geometry as the on-screen preview.
+  a: number
+  b: number
+  c: number
+  d: number
+  e: number
+  f: number
   scaleAvg: number
+}
+
+function transformPoint(chunk: PlacementChunk, x: number, y: number): { x: number; y: number } {
+  return {
+    x: chunk.a * x + chunk.c * y + chunk.e,
+    y: chunk.b * x + chunk.d * y + chunk.f,
+  }
+}
+
+function transformBbox(box: BoundingBox, chunk: PlacementChunk): BoundingBox {
+  // Rotation can swap the bbox extremes, so map all four corners and
+  // take the min/max — this stays correct for any combination of
+  // rotation / mirror / scale.
+  const corners = [
+    transformPoint(chunk, box.x_min, box.y_min),
+    transformPoint(chunk, box.x_min, box.y_max),
+    transformPoint(chunk, box.x_max, box.y_min),
+    transformPoint(chunk, box.x_max, box.y_max),
+  ]
+  let x_min = Infinity
+  let y_min = Infinity
+  let x_max = -Infinity
+  let y_max = -Infinity
+  for (const c of corners) {
+    if (c.x < x_min) x_min = c.x
+    if (c.x > x_max) x_max = c.x
+    if (c.y < y_min) y_min = c.y
+    if (c.y > y_max) y_max = c.y
+  }
+  return { x_min, y_min, x_max, y_max }
 }
 
 function extractPlacementChunk(
@@ -115,13 +154,53 @@ function extractPlacementChunk(
   }
   if (vbW <= 0 || vbH <= 0) return null
 
-  const sx = p.width_mm / vbW
-  const sy = p.height_mm / vbH
-  // The placement is positioned in workspace-relative mm. We bake the
-  // workspace origin into the transform so the composite SVG's viewBox
-  // can stay at the machine's (x_min, y_min).
-  const tx = p.x_mm - vbX * sx
-  const ty = p.y_mm - vbY * sy
+  const rotation = ((((p.rotation ?? 0) % 360) + 360) % 360) as 0 | 90 | 180 | 270
+  const flipX = p.flip_h ? -1 : 1
+  const flipY = p.flip_v ? -1 : 1
+  // After a quarter-turn the viewBox's vbH dimension lies along the
+  // workspace X axis (and vbW along Y) — see ``rotatePlacement`` in the
+  // job store, which swaps width_mm/height_mm on rotate. The scale
+  // factors below are applied AFTER the rotation (post-multiplication
+  // in the transform chain), so they're keyed to the post-rotation
+  // dimension that lands on each axis.
+  const rotated = rotation === 90 || rotation === 270
+  const sx = rotated ? p.width_mm / vbH : p.width_mm / vbW
+  const sy = rotated ? p.height_mm / vbW : p.height_mm / vbH
+
+  // Build a 2×3 affine matrix that maps the placement viewBox into
+  // workspace mm, applying the user's rigid-body edits. Conceptually:
+  //
+  //   M = T(x_mm, y_mm)
+  //       · T(width/2, height/2)              // bbox centre → origin
+  //       · Scale(sx, sy)                     // viewBox → bbox extent
+  //       · Rot(theta)
+  //       · Scale(flipX, flipY)
+  //       · T(-vbW/2 - vbX, -vbH/2 - vbY)     // viewBox centre → origin
+  //
+  // We compose it analytically so the resulting transform stays a
+  // single ``matrix(...)`` SVG attribute the backend can parse.
+  const theta = (rotation * Math.PI) / 180
+  const cos = Math.round(Math.cos(theta))
+  const sin = Math.round(Math.sin(theta))
+  // Rotation+flip mapping in viewBox-centred space: combined linear part
+  // is Rot(theta) · diag(flipX, flipY).
+  const r11 = cos * flipX
+  const r12 = -sin * flipY
+  const r21 = sin * flipX
+  const r22 = cos * flipY
+  // Linear part of M (apply scale after the rotation+flip).
+  const a = sx * r11
+  const b = sy * r21
+  const c = sx * r12
+  const d = sy * r22
+  // Translation: image of the viewBox centre under the linear part, then
+  // shifted to the bbox centre in workspace coords.
+  const cxVb = vbX + vbW / 2
+  const cyVb = vbY + vbH / 2
+  const cxBox = p.x_mm + p.width_mm / 2
+  const cyBox = p.y_mm + p.height_mm / 2
+  const e = cxBox - (a * cxVb + c * cyVb)
+  const f = cyBox - (b * cxVb + d * cyVb)
 
   // Serialize each top-level child (rewrite labels on group elements).
   const parts: string[] = []
@@ -139,16 +218,26 @@ function extractPlacementChunk(
     }
   }
 
+  // Emit a simpler ``translate(...) scale(...)`` when there's no
+  // rotation or flip, both so the SVG stays human-readable and so the
+  // existing test suite (which asserts that exact substring) keeps
+  // matching. Otherwise fall through to a full ``matrix(...)``.
+  const isIdentityRigidBody = rotation === 0 && !p.flip_h && !p.flip_v
+  const transformAttr = isIdentityRigidBody
+    ? `translate(${e} ${f}) scale(${sx} ${sy})`
+    : `matrix(${a} ${b} ${c} ${d} ${e} ${f})`
   const wrapper
-    = `<g data-placement-id="${escapeAttr(p.id)}" transform="translate(${tx} ${ty}) scale(${sx} ${sy})">`
+    = `<g data-placement-id="${escapeAttr(p.id)}" transform="${transformAttr}">`
     + parts.join('')
     + '</g>'
   return {
     svgChunk: wrapper,
-    sx,
-    sy,
-    tx,
-    ty,
+    a,
+    b,
+    c,
+    d,
+    e,
+    f,
     scaleAvg: Math.sqrt(Math.abs(sx * sy)) || 1,
   }
 }
