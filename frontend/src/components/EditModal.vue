@@ -3,33 +3,24 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { resetEditState } from '../composables/useEditState'
-import { resetFileManager } from '../composables/useFileManager'
+import { resetFileManager, useFileManager } from '../composables/useFileManager'
 import { useBitmapDraft } from '../composables/useBitmapDraft'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
-import EditFileActions from './edit/EditFileActions.vue'
 import EditPreviewPane from './edit/EditPreviewPane.vue'
 import EditTabs, { type EditTabId } from './edit/EditTabs.vue'
 import VariantsBar from './edit/VariantsBar.vue'
 import UploadFooter from './edit/UploadFooter.vue'
-import SourceTab from './edit/tabs/SourceTab.vue'
+import EmptyPlacementDropzone from './edit/EmptyPlacementDropzone.vue'
 import ColorsTab from './edit/tabs/ColorsTab.vue'
 import RenderTab from './edit/tabs/RenderTab.vue'
 import LayersTab from './edit/tabs/LayersTab.vue'
-
-// Header-level file actions: replaces the bulky file picker that used
-// to live at the top of the Source tab. The modal opens with a file
-// already selected 100% of the time (Edit button on a library entry),
-// so the picker was redundant; "Change file" and "Clear" now live
-// here as a compact dropdown next to the file name.
-const sourceRef = ref<InstanceType<typeof SourceTab> | null>(null)
-function onChangeFile(): void { sourceRef.value?.openPicker() }
-function onClearAll(): void { sourceRef.value?.clearAll() }
 
 const { t } = useI18n()
 const ui = useUiStore()
 const store = useJobStore()
 const draft = useBitmapDraft()
+const fm = useFileManager(t)
 const { editModalOpen } = storeToRefs(ui)
 
 // Guard close: if the operator changed knobs since the last Apply,
@@ -62,17 +53,16 @@ function loadInitialTab(): EditTabId {
   try {
     const stored = localStorage.getItem(TAB_KEY)
     if (
-      stored === 'source'
-      || stored === 'colors'
+      stored === 'colors'
       || stored === 'render'
       || stored === 'layers'
     ) return stored
-    // Legacy persisted 'variants' tab id maps to 'source' now that
-    // variants live in their own bar above the tabs.
+    // Legacy ids ('source' and 'variants') from earlier iterations
+    // fall back to 'colors' — the first step of the new workflow.
   } catch {
     // localStorage unavailable
   }
-  return 'source'
+  return 'colors'
 }
 
 watch(activeTab, (tab) => {
@@ -97,10 +87,9 @@ function onKey(event: KeyboardEvent): void {
     return
   }
   if (isTypingTarget(event.target)) return
-  if (event.key === '1') { activeTab.value = 'source'; event.preventDefault() }
-  else if (event.key === '2') { activeTab.value = 'colors'; event.preventDefault() }
-  else if (event.key === '3') { activeTab.value = 'render'; event.preventDefault() }
-  else if (event.key === '4') { activeTab.value = 'layers'; event.preventDefault() }
+  if (event.key === '1') { activeTab.value = 'colors'; event.preventDefault() }
+  else if (event.key === '2') { activeTab.value = 'render'; event.preventDefault() }
+  else if (event.key === '3') { activeTab.value = 'layers'; event.preventDefault() }
 }
 
 // ============================== RESIZABLE SPLIT ==============================
@@ -220,11 +209,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           {{ headerTitle }}
         </h2>
         <div class="flex shrink-0 items-center gap-1">
-          <EditFileActions
-            :has-file="Boolean(store.lastFile || store.job)"
-            @change="onChangeFile"
-            @clear="onClearAll"
-          />
           <button
             type="button"
             class="rounded bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700"
@@ -269,36 +253,39 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           class="flex min-h-0 flex-1 flex-col"
           :style="{ minWidth: SETTINGS_MIN_PX + 'px' }"
         >
-          <VariantsBar />
-          <EditTabs
-            v-model="activeTab"
-            :layer-count="layerCount"
-            :variant-count="variantCount"
-          />
-          <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-            <!-- v-show keeps each tab's component mounted so internal
-                 state (drafts, scroll, dropdown open/closed) isn't lost
-                 when the operator hops between tabs. The source +
-                 colors + render tabs share the useBitmapDraft /
-                 useFileManager singletons; the layers + variants tabs
-                 use the placement store directly. -->
-            <div v-show="activeTab === 'source'" class="space-y-3">
-              <SourceTab ref="sourceRef" />
+          <!-- Empty-placement edge case: show the dropzone instead of
+               the tabs so the operator can attach the first file
+               without leaving the modal. Tabs reappear automatically
+               once a file is set. -->
+          <template v-if="!fm.hasSource.value">
+            <EmptyPlacementDropzone />
+          </template>
+          <template v-else>
+            <VariantsBar />
+            <EditTabs
+              v-model="activeTab"
+              :layer-count="layerCount"
+              :variant-count="variantCount"
+            />
+            <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+              <!-- v-show keeps each tab's component mounted so internal
+                   state (drafts, scroll, dropdown open/closed) isn't
+                   lost when the operator hops between tabs. -->
+              <div v-show="activeTab === 'colors'" class="space-y-3">
+                <ColorsTab />
+              </div>
+              <div v-show="activeTab === 'render'" class="space-y-3">
+                <RenderTab />
+              </div>
+              <div v-show="activeTab === 'layers'" class="space-y-3">
+                <LayersTab />
+              </div>
             </div>
-            <div v-show="activeTab === 'colors'" class="space-y-3">
-              <ColorsTab />
-            </div>
-            <div v-show="activeTab === 'render'" class="space-y-3">
-              <RenderTab />
-            </div>
-            <div v-show="activeTab === 'layers'" class="space-y-3">
-              <LayersTab />
-            </div>
-          </div>
-          <!-- Sticky upload footer so Apply is reachable from any tab.
-               Mounted once at the modal level (not per-tab) so the
-               apply button is uniform across tabs. -->
-          <UploadFooter v-if="editModalOpen" />
+            <!-- Sticky upload footer so Apply is reachable from any tab.
+                 Mounted once at the modal level (not per-tab) so the
+                 apply button is uniform across tabs. -->
+            <UploadFooter />
+          </template>
         </div>
       </main>
     </div>
