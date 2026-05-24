@@ -1,18 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SegmentationMethod } from '../../../api/client'
-import DetailPicker from '../shared/DetailPicker.vue'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 import { useAccordionPersistence } from '../../../composables/useAccordionPersistence'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 
-// Segmentation card: how the bitmap is split into colour layers
-// (kmeans / luminance_bands / thresholds / fixed_palette) plus the
-// post-processing knobs (min region, merge delta-E, background drop,
-// max dimension). The bitmap reactive object is passed by reference so
-// children mutate fields directly — the parent's deep watcher picks
-// up changes and reschedules /preview.
+// Segmentation method picker + the primary parameter for the chosen
+// method (num_colors / num_bands / thresholds list / palette ref hint).
+// Lives in the SVG tab because the segmentation method is a technical
+// vectorisation decision: it controls how the source raster gets sliced
+// into per-colour masks before any algorithm renders them. The
+// post-processing knobs (drop_background, min_region, merge_delta_e)
+// live in a sibling card on the Style tab — they filter what the
+// segmentation produces and are more naturally a colour-/output-shaping
+// concern than a segmentation choice.
 
 interface BitmapDraft {
   segmentation_method: SegmentationMethod
@@ -20,11 +21,6 @@ interface BitmapDraft {
   num_bands: number
   thresholds: number[]
   palette: string[]
-  min_region_pixels: number
-  merge_delta_e: number
-  max_dimension_px: number
-  drop_background: boolean
-  background_luminance: number
   [key: string]: unknown
 }
 
@@ -41,16 +37,6 @@ const draft = useBitmapDraft()
 
 const expanded = useAccordionPersistence('segmentation', true)
 const SEG_METHODS: SegmentationMethod[] = ['kmeans', 'luminance_bands', 'thresholds', 'fixed_palette']
-
-// Detail tier table + resolver now live in shared/DetailPicker so the
-// vocabulary stays consistent across the Colors and Render tabs.
-
-const detailValue = computed<number>({
-  get: () => props.bitmap.max_dimension_px,
-  set: (v: number) => {
-    props.bitmap.max_dimension_px = v
-  },
-})
 
 function addThreshold(): void {
   props.bitmap.thresholds = [...props.bitmap.thresholds, 0.5].sort((a, b) => a - b)
@@ -101,13 +87,6 @@ function updateThreshold(i: number, value: number): void {
           </button>
         </div>
       </div>
-
-      <!-- Image detail: promoted out of the post-process accordion
-           because operators reach for "more detail" often. Higher
-           re-segments at a larger source canvas → more fine features
-           survive into the SVG, slower preview. Shared DetailPicker
-           keeps the tier vocabulary consistent across print modes. -->
-      <DetailPicker v-model="detailValue" />
 
       <label v-if="bitmap.segmentation_method === 'kmeans'" class="block text-slate-400">
         <span class="inline-flex items-center">
@@ -163,32 +142,6 @@ function updateThreshold(i: number, value: number): void {
       <p v-else-if="bitmap.segmentation_method === 'fixed_palette'" class="text-[10px] text-slate-500">
         {{ t('convert.fixedPaletteRefHint') }}
       </p>
-
-      <div class="border-t border-slate-700 pt-2 space-y-2">
-        <p class="text-[10px] uppercase tracking-wider text-slate-500">{{ t('convert.postProcess') }}</p>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-slate-400">
-            {{ t('convert.minRegion') }}
-            <input v-model.number="bitmap.min_region_pixels" type="number" min="0" max="1000" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">
-            {{ t('convert.mergeDeltaE') }}
-            <input v-model.number="bitmap.merge_delta_e" type="number" min="0" max="50" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="flex items-center gap-2 self-end text-slate-400">
-            <input v-model="bitmap.drop_background" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
-            {{ t('convert.dropBackground') }}
-          </label>
-          <label class="block text-slate-400">{{ t('convert.bgLuminance') }}
-            <input v-model.number="bitmap.background_luminance" type="number" min="0" max="1" step="0.01" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-        </div>
-        <!-- max_dimension_px now lives at the top of the card as a
-             named-tier detail picker; no need to duplicate the raw
-             numeric input here. -->
-      </div>
     </div>
   </div>
 </template>

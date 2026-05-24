@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getFonts } from '../../../api/client'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
@@ -7,35 +7,68 @@ import { useFileManager } from '../../../composables/useFileManager'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { resolveMasterStyle } from '../../../data/printRegistry'
 import { useJobStore } from '../../../stores/job'
+import BlockMapCard from '../BlockMapCard.vue'
+import ColorModeCard from '../colors/ColorModeCard.vue'
 import MasterStylePicker from '../render/MasterStylePicker.vue'
 import MasterStyleParams from '../render/MasterStyleParams.vue'
-import DetailPicker from '../shared/DetailPicker.vue'
+import PaletteCard from '../source/PaletteCard.vue'
 import PenSlotPicker from '../shared/PenSlotPicker.vue'
+import PostProcessCard from '../style/PostProcessCard.vue'
 import TypographyCard from '../source/TypographyCard.vue'
-import BlockMapCard from '../BlockMapCard.vue'
 
-// Render tab — "how should the layers actually be drawn?". Three
-// content shapes depending on the source kind:
-//   - bitmap mono   → master-style gallery + per-style knobs + pen
-//                     slot + detail tier
-//   - bitmap multi  → DetailPicker + pointer to the Layers tab where
-//                     per-layer rendering happens
-//   - typography    → TypographyCard (font, size, line spacing,
-//                     alignment, page geometry)
-//   - document/PDF  → BlockMapCard + bitmap mono/multi knobs (PDF
-//                     pages get rasterised so the bitmap controls
-//                     still apply to the raster portion)
+// Style tab — merges the former "Colors" and "Render" tabs into one
+// surface focused on *what* the rendered output looks like:
+//   - bitmap mono  → master style picker, per-style params, pen slot,
+//                    plus post-process filters
+//   - bitmap multi → color-mode toggle, palette (manual / follows pens),
+//                    plus post-process filters
+//   - typography   → TypographyCard (font, size, line spacing, page)
+//   - document/PDF → BlockMapCard on top of the bitmap controls (PDF
+//                    pages get rasterised so the bitmap controls still
+//                    apply to the raster portion)
 //
-// The Source tab no longer exists, so TypographyCard / BlockMapCard
-// live here now — they're conceptually "the render style for this
-// source kind".
+// The image → SVG technical knobs (detail tier, centerline mode,
+// simplification, segmentation method) live on the sibling SVG tab.
 
 const { t } = useI18n()
 const draft = useBitmapDraft()
 const fm = useFileManager(t)
 const store = useJobStore()
 
+const bitmap = draft.bitmap
 const printMode = draft.printMode
+
+const installedPenColors = computed<string[]>(() => {
+  const pens = store.selectedProfile?.pens ?? []
+  return pens.filter((p) => p.installed && p.color).map((p) => p.color)
+})
+
+const penSlotCount = computed(() => store.selectedProfile?.pen_slot_count ?? 0)
+
+// When palette-follows-pens is on AND there are installed pens, mirror
+// them into the draft palette + lock the segmentation method to
+// ``fixed_palette``. Guarded against stomping a mono-mode rehydrate
+// (see ColorsTab's original comment) — only seed for genuine
+// multicolour placements.
+watch(
+  [draft.paletteFollowsPens, installedPenColors],
+  ([follows, colors]) => {
+    if (printMode.value !== 'multicolor') return
+    if (follows && colors.length) {
+      bitmap.value.palette = [...colors]
+      bitmap.value.segmentation_method = 'fixed_palette'
+    }
+  },
+  { immediate: true },
+)
+
+const manualSwapCount = computed(() =>
+  Math.max(0, bitmap.value.palette.length - penSlotCount.value),
+)
+
+function setPaletteFollowsPens(value: boolean): void {
+  draft.paletteFollowsPens.value = value
+}
 
 // Font catalogue for TypographyCard (.txt / .md sources). Local to
 // this tab rather than the singleton because no other tab needs it.
@@ -56,17 +89,17 @@ async function onMasterStyleChange(id: string): Promise<void> {
   const style = resolveMasterStyle(id)
   const seg = style.segmentation
   if (seg) {
-    draft.bitmap.value.segmentation_method = seg.method
-    draft.bitmap.value.drop_background = seg.drop_background
-    draft.bitmap.value.background_luminance = seg.background_luminance
-    draft.bitmap.value.algorithm = style.defaultAlgorithm
-    draft.bitmap.value.algorithm_options = { ...style.defaultAlgorithmOptions }
+    bitmap.value.segmentation_method = seg.method
+    bitmap.value.drop_background = seg.drop_background
+    bitmap.value.background_luminance = seg.background_luminance
+    bitmap.value.algorithm = style.defaultAlgorithm
+    bitmap.value.algorithm_options = { ...style.defaultAlgorithmOptions }
     if (seg.method === 'luminance_bands') {
-      if (draft.bitmap.value.num_bands < 2 || draft.bitmap.value.num_bands > 6) {
-        draft.bitmap.value.num_bands = seg.default_num_bands ?? 4
+      if (bitmap.value.num_bands < 2 || bitmap.value.num_bands > 6) {
+        bitmap.value.num_bands = seg.default_num_bands ?? 4
       }
     } else if (seg.method === 'thresholds') {
-      draft.bitmap.value.thresholds = [seg.default_threshold ?? 0.5]
+      bitmap.value.thresholds = [seg.default_threshold ?? 0.5]
     }
   }
 
@@ -98,6 +131,8 @@ async function onMasterStyleChange(id: string): Promise<void> {
   <section v-else-if="fm.showsBitmapForm.value" class="space-y-3">
     <BlockMapCard v-if="fm.kind.value === 'document'" />
 
+    <ColorModeCard :mode="printMode" @update:mode="(mode) => draft.setPrintMode(mode)" />
+
     <template v-if="printMode === 'monochrome'">
       <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
         <PenSlotPicker
@@ -111,13 +146,8 @@ async function onMasterStyleChange(id: string): Promise<void> {
         />
 
         <MasterStyleParams
-          :bitmap="draft.bitmap.value"
+          :bitmap="bitmap"
           :style-id="draft.monoMasterStyleId.value"
-        />
-
-        <DetailPicker
-          :model-value="draft.bitmap.value.max_dimension_px"
-          @update:model-value="(v) => draft.bitmap.value.max_dimension_px = v"
         />
 
         <p class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-[10px] leading-snug text-slate-400">
@@ -127,22 +157,23 @@ async function onMasterStyleChange(id: string): Promise<void> {
     </template>
 
     <template v-else>
-      <!-- Multicolor rendering is per-layer (see Layers tab). The only
-           global render knob that still makes sense at this level is
-           the detail tier. -->
-      <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
-        <DetailPicker
-          :model-value="draft.bitmap.value.max_dimension_px"
-          @update:model-value="(v) => draft.bitmap.value.max_dimension_px = v"
-        />
-        <p class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1.5 text-[11px] text-slate-400">
-          {{ t('render.multicolorHint') }}
-        </p>
-      </div>
+      <PaletteCard
+        :bitmap="bitmap"
+        :palette-follows-pens="draft.paletteFollowsPens.value"
+        :installed-pen-colors="installedPenColors"
+        :pen-slot-count="penSlotCount"
+        :manual-swap-count="manualSwapCount"
+        @update:palette-follows-pens="setPaletteFollowsPens"
+      />
+      <p class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1.5 text-[11px] text-slate-400">
+        {{ t('render.multicolorHint') }}
+      </p>
     </template>
+
+    <PostProcessCard :bitmap="bitmap" />
   </section>
 
   <p v-else class="text-[11px] text-slate-500">
-    {{ t('render.notApplicable') }}
+    {{ t('style.notApplicable') }}
   </p>
 </template>
