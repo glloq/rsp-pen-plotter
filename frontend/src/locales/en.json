@@ -87,6 +87,7 @@
     "close": "Close",
     "done": "Done",
     "tabSource": "Source",
+    "tabImage": "Image",
     "tabColors": "Colors",
     "tabRender": "Render",
     "tabLayers": "Layers",
@@ -105,6 +106,45 @@
     "monoHint": "Single-ink mode — pick the master style on the Render tab.",
     "noSource": "Attach a file on the Source tab to choose colour settings.",
     "notApplicable": "This file type doesn't use colour segmentation."
+  },
+  "preprocess": {
+    "intro": "Prepare the source image before it's segmented into colour layers.",
+    "reset": "Reset",
+    "noSource": "Attach a file to start adjusting the image.",
+    "notApplicable": "This file type isn't a bitmap — nothing to preprocess.",
+    "basic": {
+      "title": "Brightness & colour",
+      "brightness": "Brightness",
+      "contrast": "Contrast",
+      "saturation": "Saturation",
+      "gamma": "Gamma",
+      "gammaHint": "Below 1 darkens midtones, above 1 lightens them."
+    },
+    "levels": {
+      "title": "Levels",
+      "black": "Black point",
+      "white": "White point",
+      "auto": "Auto-stretch contrast",
+      "hint": "Recentre the tonal range — useful before threshold-based segmentation."
+    },
+    "filters": {
+      "title": "Filters",
+      "sharpen": "Sharpen",
+      "blur": "Blur",
+      "invert": "Invert colours",
+      "grayscale": "Convert to grayscale"
+    },
+    "transform": {
+      "title": "Transform & crop",
+      "rotate": "Rotate",
+      "flipH": "Flip horizontal",
+      "flipV": "Flip vertical",
+      "cropEnable": "Crop to a region",
+      "cropX": "X",
+      "cropY": "Y",
+      "cropW": "Width",
+      "cropH": "Height"
+    }
   },
   "render": {
     "masterStyle": "Master style",

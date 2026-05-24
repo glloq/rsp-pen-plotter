@@ -14,8 +14,8 @@ from typing import Any, ClassVar, Literal
 import numpy as np
 import pillow_heif
 from numpy.typing import NDArray
-from PIL import Image
-from pydantic import BaseModel, Field
+from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from pydantic import BaseModel, Field, field_validator
 
 from pen_plotter.converters import segmentation
 from pen_plotter.converters.algorithms import get_algorithm
@@ -26,6 +26,58 @@ pillow_heif.register_heif_opener()
 _REC709 = np.array([0.2126, 0.7152, 0.0722])
 
 SegmentationMethod = Literal["kmeans", "luminance_bands", "thresholds", "fixed_palette"]
+Rotation = Literal[0, 90, 180, 270]
+
+
+class PreprocessOptions(BaseModel):
+    """Image adjustments applied before downscale + segmentation.
+
+    The editor's "Image" tab writes here. Every field defaults to a
+    neutral value so omitting the block (older clients, missing in
+    ``last_options``) is identical to running the converter unchanged.
+
+    Order of application matches the order operators expect from a
+    photo editor: geometry first (crop → rotate → flip), then colour
+    space conversions (grayscale, invert), then tonal mapping
+    (levels → gamma → brightness → contrast → saturation), then spatial
+    filters (blur, sharpen), and finally the optional auto-contrast
+    stretch which runs *last* so the operator's manual choices remain
+    the dominant signal.
+    """
+
+    brightness: float = Field(default=0.0, ge=-1.0, le=1.0)
+    contrast: float = Field(default=0.0, ge=-1.0, le=1.0)
+    saturation: float = Field(default=1.0, ge=0.0, le=2.0)
+    gamma: float = Field(default=1.0, gt=0.0, le=5.0)
+    black_point: int = Field(default=0, ge=0, le=255)
+    white_point: int = Field(default=255, ge=0, le=255)
+    sharpen: float = Field(default=0.0, ge=0.0, le=2.0)
+    blur_px: float = Field(default=0.0, ge=0.0, le=10.0)
+    invert: bool = False
+    grayscale: bool = False
+    auto_contrast: bool = False
+    rotate_deg: Rotation = 0
+    flip_h: bool = False
+    flip_v: bool = False
+    # Normalised crop rectangle (x, y, width, height) in [0, 1]. ``None``
+    # means no crop. Validated so x+w <= 1 and y+h <= 1 — otherwise the
+    # PIL crop would silently clamp and the operator's rectangle wouldn't
+    # match the preview.
+    crop: tuple[float, float, float, float] | None = None
+
+    @field_validator("crop")
+    @classmethod
+    def _crop_inside_unit(
+        cls, value: tuple[float, float, float, float] | None
+    ) -> tuple[float, float, float, float] | None:
+        if value is None:
+            return None
+        x, y, w, h = value
+        if w <= 0 or h <= 0:
+            raise ValueError("crop width and height must be > 0")
+        if x < 0 or y < 0 or x + w > 1.0001 or y + h > 1.0001:
+            raise ValueError("crop must lie within the [0, 1] unit square")
+        return value
 
 
 @dataclass
@@ -82,6 +134,11 @@ class BitmapOptions(BaseModel):
     # only the uniform default and the operator only sees the real
     # result after Apply.
     band_recipes: list[dict[str, Any]] | None = None
+    # Photo-editor style adjustments applied to the loaded RGB image
+    # before the downscale + segmentation pass. Defaults are neutral so
+    # the field is safe to omit; the editor's "Image" tab writes the
+    # operator's tweaks here. See :class:`PreprocessOptions`.
+    preprocess: PreprocessOptions = Field(default_factory=PreprocessOptions)
 
 
 class BitmapConverter(Converter):
@@ -144,6 +201,7 @@ class BitmapConverter(Converter):
         max_dim = opts.max_dimension_px
         n_init = 1 if fast else 10
         image = self._load_rgb(data)
+        image = self._preprocess(image, opts.preprocess)
         image = self._fit_within(image, max_dim)
         labels, palette = self._segment(image, opts, n_init=n_init)
         if opts.min_region_pixels > 0:
@@ -290,6 +348,89 @@ class BitmapConverter(Converter):
     def _load_rgb(data: bytes) -> Image.Image:
         """Decode image bytes into an RGB Pillow image."""
         return Image.open(io.BytesIO(data)).convert("RGB")
+
+    @staticmethod
+    def _preprocess(image: Image.Image, opts: PreprocessOptions) -> Image.Image:
+        """Apply the operator's photo-editor adjustments to ``image``.
+
+        Returns ``image`` unchanged when every field is neutral so the
+        no-op path stays free of allocations / colour conversions.
+        """
+        if (
+            opts.crop is None
+            and opts.rotate_deg == 0
+            and not opts.flip_h
+            and not opts.flip_v
+            and not opts.grayscale
+            and not opts.invert
+            and opts.black_point == 0
+            and opts.white_point == 255
+            and opts.gamma == 1.0
+            and opts.brightness == 0.0
+            and opts.contrast == 0.0
+            and opts.saturation == 1.0
+            and opts.blur_px == 0.0
+            and opts.sharpen == 0.0
+            and not opts.auto_contrast
+        ):
+            return image
+
+        out = image
+        if opts.crop is not None:
+            x, y, w, h = opts.crop
+            left = int(round(x * out.width))
+            top = int(round(y * out.height))
+            right = min(out.width, max(left + 1, int(round((x + w) * out.width))))
+            bottom = min(out.height, max(top + 1, int(round((y + h) * out.height))))
+            out = out.crop((left, top, right, bottom))
+        if opts.rotate_deg:
+            # ``expand=True`` so the canvas grows to fit the rotated image
+            # instead of clipping the corners.
+            out = out.rotate(-opts.rotate_deg, expand=True)
+        if opts.flip_h:
+            out = ImageOps.mirror(out)
+        if opts.flip_v:
+            out = ImageOps.flip(out)
+        if opts.grayscale:
+            # Keep the RGB mode so downstream segmentation, which expects
+            # 3-channel input, doesn't need a special case.
+            out = ImageOps.grayscale(out).convert("RGB")
+        if opts.invert:
+            out = ImageOps.invert(out)
+        if opts.black_point > 0 or opts.white_point < 255:
+            lo = min(opts.black_point, opts.white_point)
+            hi = max(opts.black_point, opts.white_point)
+            if hi - lo < 1:
+                hi = min(255, lo + 1)
+            scale = 255.0 / (hi - lo)
+            arr = np.asarray(out, dtype=np.float32)
+            arr = (arr - lo) * scale
+            arr = np.clip(arr, 0.0, 255.0).astype(np.uint8)
+            out = Image.fromarray(arr, mode="RGB")
+        if opts.gamma != 1.0:
+            inv_gamma = 1.0 / opts.gamma
+            lut = (np.linspace(0.0, 1.0, 256) ** inv_gamma * 255.0).clip(0, 255).astype(np.uint8)
+            # PIL's point() with a single LUT applies it to each channel.
+            out = out.point(lut.tolist() * len(out.getbands()))
+        if opts.brightness != 0.0:
+            # Map -1..+1 onto a multiplicative factor 0..2 the way most
+            # editors do (0 = black, 1 = identity, 2 = fully white).
+            out = ImageEnhance.Brightness(out).enhance(1.0 + opts.brightness)
+        if opts.contrast != 0.0:
+            out = ImageEnhance.Contrast(out).enhance(1.0 + opts.contrast)
+        if opts.saturation != 1.0:
+            out = ImageEnhance.Color(out).enhance(opts.saturation)
+        if opts.blur_px > 0:
+            out = out.filter(ImageFilter.GaussianBlur(radius=opts.blur_px))
+        if opts.sharpen > 0:
+            # Map 0..2 onto unsharp mask percentage 0..200 — gives a
+            # noticeable but bounded effect.
+            out = out.filter(
+                ImageFilter.UnsharpMask(radius=2.0, percent=int(opts.sharpen * 100), threshold=2)
+            )
+        if opts.auto_contrast:
+            out = ImageOps.autocontrast(out, cutoff=1)
+        return out
 
     @staticmethod
     def _fit_within(image: Image.Image, max_dim: int) -> Image.Image:

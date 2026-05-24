@@ -1,10 +1,12 @@
+import io
 import shutil
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from pen_plotter.converters.algorithms import available_algorithms, get_algorithm
-from pen_plotter.converters.bitmap import BitmapConverter
+from pen_plotter.converters.bitmap import BitmapConverter, PreprocessOptions
 
 needs_potrace = pytest.mark.skipif(
     shutil.which("potrace") is None, reason="potrace binary not installed"
@@ -79,3 +81,104 @@ def test_bitmap_converter_halftone_no_potrace_needed(two_color_png: bytes) -> No
 def test_bitmap_converter_rejects_unknown_algorithm(two_color_png: bytes) -> None:
     with pytest.raises(KeyError):
         BitmapConverter().convert(two_color_png, options={"algorithm": "bogus"})
+
+
+# --- Preprocess pipeline ---------------------------------------------------
+
+
+def _gradient_png() -> bytes:
+    """50x50 horizontal grayscale gradient — useful for tonal-mapping checks."""
+    arr = np.tile(np.linspace(0, 255, 50, dtype=np.uint8), (50, 1))
+    rgb = np.stack([arr, arr, arr], axis=-1)
+    buf = io.BytesIO()
+    Image.fromarray(rgb).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _decode_png(data: bytes) -> np.ndarray:
+    return np.asarray(Image.open(io.BytesIO(data)).convert("RGB"))
+
+
+def test_preprocess_neutral_is_identity() -> None:
+    img = Image.fromarray(_decode_png(_gradient_png()))
+    out = BitmapConverter._preprocess(img, PreprocessOptions())
+    # Neutral options should bypass every filter — same object handed back.
+    assert out is img
+
+
+def test_preprocess_brightness_pushes_to_white() -> None:
+    img = Image.fromarray(_decode_png(_gradient_png()))
+    out = BitmapConverter._preprocess(img, PreprocessOptions(brightness=1.0))
+    arr = np.asarray(out)
+    # +1.0 brightness uses an enhance factor of 2 → mid-gray and above
+    # clip to 255; only the dark left edge stays below.
+    assert arr.max() == 255
+    assert int(arr[0, 25, 0]) >= 200
+    assert int(arr[0, 0, 0]) == 0  # pure black is unaffected by multiplicative gain
+
+
+def test_preprocess_invert_swaps_extremes() -> None:
+    img = Image.fromarray(_decode_png(_gradient_png()))
+    inverted = BitmapConverter._preprocess(img, PreprocessOptions(invert=True))
+    arr = np.asarray(inverted)
+    # The gradient went 0..255 left→right; after invert it goes 255..0.
+    assert arr[0, 0, 0] > 250
+    assert arr[0, -1, 0] < 5
+
+
+def test_preprocess_crop_returns_expected_size() -> None:
+    img = Image.fromarray(_decode_png(_gradient_png()))
+    out = BitmapConverter._preprocess(
+        img, PreprocessOptions(crop=(0.25, 0.0, 0.5, 1.0))
+    )
+    # Cropped width is roughly half the original (±1 for rounding);
+    # height untouched.
+    assert 24 <= out.width <= 26
+    assert out.height == 50
+
+
+def test_preprocess_rotate_swaps_dimensions() -> None:
+    img = Image.fromarray(np.zeros((20, 40, 3), dtype=np.uint8))
+    out = BitmapConverter._preprocess(img, PreprocessOptions(rotate_deg=90))
+    assert (out.width, out.height) == (20, 40)
+
+
+def test_preprocess_grayscale_collapses_channels() -> None:
+    arr = np.zeros((10, 10, 3), dtype=np.uint8)
+    arr[..., 0] = 200  # pure red
+    img = Image.fromarray(arr)
+    out = BitmapConverter._preprocess(img, PreprocessOptions(grayscale=True))
+    pixels = np.asarray(out)
+    # After grayscale collapse the three channels must be equal.
+    assert np.all(pixels[..., 0] == pixels[..., 1])
+    assert np.all(pixels[..., 1] == pixels[..., 2])
+
+
+def test_preprocess_levels_stretch() -> None:
+    img = Image.fromarray(_decode_png(_gradient_png()))
+    out = BitmapConverter._preprocess(
+        img, PreprocessOptions(black_point=64, white_point=192)
+    )
+    arr = np.asarray(out)
+    # Anything <= 64 should clip to 0, anything >= 192 to 255.
+    assert arr[0, 0, 0] == 0
+    assert arr[0, -1, 0] == 255
+
+
+def test_preprocess_crop_rejects_out_of_bounds() -> None:
+    with pytest.raises(ValueError):
+        PreprocessOptions(crop=(0.5, 0.5, 0.8, 0.8))
+
+
+def test_bitmap_converter_accepts_preprocess(two_color_png: bytes) -> None:
+    # End-to-end: a brightness bump should not crash the pipeline and
+    # should still produce a layered SVG.
+    result = BitmapConverter().convert(
+        two_color_png,
+        options={
+            "algorithm": "halftone",
+            "num_colors": 2,
+            "preprocess": {"brightness": 0.2, "contrast": 0.3},
+        },
+    )
+    assert result.svg.startswith("<svg")

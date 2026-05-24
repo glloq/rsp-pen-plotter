@@ -23,7 +23,30 @@ import { computed, ref } from 'vue'
 import type { SegmentationMethod } from '../api/client'
 import { resolveMasterStyle, DEFAULT_MASTER_STYLE_ID } from '../data/printRegistry'
 
+// Photo-editor adjustments the operator can apply before segmentation.
+// Mirrors ``PreprocessOptions`` on the backend; every field defaults to
+// a neutral value so the payload is safe to ship unconditionally.
+export type PreprocessDraft = {
+  brightness: number   // -1..+1, 0 = neutral
+  contrast: number     // -1..+1, 0 = neutral
+  saturation: number   // 0..2, 1 = neutral
+  gamma: number        // 0.1..5, 1 = neutral
+  black_point: number  // 0..255
+  white_point: number  // 0..255
+  sharpen: number      // 0..2
+  blur_px: number      // 0..10
+  invert: boolean
+  grayscale: boolean
+  auto_contrast: boolean
+  rotate_deg: 0 | 90 | 180 | 270
+  flip_h: boolean
+  flip_v: boolean
+  // Normalised crop rectangle [x, y, w, h] in [0, 1], or null for no crop.
+  crop: [number, number, number, number] | null
+}
+
 export type BitmapDraft = {
+  preprocess: PreprocessDraft
   segmentation_method: SegmentationMethod
   num_colors: number
   num_bands: number
@@ -72,8 +95,51 @@ export type TypographyDraft = {
   page_height_mm: number
 }
 
+export function defaultPreprocess(): PreprocessDraft {
+  return {
+    brightness: 0,
+    contrast: 0,
+    saturation: 1,
+    gamma: 1,
+    black_point: 0,
+    white_point: 255,
+    sharpen: 0,
+    blur_px: 0,
+    invert: false,
+    grayscale: false,
+    auto_contrast: false,
+    rotate_deg: 0,
+    flip_h: false,
+    flip_v: false,
+    crop: null,
+  }
+}
+
+// True when every preprocess field is at its neutral value; lets the UI
+// display a "default" badge and the close-confirm dialog stay quiet.
+export function isPreprocessNeutral(p: PreprocessDraft): boolean {
+  return (
+    p.brightness === 0
+    && p.contrast === 0
+    && p.saturation === 1
+    && p.gamma === 1
+    && p.black_point === 0
+    && p.white_point === 255
+    && p.sharpen === 0
+    && p.blur_px === 0
+    && !p.invert
+    && !p.grayscale
+    && !p.auto_contrast
+    && p.rotate_deg === 0
+    && !p.flip_h
+    && !p.flip_v
+    && p.crop === null
+  )
+}
+
 export function defaultBitmap(): BitmapDraft {
   return {
+    preprocess: defaultPreprocess(),
     segmentation_method: 'kmeans',
     num_colors: 4,
     num_bands: 4,
@@ -190,7 +256,21 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
 
   const target = _bitmap.value as Record<string, unknown>
   for (const key of Object.keys(target)) {
+    if (key === 'preprocess') continue // handled below as a partial merge
     if (key in opts) target[key] = opts[key]
+  }
+  // Merge persisted preprocess fields over the neutral defaults so an
+  // older placement (no ``preprocess`` block, or one missing some
+  // recently-added fields) still produces an identical render.
+  const preprocessOpts = (opts as Record<string, unknown>).preprocess
+  if (preprocessOpts && typeof preprocessOpts === 'object') {
+    const fresh = defaultPreprocess() as Record<string, unknown>
+    for (const key of Object.keys(fresh)) {
+      if (key in (preprocessOpts as Record<string, unknown>)) {
+        fresh[key] = (preprocessOpts as Record<string, unknown>)[key]
+      }
+    }
+    _bitmap.value.preprocess = fresh as unknown as PreprocessDraft
   }
   // Restore the master-style id when the placement was committed with
   // one. Falls back to the default if the field is missing (older
@@ -381,6 +461,10 @@ export function buildBitmapOptions(): Record<string, unknown> {
     min_region_pixels: b.min_region_pixels,
     merge_delta_e: b.merge_delta_e,
     algorithm_options: buildAlgorithmOptions(),
+    // Photo-editor adjustments applied before downscale + segmentation.
+    // Always shipped so the operator's tweaks survive /preview <->
+    // /upload round-trips; neutral defaults are a no-op server-side.
+    preprocess: { ...b.preprocess },
     // Persisted alongside the rest of the options so the next modal
     // open on this placement can rehydrate the same master style the
     // operator committed with. The backend tolerates unknown extras

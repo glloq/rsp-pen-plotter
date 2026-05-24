@@ -87,6 +87,7 @@
     "close": "Fermer",
     "done": "Terminer",
     "tabSource": "Source",
+    "tabImage": "Image",
     "tabColors": "Couleurs",
     "tabRender": "Rendu",
     "tabLayers": "Calques",
@@ -105,6 +106,45 @@
     "monoHint": "Mode monochrome — choisis le style maître dans l'onglet Rendu.",
     "noSource": "Attache un fichier dans l'onglet Source pour régler les couleurs.",
     "notApplicable": "Ce type de fichier n'utilise pas de segmentation couleur."
+  },
+  "preprocess": {
+    "intro": "Prépare l'image source avant son découpage en couches de couleur.",
+    "reset": "Réinitialiser",
+    "noSource": "Attache un fichier pour commencer à ajuster l'image.",
+    "notApplicable": "Ce type de fichier n'est pas une image bitmap — rien à prétraiter.",
+    "basic": {
+      "title": "Luminosité & couleur",
+      "brightness": "Luminosité",
+      "contrast": "Contraste",
+      "saturation": "Saturation",
+      "gamma": "Gamma",
+      "gammaHint": "En dessous de 1 assombrit les tons moyens, au-dessus les éclaircit."
+    },
+    "levels": {
+      "title": "Niveaux",
+      "black": "Point noir",
+      "white": "Point blanc",
+      "auto": "Étirer le contraste automatiquement",
+      "hint": "Recentre la dynamique tonale — utile avant une segmentation par seuils."
+    },
+    "filters": {
+      "title": "Filtres",
+      "sharpen": "Netteté",
+      "blur": "Flou",
+      "invert": "Inverser les couleurs",
+      "grayscale": "Convertir en niveaux de gris"
+    },
+    "transform": {
+      "title": "Transformation & recadrage",
+      "rotate": "Rotation",
+      "flipH": "Miroir horizontal",
+      "flipV": "Miroir vertical",
+      "cropEnable": "Recadrer une zone",
+      "cropX": "X",
+      "cropY": "Y",
+      "cropW": "Largeur",
+      "cropH": "Hauteur"
+    }
   },
   "render": {
     "masterStyle": "Style maître",

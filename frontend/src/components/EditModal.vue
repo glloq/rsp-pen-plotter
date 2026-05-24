@@ -12,6 +12,7 @@ import EditTabs, { type EditTabId } from './edit/EditTabs.vue'
 import VariantsBar from './edit/VariantsBar.vue'
 import UploadFooter from './edit/UploadFooter.vue'
 import EmptyPlacementDropzone from './edit/EmptyPlacementDropzone.vue'
+import ImageTab from './edit/tabs/ImageTab.vue'
 import ColorsTab from './edit/tabs/ColorsTab.vue'
 import RenderTab from './edit/tabs/RenderTab.vue'
 import LayersTab from './edit/tabs/LayersTab.vue'
@@ -53,16 +54,17 @@ function loadInitialTab(): EditTabId {
   try {
     const stored = localStorage.getItem(TAB_KEY)
     if (
-      stored === 'colors'
+      stored === 'image'
+      || stored === 'colors'
       || stored === 'render'
       || stored === 'layers'
     ) return stored
     // Legacy ids ('source' and 'variants') from earlier iterations
-    // fall back to 'colors' — the first step of the new workflow.
+    // fall back to 'image' — the new first step of the workflow.
   } catch {
     // localStorage unavailable
   }
-  return 'colors'
+  return 'image'
 }
 
 watch(activeTab, (tab) => {
@@ -87,9 +89,10 @@ function onKey(event: KeyboardEvent): void {
     return
   }
   if (isTypingTarget(event.target)) return
-  if (event.key === '1') { activeTab.value = 'colors'; event.preventDefault() }
-  else if (event.key === '2') { activeTab.value = 'render'; event.preventDefault() }
-  else if (event.key === '3') { activeTab.value = 'layers'; event.preventDefault() }
+  if (event.key === '1') { activeTab.value = 'image'; event.preventDefault() }
+  else if (event.key === '2') { activeTab.value = 'colors'; event.preventDefault() }
+  else if (event.key === '3') { activeTab.value = 'render'; event.preventDefault() }
+  else if (event.key === '4') { activeTab.value = 'layers'; event.preventDefault() }
 }
 
 // ============================== RESIZABLE SPLIT ==============================
@@ -271,6 +274,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               <!-- v-show keeps each tab's component mounted so internal
                    state (drafts, scroll, dropdown open/closed) isn't
                    lost when the operator hops between tabs. -->
+              <div v-show="activeTab === 'image'" class="space-y-3">
+                <ImageTab />
+              </div>
               <div v-show="activeTab === 'colors'" class="space-y-3">
                 <ColorsTab />
               </div>
