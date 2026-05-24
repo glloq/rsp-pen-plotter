@@ -190,15 +190,25 @@ export type MonoStyleKnobs = {
   rings_max?: number
   wave_min?: number
   wave_max?: number
+  wave_period?: number
   dot_radius?: number
   angles?: number[]
   crossed_on_darkest?: boolean
   stroke_width?: number
+  // Single-value knobs for binary styles where there's no min/max
+  // gradient — TSP density and Spiral spacing each control darkness
+  // via one number rather than an interpolated range.
+  density?: number
+  spacing_px?: number
   perBand?: Record<number, Record<string, unknown>>
 }
 
 export type MonoKnobsDraft = {
   ink_color: string
+  // When true, the per-band override drawer is shown and the operator
+  // can pin individual band recipes. Default false keeps the UI simple
+  // for the typical operator who only needs the global range sliders.
+  advanced_mode: boolean
   perStyle: Record<string, MonoStyleKnobs>
 }
 
@@ -218,7 +228,7 @@ export function defaultMono(): MonoKnobsDraft {
   for (const id of Object.keys(MONO_STYLE_DEFAULTS)) {
     perStyle[id] = defaultMonoStyleKnobs(id)
   }
-  return { ink_color: '#000000', perStyle }
+  return { ink_color: '#000000', advanced_mode: false, perStyle }
 }
 
 export function defaultTypography(): TypographyDraft {
@@ -512,6 +522,10 @@ export function setMonoInkColor(color: string): void {
   _mono.value.ink_color = color
 }
 
+export function setMonoAdvancedMode(value: boolean): void {
+  _mono.value.advanced_mode = value
+}
+
 export function getMonoStyleKnobs(styleId: string): MonoStyleKnobs {
   if (!_mono.value.perStyle[styleId]) {
     _mono.value.perStyle[styleId] = defaultMonoStyleKnobs(styleId)
@@ -717,7 +731,7 @@ function recipeFromKnobs(
         algorithm_options: {
           spacing_px: spacing,
           wave_amp_px: wave,
-          wave_period_px: 14,
+          wave_period_px: knobs.wave_period ?? 14,
         },
       }
     }
@@ -736,6 +750,44 @@ function recipeFromKnobs(
       return {
         algorithm: 'contours',
         algorithm_options: { spacing_px: spacing, max_rings: rings },
+      }
+    }
+    case 'tsp': {
+      // Binary mono style: a single band, one knob (dot density). The
+      // bandRecipe path is still consulted (rather than letting the
+      // backend reuse a static algorithm_options) so the operator's
+      // slider takes effect on /preview without /rerender.
+      return {
+        algorithm: 'tsp',
+        algorithm_options: { density: knobs.density ?? 0.04, seed: 0 },
+      }
+    }
+    case 'spiral-master': {
+      // Same single-band shape as TSP: spacing_px is the only darkness
+      // lever, fed through the recipe so the slider edit re-fires
+      // /preview with the new value.
+      return {
+        algorithm: 'spiral',
+        algorithm_options: {
+          spacing_px: knobs.spacing_px ?? 3,
+          samples_per_turn: 64,
+        },
+      }
+    }
+    case 'outline': {
+      return {
+        algorithm: 'edges',
+        algorithm_options: { stroke_width: knobs.stroke_width ?? 0.8 },
+      }
+    }
+    case 'centerline-trace': {
+      return {
+        algorithm: 'centerline',
+        algorithm_options: {
+          stroke_width: knobs.stroke_width ?? 0.8,
+          smooth: true,
+          min_branch_px: 3,
+        },
       }
     }
     default:
@@ -765,15 +817,22 @@ export function interpolatedBandOptions(
 
 // Build the per-band recipes for the current master style so the
 // backend's /preview applies them inline instead of just the uniform
-// algorithm. Only emitted in mono shaded mode (where the segmentation
-// produces N >= 2 bands and the active style carries a ``bandRecipe``);
-// returns ``undefined`` everywhere else so the payload stays minimal.
+// algorithm. Emitted in mono shaded mode (luminance_bands → N recipes)
+// AND in mono binary mode (thresholds → 1 recipe), so single-band
+// styles like TSP / Spiral / Outline / Centerline pick up the
+// operator's global slider edits on /preview without requiring a
+// /rerender round-trip.
 function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
   if (_printMode.value !== 'monochrome') return undefined
-  if (_bitmap.value.segmentation_method !== 'luminance_bands') return undefined
+  const segMethod = _bitmap.value.segmentation_method
+  if (segMethod !== 'luminance_bands' && segMethod !== 'thresholds') return undefined
   const style = resolveMasterStyle(_monoMasterStyleId.value)
   if (!style.bandRecipe && !(style.id in MONO_STYLE_DEFAULTS)) return undefined
-  const total = _bitmap.value.num_bands
+  // Binary mono modes render exactly one layer (drop_background drops
+  // the lighter side of the threshold), so emit a single recipe.
+  const total = segMethod === 'luminance_bands'
+    ? _bitmap.value.num_bands
+    : 1
   const knobs = _mono.value.perStyle[style.id]
   return Array.from({ length: total }, (_, i) => {
     const recipe = recipeFromKnobs(style, knobs, i, total)
@@ -944,6 +1003,7 @@ export function useBitmapDraft() {
     setPrintMode,
     setMasterStyle,
     setMonoInkColor,
+    setMonoAdvancedMode,
     getMonoStyleKnobs,
     setMonoKnob,
     setMonoBandOverride,

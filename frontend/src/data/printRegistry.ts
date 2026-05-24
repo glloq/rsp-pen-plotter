@@ -231,6 +231,7 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     spacing_max: 5,
     wave_min: 0.6,
     wave_max: 1.6,
+    wave_period: 14,
   },
   'contours-topo': {
     spacing_min: 2.5,
@@ -241,9 +242,11 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
   outline: {
     stroke_width: 0.8,
   },
-  tsp: {},
+  tsp: {
+    density: 0.04,
+  },
   'spiral-master': {
-    spacing_min: 3,
+    spacing_px: 3,
   },
   'centerline-trace': {
     stroke_width: 0.8,
