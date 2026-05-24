@@ -175,6 +175,15 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   _typo.value = defaultTypography()
   _paletteFollowsPens.value = true
   _committed.value = false
+  // Reset the master-style id so a stale value from a previous
+  // placement can't keep feeding the wrong ``bandRecipe`` into
+  // ``/preview``. The actual id (if the placement was persisted with
+  // one) is read back from ``last_options.master_style_id`` below.
+  // Without this reset, opening the modal on a placement saved with
+  // Halftone after editing a Pencil one would keep generating Pencil
+  // recipes for every /preview round-trip even though the operator
+  // never sees ``pencil`` highlighted in the picker.
+  _monoMasterStyleId.value = DEFAULT_MASTER_STYLE_ID
 
   const opts = ctx.placement?.last_options
   if (!opts || typeof opts !== 'object') return
@@ -182,6 +191,13 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   const target = _bitmap.value as Record<string, unknown>
   for (const key of Object.keys(target)) {
     if (key in opts) target[key] = opts[key]
+  }
+  // Restore the master-style id when the placement was committed with
+  // one. Falls back to the default if the field is missing (older
+  // placements predate the field) or unparseable.
+  const persistedStyleId = (opts as Record<string, unknown>).master_style_id
+  if (typeof persistedStyleId === 'string' && persistedStyleId) {
+    _monoMasterStyleId.value = persistedStyleId
   }
   const algoOpts = (opts as Record<string, unknown>).algorithm_options as
     | Record<string, unknown>
@@ -365,6 +381,12 @@ export function buildBitmapOptions(): Record<string, unknown> {
     min_region_pixels: b.min_region_pixels,
     merge_delta_e: b.merge_delta_e,
     algorithm_options: buildAlgorithmOptions(),
+    // Persisted alongside the rest of the options so the next modal
+    // open on this placement can rehydrate the same master style the
+    // operator committed with. The backend tolerates unknown extras
+    // (BitmapOptions ignores unrecognised keys); only the frontend
+    // rehydrate path reads it back.
+    master_style_id: _monoMasterStyleId.value,
   }
   const bandRecipes = buildBandRecipes()
   if (bandRecipes) payload.band_recipes = bandRecipes

@@ -32,10 +32,17 @@ const penSlotCount = computed(() => store.selectedProfile?.pen_slot_count ?? 0)
 
 // When palette-follows-pens is on AND there are installed pens, mirror
 // them into the draft palette + lock the segmentation method to
-// ``fixed_palette``. Same behaviour as the old SourceSection wiring.
+// ``fixed_palette``. Guarded against stomping a mono-mode rehydrate:
+// a placement uploaded with luminance_bands (mono shaded) would
+// otherwise have its segmentation_method silently overwritten to
+// fixed_palette the moment ColorsTab mounts with immediate=true, with
+// the operator seeing a colourful preview for a single-ink placement.
+// The guard `printMode === 'multicolor'` keeps seeding behaviour for
+// genuine multicolour placements without polluting mono ones.
 watch(
   [draft.paletteFollowsPens, installedPenColors],
   ([follows, colors]) => {
+    if (printMode.value !== 'multicolor') return
     if (follows && colors.length) {
       bitmap.value.palette = [...colors]
       bitmap.value.segmentation_method = 'fixed_palette'
