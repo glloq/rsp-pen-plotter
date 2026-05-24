@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getFonts } from '../../../api/client'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { useFileManager } from '../../../composables/useFileManager'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
@@ -9,13 +11,24 @@ import MasterStylePicker from '../render/MasterStylePicker.vue'
 import MasterStyleParams from '../render/MasterStyleParams.vue'
 import DetailPicker from '../shared/DetailPicker.vue'
 import PenSlotPicker from '../shared/PenSlotPicker.vue'
+import TypographyCard from '../source/TypographyCard.vue'
+import BlockMapCard from '../BlockMapCard.vue'
 
-// Render tab — "how should the layers actually be drawn?". For mono
-// mode this is the master-style gallery + per-style knobs + pen slot
-// + detail tier. For multicolour mode it shows the global detail
-// picker and points the operator at the Layers tab for per-layer
-// render choices (which is where multicolour rendering actually
-// happens).
+// Render tab — "how should the layers actually be drawn?". Three
+// content shapes depending on the source kind:
+//   - bitmap mono   → master-style gallery + per-style knobs + pen
+//                     slot + detail tier
+//   - bitmap multi  → DetailPicker + pointer to the Layers tab where
+//                     per-layer rendering happens
+//   - typography    → TypographyCard (font, size, line spacing,
+//                     alignment, page geometry)
+//   - document/PDF  → BlockMapCard + bitmap mono/multi knobs (PDF
+//                     pages get rasterised so the bitmap controls
+//                     still apply to the raster portion)
+//
+// The Source tab no longer exists, so TypographyCard / BlockMapCard
+// live here now — they're conceptually "the render style for this
+// source kind".
 
 const { t } = useI18n()
 const draft = useBitmapDraft()
@@ -24,12 +37,18 @@ const store = useJobStore()
 
 const printMode = draft.printMode
 
+// Font catalogue for TypographyCard (.txt / .md sources). Local to
+// this tab rather than the singleton because no other tab needs it.
+const fonts = ref<string[]>([])
+onMounted(async () => {
+  try { fonts.value = await getFonts() } catch { /* keep [] */ }
+})
+
 // Switching master style: rewrite the draft's segmentation + uniform
-// algorithm (same logic ``MonochromeCard.selectMode`` used). When
-// layers already exist (post-upload), also re-propagate the per-band
-// recipe across them so the live preview reflects the new style
-// without needing a re-upload. If the operator has overridden some
-// layers manually, confirm before stomping their work.
+// algorithm. When layers already exist (post-upload), also re-propagate
+// the per-band recipe across them so the live preview reflects the new
+// style without needing a re-upload. If the operator has overridden
+// some layers manually, confirm before stomping their work.
 async function onMasterStyleChange(id: string): Promise<void> {
   const previous = draft.monoMasterStyleId.value
   draft.monoMasterStyleId.value = id
@@ -51,9 +70,6 @@ async function onMasterStyleChange(id: string): Promise<void> {
     }
   }
 
-  // Re-propagate to existing layers (post-upload only). Confirm if
-  // the operator already overrode some layers — we'd otherwise stomp
-  // their tuning silently.
   if (store.layers.length > 0 && previous !== id) {
     const overrideCount = Object.keys(store.layerAlgorithms).length
     if (overrideCount > 0) {
@@ -71,7 +87,17 @@ async function onMasterStyleChange(id: string): Promise<void> {
 </script>
 
 <template>
-  <section v-if="fm.hasSource.value && fm.showsBitmapForm.value" class="space-y-3">
+  <!-- Typography source: dedicated card replaces the bitmap content. -->
+  <section v-if="fm.kind.value === 'typography'" class="space-y-3">
+    <TypographyCard :typo="draft.typo.value" :fonts="fonts" />
+  </section>
+
+  <!-- Bitmap or document (PDF). Document gets a BlockMapCard on top
+       of the standard bitmap controls because the PDF's raster
+       regions still go through the same segmentation pipeline. -->
+  <section v-else-if="fm.showsBitmapForm.value" class="space-y-3">
+    <BlockMapCard v-if="fm.kind.value === 'document'" />
+
     <template v-if="printMode === 'monochrome'">
       <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
         <PenSlotPicker
@@ -103,8 +129,7 @@ async function onMasterStyleChange(id: string): Promise<void> {
     <template v-else>
       <!-- Multicolor rendering is per-layer (see Layers tab). The only
            global render knob that still makes sense at this level is
-           the detail tier, which controls segmentation resolution and
-           applies to every layer the same way. -->
+           the detail tier. -->
       <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
         <DetailPicker
           :model-value="draft.bitmap.value.max_dimension_px"
@@ -116,10 +141,6 @@ async function onMasterStyleChange(id: string): Promise<void> {
       </div>
     </template>
   </section>
-
-  <p v-else-if="!fm.hasSource.value" class="text-[11px] text-slate-500">
-    {{ t('render.noSource') }}
-  </p>
 
   <p v-else class="text-[11px] text-slate-500">
     {{ t('render.notApplicable') }}

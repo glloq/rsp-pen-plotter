@@ -2,13 +2,14 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-// Tab strip for the modal's right-hand settings pane. Splits the long
-// scrollable section into 4 contextual tabs (Source / Colors / Render
-// / Layers) ordered by the natural workflow. Variants moved out of
-// the tab strip into the persistent ``VariantsBar`` above — they're a
-// state-switcher, not a step.
+// Tab strip for the modal's right-hand settings pane. Three workflow
+// tabs: Colors → Render → Layers. The old "Source" tab is gone — the
+// modal always opens with a file already attached (Edit on a library
+// entry); the rare empty-placement case shows a dedicated overlay
+// dropzone instead of a tab. Variants live in the persistent
+// VariantsBar mounted above this strip.
 
-export type EditTabId = 'source' | 'colors' | 'render' | 'layers'
+export type EditTabId = 'colors' | 'render' | 'layers'
 
 const props = defineProps<{
   modelValue: EditTabId
@@ -30,13 +31,12 @@ interface TabSpec {
 }
 
 // Shortcut keys mirror the global handler in EditModal.vue (the digits
-// 1-4). The labelled <kbd> badge below makes them discoverable
+// 1-3). The labelled <kbd> badge below makes them discoverable
 // without forcing the operator to memorise an undocumented binding.
 const tabs = computed<TabSpec[]>(() => [
-  { id: 'source', labelKey: 'editModal.tabSource', shortcut: '1' },
-  { id: 'colors', labelKey: 'editModal.tabColors', shortcut: '2' },
-  { id: 'render', labelKey: 'editModal.tabRender', shortcut: '3' },
-  { id: 'layers', labelKey: 'editModal.tabLayers', shortcut: '4', count: props.layerCount },
+  { id: 'colors', labelKey: 'editModal.tabColors', shortcut: '1' },
+  { id: 'render', labelKey: 'editModal.tabRender', shortcut: '2' },
+  { id: 'layers', labelKey: 'editModal.tabLayers', shortcut: '3', count: props.layerCount },
 ])
 
 function select(id: EditTabId): void {

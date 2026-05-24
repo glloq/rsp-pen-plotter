@@ -253,6 +253,14 @@ export function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
         _bitmap.value.thresholds = [seg.default_threshold ?? 0.5]
       }
     }
+    // Clear the multicolour palette so a stale ``fixed_palette`` from
+    // the previous mode can't keep the preview / upload painting in
+    // colour. Without this, switching multi → mono left the operator
+    // with N coloured layers because ``buildSegmentationOptions`` would
+    // still serve the old palette if anything tipped the
+    // segmentation_method back to fixed_palette.
+    _bitmap.value.palette = []
+    _bitmap.value.num_colors = 1
     _paletteFollowsPens.value = false
   } else {
     _bitmap.value.segmentation_method = 'kmeans'
@@ -318,9 +326,35 @@ export function buildAlgorithmOptions(): Record<string, unknown> {
   }
 }
 
+// Build the per-band recipes for the current master style so the
+// backend's /preview applies them inline instead of just the uniform
+// algorithm. Only emitted in mono shaded mode (where the segmentation
+// produces N >= 2 bands and the active style carries a ``bandRecipe``);
+// returns ``undefined`` everywhere else so the payload stays minimal.
+function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
+  if (_printMode.value !== 'monochrome') return undefined
+  if (_bitmap.value.segmentation_method !== 'luminance_bands') return undefined
+  const style = resolveMasterStyle(_monoMasterStyleId.value)
+  if (!style.bandRecipe) return undefined
+  const total = _bitmap.value.num_bands
+  return Array.from({ length: total }, (_, i) => {
+    const recipe = style.bandRecipe!(i, total)
+    if (!recipe) {
+      return {
+        algorithm: style.defaultAlgorithm,
+        algorithm_options: { ...style.defaultAlgorithmOptions },
+      }
+    }
+    return {
+      algorithm: recipe.algorithm,
+      algorithm_options: { ...recipe.algorithm_options },
+    }
+  })
+}
+
 export function buildBitmapOptions(): Record<string, unknown> {
   const b = _bitmap.value
-  return {
+  const payload: Record<string, unknown> = {
     algorithm: b.algorithm,
     num_colors: b.num_colors,
     max_dimension_px: b.max_dimension_px,
@@ -332,11 +366,35 @@ export function buildBitmapOptions(): Record<string, unknown> {
     merge_delta_e: b.merge_delta_e,
     algorithm_options: buildAlgorithmOptions(),
   }
+  const bandRecipes = buildBandRecipes()
+  if (bandRecipes) payload.band_recipes = bandRecipes
+  return payload
 }
 
 export function buildTypographyOptions(): Record<string, unknown> {
   return { ..._typo.value }
 }
+
+// Predicted number of layers the next /upload will produce. Drives the
+// inline "→ N calques" badges next to the sliders that change it
+// (bands, num_colors, palette length). Keeps the operator from
+// having to commit and then count cards in the Layers tab to
+// understand the cost of a tweak.
+const _expectedLayerCount = computed<number>(() => {
+  const b = _bitmap.value
+  if (_printMode.value === 'monochrome') {
+    if (b.segmentation_method === 'luminance_bands') return b.num_bands
+    if (b.segmentation_method === 'thresholds') {
+      // drop_background removes the lightest band, so N thresholds
+      // produce N rendered layers. Binary mono modes ship a single
+      // threshold → 1 layer.
+      return b.thresholds.length
+    }
+    return 1
+  }
+  if (b.segmentation_method === 'fixed_palette') return b.palette.length
+  return b.num_colors
+})
 
 // ---- Dirty tracking ----
 // Snapshot of "what we last committed" — set by ``markCommitted`` after
@@ -362,11 +420,20 @@ function markCommitted(): void {
   _committed.value = true
 }
 
-// Wired into ``rehydrateDraft`` so the loaded placement starts clean.
+// Wired into ``rehydrateDraft`` so a loaded placement starts clean.
+// Only marks the rehydrated state as the committed baseline when the
+// placement actually carries committed options (``last_options``); for
+// a fresh / empty placement we leave the baseline as-is so the dirty
+// tracker correctly flags the first edit as "unsaved" rather than
+// pinning a blank draft as if it were already committed.
 const _origRehydrate = rehydrateDraft
 function rehydrateDraftAndMark(ctx: RehydrateContext): void {
   _origRehydrate(ctx)
-  markCommitted()
+  const hasCommitted = Boolean(
+    ctx.placement?.last_options
+    && typeof ctx.placement.last_options === 'object',
+  )
+  if (hasCommitted) markCommitted()
 }
 
 // ---- Public composable ----
@@ -380,6 +447,7 @@ export function useBitmapDraft() {
     committed: _committed,
     isDirty: _isDirty,
     printMode: _printMode,
+    expectedLayerCount: _expectedLayerCount,
     setPrintMode,
     rehydrateDraft: rehydrateDraftAndMark,
     applyPresetOptions,

@@ -343,7 +343,8 @@
     "expandAllHint": "Open every layer card",
     "collapseAll": "Collapse all",
     "collapseAllHint": "Reduce every layer card to its header",
-    "summary": "Total"
+    "summary": "Total",
+    "expectedHint": "Layers this image will produce when you Apply"
   },
   "passes": {
     "title": "Passes",

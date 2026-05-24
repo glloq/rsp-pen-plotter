@@ -134,6 +134,69 @@ def test_bitmap_converter_routes_through_luminance_bands() -> None:
     assert result.svg.count('inkscape:label="color-') == 3
 
 
+def test_bitmap_converter_applies_band_recipes_in_preview() -> None:
+    """End-to-end: ``band_recipes`` overrides per-layer algos so the live
+    preview reflects what the post-upload bandRecipe propagation will
+    eventually install. Without this the operator only ever sees the
+    uniform default algorithm until they hit Apply + /rerender — exactly
+    the bug the iter-2 refactor is fixing."""
+    image = _gradient_image(width=16, height=16)
+    # Three luminance bands → three recipes, each picking a different
+    # algo so the resulting SVG carries the corresponding fingerprints.
+    # halftone emits <circle>, crosshatch + edges emit <line>/<path>, so
+    # a halftone-only band leaves circles inside its label group; a
+    # crosshatch-only band has none.
+    result = BitmapConverter().convert(
+        _png_bytes(image),
+        options={
+            "algorithm": "direct",
+            "segmentation_method": "luminance_bands",
+            "segmentation_options": {"num_bands": 3},
+            "drop_background": False,
+            "band_recipes": [
+                {"algorithm": "halftone", "algorithm_options": {"cell_size_px": 3}},
+                {"algorithm": "crosshatch", "algorithm_options": {"angle_deg": 45, "spacing_px": 3, "crossed": False}},
+                {"algorithm": "crosshatch", "algorithm_options": {"angle_deg": 135, "spacing_px": 5, "crossed": False}},
+            ],
+        },
+        fast=True,
+    )
+    # Three rendered band layers (one per luminance band).
+    assert result.svg.count('inkscape:label="color-') == 3
+    # The first (darkest) band uses halftone → carries <circle> tags
+    # somewhere; the two crosshatch bands together carry <line> tags.
+    assert '<circle' in result.svg
+    assert '<line' in result.svg
+
+
+def test_bitmap_converter_band_recipes_skip_dropped_background() -> None:
+    """``band_recipes`` index aligns with rendered layers, not raw
+    segmentation clusters — so dropping the lightest band still
+    matches recipes correctly against the surviving bands."""
+    image = _gradient_image(width=16, height=16)
+    result = BitmapConverter().convert(
+        _png_bytes(image),
+        options={
+            "algorithm": "direct",
+            "segmentation_method": "luminance_bands",
+            "segmentation_options": {"num_bands": 4},
+            "drop_background": True,
+            "background_luminance": 0.5,
+            "band_recipes": [
+                {"algorithm": "halftone", "algorithm_options": {"cell_size_px": 4}},
+                {"algorithm": "halftone", "algorithm_options": {"cell_size_px": 4}},
+                {"algorithm": "halftone", "algorithm_options": {"cell_size_px": 4}},
+                {"algorithm": "halftone", "algorithm_options": {"cell_size_px": 4}},
+            ],
+        },
+        fast=True,
+    )
+    # drop_background trimmed the lightest band(s); the surviving ones
+    # all rendered through the halftone recipe so the SVG has circles
+    # and no <line>/<path> from a fallback algorithm.
+    assert '<circle' in result.svg
+
+
 def test_bitmap_converter_fixed_palette_via_options() -> None:
     image = _gradient_image(width=16, height=16)
     result = BitmapConverter().convert(

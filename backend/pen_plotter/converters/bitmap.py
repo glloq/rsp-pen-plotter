@@ -65,6 +65,16 @@ class BitmapOptions(BaseModel):
     # collapses palette entries closer than ``threshold`` in CIE Lab.
     min_region_pixels: int = Field(default=0, ge=0)
     merge_delta_e: float = Field(default=0.0, ge=0.0)
+    # Per-band rendering recipes for mono shaded modes. When provided,
+    # ``band_recipes[i]`` overrides the uniform ``algorithm`` /
+    # ``algorithm_options`` for the i-th produced layer (ordered
+    # darkest-first, matching the front-end's ``bandRecipe`` contract).
+    # This lets ``/preview`` reflect the per-band variation that mono
+    # master styles like Pencil / Halftone / Stippling apply
+    # post-/upload via /rerender — without it, the live preview shows
+    # only the uniform default and the operator only sees the real
+    # result after Apply.
+    band_recipes: list[dict[str, Any]] | None = None
 
 
 class BitmapConverter(Converter):
@@ -137,7 +147,37 @@ class BitmapConverter(Converter):
             )
         height, width = labels.shape
         seg = SegmentationResult(labels=labels, palette=palette, width=width, height=height)
-        svg, warnings = self.render_from_segmentation(seg, opts)
+        # Translate ``band_recipes`` (positional, darkest-first) into the
+        # label-keyed ``per_layer_overrides`` ``render_from_segmentation``
+        # already understands. The frontend builds the recipe list from
+        # the master style's ``bandRecipe(i, total)`` so the live preview
+        # reflects per-band variation (Pencil's rotating crosshatch
+        # angles, Halftone's growing cell size, etc.) without needing a
+        # /rerender round-trip after upload.
+        overrides: dict[str, dict[str, Any]] | None = None
+        if opts.band_recipes:
+            overrides = {}
+            ordered_clusters = list(BitmapConverter._layer_order(labels, palette))
+            # Replicate the drop_background filter ``render_from_segmentation``
+            # applies so band_recipes[i] aligns with the i-th *rendered*
+            # layer the operator sees, not the i-th raw segmentation cluster.
+            rendered_clusters = [
+                c for c in ordered_clusters
+                if not (
+                    opts.drop_background
+                    and float(np.dot(palette[c] / 255.0, _REC709)) >= opts.background_luminance
+                )
+            ]
+            for i, cluster in enumerate(rendered_clusters):
+                if i >= len(opts.band_recipes):
+                    break
+                recipe = opts.band_recipes[i] or {}
+                color_hex = "#{:02x}{:02x}{:02x}".format(*palette[cluster].astype(int))
+                label = f"color-{color_hex.lstrip('#')}"
+                overrides[label] = recipe
+        svg, warnings = BitmapConverter.render_from_segmentation(
+            seg, opts, per_layer_overrides=overrides,
+        )
         return (
             ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings),
             seg,

@@ -155,6 +155,13 @@ export function useFileManager(t?: Translator) {
         styleId: draft.monoMasterStyleId.value,
         penSlot: draft.monoPenSlot.value,
       })
+      // Refresh the live preview so the canvas reflects the per-band
+      // recipes that ``applyMasterStyleToLayers`` just installed via
+      // /rerender. Without this, the pane would either stay blank
+      // (previewer.clear() above) until the placement SVG arrives, or
+      // keep the pre-Apply uniform-algo preview visible — confusing
+      // the operator who expected to see the result of their changes.
+      previewer.schedule({ immediate: true })
     }
     // Pin the new baseline so the dirty tracker flips back to false
     // — Apply button greys out, close-modal warning won't fire.
