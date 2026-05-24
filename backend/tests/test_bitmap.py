@@ -182,3 +182,43 @@ def test_bitmap_converter_accepts_preprocess(two_color_png: bytes) -> None:
         },
     )
     assert result.svg.startswith("<svg")
+
+
+def test_fixed_palette_preserves_white_background() -> None:
+    # When the operator's palette follows their pen rack (no white pen),
+    # white pixels would otherwise snap to the nearest pen colour and
+    # the resulting layer would survive ``drop_background``. The
+    # converter must auto-inject ``#ffffff`` so the white area maps to
+    # white and gets dropped, leaving the foreground as the only layer.
+    img = Image.new("RGB", (50, 50), "white")
+    for y in range(10, 30):
+        for x in range(10, 30):
+            img.putpixel((x, y), (255, 0, 0))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    result = BitmapConverter().convert(
+        buf.getvalue(),
+        options={
+            "segmentation_method": "fixed_palette",
+            "segmentation_options": {"palette": ["#ff0000", "#00ff00"]},
+            "drop_background": True,
+            "background_luminance": 0.92,
+            "algorithm": "halftone",
+        },
+    )
+    lowered = result.svg.lower()
+    assert "ffffff" not in lowered
+    assert "ff0000" in lowered
+
+
+def test_fixed_palette_chunked_handles_large_image() -> None:
+    # Regression for the Ultra-tier OOM: a 5000×5000 input must not
+    # blow up the (P, K, 3) broadcast. We just check it completes and
+    # returns label shapes that match.
+    from pen_plotter.converters.segmentation import fixed_palette
+
+    big = Image.new("RGB", (5000, 5000), "#888888")
+    labels, palette = fixed_palette(big, palette_hex=["#000000", "#ffffff"])
+    assert labels.shape == (5000, 5000)
+    assert palette.shape == (2, 3)

@@ -118,17 +118,31 @@ def fixed_palette(
     Distance is Euclidean in RGB — good enough for the small palettes the
     operator will typically use (matching their pen rack). For wider
     palettes we'd switch to Lab, but the cost isn't justified here.
+
+    Computed in float32 chunks: the previous (P, K, 3) float64 broadcast
+    blew up at the editor's "Ultra" detail tier (4800–8192 px) — for an
+    8192² image with 8 colours the intermediate alone is ~6 GB. The
+    chunked argmin keeps peak memory bounded regardless of input size,
+    and float32 has more than enough precision for 0–255 RGB distances.
     """
     colours = [_hex_to_rgb(h) for h in palette_hex]
     if not colours:
         raise ValueError("Fixed palette must contain at least one colour")
     palette = np.array(colours, dtype=np.uint8)
-    pixels = np.asarray(image, dtype=np.float64).reshape(-1, 3)
-    # (P, K) distance matrix; we keep argmin per pixel.
-    diffs = pixels[:, None, :] - palette[None, :, :].astype(np.float64)
-    sq = np.einsum("pkc,pkc->pk", diffs, diffs)
-    flat_labels = sq.argmin(axis=1).astype(np.intp)
-    labels = flat_labels.reshape(image.height, image.width)
+    pal_f = palette.astype(np.float32)
+    pal_sq = (pal_f * pal_f).sum(axis=1)
+    pixels = np.asarray(image, dtype=np.float32).reshape(-1, 3)
+    n = pixels.shape[0]
+    flat = np.empty(n, dtype=np.intp)
+    chunk = 1_000_000
+    for start in range(0, n, chunk):
+        end = min(n, start + chunk)
+        block = pixels[start:end]
+        dots = block @ pal_f.T
+        block_sq = (block * block).sum(axis=1, keepdims=True)
+        sq = block_sq - 2.0 * dots + pal_sq[None, :]
+        flat[start:end] = sq.argmin(axis=1)
+    labels = flat.reshape(image.height, image.width)
     return labels, palette
 
 

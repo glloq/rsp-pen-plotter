@@ -32,6 +32,7 @@ export type AlgorithmId =
   | 'crosshatch'
   | 'contours'
   | 'edges'
+  | 'centerline'
   | 'spiral'
   | 'scanlines'
   | 'tsp'
@@ -93,6 +94,15 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     defaults: { stroke_width: 0.8 },
     schema: [
       { key: 'stroke_width', label: 'convert.strokeWidthPx', type: 'number', min: 0.1, max: 5, step: 0.1 },
+    ],
+  },
+  centerline: {
+    id: 'centerline',
+    defaults: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+    schema: [
+      { key: 'stroke_width', label: 'convert.strokeWidthPx', type: 'number', min: 0.1, max: 5, step: 0.1 },
+      { key: 'smooth', label: 'convert.smooth', type: 'boolean' },
+      { key: 'min_branch_px', label: 'convert.minBranch', type: 'number', min: 0, max: 50, step: 1 },
     ],
   },
   spiral: {
@@ -383,6 +393,28 @@ export const PRINT_STYLES: PrintStyle[] = [
       return { algorithm: 'spiral', algorithm_options: { spacing_px: 3, samples_per_turn: 64 } }
     },
   },
+  {
+    id: 'centerline-trace',
+    labelKey: 'mono.modes.centerline',
+    descriptionKey: 'mono.modes.centerlineDesc',
+    applicableTo: ['image', 'schematic'],
+    scope: 'master',
+    segmentation: {
+      method: 'thresholds',
+      default_threshold: 0.5,
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'centerline',
+    defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+    bandRecipe() {
+      return {
+        algorithm: 'centerline',
+        algorithm_options: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+      }
+    },
+  },
   // ============== LAYER STYLES — per-layer presets ==============
   {
     id: 'direct',
@@ -465,6 +497,15 @@ export const PRINT_STYLES: PrintStyle[] = [
     defaultAlgorithm: 'scanlines',
     defaultAlgorithmOptions: { spacing_px: 4, wave_amp_px: 0, wave_period_px: 12 },
   },
+  {
+    id: 'centerline-stroke',
+    labelKey: 'printStyles.centerline',
+    descriptionKey: 'printStyles.centerlineDesc',
+    applicableTo: ['image', 'schematic'],
+    scope: 'layer',
+    defaultAlgorithm: 'centerline',
+    defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+  },
 ]
 
 // Default master style applied when the operator first switches to
@@ -484,6 +525,7 @@ export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   outline: 'outline',
   tsp: 'tsp',
   spiral: 'spiral-master',
+  centerline: 'centerline-trace',
 }
 
 // ---- Query helpers ----

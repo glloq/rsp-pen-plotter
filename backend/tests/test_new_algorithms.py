@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from pen_plotter.converters.algorithms import (
+    CenterlineAlgorithm,
     ContoursAlgorithm,
     CrosshatchAlgorithm,
     EdgesAlgorithm,
@@ -31,7 +32,7 @@ def _square_mask(size: int = 20, inset: int = 4) -> np.ndarray:
     return mask
 
 
-def test_registry_lists_all_nine_algorithms() -> None:
+def test_registry_lists_all_algorithms() -> None:
     names = {a.name for a in available_algorithms()}
     assert names == {
         "direct",
@@ -40,6 +41,7 @@ def test_registry_lists_all_nine_algorithms() -> None:
         "crosshatch",
         "contours",
         "edges",
+        "centerline",
         "spiral",
         "scanlines",
         "tsp",
@@ -51,9 +53,35 @@ def test_algorithm_kind_groups_by_family() -> None:
     assert algorithm_kind("crosshatch") == "fill"
     assert algorithm_kind("contours") == "lines"
     assert algorithm_kind("edges") == "lines"
+    assert algorithm_kind("centerline") == "lines"
     assert algorithm_kind("spiral") == "mono_stroke"
     assert algorithm_kind("scanlines") == "mono_stroke"
     assert algorithm_kind("tsp") == "mono_stroke"
+
+
+def test_centerline_traces_horizontal_bar() -> None:
+    # A 100×10 horizontal bar should yield a single polyline running
+    # roughly across the middle row from one end to the other.
+    mask = np.zeros((10, 100), dtype=bool)
+    mask[3:7, 1:99] = True
+    svg = CenterlineAlgorithm().render_layer(
+        mask, "#000000", "test", options={"min_branch_px": 3}
+    )
+    assert "<polyline" in svg
+    assert svg.count("<polyline") == 1
+    assert 'fill="none"' in svg
+
+
+def test_centerline_skimage_missing_falls_back_to_edges(monkeypatch) -> None:
+    # When scikit-image isn't installed the algorithm must degrade
+    # gracefully to an outline rather than crash.
+    import pen_plotter.converters.algorithms.centerline as centerline_module
+
+    monkeypatch.setattr(centerline_module, "_skeletonize", lambda mask: None)
+    mask = _square_mask()
+    svg = CenterlineAlgorithm().render_layer(mask, "#000000", "test")
+    assert svg.startswith("<g")
+    assert "<polyline" in svg
 
 
 @pytest.mark.parametrize(

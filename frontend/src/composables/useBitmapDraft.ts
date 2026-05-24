@@ -84,6 +84,20 @@ export type BitmapDraft = {
   scanlines_wave_period_px: number
 }
 
+// Path-level treatment applied between the image-preprocess step and
+// the colour/render stages. ``centerline_mode`` switches the active
+// algorithm to ``centerline`` so the vectorisation traces medial
+// skeletons rather than filled outlines — essential for schematics
+// and line art. ``simplify_tolerance_mm`` is passed through to the
+// /optimize endpoint as the default ``LayerOptimization.simplify_tolerance_mm``.
+// ``curve_fit`` is currently a UI-only flag (no backend support yet);
+// shipped as a ``coming soon`` toggle so the field is reserved.
+export type CurvesDraft = {
+  centerline_mode: boolean
+  simplify_tolerance_mm: number
+  curve_fit: boolean
+}
+
 export type TypographyDraft = {
   font: string
   font_size_mm: number
@@ -170,6 +184,14 @@ export function defaultBitmap(): BitmapDraft {
   }
 }
 
+export function defaultCurves(): CurvesDraft {
+  return {
+    centerline_mode: false,
+    simplify_tolerance_mm: 0.05,
+    curve_fit: false,
+  }
+}
+
 export function defaultTypography(): TypographyDraft {
   return {
     font: 'futural',
@@ -185,6 +207,7 @@ export function defaultTypography(): TypographyDraft {
 
 // ---- Singleton state ----
 const _bitmap = ref<BitmapDraft>(defaultBitmap())
+const _curves = ref<CurvesDraft>(defaultCurves())
 const _typo = ref<TypographyDraft>(defaultTypography())
 const _monoPenSlot = ref<number>(0)
 const _monoMasterStyleId = ref<string>(DEFAULT_MASTER_STYLE_ID)
@@ -238,6 +261,7 @@ export interface RehydrateContext {
 
 export function rehydrateDraft(ctx: RehydrateContext): void {
   _bitmap.value = defaultBitmap()
+  _curves.value = defaultCurves()
   _typo.value = defaultTypography()
   _paletteFollowsPens.value = true
   _committed.value = false
@@ -304,6 +328,16 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   const typoTarget = _typo.value as Record<string, unknown>
   for (const key of Object.keys(typoTarget)) {
     if (key in opts) typoTarget[key] = opts[key]
+  }
+  const curvesOpts = (opts as Record<string, unknown>).curves
+  if (curvesOpts && typeof curvesOpts === 'object') {
+    const fresh = defaultCurves() as Record<string, unknown>
+    for (const key of Object.keys(fresh)) {
+      if (key in (curvesOpts as Record<string, unknown>)) {
+        fresh[key] = (curvesOpts as Record<string, unknown>)[key]
+      }
+    }
+    _curves.value = fresh as unknown as CurvesDraft
   }
   // A placement that round-tripped through /upload is by definition
   // committed; we only flip back to dirty on the first user mutation
@@ -450,8 +484,17 @@ function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
 
 export function buildBitmapOptions(): Record<string, unknown> {
   const b = _bitmap.value
+  const c = _curves.value
+  // Centerline mode (Courbes tab) overrides whichever algorithm + per-
+  // band recipe the master style picked: tracing a medial skeleton makes
+  // sense regardless of what the operator originally selected, and it's
+  // a single global flag rather than a per-band concern.
+  const algo = c.centerline_mode ? 'centerline' : b.algorithm
+  const algoOpts = c.centerline_mode
+    ? { stroke_width: 0.8, smooth: true, min_branch_px: 3 }
+    : buildAlgorithmOptions()
   const payload: Record<string, unknown> = {
-    algorithm: b.algorithm,
+    algorithm: algo,
     num_colors: b.num_colors,
     max_dimension_px: b.max_dimension_px,
     drop_background: b.drop_background,
@@ -460,7 +503,7 @@ export function buildBitmapOptions(): Record<string, unknown> {
     segmentation_options: buildSegmentationOptions(),
     min_region_pixels: b.min_region_pixels,
     merge_delta_e: b.merge_delta_e,
-    algorithm_options: buildAlgorithmOptions(),
+    algorithm_options: algoOpts,
     // Photo-editor adjustments applied before downscale + segmentation.
     // Always shipped so the operator's tweaks survive /preview <->
     // /upload round-trips; neutral defaults are a no-op server-side.
@@ -471,9 +514,18 @@ export function buildBitmapOptions(): Record<string, unknown> {
     // (BitmapOptions ignores unrecognised keys); only the frontend
     // rehydrate path reads it back.
     master_style_id: _monoMasterStyleId.value,
+    // Curves tab state — also a backend-unknown extra, read back by
+    // ``rehydrateDraft`` so the toggles survive a round-trip.
+    curves: { ...c },
   }
-  const bandRecipes = buildBandRecipes()
-  if (bandRecipes) payload.band_recipes = bandRecipes
+  if (c.centerline_mode) {
+    // Suppress per-band variations so every layer renders as a single-
+    // stroke skeleton instead of inheriting the master's crosshatch /
+    // halftone recipe.
+  } else {
+    const bandRecipes = buildBandRecipes()
+    if (bandRecipes) payload.band_recipes = bandRecipes
+  }
   return payload
 }
 
@@ -515,14 +567,18 @@ function snap(value: unknown): string {
   try { return JSON.stringify(value) } catch { return '' }
 }
 
+const _baselineCurves = ref<string>('')
+
 const _isDirty = computed<boolean>(() => {
   return snap(_bitmap.value) !== _baselineBitmap.value
     || snap(_typo.value) !== _baselineTypo.value
+    || snap(_curves.value) !== _baselineCurves.value
 })
 
 function markCommitted(): void {
   _baselineBitmap.value = snap(_bitmap.value)
   _baselineTypo.value = snap(_typo.value)
+  _baselineCurves.value = snap(_curves.value)
   _committed.value = true
 }
 
@@ -546,6 +602,7 @@ function rehydrateDraftAndMark(ctx: RehydrateContext): void {
 export function useBitmapDraft() {
   return {
     bitmap: _bitmap,
+    curves: _curves,
     typo: _typo,
     monoPenSlot: _monoPenSlot,
     monoMasterStyleId: _monoMasterStyleId,

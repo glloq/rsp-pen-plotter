@@ -13,6 +13,7 @@ import VariantsBar from './edit/VariantsBar.vue'
 import UploadFooter from './edit/UploadFooter.vue'
 import EmptyPlacementDropzone from './edit/EmptyPlacementDropzone.vue'
 import ImageTab from './edit/tabs/ImageTab.vue'
+import CurvesTab from './edit/tabs/CurvesTab.vue'
 import ColorsTab from './edit/tabs/ColorsTab.vue'
 import RenderTab from './edit/tabs/RenderTab.vue'
 import LayersTab from './edit/tabs/LayersTab.vue'
@@ -56,6 +57,7 @@ function loadInitialTab(): EditTabId {
     const stored = localStorage.getItem(TAB_KEY)
     if (
       stored === 'image'
+      || stored === 'curves'
       || stored === 'colors'
       || stored === 'render'
       || stored === 'layers'
@@ -104,9 +106,10 @@ function onKey(event: KeyboardEvent): void {
   }
   if (isTypingTarget(event.target)) return
   if (event.key === '1') { activeTab.value = 'image'; event.preventDefault() }
-  else if (event.key === '2') { activeTab.value = 'colors'; event.preventDefault() }
-  else if (event.key === '3') { activeTab.value = 'render'; event.preventDefault() }
-  else if (event.key === '4') { activeTab.value = 'layers'; event.preventDefault() }
+  else if (event.key === '2') { activeTab.value = 'curves'; event.preventDefault() }
+  else if (event.key === '3') { activeTab.value = 'colors'; event.preventDefault() }
+  else if (event.key === '4') { activeTab.value = 'render'; event.preventDefault() }
+  else if (event.key === '5') { activeTab.value = 'layers'; event.preventDefault() }
 }
 
 // ============================== RESIZABLE SPLIT ==============================
@@ -290,6 +293,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                    lost when the operator hops between tabs. -->
               <div v-show="activeTab === 'image'" class="space-y-3">
                 <ImageTab />
+              </div>
+              <div v-show="activeTab === 'curves'" class="space-y-3">
+                <CurvesTab />
               </div>
               <div v-show="activeTab === 'colors'" class="space-y-3">
                 <ColorsTab />

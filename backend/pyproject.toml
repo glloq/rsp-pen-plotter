@@ -13,6 +13,7 @@ dependencies = [
     "pillow>=10.4",
     "pillow-heif>=0.18",
     "numpy>=2.0",
+    "scikit-image>=0.22",
     "scikit-learn>=1.5",
     "pymupdf>=1.24",
     "ezdxf>=1.3",
