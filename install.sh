@@ -9,6 +9,7 @@
 #   ./install.sh --service        # also install + enable the systemd unit
 #                                 # (calls install-service.sh internally)
 #   ./install.sh --no-system-deps # skip apt-get installs (custom setups)
+#   ./install.sh --no-restart     # do not restart omniplot.service if installed
 #   ./install.sh --help
 #
 # Environment:
@@ -21,10 +22,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 WITH_SERVICE=0
 SKIP_SYSTEM_DEPS=0
+NO_RESTART=0
 for arg in "$@"; do
   case "$arg" in
     --service)        WITH_SERVICE=1 ;;
     --no-system-deps) SKIP_SYSTEM_DEPS=1 ;;
+    --no-restart)     NO_RESTART=1 ;;
     --help|-h)
       # Print the header comment block (lines starting with '#' between the
       # shebang and the first code line), stripping the leading '# '.
@@ -177,6 +180,26 @@ install_service() {
   fi
 }
 
+# Restart the systemd unit if it's installed, so a rebuild picks up changes.
+# Skipped when --service was passed (install-service.sh already enable --now's
+# it) or when --no-restart is set. Silent no-op if the unit isn't installed.
+restart_service_if_installed() {
+  if [ "$NO_RESTART" -eq 1 ] || [ "$WITH_SERVICE" -eq 1 ]; then
+    return
+  fi
+  has systemctl || return
+  systemctl list-unit-files 2>/dev/null | grep -q '^omniplot\.service' || return
+  step "Restarting omniplot.service"
+  if [ "$EUID" -eq 0 ]; then
+    systemctl restart omniplot.service
+  else
+    sudo -n systemctl restart omniplot.service 2>/dev/null || {
+      echo "    Note: could not restart without password; run 'sudo systemctl restart omniplot' manually." >&2
+      return
+    }
+  fi
+}
+
 # ----------------------------------------------------------------- main ----
 
 install_system_deps
@@ -187,6 +210,7 @@ install_frontend
 if [ "$WITH_SERVICE" -eq 1 ]; then
   install_service
 fi
+restart_service_if_installed
 
 # Suggest the URL the user will visit. Best-effort LAN-IP detection.
 ip=""
