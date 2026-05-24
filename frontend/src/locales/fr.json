@@ -126,7 +126,11 @@
     "resetView": "Réinitialiser la vue (clic) · molette pour zoomer · glisser pour déplacer",
     "cancelPreview": "Annuler l'aperçu",
     "retry": "Réessayer",
-    "paths": "tracés"
+    "paths": "tracés",
+    "live": "Live",
+    "livePreviewHint": "Reflète chaque changement de réglage — pas encore appliqué au plan.",
+    "saved": "Sauvé",
+    "savedHint": "Dernière conversion appliquée — change les réglages puis clique Re-convertir pour rafraîchir."
   },
   "planRail": {
     "title": "Plan",
