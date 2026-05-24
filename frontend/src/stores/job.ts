@@ -226,39 +226,6 @@ export const useJobStore = defineStore('job', () => {
     else patchPlacement(id, { flip_v: !target.flip_v })
   }
 
-  function centerPlacement(id: string): void {
-    const target = placements.value.find((p) => p.id === id)
-    const ws = selectedProfile.value?.workspace
-    if (!target || !ws) return
-    const wsW = ws.x_max - ws.x_min
-    const wsH = ws.y_max - ws.y_min
-    patchPlacement(id, {
-      x_mm: (wsW - target.width_mm) / 2,
-      y_mm: (wsH - target.height_mm) / 2,
-    })
-  }
-
-  function resetPlacementTransform(id: string): void {
-    const target = placements.value.find((p) => p.id === id)
-    if (!target) return
-    // Restore upright orientation while keeping the placement's centre
-    // pinned, then drop both mirror axes.
-    const cx = target.x_mm + target.width_mm / 2
-    const cy = target.y_mm + target.height_mm / 2
-    const swap = target.rotation % 180 !== 0
-    const newW = swap ? target.height_mm : target.width_mm
-    const newH = swap ? target.width_mm : target.height_mm
-    patchPlacement(id, {
-      rotation: 0,
-      flip_h: false,
-      flip_v: false,
-      width_mm: newW,
-      height_mm: newH,
-      x_mm: cx - newW / 2,
-      y_mm: cy - newH / 2,
-    })
-  }
-
   function duplicatePlacement(id: string, offsetMm = 15): string | null {
     const src = placements.value.find((p) => p.id === id)
     if (!src) return null
@@ -1157,8 +1124,6 @@ export const useJobStore = defineStore('job', () => {
     removePlacement,
     rotatePlacement,
     flipPlacement,
-    centerPlacement,
-    resetPlacementTransform,
     // Backward-compat views
     job,
     svg,

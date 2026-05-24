@@ -393,11 +393,7 @@
     "rotateLeft": "Rotate −90°",
     "rotateRight": "Rotate +90°",
     "flipH": "Mirror horizontally",
-    "flipV": "Mirror vertically",
-    "centerPlacement": "Center on sheet",
-    "duplicatePlacement": "Duplicate",
-    "resetTransform": "Reset rotation and mirror",
-    "resetTransformShort": "Reset"
+    "flipV": "Mirror vertically"
   },
   "convert": {
     "options": "Conversion options",

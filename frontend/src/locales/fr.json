@@ -393,11 +393,7 @@
     "rotateLeft": "Rotation −90°",
     "rotateRight": "Rotation +90°",
     "flipH": "Miroir horizontal",
-    "flipV": "Miroir vertical",
-    "centerPlacement": "Centrer sur la feuille",
-    "duplicatePlacement": "Dupliquer",
-    "resetTransform": "Réinitialiser rotation et miroir",
-    "resetTransformShort": "Réinit."
+    "flipV": "Miroir vertical"
   },
   "convert": {
     "options": "Options de conversion",
