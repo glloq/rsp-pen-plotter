@@ -150,6 +150,36 @@ const statusLabel = computed(() => {
   }
   return ''
 })
+
+// SVG diagnostics — concrete proof that the detail / mode tweaks
+// actually change the rendered output. Without this, the live preview
+// auto-scales to fit the pane so a 400×400 result and a 1200×1200
+// result look visually similar even though one has 4× the paths. The
+// footer reports the SVG's viewBox size and a path-element count so
+// the operator can verify "yes, switching to High really did rebuild
+// the SVG at higher resolution".
+const currentSvg = computed<string>(() => {
+  if (edit?.previewSvg.value) return edit.previewSvg.value
+  return placementSvg.value
+})
+
+const svgStats = computed<{ width: number; height: number; paths: number } | null>(() => {
+  const svg = currentSvg.value
+  if (!svg) return null
+  const vbMatch = svg.match(/viewBox="([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)"/)
+  const width = vbMatch ? Math.round(Number(vbMatch[3])) : 0
+  const height = vbMatch ? Math.round(Number(vbMatch[4])) : 0
+  // Count the renderer's primitive elements: <path>, <line>, <circle>,
+  // <polyline>, <polygon>. Each is roughly one pen stroke.
+  const paths
+    = (svg.match(/<path /g)?.length ?? 0)
+    + (svg.match(/<line /g)?.length ?? 0)
+    + (svg.match(/<circle /g)?.length ?? 0)
+    + (svg.match(/<polyline /g)?.length ?? 0)
+    + (svg.match(/<polygon /g)?.length ?? 0)
+  if (!width && !height && !paths) return null
+  return { width, height, paths }
+})
 </script>
 
 <template>
@@ -337,19 +367,30 @@ const statusLabel = computed(() => {
       </div>
     </div>
 
-    <!-- Palette swatches from the live /preview, when available. -->
+    <!-- Status footer: SVG diagnostics (dimensions + path count) plus
+         the live palette swatches when /preview returned a palette.
+         The diagnostics make detail / mode tweaks visible — the
+         preview pane scales the SVG to fit, so a higher-detail SVG
+         looks the same as a lower-detail one at first glance even
+         though the path count multiplied. -->
     <footer
-      v-if="edit && edit.previewPalette.value.length"
-      class="flex flex-wrap items-center gap-1.5 border-t border-slate-700 bg-slate-900/60 px-3 py-1.5 text-[10px] text-slate-500"
+      v-if="svgStats || (edit && edit.previewPalette.value.length)"
+      class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-700 bg-slate-900/60 px-3 py-1.5 text-[10px] text-slate-500"
     >
-      <span class="uppercase tracking-wider">{{ t('editPreview.palette') }}</span>
-      <span
-        v-for="hex in edit.previewPalette.value"
-        :key="hex"
-        class="inline-block h-3 w-3 rounded border border-slate-600"
-        :style="{ backgroundColor: hex }"
-        :title="hex"
-      />
+      <span v-if="svgStats" class="font-mono text-slate-400">
+        {{ svgStats.width }} × {{ svgStats.height }}
+        · {{ svgStats.paths }} {{ t('editPreview.paths') }}
+      </span>
+      <template v-if="edit && edit.previewPalette.value.length">
+        <span class="uppercase tracking-wider">{{ t('editPreview.palette') }}</span>
+        <span
+          v-for="hex in edit.previewPalette.value"
+          :key="hex"
+          class="inline-block h-3 w-3 rounded border border-slate-600"
+          :style="{ backgroundColor: hex }"
+          :title="hex"
+        />
+      </template>
     </footer>
   </section>
 </template>

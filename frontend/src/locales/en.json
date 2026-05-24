@@ -125,7 +125,8 @@
     "zoomOut": "Zoom out",
     "resetView": "Reset view (click) · scroll to zoom · drag to pan",
     "cancelPreview": "Cancel preview",
-    "retry": "Retry"
+    "retry": "Retry",
+    "paths": "paths"
   },
   "planRail": {
     "title": "Plan",
