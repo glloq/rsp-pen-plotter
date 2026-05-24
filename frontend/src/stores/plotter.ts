@@ -57,19 +57,38 @@ export const usePlotterStore = defineStore('plotter', () => {
     }
   }
 
-  async function withErrors(fn: () => Promise<PlotterStatus>): Promise<void> {
+  async function withErrors(
+    fn: () => Promise<PlotterStatus>,
+    progressMessage?: string,
+    successMessage?: string,
+  ): Promise<void> {
     error.value = null
+    const toasts = useToastStore()
+    const toastId = progressMessage ? toasts.progress(progressMessage) : null
     try {
       status.value = await fn()
+      if (toastId !== null && successMessage) {
+        toasts.update(toastId, 'success', successMessage, 3000)
+      } else if (toastId !== null) {
+        toasts.dismiss(toastId)
+      }
     } catch (err) {
       const message = errorDetail(err, i18n.global.t('plotter.commandFailed'))
       error.value = message
-      useToastStore().error(message)
+      if (toastId !== null) {
+        toasts.update(toastId, 'error', message, 6000)
+      } else {
+        toasts.error(message)
+      }
     }
   }
 
   async function connect(): Promise<void> {
-    await withErrors(() => plotterConnect(port.value, baudrate.value, terminator.value))
+    await withErrors(
+      () => plotterConnect(port.value, baudrate.value, terminator.value),
+      i18n.global.t('toast.plotterConnecting'),
+      i18n.global.t('toast.plotterConnected'),
+    )
     if (status.value.connected) openSocket()
   }
 
@@ -80,7 +99,12 @@ export const usePlotterStore = defineStore('plotter', () => {
     withErrors(() => plotterGoto(x, y, profileName))
   const home = (profileName: string): Promise<void> =>
     withErrors(() => plotterHome(profileName))
-  const run = (gcode: string): Promise<void> => withErrors(() => plotterRun(gcode))
+  const run = (gcode: string): Promise<void> =>
+    withErrors(
+      () => plotterRun(gcode),
+      i18n.global.t('toast.plotterSending'),
+      i18n.global.t('toast.plotterSent'),
+    )
   const pause = (): Promise<void> => withErrors(() => plotterCommand('pause'))
   const resume = (): Promise<void> => withErrors(() => plotterCommand('resume'))
   const abort = (): Promise<void> => withErrors(() => plotterCommand('abort'))

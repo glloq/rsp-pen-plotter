@@ -45,18 +45,19 @@ async function runUpdate(force = false): Promise<void> {
   updating.value = true
   updateError.value = null
   lastUpdate.value = null
+  const toastId = toasts.progress(t('toast.updateChecking'))
   try {
     const result = await systemUpdate(force)
     lastUpdate.value = result
     if (result.updated) {
-      toasts.success(t('system.updateApplied'))
+      toasts.update(toastId, 'success', t('toast.updateInstalled'), 5000)
     } else {
-      toasts.info(t('system.upToDate'))
+      toasts.update(toastId, 'info', t('toast.updateNone'), 4000)
     }
     await loadVersion()
   } catch (err) {
     updateError.value = (err as Error).message || t('system.updateFailed')
-    toasts.error(updateError.value)
+    toasts.update(toastId, 'error', updateError.value, 6000)
   } finally {
     updating.value = false
   }

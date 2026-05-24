@@ -7,7 +7,24 @@
   },
   "toast": {
     "uploaded": "« {name} » importé ({count} calques).",
-    "moreWarnings": "+{count} avertissements supplémentaires."
+    "moreWarnings": "+{count} avertissements supplémentaires.",
+    "uploading": "Importation de « {name} »…",
+    "libraryLoading": "Chargement de la bibliothèque…",
+    "converting": "Conversion en cours…",
+    "converted": "Conversion terminée.",
+    "optimizing": "Optimisation des trajectoires…",
+    "optimized": "Trajectoires optimisées.",
+    "preflighting": "Vérification pré-tracé…",
+    "preflightOk": "Vérification pré-tracé terminée.",
+    "generating": "Génération du G-code…",
+    "generated": "G-code généré.",
+    "updateChecking": "Recherche d'une mise à jour…",
+    "updateInstalled": "Mise à jour installée.",
+    "updateNone": "Logiciel à jour.",
+    "plotterSending": "Envoi du G-code au traceur…",
+    "plotterSent": "G-code envoyé au traceur.",
+    "plotterConnecting": "Connexion au traceur…",
+    "plotterConnected": "Traceur connecté."
   },
   "header": {
     "settings": "Réglages",
