@@ -12,12 +12,10 @@ import PlotterDrawer from './components/PlotterDrawer.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import { useJobStore } from './stores/job'
-import { useToastStore } from './stores/toasts'
 import { useUiStore } from './stores/ui'
 
 const { t, locale } = useI18n()
 const store = useJobStore()
-const toasts = useToastStore()
 const ui = useUiStore()
 const status = ref<string | null>(null)
 const version = ref<string | null>(null)
@@ -65,12 +63,9 @@ async function onWindowDrop(event: DragEvent): Promise<void> {
   store.addEmptyPlacement()
   await store.upload(file)
   if (store.layers.length) {
-    toasts.success(
-      t('toast.uploaded', { name: file.name, count: store.layers.length }),
-      4000,
-    )
-    // Land the operator straight in the conversion settings modal so the
-    // drop-anywhere workflow matches the "Edit" button workflow.
+    // ``store.upload`` already shows progress + success/error toasts; we
+    // just open the conversion settings modal so the drop-anywhere
+    // workflow matches the "Edit" button workflow.
     ui.openEditModal()
   }
 }

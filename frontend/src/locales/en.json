@@ -7,7 +7,24 @@
   },
   "toast": {
     "uploaded": "\"{name}\" loaded ({count} layers).",
-    "moreWarnings": "+{count} more warnings."
+    "moreWarnings": "+{count} more warnings.",
+    "uploading": "Uploading \"{name}\"…",
+    "libraryLoading": "Loading library…",
+    "converting": "Converting…",
+    "converted": "Conversion done.",
+    "optimizing": "Optimizing toolpaths…",
+    "optimized": "Toolpaths optimized.",
+    "preflighting": "Running pre-plot check…",
+    "preflightOk": "Pre-plot check complete.",
+    "generating": "Generating G-code…",
+    "generated": "G-code generated.",
+    "updateChecking": "Checking for updates…",
+    "updateInstalled": "Update installed.",
+    "updateNone": "Already up to date.",
+    "plotterSending": "Sending G-code to plotter…",
+    "plotterSent": "G-code sent to plotter.",
+    "plotterConnecting": "Connecting to plotter…",
+    "plotterConnected": "Plotter connected."
   },
   "header": {
     "settings": "Settings",

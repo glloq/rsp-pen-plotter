@@ -8,6 +8,7 @@ const toneClass: Record<ToastKind, string> = {
   success: 'border-emerald-700 bg-emerald-950/80 text-emerald-100',
   warning: 'border-amber-700 bg-amber-950/80 text-amber-100',
   error: 'border-red-700 bg-red-950/80 text-red-100',
+  progress: 'border-slate-600 bg-slate-900/80 text-slate-100',
 }
 
 const icon: Record<ToastKind, string> = {
@@ -15,6 +16,7 @@ const icon: Record<ToastKind, string> = {
   success: '✓',
   warning: '⚠',
   error: '✕',
+  progress: '',
 }
 </script>
 
@@ -32,9 +34,15 @@ const icon: Record<ToastKind, string> = {
         :class="toneClass[toast.kind]"
         role="status"
       >
-        <span class="mt-0.5 shrink-0 font-bold leading-none">{{ icon[toast.kind] }}</span>
+        <span
+          v-if="toast.kind === 'progress'"
+          class="mt-0.5 inline-block h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-slate-500 border-t-slate-200"
+          aria-hidden="true"
+        />
+        <span v-else class="mt-0.5 shrink-0 font-bold leading-none">{{ icon[toast.kind] }}</span>
         <p class="min-w-0 flex-1 whitespace-pre-wrap break-words">{{ toast.message }}</p>
         <button
+          v-if="toast.kind !== 'progress'"
           type="button"
           class="shrink-0 rounded p-1 leading-none text-slate-300 hover:bg-white/10 hover:text-white"
           aria-label="Dismiss"

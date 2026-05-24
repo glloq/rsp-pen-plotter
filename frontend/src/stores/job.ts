@@ -549,10 +549,17 @@ export const useJobStore = defineStore('job', () => {
     preflight.value = null
     const toasts = useToastStore()
     const library = useLibraryStore()
+    const toastId = toasts.progress(i18n.global.t('toast.uploading', { name: file.name }))
     try {
       const result = await library.upload(file, { convertOptions: options })
       if (!result) {
-        throw new Error(i18n.global.t('upload.failed'))
+        // library.upload already surfaced the error toast; just clear the
+        // progress one and bail.
+        toasts.dismiss(toastId)
+        patchPlacement(targetId, { svg: '', layers: [] })
+        error.value = i18n.global.t('upload.failed')
+        errorScope.value = 'upload'
+        return
       }
       const detail = result.file
       const bboxes = detail.layers.map((l) => l.bbox)
@@ -574,6 +581,15 @@ export const useJobStore = defineStore('job', () => {
         visibility: Object.fromEntries(detail.layers.map((l) => [l.layer_id, true])),
         ...layoutPatch,
       })
+      toasts.update(
+        toastId,
+        'success',
+        i18n.global.t('toast.uploaded', {
+          name: detail.source_file,
+          count: detail.layers.length,
+        }),
+        4000,
+      )
     } catch (err) {
       const message = errorDetail(err, i18n.global.t('upload.failed'))
       error.value = message
@@ -581,7 +597,7 @@ export const useJobStore = defineStore('job', () => {
       // Reset svg/layers on the target placement so the UI shows the
       // drop-zone again instead of stale content.
       patchPlacement(targetId, { svg: '', layers: [] })
-      toasts.error(message)
+      toasts.update(toastId, 'error', message, 6000)
     } finally {
       loading.value = false
     }
@@ -688,6 +704,8 @@ export const useJobStore = defineStore('job', () => {
     error.value = null
     errorScope.value = null
     patchPlacement(targetId, { last_options: next })
+    const toasts = useToastStore()
+    const toastId = toasts.progress(i18n.global.t('toast.converting'))
     try {
       const result = await uploadFile(p.last_file, selectedProfileName.value, next)
       const bboxes = result.job.layers.map((l) => l.bbox)
@@ -707,11 +725,12 @@ export const useJobStore = defineStore('job', () => {
         visibility: Object.fromEntries(result.job.layers.map((l) => [l.layer_id, true])),
         ...layoutPatch,
       })
+      toasts.update(toastId, 'success', i18n.global.t('toast.converted'), 3000)
     } catch (err) {
       const message = errorDetail(err, i18n.global.t('upload.failed'))
       error.value = message
       errorScope.value = 'upload'
-      useToastStore().error(message)
+      toasts.update(toastId, 'error', message, 6000)
     } finally {
       loading.value = false
     }
@@ -727,6 +746,8 @@ export const useJobStore = defineStore('job', () => {
     optimizing.value = true
     error.value = null
     errorScope.value = null
+    const toasts = useToastStore()
+    const toastId = toasts.progress(i18n.global.t('toast.optimizing'))
     try {
       const result = await optimizeToolpaths(
         p.svg,
@@ -744,9 +765,12 @@ export const useJobStore = defineStore('job', () => {
       metrics.value = result.metrics
       gcode.value = null
       preflight.value = null
+      toasts.update(toastId, 'success', i18n.global.t('toast.optimized'), 3000)
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('layers.optimizeFailed'))
+      const message = errorDetail(err, i18n.global.t('layers.optimizeFailed'))
+      error.value = message
       errorScope.value = 'optimize'
+      toasts.update(toastId, 'error', message, 6000)
     } finally {
       optimizing.value = false
     }
@@ -788,6 +812,8 @@ export const useJobStore = defineStore('job', () => {
     preflighting.value = true
     error.value = null
     errorScope.value = null
+    const toasts = useToastStore()
+    const toastId = toasts.progress(i18n.global.t('toast.preflighting'))
     try {
       preflight.value = await preflightCheck(
         payload.svg,
@@ -804,10 +830,13 @@ export const useJobStore = defineStore('job', () => {
         0,
         payload.placement,
       )
+      toasts.update(toastId, 'success', i18n.global.t('toast.preflightOk'), 3000)
     } catch (err) {
       preflight.value = null
-      error.value = errorDetail(err, i18n.global.t('preflight.failed'))
+      const message = errorDetail(err, i18n.global.t('preflight.failed'))
+      error.value = message
       errorScope.value = 'generate'
+      toasts.update(toastId, 'error', message, 6000)
     } finally {
       preflighting.value = false
     }
@@ -819,6 +848,8 @@ export const useJobStore = defineStore('job', () => {
     generating.value = true
     error.value = null
     errorScope.value = null
+    const toasts = useToastStore()
+    const toastId = toasts.progress(i18n.global.t('toast.generating'))
     try {
       const result = await generateGcode(
         payload.svg,
@@ -836,9 +867,12 @@ export const useJobStore = defineStore('job', () => {
         payload.placement,
       )
       gcode.value = result.gcode
+      toasts.update(toastId, 'success', i18n.global.t('toast.generated'), 3000)
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('layers.generateFailed'))
+      const message = errorDetail(err, i18n.global.t('layers.generateFailed'))
+      error.value = message
       errorScope.value = 'generate'
+      toasts.update(toastId, 'error', message, 6000)
     } finally {
       generating.value = false
     }
