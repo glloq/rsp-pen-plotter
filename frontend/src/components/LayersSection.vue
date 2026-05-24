@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, provide, ref } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import draggable from 'vuedraggable'
 import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../api/client'
 import { canReduceSwaps, groupByPen } from '../lib/penorder'
 import { useJobStore } from '../stores/job'
+import { createLayerSelection, LayerSelectionKey } from '../composables/useLayerSelection'
 import LayerCard from './LayerCard.vue'
+import LayerBulkBar from './edit/LayerBulkBar.vue'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -48,6 +50,16 @@ provide<typeof collapseAll>('layersCollapseAll', collapseAll)
 function setCollapseAll(value: boolean): void {
   collapseAll.value = value
 }
+
+// Multi-selection for bulk operations: click a layer header to select
+// it, shift-click to extend the range, ctrl/⌘-click to toggle. The
+// ``LayerBulkBar`` reads the same provided selection to expose the
+// pen / style / reset-override bulk actions.
+const selection = createLayerSelection()
+provide(LayerSelectionKey, selection)
+// Drop the selection whenever the layer set itself changes (re-upload,
+// placement switch) so stale ids don't leak into bulk operations.
+watch(() => store.layers.map((l) => l.layer_id).join(','), () => selection.clear())
 
 // Estimation footer for the layer set: total path length + duration so
 // the operator sees the cost of the current layer choices at a glance.
@@ -128,6 +140,8 @@ const totalPaths = computed(() =>
         ▸ {{ t('layers.collapseAll') }}
       </button>
     </div>
+
+    <LayerBulkBar v-if="store.layers.length" />
 
     <draggable
       v-if="store.layers.length"
