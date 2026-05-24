@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import DOMPurify from 'dompurify'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -7,12 +6,12 @@ import {
   downloadOriginalFile,
   getAlgorithms,
   getFonts,
-  previewBitmap,
   type AlgorithmInfo,
-  type PreviewResponse,
   type SegmentationMethod,
 } from '../api/client'
 import { useEditState } from '../composables/useEditState'
+import { usePreviewScheduler } from '../composables/usePreviewScheduler'
+import { applyMasterStyleToLayers } from '../composables/useStylePropagation'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import FileSourceCard from './edit/source/FileSourceCard.vue'
@@ -252,80 +251,30 @@ watch(selectedFile, async (file) => {
 //  live here moved into LayerCard when render became a per-layer choice.)
 
 // Live preview: debounced /preview round-trip on parameter changes.
-const previewResult = ref<PreviewResponse | null>(null)
-const previewLoading = ref(false)
-const previewError = ref<string | null>(null)
-let previewController: AbortController | null = null
-let previewTimer: ReturnType<typeof setTimeout> | null = null
-
-const previewSvg = computed(() => {
-  if (!previewResult.value) return ''
-  return DOMPurify.sanitize(previewResult.value.svg, {
-    USE_PROFILES: { svg: true, svgFilters: true },
-  })
+// The scheduler owns the AbortController, the timeout, and the
+// previewResult/loading/error refs — see usePreviewScheduler. We pass
+// it the getters it needs so it can be re-evaluated whenever a watcher
+// fires without grabbing local state.
+const previewer = usePreviewScheduler({
+  fileGetter: () => selectedFile.value,
+  algorithmGetter: () => bitmap.value.algorithm,
+  optionsBuilder: () => buildOptions(),
+  shouldRun: () => kind.value === 'bitmap',
+  failedMessage: t('upload.failed'),
 })
+const { previewResult, previewLoading, previewError, previewSvg } = previewer
 
-// schedulePreview runs the live /preview on a debounce so dragging
-// a slider doesn't fire N round-trips. ``immediate`` skips the
-// debounce — used by the detail-tier picker since a tier click is
-// already a discrete commitment by the operator (one click, not a
-// stream), and the operator expects instant feedback.
+// Re-exported with the old function names so the rest of the file
+// (including the auto-jump branches and the modal's preview pane
+// callbacks) stays oblivious to the scheduler-vs-inline implementation.
 function schedulePreview(immediate = false): void {
-  if (!selectedFile.value || kind.value !== 'bitmap') return
-  if (previewTimer) clearTimeout(previewTimer)
-  if (immediate) {
-    void runPreview()
-  } else {
-    previewTimer = setTimeout(runPreview, 500)
-  }
+  previewer.schedule({ immediate })
 }
-
-async function runPreview(): Promise<void> {
-  if (!selectedFile.value || kind.value !== 'bitmap') return
-  if (previewController) previewController.abort()
-  const controller = new AbortController()
-  previewController = controller
-  previewLoading.value = true
-  previewError.value = null
-  try {
-    const result = await previewBitmap(
-      selectedFile.value,
-      bitmap.value.algorithm,
-      buildOptions(),
-      controller.signal,
-    )
-    if (controller.signal.aborted) return
-    previewResult.value = result
-  } catch (err) {
-    if (controller.signal.aborted) return
-    previewError.value = (err as Error).message || t('upload.failed')
-  } finally {
-    if (previewController === controller) {
-      previewController = null
-      previewLoading.value = false
-    }
-  }
-}
-
-// Cancellation + retry exposed to the preview pane (via useEditState).
-// Cancel aborts the in-flight controller AND clears any pending debounce,
-// so a long /preview round-trip doesn't keep eating CPU after the user
-// gives up on it.
 function cancelPreview(): void {
-  if (previewTimer) {
-    clearTimeout(previewTimer)
-    previewTimer = null
-  }
-  if (previewController) {
-    previewController.abort()
-    previewController = null
-  }
-  previewLoading.value = false
+  previewer.cancel()
 }
-
 function retryPreview(): void {
-  previewError.value = null
-  runPreview()
+  previewer.retry()
 }
 
 // Detail-tier changes get their own watcher with no debounce — the
@@ -374,16 +323,14 @@ watch(
     if (selectedFile.value && kind.value === 'bitmap') {
       schedulePreview()
     } else {
-      previewResult.value = null
-      previewError.value = null
+      previewer.clear()
     }
   },
   { deep: true },
 )
 
 onBeforeUnmount(() => {
-  if (previewTimer) clearTimeout(previewTimer)
-  if (previewController) previewController.abort()
+  previewer.dispose()
 })
 
 // Try to restore the placement's source as a File object. Two paths:
@@ -567,8 +514,7 @@ async function uploadSelected(): Promise<void> {
   // Drop the stale draft preview now that the placement carries its own
   // committed SVG. Otherwise the live preview would shadow the
   // committed SVG in EditPreviewPane.
-  previewResult.value = null
-  previewError.value = null
+  previewer.clear()
   // Mono mode: every produced band-layer plots with the same pen, so
   // pre-assign them to the slot the operator picked in MonochromeCard
   // (saves a "All to one pen" click + spares the manual swap warning).
@@ -576,23 +522,11 @@ async function uploadSelected(): Promise<void> {
   // installed here — store.applyLayerAlgorithm debounces a single
   // /rerender once all calls are queued, so we don't fan out N
   // round-trips for an N-band image.
-  if (wasMono && store.layers.length) {
-    const mode = getMonoMode(monoModeId.value)
-    const total = store.layers.length
-    for (let i = 0; i < total; i++) {
-      const layer = store.layers[i]!
-      if (layer.target_pen_slot !== monoPenSlot.value) {
-        store.updateLayer(layer.layer_id, { target_pen_slot: monoPenSlot.value })
-      }
-      const override = mode?.algoForBand(i, total)
-      if (override) {
-        await store.applyLayerAlgorithm(
-          layer.layer_id,
-          override.algorithm,
-          override.algorithm_options,
-        )
-      }
-    }
+  if (wasMono) {
+    await applyMasterStyleToLayers(store, {
+      styleId: monoModeId.value,
+      penSlot: monoPenSlot.value,
+    })
   }
   if (store.layers.length) ui.canvasTab = 'sheet'
 }

@@ -6,7 +6,6 @@ import {
   PRINT_STYLES,
   defaultsFor,
   getAlgorithm,
-  getStyle,
   layerStyles,
   masterStyles,
   resolveMasterStyle,
@@ -109,7 +108,7 @@ describe('printRegistry', () => {
     }
   })
 
-  it('getStyle / layerStyles filter by applicableTo', () => {
+  it('layerStyles filters by applicableTo', () => {
     const imageOnly = layerStyles('image')
     for (const s of imageOnly) expect(s.applicableTo).toContain('image')
     const textStyles = layerStyles('text')

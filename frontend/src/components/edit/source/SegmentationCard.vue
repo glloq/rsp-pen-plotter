@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SegmentationMethod } from '../../../api/client'
+import DetailPicker from '../shared/DetailPicker.vue'
 
 // Segmentation card: how the bitmap is split into colour layers
 // (kmeans / luminance_bands / thresholds / fixed_palette) plus the
@@ -37,32 +38,14 @@ const { t } = useI18n()
 const expanded = ref(true)
 const SEG_METHODS: SegmentationMethod[] = ['kmeans', 'luminance_bands', 'thresholds', 'fixed_palette']
 
-// Detail tiers shared with MonochromeCard so the vocabulary stays
-// consistent. Pixel values are kept as implementation detail; the
-// UI only shows the named tier.
-interface DetailLevel {
-  id: 'low' | 'standard' | 'high' | 'max'
-  value: number
-  labelKey: string
-}
-const detailLevels: DetailLevel[] = [
-  { id: 'low', value: 400, labelKey: 'mono.detailLow' },
-  { id: 'standard', value: 800, labelKey: 'mono.detailStandard' },
-  { id: 'high', value: 1400, labelKey: 'mono.detailHigh' },
-  { id: 'max', value: 2400, labelKey: 'mono.detailMax' },
-]
-const currentDetail = computed<DetailLevel['id']>(() => {
-  const target = props.bitmap.max_dimension_px
-  let best = detailLevels[0]!
-  let bestDelta = Math.abs(best.value - target)
-  for (const level of detailLevels.slice(1)) {
-    const delta = Math.abs(level.value - target)
-    if (delta < bestDelta) {
-      best = level
-      bestDelta = delta
-    }
-  }
-  return best.id
+// Detail tier table + resolver now live in shared/DetailPicker so the
+// vocabulary stays consistent across the Colors and Render tabs.
+
+const detailValue = computed<number>({
+  get: () => props.bitmap.max_dimension_px,
+  set: (v: number) => {
+    props.bitmap.max_dimension_px = v
+  },
 })
 
 function addThreshold(): void {
@@ -118,27 +101,9 @@ function updateThreshold(i: number, value: number): void {
       <!-- Image detail: promoted out of the post-process accordion
            because operators reach for "more detail" often. Higher
            re-segments at a larger source canvas → more fine features
-           survive into the SVG, slower preview. Same 4 named tiers as
-           MonochromeCard so the vocabulary is consistent across
-           print modes. -->
-      <div class="space-y-1">
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.detail') }}</p>
-        <div class="grid grid-cols-4 gap-1">
-          <button
-            v-for="level in detailLevels"
-            :key="level.id"
-            type="button"
-            class="rounded border px-2 py-1.5 text-[11px] transition"
-            :class="currentDetail === level.id
-              ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-              : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
-            @click="bitmap.max_dimension_px = level.value"
-          >
-            {{ t(level.labelKey) }}
-          </button>
-        </div>
-        <p class="text-[10px] text-slate-500">{{ t('mono.detailHint') }}</p>
-      </div>
+           survive into the SVG, slower preview. Shared DetailPicker
+           keeps the tier vocabulary consistent across print modes. -->
+      <DetailPicker v-model="detailValue" />
 
       <label v-if="bitmap.segmentation_method === 'kmeans'" class="block text-slate-400">
         {{ t('convert.numColors') }}

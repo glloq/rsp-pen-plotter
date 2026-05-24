@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useJobStore } from '../../../stores/job'
 import { MONO_MODES, type MonoMode } from '../../../data/monoModes'
+import DetailPicker from '../shared/DetailPicker.vue'
+import PenSlotPicker from '../shared/PenSlotPicker.vue'
 
 // Mono-ink rendering card driven by named modes (Pencil, Halftone,
 // Stippling, Engraving, Contours, Outline, TSP, Spiral). Each mode is
@@ -42,22 +43,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const store = useJobStore()
 
 // ============================== PEN SLOT ==============================
-const penSlots = computed(() => {
-  const profile = store.selectedProfile
-  const pens = profile?.pens ?? []
-  return Array.from({ length: profile?.pen_slot_count ?? 1 }, (_, i) => {
-    const pen = pens.find((p) => p.index === i)
-    return {
-      index: i,
-      name: pen?.name || `${i}`,
-      color: pen?.color ?? '#94a3b8',
-      installed: pen?.installed ?? false,
-    }
-  })
-})
+// The grid of installed-pen swatches now lives in shared/PenSlotPicker
+// so LayerCard and future bulk-assign UIs use the same component.
 
 function setSlot(index: number): void {
   emit('update:monoPenSlot', index)
@@ -109,70 +98,26 @@ const thresholdValue = computed({
 })
 
 // ============================== DETAIL LEVEL ==============================
-// Four tiers that map to the segmentation resolution used at /upload
-// AND /preview time. Higher tiers re-segment the source at a bigger
-// canvas, so fine features that would have been smoothed away at low
-// detail show up as their own SVG paths. The numeric pixel value is
-// hidden from the UI (it doesn't mean anything to non-technical
-// operators) — only the named tier shows.
-interface DetailLevel {
-  id: 'low' | 'standard' | 'high' | 'max'
-  value: number
-  labelKey: string
-}
-const detailLevels: DetailLevel[] = [
-  { id: 'low', value: 400, labelKey: 'mono.detailLow' },
-  { id: 'standard', value: 800, labelKey: 'mono.detailStandard' },
-  { id: 'high', value: 1400, labelKey: 'mono.detailHigh' },
-  { id: 'max', value: 2400, labelKey: 'mono.detailMax' },
-]
+// The Low/Standard/High/Max tier table lives in
+// ``composables/useDetailPicker`` now and the render lives in
+// ``shared/DetailPicker.vue``. The MonochromeCard just binds
+// max_dimension_px through v-model.
 
-const currentDetail = computed<DetailLevel['id']>(() => {
-  const target = props.bitmap.max_dimension_px
-  let best = detailLevels[0]!
-  let bestDelta = Math.abs(best.value - target)
-  for (const level of detailLevels.slice(1)) {
-    const delta = Math.abs(level.value - target)
-    if (delta < bestDelta) {
-      best = level
-      bestDelta = delta
-    }
-  }
-  return best.id
+const detailValue = computed<number>({
+  get: () => props.bitmap.max_dimension_px,
+  set: (v: number) => {
+    props.bitmap.max_dimension_px = v
+  },
 })
-
-function setDetail(value: number): void {
-  props.bitmap.max_dimension_px = value
-}
 </script>
 
 <template>
   <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
     <!-- Pen slot -->
-    <div class="space-y-1">
-      <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.pen') }}</p>
-      <div class="flex flex-wrap gap-1">
-        <button
-          v-for="slot in penSlots"
-          :key="slot.index"
-          type="button"
-          class="flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] transition"
-          :class="monoPenSlot === slot.index
-            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
-          :title="slot.installed ? slot.name : t('mono.penNotInstalled')"
-          @click="setSlot(slot.index)"
-        >
-          <span
-            class="inline-block h-3 w-3 rounded-full border border-slate-600"
-            :style="{ backgroundColor: slot.color }"
-          />
-          <span class="font-mono text-[10px] text-slate-500">#{{ slot.index }}</span>
-          <span class="truncate">{{ slot.name }}</span>
-          <span v-if="!slot.installed" class="text-[9px] text-amber-400">·</span>
-        </button>
-      </div>
-    </div>
+    <PenSlotPicker
+      :model-value="monoPenSlot"
+      @update:model-value="setSlot"
+    />
 
     <!-- Mode picker -->
     <div class="space-y-1">
@@ -228,24 +173,7 @@ function setDetail(value: number): void {
     </div>
 
     <!-- Detail level -->
-    <div class="space-y-1">
-      <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.detail') }}</p>
-      <div class="grid grid-cols-4 gap-1">
-        <button
-          v-for="level in detailLevels"
-          :key="level.id"
-          type="button"
-          class="rounded border px-2 py-1.5 text-[11px] transition"
-          :class="currentDetail === level.id
-            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
-          @click="setDetail(level.value)"
-        >
-          {{ t(level.labelKey) }}
-        </button>
-      </div>
-      <p class="text-[10px] text-slate-500">{{ t('mono.detailHint') }}</p>
-    </div>
+    <DetailPicker v-model="detailValue" />
 
     <p class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-[10px] leading-snug text-slate-400">
       {{ t('mono.layersHint') }}
