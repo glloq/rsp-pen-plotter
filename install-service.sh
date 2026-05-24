@@ -46,6 +46,23 @@ sed -e "s|__USER__|$USER_NAME|g" -e "s|__ROOT__|$ROOT|g" \
   "$ROOT/deploy/omniplot.service.in" > "$UNIT"
 chmod 644 "$UNIT"
 
+# Allow the service user to restart omniplot without a password. Required so
+# the in-app "Update" button (which runs update.sh inside the service) can
+# trigger a restart to load new Python code. Scope is intentionally narrow:
+# only `systemctl restart omniplot.service`, nothing else.
+SUDOERS=/etc/sudoers.d/omniplot
+cat > "$SUDOERS.tmp" <<EOF
+$USER_NAME ALL=(root) NOPASSWD: /bin/systemctl restart omniplot.service, /usr/bin/systemctl restart omniplot.service, /bin/systemctl restart omniplot, /usr/bin/systemctl restart omniplot
+EOF
+chmod 440 "$SUDOERS.tmp"
+if visudo -cf "$SUDOERS.tmp" >/dev/null; then
+  mv "$SUDOERS.tmp" "$SUDOERS"
+else
+  rm -f "$SUDOERS.tmp"
+  echo "Error: generated sudoers file failed validation; not installed." >&2
+  exit 1
+fi
+
 systemctl daemon-reload
 systemctl enable --now omniplot.service
 
@@ -54,4 +71,4 @@ echo "==> OmniPlot service installed and started."
 echo "    Status:   sudo systemctl status omniplot"
 echo "    Logs:     sudo journalctl -u omniplot -f"
 echo "    Edit env: sudo -u $USER_NAME \$EDITOR $ENV_FILE && sudo systemctl restart omniplot"
-echo "    Remove:   sudo systemctl disable --now omniplot && sudo rm $UNIT && sudo systemctl daemon-reload"
+echo "    Remove:   sudo systemctl disable --now omniplot && sudo rm $UNIT $SUDOERS && sudo systemctl daemon-reload"

@@ -101,13 +101,25 @@ step "Reinstalling backend + frontend"
 
 if [ "$NO_RESTART" -eq 0 ]; then
   if has systemctl && systemctl list-unit-files 2>/dev/null | grep -q '^omniplot\.service'; then
-    step "Restarting omniplot service"
+    # Defer the restart: when this script is invoked via the web UI's Update
+    # button, the calling process IS the omniplot backend, and restarting
+    # synchronously would kill it before the HTTP response goes out. A short
+    # sleep in a detached background process lets the response flush first.
+    # When invoked from a shell, the delay is harmless.
+    step "Scheduling omniplot.service restart (in ~3s)"
     if [ "$EUID" -eq 0 ]; then
-      systemctl restart omniplot
+      restart_cmd='systemctl restart omniplot.service'
+    elif sudo -n true 2>/dev/null; then
+      restart_cmd='sudo -n systemctl restart omniplot.service'
     else
-      sudo -n systemctl restart omniplot || {
-        echo "Warning: could not restart service without password; run 'sudo systemctl restart omniplot' manually." >&2
-      }
+      restart_cmd=''
+      echo "Warning: cannot restart omniplot without a password." >&2
+      echo "         Run 'sudo systemctl restart omniplot' manually, or reinstall" >&2
+      echo "         the service (./install-service.sh) to add the sudoers rule." >&2
+    fi
+    if [ -n "$restart_cmd" ]; then
+      setsid sh -c "sleep 3 && $restart_cmd" </dev/null >/dev/null 2>&1 &
+      disown 2>/dev/null || true
     fi
   fi
 fi
