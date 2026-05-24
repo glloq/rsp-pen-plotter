@@ -41,8 +41,14 @@ const thresholdValue = computed({
   get: () => props.bitmap.thresholds[0] ?? 0.5,
   set: (v: number) => {
     props.bitmap.thresholds = [Math.max(0, Math.min(1, v))]
+    draft.markSegmentationTouched('thresholds')
   },
 })
+
+function setNumBands(value: number): void {
+  props.bitmap.num_bands = value
+  draft.markSegmentationTouched('num_bands')
+}
 </script>
 
 <template>
@@ -55,12 +61,13 @@ const thresholdValue = computed({
       <span class="font-mono text-[11px] text-slate-300">{{ bitmap.num_bands }}</span>
     </div>
     <input
-      v-model.number="bitmap.num_bands"
+      :value="bitmap.num_bands"
       type="range"
       min="1"
       max="6"
       step="1"
       class="w-full accent-emerald-500"
+      @input="(e) => setNumBands(Number((e.target as HTMLInputElement).value))"
     />
     <p class="text-[10px] text-slate-500">{{ t('mono.shadesHint') }}</p>
   </div>

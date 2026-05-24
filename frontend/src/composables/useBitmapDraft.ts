@@ -21,7 +21,7 @@
 
 import { computed, ref } from 'vue'
 import type { SegmentationMethod } from '../api/client'
-import { resolveMasterStyle, DEFAULT_MASTER_STYLE_ID } from '../data/printRegistry'
+import { resolveMasterStyle, DEFAULT_MASTER_STYLE_ID, type PrintStyle } from '../data/printRegistry'
 
 // Photo-editor adjustments the operator can apply before segmentation.
 // Mirrors ``PreprocessOptions`` on the backend; every field defaults to
@@ -213,6 +213,16 @@ const _monoPenSlot = ref<number>(0)
 const _monoMasterStyleId = ref<string>(DEFAULT_MASTER_STYLE_ID)
 const _paletteFollowsPens = ref<boolean>(true)
 
+// Tracks the segmentation knobs the operator manually changed since the
+// last preset/print-mode application. Used by ``setSegmentationFromStyle``
+// to warn (via toast) when an automatic action — switching master style,
+// flipping print mode, toggling palette-follows-pens — is about to
+// overwrite a manual choice the operator made on the SvgTab or
+// MasterStyleParams. Reset on placement rehydrate and on intentional
+// "reset to preset" calls (force=true).
+type SegmentationField = 'method' | 'num_bands' | 'thresholds' | 'drop_background' | 'background_luminance'
+const _segmentationTouched = ref<Set<SegmentationField>>(new Set())
+
 // "Was this draft committed yet?" — set to false when SourceSection
 // rehydrates on a placement switch and flipped to true after /upload.
 // Phase 4's dirty-tracker will hang off this in addition to a snapshot.
@@ -274,6 +284,10 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   // recipes for every /preview round-trip even though the operator
   // never sees ``pencil`` highlighted in the picker.
   _monoMasterStyleId.value = DEFAULT_MASTER_STYLE_ID
+  // Rehydrating wipes the touched tracker — the persisted last_options
+  // ARE the baseline, so subsequent style switches shouldn't think the
+  // operator has been hand-tweaking.
+  _segmentationTouched.value = new Set()
 
   const opts = ctx.placement?.last_options
   if (!opts || typeof opts !== 'object') return
@@ -359,33 +373,101 @@ export function applyPresetOptions(opts: Record<string, unknown>): void {
   }
 }
 
-// Switch between multicolour and monochrome. Rewrites the segmentation
-// method, algorithm and post-process knobs to the active master style's
-// recipe (mono) or back to a sensible kmeans default (multi). The
-// MonochromeCard's mode picker calls this indirectly by mutating the
-// draft itself; this helper centralises the "what does mono/multi
-// imply for each field?" answer.
-export function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
-  if (mode === 'monochrome') {
-    const style = resolveMasterStyle(_monoMasterStyleId.value)
-    const seg = style.segmentation
-    if (seg) {
-      _bitmap.value.segmentation_method = seg.method
-      _bitmap.value.drop_background = seg.drop_background
-      _bitmap.value.background_luminance = seg.background_luminance
-      _bitmap.value.algorithm = style.defaultAlgorithm
-      _bitmap.value.algorithm_options = { ...style.defaultAlgorithmOptions }
-      if (seg.method === 'luminance_bands') {
-        // Mono defaults to a single layer; the operator opts into
-        // multi-band shading by raising the slider in MasterStyleParams
-        // (or by adding overlays in the Layers tab afterwards).
-        if (_bitmap.value.num_bands < 1 || _bitmap.value.num_bands > 6) {
-          _bitmap.value.num_bands = seg.default_num_bands ?? 1
-        }
-      } else if (seg.method === 'thresholds') {
-        _bitmap.value.thresholds = [seg.default_threshold ?? 0.5]
+// Mark a segmentation field as manually changed by the operator. Called
+// by the SvgTab's SegmentationMethodCard, MasterStyleParams sliders and
+// PaletteCard whenever a user-driven mutation lands. The next automatic
+// action that would overwrite a touched field surfaces a warning toast
+// instead of clobbering silently. SegmentationMethodCard / MasterStyleParams
+// / PaletteCard call this directly; programmatic mutators (this module's
+// own ``setSegmentationFromStyle``) bypass it.
+export function markSegmentationTouched(...fields: SegmentationField[]): void {
+  if (!fields.length) return
+  const next = new Set(_segmentationTouched.value)
+  for (const f of fields) next.add(f)
+  _segmentationTouched.value = next
+}
+
+// Per-style segmentation rewrite, centralised so ``setPrintMode`` and
+// ``setMasterStyle`` (the StyleTab picker) share one path. Returns the
+// list of touched fields that were about to be overwritten — empty when
+// the change is harmless, populated when the caller should warn the
+// operator. ``force`` skips the warning entirely (used by intentional
+// reset paths like rehydrate or a fresh placement).
+function applyStyleSegmentation(
+  style: PrintStyle,
+  opts: { force?: boolean } = {},
+): SegmentationField[] {
+  const seg = style.segmentation
+  if (!seg) return []
+  const b = _bitmap.value
+  const wouldOverwrite: SegmentationField[] = []
+  if (!opts.force) {
+    if (
+      _segmentationTouched.value.has('method')
+      && b.segmentation_method !== seg.method
+    ) wouldOverwrite.push('method')
+    if (
+      _segmentationTouched.value.has('drop_background')
+      && b.drop_background !== seg.drop_background
+    ) wouldOverwrite.push('drop_background')
+    if (
+      _segmentationTouched.value.has('background_luminance')
+      && b.background_luminance !== seg.background_luminance
+    ) wouldOverwrite.push('background_luminance')
+    if (
+      seg.method === 'luminance_bands'
+      && _segmentationTouched.value.has('num_bands')
+    ) {
+      const target = seg.default_num_bands ?? 1
+      if (b.num_bands !== target && (b.num_bands < 1 || b.num_bands > 6)) {
+        wouldOverwrite.push('num_bands')
       }
     }
+    if (
+      seg.method === 'thresholds'
+      && _segmentationTouched.value.has('thresholds')
+    ) {
+      const target = seg.default_threshold ?? 0.5
+      const current = b.thresholds[0] ?? target
+      if (b.thresholds.length !== 1 || Math.abs(current - target) > 1e-6) {
+        wouldOverwrite.push('thresholds')
+      }
+    }
+  }
+
+  b.segmentation_method = seg.method
+  b.drop_background = seg.drop_background
+  b.background_luminance = seg.background_luminance
+  b.algorithm = style.defaultAlgorithm
+  b.algorithm_options = { ...style.defaultAlgorithmOptions }
+  if (seg.method === 'luminance_bands') {
+    // Mono defaults to a single layer; the operator opts into multi-band
+    // shading by raising the slider in MasterStyleParams (or by adding
+    // overlays in the Layers tab afterwards).
+    if (b.num_bands < 1 || b.num_bands > 6) {
+      b.num_bands = seg.default_num_bands ?? 1
+    }
+  } else if (seg.method === 'thresholds') {
+    b.thresholds = [seg.default_threshold ?? 0.5]
+  }
+  // Style picker / print-mode flip resets the touched set: this is the
+  // new baseline.
+  _segmentationTouched.value = new Set()
+  return wouldOverwrite
+}
+
+// Switch between multicolour and monochrome. Rewrites the segmentation
+// method, algorithm and post-process knobs to the active master style's
+// recipe (mono) or back to a sensible kmeans default (multi). Returns
+// the list of fields the operator had manually touched and that this
+// call overwrote; callers may surface a toast.
+export function setPrintMode(
+  mode: 'multicolor' | 'monochrome',
+  opts: { force?: boolean } = {},
+): SegmentationField[] {
+  if (mode === 'monochrome') {
+    const style = resolveMasterStyle(_monoMasterStyleId.value)
+    const overwritten = applyStyleSegmentation(style, opts)
     // Clear the multicolour palette so a stale ``fixed_palette`` from
     // the previous mode can't keep the preview / upload painting in
     // colour. Without this, switching multi → mono left the operator
@@ -395,23 +477,41 @@ export function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
     _bitmap.value.palette = []
     _bitmap.value.num_colors = 1
     _paletteFollowsPens.value = false
-  } else {
-    _bitmap.value.segmentation_method = 'kmeans'
-    _bitmap.value.num_colors = 4
-    _bitmap.value.background_luminance = 0.92
-    // Clear the master style's options dict so the multicolour path
-    // falls back to the per-algo scattered fields and respects any
-    // preset applied afterwards.
-    _bitmap.value.algorithm_options = {}
-    if (
-      _bitmap.value.algorithm !== 'direct'
-      && _bitmap.value.algorithm !== 'halftone'
-      && _bitmap.value.algorithm !== 'stippling'
-    ) {
-      _bitmap.value.algorithm = 'direct'
-    }
-    _paletteFollowsPens.value = true
+    return overwritten
   }
+  // Multicolour: bypass the per-style helper because we're leaving the
+  // master-style world entirely; "touched" fields stay touched only if
+  // they're still meaningful in kmeans (only background_luminance is).
+  const b = _bitmap.value
+  b.segmentation_method = 'kmeans'
+  b.num_colors = 4
+  b.background_luminance = 0.92
+  // Clear the master style's options dict so the multicolour path falls
+  // back to the per-algo scattered fields and respects any preset
+  // applied afterwards.
+  b.algorithm_options = {}
+  if (
+    b.algorithm !== 'direct'
+    && b.algorithm !== 'halftone'
+    && b.algorithm !== 'stippling'
+  ) {
+    b.algorithm = 'direct'
+  }
+  _paletteFollowsPens.value = true
+  _segmentationTouched.value = new Set()
+  return []
+}
+
+// Switch master style. Returns the list of touched fields overwritten
+// (callers surface a toast). Mirrors setPrintMode's signature so the
+// StyleTab can share the warning code path. Caller is still
+// responsible for the post-upload ``applyMasterStyleToLayers`` push.
+export function setMasterStyle(
+  id: string,
+  opts: { force?: boolean } = {},
+): SegmentationField[] {
+  _monoMasterStyleId.value = id
+  return applyStyleSegmentation(resolveMasterStyle(id), opts)
 }
 
 // ---- Payload builders ----
@@ -426,6 +526,11 @@ export function buildSegmentationOptions(): Record<string, unknown> {
 
 export function buildAlgorithmOptions(): Record<string, unknown> {
   const b = _bitmap.value
+  // Master-style recipes write their full options into algorithm_options
+  // and the dict wins when present. The scattered per-algo fields below
+  // are kept for legacy placements rehydrated from disk; no live UI
+  // writes to them any more (verified with a repo-wide grep — see Tier
+  // 3 migration T3.1 which removes both the fields and this fallback).
   if (Object.keys(b.algorithm_options).length > 0) {
     return { ...b.algorithm_options }
   }
@@ -621,7 +726,10 @@ export function useBitmapDraft() {
     isDirty: _isDirty,
     printMode: _printMode,
     expectedLayerCount: _expectedLayerCount,
+    segmentationTouched: _segmentationTouched,
     setPrintMode,
+    setMasterStyle,
+    markSegmentationTouched,
     rehydrateDraft: rehydrateDraftAndMark,
     applyPresetOptions,
     buildSegmentationOptions,

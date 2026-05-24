@@ -165,14 +165,20 @@
     }
   },
   "render": {
-    "masterStyle": "Style maître",
+    "masterStyle": "Préréglage de style",
     "multicolorHint": "Le rendu multicolore se fait par couche. Va dans l'onglet Calques pour choisir un style pour chaque couleur.",
     "noSource": "Attache un fichier dans l'onglet Source pour choisir un style de rendu.",
     "notApplicable": "Ce type de fichier n'a pas de style de rendu.",
     "replaceOverridesWarning": "Changer de style va remplacer {count} override(s) par couche. Continuer ?",
     "customised": "Personnalisé",
     "customisedHint": "Les réglages courants ne correspondent plus au preset.",
-    "customisedExplain": "Réglages modifiés depuis le preset « {style} » — clique un preset pour revenir aux valeurs par défaut."
+    "customisedExplain": "Réglages modifiés depuis le preset « {style} » — clique un preset pour revenir aux valeurs par défaut.",
+    "styleOverwroteFields": "Le preset a remplacé tes réglages manuels : {fields}.",
+    "field_method": "méthode de segmentation",
+    "field_num_bands": "nombre de bandes",
+    "field_thresholds": "seuils",
+    "field_drop_background": "filtrage du fond",
+    "field_background_luminance": "luminance du fond"
   },
   "mono": {
     "pen": "Stylo",
@@ -281,11 +287,11 @@
     "expand": "Déplier la barre des variantes"
   },
   "printMode": {
-    "title": "Sortie (SVG)",
+    "title": "Mode couleur",
     "multicolor": "Multi-couleurs",
     "multicolorHint": "Découper l'image en un calque par couleur détectée.",
-    "monochrome": "Mono-couleur (un pen)",
-    "monochromeHint": "Tramer toute l'image en pointillés/halftone avec une seule encre."
+    "monochrome": "Mono-couleur",
+    "monochromeHint": "Tout dessiner sur un seul calque avec un seul stylo."
   },
   "palette": {
     "title": "Palette",
@@ -379,7 +385,9 @@
     "preview": "Aperçu rapide",
     "previewing": "Calcul…",
     "previewHint": "Choisissez un algorithme pour voir l'aperçu.",
-    "cached": "cache"
+    "cached": "cache",
+    "retryPreview": "Réessayer l'aperçu",
+    "applyAnywayHint": "L'aperçu a échoué mais tu peux quand même appliquer pour lancer le rendu complet."
   },
   "layers": {
     "title": "Calques",
@@ -421,9 +429,9 @@
     "pauseAuto": "auto",
     "pauseAlways": "toujours",
     "pauseNever": "jamais",
-    "renderAlgorithm": "Style",
+    "renderAlgorithm": "Algorithme du calque",
     "defaultAlgo": "défaut",
-    "printStyle": "Style d'impression",
+    "printStyle": "Algorithme du calque",
     "advancedShow": "+ Avancé",
     "advancedHide": "− Avancé",
     "rerenderFailed": "Échec du re-rendu du calque.",
