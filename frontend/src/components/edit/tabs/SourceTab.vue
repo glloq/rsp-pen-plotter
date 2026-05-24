@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getFonts } from '../../../api/client'
 import { useFileManager, FILE_ACCEPT } from '../../../composables/useFileManager'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { useJobStore } from '../../../stores/job'
@@ -23,7 +24,17 @@ const store = useJobStore()
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
+
+// Hershey font catalogue, fetched once on first mount. Drives the
+// font dropdown in TypographyCard — without this fetch the dropdown
+// would render empty (the old SourceSection's onMounted did the same
+// fetch alongside the algorithms one; only the algorithms half was
+// preserved when SourceSection was dissolved into tabs, leaving the
+// fonts dropdown silently empty until this restored it).
 const fonts = ref<string[]>([])
+onMounted(async () => {
+  try { fonts.value = await getFonts() } catch { /* keep [] — TypographyCard handles empty list */ }
+})
 
 function openPicker(): void {
   fileInput.value?.click()
