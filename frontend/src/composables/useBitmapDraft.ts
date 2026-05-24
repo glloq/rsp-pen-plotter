@@ -338,6 +338,37 @@ export function buildTypographyOptions(): Record<string, unknown> {
   return { ..._typo.value }
 }
 
+// ---- Dirty tracking ----
+// Snapshot of "what we last committed" — set by ``markCommitted`` after
+// a successful /upload and by ``rehydrateDraft`` when loading an
+// existing placement. Compared against the live drafts in
+// ``isDirty`` so the UI can warn before close + disable Apply when
+// nothing has drifted.
+const _baselineBitmap = ref<string>('')
+const _baselineTypo = ref<string>('')
+
+function snap(value: unknown): string {
+  try { return JSON.stringify(value) } catch { return '' }
+}
+
+const _isDirty = computed<boolean>(() => {
+  return snap(_bitmap.value) !== _baselineBitmap.value
+    || snap(_typo.value) !== _baselineTypo.value
+})
+
+function markCommitted(): void {
+  _baselineBitmap.value = snap(_bitmap.value)
+  _baselineTypo.value = snap(_typo.value)
+  _committed.value = true
+}
+
+// Wired into ``rehydrateDraft`` so the loaded placement starts clean.
+const _origRehydrate = rehydrateDraft
+function rehydrateDraftAndMark(ctx: RehydrateContext): void {
+  _origRehydrate(ctx)
+  markCommitted()
+}
+
 // ---- Public composable ----
 export function useBitmapDraft() {
   return {
@@ -347,13 +378,15 @@ export function useBitmapDraft() {
     monoMasterStyleId: _monoMasterStyleId,
     paletteFollowsPens: _paletteFollowsPens,
     committed: _committed,
+    isDirty: _isDirty,
     printMode: _printMode,
     setPrintMode,
-    rehydrateDraft,
+    rehydrateDraft: rehydrateDraftAndMark,
     applyPresetOptions,
     buildSegmentationOptions,
     buildAlgorithmOptions,
     buildBitmapOptions,
     buildTypographyOptions,
+    markCommitted,
   }
 }

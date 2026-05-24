@@ -14,10 +14,28 @@ import LayerPassStack from './edit/LayerPassStack.vue'
 import AlgoParamsForm from './edit/AlgoParamsForm.vue'
 import { defaultsFor, getAlgoSpec } from '../data/algorithmSchemas'
 import type { PrintStyle, PrintStyleKind } from '../data/printStyles'
+import { LayerSelectionKey } from '../composables/useLayerSelection'
 
 const { t } = useI18n()
 const props = defineProps<{ layer: LayerInfo }>()
 const store = useJobStore()
+
+// Bulk selection (provided by LayersSection). May be null when this
+// card is rendered outside the layers section (currently doesn't
+// happen, but the inject default keeps the file forgiving).
+const selection = inject(LayerSelectionKey, null)
+const isSelected = computed(() => Boolean(selection?.isSelected(props.layer.layer_id)))
+
+function onHeaderClick(event: MouseEvent): void {
+  // Only intercept click for selection if a modifier is held — plain
+  // clicks on the header would otherwise eat collapse-toggle / drag
+  // affordances. Shift / Ctrl / Cmd are the canonical list-box
+  // modifiers, identical to Finder / Explorer / Slack channel lists.
+  if (!selection) return
+  if (!event.shiftKey && !event.ctrlKey && !event.metaKey) return
+  const allIds = store.layers.map((l) => l.layer_id)
+  selection.handleClick(props.layer.layer_id, event, allIds)
+}
 
 const algorithms = ref<AlgorithmInfo[]>([])
 onMounted(async () => {
@@ -189,8 +207,14 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
 </script>
 
 <template>
-  <div class="rounded border border-slate-700 bg-slate-800 px-3 py-2 space-y-2">
-    <div class="flex items-center gap-3">
+  <div
+    class="rounded border bg-slate-800 px-3 py-2 space-y-2 transition"
+    :class="isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/60' : 'border-slate-700'"
+  >
+    <div
+      class="flex items-center gap-3"
+      @click="onHeaderClick"
+    >
       <span class="cursor-grab text-slate-500 select-none" :title="t('layers.dragHint')" aria-hidden="true">⠿</span>
       <input v-model="visible" type="checkbox" class="h-4 w-4 accent-emerald-500" />
 

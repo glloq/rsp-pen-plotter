@@ -150,6 +150,9 @@ export function useFileManager(t?: Translator) {
         penSlot: draft.monoPenSlot.value,
       })
     }
+    // Pin the new baseline so the dirty tracker flips back to false
+    // — Apply button greys out, close-modal warning won't fire.
+    draft.markCommitted()
     if (store.layers.length) ui.canvasTab = 'sheet'
   }
 

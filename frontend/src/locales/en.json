@@ -93,7 +93,8 @@
     "tabOutput": "Layout & output",
     "tabShortcut": "Press {key} to jump to this tab",
     "fileActions": "File actions",
-    "resizeHandle": "Drag to resize · double-click to reset"
+    "resizeHandle": "Drag to resize · double-click to reset",
+    "unsavedWarning": "You have unsaved changes. Close anyway?"
   },
   "source": {
     "perLayerHint": "Pick the rendering style and pen slot for each colour in the Layers tab.",
@@ -185,7 +186,10 @@
     "updateHint": "Overwrite the active variant with current settings",
     "rename": "Rename",
     "remove": "Delete variant",
-    "hint": "Each variant snapshots the layer styles and visibility for this file."
+    "hint": "Each variant snapshots the layer styles and visibility for this file.",
+    "switchHint": "Click to switch · double-click to rename",
+    "collapse": "Collapse variants bar",
+    "expand": "Expand variants bar"
   },
   "printMode": {
     "title": "Output (SVG)",
@@ -302,6 +306,11 @@
     "collapse": "Collapse layer",
     "mergeToOnePen": "All to one pen",
     "mergeToOnePenHint": "Reassign every layer to pen slot 0 — useful when only one ink is loaded.",
+    "bulkSelected": "{count} selected",
+    "bulkPen": "Pen",
+    "bulkStyle": "Style",
+    "bulkReset": "Reset overrides",
+    "bulkClear": "Clear selection",
     "totalLength": "Total length",
     "estimatedTime": "Estimated time",
     "optimizeButton": "Optimize toolpaths",

@@ -93,7 +93,8 @@
     "tabOutput": "Mise en page & sortie",
     "tabShortcut": "Appuyer sur {key} pour ouvrir cet onglet",
     "fileActions": "Actions sur le fichier",
-    "resizeHandle": "Glisser pour redimensionner · double-clic pour réinitialiser"
+    "resizeHandle": "Glisser pour redimensionner · double-clic pour réinitialiser",
+    "unsavedWarning": "Tu as des changements non appliqués. Fermer quand même ?"
   },
   "source": {
     "perLayerHint": "Choisis le style de rendu et le stylo pour chaque couleur dans l'onglet Calques.",
@@ -185,7 +186,10 @@
     "updateHint": "Écraser la variante active avec les réglages actuels",
     "rename": "Renommer",
     "remove": "Supprimer la variante",
-    "hint": "Chaque variante capture les styles et la visibilité des calques pour ce fichier."
+    "hint": "Chaque variante capture les styles et la visibilité des calques pour ce fichier.",
+    "switchHint": "Cliquer pour basculer · double-clic pour renommer",
+    "collapse": "Replier la barre des variantes",
+    "expand": "Déplier la barre des variantes"
   },
   "printMode": {
     "title": "Sortie (SVG)",
@@ -302,6 +306,11 @@
     "collapse": "Replier le calque",
     "mergeToOnePen": "Tous sur un pen",
     "mergeToOnePenHint": "Réaffecte chaque calque au slot 0 — pratique quand une seule encre est chargée.",
+    "bulkSelected": "{count} sélectionné(s)",
+    "bulkPen": "Stylo",
+    "bulkStyle": "Style",
+    "bulkReset": "Réinitialiser les overrides",
+    "bulkClear": "Effacer la sélection",
     "totalLength": "Longueur totale",
     "estimatedTime": "Durée estimée",
     "optimizeButton": "Optimiser les trajectoires",

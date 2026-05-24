@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SegmentationMethod } from '../../../api/client'
 import DetailPicker from '../shared/DetailPicker.vue'
+import { useAccordionPersistence } from '../../../composables/useAccordionPersistence'
 
 // Segmentation card: how the bitmap is split into colour layers
 // (kmeans / luminance_bands / thresholds / fixed_palette) plus the
@@ -35,7 +36,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
-const expanded = ref(true)
+const expanded = useAccordionPersistence('segmentation', true)
 const SEG_METHODS: SegmentationMethod[] = ['kmeans', 'luminance_bands', 'thresholds', 'fixed_palette']
 
 // Detail tier table + resolver now live in shared/DetailPicker so the

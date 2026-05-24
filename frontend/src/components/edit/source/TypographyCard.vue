@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAccordionPersistence } from '../../../composables/useAccordionPersistence'
 
 // Typography card: font + sizing knobs for plain-text and markdown
 // sources. Only rendered when the active source is a typography file
@@ -25,7 +25,7 @@ defineProps<{
 
 const { t } = useI18n()
 
-const expanded = ref(false)
+const expanded = useAccordionPersistence('typography', false)
 </script>
 
 <template>
