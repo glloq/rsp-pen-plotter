@@ -265,10 +265,19 @@ const previewSvg = computed(() => {
   })
 })
 
-function schedulePreview(): void {
+// schedulePreview runs the live /preview on a debounce so dragging
+// a slider doesn't fire N round-trips. ``immediate`` skips the
+// debounce — used by the detail-tier picker since a tier click is
+// already a discrete commitment by the operator (one click, not a
+// stream), and the operator expects instant feedback.
+function schedulePreview(immediate = false): void {
   if (!selectedFile.value || kind.value !== 'bitmap') return
   if (previewTimer) clearTimeout(previewTimer)
-  previewTimer = setTimeout(runPreview, 500)
+  if (immediate) {
+    void runPreview()
+  } else {
+    previewTimer = setTimeout(runPreview, 500)
+  }
 }
 
 async function runPreview(): Promise<void> {
@@ -319,6 +328,18 @@ function retryPreview(): void {
   runPreview()
 }
 
+// Detail-tier changes get their own watcher with no debounce — the
+// operator clicks a tier and expects immediate visual feedback (the
+// preview pane footer's path-count diagnostic in particular). The
+// debounced watcher below still handles the more granular slider /
+// numeric inputs.
+watch(
+  () => bitmap.value.max_dimension_px,
+  () => {
+    if (selectedFile.value && kind.value === 'bitmap') schedulePreview(true)
+  },
+)
+
 watch(
   [
     selectedFile,
@@ -333,7 +354,6 @@ watch(
     () => bitmap.value.background_luminance,
     () => bitmap.value.min_region_pixels,
     () => bitmap.value.merge_delta_e,
-    () => bitmap.value.max_dimension_px,
     () => bitmap.value.cell_size_px,
     () => bitmap.value.density,
     () => bitmap.value.dot_radius_px,

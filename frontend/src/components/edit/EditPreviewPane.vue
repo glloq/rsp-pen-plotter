@@ -184,9 +184,25 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
 
 <template>
   <section class="flex h-full min-h-0 flex-col">
-    <header class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-slate-700 bg-slate-900/60 px-3 py-2 text-xs">
-      <div class="flex flex-wrap items-baseline gap-x-3">
+    <header class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-700 bg-slate-900/60 px-3 py-2 text-xs">
+      <div class="flex flex-wrap items-center gap-x-2">
         <span class="uppercase tracking-wide text-slate-400">{{ t('editPreview.title') }}</span>
+        <!-- LIVE vs SAVED badge: tells the operator at a glance whether
+             the canvas is showing the freshly-rendered draft (every
+             setting change updates it) or the last committed
+             placement SVG (only Re-convert refreshes it). Without
+             this, settings changes that updated the live preview but
+             not the placement looked like "nothing happened". -->
+        <span
+          v-if="showLivePreview"
+          class="rounded-sm border border-emerald-700 bg-emerald-950/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-emerald-300"
+          :title="t('editPreview.livePreviewHint')"
+        >{{ t('editPreview.live') }}</span>
+        <span
+          v-else-if="showPlacementSvg"
+          class="rounded-sm border border-slate-700 bg-slate-900/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-slate-400"
+          :title="t('editPreview.savedHint')"
+        >{{ t('editPreview.saved') }}</span>
         <span v-if="edit?.selectedFile.value" class="truncate font-mono text-slate-300">
           {{ edit.selectedFile.value.name }}
         </span>

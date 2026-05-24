@@ -126,7 +126,11 @@
     "resetView": "Reset view (click) · scroll to zoom · drag to pan",
     "cancelPreview": "Cancel preview",
     "retry": "Retry",
-    "paths": "paths"
+    "paths": "paths",
+    "live": "Live",
+    "livePreviewHint": "Reflects every setting change — not yet committed to the plan.",
+    "saved": "Saved",
+    "savedHint": "Last committed conversion — change settings then click Re-convert to refresh."
   },
   "planRail": {
     "title": "Plan",
