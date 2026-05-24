@@ -107,9 +107,11 @@
     "notApplicable": "This file type doesn't use colour segmentation."
   },
   "render": {
+    "masterStyle": "Master style",
     "multicolorHint": "Multicolour rendering is per-layer. Switch to the Layers tab to pick a style for each colour.",
     "noSource": "Attach a file on the Source tab to choose a render style.",
-    "notApplicable": "This file type doesn't have a render style."
+    "notApplicable": "This file type doesn't have a render style.",
+    "replaceOverridesWarning": "Switching style will replace {count} per-layer override(s). Continue?"
   },
   "mono": {
     "pen": "Pen",

@@ -107,9 +107,11 @@
     "notApplicable": "Ce type de fichier n'utilise pas de segmentation couleur."
   },
   "render": {
+    "masterStyle": "Style maître",
     "multicolorHint": "Le rendu multicolore se fait par couche. Va dans l'onglet Calques pour choisir un style pour chaque couleur.",
     "noSource": "Attache un fichier dans l'onglet Source pour choisir un style de rendu.",
-    "notApplicable": "Ce type de fichier n'a pas de style de rendu."
+    "notApplicable": "Ce type de fichier n'a pas de style de rendu.",
+    "replaceOverridesWarning": "Changer de style va remplacer {count} override(s) par couche. Continuer ?"
   },
   "mono": {
     "pen": "Stylo",
