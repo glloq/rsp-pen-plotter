@@ -21,6 +21,8 @@
     "updateChecking": "Checking for updates…",
     "updateInstalled": "Update installed.",
     "updateNone": "Already up to date.",
+    "updateAvailable": "A new update is available ({count} commit(s) behind).",
+    "openSettings": "Open settings",
     "plotterSending": "Sending G-code to plotter…",
     "plotterSent": "G-code sent to plotter.",
     "plotterConnecting": "Connecting to plotter…",
@@ -713,6 +715,27 @@
     "forceUpdateHint": "Overwrites local changes then updates. Cannot be undone.",
     "forceUpdateConfirmTitle": "Force update",
     "forceUpdateConfirmMsg": "Local changes will be permanently discarded. Continue?",
-    "forcedNotice": "Forced update — local changes were discarded."
+    "forcedNotice": "Forced update — local changes were discarded.",
+    "notifications": "Notifications",
+    "notifyOnStartup": "Notify on startup when an update is available",
+    "notifyOnStartupHint": "Shows a toast on page load when a new commit is available on the remote."
+  },
+  "updateModal": {
+    "titleRunning": "Update in progress",
+    "titleSuccess": "Update complete",
+    "titleNoop": "Up to date",
+    "titleError": "Update failed",
+    "statusPulling": "Pulling the latest code and rebuilding the UI…",
+    "successMessage": "The new code is installed.",
+    "noopMessage": "No new commits — your install is already current.",
+    "errorMessage": "Something went wrong during the update.",
+    "elapsed": "Elapsed: {seconds}s",
+    "doNotClose": "Don't close this window — the interface is locked until the operation finishes.",
+    "forcedNotice": "Forced update — local changes were discarded.",
+    "cacheTitle": "Clear the browser cache",
+    "cacheHint": "To load the rebuilt UI, do a hard refresh that bypasses the cache.",
+    "cacheShortcut": "Shortcut: Ctrl + Shift + R (⌘ + Shift + R on Mac)",
+    "reloadNow": "Reload now",
+    "close": "Close"
   }
 }

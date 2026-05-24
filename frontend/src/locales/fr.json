@@ -21,6 +21,8 @@
     "updateChecking": "Recherche d'une mise à jour…",
     "updateInstalled": "Mise à jour installée.",
     "updateNone": "Logiciel à jour.",
+    "updateAvailable": "Une mise à jour est disponible ({count} commit(s) d'avance).",
+    "openSettings": "Ouvrir les réglages",
     "plotterSending": "Envoi du G-code au traceur…",
     "plotterSent": "G-code envoyé au traceur.",
     "plotterConnecting": "Connexion au traceur…",
@@ -713,6 +715,27 @@
     "forceUpdateHint": "Écrase les modifications locales puis met à jour. Irréversible.",
     "forceUpdateConfirmTitle": "Forcer la mise à jour",
     "forceUpdateConfirmMsg": "Les modifications locales seront définitivement perdues. Continuer ?",
-    "forcedNotice": "Mise à jour forcée — les modifications locales ont été écrasées."
+    "forcedNotice": "Mise à jour forcée — les modifications locales ont été écrasées.",
+    "notifications": "Notifications",
+    "notifyOnStartup": "Notifier à l'ouverture si une mise à jour est disponible",
+    "notifyOnStartupHint": "Affiche un toast au chargement de la page lorsqu'un nouveau commit existe sur le dépôt."
+  },
+  "updateModal": {
+    "titleRunning": "Mise à jour en cours",
+    "titleSuccess": "Mise à jour terminée",
+    "titleNoop": "Logiciel à jour",
+    "titleError": "Échec de la mise à jour",
+    "statusPulling": "Récupération du dernier code et reconstruction de l'interface…",
+    "successMessage": "Le nouveau code est installé.",
+    "noopMessage": "Aucun nouveau commit — l'installation est déjà à jour.",
+    "errorMessage": "Une erreur est survenue pendant la mise à jour.",
+    "elapsed": "Temps écoulé : {seconds} s",
+    "doNotClose": "Ne ferme pas cette fenêtre — l'interface reste verrouillée jusqu'à la fin de l'opération.",
+    "forcedNotice": "Mise à jour forcée — les modifications locales ont été écrasées.",
+    "cacheTitle": "Vide le cache du navigateur",
+    "cacheHint": "Pour charger la nouvelle interface, fais un rafraîchissement forcé qui ignore le cache.",
+    "cacheShortcut": "Raccourci : Ctrl + Maj + R (⌘ + Maj + R sur Mac)",
+    "reloadNow": "Recharger maintenant",
+    "close": "Fermer"
   }
 }
