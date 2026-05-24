@@ -90,6 +90,7 @@
     "done": "Terminer",
     "tabSource": "Source",
     "tabImage": "Image",
+    "tabCurves": "Courbes",
     "tabColors": "Couleurs",
     "tabRender": "Rendu",
     "tabLayers": "Calques",
@@ -108,6 +109,18 @@
     "monoHint": "Mode monochrome — choisis le style maître dans l'onglet Rendu.",
     "noSource": "Attache un fichier dans l'onglet Source pour régler les couleurs.",
     "notApplicable": "Ce type de fichier n'utilise pas de segmentation couleur."
+  },
+  "curves": {
+    "title": "Simplification des courbes",
+    "centerline": "Mode trait (centerline)",
+    "centerlineDesc": "Trace le squelette médian au lieu des contours fermés. Idéal pour les schémas et dessins au trait. Les zones remplies épaisses sont réduites à un seul trait au centre, c'est voulu.",
+    "simplify": "Tolérance Douglas-Peucker",
+    "simplifyDesc": "Plus la valeur est haute, plus le /optimize supprime de sommets intermédiaires. S'applique à tous les calques du placement courant.",
+    "curveFit": "Lissage en courbes de Bézier",
+    "curveFitDesc": "Convertit les polylignes simplifiées en courbes de Bézier cubiques pour des mouvements de plotter plus doux.",
+    "curveFitTodo": "Bientôt",
+    "noSource": "Attache d'abord un fichier.",
+    "notApplicable": "Ce type de fichier n'utilise pas la simplification de courbes."
   },
   "preprocess": {
     "intro": "Prépare l'image source avant son découpage en couches de couleur.",
@@ -189,7 +202,9 @@
       "tsp": "Mono-trait (TSP)",
       "tspDesc": "Un seul trait continu traversant les pixels sombres au plus proche voisin.",
       "spiral": "Spirale",
-      "spiralDesc": "Spirale d'Archimède clippée à la zone sombre de l'image."
+      "spiralDesc": "Spirale d'Archimède clippée à la zone sombre de l'image.",
+      "centerline": "Tracé centerline",
+      "centerlineDesc": "Squelettise puis trace chaque trait comme une polyligne unique — idéal pour les schémas et dessins au trait."
     }
   },
   "editPreview": {
@@ -275,7 +290,9 @@
     "spiral": "Spirale",
     "spiralDesc": "Spirale continue unique",
     "scanlines": "Lignes",
-    "scanlinesDesc": "Lignes horizontales"
+    "scanlinesDesc": "Lignes horizontales",
+    "centerline": "Centerline",
+    "centerlineDesc": "Trace les traits comme polylignes uniques (line art)"
   },
   "execute": {
     "connection": "Connexion",
@@ -547,7 +564,9 @@
     "strokeWidthPx": "Épaisseur (px)",
     "samplesPerTurn": "Pts/tour",
     "waveAmp": "Amplitude",
-    "wavePeriod": "Période"
+    "wavePeriod": "Période",
+    "smooth": "Lissage",
+    "minBranch": "Branche min (px)"
   },
   "profile": {
     "title": "Profil machine",

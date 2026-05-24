@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Literal
 
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.centerline import CenterlineAlgorithm
 from pen_plotter.converters.algorithms.contours import ContoursAlgorithm
 from pen_plotter.converters.algorithms.crosshatch import CrosshatchAlgorithm
 from pen_plotter.converters.algorithms.direct import DirectVectorizationAlgorithm
@@ -33,6 +34,7 @@ _ALGORITHMS: dict[str, RasterAlgorithm] = {
         CrosshatchAlgorithm(),
         ContoursAlgorithm(),
         EdgesAlgorithm(),
+        CenterlineAlgorithm(),
         SpiralAlgorithm(),
         ScanlinesAlgorithm(),
         TspAlgorithm(),
@@ -48,6 +50,7 @@ _KINDS: dict[str, AlgorithmKind] = {
     "crosshatch": "fill",
     "contours": "lines",
     "edges": "lines",
+    "centerline": "lines",
     "spiral": "mono_stroke",
     "scanlines": "mono_stroke",
     "tsp": "mono_stroke",
@@ -84,6 +87,7 @@ def available_algorithms() -> list[RasterAlgorithm]:
 
 __all__ = [
     "AlgorithmKind",
+    "CenterlineAlgorithm",
     "ContoursAlgorithm",
     "CrosshatchAlgorithm",
     "DirectVectorizationAlgorithm",

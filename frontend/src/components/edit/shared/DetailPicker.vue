@@ -47,13 +47,14 @@ function selectLevel(value: number): void {
         v-for="level in DETAIL_LEVELS"
         :key="level.id"
         type="button"
-        class="rounded border px-2 py-1.5 text-[11px] transition"
+        class="flex flex-col items-center rounded border px-2 py-1.5 text-[11px] leading-tight transition"
         :class="currentDetail() === level.id
           ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
           : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
         @click="selectLevel(level.value)"
       >
-        {{ t(level.labelKey) }}
+        <span>{{ t(level.labelKey) }}</span>
+        <span class="text-[9px] font-mono opacity-70">{{ level.value }}px</span>
       </button>
     </div>
     <p class="text-[10px] text-slate-500">{{ hint ?? t('mono.detailHint') }}</p>

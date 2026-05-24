@@ -90,6 +90,7 @@
     "done": "Done",
     "tabSource": "Source",
     "tabImage": "Image",
+    "tabCurves": "Curves",
     "tabColors": "Colors",
     "tabRender": "Render",
     "tabLayers": "Layers",
@@ -108,6 +109,18 @@
     "monoHint": "Single-ink mode — pick the master style on the Render tab.",
     "noSource": "Attach a file on the Source tab to choose colour settings.",
     "notApplicable": "This file type doesn't use colour segmentation."
+  },
+  "curves": {
+    "title": "Path simplification",
+    "centerline": "Line-tracing mode (centerline)",
+    "centerlineDesc": "Trace the medial skeleton instead of region outlines. Best for schematics and line art. Thick filled areas collapse to a single line at the centre, which is intentional.",
+    "simplify": "Douglas-Peucker tolerance",
+    "simplifyDesc": "Higher values remove more intermediate vertices when /optimize runs. Applies to every layer in the current placement.",
+    "curveFit": "Smooth into Bézier curves",
+    "curveFitDesc": "Convert simplified polylines into cubic Bézier paths for smoother plotter motion.",
+    "curveFitTodo": "Coming soon",
+    "noSource": "Attach a file first.",
+    "notApplicable": "This file type doesn't use curve simplification."
   },
   "preprocess": {
     "intro": "Prepare the source image before it's segmented into colour layers.",
@@ -189,7 +202,9 @@
       "tsp": "Single-line (TSP)",
       "tspDesc": "One continuous nearest-neighbour tour through dark pixels.",
       "spiral": "Spiral",
-      "spiralDesc": "Single Archimedean spiral clipped to the dark region."
+      "spiralDesc": "Single Archimedean spiral clipped to the dark region.",
+      "centerline": "Centerline trace",
+      "centerlineDesc": "Skeletonise then trace each stroke as a single polyline — ideal for schematics and line art."
     }
   },
   "editPreview": {
@@ -275,7 +290,9 @@
     "spiral": "Spiral",
     "spiralDesc": "Single continuous spiral",
     "scanlines": "Scanlines",
-    "scanlinesDesc": "Horizontal lines"
+    "scanlinesDesc": "Horizontal lines",
+    "centerline": "Centerline",
+    "centerlineDesc": "Trace strokes as single polylines (line art)"
   },
   "execute": {
     "connection": "Connection",
@@ -547,7 +564,9 @@
     "strokeWidthPx": "Stroke (px)",
     "samplesPerTurn": "Pts/turn",
     "waveAmp": "Amplitude",
-    "wavePeriod": "Period"
+    "wavePeriod": "Period",
+    "smooth": "Smooth",
+    "minBranch": "Min branch (px)"
   },
   "profile": {
     "title": "Machine profile",

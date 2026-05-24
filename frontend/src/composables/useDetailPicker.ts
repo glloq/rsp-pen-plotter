@@ -5,12 +5,13 @@
 // table grid lines, dense schematic detail) survive the segmentation
 // pass instead of being smoothed away.
 //
-// The "Ultra" tier (4096) was added after the operator reported that
-// "increasing detail doesn't do much" on text + table imagery: the
-// previous Max (2400) was already the backend's silent ceiling, so the
-// slider topped out before the operator could push detail further.
-// The new tier matches the backend's expanded 8192 cap, leaving
-// headroom for a future "Native" tier if needed.
+// The "Ultra" tier (8192) matches the backend's expanded cap. Tier
+// values double from one step to the next so the visual difference is
+// obvious in the preview — the previous 1600/3200 spread between
+// High and Max was too small for the downstream algorithms to expose
+// any real change, and operators reported the picker felt broken.
+// The chunked-argmin fix in segmentation.fixed_palette makes the
+// 8192 ceiling actually usable; before, Ultra would 400.
 
 import { computed, type Ref } from 'vue'
 
@@ -23,11 +24,11 @@ export interface DetailLevel {
 }
 
 export const DETAIL_LEVELS: readonly DetailLevel[] = [
-  { id: 'low', value: 400, labelKey: 'mono.detailLow' },
-  { id: 'standard', value: 800, labelKey: 'mono.detailStandard' },
-  { id: 'high', value: 1600, labelKey: 'mono.detailHigh' },
-  { id: 'max', value: 3200, labelKey: 'mono.detailMax' },
-  { id: 'ultra', value: 4800, labelKey: 'mono.detailUltra' },
+  { id: 'low', value: 600, labelKey: 'mono.detailLow' },
+  { id: 'standard', value: 1200, labelKey: 'mono.detailStandard' },
+  { id: 'high', value: 2400, labelKey: 'mono.detailHigh' },
+  { id: 'max', value: 4800, labelKey: 'mono.detailMax' },
+  { id: 'ultra', value: 8192, labelKey: 'mono.detailUltra' },
 ]
 
 // Map an arbitrary ``max_dimension_px`` to the closest tier id. Used to

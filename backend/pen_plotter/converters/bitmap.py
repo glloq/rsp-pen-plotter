@@ -25,6 +25,19 @@ pillow_heif.register_heif_opener()
 
 _REC709 = np.array([0.2126, 0.7152, 0.0722])
 
+
+def _palette_has_near_white(palette_hex: list[str], threshold: float) -> bool:
+    """True if any entry's Rec.709 luminance reaches the drop threshold."""
+    for entry in palette_hex:
+        try:
+            rgb = segmentation._hex_to_rgb(entry)
+        except ValueError:
+            continue
+        if float(np.dot(np.array(rgb) / 255.0, _REC709)) >= threshold:
+            return True
+    return False
+
+
 SegmentationMethod = Literal["kmeans", "luminance_bands", "thresholds", "fixed_palette"]
 Rotation = Literal[0, 90, 180, 270]
 
@@ -471,6 +484,19 @@ class BitmapConverter(Converter):
                 raise ValueError(
                     "segmentation_options.palette must be a non-empty list of hex colours"
                 )
+            # Preserve white background: when the operator's palette
+            # follows their pen rack (typically no white pen), white
+            # pixels would otherwise snap to the nearest pen colour
+            # (light grey, pale yellow, …) and the resulting layer's
+            # luminance is no longer above ``background_luminance`` —
+            # so the drop_background filter downstream lets the wrong-
+            # colour "background" through. Auto-inject ``#ffffff`` here
+            # so white pixels snap to white instead, and the existing
+            # filter at the render step drops that layer cleanly.
+            if opts.drop_background and not _palette_has_near_white(
+                palette_hex, opts.background_luminance
+            ):
+                palette_hex = ["#ffffff", *palette_hex]
             return segmentation.fixed_palette(image, palette_hex=palette_hex)
         return segmentation.kmeans(image, num_colors=opts.num_colors, n_init=n_init)
 
