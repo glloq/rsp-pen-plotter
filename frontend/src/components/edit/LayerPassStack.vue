@@ -260,8 +260,8 @@ function clearAll(): void {
     >
       <template #item="{ element: pass, index: i }: { element: LayerPass; index: number }">
         <div
-          class="rounded bg-slate-900 px-1.5 py-1"
-          :class="hidden[i] ? 'opacity-60' : ''"
+          class="rounded bg-slate-900 px-1.5 py-1 transition"
+          :class="hidden[i] ? 'opacity-50' : ''"
         >
           <div class="flex items-center gap-1">
             <button
@@ -273,14 +273,22 @@ function clearAll(): void {
             <button
               type="button"
               class="rounded px-1 py-0.5 text-[11px] hover:bg-slate-800"
-              :class="hidden[i] ? 'text-slate-600' : 'text-slate-300'"
+              :class="hidden[i] ? 'text-amber-500' : 'text-slate-300'"
               :title="hidden[i] ? t('passes.show') : t('passes.hide')"
               @click="toggleHidden(i)"
             >{{ hidden[i] ? '◌' : '●' }}</button>
-            <StyleThumbnail :algorithm="pass.algorithm" size="sm" />
+            <span class="relative inline-flex">
+              <StyleThumbnail :algorithm="pass.algorithm" size="sm" />
+              <span
+                v-if="hidden[i]"
+                class="pointer-events-none absolute inset-0 flex items-center justify-center text-[14px] font-bold leading-none text-amber-400"
+                aria-hidden="true"
+              >⊘</span>
+            </span>
             <select
               :value="pass.algorithm"
               class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-100"
+              :class="hidden[i] ? 'line-through text-slate-500' : ''"
               @change="(e) => onPassAlgorithm(i, (e.target as HTMLSelectElement).value)"
             >
               <option v-for="algo in algoChoices" :key="algo.id" :value="algo.id">

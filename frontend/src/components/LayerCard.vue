@@ -209,7 +209,9 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
 <template>
   <div
     class="rounded border bg-slate-800 px-3 py-2 space-y-2 transition"
-    :class="isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/60' : 'border-slate-700'"
+    :class="isSelected
+      ? 'border-emerald-500 ring-2 ring-emerald-500 ring-offset-2 ring-offset-slate-900'
+      : 'border-slate-700'"
   >
     <div
       class="flex items-center gap-3"

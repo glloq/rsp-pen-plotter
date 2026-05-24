@@ -253,6 +253,14 @@ export function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
         _bitmap.value.thresholds = [seg.default_threshold ?? 0.5]
       }
     }
+    // Clear the multicolour palette so a stale ``fixed_palette`` from
+    // the previous mode can't keep the preview / upload painting in
+    // colour. Without this, switching multi → mono left the operator
+    // with N coloured layers because ``buildSegmentationOptions`` would
+    // still serve the old palette if anything tipped the
+    // segmentation_method back to fixed_palette.
+    _bitmap.value.palette = []
+    _bitmap.value.num_colors = 1
     _paletteFollowsPens.value = false
   } else {
     _bitmap.value.segmentation_method = 'kmeans'
@@ -362,11 +370,20 @@ function markCommitted(): void {
   _committed.value = true
 }
 
-// Wired into ``rehydrateDraft`` so the loaded placement starts clean.
+// Wired into ``rehydrateDraft`` so a loaded placement starts clean.
+// Only marks the rehydrated state as the committed baseline when the
+// placement actually carries committed options (``last_options``); for
+// a fresh / empty placement we leave the baseline as-is so the dirty
+// tracker correctly flags the first edit as "unsaved" rather than
+// pinning a blank draft as if it were already committed.
 const _origRehydrate = rehydrateDraft
 function rehydrateDraftAndMark(ctx: RehydrateContext): void {
   _origRehydrate(ctx)
-  markCommitted()
+  const hasCommitted = Boolean(
+    ctx.placement?.last_options
+    && typeof ctx.placement.last_options === 'object',
+  )
+  if (hasCommitted) markCommitted()
 }
 
 // ---- Public composable ----
