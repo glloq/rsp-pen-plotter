@@ -209,7 +209,12 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
   pencil: {
     spacing_min: 2.5,
     spacing_max: 6.5,
-    angles: [45, 135, 0, 90, 30, 150],
+    // Limited to the four angles the chip picker exposes (0/45/90/135)
+    // so the active state of each chip on first paint matches the
+    // operator's intuition. The 30°/150° pair that lived here pre-
+    // refactor wasn't selectable from the UI, only visible after a
+    // /preview round-trip — confusing.
+    angles: [45, 135, 0, 90],
     crossed_on_darkest: true,
   },
   'halftone-shade': {
