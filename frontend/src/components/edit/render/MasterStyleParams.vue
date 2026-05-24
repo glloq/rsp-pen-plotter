@@ -7,21 +7,23 @@ import {
 } from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
+import DualRangeSlider from './DualRangeSlider.vue'
 
 // Per-style knobs exposed by the active master style. Two paths:
-//   - shaded styles (luminance_bands)   → bands slider (2..6) + the
-//                                          monochrome ink colour picker
-//                                          + style-specific range knobs
-//                                          (spacing, angles, density)
-//                                          + per-band override drawer.
-//   - binary styles (thresholds)        → single threshold slider
-//                                          (0.1..0.9) + ink colour
-//                                          picker + optional stroke
-//                                          width slider.
+//   - shaded styles (luminance_bands)   → bands slider (2..6) + ink
+//                                          colour + ONE compact range
+//                                          slider per dimension
+//                                          (spacing, density, cell,
+//                                          rings, wave amplitude).
+//   - binary styles (thresholds)        → single threshold slider +
+//                                          ink colour + ONE single
+//                                          slider for the only knob
+//                                          that drives darkness on
+//                                          that style (stroke width,
+//                                          dot density, spiral spacing).
 //
-// Each "shaded" knob group writes into useBitmapDraft._mono.perStyle[id]
-// via setMonoKnob; ``buildBandRecipes`` re-reads them on every /preview
-// scheduling so live tweaks reflect immediately.
+// Per-band override drawer is only shown when ``mono.advanced_mode``
+// is on — the default UI stays focused on the global sliders.
 
 interface BitmapLike {
   num_bands: number
@@ -62,16 +64,18 @@ const inkColor = computed({
   set: (v: string) => draft.setMonoInkColor(v),
 })
 
+const advancedMode = computed({
+  get: () => draft.mono.value.advanced_mode,
+  set: (v: boolean) => draft.setMonoAdvancedMode(v),
+})
+
 // ---- Per-style knob accessors ----
-// Reading via computed keeps the template terse and reactive. Setting
-// goes through the composable's setter so future hooks (analytics,
-// validation) have one place to land.
 const knobs = computed(() => draft.getMonoStyleKnobs(props.styleId))
 
 function setKnob<K extends string>(key: K, value: unknown): void {
   // The composable's setMonoKnob is generic over keyof MonoStyleKnobs;
-  // we widen here for the template's sake since each call site already
-  // knows the field name + type from the <input> binding.
+  // widening here keeps the template terse while every call site
+  // already knows the field name + type from its <input> binding.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(draft.setMonoKnob as any)(props.styleId, key, value)
 }
@@ -95,15 +99,13 @@ function isAngleActive(angle: number): boolean {
   return (knobs.value.angles ?? []).includes(angle)
 }
 
-// ---- Per-band override drawer ----
+// ---- Per-band override drawer (advanced only) ----
 const bandIndices = computed(() => {
   if (!usesBands.value) return []
   return Array.from({ length: props.bitmap.num_bands }, (_, i) => i)
 })
 
 function bandPreview(i: number): Record<string, unknown> {
-  // Show the literal pinned override if present, else the interpolated
-  // value the operator would get without an override.
   const pinned = knobs.value.perBand?.[i]
   if (pinned) return pinned
   return draft.interpolatedBandOptions(i, props.bitmap.num_bands)
@@ -123,11 +125,10 @@ function resetBand(i: number): void {
   draft.setMonoBandOverride(props.styleId, i, null)
 }
 
-// ---- Per-band luminance swatch (visual cue: darkest → lightest) ----
 function bandSwatchStyle(i: number): Record<string, string> {
-  // Darker bands first (i=0 darkest), interpolate to near-white at the
-  // brightest band. Pure visual reference — operators recognise which
-  // card maps to which gray.
+  // Darker bands first (i=0 darkest), interpolating toward near-white
+  // at the brightest. Pure visual reference — lets the operator map
+  // each card to its target gray level at a glance.
   const total = Math.max(1, props.bitmap.num_bands - 1)
   const t = total === 0 ? 0 : i / total
   const v = Math.round(60 + t * 180)
@@ -193,8 +194,8 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <p class="text-[10px] text-slate-500">{{ t('mono.thresholdHint') }}</p>
     </div>
 
-    <!-- ===== Pencil: angle chips + spacing range + crossed toggle ===== -->
-    <div v-if="styleId === 'pencil'" class="space-y-2 border-t border-slate-800 pt-3">
+    <!-- ===== Pencil: angle chips + density range + crossed toggle ===== -->
+    <div v-if="styleId === 'pencil'" class="space-y-3 border-t border-slate-800 pt-3">
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.angles') }}
@@ -211,31 +212,23 @@ function bandSwatchStyle(i: number): Record<string, string> {
             @click="toggleAngle(a)"
           >{{ a }}°</button>
         </div>
-        <p class="text-[10px] text-slate-500">{{ t('mono.anglesHint') }}</p>
+        <p class="mt-1 text-[10px] text-slate-500">{{ t('mono.anglesHint') }}</p>
       </div>
 
-      <div>
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">
-          {{ t('mono.spacingRange') }}
-        </p>
-        <div class="flex items-center gap-2">
-          <span class="text-[10px] text-slate-500">{{ t('mono.minLabel') }}</span>
-          <input
-            type="number" min="1" max="10" step="0.5"
-            :value="knobs.spacing_min ?? 2.5"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('spacing_min', Number((e.target as HTMLInputElement).value))"
-          />
-          <span class="text-[10px] text-slate-500">{{ t('mono.maxLabel') }}</span>
-          <input
-            type="number" min="1" max="10" step="0.5"
-            :value="knobs.spacing_max ?? 6.5"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('spacing_max', Number((e.target as HTMLInputElement).value))"
-          />
-        </div>
-        <p class="text-[10px] text-slate-500">{{ t('mono.spacingRangeHint') }}</p>
-      </div>
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 2.5"
+        :model-value-max="knobs.spacing_max ?? 6.5"
+        :min="1" :max="10" :step="0.5" unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+        <template #hint>
+          <p class="text-[10px] text-slate-500">{{ t('mono.spacingRangeHint') }}</p>
+        </template>
+      </DualRangeSlider>
 
       <label class="flex items-center gap-2 text-[11px] text-slate-300">
         <input
@@ -249,55 +242,39 @@ function bandSwatchStyle(i: number): Record<string, string> {
     </div>
 
     <!-- ===== Halftone shade: cell size range ===== -->
-    <div v-else-if="styleId === 'halftone-shade'" class="space-y-2 border-t border-slate-800 pt-3">
-      <div>
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">
-          {{ t('mono.cellRange') }}
-        </p>
-        <div class="flex items-center gap-2">
-          <span class="text-[10px] text-slate-500">{{ t('mono.minLabel') }}</span>
-          <input
-            type="number" min="2" max="14" step="1"
-            :value="knobs.cell_min ?? 3"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('cell_min', Number((e.target as HTMLInputElement).value))"
-          />
-          <span class="text-[10px] text-slate-500">{{ t('mono.maxLabel') }}</span>
-          <input
-            type="number" min="2" max="14" step="1"
-            :value="knobs.cell_max ?? 9"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('cell_max', Number((e.target as HTMLInputElement).value))"
-          />
-        </div>
+    <DualRangeSlider
+      v-else-if="styleId === 'halftone-shade'"
+      class="border-t border-slate-800 pt-3"
+      :model-value-min="knobs.cell_min ?? 3"
+      :model-value-max="knobs.cell_max ?? 9"
+      :min="2" :max="14" :step="1" unit="px"
+      @update:model-value-min="(v) => setKnob('cell_min', v)"
+      @update:model-value-max="(v) => setKnob('cell_max', v)"
+    >
+      <template #label>
+        <span class="uppercase tracking-wider">{{ t('mono.cellRange') }}</span>
+      </template>
+      <template #hint>
         <p class="text-[10px] text-slate-500">{{ t('mono.cellRangeHint') }}</p>
-      </div>
-    </div>
+      </template>
+    </DualRangeSlider>
 
     <!-- ===== Stippling shade: density range + dot radius ===== -->
-    <div v-else-if="styleId === 'stippling-shade'" class="space-y-2 border-t border-slate-800 pt-3">
-      <div>
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">
-          {{ t('mono.densityRange') }}
-        </p>
-        <div class="flex items-center gap-2">
-          <span class="text-[10px] text-slate-500">{{ t('mono.minLabel') }}</span>
-          <input
-            type="number" min="0.005" max="0.1" step="0.001"
-            :value="knobs.density_min ?? 0.012"
-            class="w-20 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('density_min', Number((e.target as HTMLInputElement).value))"
-          />
-          <span class="text-[10px] text-slate-500">{{ t('mono.maxLabel') }}</span>
-          <input
-            type="number" min="0.005" max="0.1" step="0.001"
-            :value="knobs.density_max ?? 0.06"
-            class="w-20 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('density_max', Number((e.target as HTMLInputElement).value))"
-          />
-        </div>
-        <p class="text-[10px] text-slate-500">{{ t('mono.densityRangeHint') }}</p>
-      </div>
+    <div v-else-if="styleId === 'stippling-shade'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.density_min ?? 0.012"
+        :model-value-max="knobs.density_max ?? 0.06"
+        :min="0.005" :max="0.1" :step="0.001"
+        @update:model-value-min="(v) => setKnob('density_min', v)"
+        @update:model-value-max="(v) => setKnob('density_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.densityRange') }}</span>
+        </template>
+        <template #hint>
+          <p class="text-[10px] text-slate-500">{{ t('mono.densityRangeHint') }}</p>
+        </template>
+      </DualRangeSlider>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.dotRadius') }}
@@ -312,102 +289,112 @@ function bandSwatchStyle(i: number): Record<string, string> {
       </div>
     </div>
 
-    <!-- ===== Engraving: spacing range + wave amp range ===== -->
-    <div v-else-if="styleId === 'engraving'" class="space-y-2 border-t border-slate-800 pt-3">
+    <!-- ===== Engraving: spacing range + wave amp range + wave period ===== -->
+    <div v-else-if="styleId === 'engraving'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 1.8"
+        :model-value-max="knobs.spacing_max ?? 5"
+        :min="1" :max="8" :step="0.5" unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <DualRangeSlider
+        :model-value-min="knobs.wave_min ?? 0.6"
+        :model-value-max="knobs.wave_max ?? 1.6"
+        :min="0" :max="3" :step="0.1" unit="px"
+        @update:model-value-min="(v) => setKnob('wave_min', v)"
+        @update:model-value-max="(v) => setKnob('wave_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.waveRange') }}</span>
+        </template>
+      </DualRangeSlider>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
-          {{ t('mono.spacingRange') }}
+          {{ t('mono.wavePeriod') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.wave_period ?? 14) }} px</span>
         </p>
-        <div class="flex items-center gap-2">
-          <span class="text-[10px] text-slate-500">{{ t('mono.minLabel') }}</span>
-          <input
-            type="number" min="1" max="8" step="0.5"
-            :value="knobs.spacing_min ?? 1.8"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('spacing_min', Number((e.target as HTMLInputElement).value))"
-          />
-          <span class="text-[10px] text-slate-500">{{ t('mono.maxLabel') }}</span>
-          <input
-            type="number" min="1" max="8" step="0.5"
-            :value="knobs.spacing_max ?? 5"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('spacing_max', Number((e.target as HTMLInputElement).value))"
-          />
-        </div>
-      </div>
-      <div>
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">
-          {{ t('mono.waveRange') }}
-        </p>
-        <div class="flex items-center gap-2">
-          <span class="text-[10px] text-slate-500">{{ t('mono.minLabel') }}</span>
-          <input
-            type="number" min="0" max="3" step="0.1"
-            :value="knobs.wave_min ?? 0.6"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('wave_min', Number((e.target as HTMLInputElement).value))"
-          />
-          <span class="text-[10px] text-slate-500">{{ t('mono.maxLabel') }}</span>
-          <input
-            type="number" min="0" max="3" step="0.1"
-            :value="knobs.wave_max ?? 1.6"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('wave_max', Number((e.target as HTMLInputElement).value))"
-          />
-        </div>
+        <input
+          type="range" min="8" max="20" step="1"
+          :value="knobs.wave_period ?? 14"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('wave_period', Number((e.target as HTMLInputElement).value))"
+        />
       </div>
     </div>
 
     <!-- ===== Contours-topo: spacing range + rings range ===== -->
-    <div v-else-if="styleId === 'contours-topo'" class="space-y-2 border-t border-slate-800 pt-3">
-      <div>
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">
-          {{ t('mono.spacingRange') }}
-        </p>
-        <div class="flex items-center gap-2">
-          <span class="text-[10px] text-slate-500">{{ t('mono.minLabel') }}</span>
-          <input
-            type="number" min="1" max="8" step="0.5"
-            :value="knobs.spacing_min ?? 2.5"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('spacing_min', Number((e.target as HTMLInputElement).value))"
-          />
-          <span class="text-[10px] text-slate-500">{{ t('mono.maxLabel') }}</span>
-          <input
-            type="number" min="1" max="8" step="0.5"
-            :value="knobs.spacing_max ?? 6"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('spacing_max', Number((e.target as HTMLInputElement).value))"
-          />
-        </div>
-      </div>
-      <div>
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">
-          {{ t('mono.ringsRange') }}
-        </p>
-        <div class="flex items-center gap-2">
-          <span class="text-[10px] text-slate-500">{{ t('mono.minLabel') }}</span>
-          <input
-            type="number" min="5" max="40" step="1"
-            :value="knobs.rings_min ?? 10"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('rings_min', Number((e.target as HTMLInputElement).value))"
-          />
-          <span class="text-[10px] text-slate-500">{{ t('mono.maxLabel') }}</span>
-          <input
-            type="number" min="5" max="40" step="1"
-            :value="knobs.rings_max ?? 30"
-            class="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-            @input="(e) => setKnob('rings_max', Number((e.target as HTMLInputElement).value))"
-          />
-        </div>
-        <p class="text-[10px] text-slate-500">{{ t('mono.ringsRangeHint') }}</p>
-      </div>
+    <div v-else-if="styleId === 'contours-topo'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 2.5"
+        :model-value-max="knobs.spacing_max ?? 6"
+        :min="1" :max="8" :step="0.5" unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <DualRangeSlider
+        :model-value-min="knobs.rings_min ?? 10"
+        :model-value-max="knobs.rings_max ?? 30"
+        :min="5" :max="40" :step="1"
+        @update:model-value-min="(v) => setKnob('rings_min', v)"
+        @update:model-value-max="(v) => setKnob('rings_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.ringsRange') }}</span>
+        </template>
+        <template #hint>
+          <p class="text-[10px] text-slate-500">{{ t('mono.ringsRangeHint') }}</p>
+        </template>
+      </DualRangeSlider>
     </div>
 
-    <!-- ===== Binary styles (outline / centerline / spiral / tsp): stroke width ===== -->
+    <!-- ===== TSP: dot density (single knob — binary mono) ===== -->
     <div
-      v-else-if="!usesBands && (styleId === 'outline' || styleId === 'centerline-trace')"
+      v-else-if="styleId === 'tsp'"
+      class="space-y-1 border-t border-slate-800 pt-3"
+    >
+      <p class="text-[10px] uppercase tracking-wider text-slate-400">
+        {{ t('mono.dotDensity') }}
+        <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.density ?? 0.04).toFixed(3) }}</span>
+      </p>
+      <input
+        type="range" min="0.01" max="0.1" step="0.005"
+        :value="knobs.density ?? 0.04"
+        class="w-full accent-emerald-500"
+        @input="(e) => setKnob('density', Number((e.target as HTMLInputElement).value))"
+      />
+      <p class="text-[10px] text-slate-500">{{ t('mono.dotDensityHint') }}</p>
+    </div>
+
+    <!-- ===== Spiral: spacing (single knob — binary mono) ===== -->
+    <div
+      v-else-if="styleId === 'spiral-master'"
+      class="space-y-1 border-t border-slate-800 pt-3"
+    >
+      <p class="text-[10px] uppercase tracking-wider text-slate-400">
+        {{ t('mono.spiralSpacing') }}
+        <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.spacing_px ?? 3).toFixed(1) }} px</span>
+      </p>
+      <input
+        type="range" min="1" max="8" step="0.5"
+        :value="knobs.spacing_px ?? 3"
+        class="w-full accent-emerald-500"
+        @input="(e) => setKnob('spacing_px', Number((e.target as HTMLInputElement).value))"
+      />
+      <p class="text-[10px] text-slate-500">{{ t('mono.spiralSpacingHint') }}</p>
+    </div>
+
+    <!-- ===== Outline / Centerline: stroke width (binary mono) ===== -->
+    <div
+      v-else-if="styleId === 'outline' || styleId === 'centerline-trace'"
       class="space-y-1 border-t border-slate-800 pt-3"
     >
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
@@ -422,13 +409,20 @@ function bandSwatchStyle(i: number): Record<string, string> {
       />
     </div>
 
-    <!-- ===== Per-band override drawer (shaded styles only) ===== -->
-    <details v-if="usesBands" class="border-t border-slate-800 pt-3">
-      <summary class="cursor-pointer text-[10px] uppercase tracking-wider text-slate-400 hover:text-slate-200">
-        {{ t('mono.perBandOverrides') }}
-      </summary>
-      <p class="mt-1 text-[10px] text-slate-500">{{ t('mono.perBandHint') }}</p>
-      <div class="mt-2 space-y-2">
+    <!-- ===== Advanced mode toggle + per-band drawer ===== -->
+    <div v-if="usesBands" class="border-t border-slate-800 pt-3">
+      <label class="flex cursor-pointer items-center gap-2 text-[11px] text-slate-300">
+        <input
+          v-model="advancedMode"
+          type="checkbox"
+          class="accent-emerald-500"
+        />
+        <span class="uppercase tracking-wider text-slate-400">{{ t('mono.advancedMode') }}</span>
+      </label>
+      <p class="mt-1 text-[10px] text-slate-500">{{ t('mono.advancedModeHint') }}</p>
+
+      <div v-if="advancedMode" class="mt-3 space-y-2">
+        <p class="text-[10px] text-slate-500">{{ t('mono.perBandHint') }}</p>
         <div
           v-for="i in bandIndices"
           :key="i"
@@ -453,10 +447,6 @@ function bandSwatchStyle(i: number): Record<string, string> {
               @click="resetBand(i)"
             >↺</button>
           </div>
-          <!-- Render the same numeric fields as the relevant interpolated
-               option keys, so the operator pins whichever knob they care
-               about for this specific band. Generic key-value editor
-               keeps the drawer style-agnostic. -->
           <div class="grid grid-cols-2 gap-1">
             <label
               v-for="(value, key) in bandPreview(i)"
@@ -482,6 +472,6 @@ function bandSwatchStyle(i: number): Record<string, string> {
           </div>
         </div>
       </div>
-    </details>
+    </div>
   </div>
 </template>
