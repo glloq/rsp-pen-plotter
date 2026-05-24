@@ -42,6 +42,14 @@ const icon: Record<ToastKind, string> = {
         <span v-else class="mt-0.5 shrink-0 font-bold leading-none">{{ icon[toast.kind] }}</span>
         <p class="min-w-0 flex-1 whitespace-pre-wrap break-words">{{ toast.message }}</p>
         <button
+          v-if="toast.action"
+          type="button"
+          class="shrink-0 rounded border border-current/40 bg-white/10 px-2 py-0.5 text-[11px] font-medium leading-none hover:bg-white/20"
+          @click="toast.action.onClick"
+        >
+          {{ toast.action.label }}
+        </button>
+        <button
           v-if="toast.kind !== 'progress'"
           type="button"
           class="shrink-0 rounded p-1 leading-none text-slate-300 hover:bg-white/10 hover:text-white"

@@ -42,7 +42,7 @@ function selectLevel(value: number): void {
     >
       {{ t('mono.detail') }}
     </p>
-    <div class="grid grid-cols-4 gap-1">
+    <div class="grid grid-cols-5 gap-1">
       <button
         v-for="level in DETAIL_LEVELS"
         :key="level.id"

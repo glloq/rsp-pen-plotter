@@ -23,6 +23,7 @@
 import { computed, ref } from 'vue'
 import DOMPurify from 'dompurify'
 import { previewBitmap, type PreviewResponse } from '../api/client'
+import { useToastStore } from '../stores/toasts'
 
 export interface PreviewSchedulerOptions {
   // Returns the current file to preview, or null when there's nothing
@@ -56,6 +57,17 @@ export interface PreviewSchedulerOptions {
   // so per-pass thumbnails (added in Phase 3) can use a longer window
   // if needed.
   debounceMs?: number
+  // Localised template "{seconds}s" used in the progress toast that
+  // surfaces a long-running render. Defaults to a plain "Rendering
+  // preview… ({seconds}s)" string when omitted, so the composable
+  // stays vue-i18n-free.
+  progressMessage?: (seconds: number) => string
+  // Localised label for the toast's cancel button.
+  cancelLabel?: string
+  // After how many ms the progress toast appears. Renders that finish
+  // under this threshold never surface a toast — keeps the UI calm
+  // for the typical sub-second case.
+  toastDelayMs?: number
 }
 
 export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
@@ -64,6 +76,59 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
   const previewError = ref<string | null>(null)
   let controller: AbortController | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  // Progress toast bookkeeping. The toast only appears if the render
+  // takes longer than ``toastDelayMs`` and lives until the round-trip
+  // resolves (success / error / cancel). Tick interval refreshes the
+  // toast message with the elapsed seconds so the operator sees
+  // forward motion even on slow renders.
+  let toastId: number | null = null
+  let toastTick: ReturnType<typeof setInterval> | null = null
+  let toastDelayTimer: ReturnType<typeof setTimeout> | null = null
+
+  const toasts = useToastStore()
+
+  function formatProgress(seconds: number): string {
+    return opts.progressMessage
+      ? opts.progressMessage(seconds)
+      : `Rendering preview… (${seconds}s)`
+  }
+
+  function dismissToast(): void {
+    if (toastDelayTimer) {
+      clearTimeout(toastDelayTimer)
+      toastDelayTimer = null
+    }
+    if (toastTick) {
+      clearInterval(toastTick)
+      toastTick = null
+    }
+    if (toastId !== null) {
+      toasts.dismiss(toastId)
+      toastId = null
+    }
+  }
+
+  function startToast(): void {
+    dismissToast()
+    const startedAt = Date.now()
+    const delay = opts.toastDelayMs ?? 800
+    toastDelayTimer = setTimeout(() => {
+      toastDelayTimer = null
+      // Show toast only if the render hasn't already finished by now.
+      if (!previewLoading.value) return
+      toastId = toasts.progress(formatProgress(0), {
+        label: opts.cancelLabel ?? 'Cancel',
+        onClick: () => cancel(),
+      })
+      toastTick = setInterval(() => {
+        if (toastId === null) return
+        const seconds = Math.round((Date.now() - startedAt) / 1000)
+        // ``progress`` toasts have ttl=0 so update() with ttl=0 again
+        // keeps them sticky while just refreshing the message.
+        toasts.update(toastId, 'progress', formatProgress(seconds), 0)
+      }, 1000)
+    }, delay)
+  }
 
   const previewSvg = computed<string>(() => {
     if (!previewResult.value) return ''
@@ -80,6 +145,7 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
     controller = c
     previewLoading.value = true
     previewError.value = null
+    startToast()
     try {
       const result = await previewBitmap(
         file,
@@ -91,13 +157,10 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
       previewResult.value = result
     } catch (err) {
       if (c.signal.aborted) return
-      // axios surfaces a request timeout as either ``ECONNABORTED``
-      // (its own AbortController fires when the timeout config
-      // elapses) or a message containing the word "timeout". Either
-      // way we want a friendly, actionable string instead of the raw
-      // axios error so the operator knows the render isn't broken,
-      // just slow.
       const e = err as { code?: string; message?: string }
+      // axios's own timeout path is no longer hit (we set timeout: 0)
+      // but keep the categorisation defensive in case a downstream
+      // proxy / fetch shim surfaces one anyway.
       const isTimeout = e.code === 'ECONNABORTED'
         || (typeof e.message === 'string' && /timeout/i.test(e.message))
       if (isTimeout && opts.timeoutMessage) {
@@ -110,6 +173,7 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
         controller = null
         previewLoading.value = false
       }
+      dismissToast()
     }
   }
 
@@ -140,6 +204,7 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
       controller = null
     }
     previewLoading.value = false
+    dismissToast()
   }
 
   function retry(): void {
