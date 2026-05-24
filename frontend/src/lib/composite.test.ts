@@ -108,6 +108,42 @@ describe('buildComposite', () => {
     expect(result.svg).not.toContain('p1__color-00ff00')
   })
 
+  it('bakes a 90° rotation into a matrix transform with swapped extents', () => {
+    // Placement: 100×100 viewBox rotated 90° CW, footprint 60mm × 40mm
+    // after width/height swap done by the store. The viewBox H (100)
+    // maps to the footprint W (60), so the linear part should be
+    // (sx=0, sy=0.6) on the X row and (sx=0.4, sy=0) on the Y row.
+    const snap = snapshot('p1', 100, 50, 60, 40)
+    snap.rotation = 90
+    const result = buildComposite([snap], profile())
+    // 90° rotation routes through the ``matrix(...)`` branch (no
+    // ``translate ... scale ...`` fast path).
+    expect(result.svg).toContain('matrix(')
+    // Layer (0,0)→(100,100) in viewBox maps to a 60×40 footprint at
+    // (100, 50). The bbox should match the placement footprint.
+    const composedRed = result.layers[0]!
+    expect(composedRed.bbox.x_min).toBeCloseTo(100, 4)
+    expect(composedRed.bbox.x_max).toBeCloseTo(160, 4)
+    expect(composedRed.bbox.y_min).toBeCloseTo(50, 4)
+    expect(composedRed.bbox.y_max).toBeCloseTo(90, 4)
+  })
+
+  it('bakes horizontal mirror by negating the X scale in the matrix', () => {
+    const snap = snapshot('p1', 0, 0, 100, 100)
+    snap.flip_h = true
+    const result = buildComposite([snap], profile())
+    // matrix(a b c d e f) — flipping H makes ``a`` negative.
+    const match = result.svg.match(/matrix\(([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+)\)/)
+    expect(match).toBeTruthy()
+    const [, a, , , d] = match!.map(Number)
+    expect(a).toBeLessThan(0)
+    expect(d).toBeGreaterThan(0)
+    // Layer footprint stays within the placement rect even when mirrored.
+    const composedRed = result.layers[0]!
+    expect(composedRed.bbox.x_min).toBeCloseTo(0, 4)
+    expect(composedRed.bbox.x_max).toBeCloseTo(100, 4)
+  })
+
   it('scales the source bbox into workspace coordinates', () => {
     const result = buildComposite([snapshot('p1', 50, 50, 200, 100)], profile())
     const composedRed = result.layers[0]!

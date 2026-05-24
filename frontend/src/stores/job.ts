@@ -82,6 +82,12 @@ export interface Placement {
   y_mm: number
   width_mm: number
   height_mm: number
+  // Quarter-turn rotation applied around the placement bbox centre.
+  // Always normalized to 0/90/180/270.
+  rotation: number
+  // Horizontal / vertical mirroring, applied AFTER rotation.
+  flip_h: boolean
+  flip_v: boolean
   variants: Variant[]
   active_variant_id: string
 }
@@ -173,6 +179,9 @@ export const useJobStore = defineStore('job', () => {
       visibility: {},
       variants: [variant],
       active_variant_id: variant.id,
+      rotation: 0,
+      flip_h: false,
+      flip_v: false,
       ...size,
     }
   }
@@ -182,6 +191,72 @@ export const useJobStore = defineStore('job', () => {
     placements.value = [...placements.value, placement]
     selectedPlacementId.value = placement.id
     return placement.id
+  }
+
+  // ====== Placement transforms (rotation / flip / centering) =============
+  // These act on a placement's geometry without re-rendering the source
+  // SVG: rotation is applied around the placement bbox centre, and a
+  // quarter-turn swaps the bbox width / height so the workspace
+  // footprint follows the rotated drawing. The transforms are baked into
+  // the composite SVG sent to the backend so the gcode matches.
+  function rotatePlacement(id: string, deltaDeg: number): void {
+    const target = placements.value.find((p) => p.id === id)
+    if (!target) return
+    const next = (((target.rotation + deltaDeg) % 360) + 360) % 360
+    // A quarter-turn swaps the on-plan footprint dimensions so the
+    // drawing's outer bbox keeps matching the placement rect.
+    const swap = Math.abs(deltaDeg) % 180 === 90
+    const cx = target.x_mm + target.width_mm / 2
+    const cy = target.y_mm + target.height_mm / 2
+    const newW = swap ? target.height_mm : target.width_mm
+    const newH = swap ? target.width_mm : target.height_mm
+    patchPlacement(id, {
+      rotation: next,
+      width_mm: newW,
+      height_mm: newH,
+      x_mm: cx - newW / 2,
+      y_mm: cy - newH / 2,
+    })
+  }
+
+  function flipPlacement(id: string, axis: 'h' | 'v'): void {
+    const target = placements.value.find((p) => p.id === id)
+    if (!target) return
+    if (axis === 'h') patchPlacement(id, { flip_h: !target.flip_h })
+    else patchPlacement(id, { flip_v: !target.flip_v })
+  }
+
+  function centerPlacement(id: string): void {
+    const target = placements.value.find((p) => p.id === id)
+    const ws = selectedProfile.value?.workspace
+    if (!target || !ws) return
+    const wsW = ws.x_max - ws.x_min
+    const wsH = ws.y_max - ws.y_min
+    patchPlacement(id, {
+      x_mm: (wsW - target.width_mm) / 2,
+      y_mm: (wsH - target.height_mm) / 2,
+    })
+  }
+
+  function resetPlacementTransform(id: string): void {
+    const target = placements.value.find((p) => p.id === id)
+    if (!target) return
+    // Restore upright orientation while keeping the placement's centre
+    // pinned, then drop both mirror axes.
+    const cx = target.x_mm + target.width_mm / 2
+    const cy = target.y_mm + target.height_mm / 2
+    const swap = target.rotation % 180 !== 0
+    const newW = swap ? target.height_mm : target.width_mm
+    const newH = swap ? target.width_mm : target.height_mm
+    patchPlacement(id, {
+      rotation: 0,
+      flip_h: false,
+      flip_v: false,
+      width_mm: newW,
+      height_mm: newH,
+      x_mm: cx - newW / 2,
+      y_mm: cy - newH / 2,
+    })
   }
 
   function duplicatePlacement(id: string, offsetMm = 15): string | null {
@@ -984,7 +1059,12 @@ export const useJobStore = defineStore('job', () => {
           // Default the new ``library_file_id`` field for placements
           // persisted before the library existed.
           const placement = {
-            ...({ library_file_id: null } as Pick<Placement, 'library_file_id'>),
+            ...({
+              library_file_id: null,
+              rotation: 0,
+              flip_h: false,
+              flip_v: false,
+            } as Pick<Placement, 'library_file_id' | 'rotation' | 'flip_h' | 'flip_v'>),
             ...p,
             last_file: null,
           } as Placement
@@ -1041,6 +1121,10 @@ export const useJobStore = defineStore('job', () => {
     addEmptyPlacement,
     duplicatePlacement,
     removePlacement,
+    rotatePlacement,
+    flipPlacement,
+    centerPlacement,
+    resetPlacementTransform,
     // Backward-compat views
     job,
     svg,
