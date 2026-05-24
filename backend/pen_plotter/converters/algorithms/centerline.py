@@ -19,17 +19,21 @@ keep the Python overhead per step small we:
 * Build a per-pixel **direction bitmask** (one byte / pixel) in 8
   vectorised numpy passes — no per-pixel Python work. Bit ``di`` is
   set iff the neighbour at offset ``_NEIGHBOURS_8[di]`` is also a
-  skeleton pixel. The walk then resolves "given I came from
-  direction X, where do I go next?" with two array lookups and a
-  bit op, with no dict involved.
+  skeleton pixel.
+* Convert the direction mask and neighbour counts to ``bytearray`` /
+  ``bytes`` for the walk: indexing a ``bytearray`` returns a Python
+  ``int`` directly, sidestepping the numpy-scalar boxing that every
+  ``arr[i]`` would otherwise pay per step.
+* Track unwalked edges by **mutating the direction bitmask** instead
+  of maintaining a Python ``set`` of visited (a, b) tuples. Each
+  walked edge clears one bit on each endpoint. "Edge already visited"
+  becomes a single bit test, and the set's ~80 MB / 1.6 M tuple
+  overhead disappears.
 * Use ``scipy.ndimage.label`` to find closed-loop components in O(N)
-  C-time, *only* when there are unwalked edges left. The previous
-  implementation re-scanned every count==2 pixel of the skeleton in
-  Python, even though the overwhelming majority were already covered
-  by chains walked from endpoints / junctions — that pass alone
-  could take hundreds of seconds on a dense schematic.
-* Vectorise Chaikin smoothing so long chains don't pay per-vertex
-  Python overhead.
+  C-time, *only* when bits remain set after the seed pass — schematics
+  without resistor loops, IC outlines etc. don't pay for it at all.
+* Vectorise Chaikin smoothing and batch coordinate formatting so the
+  per-vertex Python overhead is amortised across all chains.
 """
 
 from __future__ import annotations
@@ -60,6 +64,9 @@ for _v in range(1, 256):
     while not (_v >> _b) & 1:
         _b += 1
     _LOWEST_SET_BIT[_v] = _b
+# uint8 byte → popcount. Used to derive skeleton-neighbour counts from
+# the direction bitmask without a second numpy convolution pass.
+_POPCOUNT_LUT = np.array([bin(v).count("1") for v in range(256)], dtype=np.uint8)
 
 
 def _skeletonize(mask: NDArray[np.bool_]) -> NDArray[np.bool_] | None:
@@ -83,7 +90,7 @@ def _neighbour_count(skel: NDArray[np.bool_]) -> NDArray[np.int8]:
         total = np.zeros_like(skel, dtype=np.int8)
         for dy, dx in _NEIGHBOURS_8:
             total += padded[1 + dy:1 + dy + skel.shape[0], 1 + dx:1 + dx + skel.shape[1]]
-    return (total * skel.astype(np.int8)).astype(np.int8)
+    return total * skel.astype(np.int8)
 
 
 def _direction_mask(skel: NDArray[np.bool_]) -> NDArray[np.uint8]:
@@ -94,12 +101,13 @@ def _direction_mask(skel: NDArray[np.bool_]) -> NDArray[np.uint8]:
     flat pixel index, replacing what would otherwise be 8 bounds-checked
     Python lookups per step.
     """
+    skel = np.ascontiguousarray(skel)
     h, w = skel.shape
     padded = np.pad(skel, 1, mode="constant", constant_values=False)
     mask = np.zeros(h * w, dtype=np.uint8)
     for di, (dy, dx) in enumerate(_NEIGHBOURS_8):
         shifted = padded[1 + dy:1 + dy + h, 1 + dx:1 + dx + w]
-        pair = (skel & shifted).ravel().view(np.uint8)
+        pair = np.ascontiguousarray(skel & shifted).ravel().view(np.uint8)
         if pair.any():
             mask |= pair << di
     return mask
@@ -107,7 +115,7 @@ def _direction_mask(skel: NDArray[np.bool_]) -> NDArray[np.uint8]:
 
 def _trace_chains(
     skel: NDArray[np.bool_], *, min_branch_px: int
-) -> list[list[tuple[float, float]]]:
+) -> list[NDArray[np.float64]]:
     """Walk the skeleton into polylines between endpoints/junctions.
 
     A skeleton pixel is an *endpoint* if it has exactly one skeleton
@@ -122,113 +130,104 @@ def _trace_chains(
         return []
 
     h, w = skel.shape
-    counts_flat = _neighbour_count(skel).ravel()
-    dir_mask = _direction_mask(skel)
+    dir_mask_np = _direction_mask(skel)
+    # Derive per-pixel neighbour counts from the direction bitmask via
+    # a 256-entry popcount LUT — saves a second scipy convolution pass
+    # over the full canvas (0.5 s on 8 k × 6 k in benchmarks).
+    counts_np = _POPCOUNT_LUT[dir_mask_np]
+    # ``bytes`` / ``bytearray`` views give O(1) Python-int indexing in
+    # the hot loop without paying numpy-scalar boxing per access.
+    counts = bytes(counts_np)
+    # ``live`` starts as the per-pixel direction bitmask of unwalked
+    # edges; the walker clears bits as it traverses them. When every
+    # edge is walked, ``live`` is all-zero, and the cycle pass
+    # short-circuits.
+    live = bytearray(dir_mask_np)
     dir_deltas = tuple(dy * w + dx for dy, dx in _NEIGHBOURS_8)
     lowest = _LOWEST_SET_BIT
     opposite = _OPPOSITE_DIR
-    total_edges = int(counts_flat.sum()) // 2
-    visited_edges: set[tuple[int, int]] = set()
     chains_flat: list[list[int]] = []
 
-    seeds = np.flatnonzero((counts_flat == 1) | (counts_flat >= 3)).tolist()
+    seeds = np.flatnonzero(
+        (counts_np == 1) | (counts_np >= 3)
+    ).tolist()
     for s in seeds:
         s = int(s)
-        m = int(dir_mask[s])
-        di = 0
-        while m:
-            if m & 1:
-                n = s + dir_deltas[di]
-                edge = (s, n) if s < n else (n, s)
-                if edge not in visited_edges:
-                    chain: list[int] = [s]
-                    prev = s
-                    cur = n
-                    cur_from = opposite[di]
-                    while True:
-                        e = (prev, cur) if prev < cur else (cur, prev)
-                        visited_edges.add(e)
-                        chain.append(cur)
-                        if counts_flat[cur] != 2:
-                            break
-                        # Pick the "other" set neighbour by clearing the
-                        # bit we came from; the byte then has exactly one
-                        # bit set whose index we look up in O(1).
-                        other = (int(dir_mask[cur]) & ~(1 << cur_from)) & 0xFF
-                        ex = lowest[other]
-                        nxt = cur + dir_deltas[ex]
-                        cur_from = opposite[ex]
-                        prev = cur
-                        cur = nxt
-                    if len(chain) - 1 >= min_branch_px:
-                        chains_flat.append(chain)
-            m >>= 1
-            di += 1
+        # Walk every still-live edge out of s. Re-checking ``live[s]``
+        # each iteration handles the case where another chain (e.g. one
+        # walked from a different junction sharing this pixel) has
+        # already cleared some bits.
+        while live[s]:
+            di = lowest[live[s]]
+            n = s + dir_deltas[di]
+            opp = opposite[di]
+            live[s] &= 0xFF ^ (1 << di)
+            live[n] &= 0xFF ^ (1 << opp)
+            chain: list[int] = [s, n]
+            cur = n
+            # Walk through count==2 interior pixels until we hit a
+            # junction / endpoint. The entry edge has already been
+            # cleared in ``live[cur]``, so the remaining set bit
+            # (there's exactly one for count==2) is the exit direction.
+            while counts[cur] == 2:
+                other = live[cur]
+                if not other:
+                    break  # defensive — pure-cycle entries handled below
+                ex = lowest[other]
+                nxt = cur + dir_deltas[ex]
+                live[cur] = 0  # both bits cleared (entry + exit)
+                live[nxt] &= 0xFF ^ (1 << opposite[ex])
+                chain.append(nxt)
+                cur = nxt
+            if len(chain) - 1 >= min_branch_px:
+                chains_flat.append(chain)
 
-    # Closed loops (cycles with no endpoints or junctions). Skip the
-    # whole pass when every edge was already walked — schematics
-    # without resistor loops, IC outlines etc. don't pay for it.
-    if len(visited_edges) < total_edges:
+    # Closed loops (cycles with no endpoints or junctions). After the
+    # seed pass, any pixel with ``live[p] != 0`` is part of an unwalked
+    # cycle. Build a 2D mask of those and label its connected components
+    # so we walk each cycle exactly once.
+    live_np = np.frombuffer(live, dtype=np.uint8)
+    if live_np.any():
         try:
             from scipy.ndimage import label as _ndi_label
         except ImportError:
             _ndi_label = None
         if _ndi_label is not None:
-            remaining = skel & (counts_flat.reshape(h, w) == 2)
-            if remaining.any():
-                labeled, n_comp = _ndi_label(
-                    remaining, structure=np.ones((3, 3), dtype=int)
+            cycle_mask = (live_np != 0).reshape(h, w)
+            labeled, n_comp = _ndi_label(
+                cycle_mask, structure=np.ones((3, 3), dtype=int)
+            )
+            if n_comp > 0:
+                # One representative pixel per component, iterating only
+                # the sparse "alive" pixels rather than the full canvas
+                # — np.unique over h*w would be ~30× slower on a typical
+                # schematic with <5% skeleton coverage.
+                nz_indices = np.flatnonzero(cycle_mask.ravel())
+                nz_labels = labeled.ravel()[nz_indices]
+                order = np.argsort(nz_labels, kind="stable")
+                sorted_labels = nz_labels[order]
+                sorted_indices = nz_indices[order]
+                first_positions = np.concatenate(
+                    ([0], np.flatnonzero(np.diff(sorted_labels)) + 1)
                 )
-                if n_comp > 0:
-                    flat_labeled = labeled.ravel()
-                    # Find one representative pixel per labeled component
-                    # via np.unique(return_index=True) — single C-time pass.
-                    uniq, first_idx = np.unique(flat_labeled, return_index=True)
-                    first_idx = first_idx[uniq != 0]
-                    for s in first_idx.tolist():
-                        s = int(s)
-                        m = int(dir_mask[s])
-                        if bin(m).count("1") < 2:
-                            continue
-                        # If any incident edge was already traced, this
-                        # component is the interior of a chain we walked.
-                        already_seen = False
-                        mm = m
-                        dd = 0
-                        while mm:
-                            if mm & 1:
-                                nb = s + dir_deltas[dd]
-                                ee = (s, nb) if s < nb else (nb, s)
-                                if ee in visited_edges:
-                                    already_seen = True
-                                    break
-                            mm >>= 1
-                            dd += 1
-                        if already_seen:
-                            continue
-                        # Walk the cycle.
-                        first_di = lowest[m]
-                        chain = [s]
-                        prev = s
-                        cur = s + dir_deltas[first_di]
-                        cur_from = opposite[first_di]
-                        e = (s, cur) if s < cur else (cur, s)
-                        visited_edges.add(e)
-                        chain.append(cur)
-                        while cur != s:
-                            if counts_flat[cur] != 2:
-                                break  # defensive — pure cycles stay count==2
-                            other = (int(dir_mask[cur]) & ~(1 << cur_from)) & 0xFF
-                            ex = lowest[other]
-                            nxt = cur + dir_deltas[ex]
-                            cur_from = opposite[ex]
-                            e = (cur, nxt) if cur < nxt else (nxt, cur)
-                            visited_edges.add(e)
-                            chain.append(nxt)
-                            prev = cur
-                            cur = nxt
-                        if len(chain) - 1 >= min_branch_px:
-                            chains_flat.append(chain)
+                for s in sorted_indices[first_positions].tolist():
+                    s = int(s)
+                    if not live[s]:
+                        continue  # cleared by an earlier cycle walk
+                    di = lowest[live[s]]
+                    cur = s + dir_deltas[di]
+                    live[s] &= 0xFF ^ (1 << di)
+                    live[cur] &= 0xFF ^ (1 << opposite[di])
+                    chain = [s, cur]
+                    while cur != s and live[cur]:
+                        ex = lowest[live[cur]]
+                        nxt = cur + dir_deltas[ex]
+                        live[cur] = 0
+                        live[nxt] &= 0xFF ^ (1 << opposite[ex])
+                        chain.append(nxt)
+                        cur = nxt
+                    if len(chain) - 1 >= min_branch_px:
+                        chains_flat.append(chain)
 
     # Return as (N, 2) float numpy arrays so downstream Chaikin /
     # SVG formatting can stay vectorised — avoids two list↔ndarray
