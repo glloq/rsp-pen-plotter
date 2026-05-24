@@ -5,12 +5,6 @@ import { usePlotterStore } from '../stores/plotter'
 import { useUiStore } from '../stores/ui'
 import MachineStatusPill from './MachineStatusPill.vue'
 
-defineProps<{
-  status: string | null
-  version: string | null
-  apiError: boolean
-}>()
-
 const { t } = useI18n()
 const ui = useUiStore()
 const plotter = usePlotterStore()
@@ -23,7 +17,6 @@ const { status: plotterStatus } = storeToRefs(plotter)
   >
     <div class="mr-2 flex items-baseline gap-2">
       <h1 class="text-lg font-bold tracking-tight">OmniPlot</h1>
-      <p class="hidden text-xs text-slate-500 lg:block">{{ t('app.tagline') }}</p>
     </div>
 
     <div class="ml-auto flex items-center gap-3">
@@ -60,20 +53,6 @@ const { status: plotterStatus } = storeToRefs(plotter)
         </svg>
         <span class="hidden sm:inline">{{ t('header.settings') }}</span>
       </button>
-
-      <span
-        v-if="apiError"
-        class="rounded bg-red-900/60 border border-red-500 px-2 py-1 text-xs text-red-200"
-      >
-        {{ t('app.apiUnreachable') }}
-      </span>
-      <span
-        v-else-if="status"
-        class="hidden font-mono text-[10px] text-emerald-400/70 lg:inline"
-        :title="`v${version}`"
-      >
-        API {{ status }}
-      </span>
     </div>
   </header>
 </template>

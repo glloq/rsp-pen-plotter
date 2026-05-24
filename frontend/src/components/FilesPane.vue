@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import DOMPurify from 'dompurify'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
 import { useJobStore } from '../stores/job'
@@ -20,6 +21,10 @@ onMounted(() => {
 interface Row {
   file: LibraryFileRecord
   placementCount: number
+  // A file is considered "configured / ready to print" when at least one
+  // placement on the plan references it. Drives the green accent in the
+  // list.
+  configured: boolean
 }
 
 const rows = computed<Row[]>(() => {
@@ -29,11 +34,40 @@ const rows = computed<Row[]>(() => {
       counts.set(p.library_file_id, (counts.get(p.library_file_id) ?? 0) + 1)
     }
   }
-  return library.filteredSorted.map((file) => ({
-    file,
-    placementCount: counts.get(file.file_id) ?? 0,
-  }))
+  return library.filteredSorted.map((file) => {
+    const placementCount = counts.get(file.file_id) ?? 0
+    return { file, placementCount, configured: placementCount > 0 }
+  })
 })
+
+// Fetch full SVG for each listed file so the row can show a mini preview.
+// Detail is cached in the library store, so this is a no-op after the
+// first hit per file.
+watch(
+  () => rows.value.map((r) => r.file.file_id),
+  (ids) => {
+    for (const id of ids) {
+      if (!library.getDetail(id)) void library.ensureDetail(id)
+    }
+  },
+  { immediate: true },
+)
+
+// Thumbnail cache keyed by file_id. Sanitizing through DOMPurify is the
+// most expensive part of rendering the inline preview, so we memoize per
+// file and only recompute when the cached detail isn't there yet.
+const thumbCache = new Map<string, string>()
+function previewSvg(fileId: string): string | null {
+  const cached = thumbCache.get(fileId)
+  if (cached !== undefined) return cached || null
+  const detail = library.getDetail(fileId)
+  if (!detail?.svg) return null
+  const clean = DOMPurify.sanitize(detail.svg, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+  })
+  thumbCache.set(fileId, clean)
+  return clean
+}
 
 const searchInput = ref(library.search)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -72,14 +106,23 @@ function onFolderChange(event: Event): void {
   }
 }
 
+// Hidden <input type="file"> handle — clicked programmatically by the
+// "Add a file" button so dropping the file into the library doesn't
+// require the editor to be open.
+const fileInput = ref<HTMLInputElement | null>(null)
+
 function addFile(): void {
-  store.addEmptyPlacement()
-  ui.openEditModal()
+  fileInput.value?.click()
 }
 
-async function placeOnPlan(fileId: string): Promise<void> {
-  const placementId = await store.createPlacementFromLibrary(fileId)
-  if (placementId) store.selectPlacement(placementId)
+async function onFileInputChange(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  for (const file of files) {
+    await library.upload(file)
+  }
+  // Reset so picking the same file twice in a row still fires ``change``.
+  input.value = ''
 }
 
 async function editFile(fileId: string): Promise<void> {
@@ -94,13 +137,6 @@ async function editFile(fileId: string): Promise<void> {
     store.selectPlacement(newId)
   }
   ui.openEditModal()
-}
-
-async function renameFile(file: LibraryFileRecord): Promise<void> {
-  const next = window.prompt(t('files.renamePrompt'), file.source_file)?.trim()
-  if (next && next !== file.source_file) {
-    await library.rename(file.file_id, next)
-  }
 }
 
 async function moveFile(file: LibraryFileRecord): Promise<void> {
@@ -211,20 +247,38 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
         <li
           v-for="row in rows"
           :key="row.file.file_id"
-          class="group flex items-center gap-2 rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs cursor-grab hover:border-slate-500 active:cursor-grabbing"
+          class="group flex items-center gap-2 rounded border bg-slate-800 px-2 py-1.5 text-xs cursor-grab active:cursor-grabbing"
+          :class="row.configured
+            ? 'border-emerald-600 bg-emerald-950/30 hover:border-emerald-400'
+            : 'border-slate-700 hover:border-slate-500'"
           draggable="true"
           :title="t('files.dragHint')"
           @dragstart="(e) => onDragStart(e, row.file)"
-          @dblclick="placeOnPlan(row.file.file_id)"
+          @dblclick="editFile(row.file.file_id)"
         >
-          <span
-            class="shrink-0 rounded bg-slate-700 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider text-slate-300"
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border bg-white"
+            :class="row.configured ? 'border-emerald-500/50' : 'border-slate-600'"
             :title="row.file.source_mime"
           >
-            {{ shortMime(row.file.source_mime) }}
-          </span>
+            <div
+              v-if="previewSvg(row.file.file_id)"
+              v-html="previewSvg(row.file.file_id)"
+              class="files-thumb h-full w-full"
+            />
+            <span
+              v-else
+              class="font-mono text-[9px] uppercase tracking-wider text-slate-500"
+            >
+              {{ shortMime(row.file.source_mime) }}
+            </span>
+          </div>
           <div class="min-w-0 flex-1">
-            <p class="truncate text-sm text-slate-100" :title="row.file.source_file">
+            <p
+              class="truncate text-sm"
+              :class="row.configured ? 'text-emerald-100' : 'text-slate-100'"
+              :title="row.file.source_file"
+            >
               {{ row.file.source_file }}
             </p>
             <p class="truncate text-[10px] text-slate-500">
@@ -251,22 +305,6 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
             <button
               type="button"
               class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
-              :title="t('files.duplicate')"
-              @click.stop="placeOnPlan(row.file.file_id)"
-            >
-              ＋
-            </button>
-            <button
-              type="button"
-              class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
-              :title="t('files.rename')"
-              @click.stop="renameFile(row.file)"
-            >
-              ✏
-            </button>
-            <button
-              type="button"
-              class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
               :title="t('files.moveTo')"
               @click.stop="moveFile(row.file)"
             >
@@ -284,5 +322,24 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
         </li>
       </ul>
     </div>
+
+    <input
+      ref="fileInput"
+      type="file"
+      multiple
+      class="hidden"
+      @change="onFileInputChange"
+    />
   </aside>
 </template>
+
+<style scoped>
+/* Force inline SVG previews to behave as scalable thumbnails: ignore any
+   inline width/height baked into the source, scale to fit the parent
+   square via the existing viewBox. */
+.files-thumb :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+</style>
