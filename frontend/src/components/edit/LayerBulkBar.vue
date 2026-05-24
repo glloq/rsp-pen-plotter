@@ -55,10 +55,13 @@ function applyStyleToAll(style: PrintStyle): void {
 
 async function resetOverrides(): Promise<void> {
   for (const id of selectedIds.value) {
-    // ``applyLayerAlgorithm`` with an empty options dict + the
-    // ``direct`` algo is the cheapest way to reset to the default.
-    // The store debounces /rerender so all N resets fire one round-trip.
-    await store.applyLayerAlgorithm(id, 'direct', {})
+    // ``clearLayerAlgorithm`` drops the entry from layer_algorithms
+    // entirely, letting the master style's recipe take over again.
+    // We used to send applyLayerAlgorithm('direct', {}) here, but that
+    // installs an explicit "direct" override — semantically different
+    // from "no override". The store debounces /rerender so all N
+    // resets fire one round-trip.
+    await store.clearLayerAlgorithm(id)
   }
 }
 
