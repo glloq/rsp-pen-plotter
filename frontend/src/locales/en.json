@@ -277,6 +277,7 @@
     "choose": "Upload & convert",
     "converting": "Converting…",
     "failed": "Upload failed. Check the file type and that the API is running.",
+    "previewTimeout": "Preview too slow for this style. Lower the Detail tier or hit Apply to render anyway.",
     "loaded": "Loaded",
     "layers": "layer | layers",
     "pageOf": "Page {current} / {total}",
