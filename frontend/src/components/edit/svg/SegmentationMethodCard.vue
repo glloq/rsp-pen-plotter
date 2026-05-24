@@ -38,17 +38,30 @@ const draft = useBitmapDraft()
 const expanded = useAccordionPersistence('segmentation', true)
 const SEG_METHODS: SegmentationMethod[] = ['kmeans', 'luminance_bands', 'thresholds', 'fixed_palette']
 
+// User-driven mutators flag the corresponding field as "touched" so the
+// next master-style switch / print-mode flip can warn before stomping.
+function selectMethod(method: SegmentationMethod): void {
+  props.bitmap.segmentation_method = method
+  draft.markSegmentationTouched('method')
+}
+function setNumBands(value: number): void {
+  props.bitmap.num_bands = value
+  draft.markSegmentationTouched('num_bands')
+}
 function addThreshold(): void {
   props.bitmap.thresholds = [...props.bitmap.thresholds, 0.5].sort((a, b) => a - b)
+  draft.markSegmentationTouched('thresholds')
 }
 function removeThreshold(i: number): void {
   props.bitmap.thresholds = props.bitmap.thresholds.filter((_, idx) => idx !== i)
+  draft.markSegmentationTouched('thresholds')
 }
 function updateThreshold(i: number, value: number): void {
   const clamped = Math.max(0, Math.min(1, value))
   const next = [...props.bitmap.thresholds]
   next[i] = clamped
   props.bitmap.thresholds = next.sort((a, b) => a - b)
+  draft.markSegmentationTouched('thresholds')
 }
 </script>
 
@@ -80,7 +93,7 @@ function updateThreshold(i: number, value: number): void {
               ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
               : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
             :title="t(`convert.seg_${method}_hint`)"
-            @click="bitmap.segmentation_method = method"
+            @click="selectMethod(method)"
           >
             <span class="block font-medium">{{ t(`convert.seg_${method}`) }}</span>
             <span class="block text-[9px] text-slate-500">{{ t(`convert.seg_${method}_hint`) }}</span>
@@ -101,7 +114,14 @@ function updateThreshold(i: number, value: number): void {
           {{ t('convert.numBands') }}
           <LayerCountBadge :count="draft.expectedLayerCount.value" />
         </span>
-        <input v-model.number="bitmap.num_bands" type="number" min="1" max="16" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+        <input
+          :value="bitmap.num_bands"
+          type="number"
+          min="1"
+          max="16"
+          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          @input="(e) => setNumBands(Number((e.target as HTMLInputElement).value))"
+        />
       </label>
 
       <div v-else-if="bitmap.segmentation_method === 'thresholds'" class="space-y-1">

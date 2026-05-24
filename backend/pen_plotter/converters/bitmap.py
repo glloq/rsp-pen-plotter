@@ -16,6 +16,7 @@ import pillow_heif
 from numpy.typing import NDArray
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from pydantic import BaseModel, Field, field_validator
+from pydantic_core import PydanticUndefined
 
 from pen_plotter.converters import segmentation
 from pen_plotter.converters.algorithms import get_algorithm
@@ -180,9 +181,11 @@ class BitmapConverter(Converter):
         Args:
             data: Raw image file bytes.
             options: Optional parameters validated against :class:`BitmapOptions`.
-            fast: When ``True``, force a small ``max_dimension_px`` and a single
-                k-means initialisation. Used by the ``/preview`` endpoint to
-                trade quality for sub-second turnaround.
+            fast: When ``True``, force ``n_init=1`` for the k-means restart
+                (single initialisation instead of 10). ``max_dimension_px`` is
+                honoured as the operator set it — the ``/preview`` endpoint
+                pairs this flag with a tier-specific resolution cap of its own
+                rather than overriding the option here.
 
         Returns:
             A :class:`ConversionResult` whose SVG contains one labeled ``<g>``
@@ -363,29 +366,39 @@ class BitmapConverter(Converter):
         return Image.open(io.BytesIO(data)).convert("RGB")
 
     @staticmethod
+    def _is_preprocess_neutral(opts: PreprocessOptions) -> bool:
+        """True when every preprocess field matches its model default.
+
+        Iterates ``PreprocessOptions.model_fields`` so a freshly-added
+        field automatically becomes part of the neutrality check. The
+        only field without a usable model default is ``crop`` (the
+        default is ``None``, which already round-trips correctly through
+        the equality check below).
+        """
+        for name, field_info in PreprocessOptions.model_fields.items():
+            default = field_info.default
+            current = getattr(opts, name)
+            # PydanticUndefined sentinels show up for required fields;
+            # PreprocessOptions has none today, but guard so the helper
+            # never crashes if one is added later.
+            if default is PydanticUndefined:
+                return False
+            if current != default:
+                return False
+        return True
+
+    @staticmethod
     def _preprocess(image: Image.Image, opts: PreprocessOptions) -> Image.Image:
         """Apply the operator's photo-editor adjustments to ``image``.
 
         Returns ``image`` unchanged when every field is neutral so the
         no-op path stays free of allocations / colour conversions.
+        Neutrality is computed by comparing each field against the model
+        default, so adding a new PreprocessOptions field doesn't require
+        updating a hand-maintained checklist (regression risk that bit
+        us when ``sharpen`` was added without flipping the gate).
         """
-        if (
-            opts.crop is None
-            and opts.rotate_deg == 0
-            and not opts.flip_h
-            and not opts.flip_v
-            and not opts.grayscale
-            and not opts.invert
-            and opts.black_point == 0
-            and opts.white_point == 255
-            and opts.gamma == 1.0
-            and opts.brightness == 0.0
-            and opts.contrast == 0.0
-            and opts.saturation == 1.0
-            and opts.blur_px == 0.0
-            and opts.sharpen == 0.0
-            and not opts.auto_contrast
-        ):
+        if BitmapConverter._is_preprocess_neutral(opts):
             return image
 
         out = image

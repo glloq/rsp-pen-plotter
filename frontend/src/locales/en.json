@@ -165,11 +165,20 @@
     }
   },
   "render": {
-    "masterStyle": "Master style",
+    "masterStyle": "Style preset",
     "multicolorHint": "Multicolour rendering is per-layer. Switch to the Layers tab to pick a style for each colour.",
     "noSource": "Attach a file on the Source tab to choose a render style.",
     "notApplicable": "This file type doesn't have a render style.",
-    "replaceOverridesWarning": "Switching style will replace {count} per-layer override(s). Continue?"
+    "replaceOverridesWarning": "Switching style will replace {count} per-layer override(s). Continue?",
+    "customised": "Customised",
+    "customisedHint": "Current settings no longer match the preset.",
+    "customisedExplain": "Settings drifted from the \"{style}\" preset — click a preset to reset to its defaults.",
+    "styleOverwroteFields": "Preset overwrote your manual settings: {fields}.",
+    "field_method": "segmentation method",
+    "field_num_bands": "number of bands",
+    "field_thresholds": "thresholds",
+    "field_drop_background": "drop background",
+    "field_background_luminance": "background luminance"
   },
   "mono": {
     "pen": "Pen",
@@ -278,11 +287,11 @@
     "expand": "Expand variants bar"
   },
   "printMode": {
-    "title": "Output (SVG)",
+    "title": "Colour mode",
     "multicolor": "Multi-colour",
     "multicolorHint": "Split the image into one layer per detected colour.",
-    "monochrome": "Single colour (one pen)",
-    "monochromeHint": "Render the whole image as halftone / stippling in one ink."
+    "monochrome": "Monochrome",
+    "monochromeHint": "Draw everything on a single layer with one pen."
   },
   "palette": {
     "title": "Palette",
@@ -376,7 +385,9 @@
     "preview": "Quick preview",
     "previewing": "Computing…",
     "previewHint": "Pick an algorithm to see the preview.",
-    "cached": "cached"
+    "cached": "cached",
+    "retryPreview": "Retry preview",
+    "applyAnywayHint": "Preview failed, but you can still apply to run the full render."
   },
   "layers": {
     "title": "Layers",
@@ -418,13 +429,14 @@
     "pauseAuto": "auto",
     "pauseAlways": "always",
     "pauseNever": "never",
-    "renderAlgorithm": "Style",
+    "renderAlgorithm": "Layer algorithm",
     "defaultAlgo": "default",
-    "printStyle": "Print style",
+    "printStyle": "Layer algorithm",
     "advancedShow": "+ Advanced",
     "advancedHide": "− Advanced",
     "rerenderFailed": "Layer re-render failed.",
     "rerenderUnavailable": "Re-rendering is unavailable; re-upload the file to apply the new style.",
+    "rerenderCacheMiss": "Server-side cache expired — click Apply to run the full render.",
     "generateMovedHint": "Generate G-code lives in the Plan header — close this dialog and click the green button on the top-right of the preview.",
     "algoSettings": "{algorithm} settings",
     "expandAll": "Expand all",

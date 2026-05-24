@@ -452,7 +452,13 @@ export const useJobStore = defineStore('job', () => {
       if (controller.signal.aborted) return
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 404) {
-        // silent — cache evicted; re-upload to refresh
+        // Cache evicted (backend restart, LRU rollover). Surface a soft
+        // hint so the operator knows their tweak didn't render — the
+        // previous silent path left them wondering why the canvas
+        // didn't update. Re-uploading via the Apply button rebuilds
+        // the segmentation cache; the hint includes that affordance.
+        const toasts = useToastStore()
+        toasts.info(i18n.global.t('layers.rerenderCacheMiss'), 4000)
       } else if (status === 405) {
         const toasts = useToastStore()
         toasts.warning(i18n.global.t('layers.rerenderUnavailable'))

@@ -29,12 +29,24 @@ const showExpectedCount = computed(() =>
 
 <template>
   <div class="space-y-2 border-t border-slate-700 bg-slate-900/80 px-4 py-3 backdrop-blur">
-    <p
+    <div
       v-if="fm.hasSource.value && fm.previewError.value"
       class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300"
     >
-      {{ fm.previewError.value }}
-    </p>
+      <p>{{ fm.previewError.value }}</p>
+      <div class="mt-1 flex flex-wrap gap-1">
+        <button
+          type="button"
+          class="rounded border border-red-700 bg-red-900/60 px-2 py-0.5 text-[10px] text-red-100 hover:bg-red-800"
+          @click="fm.previewer.retry"
+        >
+          {{ t('upload.retryPreview') }}
+        </button>
+        <span class="self-center text-[10px] text-red-300/80">
+          {{ t('upload.applyAnywayHint') }}
+        </span>
+      </div>
+    </div>
 
     <p
       v-if="fm.hasSource.value && fm.multiPassLayerCount.value > 0 && store.job"

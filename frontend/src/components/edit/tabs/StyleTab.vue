@@ -5,8 +5,8 @@ import { getFonts } from '../../../api/client'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { useFileManager } from '../../../composables/useFileManager'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
-import { resolveMasterStyle } from '../../../data/printRegistry'
 import { useJobStore } from '../../../stores/job'
+import { useToastStore } from '../../../stores/toasts'
 import BlockMapCard from '../BlockMapCard.vue'
 import ColorModeCard from '../colors/ColorModeCard.vue'
 import MasterStylePicker from '../render/MasterStylePicker.vue'
@@ -34,6 +34,7 @@ const { t } = useI18n()
 const draft = useBitmapDraft()
 const fm = useFileManager(t)
 const store = useJobStore()
+const toasts = useToastStore()
 
 const bitmap = draft.bitmap
 const printMode = draft.printMode
@@ -78,29 +79,21 @@ onMounted(async () => {
 })
 
 // Switching master style: rewrite the draft's segmentation + uniform
-// algorithm. When layers already exist (post-upload), also re-propagate
-// the per-band recipe across them so the live preview reflects the new
-// style without needing a re-upload. If the operator has overridden
-// some layers manually, confirm before stomping their work.
+// algorithm via the centralised helper, then surface a toast if the
+// operator had manually tweaked the segmentation knobs (so the silent
+// stomp class of bug is gone). When layers already exist (post-upload),
+// also re-propagate the per-band recipe across them so the live preview
+// reflects the new style without needing a re-upload. If the operator
+// has overridden some layers manually, confirm before stomping.
 async function onMasterStyleChange(id: string): Promise<void> {
   const previous = draft.monoMasterStyleId.value
-  draft.monoMasterStyleId.value = id
-
-  const style = resolveMasterStyle(id)
-  const seg = style.segmentation
-  if (seg) {
-    bitmap.value.segmentation_method = seg.method
-    bitmap.value.drop_background = seg.drop_background
-    bitmap.value.background_luminance = seg.background_luminance
-    bitmap.value.algorithm = style.defaultAlgorithm
-    bitmap.value.algorithm_options = { ...style.defaultAlgorithmOptions }
-    if (seg.method === 'luminance_bands') {
-      if (bitmap.value.num_bands < 1 || bitmap.value.num_bands > 6) {
-        bitmap.value.num_bands = seg.default_num_bands ?? 1
-      }
-    } else if (seg.method === 'thresholds') {
-      bitmap.value.thresholds = [seg.default_threshold ?? 0.5]
-    }
+  const overwritten = draft.setMasterStyle(id)
+  if (overwritten.length > 0) {
+    toasts.warning(
+      t('render.styleOverwroteFields', {
+        fields: overwritten.map((f) => t(`render.field_${f}`)).join(', '),
+      }),
+    )
   }
 
   if (store.layers.length > 0 && previous !== id) {

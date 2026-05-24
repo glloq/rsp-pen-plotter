@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import draggable from 'vuedraggable'
 import { useI18n } from 'vue-i18n'
 import type { LayerPass } from '../../stores/job'
@@ -28,6 +28,11 @@ import StyleThumbnail from './shared/StyleThumbnail.vue'
 
 const props = defineProps<{
   passes: LayerPass[]
+  // Layer identifier — used to key the per-pass visibility state in a
+  // module-level Map so the operator's hide/show toggles survive
+  // navigating away from this layer card and back. Optional so call
+  // sites that don't track layer ids (none today) still compile.
+  layerId?: string
 }>()
 
 const emit = defineEmits<{
@@ -35,6 +40,13 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Module-level visibility store, keyed by layer id → {rowIndex: hidden}.
+// Lives outside the component so unmount/remount of LayerCard (which
+// happens whenever the operator scrolls or switches variants) doesn't
+// wipe the operator's hide/show toggles. ``reactive`` so Vue still
+// tracks gets/sets through the computed wrapper below.
+const HIDDEN_BY_LAYER: Map<string, Record<number, boolean>> = reactive(new Map())
 
 // Available algorithms in the stack picker — everything in the
 // registry except ``direct`` (stacking direct on top is a no-op visually).
@@ -56,9 +68,17 @@ function hasOptions(algorithm: string): boolean {
 // Per-row visibility toggle. Hidden passes are filtered out before
 // emitting the update — the backend never sees them, but the
 // operator can flip them back on without re-picking the algorithm.
-// State is keyed by row index so it survives algorithm changes inside
-// the same row.
-const hidden = ref<Record<number, boolean>>({})
+// State is keyed by row index, and the whole map is keyed by layer
+// id in a module-level store so toggles survive scrolling away from
+// this layer card and back (or switching variants). Without this, a
+// hidden pass would silently re-appear the moment the operator
+// switches layers, because Vue tears down + remounts each card.
+const hidden = computed<Record<number, boolean>>({
+  get: () => HIDDEN_BY_LAYER.get(props.layerId ?? '__nolayer__') ?? {},
+  set: (value) => {
+    HIDDEN_BY_LAYER.set(props.layerId ?? '__nolayer__', value)
+  },
+})
 function toggleHidden(i: number): void {
   hidden.value = { ...hidden.value, [i]: !hidden.value[i] }
   pushUpdate(props.passes)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../../stores/job'
 
@@ -21,17 +21,30 @@ const activeName = computed(
 )
 
 // Persisted collapsed state — the operator who hides the bar once
-// shouldn't see it pop back open every modal reopen.
-const COLLAPSED_KEY = 'omniplot.editModal.variantsBar.collapsed'
-function initialCollapsed(): boolean {
+// shouldn't see it pop back open every modal reopen. Keyed per
+// placement so a placement the operator hid stays hidden, while a
+// brand-new placement starts at the default (expanded). The legacy
+// global key is kept as a fallback for placements that haven't been
+// touched yet so we don't visually regress existing setups.
+const LEGACY_COLLAPSED_KEY = 'omniplot.editModal.variantsBar.collapsed'
+const collapsedKey = computed(
+  () => `omniplot.editModal.variantsBar.collapsed.${store.selectedPlacementId ?? 'none'}`,
+)
+function readCollapsed(key: string): boolean {
   try {
-    return localStorage.getItem(COLLAPSED_KEY) === '1'
-  } catch { return false }
+    const v = localStorage.getItem(key)
+    if (v === '1') return true
+    if (v === '0') return false
+  } catch { /* ignore */ }
+  // Fall back to the legacy global value when this placement has no
+  // entry yet; pre-migration users keep their previously-set state.
+  try { return localStorage.getItem(LEGACY_COLLAPSED_KEY) === '1' } catch { return false }
 }
-const collapsed = ref<boolean>(initialCollapsed())
+const collapsed = ref<boolean>(readCollapsed(collapsedKey.value))
+watch(collapsedKey, (key) => { collapsed.value = readCollapsed(key) })
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value
-  try { localStorage.setItem(COLLAPSED_KEY, collapsed.value ? '1' : '0') } catch { /* ignore */ }
+  try { localStorage.setItem(collapsedKey.value, collapsed.value ? '1' : '0') } catch { /* ignore */ }
 }
 
 // Inline rename, same UX as the old card.
