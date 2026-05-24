@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SegmentationMethod } from '../../../api/client'
 
@@ -36,6 +36,34 @@ const { t } = useI18n()
 
 const expanded = ref(true)
 const SEG_METHODS: SegmentationMethod[] = ['kmeans', 'luminance_bands', 'thresholds', 'fixed_palette']
+
+// Detail tiers shared with MonochromeCard so the vocabulary stays
+// consistent. Pixel values are kept as implementation detail; the
+// UI only shows the named tier.
+interface DetailLevel {
+  id: 'low' | 'standard' | 'high' | 'max'
+  value: number
+  labelKey: string
+}
+const detailLevels: DetailLevel[] = [
+  { id: 'low', value: 400, labelKey: 'mono.detailLow' },
+  { id: 'standard', value: 800, labelKey: 'mono.detailStandard' },
+  { id: 'high', value: 1400, labelKey: 'mono.detailHigh' },
+  { id: 'max', value: 2400, labelKey: 'mono.detailMax' },
+]
+const currentDetail = computed<DetailLevel['id']>(() => {
+  const target = props.bitmap.max_dimension_px
+  let best = detailLevels[0]!
+  let bestDelta = Math.abs(best.value - target)
+  for (const level of detailLevels.slice(1)) {
+    const delta = Math.abs(level.value - target)
+    if (delta < bestDelta) {
+      best = level
+      bestDelta = delta
+    }
+  }
+  return best.id
+})
 
 function addThreshold(): void {
   props.bitmap.thresholds = [...props.bitmap.thresholds, 0.5].sort((a, b) => a - b)
@@ -88,21 +116,27 @@ function updateThreshold(i: number, value: number): void {
       </div>
 
       <!-- Image detail: promoted out of the post-process accordion
-           because operators reach for "more detail" often. Higher =
-           more visible features in the segmentation, slower preview. -->
+           because operators reach for "more detail" often. Higher
+           re-segments at a larger source canvas → more fine features
+           survive into the SVG, slower preview. Same 4 named tiers as
+           MonochromeCard so the vocabulary is consistent across
+           print modes. -->
       <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.detail') }}</p>
-          <span class="font-mono text-[10px] text-slate-400">{{ bitmap.max_dimension_px }}px</span>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.detail') }}</p>
+        <div class="grid grid-cols-4 gap-1">
+          <button
+            v-for="level in detailLevels"
+            :key="level.id"
+            type="button"
+            class="rounded border px-2 py-1.5 text-[11px] transition"
+            :class="currentDetail === level.id
+              ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+              : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+            @click="bitmap.max_dimension_px = level.value"
+          >
+            {{ t(level.labelKey) }}
+          </button>
         </div>
-        <input
-          v-model.number="bitmap.max_dimension_px"
-          type="range"
-          min="200"
-          max="2400"
-          step="100"
-          class="w-full accent-emerald-500"
-        />
         <p class="text-[10px] text-slate-500">{{ t('mono.detailHint') }}</p>
       </div>
 
@@ -173,9 +207,9 @@ function updateThreshold(i: number, value: number): void {
             <input v-model.number="bitmap.background_luminance" type="number" min="0" max="1" step="0.01" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
           </label>
         </div>
-        <label class="block text-slate-400">{{ t('convert.maxDim') }}
-          <input v-model.number="bitmap.max_dimension_px" type="number" min="16" max="4096" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-        </label>
+        <!-- max_dimension_px now lives at the top of the card as a
+             named-tier detail picker; no need to duplicate the raw
+             numeric input here. -->
       </div>
     </div>
   </div>

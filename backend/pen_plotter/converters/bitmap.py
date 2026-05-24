@@ -118,7 +118,13 @@ class BitmapConverter(Converter):
         segmentation pass again.
         """
         opts = BitmapOptions.model_validate(options or {})
-        max_dim = 128 if fast else opts.max_dimension_px
+        # ``fast`` keeps the cheap k-means single restart (n_init=1)
+        # but no longer overrides ``max_dimension_px``: the operator
+        # explicitly picks the segmentation resolution in the editor
+        # and expects the live /preview to reflect that choice. Capping
+        # to 128 made the detail slider a no-op for the UI even though
+        # the backend would honour it at /upload — confusing.
+        max_dim = opts.max_dimension_px
         n_init = 1 if fast else 10
         image = self._load_rgb(data)
         image = self._fit_within(image, max_dim)
