@@ -13,8 +13,8 @@ test('TSP knob slider feeds bandRecipe density on /preview payload', () => {
   expect(Array.isArray(payload.band_recipes)).toBe(true)
   const recipes = payload.band_recipes as Array<Record<string, unknown>>
   expect(recipes.length).toBe(1)
-  expect(recipes[0].algorithm).toBe('tsp')
-  const opts = recipes[0].algorithm_options as Record<string, unknown>
+  expect(recipes[0]!.algorithm).toBe('tsp')
+  const opts = recipes[0]!.algorithm_options as Record<string, unknown>
   expect(opts.density).toBeCloseTo(0.077)
 })
 
@@ -26,8 +26,8 @@ test('Spiral knob slider feeds bandRecipe spacing_px', () => {
   d.setMonoKnob('spiral-master', 'spacing_px', 5.5)
   const payload = d.buildBitmapOptions()
   const recipes = payload.band_recipes as Array<Record<string, unknown>>
-  expect(recipes[0].algorithm).toBe('spiral')
-  const opts = recipes[0].algorithm_options as Record<string, unknown>
+  expect(recipes[0]!.algorithm).toBe('spiral')
+  const opts = recipes[0]!.algorithm_options as Record<string, unknown>
   expect(opts.spacing_px).toBe(5.5)
 })
 
