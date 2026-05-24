@@ -6,7 +6,9 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from pen_plotter.converters.algorithms import (
+    AlgorithmComplexity,
     AlgorithmKind,
+    algorithm_complexity,
     algorithm_kind,
     available_algorithms,
 )
@@ -23,6 +25,11 @@ class AlgorithmInfo(BaseModel):
     # "lines" emits discrete outlines, "mono_stroke" produces a single
     # continuous polyline (spiral / scanlines / TSP).
     kind: AlgorithmKind = "fill"
+    # Static cost class. The UI seeds its preview-time estimator from this
+    # before any /preview round-trip has been observed, then refines the
+    # estimate with the real ``elapsed_ms`` history per (algorithm,
+    # quality) pair.
+    complexity: AlgorithmComplexity = "medium"
 
 
 @router.get("/algorithms")
@@ -37,6 +44,7 @@ async def list_algorithms() -> list[AlgorithmInfo]:
             name=algo.name,
             description=algo.description,
             kind=algorithm_kind(algo.name),
+            complexity=algorithm_complexity(algo.name),
         )
         for algo in available_algorithms()
     ]

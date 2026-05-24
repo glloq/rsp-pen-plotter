@@ -242,7 +242,11 @@
     "qualityStandard": "Std",
     "qualityStandardHint": "Honours your detail / max-dimension choice with a single k-means restart. Default.",
     "qualityFinal": "Final",
-    "qualityFinalHint": "Near-/upload fidelity: full 10-restart k-means at your full detail. Slowest."
+    "qualityFinalHint": "Near-/upload fidelity: full 10-restart k-means at your full detail. Slowest.",
+    "estimateHint": "Estimated /preview latency — algorithm complexity: {complexity}. Refines over time from observed runs.",
+    "complexity_low": "low",
+    "complexity_medium": "medium",
+    "complexity_high": "high"
   },
   "planRail": {
     "title": "Plan",

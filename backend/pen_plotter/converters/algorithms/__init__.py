@@ -25,6 +25,16 @@ from pen_plotter.converters.algorithms.tsp import TspAlgorithm
 
 AlgorithmKind = Literal["fill", "lines", "mono_stroke"]
 
+# Static complexity score: a rough order-of-magnitude estimate of how
+# expensive each algorithm is at /preview-time, relative to the cheapest
+# pipeline. Used by the UI's cost estimator to pre-warn the operator
+# *before* the first /preview round-trip — the actual EMA correction
+# kicks in after the first observation. "low" ≈ sub-200ms-ish on a Pi
+# with a small image; "medium" ≈ a few hundred ms; "high" can hit
+# multiple seconds (TSP is the obvious offender — its tour length grows
+# super-linearly with point count).
+AlgorithmComplexity = Literal["low", "medium", "high"]
+
 _ALGORITHMS: dict[str, RasterAlgorithm] = {
     algo.name: algo
     for algo in (
@@ -56,6 +66,23 @@ _KINDS: dict[str, AlgorithmKind] = {
     "tsp": "mono_stroke",
 }
 
+# Rough cost class per algorithm — see ``AlgorithmComplexity`` above for
+# the meaning of low/medium/high. Reviewed against typical /preview
+# latencies on a Pi-class device with the default detail tier; tweak
+# alongside any algorithm-internal changes that change runtime scaling.
+_COMPLEXITY: dict[str, AlgorithmComplexity] = {
+    "direct": "low",       # potrace on a small label mask
+    "halftone": "low",     # uniform dot grid
+    "stippling": "medium", # Poisson-disk sampling
+    "crosshatch": "medium",
+    "contours": "low",
+    "edges": "low",
+    "centerline": "medium",  # thinning + path extraction
+    "spiral": "medium",
+    "scanlines": "low",
+    "tsp": "high",          # tour optimisation dominates
+}
+
 
 def get_algorithm(name: str) -> RasterAlgorithm:
     """Return the raster algorithm registered under ``name``.
@@ -80,12 +107,22 @@ def algorithm_kind(name: str) -> AlgorithmKind:
     return _KINDS.get(name, "fill")
 
 
+def algorithm_complexity(name: str) -> AlgorithmComplexity:
+    """Return the static cost class for a registered algorithm.
+
+    Unknown names default to ``"medium"`` so a never-classified algorithm
+    surfaces in the UI without an aggressive "this will be fast" badge.
+    """
+    return _COMPLEXITY.get(name, "medium")
+
+
 def available_algorithms() -> list[RasterAlgorithm]:
     """Return all registered raster algorithms."""
     return list(_ALGORITHMS.values())
 
 
 __all__ = [
+    "AlgorithmComplexity",
     "AlgorithmKind",
     "CenterlineAlgorithm",
     "ContoursAlgorithm",
@@ -98,6 +135,7 @@ __all__ = [
     "SpiralAlgorithm",
     "StipplingAlgorithm",
     "TspAlgorithm",
+    "algorithm_complexity",
     "algorithm_kind",
     "available_algorithms",
     "get_algorithm",

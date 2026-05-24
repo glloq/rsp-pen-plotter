@@ -1,4 +1,7 @@
 import { computed, type ComputedRef, type Ref, ref, watch } from 'vue'
+import type { PreviewQuality } from '../api/client'
+
+export type { PreviewQuality }
 
 // Editor-pane state shared between the right-hand settings cards
 // (SourceSection) and the left-hand preview pane (EditPreviewPane). The
@@ -40,7 +43,8 @@ const _previewMode = ref<PreviewMode>('auto')
 // Preview quality tier. Picked by the operator in the preview pane
 // toolbar; defaults to Standard to match the historical /preview
 // latency. Persisted to localStorage so the choice survives a reload.
-export type PreviewQuality = 'draft' | 'standard' | 'final'
+// (Type imported from api/client — defined there so /preview's form
+// field and the estimator both share the source of truth.)
 const QUALITY_KEY = 'previewQuality'
 function _loadQuality(): PreviewQuality {
   try {

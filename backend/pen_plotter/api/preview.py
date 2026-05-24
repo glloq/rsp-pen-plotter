@@ -44,7 +44,7 @@ _ACCEPTED_MIMES = frozenset(
     }
 )
 _CACHE_SIZE = 16
-_cache: OrderedDict[str, "PreviewResponse"] = OrderedDict()
+_cache: OrderedDict[str, PreviewResponse] = OrderedDict()
 # A single shared converter — its state is purely the registered algorithms,
 # stateless once instantiated.
 _converter = BitmapConverter()

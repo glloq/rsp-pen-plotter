@@ -1,15 +1,71 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../../stores/job'
 import { useEditState } from '../../composables/useEditState'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
+import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimator'
+import {
+  getAlgorithms,
+  type AlgorithmComplexity,
+  type AlgorithmInfo,
+} from '../../api/client'
 
 const { t } = useI18n()
 const store = useJobStore()
 const edit = useEditState()
 const draft = useBitmapDraft()
+const costEstimator = usePreviewCostEstimator()
+
+// Algorithm metadata cache. Fetched once on mount; the result feeds
+// the cost chip's complexity seed. We tolerate the fetch failing —
+// the estimator falls back to ``medium`` when the complexity is
+// undefined, so the chip still renders.
+const algorithmsInfo = ref<AlgorithmInfo[]>([])
+onMounted(async () => {
+  try { algorithmsInfo.value = await getAlgorithms() } catch { /* offline / 404 — fall through */ }
+})
+const currentComplexity = computed<AlgorithmComplexity>(() => {
+  const algo = algorithmsInfo.value.find((a) => a.name === draft.bitmap.value.algorithm)
+  return algo?.complexity ?? 'medium'
+})
+const estimatedMs = computed<number>(() =>
+  costEstimator.estimateMs(
+    draft.bitmap.value.algorithm,
+    edit.previewQuality.value,
+    currentComplexity.value,
+  ),
+)
+// Format ms → human label. Sub-second renders show "120 ms"; otherwise
+// switch to "1.4 s" so the operator parses it at a glance.
+const estimatedLabel = computed<string>(() => {
+  const ms = estimatedMs.value
+  if (!Number.isFinite(ms) || ms <= 0) return ''
+  if (ms < 1000) return `~${Math.round(ms)} ms`
+  return `~${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} s`
+})
+// Tint the chip by predicted latency so a "this will hurt" estimate
+// reads at a glance. Thresholds mirror the operator's rough patience
+// budget on a Pi: under 300 ms feels instant, 300-1500 ms is the
+// "slider drag wait" zone, beyond 1500 ms is "go grab a coffee".
+const estimateTone = computed<'fast' | 'medium' | 'slow'>(() => {
+  const ms = estimatedMs.value
+  if (ms < 300) return 'fast'
+  if (ms < 1500) return 'medium'
+  return 'slow'
+})
+const estimateChipClass = computed<string>(() => {
+  switch (estimateTone.value) {
+    case 'fast':
+      return 'border-emerald-700 bg-emerald-950/40 text-emerald-300'
+    case 'medium':
+      return 'border-amber-700 bg-amber-950/40 text-amber-300'
+    case 'slow':
+      return 'border-rose-700 bg-rose-950/40 text-rose-300'
+  }
+  return ''
+})
 
 // ============================== ZOOM & PAN ==============================
 // Wheel zooms around the cursor (so the user can dig into a detail);
@@ -384,7 +440,21 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
           {{ edit.selectedFile.value.name }}
         </span>
       </div>
-      <span class="text-slate-400">{{ statusLabel }}</span>
+      <div class="flex items-center gap-2">
+        <!-- Cost estimate chip. Reads the per-(algorithm, quality) EMA
+             fed by the preview scheduler, seeded by the algorithm's
+             static complexity from /algorithms. Tinted by tone so an
+             impending multi-second render is obvious at a glance —
+             the operator can downgrade Final → Standard before
+             committing. -->
+        <span
+          v-if="estimatedLabel && edit.kind.value === 'bitmap'"
+          class="rounded-sm border px-1.5 py-px font-mono text-[10px]"
+          :class="estimateChipClass"
+          :title="t('editPreview.estimateHint', { complexity: t(`editPreview.complexity_${currentComplexity}`) })"
+        >{{ estimatedLabel }}</span>
+        <span class="text-slate-400">{{ statusLabel }}</span>
+      </div>
     </header>
 
     <!-- Variant chips: quick switch + reflect the active variant
