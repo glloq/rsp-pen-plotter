@@ -31,11 +31,22 @@ export async function getHealth(): Promise<HealthResponse> {
 }
 
 export type AlgorithmKind = 'fill' | 'lines' | 'mono_stroke'
+export type AlgorithmComplexity = 'low' | 'medium' | 'high'
+// Preview latency/fidelity tier the operator picks in the preview pane.
+// Defined here (rather than in useEditState) because /preview takes it
+// as a form field, and the cost estimator + state composable both
+// need to import it — keeping it next to the API client avoids a
+// circular dependency.
+export type PreviewQuality = 'draft' | 'standard' | 'final'
 
 export interface AlgorithmInfo {
   name: string
   description: string
   kind: AlgorithmKind
+  // Static cost class — server-declared, defaults to ``medium`` for any
+  // algorithm registered without an explicit entry. Drives the preview
+  // pane's seed estimate before the EMA has any real observations.
+  complexity?: AlgorithmComplexity
 }
 
 export type SegmentationMethod = 'kmeans' | 'luminance_bands' | 'thresholds' | 'fixed_palette'

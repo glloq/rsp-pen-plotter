@@ -242,7 +242,11 @@
     "qualityStandard": "Std",
     "qualityStandardHint": "Respecte ton choix de détail / résolution avec un seul redémarrage k-means. Par défaut.",
     "qualityFinal": "Final",
-    "qualityFinalHint": "Fidélité proche du /upload : k-means complet 10 redémarrages à pleine résolution. Le plus lent."
+    "qualityFinalHint": "Fidélité proche du /upload : k-means complet 10 redémarrages à pleine résolution. Le plus lent.",
+    "estimateHint": "Latence /preview estimée — complexité de l'algorithme : {complexity}. S'affine au fil des rendus observés.",
+    "complexity_low": "faible",
+    "complexity_medium": "moyenne",
+    "complexity_high": "élevée"
   },
   "planRail": {
     "title": "Plan",

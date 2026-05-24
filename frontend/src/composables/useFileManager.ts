@@ -18,6 +18,7 @@ import { downloadOriginalFile } from '../api/client'
 import { useEditState } from './useEditState'
 import { useBitmapDraft } from './useBitmapDraft'
 import { usePreviewScheduler } from './usePreviewScheduler'
+import { usePreviewCostEstimator } from './usePreviewCostEstimator'
 import { applyMasterStyleToLayers } from './useStylePropagation'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
@@ -48,6 +49,7 @@ export function useFileManager(t?: Translator) {
   const ui = useUiStore()
   const draft = useBitmapDraft()
   const edit = useEditState()
+  const costEstimator = usePreviewCostEstimator()
 
   const sourceName = computed<string>(
     () => _selectedFile.value?.name ?? store.selectedPlacement?.source_file ?? '',
@@ -286,7 +288,20 @@ export function useFileManager(t?: Translator) {
       watch(previewer.previewSvg, (v) => { edit.previewSvg.value = v }, { immediate: true }),
       watch(previewer.previewLoading, (v) => { edit.previewLoading.value = v }, { immediate: true }),
       watch(previewer.previewError, (v) => { edit.previewError.value = v }, { immediate: true }),
-      watch(previewer.previewResult, (v) => { edit.previewResult.value = v }, { immediate: true }),
+      watch(previewer.previewResult, (v) => {
+        edit.previewResult.value = v
+        // Feed the cost estimator. Cache hits skew downward (the cost
+        // we want to estimate is *compute*, not network), so they're
+        // excluded. ``elapsed_ms`` comes straight from the backend's
+        // perf_counter wrapper around the converter call.
+        if (v && !v.cached && typeof v.elapsed_ms === 'number') {
+          costEstimator.record(
+            draft.bitmap.value.algorithm,
+            edit.previewQuality.value,
+            v.elapsed_ms,
+          )
+        }
+      }, { immediate: true }),
       watch(kind, (v) => { edit.kind.value = v }, { immediate: true }),
       watch(pageCount, (v) => { edit.pageCount.value = v }, { immediate: true }),
       watch(currentPage, (v) => { edit.currentPage.value = v }, { immediate: true }),
