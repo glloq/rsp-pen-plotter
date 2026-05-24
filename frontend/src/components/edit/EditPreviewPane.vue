@@ -4,10 +4,12 @@ import DOMPurify from 'dompurify'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../../stores/job'
 import { useEditState } from '../../composables/useEditState'
+import { useBitmapDraft } from '../../composables/useBitmapDraft'
 
 const { t } = useI18n()
 const store = useJobStore()
 const edit = useEditState()
+const draft = useBitmapDraft()
 
 // ============================== ZOOM & PAN ==============================
 // Wheel zooms around the cursor (so the user can dig into a detail);
@@ -114,31 +116,103 @@ const placementSvg = computed(() => {
   return DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
 })
 
-const showLivePreview = computed(() => Boolean(edit?.previewSvg.value))
-const showPlacementSvg = computed(
-  () => !showLivePreview.value && Boolean(placementSvg.value),
+// ``source`` mode (set by EditModal when the Image tab is active)
+// forces the raster source + preprocess overlay even when an SVG
+// preview is ready, so the operator can see what their brightness /
+// contrast / crop tweaks are doing to the *source pixels*. Falls back
+// to the regular SVG flow on every other tab.
+const sourceMode = computed(
+  () =>
+    edit.previewMode.value === 'source'
+    && edit.kind.value === 'bitmap'
+    && Boolean(edit.previewUrl.value),
 )
+const showLivePreview = computed(
+  () => !sourceMode.value && Boolean(edit?.previewSvg.value),
+)
+const showPlacementSvg = computed(
+  () => !sourceMode.value && !showLivePreview.value && Boolean(placementSvg.value),
+)
+const showSourcePreview = computed(() => sourceMode.value)
 const showThumbnail = computed(
   () =>
-    !showLivePreview.value
+    !sourceMode.value
+    && !showLivePreview.value
     && !showPlacementSvg.value
     && edit?.kind.value === 'bitmap'
     && Boolean(edit?.previewUrl.value),
 )
 const showTextPreview = computed(
   () =>
-    !showLivePreview.value
+    !sourceMode.value
+    && !showLivePreview.value
     && !showPlacementSvg.value
     && edit?.kind.value === 'typography'
     && Boolean(edit?.textPreview.value),
 )
 const showEmptyHint = computed(
   () =>
-    !showLivePreview.value
+    !sourceMode.value
+    && !showLivePreview.value
     && !showPlacementSvg.value
     && !showThumbnail.value
     && !showTextPreview.value,
 )
+
+// CSS filter / transform / clip-path that mirror the operator's
+// PreprocessDraft so the raw source preview reflects their tweaks live
+// without a server round-trip. Caveats noted in the i18n hint:
+// gamma, levels, sharpen and auto-contrast aren't expressible in
+// stock CSS — those land in the SVG preview once the operator
+// switches tabs. The colour adjustments (brightness, contrast,
+// saturation, blur, invert, grayscale) and the geometric ones
+// (rotate, flip, crop) are exact.
+const sourceImageStyle = computed<Record<string, string>>(() => {
+  const p = draft.bitmap.value.preprocess
+  const filters: string[] = []
+  if (p.brightness !== 0) filters.push(`brightness(${1 + p.brightness})`)
+  if (p.contrast !== 0) filters.push(`contrast(${1 + p.contrast})`)
+  if (p.saturation !== 1) filters.push(`saturate(${p.saturation})`)
+  if (p.blur_px > 0) filters.push(`blur(${p.blur_px}px)`)
+  if (p.invert) filters.push('invert(1)')
+  if (p.grayscale) filters.push('grayscale(1)')
+  const transforms: string[] = []
+  if (p.rotate_deg) transforms.push(`rotate(${p.rotate_deg}deg)`)
+  const sx = p.flip_h ? -1 : 1
+  const sy = p.flip_v ? -1 : 1
+  if (sx !== 1 || sy !== 1) transforms.push(`scale(${sx}, ${sy})`)
+  const style: Record<string, string> = {
+    maxHeight: '100%',
+    maxWidth: '100%',
+    objectFit: 'contain',
+  }
+  if (filters.length) style.filter = filters.join(' ')
+  if (transforms.length) style.transform = transforms.join(' ')
+  if (p.crop) {
+    const [x, y, w, h] = p.crop
+    const top = (y * 100).toFixed(2)
+    const right = ((1 - (x + w)) * 100).toFixed(2)
+    const bottom = ((1 - (y + h)) * 100).toFixed(2)
+    const left = (x * 100).toFixed(2)
+    style.clipPath = `inset(${top}% ${right}% ${bottom}% ${left}%)`
+  }
+  return style
+})
+
+// Crop overlay rectangle: rendered above the raster to make the
+// kept region obvious (dark mask outside, clear inside). Only emitted
+// when the operator actually enabled a crop.
+const cropOverlay = computed<{ x: string; y: string; w: string; h: string } | null>(() => {
+  const p = draft.bitmap.value.preprocess
+  if (!p.crop) return null
+  const [x, y, w, h] = p.crop
+  return {
+    x: `${(x * 100).toFixed(2)}%`,
+    y: `${(y * 100).toFixed(2)}%`,
+    w: `${(w * 100).toFixed(2)}%`,
+    h: `${(h * 100).toFixed(2)}%`,
+  }
+})
 
 const statusLabel = computed(() => {
   if (!edit) return ''
@@ -194,7 +268,12 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
              this, settings changes that updated the live preview but
              not the placement looked like "nothing happened". -->
         <span
-          v-if="showLivePreview"
+          v-if="showSourcePreview"
+          class="rounded-sm border border-sky-700 bg-sky-950/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-sky-300"
+          :title="t('editPreview.sourceHint')"
+        >{{ t('editPreview.source') }}</span>
+        <span
+          v-else-if="showLivePreview"
           class="rounded-sm border border-emerald-700 bg-emerald-950/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-emerald-300"
           :title="t('editPreview.livePreviewHint')"
         >{{ t('editPreview.live') }}</span>
@@ -282,10 +361,68 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
         class="absolute inset-0 flex items-center justify-center p-3"
         :style="contentStyle"
       >
+        <!-- Source-pixel preview: the raw raster with the operator's
+             preprocess adjustments overlaid via CSS filters /
+             transforms / clip-path. Active on the Image tab so the
+             operator sees what their tweaks do to the *source*
+             before segmentation runs. The crop region is also
+             outlined with a dark mask so the kept area is obvious. -->
+        <div
+          v-if="showSourcePreview"
+          class="relative flex h-full w-full items-center justify-center"
+        >
+          <img
+            :src="edit!.previewUrl.value!"
+            :alt="edit!.selectedFile.value?.name ?? ''"
+            class="block"
+            :style="sourceImageStyle"
+            draggable="false"
+          />
+          <!-- Crop guide: a 4-quadrant dark mask makes the kept region
+               unmistakable while the operator dials in the crop. -->
+          <template v-if="cropOverlay">
+            <div class="pointer-events-none absolute inset-0">
+              <div class="absolute inset-x-0 top-0 bg-black/55" :style="{ height: cropOverlay.y }" />
+              <div
+                class="absolute inset-x-0 bottom-0 bg-black/55"
+                :style="{
+                  top: `calc(${cropOverlay.y} + ${cropOverlay.h})`,
+                }"
+              />
+              <div
+                class="absolute bg-black/55"
+                :style="{
+                  top: cropOverlay.y,
+                  left: 0,
+                  width: cropOverlay.x,
+                  height: cropOverlay.h,
+                }"
+              />
+              <div
+                class="absolute bg-black/55"
+                :style="{
+                  top: cropOverlay.y,
+                  left: `calc(${cropOverlay.x} + ${cropOverlay.w})`,
+                  right: 0,
+                  height: cropOverlay.h,
+                }"
+              />
+              <div
+                class="absolute border-2 border-emerald-400/80"
+                :style="{
+                  top: cropOverlay.y,
+                  left: cropOverlay.x,
+                  width: cropOverlay.w,
+                  height: cropOverlay.h,
+                }"
+              />
+            </div>
+          </template>
+        </div>
         <!-- Vectorised placement SVG: the post-upload state, updated by
              /rerender when layer algorithms change. -->
         <div
-          v-if="showPlacementSvg"
+          v-else-if="showPlacementSvg"
           class="flex h-full w-full items-center justify-center [&_svg]:max-h-full [&_svg]:max-w-full"
           v-html="placementSvg"
         />

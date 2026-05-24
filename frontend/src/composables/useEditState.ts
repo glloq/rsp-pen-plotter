@@ -28,6 +28,13 @@ const _previewResult = ref<PreviewResultLike | null>(null)
 const _kind = ref<EditFileKind>('none')
 const _pageCount = ref<number>(0)
 const _currentPage = ref<number>(0)
+// Override that lets the active tab steer what the preview pane shows.
+// ``auto`` falls back to the existing priority (live SVG → placement
+// SVG → raster thumbnail). ``source`` forces the raw raster with the
+// operator's preprocess adjustments overlaid, so the Image tab can
+// show what the source actually looks like after brightness/contrast/
+// crop/etc. without the SVG renderer hiding the effect.
+const _previewMode = ref<'auto' | 'source'>('auto')
 let _goToPage: (page: number) => Promise<void> = async () => {}
 // Callbacks installed by SourceSection so the preview pane can cancel
 // or retry the in-flight /preview round-trip without reaching across to
@@ -58,6 +65,7 @@ export interface EditState {
   previewCached: Ref<boolean>
   previewPalette: Ref<string[]>
   kind: Ref<EditFileKind>
+  previewMode: Ref<'auto' | 'source'>
   pageCount: Ref<number>
   currentPage: Ref<number>
   goToPage: (page: number) => Promise<void>
@@ -80,6 +88,7 @@ export function resetEditState(): void {
   _previewError.value = null
   _previewResult.value = null
   _kind.value = 'none'
+  _previewMode.value = 'auto'
   _pageCount.value = 0
   _currentPage.value = 0
   _goToPage = async () => {}
@@ -100,6 +109,7 @@ export function useEditState(): EditState {
     previewCached: _previewCached,
     previewPalette: _previewPalette,
     kind: _kind,
+    previewMode: _previewMode,
     pageCount: _pageCount,
     currentPage: _currentPage,
     goToPage: (page) => _goToPage(page),

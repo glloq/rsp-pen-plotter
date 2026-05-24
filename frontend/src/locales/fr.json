@@ -111,6 +111,7 @@
   },
   "preprocess": {
     "intro": "Prépare l'image source avant son découpage en couches de couleur.",
+    "previewNote": "Luminosité, contraste, saturation, flou, inversion, niveaux de gris, recadrage et orientation sont visibles en direct. Gamma, niveaux et netteté apparaîtront dans les autres onglets quand le SVG sera recalculé.",
     "reset": "Réinitialiser",
     "noSource": "Attache un fichier pour commencer à ajuster l'image.",
     "notApplicable": "Ce type de fichier n'est pas une image bitmap — rien à prétraiter.",
@@ -205,7 +206,9 @@
     "live": "Live",
     "livePreviewHint": "Reflète chaque changement de réglage — pas encore appliqué au plan.",
     "saved": "Sauvé",
-    "savedHint": "Dernière conversion appliquée — change les réglages puis clique Re-convertir pour rafraîchir."
+    "savedHint": "Dernière conversion appliquée — change les réglages puis clique Re-convertir pour rafraîchir.",
+    "source": "Source",
+    "sourceHint": "Affiche l'image brute avec les ajustements de l'onglet Image. Change d'onglet pour voir le rendu SVG."
   },
   "planRail": {
     "title": "Plan",

@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { resetEditState } from '../composables/useEditState'
+import { resetEditState, useEditState } from '../composables/useEditState'
 import { resetFileManager, useFileManager } from '../composables/useFileManager'
 import { useBitmapDraft } from '../composables/useBitmapDraft'
 import { useJobStore } from '../stores/job'
@@ -22,6 +22,7 @@ const ui = useUiStore()
 const store = useJobStore()
 const draft = useBitmapDraft()
 const fm = useFileManager(t)
+const edit = useEditState()
 const { editModalOpen } = storeToRefs(ui)
 
 // Guard close: if the operator changed knobs since the last Apply,
@@ -70,6 +71,19 @@ function loadInitialTab(): EditTabId {
 watch(activeTab, (tab) => {
   try { localStorage.setItem(TAB_KEY, tab) } catch { /* ignore */ }
 })
+
+// Tell the preview pane to show the raw source raster (with the
+// operator's preprocess adjustments overlaid) while they're on the
+// Image tab — they're tuning the source pixels, the SVG renderer would
+// only obscure what they're trying to see. Other tabs fall back to
+// the live SVG / committed SVG / raster fallback chain.
+watch(
+  activeTab,
+  (tab) => {
+    edit.previewMode.value = tab === 'image' ? 'source' : 'auto'
+  },
+  { immediate: true },
+)
 
 const layerCount = computed(() => store.layers.length)
 const variantCount = computed(() => store.selectedPlacement?.variants.length ?? 0)
