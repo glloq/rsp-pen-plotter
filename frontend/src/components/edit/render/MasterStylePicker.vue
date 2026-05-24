@@ -51,11 +51,8 @@ const isCustomised = computed<boolean>(() => {
   if (b.segmentation_method !== seg.method) return true
   if (b.algorithm !== style.defaultAlgorithm) return true
   if (seg.method === 'luminance_bands') {
-    // 1 = "single layer" sentinel we ship by default; only flag custom
-    // when the operator deviates from both the preset value AND the
-    // single-layer baseline.
-    const baseline = seg.default_num_bands ?? 1
-    if (b.num_bands !== baseline && b.num_bands !== 1) return true
+    const baseline = seg.default_num_bands ?? 4
+    if (b.num_bands !== baseline) return true
   } else if (seg.method === 'thresholds') {
     const baseline = seg.default_threshold ?? 0.5
     const current = b.thresholds[0] ?? baseline

@@ -139,7 +139,7 @@ export function defaultBitmap(): BitmapDraft {
     preprocess: defaultPreprocess(),
     segmentation_method: 'kmeans',
     num_colors: 4,
-    num_bands: 1,
+    num_bands: 4,
     thresholds: [0.33, 0.66],
     palette: [],
     min_region_pixels: 0,
@@ -375,8 +375,8 @@ function applyStyleSegmentation(
       seg.method === 'luminance_bands'
       && _segmentationTouched.value.has('num_bands')
     ) {
-      const target = seg.default_num_bands ?? 1
-      if (b.num_bands !== target && (b.num_bands < 1 || b.num_bands > 6)) {
+      const target = seg.default_num_bands ?? 4
+      if (b.num_bands !== target && (b.num_bands < 2 || b.num_bands > 6)) {
         wouldOverwrite.push('num_bands')
       }
     }
@@ -398,11 +398,8 @@ function applyStyleSegmentation(
   b.algorithm = style.defaultAlgorithm
   b.algorithm_options = { ...style.defaultAlgorithmOptions }
   if (seg.method === 'luminance_bands') {
-    // Mono defaults to a single layer; the operator opts into multi-band
-    // shading by raising the slider in MasterStyleParams (or by adding
-    // overlays in the Layers tab afterwards).
-    if (b.num_bands < 1 || b.num_bands > 6) {
-      b.num_bands = seg.default_num_bands ?? 1
+    if (b.num_bands < 2 || b.num_bands > 6) {
+      b.num_bands = seg.default_num_bands ?? 4
     }
   } else if (seg.method === 'thresholds') {
     b.thresholds = [seg.default_threshold ?? 0.5]
@@ -432,7 +429,6 @@ export function setPrintMode(
     // still serve the old palette if anything tipped the
     // segmentation_method back to fixed_palette.
     _bitmap.value.palette = []
-    _bitmap.value.num_colors = 1
     _paletteFollowsPens.value = false
     return overwritten
   }

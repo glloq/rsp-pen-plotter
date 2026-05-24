@@ -220,7 +220,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     scope: 'master',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 1,
+      default_num_bands: 4,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,
@@ -246,7 +246,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     scope: 'master',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 1,
+      default_num_bands: 4,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,
@@ -266,7 +266,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     scope: 'master',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 1,
+      default_num_bands: 4,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,
@@ -289,7 +289,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     scope: 'master',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 1,
+      default_num_bands: 3,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,
@@ -313,7 +313,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     scope: 'master',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 1,
+      default_num_bands: 4,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,

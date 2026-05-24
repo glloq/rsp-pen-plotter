@@ -63,7 +63,7 @@ function setNumBands(value: number): void {
     <input
       :value="bitmap.num_bands"
       type="range"
-      min="1"
+      min="2"
       max="6"
       step="1"
       class="w-full accent-emerald-500"

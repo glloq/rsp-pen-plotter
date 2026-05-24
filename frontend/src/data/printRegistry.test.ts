@@ -40,7 +40,7 @@ describe('printRegistry', () => {
       expect(['luminance_bands', 'thresholds', 'kmeans', 'fixed_palette']).toContain(seg.method)
       // Knob slider is only sensible for band-based segmentations.
       if (seg.method === 'luminance_bands') {
-        expect(seg.default_num_bands).toBeGreaterThanOrEqual(1)
+        expect(seg.default_num_bands).toBeGreaterThanOrEqual(2)
       }
       if (seg.method === 'thresholds') {
         expect(seg.default_threshold).toBeGreaterThan(0)
