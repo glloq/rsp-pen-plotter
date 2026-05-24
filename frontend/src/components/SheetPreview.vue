@@ -82,6 +82,19 @@ const renderedPlacements = computed<RenderedPlacement[]>(() => {
 
 const anyExceeds = computed(() => renderedPlacements.value.some((r) => r.exceeds))
 
+// Sheet overlay shown when the user picked a sheet format in LayoutSection.
+// Anchored at the workspace top-left, clipped to the workspace bounds, and
+// purely decorative — no impact on placement logic.
+const previewSheetRect = computed(() => {
+  const w = workspace.value
+  const sheet = ui.previewSheet
+  if (!w || !sheet) return null
+  const width = Math.max(0, Math.min(sheet.width_mm, w.wsW))
+  const height = Math.max(0, Math.min(sheet.height_mm, w.wsH))
+  if (width <= 0 || height <= 0) return null
+  return { x: w.ws.x_min, y: w.ws.y_min, width, height }
+})
+
 // Grid: minor lines every 10 mm (1 cm), major every 50 mm (5 cm).
 const grid = computed(() => {
   const w = workspace.value
@@ -547,6 +560,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               {{ label.cm }}
             </text>
           </g>
+
+          <!-- Sheet overlay: transparent rectangle at workspace top-left
+               representing the format chosen in LayoutSection. Decorative. -->
+          <rect
+            v-if="previewSheetRect"
+            :x="previewSheetRect.x"
+            :y="previewSheetRect.y"
+            :width="previewSheetRect.width"
+            :height="previewSheetRect.height"
+            fill="#38bdf8"
+            fill-opacity="0.12"
+            stroke="#0ea5e9"
+            stroke-width="1.2"
+            stroke-dasharray="6 4"
+            vector-effect="non-scaling-stroke"
+            pointer-events="none"
+          />
 
           <!-- Each placement: drawing content + interactive bbox + handles. -->
           <template v-for="rp in renderedPlacements" :key="rp.placement.id">
