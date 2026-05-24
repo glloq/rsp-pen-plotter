@@ -3,22 +3,25 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { resetEditState } from '../composables/useEditState'
+import { resetFileManager } from '../composables/useFileManager'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
-import BlockMapCard from './edit/BlockMapCard.vue'
 import EditFileActions from './edit/EditFileActions.vue'
 import EditPreviewPane from './edit/EditPreviewPane.vue'
 import EditTabs, { type EditTabId } from './edit/EditTabs.vue'
 import VariantsCard from './edit/VariantsCard.vue'
-import SourceSection from './SourceSection.vue'
-import LayersSection from './LayersSection.vue'
+import UploadFooter from './edit/UploadFooter.vue'
+import SourceTab from './edit/tabs/SourceTab.vue'
+import ColorsTab from './edit/tabs/ColorsTab.vue'
+import RenderTab from './edit/tabs/RenderTab.vue'
+import LayersTab from './edit/tabs/LayersTab.vue'
 
 // Header-level file actions: replaces the bulky file picker that used
 // to live at the top of the Source tab. The modal opens with a file
 // already selected 100% of the time (Edit button on a library entry),
 // so the picker was redundant; "Change file" and "Clear" now live
 // here as a compact dropdown next to the file name.
-const sourceRef = ref<InstanceType<typeof SourceSection> | null>(null)
+const sourceRef = ref<InstanceType<typeof SourceTab> | null>(null)
 function onChangeFile(): void { sourceRef.value?.openPicker() }
 function onClearAll(): void { sourceRef.value?.clearAll() }
 
@@ -44,7 +47,13 @@ const activeTab = ref<EditTabId>(loadInitialTab())
 function loadInitialTab(): EditTabId {
   try {
     const stored = localStorage.getItem(TAB_KEY)
-    if (stored === 'source' || stored === 'layers' || stored === 'variants') return stored
+    if (
+      stored === 'source'
+      || stored === 'colors'
+      || stored === 'render'
+      || stored === 'layers'
+      || stored === 'variants'
+    ) return stored
   } catch {
     // localStorage unavailable
   }
@@ -74,8 +83,10 @@ function onKey(event: KeyboardEvent): void {
   }
   if (isTypingTarget(event.target)) return
   if (event.key === '1') { activeTab.value = 'source'; event.preventDefault() }
-  else if (event.key === '2') { activeTab.value = 'layers'; event.preventDefault() }
-  else if (event.key === '3') { activeTab.value = 'variants'; event.preventDefault() }
+  else if (event.key === '2') { activeTab.value = 'colors'; event.preventDefault() }
+  else if (event.key === '3') { activeTab.value = 'render'; event.preventDefault() }
+  else if (event.key === '4') { activeTab.value = 'layers'; event.preventDefault() }
+  else if (event.key === '5') { activeTab.value = 'variants'; event.preventDefault() }
 }
 
 // ============================== RESIZABLE SPLIT ==============================
@@ -141,18 +152,36 @@ function resetSplit(): void {
   }
 }
 
-// Wipe the singleton edit-state composable whenever the modal closes
-// or its selected placement changes, so the preview pane never renders
-// the previous session's stale file / SVG / palette before the mirror
-// watches in SourceSection (which only mount when the modal opens) get
-// a chance to write fresh values.
+// Wipe the singleton edit-state + file-manager composables whenever
+// the modal closes or its selected placement changes, so the preview
+// pane never renders the previous session's stale file / SVG /
+// palette before the new tab mounts get a chance to write fresh
+// values.
 watch(editModalOpen, (open) => {
-  if (!open) resetEditState()
+  if (!open) {
+    resetEditState()
+    resetFileManager()
+  }
 })
 watch(
   () => store.selectedPlacementId,
   () => {
     if (editModalOpen.value) resetEditState()
+  },
+)
+
+// Auto-jump after upload: when the placement first acquires layers
+// (i.e. the operator just hit Apply), land them on the Layers tab so
+// they see the per-layer controls instead of staying on whatever tab
+// they applied from. Skip when the user is on Variants since that's a
+// deliberate side-trip.
+watch(
+  () => store.layers.length,
+  (count, prev) => {
+    if (!editModalOpen.value) return
+    if (count > 0 && (prev ?? 0) === 0 && activeTab.value !== 'variants') {
+      activeTab.value = 'layers'
+    }
   },
 )
 
@@ -234,18 +263,30 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
             <!-- v-show keeps each tab's component mounted so internal
                  state (drafts, scroll, dropdown open/closed) isn't lost
-                 when the operator hops between tabs. -->
+                 when the operator hops between tabs. The source +
+                 colors + render tabs share the useBitmapDraft /
+                 useFileManager singletons; the layers + variants tabs
+                 use the placement store directly. -->
             <div v-show="activeTab === 'source'" class="space-y-3">
-              <SourceSection />
-              <BlockMapCard />
+              <SourceTab ref="sourceRef" />
+            </div>
+            <div v-show="activeTab === 'colors'" class="space-y-3">
+              <ColorsTab />
+            </div>
+            <div v-show="activeTab === 'render'" class="space-y-3">
+              <RenderTab />
             </div>
             <div v-show="activeTab === 'layers'" class="space-y-3">
-              <LayersSection />
+              <LayersTab />
             </div>
             <div v-show="activeTab === 'variants'" class="space-y-3">
               <VariantsCard />
             </div>
           </div>
+          <!-- Sticky upload footer so Apply is reachable from any tab.
+               Mounted once at the modal level (not per-tab) so the
+               apply button is uniform across tabs. -->
+          <UploadFooter v-if="editModalOpen" />
         </div>
       </main>
     </div>

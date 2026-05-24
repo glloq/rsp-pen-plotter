@@ -87,6 +87,8 @@
     "close": "Fermer",
     "done": "Terminer",
     "tabSource": "Source",
+    "tabColors": "Couleurs",
+    "tabRender": "Rendu",
     "tabLayers": "Calques",
     "tabOutput": "Mise en page & sortie",
     "tabShortcut": "Appuyer sur {key} pour ouvrir cet onglet",
@@ -97,6 +99,16 @@
     "perLayerHint": "Choisis le style de rendu et le stylo pour chaque couleur dans l'onglet Calques.",
     "applyChanges": "Re-convertir avec ces réglages",
     "waitingForFile": "Chargement du fichier source…"
+  },
+  "colors": {
+    "monoHint": "Mode monochrome — choisis le style maître dans l'onglet Rendu.",
+    "noSource": "Attache un fichier dans l'onglet Source pour régler les couleurs.",
+    "notApplicable": "Ce type de fichier n'utilise pas de segmentation couleur."
+  },
+  "render": {
+    "multicolorHint": "Le rendu multicolore se fait par couche. Va dans l'onglet Calques pour choisir un style pour chaque couleur.",
+    "noSource": "Attache un fichier dans l'onglet Source pour choisir un style de rendu.",
+    "notApplicable": "Ce type de fichier n'a pas de style de rendu."
   },
   "mono": {
     "pen": "Stylo",

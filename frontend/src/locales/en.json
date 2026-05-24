@@ -87,6 +87,8 @@
     "close": "Close",
     "done": "Done",
     "tabSource": "Source",
+    "tabColors": "Colors",
+    "tabRender": "Render",
     "tabLayers": "Layers",
     "tabOutput": "Layout & output",
     "tabShortcut": "Press {key} to jump to this tab",
@@ -97,6 +99,16 @@
     "perLayerHint": "Pick the rendering style and pen slot for each colour in the Layers tab.",
     "applyChanges": "Re-convert with these settings",
     "waitingForFile": "Loading source file…"
+  },
+  "colors": {
+    "monoHint": "Single-ink mode — pick the master style on the Render tab.",
+    "noSource": "Attach a file on the Source tab to choose colour settings.",
+    "notApplicable": "This file type doesn't use colour segmentation."
+  },
+  "render": {
+    "multicolorHint": "Multicolour rendering is per-layer. Switch to the Layers tab to pick a style for each colour.",
+    "noSource": "Attach a file on the Source tab to choose a render style.",
+    "notApplicable": "This file type doesn't have a render style."
   },
   "mono": {
     "pen": "Pen",
