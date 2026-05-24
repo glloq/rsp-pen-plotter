@@ -42,6 +42,10 @@ export interface PreviewSchedulerOptions {
   // modes can share the same composable later without leaking
   // kind-specific logic in here.
   shouldRun: () => boolean
+  // Returns the operator-selected preview quality tier (draft /
+  // standard / final). Forwarded to the API client and ends up as a
+  // /preview form field plus part of the backend cache key.
+  qualityGetter?: () => 'draft' | 'standard' | 'final'
   // i18n-resolved fallback message used when the network error has no
   // human-readable string of its own. Passed in (rather than
   // constructed in the composable) so this file doesn't pull in
@@ -76,6 +80,13 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
   const previewError = ref<string | null>(null)
   let controller: AbortController | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  // Monotonic request counter. Belt-and-suspenders on top of the
+  // AbortController — if a stale response somehow slips past the
+  // signal check (e.g. browser flushes the resolved promise before the
+  // abort propagates, or future callers invoke run() concurrently
+  // without the lexical-closure guarantee we rely on today), the
+  // revision compare drops it before it can clobber the latest result.
+  let latestRevision = 0
   // Progress toast bookkeeping. The toast only appears if the render
   // takes longer than ``toastDelayMs`` and lives until the round-trip
   // resolves (success / error / cancel). Tick interval refreshes the
@@ -143,6 +154,7 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
     if (controller) controller.abort()
     const c = new AbortController()
     controller = c
+    const myRevision = ++latestRevision
     previewLoading.value = true
     previewError.value = null
     startToast()
@@ -152,11 +164,16 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
         opts.algorithmGetter(),
         opts.optionsBuilder(),
         c.signal,
+        opts.qualityGetter?.() ?? 'standard',
       )
-      if (c.signal.aborted) return
+      // Two-layer staleness guard: abort signal AND revision compare.
+      // The revision check protects against a resolved promise being
+      // flushed before the abort has propagated, or future callers
+      // that bypass the controller swap.
+      if (c.signal.aborted || myRevision !== latestRevision) return
       previewResult.value = result
     } catch (err) {
-      if (c.signal.aborted) return
+      if (c.signal.aborted || myRevision !== latestRevision) return
       const e = err as { code?: string; message?: string }
       // axios's own timeout path is no longer hit (we set timeout: 0)
       // but keep the categorisation defensive in case a downstream
@@ -203,6 +220,9 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
       controller.abort()
       controller = null
     }
+    // Bump revision so any in-flight promise that already crossed the
+    // ``aborted`` race window is still rejected by the staleness guard.
+    latestRevision++
     previewLoading.value = false
     dismissToast()
   }
