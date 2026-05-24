@@ -13,12 +13,18 @@ import pytest
 
 from pen_plotter.converters.algorithms import (
     CenterlineAlgorithm,
+    ConcentricOffsetAlgorithm,
     ContoursAlgorithm,
     CrosshatchAlgorithm,
     EdgesAlgorithm,
+    EulerianHatchAlgorithm,
+    FlowFieldAlgorithm,
+    GosperFillAlgorithm,
+    HilbertFillAlgorithm,
     ScanlinesAlgorithm,
     SpiralAlgorithm,
     TspAlgorithm,
+    TspOptimizedAlgorithm,
     algorithm_kind,
     available_algorithms,
     get_algorithm,
@@ -45,6 +51,12 @@ def test_registry_lists_all_algorithms() -> None:
         "spiral",
         "scanlines",
         "tsp",
+        "hilbert",
+        "gosper",
+        "eulerian_hatch",
+        "concentric_offset",
+        "flowfield",
+        "tsp_opt",
     }
 
 
@@ -57,6 +69,12 @@ def test_algorithm_kind_groups_by_family() -> None:
     assert algorithm_kind("spiral") == "mono_stroke"
     assert algorithm_kind("scanlines") == "mono_stroke"
     assert algorithm_kind("tsp") == "mono_stroke"
+    assert algorithm_kind("hilbert") == "mono_stroke"
+    assert algorithm_kind("gosper") == "mono_stroke"
+    assert algorithm_kind("eulerian_hatch") == "fill"
+    assert algorithm_kind("concentric_offset") == "mono_stroke"
+    assert algorithm_kind("flowfield") == "fill"
+    assert algorithm_kind("tsp_opt") == "mono_stroke"
 
 
 def test_centerline_traces_horizontal_bar() -> None:
@@ -93,6 +111,12 @@ def test_centerline_skimage_missing_falls_back_to_edges(monkeypatch) -> None:
         ("spiral", "<polyline"),
         ("scanlines", "<polyline"),
         ("tsp", "<polyline"),
+        ("hilbert", "<polyline"),
+        ("gosper", "<polyline"),
+        ("eulerian_hatch", "<polyline"),
+        ("concentric_offset", "<polyline"),
+        ("flowfield", "<polyline"),
+        ("tsp_opt", "<polyline"),
     ],
 )
 def test_algorithm_emits_geometry_for_filled_square(
@@ -166,3 +190,86 @@ def test_tsp_respects_density_cap() -> None:
     chunk = svg.split('points="', 1)[1].split('"', 1)[0]
     point_count = len(chunk.split())
     assert 2 <= point_count <= 4000
+
+
+def test_eulerian_hatch_fewer_pen_lifts_than_crosshatch() -> None:
+    """Boustrophedon stitching cuts pen-lifts by ≥50% on a simple square."""
+    mask = _square_mask(size=40, inset=4)
+    cross = CrosshatchAlgorithm().render_layer(
+        mask, "#000000", "ch", options={"angle_deg": 0.0, "spacing_px": 3}
+    )
+    eulerian = EulerianHatchAlgorithm().render_layer(
+        mask, "#000000", "eh", options={"angle_deg": 0.0, "spacing_px": 3}
+    )
+    cross_segments = cross.count("<line")
+    eulerian_polylines = eulerian.count("<polyline")
+    # Each polyline replaces ~spacing/connect_threshold individual segments;
+    # for a convex square one polyline covers every sweep.
+    assert eulerian_polylines * 2 <= cross_segments
+
+
+def test_hilbert_one_polyline_per_simply_connected_region() -> None:
+    """A single connected mask yields exactly one polyline."""
+    mask = _square_mask(size=32, inset=4)
+    svg = HilbertFillAlgorithm().render_layer(mask, "#000", "h")
+    assert svg.count("<polyline") == 1
+
+
+def test_hilbert_two_components_yield_two_polylines() -> None:
+    """Two disjoint masked squares produce two polylines."""
+    mask = np.zeros((40, 40), dtype=bool)
+    mask[4:14, 4:14] = True
+    mask[24:34, 24:34] = True
+    svg = HilbertFillAlgorithm().render_layer(mask, "#000", "h")
+    assert svg.count("<polyline") == 2
+
+
+def test_concentric_offset_bridge_collapses_to_single_polyline() -> None:
+    """``bridge=True`` stitches all rings into one polyline per component."""
+    mask = _square_mask(size=40, inset=4)
+    bridged = ConcentricOffsetAlgorithm().render_layer(
+        mask, "#000", "co", options={"spacing_px": 2, "bridge": True}
+    )
+    unbridged = ConcentricOffsetAlgorithm().render_layer(
+        mask, "#000", "co", options={"spacing_px": 2, "bridge": False}
+    )
+    assert bridged.count("<polyline") == 1
+    assert unbridged.count("<polyline") >= 2
+
+
+def test_gosper_handles_filled_square() -> None:
+    svg = GosperFillAlgorithm().render_layer(
+        _square_mask(size=40, inset=4), "#000", "g", options={"order": 3}
+    )
+    assert svg.count("<polyline") >= 1
+
+
+def test_flowfield_emits_streamlines() -> None:
+    mask = np.ones((40, 40), dtype=bool)
+    svg = FlowFieldAlgorithm().render_layer(
+        mask, "#000", "ff", options={"seed_spacing_px": 6.0, "max_steps": 200}
+    )
+    assert svg.count("<polyline") >= 2
+
+
+def test_tsp_opt_2opt_not_longer_than_nn() -> None:
+    """2-opt result is never longer than the seed NN tour."""
+
+    def _length(svg: str) -> float:
+        chunk = svg.split('points="', 1)[1].split('"', 1)[0]
+        pts = [tuple(float(v) for v in p.split(",")) for p in chunk.split()]
+        return sum(
+            ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
+            for a, b in zip(pts, pts[1:], strict=False)
+        )
+
+    mask = np.ones((50, 50), dtype=bool)
+    algo = TspOptimizedAlgorithm()
+    nn = algo.render_layer(mask, "#000", "t", options={"method": "nn", "seed": 1})
+    opt = algo.render_layer(
+        mask,
+        "#000",
+        "t",
+        options={"method": "nn_2opt", "seed": 1, "time_budget_s": 0.5},
+    )
+    assert _length(opt) <= _length(nn) + 1e-6
