@@ -520,7 +520,10 @@ export async function rerenderJob(
   const response = await api.post<RerenderResponse>(
     '/rerender',
     { job_id: jobId, layers },
-    { signal, timeout: 30_000 },
+    // No timeout: a heavy multi-pass stack on a high-res placement
+    // can take a while. The caller passes ``signal`` so the operator
+    // can cancel.
+    { signal, timeout: 0 },
   )
   return response.data
 }
@@ -537,13 +540,13 @@ export async function previewBitmap(
   if (options) form.append('options', JSON.stringify(options))
   const response = await api.post<PreviewResponse>('/preview', form, {
     signal,
-    // Heavy styles (high-density stippling, fine contours, TSP, spiral
-    // at Max detail) on a Pi-class device can take 20-30 s. Keep a
-    // generous ceiling so a slow render surfaces in the canvas rather
-    // than as an opaque timeout error. The /preview endpoint is fast
-    // by default (n_init=1) so 45 s is a true upper bound, not a
-    // common case.
-    timeout: 45_000,
+    // No timeout. Heavy styles (high-density stippling, fine
+    // contours, TSP, spiral at Max+ detail, or large native-res
+    // sources) can legitimately take minutes on a Pi-class device.
+    // The frontend surfaces a cancellable progress toast wired to
+    // ``signal`` so the operator interrupts long renders rather than
+    // axios giving up at an arbitrary deadline.
+    timeout: 0,
   })
   return response.data
 }
@@ -594,7 +597,11 @@ export async function uploadFile(
   if (options) {
     form.append('options', JSON.stringify(options))
   }
-  const response = await api.post<UploadResponse>('/upload', form)
+  // No timeout: /upload with a high-res native source + a heavy
+  // algorithm can legitimately take minutes. The Apply button shows
+  // a loading state; future work can promote it to a progress toast
+  // with cancel like /preview now does.
+  const response = await api.post<UploadResponse>('/upload', form, { timeout: 0 })
   return response.data
 }
 

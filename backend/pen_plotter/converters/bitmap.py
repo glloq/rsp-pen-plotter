@@ -48,7 +48,14 @@ class BitmapOptions(BaseModel):
 
     algorithm: str = "direct"
     num_colors: int = Field(default=4, ge=1, le=32)
-    max_dimension_px: int = Field(default=800, ge=16, le=4096)
+    # Upper bound bumped from 4096 to 8192 so the editor's "Ultra"
+    # detail tier (4800px) and any future "Native" tier have headroom.
+    # Higher canvas resolution preserves fine features in text, table
+    # grids and dense schematics that the previous 4096 cap was
+    # silently smoothing away — the operator reported the picker
+    # "doing nothing" past the Max tier because the backend was capping
+    # at half of what the UI now offers.
+    max_dimension_px: int = Field(default=800, ge=16, le=8192)
     drop_background: bool = True
     background_luminance: float = Field(default=0.92, ge=0.0, le=1.0)
     algorithm_options: dict[str, Any] = Field(default_factory=dict)

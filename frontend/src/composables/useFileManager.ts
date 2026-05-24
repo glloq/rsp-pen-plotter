@@ -80,12 +80,16 @@ export function useFileManager(t?: Translator) {
     optionsBuilder: () => buildOptions(),
     shouldRun: () => kind.value === 'bitmap',
     failedMessage: t?.('upload.failed') ?? 'preview failed',
-    // Timeout-specific message: tells the operator the render isn't
-    // broken, just too heavy for the live preview path — and
-    // suggests the two ways out (lower the detail tier, or hit
-    // Apply to commit and see the final SVG).
     timeoutMessage: t?.('upload.previewTimeout')
       ?? 'Preview too slow — lower the detail tier or hit Apply to render anyway.',
+    // Long-render progress toast wiring. Toast appears after 800ms
+    // (so quick renders never surface one), ticks every second so the
+    // operator sees the elapsed time, and exposes a cancel button
+    // that aborts the in-flight /preview round-trip.
+    progressMessage: (seconds: number) =>
+      t?.('upload.previewProgress', { seconds })
+        ?? `Rendering preview… (${seconds}s)`,
+    cancelLabel: t?.('upload.previewCancel') ?? 'Cancel',
   })
 
   // ---- File handling ----

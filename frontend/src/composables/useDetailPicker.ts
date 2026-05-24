@@ -1,18 +1,20 @@
-// Single source of truth for the named "Detail" tiers
-// (Low/Standard/High/Max) that appear in both the Colors and Render
-// tabs. The four pixel values map to ``max_dimension_px`` on the
-// backend (the longer side of the segmentation canvas), and the
-// vocabulary stays consistent across print modes so the operator can
-// build muscle memory regardless of which tab they're in.
+// Single source of truth for the named "Detail" tiers that appear in
+// both the Colors and Render tabs. The pixel values map to
+// ``max_dimension_px`` on the backend (the longer side of the
+// segmentation canvas) — higher tiers let fine features (text strokes,
+// table grid lines, dense schematic detail) survive the segmentation
+// pass instead of being smoothed away.
 //
-// Used by both SegmentationCard (multicolour) and MonochromeCard
-// (monochrome) — previously these two cards each carried their own
-// copy of the tier table and the ``currentDetail`` resolver, which
-// drifted apart silently. This composable is the deduplication.
+// The "Ultra" tier (4096) was added after the operator reported that
+// "increasing detail doesn't do much" on text + table imagery: the
+// previous Max (2400) was already the backend's silent ceiling, so the
+// slider topped out before the operator could push detail further.
+// The new tier matches the backend's expanded 8192 cap, leaving
+// headroom for a future "Native" tier if needed.
 
 import { computed, type Ref } from 'vue'
 
-export type DetailId = 'low' | 'standard' | 'high' | 'max'
+export type DetailId = 'low' | 'standard' | 'high' | 'max' | 'ultra'
 
 export interface DetailLevel {
   id: DetailId
@@ -23,8 +25,9 @@ export interface DetailLevel {
 export const DETAIL_LEVELS: readonly DetailLevel[] = [
   { id: 'low', value: 400, labelKey: 'mono.detailLow' },
   { id: 'standard', value: 800, labelKey: 'mono.detailStandard' },
-  { id: 'high', value: 1400, labelKey: 'mono.detailHigh' },
-  { id: 'max', value: 2400, labelKey: 'mono.detailMax' },
+  { id: 'high', value: 1600, labelKey: 'mono.detailHigh' },
+  { id: 'max', value: 3200, labelKey: 'mono.detailMax' },
+  { id: 'ultra', value: 4800, labelKey: 'mono.detailUltra' },
 ]
 
 // Map an arbitrary ``max_dimension_px`` to the closest tier id. Used to
