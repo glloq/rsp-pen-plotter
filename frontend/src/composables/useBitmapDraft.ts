@@ -61,27 +61,10 @@ export type BitmapDraft = {
   drop_background: boolean
   background_luminance: number
   algorithm: string
-  // Mono master styles write their full options dict here directly,
-  // bypassing the scattered per-algo fields below. When non-empty it
-  // takes precedence in ``buildAlgorithmOptions`` so a master style's
-  // recipe survives intact even though the multicolour path still
-  // writes to the legacy scattered fields.
+  // Master styles and presets write their full options here. This dict
+  // is the single source of truth for the master-style algorithm; the
+  // backend reads it verbatim.
   algorithm_options: Record<string, unknown>
-  cell_size_px: number
-  density: number
-  dot_radius_px: number
-  seed: number
-  crosshatch_angle_deg: number
-  crosshatch_spacing_px: number
-  crosshatch_crossed: boolean
-  contours_spacing_px: number
-  contours_max_rings: number
-  edges_stroke_width: number
-  spiral_spacing_px: number
-  spiral_samples_per_turn: number
-  scanlines_spacing_px: number
-  scanlines_wave_amp_px: number
-  scanlines_wave_period_px: number
 }
 
 // Path-level treatment applied between the image-preprocess step and
@@ -166,21 +149,6 @@ export function defaultBitmap(): BitmapDraft {
     background_luminance: 0.92,
     algorithm: 'direct',
     algorithm_options: {},
-    cell_size_px: 6,
-    density: 0.02,
-    dot_radius_px: 0.6,
-    seed: 0,
-    crosshatch_angle_deg: 45,
-    crosshatch_spacing_px: 4,
-    crosshatch_crossed: false,
-    contours_spacing_px: 4,
-    contours_max_rings: 20,
-    edges_stroke_width: 0.8,
-    spiral_spacing_px: 4,
-    spiral_samples_per_turn: 64,
-    scanlines_spacing_px: 4,
-    scanlines_wave_amp_px: 0,
-    scanlines_wave_period_px: 12,
   }
 }
 
@@ -317,18 +285,11 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   if (typeof persistedStyleId === 'string' && persistedStyleId) {
     _monoMasterStyleId.value = persistedStyleId
   }
-  const algoOpts = (opts as Record<string, unknown>).algorithm_options as
-    | Record<string, unknown>
-    | undefined
-  if (algoOpts) {
-    // Mirror the scattered per-algo fields from the saved
-    // algorithm_options dict so re-uploading without changes produces
-    // the same SVG. The dict-only migration arrives in Phase 2's UI
-    // refactor.
-    for (const key of ['cell_size_px', 'density', 'dot_radius_px', 'seed']) {
-      if (key in algoOpts) target[key] = algoOpts[key]
-    }
-  }
+  // algorithm_options is the single source of truth — already merged
+  // by the generic key loop above. The legacy "scattered per-algo
+  // fields" the rehydrate path used to mirror are gone; nothing in the
+  // UI reads them. Pre-migration placements still round-trip cleanly:
+  // their algorithm_options dict is preserved verbatim.
   const segOpts = (opts as Record<string, unknown>).segmentation_options as
     | Record<string, unknown>
     | undefined
@@ -366,10 +327,6 @@ export function applyPresetOptions(opts: Record<string, unknown>): void {
   const target = _bitmap.value as Record<string, unknown>
   for (const key of Object.keys(target)) {
     if (key in opts) target[key] = opts[key]
-  }
-  const algoOpts = (opts.algorithm_options as Record<string, unknown>) ?? {}
-  for (const key of ['cell_size_px', 'density', 'dot_radius_px', 'seed']) {
-    if (key in algoOpts) target[key] = algoOpts[key]
   }
 }
 
@@ -525,43 +482,7 @@ export function buildSegmentationOptions(): Record<string, unknown> {
 }
 
 export function buildAlgorithmOptions(): Record<string, unknown> {
-  const b = _bitmap.value
-  // Master-style recipes write their full options into algorithm_options
-  // and the dict wins when present. The scattered per-algo fields below
-  // are kept for legacy placements rehydrated from disk; no live UI
-  // writes to them any more (verified with a repo-wide grep — see Tier
-  // 3 migration T3.1 which removes both the fields and this fallback).
-  if (Object.keys(b.algorithm_options).length > 0) {
-    return { ...b.algorithm_options }
-  }
-  switch (b.algorithm) {
-    case 'halftone':
-      return { cell_size_px: b.cell_size_px }
-    case 'stippling':
-      return { density: b.density, dot_radius_px: b.dot_radius_px, seed: b.seed }
-    case 'crosshatch':
-      return {
-        angle_deg: b.crosshatch_angle_deg,
-        spacing_px: b.crosshatch_spacing_px,
-        crossed: b.crosshatch_crossed,
-      }
-    case 'contours':
-      return { spacing_px: b.contours_spacing_px, max_rings: b.contours_max_rings }
-    case 'edges':
-      return { stroke_width: b.edges_stroke_width }
-    case 'spiral':
-      return { spacing_px: b.spiral_spacing_px, samples_per_turn: b.spiral_samples_per_turn }
-    case 'scanlines':
-      return {
-        spacing_px: b.scanlines_spacing_px,
-        wave_amp_px: b.scanlines_wave_amp_px,
-        wave_period_px: b.scanlines_wave_period_px,
-      }
-    case 'tsp':
-      return { density: b.density, seed: b.seed }
-    default:
-      return {}
-  }
+  return { ..._bitmap.value.algorithm_options }
 }
 
 // Build the per-band recipes for the current master style so the

@@ -11,15 +11,8 @@
 //                     * scope='master' → owns segmentation method,
 //                       default algorithm, AND a per-band recipe used
 //                       after upload to override each produced layer.
-//                       (Replaces ``data/monoModes.ts``.)
 //                     * scope='layer'  → algorithm + options preset for
 //                       a single layer/pass. No segmentation responsibility.
-//                       (Replaces ``data/printStyles.ts``.)
-//
-// The old modules (``monoModes.ts``, ``printStyles.ts``,
-// ``algorithmSchemas.ts``) are kept as @deprecated facades that
-// re-export from here so the migration can happen file-by-file without
-// breaking imports.
 
 // =====================================================================
 // Algorithms (was algorithmSchemas.ts)
@@ -142,7 +135,8 @@ export function defaultsFor(id: string): Record<string, unknown> {
 }
 
 // =====================================================================
-// Styles (merger of monoModes.ts + printStyles.ts)
+// Styles — master (segmentation + per-band recipe) and layer (per-layer
+// algorithm preset)
 // =====================================================================
 
 export type StyleScope = 'master' | 'layer'
@@ -513,9 +507,10 @@ export const PRINT_STYLES: PrintStyle[] = [
 // photographs.
 export const DEFAULT_MASTER_STYLE_ID = 'pencil'
 
-// Old monoModes ids that the rehydration path may encounter on saved
-// placements / variants. Maps them to their new registry id so existing
-// state doesn't silently break.
+// Legacy master-style ids from before the registry merge. Saved
+// placements and variants still carry them; the rehydration path maps
+// them to the renamed registry entries so historical state doesn't
+// silently break.
 export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   pencil: 'pencil',
   halftone: 'halftone-shade',

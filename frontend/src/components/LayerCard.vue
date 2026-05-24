@@ -13,7 +13,7 @@ import PrintStylePicker from './edit/PrintStylePicker.vue'
 import LayerPassStack from './edit/LayerPassStack.vue'
 import AlgoParamsForm from './edit/AlgoParamsForm.vue'
 import { defaultsFor, getAlgoSpec } from '../data/algorithmSchemas'
-import type { PrintStyle, PrintStyleKind } from '../data/printStyles'
+import type { PrintStyle, PrintStyleKind } from '../data/printRegistry'
 import { LayerSelectionKey } from '../composables/useLayerSelection'
 
 const { t } = useI18n()
@@ -170,7 +170,11 @@ const styleKind = computed<PrintStyleKind>(() =>
 )
 
 function onPickStyle(style: PrintStyle): void {
-  store.applyLayerAlgorithm(props.layer.layer_id, style.algorithm, { ...style.algorithm_options })
+  store.applyLayerAlgorithm(
+    props.layer.layer_id,
+    style.defaultAlgorithm,
+    { ...style.defaultAlgorithmOptions },
+  )
 }
 
 function onResetStyle(): void {

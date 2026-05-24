@@ -2,10 +2,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  stylesFor,
+  layerStyles,
   type PrintStyle,
   type PrintStyleKind,
-} from '../../data/printStyles'
+} from '../../data/printRegistry'
 
 const props = defineProps<{
   kind: PrintStyleKind
@@ -22,10 +22,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const visible = computed(() => stylesFor(props.kind))
+const visible = computed(() => layerStyles(props.kind))
 
 function isSelected(style: PrintStyle): boolean {
-  return style.algorithm === props.currentAlgorithm
+  return style.defaultAlgorithm === props.currentAlgorithm
 }
 
 // "Default" tile clears any per-layer override so the layer renders

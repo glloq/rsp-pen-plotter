@@ -16,10 +16,10 @@ import StyleThumbnail from '../shared/StyleThumbnail.vue'
 // is 2 columns to match the density of the surrounding render tab;
 // 3-4 columns would feel sparse for 8 entries.
 //
-// Selecting a style commits the registry id directly into the draft
-// AND mirrors the legacy id (which is what monoModes.ts uses today)
-// so older code paths (preview, store-side propagation) keep working
-// through the migration.
+// Selecting a style commits the registry id directly into the draft.
+// LEGACY_MASTER_ID_MAP still resolves saved placements that were
+// committed under the pre-merge ids (halftone / spiral / centerline)
+// so historical SVGs rehydrate to the renamed registry entries.
 
 const props = defineProps<{
   // Active style id — either the registry id (``pencil``,

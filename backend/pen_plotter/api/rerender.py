@@ -6,14 +6,21 @@ a single layer in the UI, we don't want to re-segment — only re-render.
 This module caches the segmentation result (labels + palette) of each
 bitmap job by ``job_id`` so a second pass only pays for the rendering.
 
-The cache is bounded (LRU, ~16 entries) and lives in process memory, so
-it's lost on backend restart. The UI tolerates a 404 from ``/rerender``
-by falling back to a fresh upload — the only consequence of a miss is
-slower latency, not a broken state.
+The cache is bounded (LRU) and lives in process memory, so it's lost on
+backend restart. The UI tolerates a 404 from ``/rerender`` by falling
+back to a fresh upload — the only consequence of a miss is slower
+latency, not a broken state.
+
+The capacity defaults to 64 (room for several placements being edited
+in a session) and is configurable via the ``RERENDER_CACHE_SIZE`` env
+var. A future enhancement (tracked separately) would back the cache
+with disk so segmentation survives restarts; today's in-memory store
+is a deliberate scope cap because the Pi target has tight RAM.
 """
 
 from __future__ import annotations
 
+import os
 from collections import OrderedDict
 from typing import Any
 
@@ -25,7 +32,18 @@ from pen_plotter.core.sanitize import sanitize_svg
 
 router = APIRouter()
 
-_CACHE_SIZE = 16
+
+def _load_cache_size() -> int:
+    """Read the LRU cap from env, clamped to a sane range."""
+    raw = os.environ.get("RERENDER_CACHE_SIZE", "64")
+    try:
+        size = int(raw)
+    except ValueError:
+        size = 64
+    return max(4, min(256, size))
+
+
+_CACHE_SIZE = _load_cache_size()
 
 
 class _CacheEntry:
