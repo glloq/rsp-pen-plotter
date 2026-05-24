@@ -111,9 +111,16 @@ export function resetEditState(): void {
   _previewError.value = null
   _previewResult.value = null
   _kind.value = 'none'
-  _previewMode.value = 'auto'
-  // Note: _previewQuality is intentionally NOT reset — it's an operator
-  // preference that persists across sessions (see localStorage above).
+  // _previewMode is intentionally NOT reset here: it's owned by the
+  // tab→mode mapping in EditModal (Image tab forces ``source`` so the
+  // operator sees their photo adjustments live; other tabs use ``auto``)
+  // and by the operator's explicit toggle. Resetting it to ``auto`` here
+  // would silently stomp the Image-tab default after every placement
+  // switch or modal reopen, leaving multicolour previews stuck on the
+  // SVG renderer instead of the raster they're tuning.
+  // Note: _previewQuality is intentionally NOT reset either — it's an
+  // operator preference that persists across sessions (see localStorage
+  // above).
   _pageCount.value = 0
   _currentPage.value = 0
   _goToPage = async () => {}

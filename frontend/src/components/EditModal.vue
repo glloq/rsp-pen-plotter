@@ -77,13 +77,16 @@ watch(activeTab, (tab) => {
 // Image tab — they're tuning the source pixels, the SVG renderer would
 // only obscure what they're trying to see. Other tabs fall back to
 // the live SVG / committed SVG / raster fallback chain.
-watch(
-  activeTab,
-  (tab) => {
-    edit.previewMode.value = tab === 'image' ? 'source' : 'auto'
-  },
-  { immediate: true },
-)
+//
+// Reapplied on modal-open and on placement-switch as well as tab change:
+// addEmptyPlacement + selectedPlacementId flips would otherwise land us
+// here with the previous session's mode (or 'auto', the singleton's
+// initial value) instead of the tab's intended default, leaving the
+// operator's photo adjustments invisible on multicolour images.
+function applyTabPreviewMode(): void {
+  edit.previewMode.value = activeTab.value === 'image' ? 'source' : 'auto'
+}
+watch(activeTab, applyTabPreviewMode, { immediate: true })
 
 const layerCount = computed(() => store.layers.length)
 const variantCount = computed(() => store.selectedPlacement?.variants.length ?? 0)
@@ -178,7 +181,14 @@ function resetSplit(): void {
 // palette before the new tab mounts get a chance to write fresh
 // values.
 watch(editModalOpen, (open) => {
-  if (!open) {
+  if (open) {
+    // Re-derive preview mode from the active tab on every modal open.
+    // The opener flow (addEmptyPlacement → selectedPlacementId watch →
+    // resetEditState) runs before this watch, so without re-applying
+    // here the Image tab would land on 'auto' on first open instead of
+    // its intended 'source' default.
+    applyTabPreviewMode()
+  } else {
     resetEditState()
     resetFileManager()
   }
@@ -186,7 +196,12 @@ watch(editModalOpen, (open) => {
 watch(
   () => store.selectedPlacementId,
   () => {
-    if (editModalOpen.value) resetEditState()
+    if (editModalOpen.value) {
+      resetEditState()
+      // Re-apply tab→mode after the reset so a placement switch within
+      // the modal doesn't drop us out of the Image tab's source mode.
+      applyTabPreviewMode()
+    }
   },
 )
 
