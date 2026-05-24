@@ -2,14 +2,18 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-// Tab strip for the modal's right-hand settings pane. Three workflow
-// tabs: Colors → Render → Layers. The old "Source" tab is gone — the
-// modal always opens with a file already attached (Edit on a library
-// entry); the rare empty-placement case shows a dedicated overlay
-// dropzone instead of a tab. Variants live in the persistent
-// VariantsBar mounted above this strip.
+// Tab strip for the modal's right-hand settings pane. Four workflow
+// tabs: Image → Colors → Render → Layers. ``Image`` is the photo-editor
+// step (brightness / contrast / crop / etc.) applied before the
+// bitmap is segmented; it lives first so the operator preps the source
+// pixels before anything downstream cares about colour count or
+// rendering algorithm. The old "Source" tab is gone — the modal always
+// opens with a file already attached (Edit on a library entry); the
+// rare empty-placement case shows a dedicated overlay dropzone
+// instead of a tab. Variants live in the persistent VariantsBar
+// mounted above this strip.
 
-export type EditTabId = 'colors' | 'render' | 'layers'
+export type EditTabId = 'image' | 'colors' | 'render' | 'layers'
 
 const props = defineProps<{
   modelValue: EditTabId
@@ -31,12 +35,13 @@ interface TabSpec {
 }
 
 // Shortcut keys mirror the global handler in EditModal.vue (the digits
-// 1-3). The labelled <kbd> badge below makes them discoverable
+// 1-4). The labelled <kbd> badge below makes them discoverable
 // without forcing the operator to memorise an undocumented binding.
 const tabs = computed<TabSpec[]>(() => [
-  { id: 'colors', labelKey: 'editModal.tabColors', shortcut: '1' },
-  { id: 'render', labelKey: 'editModal.tabRender', shortcut: '2' },
-  { id: 'layers', labelKey: 'editModal.tabLayers', shortcut: '3', count: props.layerCount },
+  { id: 'image', labelKey: 'editModal.tabImage', shortcut: '1' },
+  { id: 'colors', labelKey: 'editModal.tabColors', shortcut: '2' },
+  { id: 'render', labelKey: 'editModal.tabRender', shortcut: '3' },
+  { id: 'layers', labelKey: 'editModal.tabLayers', shortcut: '4', count: props.layerCount },
 ])
 
 function select(id: EditTabId): void {
