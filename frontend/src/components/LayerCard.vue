@@ -380,6 +380,7 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       <LayerPassStack
         v-else
         :passes="currentPasses"
+        :layer-id="props.layer.layer_id"
         @update="onUpdatePasses"
       />
     </div>

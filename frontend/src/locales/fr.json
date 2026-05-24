@@ -169,7 +169,10 @@
     "multicolorHint": "Le rendu multicolore se fait par couche. Va dans l'onglet Calques pour choisir un style pour chaque couleur.",
     "noSource": "Attache un fichier dans l'onglet Source pour choisir un style de rendu.",
     "notApplicable": "Ce type de fichier n'a pas de style de rendu.",
-    "replaceOverridesWarning": "Changer de style va remplacer {count} override(s) par couche. Continuer ?"
+    "replaceOverridesWarning": "Changer de style va remplacer {count} override(s) par couche. Continuer ?",
+    "customised": "Personnalisé",
+    "customisedHint": "Les réglages courants ne correspondent plus au preset.",
+    "customisedExplain": "Réglages modifiés depuis le preset « {style} » — clique un preset pour revenir aux valeurs par défaut."
   },
   "mono": {
     "pen": "Stylo",

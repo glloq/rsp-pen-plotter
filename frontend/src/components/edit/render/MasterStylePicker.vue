@@ -7,6 +7,7 @@ import {
   LEGACY_MASTER_ID_MAP,
   type PrintStyle,
 } from '../../../data/printRegistry'
+import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import StyleThumbnail from '../shared/StyleThumbnail.vue'
 
 // Gallery of master styles (Pencil / Halftone / Stippling / Engraving
@@ -31,8 +32,37 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const draft = useBitmapDraft()
 
 const styles = computed<PrintStyle[]>(() => masterStyles())
+
+// "Custom" surfaces when the operator has touched segmentation or
+// algorithm knobs (typically on the SvgTab) so the live bitmap state
+// no longer matches the active preset's defaults. Without this pill
+// the picker silently keeps the previously-selected tile highlighted
+// even though the rendered output reflects a one-off configuration,
+// which the UX audit flagged as a recurring source of confusion.
+const activeStyleId = computed(() => resolveMasterStyle(props.modelValue).id)
+const isCustomised = computed<boolean>(() => {
+  const style = resolveMasterStyle(props.modelValue)
+  const seg = style.segmentation
+  const b = draft.bitmap.value
+  if (!seg) return false
+  if (b.segmentation_method !== seg.method) return true
+  if (b.algorithm !== style.defaultAlgorithm) return true
+  if (seg.method === 'luminance_bands') {
+    // 1 = "single layer" sentinel we ship by default; only flag custom
+    // when the operator deviates from both the preset value AND the
+    // single-layer baseline.
+    const baseline = seg.default_num_bands ?? 1
+    if (b.num_bands !== baseline && b.num_bands !== 1) return true
+  } else if (seg.method === 'thresholds') {
+    const baseline = seg.default_threshold ?? 0.5
+    const current = b.thresholds[0] ?? baseline
+    if (b.thresholds.length !== 1 || Math.abs(current - baseline) > 1e-6) return true
+  }
+  return false
+})
 
 // Match either by registry id or by mapped legacy id so the active
 // pill survives both old (``halftone``) and new (``halftone-shade``)
@@ -58,8 +88,20 @@ const activeStyle = computed(() => resolveMasterStyle(props.modelValue))
 
 <template>
   <div class="space-y-1">
-    <p class="text-[10px] uppercase tracking-wider text-slate-400">
-      {{ t('render.masterStyle') }}
+    <div class="flex items-center justify-between">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400">
+        {{ t('render.masterStyle') }}
+      </p>
+      <span
+        v-if="isCustomised"
+        class="rounded border border-amber-700 bg-amber-950/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-amber-200"
+        :title="t('render.customisedHint')"
+      >
+        {{ t('render.customised') }}
+      </span>
+    </div>
+    <p v-if="isCustomised" class="text-[10px] text-amber-400/80">
+      {{ t('render.customisedExplain', { style: t(resolveMasterStyle(activeStyleId).labelKey) }) }}
     </p>
     <div class="grid grid-cols-2 gap-1">
       <button

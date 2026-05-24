@@ -169,7 +169,10 @@
     "multicolorHint": "Multicolour rendering is per-layer. Switch to the Layers tab to pick a style for each colour.",
     "noSource": "Attach a file on the Source tab to choose a render style.",
     "notApplicable": "This file type doesn't have a render style.",
-    "replaceOverridesWarning": "Switching style will replace {count} per-layer override(s). Continue?"
+    "replaceOverridesWarning": "Switching style will replace {count} per-layer override(s). Continue?",
+    "customised": "Customised",
+    "customisedHint": "Current settings no longer match the preset.",
+    "customisedExplain": "Settings drifted from the \"{style}\" preset — click a preset to reset to its defaults."
   },
   "mono": {
     "pen": "Pen",

@@ -180,9 +180,11 @@ class BitmapConverter(Converter):
         Args:
             data: Raw image file bytes.
             options: Optional parameters validated against :class:`BitmapOptions`.
-            fast: When ``True``, force a small ``max_dimension_px`` and a single
-                k-means initialisation. Used by the ``/preview`` endpoint to
-                trade quality for sub-second turnaround.
+            fast: When ``True``, force ``n_init=1`` for the k-means restart
+                (single initialisation instead of 10). ``max_dimension_px`` is
+                honoured as the operator set it — the ``/preview`` endpoint
+                pairs this flag with a tier-specific resolution cap of its own
+                rather than overriding the option here.
 
         Returns:
             A :class:`ConversionResult` whose SVG contains one labeled ``<g>``

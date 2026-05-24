@@ -496,9 +496,16 @@ export function buildBitmapOptions(): Record<string, unknown> {
   const algoOpts = c.centerline_mode
     ? { stroke_width: 0.8, smooth: true, min_branch_px: 3 }
     : buildAlgorithmOptions()
+  // num_colors only feeds the kmeans fallback; in mono / luminance_bands
+  // / thresholds / fixed_palette modes the backend reads num_bands /
+  // levels / palette and ignores num_colors. Skipping it keeps the
+  // payload truthful and avoids future confusion when a backend
+  // validation tightens unknown-field handling.
+  const shipsNumColors
+    = _printMode.value === 'multicolor' && b.segmentation_method === 'kmeans'
   const payload: Record<string, unknown> = {
     algorithm: algo,
-    num_colors: b.num_colors,
+    ...(shipsNumColors ? { num_colors: b.num_colors } : {}),
     max_dimension_px: b.max_dimension_px,
     drop_background: b.drop_background,
     background_luminance: b.background_luminance,

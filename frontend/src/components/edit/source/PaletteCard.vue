@@ -48,9 +48,16 @@ function setPaletteSource(follows: boolean): void {
 
 function addPaletteColour(): void {
   props.bitmap.palette = [...props.bitmap.palette, '#888888']
-  // Pinning a colour implies fixed_palette mode — kmeans would ignore
-  // the palette entry, which is confusing UX.
-  props.bitmap.segmentation_method = 'fixed_palette'
+  // Pinning a colour implies fixed_palette — kmeans would ignore the
+  // entry. Only rewrite when leaving the empty state (palette was
+  // previously empty so no SvgTab choice could be in flight); once
+  // we're already in fixed_palette, adding more chips doesn't need to
+  // re-stomp the method. Avoids overwriting an explicit thresholds /
+  // luminance_bands choice the operator made on the SVG tab between
+  // colour additions.
+  if (props.bitmap.palette.length === 1) {
+    props.bitmap.segmentation_method = 'fixed_palette'
+  }
 }
 
 function removePaletteColour(i: number): void {
