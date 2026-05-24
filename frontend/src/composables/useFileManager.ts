@@ -80,6 +80,12 @@ export function useFileManager(t?: Translator) {
     optionsBuilder: () => buildOptions(),
     shouldRun: () => kind.value === 'bitmap',
     failedMessage: t?.('upload.failed') ?? 'preview failed',
+    // Timeout-specific message: tells the operator the render isn't
+    // broken, just too heavy for the live preview path — and
+    // suggests the two ways out (lower the detail tier, or hit
+    // Apply to commit and see the final SVG).
+    timeoutMessage: t?.('upload.previewTimeout')
+      ?? 'Preview too slow — lower the detail tier or hit Apply to render anyway.',
   })
 
   // ---- File handling ----

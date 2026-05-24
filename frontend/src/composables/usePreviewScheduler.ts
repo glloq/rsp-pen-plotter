@@ -46,6 +46,12 @@ export interface PreviewSchedulerOptions {
   // constructed in the composable) so this file doesn't pull in
   // vue-i18n.
   failedMessage?: string
+  // i18n-resolved message used specifically when axios reports a
+  // timeout (heavy style + high detail). Kept distinct from the
+  // generic ``failedMessage`` so the UI can guide the operator to
+  // lower the detail tier or hit Apply rather than chase a
+  // mystery error.
+  timeoutMessage?: string
   // Debounce window, ms. Matches the SourceSection default. Exposed
   // so per-pass thumbnails (added in Phase 3) can use a longer window
   // if needed.
@@ -85,7 +91,20 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
       previewResult.value = result
     } catch (err) {
       if (c.signal.aborted) return
-      previewError.value = (err as Error).message || opts.failedMessage || 'preview failed'
+      // axios surfaces a request timeout as either ``ECONNABORTED``
+      // (its own AbortController fires when the timeout config
+      // elapses) or a message containing the word "timeout". Either
+      // way we want a friendly, actionable string instead of the raw
+      // axios error so the operator knows the render isn't broken,
+      // just slow.
+      const e = err as { code?: string; message?: string }
+      const isTimeout = e.code === 'ECONNABORTED'
+        || (typeof e.message === 'string' && /timeout/i.test(e.message))
+      if (isTimeout && opts.timeoutMessage) {
+        previewError.value = opts.timeoutMessage
+      } else {
+        previewError.value = e.message || opts.failedMessage || 'preview failed'
+      }
     } finally {
       if (controller === c) {
         controller = null

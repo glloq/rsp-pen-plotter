@@ -277,6 +277,7 @@
     "choose": "Importer & convertir",
     "converting": "Conversion…",
     "failed": "Échec de l'envoi. Vérifiez le type de fichier et que l'API fonctionne.",
+    "previewTimeout": "Aperçu trop lent pour ce style. Réduis le Détail ou clique Appliquer pour rendre quand même.",
     "loaded": "Chargé",
     "layers": "calque | calques",
     "pageOf": "Page {current} / {total}",

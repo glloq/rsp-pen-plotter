@@ -537,9 +537,13 @@ export async function previewBitmap(
   if (options) form.append('options', JSON.stringify(options))
   const response = await api.post<PreviewResponse>('/preview', form, {
     signal,
-    // The fast path should answer well under a second on a Pi, but keep a
-    // generous ceiling so slow first-time runs don't surface as errors.
-    timeout: 15_000,
+    // Heavy styles (high-density stippling, fine contours, TSP, spiral
+    // at Max detail) on a Pi-class device can take 20-30 s. Keep a
+    // generous ceiling so a slow render surfaces in the canvas rather
+    // than as an opaque timeout error. The /preview endpoint is fast
+    // by default (n_init=1) so 45 s is a true upper bound, not a
+    // common case.
+    timeout: 45_000,
   })
   return response.data
 }
