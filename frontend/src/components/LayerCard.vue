@@ -10,7 +10,7 @@ import {
 import { formatLayerLabel } from '../lib/labels'
 import { useJobStore, type LayerPass } from '../stores/job'
 import PrintStylePicker from './edit/PrintStylePicker.vue'
-import PassList from './edit/PassList.vue'
+import LayerPassStack from './edit/LayerPassStack.vue'
 import AlgoParamsForm from './edit/AlgoParamsForm.vue'
 import { defaultsFor, getAlgoSpec } from '../data/algorithmSchemas'
 import type { PrintStyle, PrintStyleKind } from '../data/printStyles'
@@ -349,9 +349,9 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       />
 
       <!-- Multi-pass stack: ordered list of algorithms drawn against the
-           same colour mask. Order matters — the first pass plots first,
-           the last on top. -->
-      <PassList
+           same colour mask. Drag the ⠿ handle to reorder; the first
+           pass plots first, the last on top. -->
+      <LayerPassStack
         v-else
         :passes="currentPasses"
         @update="onUpdatePasses"

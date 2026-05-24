@@ -349,6 +349,10 @@
     "presetCrossedHatch": "Crossed hatch",
     "presetContourStipple": "Contours + stipple",
     "toggleOptions": "Show / hide options",
+    "duplicate": "Duplicate pass",
+    "dragHandle": "Drag to reorder",
+    "show": "Show pass",
+    "hide": "Hide pass (skip in next render)",
     "or": "or",
     "reuploadHint": "Re-uploading will reset the {count} multi-pass layer(s) you've configured.",
     "reuploadWarning": "Re-uploading will reset {count} multi-pass layer(s). Continue?"

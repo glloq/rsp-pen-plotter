@@ -349,6 +349,10 @@
     "presetCrossedHatch": "Hachures croisées",
     "presetContourStipple": "Contours + pointillé",
     "toggleOptions": "Afficher / masquer les options",
+    "duplicate": "Dupliquer la passe",
+    "dragHandle": "Glisser pour réordonner",
+    "show": "Afficher la passe",
+    "hide": "Masquer la passe (ignorée au prochain rendu)",
     "or": "ou",
     "reuploadHint": "Ré-importer va réinitialiser les {count} calque(s) multi-passes que tu as configurés.",
     "reuploadWarning": "Ré-importer va réinitialiser {count} calque(s) multi-passes. Continuer ?"
