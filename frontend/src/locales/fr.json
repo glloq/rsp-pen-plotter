@@ -125,7 +125,8 @@
     "zoomOut": "Dézoomer",
     "resetView": "Réinitialiser la vue (clic) · molette pour zoomer · glisser pour déplacer",
     "cancelPreview": "Annuler l'aperçu",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "paths": "tracés"
   },
   "planRail": {
     "title": "Plan",
