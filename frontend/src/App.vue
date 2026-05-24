@@ -13,16 +13,15 @@ import SettingsDrawer from './components/SettingsDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
 import { useJobStore } from './stores/job'
+import { useLibraryStore } from './stores/library'
 import { useToastStore } from './stores/toasts'
 import { useUiStore } from './stores/ui'
 
 const { t, locale } = useI18n()
 const store = useJobStore()
+const library = useLibraryStore()
 const ui = useUiStore()
 const toasts = useToastStore()
-const status = ref<string | null>(null)
-const version = ref<string | null>(null)
-const apiError = ref(false)
 const dragDepth = ref(0)
 const dropping = ref(false)
 
@@ -84,19 +83,14 @@ async function onWindowDrop(event: DragEvent): Promise<void> {
   // SourceSection's drop zone calls preventDefault on its own drop; in that
   // case we let it handle the upload and skip here to avoid uploading twice.
   if (event.defaultPrevented) return
-  const file = event.dataTransfer?.files?.[0]
-  if (!file) return
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  if (!files.length) return
   event.preventDefault()
-  // Each global drop creates a fresh placement so multi-file mixing
-  // works out of the box: drop file A, drop file B → both end up on
-  // the plan with independent configs.
-  store.addEmptyPlacement()
-  await store.upload(file)
-  if (store.layers.length) {
-    // ``store.upload`` already shows progress + success/error toasts; we
-    // just open the conversion settings modal so the drop-anywhere
-    // workflow matches the "Edit" button workflow.
-    ui.openEditModal()
+  // Drops add the files to the library only — no placement is created
+  // and the editor stays closed. The operator picks what to do next from
+  // the Files pane (drag onto the plan, edit, etc.).
+  for (const file of files) {
+    await library.upload(file)
   }
 }
 
@@ -106,12 +100,10 @@ onMounted(async () => {
   window.addEventListener('dragover', onWindowDragOver)
   window.addEventListener('drop', onWindowDrop)
   try {
-    const health = await getHealth()
-    status.value = health.status
-    version.value = health.version
+    await getHealth()
     await Promise.all([store.loadProfiles(), store.loadPresets()])
   } catch {
-    apiError.value = true
+    toasts.error(t('app.apiUnreachable'))
   }
   // Fire-and-forget: the toast is purely advisory, no need to block the
   // rest of the startup sequence on the (potentially slow) git fetch.
@@ -128,7 +120,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex h-screen flex-col bg-slate-900 text-slate-100">
-    <AppHeader :status="status" :version="version" :api-error="apiError" />
+    <AppHeader />
 
     <main
       class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]"
