@@ -35,17 +35,22 @@ function resetPreprocess(): void {
 <template>
   <section v-if="fm.hasSource.value && fm.showsBitmapForm.value" class="space-y-3">
     <div
-      class="flex items-center justify-between rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-[11px] text-slate-400"
+      class="space-y-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-[11px] text-slate-400"
     >
-      <span>{{ t('preprocess.intro') }}</span>
-      <button
-        type="button"
-        :disabled="neutral"
-        class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-300 transition hover:border-emerald-700 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-300"
-        @click="resetPreprocess"
-      >
-        {{ t('preprocess.reset') }}
-      </button>
+      <div class="flex items-center justify-between">
+        <span>{{ t('preprocess.intro') }}</span>
+        <button
+          type="button"
+          :disabled="neutral"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-300 transition hover:border-emerald-700 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-300"
+          @click="resetPreprocess"
+        >
+          {{ t('preprocess.reset') }}
+        </button>
+      </div>
+      <p class="text-[10px] leading-snug text-slate-500">
+        {{ t('preprocess.previewNote') }}
+      </p>
     </div>
 
     <BasicAdjustmentsCard :preprocess="preprocess" />

@@ -109,6 +109,7 @@
   },
   "preprocess": {
     "intro": "Prepare the source image before it's segmented into colour layers.",
+    "previewNote": "Brightness, contrast, saturation, blur, invert, grayscale, crop and orientation render live. Gamma, levels and sharpen will show up on the other tabs once the SVG re-renders.",
     "reset": "Reset",
     "noSource": "Attach a file to start adjusting the image.",
     "notApplicable": "This file type isn't a bitmap — nothing to preprocess.",
@@ -203,7 +204,9 @@
     "live": "Live",
     "livePreviewHint": "Reflects every setting change — not yet committed to the plan.",
     "saved": "Saved",
-    "savedHint": "Last committed conversion — change settings then click Re-convert to refresh."
+    "savedHint": "Last committed conversion — change settings then click Re-convert to refresh.",
+    "source": "Source",
+    "sourceHint": "Showing the raw image with your Image-tab adjustments overlaid. Switch tabs to see the SVG render."
   },
   "planRail": {
     "title": "Plan",
