@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 export type CanvasTab = 'sheet' | 'simulator' | 'gcode'
 export type SettingsTab = 'profile' | 'macros' | 'history' | 'audit' | 'system'
@@ -7,6 +7,39 @@ export type SettingsTab = 'profile' | 'macros' | 'history' | 'audit' | 'system'
 export interface PreviewSheet {
   width_mm: number
   height_mm: number
+}
+
+export type UpdatePhase = 'idle' | 'running' | 'success' | 'noop' | 'error'
+
+export interface UpdateModalState {
+  phase: UpdatePhase
+  // Free-form status line shown under the spinner (e.g. "Pulling latest…").
+  // Localised at the call site so the store stays string-agnostic.
+  message: string
+  // Populated when ``phase === 'error'`` so the modal can render the cause.
+  error: string | null
+  // Wall-clock start, used to render an elapsed timer.
+  startedAt: number | null
+  // Forced-update flag echoed back from the API — surfaces the "local
+  // changes were discarded" banner in the modal.
+  forced: boolean
+  // Set on a successful upgrade so the modal can show the Ctrl+Shift+R
+  // reminder and a Reload button. Distinct from ``phase === 'success'``
+  // because a no-op still ends in success but doesn't need the reminder.
+  newCommitApplied: boolean
+}
+
+const UPDATE_NOTIFY_KEY = 'omniplot.updateNotifications'
+
+function loadUpdateNotifications(): boolean {
+  try {
+    const raw = localStorage.getItem(UPDATE_NOTIFY_KEY)
+    // Default ON: first-time users see the notification until they opt out.
+    if (raw === null) return true
+    return raw === '1'
+  } catch {
+    return true
+  }
 }
 
 export const useUiStore = defineStore('ui', () => {
@@ -18,6 +51,25 @@ export const useUiStore = defineStore('ui', () => {
   // Display-only sheet overlay shown on the workspace plan, positioned at
   // the top-left. Set when the user picks a sheet format in LayoutSection.
   const previewSheet = ref<PreviewSheet | null>(null)
+
+  const updateState = ref<UpdateModalState>({
+    phase: 'idle',
+    message: '',
+    error: null,
+    startedAt: null,
+    forced: false,
+    newCommitApplied: false,
+  })
+
+  const updateNotificationsEnabled = ref(loadUpdateNotifications())
+  watch(updateNotificationsEnabled, (value) => {
+    try {
+      localStorage.setItem(UPDATE_NOTIFY_KEY, value ? '1' : '0')
+    } catch {
+      // localStorage unavailable (private browsing / quota) — preference
+      // simply won't survive a reload, which is acceptable.
+    }
+  })
 
   function setPreviewSheet(sheet: PreviewSheet | null): void {
     previewSheet.value = sheet
@@ -48,6 +100,48 @@ export const useUiStore = defineStore('ui', () => {
     editModalOpen.value = false
   }
 
+  function startUpdate(message: string): void {
+    updateState.value = {
+      phase: 'running',
+      message,
+      error: null,
+      startedAt: Date.now(),
+      forced: false,
+      newCommitApplied: false,
+    }
+  }
+
+  function setUpdateMessage(message: string): void {
+    if (updateState.value.phase === 'running') {
+      updateState.value = { ...updateState.value, message }
+    }
+  }
+
+  function finishUpdate(
+    phase: Exclude<UpdatePhase, 'idle' | 'running'>,
+    payload: { message: string; error?: string | null; forced?: boolean; newCommitApplied?: boolean } = { message: '' },
+  ): void {
+    updateState.value = {
+      phase,
+      message: payload.message,
+      error: payload.error ?? null,
+      startedAt: updateState.value.startedAt,
+      forced: payload.forced ?? false,
+      newCommitApplied: payload.newCommitApplied ?? false,
+    }
+  }
+
+  function dismissUpdate(): void {
+    updateState.value = {
+      phase: 'idle',
+      message: '',
+      error: null,
+      startedAt: null,
+      forced: false,
+      newCommitApplied: false,
+    }
+  }
+
   return {
     canvasTab,
     settingsOpen,
@@ -55,6 +149,8 @@ export const useUiStore = defineStore('ui', () => {
     plotterDrawerOpen,
     editModalOpen,
     previewSheet,
+    updateState,
+    updateNotificationsEnabled,
     setPreviewSheet,
     openSettings,
     closeSettings,
@@ -62,5 +158,9 @@ export const useUiStore = defineStore('ui', () => {
     closePlotterDrawer,
     openEditModal,
     closeEditModal,
+    startUpdate,
+    setUpdateMessage,
+    finishUpdate,
+    dismissUpdate,
   }
 })

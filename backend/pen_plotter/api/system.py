@@ -104,6 +104,131 @@ async def get_version() -> VersionResponse:
     )
 
 
+class CheckUpdateResponse(BaseModel):
+    """Result of ``GET /system/check-update``: is a newer commit available?"""
+
+    # ``True`` only when the remote branch tip is strictly ahead of the local
+    # HEAD. ``False`` covers "up to date", "no git", "fetch failed", "dirty
+    # tree" — anything where the UI shouldn't nudge the operator to update.
+    update_available: bool
+    current_commit: str | None
+    remote_commit: str | None
+    # How many commits the remote is ahead by (0 when up to date or when we
+    # can't tell). Surfaced so the toast can say "3 commits behind" if we
+    # want it later.
+    behind: int
+    branch: str | None
+    # Set when we couldn't perform the check — e.g. no network, no git, no
+    # tracking branch. The UI uses this to silently skip the notification
+    # rather than display a noisy error on every page load.
+    error: str | None = None
+
+
+@router.get("/check-update", response_model=CheckUpdateResponse)
+async def check_update() -> CheckUpdateResponse:
+    """Fetch from the remote and report whether a newer commit exists.
+
+    This is the polling endpoint behind the optional "update available"
+    startup toast; it never mutates the working tree (only ``git fetch``)
+    and tolerates offline machines by returning ``update_available=False``
+    with an ``error`` string instead of raising.
+    """
+    root = _repo_root()
+    if not (root / ".git").exists():
+        return CheckUpdateResponse(
+            update_available=False,
+            current_commit=None,
+            remote_commit=None,
+            behind=0,
+            branch=None,
+            error="not a git checkout",
+        )
+
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    current = _git("rev-parse", "HEAD")
+    if not branch or branch == "HEAD" or not current:
+        return CheckUpdateResponse(
+            update_available=False,
+            current_commit=current,
+            remote_commit=None,
+            behind=0,
+            branch=branch,
+            error="detached HEAD or unknown branch",
+        )
+
+    # ``git fetch`` is the only network operation; cap it tightly so a flaky
+    # link doesn't hang the page-load toast.
+    try:
+        fetch = await asyncio.create_subprocess_exec(
+            "git",
+            "fetch",
+            "--quiet",
+            "origin",
+            branch,
+            cwd=str(root),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            await asyncio.wait_for(fetch.communicate(), timeout=15)
+        except asyncio.TimeoutError:
+            fetch.kill()
+            return CheckUpdateResponse(
+                update_available=False,
+                current_commit=current,
+                remote_commit=None,
+                behind=0,
+                branch=branch,
+                error="git fetch timed out",
+            )
+        if fetch.returncode != 0:
+            return CheckUpdateResponse(
+                update_available=False,
+                current_commit=current,
+                remote_commit=None,
+                behind=0,
+                branch=branch,
+                error="git fetch failed",
+            )
+    except FileNotFoundError:
+        return CheckUpdateResponse(
+            update_available=False,
+            current_commit=current,
+            remote_commit=None,
+            behind=0,
+            branch=branch,
+            error="git not available",
+        )
+
+    remote_ref = f"origin/{branch}"
+    remote = _git("rev-parse", remote_ref)
+    if not remote:
+        return CheckUpdateResponse(
+            update_available=False,
+            current_commit=current,
+            remote_commit=None,
+            behind=0,
+            branch=branch,
+            error="no tracking branch",
+        )
+
+    # ``rev-list --count HEAD..origin/branch`` reports the number of commits
+    # the remote has that we don't — i.e. how far behind we are.
+    behind_str = _git("rev-list", "--count", f"HEAD..{remote_ref}")
+    try:
+        behind = int(behind_str) if behind_str is not None else 0
+    except ValueError:
+        behind = 0
+
+    return CheckUpdateResponse(
+        update_available=behind > 0 and current != remote,
+        current_commit=current,
+        remote_commit=remote,
+        behind=behind,
+        branch=branch,
+    )
+
+
 class UpdateRequest(BaseModel):
     """Optional knobs for ``POST /system/update``."""
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import {
   systemUpdate,
@@ -8,10 +9,11 @@ import {
   type SystemVersionResponse,
 } from '../api/client'
 import { confirmAction } from '../composables/confirm'
-import { useToastStore } from '../stores/toasts'
+import { useUiStore } from '../stores/ui'
 
 const { t, locale } = useI18n()
-const toasts = useToastStore()
+const ui = useUiStore()
+const { updateNotificationsEnabled } = storeToRefs(ui)
 
 function setLocale(value: 'en' | 'fr'): void {
   locale.value = value
@@ -45,19 +47,28 @@ async function runUpdate(force = false): Promise<void> {
   updating.value = true
   updateError.value = null
   lastUpdate.value = null
-  const toastId = toasts.progress(t('toast.updateChecking'))
+  // Drive the global blocking modal — operator can't interact with the rest
+  // of the UI while update.sh is running.
+  ui.startUpdate(t('updateModal.statusPulling'))
   try {
     const result = await systemUpdate(force)
     lastUpdate.value = result
     if (result.updated) {
-      toasts.update(toastId, 'success', t('toast.updateInstalled'), 5000)
+      ui.finishUpdate('success', {
+        message: t('updateModal.successMessage'),
+        forced: result.forced,
+        newCommitApplied: true,
+      })
     } else {
-      toasts.update(toastId, 'info', t('toast.updateNone'), 4000)
+      ui.finishUpdate('noop', { message: t('updateModal.noopMessage') })
     }
     await loadVersion()
   } catch (err) {
     updateError.value = (err as Error).message || t('system.updateFailed')
-    toasts.update(toastId, 'error', updateError.value, 6000)
+    ui.finishUpdate('error', {
+      message: t('updateModal.errorMessage'),
+      error: updateError.value,
+    })
   } finally {
     updating.value = false
   }
@@ -115,6 +126,21 @@ onMounted(loadVersion)
       </dl>
       <p v-else-if="versionError" class="text-amber-300">{{ versionError }}</p>
       <p v-else class="text-slate-500">{{ t('system.loading') }}</p>
+    </div>
+
+    <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+      <h3 class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('system.notifications') }}</h3>
+      <label class="flex items-start gap-2 text-slate-300">
+        <input
+          v-model="updateNotificationsEnabled"
+          type="checkbox"
+          class="mt-0.5 h-3.5 w-3.5 shrink-0 accent-emerald-500"
+        />
+        <span class="leading-snug">
+          {{ t('system.notifyOnStartup') }}
+          <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('system.notifyOnStartupHint') }}</span>
+        </span>
+      </label>
     </div>
 
     <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3">

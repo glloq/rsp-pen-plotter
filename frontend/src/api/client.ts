@@ -482,6 +482,23 @@ export async function systemVersion(): Promise<SystemVersionResponse> {
   return response.data
 }
 
+export interface SystemCheckUpdateResponse {
+  update_available: boolean
+  current_commit: string | null
+  remote_commit: string | null
+  behind: number
+  branch: string | null
+  error: string | null
+}
+
+export async function systemCheckUpdate(): Promise<SystemCheckUpdateResponse> {
+  const response = await api.get<SystemCheckUpdateResponse>('/system/check-update', {
+    // Backend caps fetch at 15s, give the HTTP layer a bit more headroom.
+    timeout: 20_000,
+  })
+  return response.data
+}
+
 export interface PreviewResponse {
   svg: string
   elapsed_ms: number

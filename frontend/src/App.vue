@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getHealth } from './api/client'
+import { getHealth, systemCheckUpdate } from './api/client'
 import AppHeader from './components/AppHeader.vue'
 import AppFooter from './components/AppFooter.vue'
 import CanvasView from './components/CanvasView.vue'
@@ -11,17 +11,47 @@ import FilesPane from './components/FilesPane.vue'
 import PlotterDrawer from './components/PlotterDrawer.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
 import Toasts from './components/Toasts.vue'
+import UpdateProgressModal from './components/UpdateProgressModal.vue'
 import { useJobStore } from './stores/job'
+import { useToastStore } from './stores/toasts'
 import { useUiStore } from './stores/ui'
 
 const { t, locale } = useI18n()
 const store = useJobStore()
 const ui = useUiStore()
+const toasts = useToastStore()
 const status = ref<string | null>(null)
 const version = ref<string | null>(null)
 const apiError = ref(false)
 const dragDepth = ref(0)
 const dropping = ref(false)
+
+async function checkForUpdatesOnStartup(): Promise<void> {
+  // Honour the opt-out toggle in Settings › System.
+  if (!ui.updateNotificationsEnabled) return
+  try {
+    const result = await systemCheckUpdate()
+    if (!result.update_available) return
+    let toastId = 0
+    toastId = toasts.show(
+      'info',
+      t('toast.updateAvailable', { count: result.behind }),
+      // Long-lived: the operator should be able to read it after wandering
+      // back to the tab. Stays until dismissed or the action is clicked.
+      0,
+      {
+        label: t('toast.openSettings'),
+        onClick: () => {
+          ui.openSettings('system')
+          toasts.dismiss(toastId)
+        },
+      },
+    )
+  } catch {
+    // Offline appliance / no network — silent. The Settings › System panel
+    // surfaces version errors there if the user goes looking.
+  }
+}
 
 watch(
   locale,
@@ -83,6 +113,9 @@ onMounted(async () => {
   } catch {
     apiError.value = true
   }
+  // Fire-and-forget: the toast is purely advisory, no need to block the
+  // rest of the startup sequence on the (potentially slow) git fetch.
+  void checkForUpdatesOnStartup()
 })
 
 onBeforeUnmount(() => {
@@ -109,6 +142,7 @@ onBeforeUnmount(() => {
     <PlotterDrawer />
     <EditModal />
     <ConfirmDialog />
+    <UpdateProgressModal />
     <Toasts />
 
     <div
