@@ -185,7 +185,7 @@
     "penNotInstalled": "Slot non marqué comme installé",
     "modeLabel": "Mode de rendu",
     "shades": "Nombre de nuances",
-    "shadesHint": "1 = un seul calque (par défaut). Monte la valeur pour ajouter des bandes de gris : chaque bande devient un calque avec un algorithme dérivé du mode.",
+    "shadesHint": "Découpe l'image en N bandes de gris ; chaque bande utilise un algorithme adapté au mode choisi.",
     "threshold": "Seuil de binarisation",
     "thresholdHint": "Les pixels plus sombres que ce seuil sont tracés ; les plus clairs sont ignorés.",
     "detail": "Détail du SVG",
@@ -196,7 +196,7 @@
     "detailUltra": "Ultra",
     "detailHint": "Plus le détail est élevé, plus le SVG est reconstruit depuis l'image avec une grande surface source — les détails fins (petit texte, grilles de tableau, schémas denses) sont conservés, la conversion prend plus de temps.",
     "style": "Style de rendu",
-    "layersHint": "Mono = un seul calque par défaut. L'onglet Calques sert à affiner, changer l'algo, empiler des multi-passes ou surcharger avec plusieurs styles d'impression.",
+    "layersHint": "Chaque bande devient un calque — ouvre l'onglet Calques pour affiner, changer l'algo d'une bande, ou empiler des multi-passes.",
     "modes": {
       "pencil": "Crayonné",
       "pencilDesc": "Hachures croisées superposées à angles variés — look fait main.",

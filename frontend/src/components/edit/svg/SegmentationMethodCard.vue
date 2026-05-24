@@ -117,7 +117,7 @@ function updateThreshold(i: number, value: number): void {
         <input
           :value="bitmap.num_bands"
           type="number"
-          min="1"
+          min="2"
           max="16"
           class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
           @input="(e) => setNumBands(Number((e.target as HTMLInputElement).value))"
