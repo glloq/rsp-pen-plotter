@@ -192,10 +192,57 @@ export interface PrintStyle {
 
 // Helper: linear interpolation across band index for spacing / density
 // recipes. ``i`` 0..total-1, returns ``from`` at i=0 and ``to`` at
-// i=total-1 (or ``from`` if total<=1).
-function lerp(i: number, total: number, from: number, to: number): number {
+// i=total-1 (or ``from`` if total<=1). Exported so ``useBitmapDraft``
+// can reuse it when synthesising per-band recipes from operator-tuned
+// ranges.
+export function lerp(i: number, total: number, from: number, to: number): number {
   if (total <= 1) return from
   return from + (to - from) * (i / (total - 1))
+}
+
+// Default min/max ranges + angle lists for the monochrome master
+// styles. These mirror the constants that used to live inline in each
+// ``bandRecipe`` below; hoisting them lets ``useBitmapDraft.defaultMono()``
+// pre-populate the operator-facing knobs from the same source of truth
+// the fallback ``bandRecipe`` still uses.
+export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
+  pencil: {
+    spacing_min: 2.5,
+    spacing_max: 6.5,
+    angles: [45, 135, 0, 90, 30, 150],
+    crossed_on_darkest: true,
+  },
+  'halftone-shade': {
+    cell_min: 3,
+    cell_max: 9,
+  },
+  'stippling-shade': {
+    density_min: 0.012,
+    density_max: 0.06,
+    dot_radius: 0.5,
+  },
+  engraving: {
+    spacing_min: 1.8,
+    spacing_max: 5,
+    wave_min: 0.6,
+    wave_max: 1.6,
+  },
+  'contours-topo': {
+    spacing_min: 2.5,
+    spacing_max: 6,
+    rings_min: 10,
+    rings_max: 30,
+  },
+  outline: {
+    stroke_width: 0.8,
+  },
+  tsp: {},
+  'spiral-master': {
+    spacing_min: 3,
+  },
+  'centerline-trace': {
+    stroke_width: 0.8,
+  },
 }
 
 // Naming convention to resolve old collisions between mono modes and

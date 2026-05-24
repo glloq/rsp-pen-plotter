@@ -82,14 +82,26 @@ class CrosshatchAlgorithm(RasterAlgorithm):
         options: dict[str, Any] | None = None,
     ) -> str:
         opts = options or {}
-        angle = float(opts.get("angle_deg", 45.0))
         spacing = max(1.0, float(opts.get("spacing_px", 4.0)))
-        crossed = bool(opts.get("crossed", False))
         bool_mask = mask.astype(bool)
 
-        segments = _line_segments(bool_mask, angle, spacing)
-        if crossed:
-            segments.extend(_line_segments(bool_mask, angle + 90.0, spacing))
+        # ``angles`` (new) lets monochrome mode stack 1..4 hatch passes
+        # inside a single layer to darken a band without changing ink
+        # colour. When absent, fall back to the legacy ``angle_deg`` +
+        # ``crossed`` pair so existing layer presets and persisted
+        # placements keep rendering identically.
+        raw_angles = opts.get("angles")
+        if raw_angles is None:
+            angle = float(opts.get("angle_deg", 45.0))
+            angles = [angle, angle + 90.0] if bool(opts.get("crossed", False)) else [angle]
+        else:
+            angles = [float(a) for a in raw_angles][:4]
+            if not angles:
+                angles = [float(opts.get("angle_deg", 45.0))]
+
+        segments: list[tuple[float, float, float, float]] = []
+        for a in angles:
+            segments.extend(_line_segments(bool_mask, a, spacing))
 
         paths = "".join(
             f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}"/>'

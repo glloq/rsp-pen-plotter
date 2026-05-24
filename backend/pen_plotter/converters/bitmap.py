@@ -148,6 +148,16 @@ class BitmapOptions(BaseModel):
     # only the uniform default and the operator only sees the real
     # result after Apply.
     band_recipes: list[dict[str, Any]] | None = None
+    # Force every rendered ``<g>`` to use this single ink colour for its
+    # ``stroke=`` attribute, regardless of the cluster's source-image
+    # palette RGB. Set by the frontend when ``_printMode === 'monochrome'``
+    # so the live preview reflects single-pen reality (gray levels come
+    # from algorithm density / spacing / angle variation, not from
+    # multiple ink colours). ``None`` keeps the legacy per-cluster colour
+    # behaviour for multicolour mode. ``color_hex`` continues to drive the
+    # per-layer label so ``band_recipes`` indexing and ``extract_layers``
+    # round-trip identically; only the visual stroke colour changes.
+    mono_ink_color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
     # Photo-editor style adjustments applied to the loaded RGB image
     # before the downscale + segmentation pass. Defaults are neutral so
     # the field is safe to omit; the editor's "Image" tab writes the
@@ -290,6 +300,10 @@ class BitmapConverter(Converter):
             mask = seg.labels == cluster
             color_hex = "#{:02x}{:02x}{:02x}".format(*rgb.astype(int))
             label = f"color-{color_hex.lstrip('#')}"
+            # Substitute the single mono ink at the last moment so the
+            # label (which keys band_recipes / extract_layers) keeps
+            # using the cluster's source colour.
+            ink_hex = opts.mono_ink_color or color_hex
             override = overrides.get(label, {})
             # Multi-pass: stack several algorithms in the same labeled
             # group so the layer is drawn with multiple visual effects
@@ -300,7 +314,7 @@ class BitmapConverter(Converter):
             passes = override.get("passes") or []
             if passes:
                 groups.append(
-                    cls._render_passes(mask, color_hex, label, passes, opts, warnings)
+                    cls._render_passes(mask, ink_hex, label, passes, opts, warnings)
                 )
                 continue
             algo_name = override.get("algorithm") or opts.algorithm
@@ -314,7 +328,7 @@ class BitmapConverter(Converter):
                     f"Layer {label}: unknown algorithm {algo_name!r}, using {opts.algorithm!r}."
                 )
                 algorithm = get_algorithm(opts.algorithm)
-            groups.append(algorithm.render_layer(mask, color_hex, label, options=algo_options))
+            groups.append(algorithm.render_layer(mask, ink_hex, label, options=algo_options))
         if not groups:
             warnings.append("No drawable layers detected (image may be entirely background).")
         return cls._wrap_svg(seg.width, seg.height, groups), warnings
