@@ -101,7 +101,7 @@ function updateThreshold(i: number, value: number): void {
           {{ t('convert.numBands') }}
           <LayerCountBadge :count="draft.expectedLayerCount.value" />
         </span>
-        <input v-model.number="bitmap.num_bands" type="number" min="2" max="16" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+        <input v-model.number="bitmap.num_bands" type="number" min="1" max="16" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
       </label>
 
       <div v-else-if="bitmap.segmentation_method === 'thresholds'" class="space-y-1">
