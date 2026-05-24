@@ -3,10 +3,12 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import { useToastStore } from '../stores/toasts'
+import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
 const store = useJobStore()
 const toasts = useToastStore()
+const ui = useUiStore()
 
 const showSheet = ref(false)
 
@@ -65,6 +67,8 @@ function applyPreset(p: SheetPreset, landscape: boolean): void {
   const height = landscape ? p.w : p.h
   widthDraft.value = width
   heightDraft.value = height
+  // Display the chosen sheet on the workspace plan (top-left, transparent).
+  ui.setPreviewSheet({ width_mm: width, height_mm: height })
   // Centre on apply so the sheet ends up nicely positioned by default.
   centreSheet(width, height)
 }
