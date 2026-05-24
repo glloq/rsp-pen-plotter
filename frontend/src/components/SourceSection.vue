@@ -333,6 +333,7 @@ watch(
     () => bitmap.value.background_luminance,
     () => bitmap.value.min_region_pixels,
     () => bitmap.value.merge_delta_e,
+    () => bitmap.value.max_dimension_px,
     () => bitmap.value.cell_size_px,
     () => bitmap.value.density,
     () => bitmap.value.dot_radius_px,

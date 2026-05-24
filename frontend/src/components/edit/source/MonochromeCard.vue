@@ -109,16 +109,22 @@ const thresholdValue = computed({
 })
 
 // ============================== DETAIL LEVEL ==============================
+// Four tiers that map to the segmentation resolution used at /upload
+// AND /preview time. Higher tiers re-segment the source at a bigger
+// canvas, so fine features that would have been smoothed away at low
+// detail show up as their own SVG paths. The numeric pixel value is
+// hidden from the UI (it doesn't mean anything to non-technical
+// operators) — only the named tier shows.
 interface DetailLevel {
-  id: 'fast' | 'standard' | 'high' | 'ultra'
+  id: 'low' | 'standard' | 'high' | 'max'
   value: number
   labelKey: string
 }
 const detailLevels: DetailLevel[] = [
-  { id: 'fast', value: 400, labelKey: 'mono.detailFast' },
+  { id: 'low', value: 400, labelKey: 'mono.detailLow' },
   { id: 'standard', value: 800, labelKey: 'mono.detailStandard' },
-  { id: 'high', value: 1200, labelKey: 'mono.detailHigh' },
-  { id: 'ultra', value: 2000, labelKey: 'mono.detailUltra' },
+  { id: 'high', value: 1400, labelKey: 'mono.detailHigh' },
+  { id: 'max', value: 2400, labelKey: 'mono.detailMax' },
 ]
 
 const currentDetail = computed<DetailLevel['id']>(() => {
@@ -229,14 +235,13 @@ function setDetail(value: number): void {
           v-for="level in detailLevels"
           :key="level.id"
           type="button"
-          class="rounded border px-1 py-1 text-[10px] transition"
+          class="rounded border px-2 py-1.5 text-[11px] transition"
           :class="currentDetail === level.id
             ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
             : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
           @click="setDetail(level.value)"
         >
           {{ t(level.labelKey) }}
-          <span class="block font-mono text-[9px] text-slate-500">{{ level.value }}px</span>
         </button>
       </div>
       <p class="text-[10px] text-slate-500">{{ t('mono.detailHint') }}</p>
