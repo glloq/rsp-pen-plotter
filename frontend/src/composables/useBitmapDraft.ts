@@ -326,9 +326,35 @@ export function buildAlgorithmOptions(): Record<string, unknown> {
   }
 }
 
+// Build the per-band recipes for the current master style so the
+// backend's /preview applies them inline instead of just the uniform
+// algorithm. Only emitted in mono shaded mode (where the segmentation
+// produces N >= 2 bands and the active style carries a ``bandRecipe``);
+// returns ``undefined`` everywhere else so the payload stays minimal.
+function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
+  if (_printMode.value !== 'monochrome') return undefined
+  if (_bitmap.value.segmentation_method !== 'luminance_bands') return undefined
+  const style = resolveMasterStyle(_monoMasterStyleId.value)
+  if (!style.bandRecipe) return undefined
+  const total = _bitmap.value.num_bands
+  return Array.from({ length: total }, (_, i) => {
+    const recipe = style.bandRecipe!(i, total)
+    if (!recipe) {
+      return {
+        algorithm: style.defaultAlgorithm,
+        algorithm_options: { ...style.defaultAlgorithmOptions },
+      }
+    }
+    return {
+      algorithm: recipe.algorithm,
+      algorithm_options: { ...recipe.algorithm_options },
+    }
+  })
+}
+
 export function buildBitmapOptions(): Record<string, unknown> {
   const b = _bitmap.value
-  return {
+  const payload: Record<string, unknown> = {
     algorithm: b.algorithm,
     num_colors: b.num_colors,
     max_dimension_px: b.max_dimension_px,
@@ -340,6 +366,9 @@ export function buildBitmapOptions(): Record<string, unknown> {
     merge_delta_e: b.merge_delta_e,
     algorithm_options: buildAlgorithmOptions(),
   }
+  const bandRecipes = buildBandRecipes()
+  if (bandRecipes) payload.band_recipes = bandRecipes
+  return payload
 }
 
 export function buildTypographyOptions(): Record<string, unknown> {
