@@ -77,9 +77,25 @@ module = [
     "vpype",
     "vpype_cli",
     "serial_asyncio",
+    "scipy",
+    "scipy.*",
+    "skimage",
+    "skimage.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+# scikit-image / scipy functions are untyped in their wheels; allow
+# new raster algorithms to call them without each call site needing a
+# per-line type: ignore comment.
+module = [
+    "pen_plotter.converters.algorithms.concentric_offset",
+    "pen_plotter.converters.algorithms.flowfield",
+    "pen_plotter.core.tsp",
+]
+disallow_untyped_calls = false
+warn_unused_ignores = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

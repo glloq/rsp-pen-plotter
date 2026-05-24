@@ -8,7 +8,10 @@ using a selectable raster algorithm.
 from __future__ import annotations
 
 import io
+import os
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from multiprocessing import get_context
 from typing import Any, ClassVar, Literal
 
 import numpy as np
@@ -165,6 +168,83 @@ class BitmapOptions(BaseModel):
     preprocess: PreprocessOptions = Field(default_factory=PreprocessOptions)
 
 
+def _render_layer_unpack(
+    job: tuple[
+        NDArray[np.bool_],
+        str,
+        str,
+        str,
+        str,
+        dict[str, Any],
+        list[dict[str, Any]] | None,
+        str,
+    ],
+) -> tuple[str, list[str]]:
+    """Adapter for :meth:`ProcessPoolExecutor.map` which only takes 1 arg."""
+    mask, color_hex, ink_hex, label, algo_name, algo_options, passes, fallback = job
+    return _render_one_layer(
+        mask, color_hex, ink_hex, label, algo_name, algo_options, passes, fallback
+    )
+
+
+def _render_one_layer(
+    mask: NDArray[np.bool_],
+    color_hex: str,
+    ink_hex: str,
+    label: str,
+    algo_name: str,
+    algo_options: dict[str, Any],
+    passes: list[dict[str, Any]] | None,
+    fallback_algo: str,
+) -> tuple[str, list[str]]:
+    """Render a single colour layer to an SVG group, picklable for workers.
+
+    Lives at module scope so :class:`concurrent.futures.ProcessPoolExecutor`
+    can pickle and dispatch it. Algorithm instances are re-resolved here
+    rather than passed in — they're stateless singletons in the registry,
+    so the lookup is free, and we sidestep "instance not picklable"
+    surprises that the registered classes might develop later.
+    """
+    warnings: list[str] = []
+    if passes:
+        from xml.sax.saxutils import quoteattr
+
+        fragments: list[str] = []
+        for idx, raw in enumerate(passes):
+            pass_algo = (raw.get("algorithm") if isinstance(raw, dict) else None) or fallback_algo
+            pass_opts = (raw.get("algorithm_options") if isinstance(raw, dict) else None) or {}
+            try:
+                pass_algorithm = get_algorithm(pass_algo)
+            except KeyError:
+                warnings.append(
+                    f"Layer {label} pass {idx}: unknown algorithm {pass_algo!r}, "
+                    f"falling back to {fallback_algo!r}."
+                )
+                pass_algorithm = get_algorithm(fallback_algo)
+            fragments.append(
+                pass_algorithm.render_layer(
+                    mask, ink_hex, f"{label}-pass-{idx}", options=pass_opts
+                )
+            )
+        if not fragments:
+            return f"<g inkscape:label={quoteattr(label)}></g>", warnings
+        return (
+            f"<g inkscape:label={quoteattr(label)}>" + "".join(fragments) + "</g>",
+            warnings,
+        )
+    try:
+        algorithm = get_algorithm(algo_name)
+    except KeyError:
+        warnings.append(
+            f"Layer {label}: unknown algorithm {algo_name!r}, using {fallback_algo!r}."
+        )
+        algorithm = get_algorithm(fallback_algo)
+    return (
+        algorithm.render_layer(mask, ink_hex, label, options=algo_options),
+        warnings,
+    )
+
+
 class BitmapConverter(Converter):
     """Separates a raster image into per-color SVG layers."""
 
@@ -185,6 +265,7 @@ class BitmapConverter(Converter):
         *,
         options: dict[str, Any] | None = None,
         fast: bool = False,
+        n_workers: int = 1,
     ) -> ConversionResult:
         """Convert image bytes into a layered SVG pivot document.
 
@@ -196,12 +277,19 @@ class BitmapConverter(Converter):
                 honoured as the operator set it — the ``/preview`` endpoint
                 pairs this flag with a tier-specific resolution cap of its own
                 rather than overriding the option here.
+            n_workers: Number of OS processes to use for per-layer rendering.
+                ``1`` (default) keeps everything in-process. Higher values
+                dispatch each colour layer to a worker via a forkserver
+                ``ProcessPoolExecutor`` — useful on multi-core Pi 4/5 when
+                the chosen algorithm is CPU-bound (TSP, 2-opt, streamlines).
 
         Returns:
             A :class:`ConversionResult` whose SVG contains one labeled ``<g>``
             layer per detected color.
         """
-        result, _seg = self.segment_and_render(data, options=options, fast=fast)
+        result, _seg = self.segment_and_render(
+            data, options=options, fast=fast, n_workers=n_workers
+        )
         return result
 
     def segment_and_render(
@@ -210,6 +298,7 @@ class BitmapConverter(Converter):
         *,
         options: dict[str, Any] | None = None,
         fast: bool = False,
+        n_workers: int = 1,
     ) -> tuple[ConversionResult, SegmentationResult]:
         """Same as :meth:`convert` but also returns the segmentation result.
 
@@ -267,7 +356,7 @@ class BitmapConverter(Converter):
                 label = f"color-{color_hex.lstrip('#')}"
                 overrides[label] = recipe
         svg, warnings = BitmapConverter.render_from_segmentation(
-            seg, opts, per_layer_overrides=overrides,
+            seg, opts, per_layer_overrides=overrides, n_workers=n_workers,
         )
         return (
             ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings),
@@ -281,6 +370,7 @@ class BitmapConverter(Converter):
         opts: BitmapOptions,
         *,
         per_layer_overrides: dict[str, dict[str, Any]] | None = None,
+        n_workers: int = 1,
     ) -> tuple[str, list[str]]:
         """Re-run only the rendering step against an existing segmentation.
 
@@ -288,10 +378,28 @@ class BitmapConverter(Converter):
         dict with ``algorithm`` and/or ``algorithm_options`` keys, swapping
         in a different algorithm just for that layer. Layers without an
         override fall back to ``opts.algorithm`` + ``opts.algorithm_options``.
+
+        ``n_workers > 1`` dispatches each colour layer to a separate
+        process via :class:`ProcessPoolExecutor` (forkserver context so
+        scikit-image / scipy imports stay isolated). ``executor.map``
+        preserves layer order so the result is deterministic regardless
+        of worker count — important for the cache keys downstream.
+        Falls back to in-process rendering when worker init fails or
+        ``n_workers <= 1``.
         """
         overrides = per_layer_overrides or {}
         warnings: list[str] = []
-        groups: list[str] = []
+        # (mask, color_hex, ink_hex, label, algo_name, algo_options, passes)
+        _LayerJob = tuple[
+            NDArray[np.bool_],
+            str,
+            str,
+            str,
+            str,
+            dict[str, Any],
+            list[dict[str, Any]] | None,
+        ]
+        jobs: list[_LayerJob] = []
         for cluster in cls._layer_order(seg.labels, seg.palette):
             rgb = seg.palette[cluster]
             luminance = float(np.dot(rgb / 255.0, _REC709))
@@ -307,72 +415,43 @@ class BitmapConverter(Converter):
             override = overrides.get(label, {})
             # Multi-pass: stack several algorithms in the same labeled
             # group so the layer is drawn with multiple visual effects
-            # (e.g. contours + crosshatch fill) using a single ink. Each
-            # pass renders against the same mask; their inner fragments
-            # are wrapped in one outer ``<g inkscape:label="color-…">`` so
-            # extract_layers still reports one layer per colour.
-            passes = override.get("passes") or []
-            if passes:
-                groups.append(
-                    cls._render_passes(mask, ink_hex, label, passes, opts, warnings)
-                )
-                continue
+            # (e.g. contours + crosshatch fill) using a single ink.
+            passes_raw = override.get("passes") or []
+            passes: list[dict[str, Any]] | None = list(passes_raw) if passes_raw else None
             algo_name = override.get("algorithm") or opts.algorithm
             algo_options = override.get("algorithm_options") or opts.algorithm_options
+            jobs.append((mask, color_hex, ink_hex, label, algo_name, algo_options, passes))
+
+        groups: list[str] = []
+        max_workers = min(max(1, n_workers), max(1, (os.cpu_count() or 1)))
+        fallback = opts.algorithm
+        worker_jobs = [(*job, fallback) for job in jobs]
+        if max_workers > 1 and len(worker_jobs) > 1:
             try:
-                algorithm = get_algorithm(algo_name)
-            except KeyError:
-                # Unknown override → fall back to the default rather than
-                # 500'ing on the operator. Surface it as a warning instead.
+                ctx = get_context("forkserver")
+                with ProcessPoolExecutor(max_workers=max_workers, mp_context=ctx) as pool:
+                    results = list(pool.map(_render_layer_unpack, worker_jobs))
+                for svg, layer_warnings in results:
+                    groups.append(svg)
+                    warnings.extend(layer_warnings)
+            except (OSError, RuntimeError, ValueError) as exc:
+                # Worker init / pickling failed — degrade to serial.
                 warnings.append(
-                    f"Layer {label}: unknown algorithm {algo_name!r}, using {opts.algorithm!r}."
+                    f"Parallel render disabled ({exc}); falling back to serial."
                 )
-                algorithm = get_algorithm(opts.algorithm)
-            groups.append(algorithm.render_layer(mask, ink_hex, label, options=algo_options))
+                groups = []
+                for job in worker_jobs:
+                    svg, layer_warnings = _render_layer_unpack(job)
+                    groups.append(svg)
+                    warnings.extend(layer_warnings)
+        else:
+            for job in worker_jobs:
+                svg, layer_warnings = _render_layer_unpack(job)
+                groups.append(svg)
+                warnings.extend(layer_warnings)
         if not groups:
             warnings.append("No drawable layers detected (image may be entirely background).")
         return cls._wrap_svg(seg.width, seg.height, groups), warnings
-
-    @classmethod
-    def _render_passes(
-        cls,
-        mask: NDArray[np.bool_],
-        color_hex: str,
-        label: str,
-        passes: list[dict[str, Any]],
-        opts: BitmapOptions,
-        warnings: list[str],
-    ) -> str:
-        """Render a stack of passes against the same mask, wrapped in one labeled group.
-
-        Each pass produces its own ``<g inkscape:label="…">…</g>`` fragment;
-        we strip those inner labels (they'd otherwise confuse downstream
-        consumers that expect one labeled group per colour) and re-nest the
-        bodies under a single outer group carrying the colour label.
-        """
-        from xml.sax.saxutils import quoteattr
-
-        fragments: list[str] = []
-        for idx, raw in enumerate(passes):
-            algo_name = (raw.get("algorithm") if isinstance(raw, dict) else None) or opts.algorithm
-            algo_options = (raw.get("algorithm_options") if isinstance(raw, dict) else None) or {}
-            try:
-                algorithm = get_algorithm(algo_name)
-            except KeyError:
-                warnings.append(
-                    f"Layer {label} pass {idx}: unknown algorithm {algo_name!r}, "
-                    f"falling back to {opts.algorithm!r}."
-                )
-                algorithm = get_algorithm(opts.algorithm)
-            pass_label = f"{label}-pass-{idx}"
-            fragments.append(
-                algorithm.render_layer(mask, color_hex, pass_label, options=algo_options)
-            )
-        if not fragments:
-            return f"<g inkscape:label={quoteattr(label)}></g>"
-        return (
-            f"<g inkscape:label={quoteattr(label)}>" + "".join(fragments) + "</g>"
-        )
 
     @staticmethod
     def _load_rgb(data: bytes) -> Image.Image:

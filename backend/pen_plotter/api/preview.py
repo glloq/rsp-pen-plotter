@@ -21,6 +21,7 @@ import asyncio
 import hashlib
 import json
 import mimetypes
+import os
 import time
 from collections import OrderedDict
 from typing import Annotated, Any
@@ -67,10 +68,17 @@ _CONVERTER_VERSION = "v2"
 #   - final:    honour options.max_dimension_px, full 10-restart k-means —
 #               near-/upload fidelity, for the "I've stopped tweaking,
 #               show me the truth" tier.
+# n_workers is capped at cpu_count - 1 so the FastAPI event loop and any
+# I/O coroutine keep a core. Set to 1 for the Draft tier (the segmentation
+# pass dominates there, the per-layer parallelism wouldn't pay back the
+# forkserver spawn cost); to 2 for Standard, and up to 4 for Final on a
+# Pi 4/5. Layer-count caps the actual fan-out anyway — a 2-colour image
+# never spawns 4 workers regardless of this setting.
+_PARALLEL_RENDER_MAX = max(1, (os.cpu_count() or 1) - 1)
 _QUALITY_TIERS: dict[str, dict[str, Any]] = {
-    "draft": {"n_init": 1, "max_dim_cap": 256},
-    "standard": {"n_init": 1, "max_dim_cap": None},
-    "final": {"n_init": 10, "max_dim_cap": None},
+    "draft": {"n_init": 1, "max_dim_cap": 256, "n_workers": 1},
+    "standard": {"n_init": 1, "max_dim_cap": None, "n_workers": min(2, _PARALLEL_RENDER_MAX)},
+    "final": {"n_init": 10, "max_dim_cap": None, "n_workers": min(4, _PARALLEL_RENDER_MAX)},
 }
 _DEFAULT_QUALITY = "standard"
 
@@ -235,12 +243,17 @@ async def preview(
     # Draft and Standard tiers both want the single-restart path; only
     # Final pays for the full 10-restart k-means.
     fast_mode = tier["n_init"] == 1
+    n_workers = int(tier.get("n_workers", 1))
 
     async with _semaphore:
         start = time.perf_counter()
         try:
             result = await asyncio.to_thread(
-                _converter.convert, data, options=raw_opts, fast=fast_mode
+                _converter.convert,
+                data,
+                options=raw_opts,
+                fast=fast_mode,
+                n_workers=n_workers,
             )
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

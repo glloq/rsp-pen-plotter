@@ -13,15 +13,21 @@ from typing import Literal
 
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 from pen_plotter.converters.algorithms.centerline import CenterlineAlgorithm
+from pen_plotter.converters.algorithms.concentric_offset import ConcentricOffsetAlgorithm
 from pen_plotter.converters.algorithms.contours import ContoursAlgorithm
 from pen_plotter.converters.algorithms.crosshatch import CrosshatchAlgorithm
 from pen_plotter.converters.algorithms.direct import DirectVectorizationAlgorithm
 from pen_plotter.converters.algorithms.edges import EdgesAlgorithm
+from pen_plotter.converters.algorithms.eulerian_hatch import EulerianHatchAlgorithm
+from pen_plotter.converters.algorithms.flowfield import FlowFieldAlgorithm
+from pen_plotter.converters.algorithms.gosper import GosperFillAlgorithm
 from pen_plotter.converters.algorithms.halftone import HalftoneAlgorithm
+from pen_plotter.converters.algorithms.hilbert import HilbertFillAlgorithm
 from pen_plotter.converters.algorithms.scanlines import ScanlinesAlgorithm
 from pen_plotter.converters.algorithms.spiral import SpiralAlgorithm
 from pen_plotter.converters.algorithms.stippling import StipplingAlgorithm
 from pen_plotter.converters.algorithms.tsp import TspAlgorithm
+from pen_plotter.converters.algorithms.tsp_opt import TspOptimizedAlgorithm
 
 AlgorithmKind = Literal["fill", "lines", "mono_stroke"]
 
@@ -48,6 +54,12 @@ _ALGORITHMS: dict[str, RasterAlgorithm] = {
         SpiralAlgorithm(),
         ScanlinesAlgorithm(),
         TspAlgorithm(),
+        HilbertFillAlgorithm(),
+        GosperFillAlgorithm(),
+        EulerianHatchAlgorithm(),
+        ConcentricOffsetAlgorithm(),
+        FlowFieldAlgorithm(),
+        TspOptimizedAlgorithm(),
     )
 }
 
@@ -64,6 +76,12 @@ _KINDS: dict[str, AlgorithmKind] = {
     "spiral": "mono_stroke",
     "scanlines": "mono_stroke",
     "tsp": "mono_stroke",
+    "hilbert": "mono_stroke",
+    "gosper": "mono_stroke",
+    "eulerian_hatch": "fill",
+    "concentric_offset": "mono_stroke",
+    "flowfield": "fill",
+    "tsp_opt": "mono_stroke",
 }
 
 # Rough cost class per algorithm — see ``AlgorithmComplexity`` above for
@@ -81,6 +99,12 @@ _COMPLEXITY: dict[str, AlgorithmComplexity] = {
     "spiral": "medium",
     "scanlines": "low",
     "tsp": "high",          # tour optimisation dominates
+    "hilbert": "medium",
+    "gosper": "medium",
+    "eulerian_hatch": "medium",
+    "concentric_offset": "medium",
+    "flowfield": "high",      # streamline integration over the field
+    "tsp_opt": "high",        # 2-opt sweep with kd-tree neighbours
 }
 
 
@@ -125,16 +149,22 @@ __all__ = [
     "AlgorithmComplexity",
     "AlgorithmKind",
     "CenterlineAlgorithm",
+    "ConcentricOffsetAlgorithm",
     "ContoursAlgorithm",
     "CrosshatchAlgorithm",
     "DirectVectorizationAlgorithm",
     "EdgesAlgorithm",
+    "EulerianHatchAlgorithm",
+    "FlowFieldAlgorithm",
+    "GosperFillAlgorithm",
     "HalftoneAlgorithm",
+    "HilbertFillAlgorithm",
     "RasterAlgorithm",
     "ScanlinesAlgorithm",
     "SpiralAlgorithm",
     "StipplingAlgorithm",
     "TspAlgorithm",
+    "TspOptimizedAlgorithm",
     "algorithm_complexity",
     "algorithm_kind",
     "available_algorithms",
