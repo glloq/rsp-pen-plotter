@@ -84,8 +84,11 @@
   "mono": {
     "pen": "Pen",
     "penNotInstalled": "Slot not marked as installed",
+    "modeLabel": "Render mode",
     "shades": "Number of shades",
-    "shadesHint": "Splits the image into N grey bands rendered with the same pen.",
+    "shadesHint": "Splits the image into N grey bands; each band carries its own algorithm tuned by the chosen mode.",
+    "threshold": "Binarisation threshold",
+    "thresholdHint": "Pixels darker than this become the rendered region; lighter pixels are dropped.",
     "detail": "Image detail",
     "detailFast": "Fast",
     "detailStandard": "Standard",
@@ -93,7 +96,25 @@
     "detailUltra": "Ultra",
     "detailHint": "Larger source resolution captures finer features but slows down conversion.",
     "style": "Render style",
-    "layersHint": "Each shade becomes one layer — open the Layers tab to fine-tune (different algorithm per shade, multi-pass effects, etc.)."
+    "layersHint": "Each band becomes one layer — open the Layers tab to fine-tune any band, swap its algorithm, or stack multi-pass effects.",
+    "modes": {
+      "pencil": "Pencil sketch",
+      "pencilDesc": "Layered cross-hatching at varying angles for a hand-drawn feel.",
+      "halftone": "Halftone (newspaper)",
+      "halftoneDesc": "Dot grid; cell size grows with brightness for a tonal print.",
+      "stippling": "Stippling",
+      "stipplingDesc": "Scattered dots whose density tracks luminance — portrait-friendly.",
+      "engraving": "Engraving",
+      "engravingDesc": "Wavy scanlines with band-dependent spacing — banknote look.",
+      "contours": "Topographic",
+      "contoursDesc": "Nested contour rings, denser for darker bands.",
+      "outline": "Line drawing",
+      "outlineDesc": "Pure edge tracing — logos, signs, simple line art.",
+      "tsp": "Single-line (TSP)",
+      "tspDesc": "One continuous nearest-neighbour tour through dark pixels.",
+      "spiral": "Spiral",
+      "spiralDesc": "Single Archimedean spiral clipped to the dark region."
+    }
   },
   "editPreview": {
     "title": "Preview",

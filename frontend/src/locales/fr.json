@@ -84,8 +84,11 @@
   "mono": {
     "pen": "Stylo",
     "penNotInstalled": "Slot non marqué comme installé",
+    "modeLabel": "Mode de rendu",
     "shades": "Nombre de nuances",
-    "shadesHint": "Découpe l'image en N bandes de gris dessinées avec le même stylo.",
+    "shadesHint": "Découpe l'image en N bandes de gris ; chaque bande utilise un algorithme adapté au mode choisi.",
+    "threshold": "Seuil de binarisation",
+    "thresholdHint": "Les pixels plus sombres que ce seuil sont tracés ; les plus clairs sont ignorés.",
     "detail": "Niveau de détail",
     "detailFast": "Rapide",
     "detailStandard": "Standard",
@@ -93,7 +96,25 @@
     "detailUltra": "Ultra",
     "detailHint": "Une plus grande résolution source capture plus de détails fins mais ralentit la conversion.",
     "style": "Style de rendu",
-    "layersHint": "Chaque nuance devient un calque — ouvre l'onglet Calques pour affiner (algo différent par nuance, multi-passes, etc.)."
+    "layersHint": "Chaque bande devient un calque — ouvre l'onglet Calques pour affiner, changer l'algo d'une bande, ou empiler des multi-passes.",
+    "modes": {
+      "pencil": "Crayonné",
+      "pencilDesc": "Hachures croisées superposées à angles variés — look fait main.",
+      "halftone": "Tramage (journal)",
+      "halftoneDesc": "Grille de points dont la taille croît avec la luminosité.",
+      "stippling": "Pointillisme",
+      "stipplingDesc": "Points dispersés à densité variable selon la luminance — idéal portraits.",
+      "engraving": "Gravure",
+      "engravingDesc": "Lignes sinusoïdales avec espacement variable — look billet de banque.",
+      "contours": "Topographique",
+      "contoursDesc": "Lignes de contour concentriques, plus denses pour les nuances sombres.",
+      "outline": "Trait pur",
+      "outlineDesc": "Détection de contours uniquement — logos, panneaux, line art.",
+      "tsp": "Mono-trait (TSP)",
+      "tspDesc": "Un seul trait continu traversant les pixels sombres au plus proche voisin.",
+      "spiral": "Spirale",
+      "spiralDesc": "Spirale d'Archimède clippée à la zone sombre de l'image."
+    }
   },
   "editPreview": {
     "title": "Aperçu",

@@ -21,6 +21,7 @@ import PaletteCard from './edit/source/PaletteCard.vue'
 import SegmentationCard from './edit/source/SegmentationCard.vue'
 import MonochromeCard from './edit/source/MonochromeCard.vue'
 import TypographyCard from './edit/source/TypographyCard.vue'
+import { DEFAULT_MONO_MODE, getMonoMode } from '../data/monoModes'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -52,6 +53,12 @@ type BitmapDraft = {
   drop_background: boolean
   background_luminance: number
   algorithm: string
+  // Mono-mode preset writes directly into this dict (one place
+  // instead of the scattered per-algo fields below). When non-empty
+  // it takes precedence in buildAlgorithmOptions; left empty for
+  // multi-colour mode so the legacy preset apply / rehydrate paths
+  // keep working through the scattered fields.
+  algorithm_options: Record<string, unknown>
   cell_size_px: number
   density: number
   dot_radius_px: number
@@ -86,6 +93,7 @@ function defaultBitmap(): BitmapDraft {
     drop_background: true,
     background_luminance: 0.92,
     algorithm: 'direct',
+    algorithm_options: {},
     cell_size_px: 6,
     density: 0.02,
     dot_radius_px: 0.6,
@@ -315,6 +323,7 @@ watch(
   [
     selectedFile,
     () => bitmap.value.algorithm,
+    () => bitmap.value.algorithm_options,
     () => bitmap.value.segmentation_method,
     () => bitmap.value.num_colors,
     () => bitmap.value.num_bands,
@@ -455,6 +464,13 @@ function buildSegmentationOptions(): Record<string, unknown> {
 
 function buildAlgorithmOptions(): Record<string, unknown> {
   const b = bitmap.value
+  // Mono modes write the full options dict into ``algorithm_options``
+  // directly — prefer that when populated so the recipe survives
+  // intact instead of being filtered through the per-algo scattered
+  // fields (which the multicolor path still uses through presets).
+  if (Object.keys(b.algorithm_options).length > 0) {
+    return { ...b.algorithm_options }
+  }
   switch (b.algorithm) {
     case 'halftone':
       return { cell_size_px: b.cell_size_px }
@@ -535,10 +551,25 @@ async function uploadSelected(): Promise<void> {
   // Mono mode: every produced band-layer plots with the same pen, so
   // pre-assign them to the slot the operator picked in MonochromeCard
   // (saves a "All to one pen" click + spares the manual swap warning).
+  // Per-band algorithm overrides from the active mono mode are also
+  // installed here — store.applyLayerAlgorithm debounces a single
+  // /rerender once all calls are queued, so we don't fan out N
+  // round-trips for an N-band image.
   if (wasMono && store.layers.length) {
-    for (const layer of store.layers) {
+    const mode = getMonoMode(monoModeId.value)
+    const total = store.layers.length
+    for (let i = 0; i < total; i++) {
+      const layer = store.layers[i]!
       if (layer.target_pen_slot !== monoPenSlot.value) {
         store.updateLayer(layer.layer_id, { target_pen_slot: monoPenSlot.value })
+      }
+      const override = mode?.algoForBand(i, total)
+      if (override) {
+        await store.applyLayerAlgorithm(
+          layer.layer_id,
+          override.algorithm,
+          override.algorithm_options,
+        )
       }
     }
   }
@@ -569,15 +600,29 @@ function openPicker(): void {
 
 // ============================== PRINT MODE (SVG OUTPUT) ==============================
 // "Single colour" mode rewrites the SVG output to a single layer drawn
-// Mono splits the image into luminance bands rendered with a single
-// ink (every band → one pen slot). Multi-colour runs kmeans / a fixed
-// palette and assigns each colour to a different pen slot. The mode
-// is derived from the segmentation method so the toggle stays in
-// sync if some other path mutates the draft (preset apply,
-// rehydrate, …).
-const printMode = computed<'multicolor' | 'monochrome'>(() =>
-  bitmap.value.segmentation_method === 'luminance_bands' ? 'monochrome' : 'multicolor',
-)
+// Mono splits the image into either luminance bands (shaded modes)
+// OR a single binarisation threshold (line-drawing / TSP / spiral
+// modes). Multi-colour uses kmeans or a manual palette. The mono
+// modes are tagged by an explicit ref so we can tell the two
+// "thresholds"-using paths apart (mono binary modes vs. a multicolor
+// thresholds segmentation, which is rare but possible).
+const printMode = computed<'multicolor' | 'monochrome'>(() => {
+  // Any of the registered mono mode segmentation methods → mono
+  if (bitmap.value.segmentation_method === 'luminance_bands') return 'monochrome'
+  // Binary mono modes use ``thresholds`` with a single split. We
+  // detect "this came from a mono mode" by checking the monoModeId
+  // ref — switching the print mode toggle is the only way it gets set.
+  const mode = getMonoMode(monoModeId.value)
+  if (
+    mode
+    && mode.segmentation_method === 'thresholds'
+    && bitmap.value.segmentation_method === 'thresholds'
+    && bitmap.value.thresholds.length === 1
+  ) {
+    return 'monochrome'
+  }
+  return 'multicolor'
+})
 
 // Mono ink slot — which pen the operator wants to use for the
 // monochrome plot. Defaults to slot 0; the post-upload step assigns
@@ -588,34 +633,37 @@ function setMonoPenSlot(value: number): void {
   monoPenSlot.value = value
 }
 
+// Active monochrome mode (Pencil / Halftone / Stippling / Engraving /
+// Contours / Outline / TSP / Spiral). The mode owns the segmentation
+// + algorithm recipe; per-band overrides are applied via /rerender
+// once the upload has produced layers. See data/monoModes.ts.
+const monoModeId = ref<string>(DEFAULT_MONO_MODE)
+function setMonoModeId(value: string): void {
+  monoModeId.value = value
+}
+
 function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
   if (mode === 'monochrome') {
-    // Mono = luminance bands rendered with a single ink. The previous
-    // implementation pinned ``fixed_palette`` to ['#000000'], which
-    // produced ONE cluster covering every pixel; halftone then dot-
-    // filled the whole image uniformly, losing the photograph's
-    // content. Using ``luminance_bands`` instead splits the image into
-    // N grey shades that the renderer treats as separate masks — each
-    // becomes its own layer, all assigned to the same pen slot, so the
-    // final plot reads as a real shaded monochrome drawing.
-    bitmap.value.segmentation_method = 'luminance_bands'
-    bitmap.value.num_bands = bitmap.value.num_bands >= 2 ? bitmap.value.num_bands : 3
-    bitmap.value.drop_background = true
-    // Use a luminance cutoff that drops the brightest band (paper
-    // white) without dropping anything mid-tone — 0.85 worked across
-    // tested samples; the user can still override via the segmentation
-    // post-process knobs if needed.
-    if (bitmap.value.background_luminance > 0.92) {
-      bitmap.value.background_luminance = 0.85
+    // Delegate to the active mono mode's recipe. The default mode
+    // (Pencil) ships sensible bands + algorithm + drop_background
+    // settings; switching modes within the card re-applies via
+    // MonochromeCard.selectMode.
+    const target = getMonoMode(monoModeId.value)
+    if (target) {
+      bitmap.value.segmentation_method = target.segmentation_method
+      bitmap.value.drop_background = target.drop_background
+      bitmap.value.background_luminance = target.background_luminance
+      bitmap.value.algorithm = target.default_algorithm
+      bitmap.value.algorithm_options = { ...target.default_algorithm_options }
+      if (target.segmentation_method === 'luminance_bands') {
+        if (bitmap.value.num_bands < 2 || bitmap.value.num_bands > 6) {
+          bitmap.value.num_bands = target.default_bands
+        }
+      } else {
+        bitmap.value.thresholds = [target.default_threshold]
+      }
     }
     paletteFollowsPens.value = false
-    // Crosshatch reads as a pencil-shaded drawing; halftone reads as
-    // newspaper dots. Both work; crosshatch is the friendlier default
-    // for photographs. ``direct`` would just outline the bands as
-    // filled regions which doesn't suit mono.
-    if (bitmap.value.algorithm === 'direct' || bitmap.value.algorithm === 'halftone') {
-      bitmap.value.algorithm = 'crosshatch'
-    }
   } else {
     // Back to multi-colour: restore the default kmeans / 4-colour
     // segmentation. If the user had pen-following enabled before
@@ -623,7 +671,15 @@ function setPrintMode(mode: 'multicolor' | 'monochrome'): void {
     bitmap.value.segmentation_method = 'kmeans'
     bitmap.value.num_colors = 4
     bitmap.value.background_luminance = 0.92
-    if (bitmap.value.algorithm === 'crosshatch') {
+    // Clear the mono mode's algorithm_options dict so the multicolor
+    // path falls back to the per-algo scattered fields and respects
+    // any preset that gets applied afterwards.
+    bitmap.value.algorithm_options = {}
+    if (
+      bitmap.value.algorithm !== 'direct'
+      && bitmap.value.algorithm !== 'halftone'
+      && bitmap.value.algorithm !== 'stippling'
+    ) {
       bitmap.value.algorithm = 'direct'
     }
     paletteFollowsPens.value = true
@@ -751,7 +807,9 @@ defineExpose({ openPicker, clearAll })
         v-else
         :bitmap="bitmap"
         :mono-pen-slot="monoPenSlot"
+        :mono-mode-id="monoModeId"
         @update:mono-pen-slot="setMonoPenSlot"
+        @update:mono-mode-id="setMonoModeId"
       />
 
       <p

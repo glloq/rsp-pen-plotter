@@ -2,64 +2,49 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../../../stores/job'
-import PrintStylePicker from '../PrintStylePicker.vue'
-import AlgoParamsForm from '../AlgoParamsForm.vue'
-import type { PrintStyle } from '../../../data/printStyles'
+import { MONO_MODES, type MonoMode } from '../../../data/monoModes'
 
-// Mono-ink rendering card. Replaces the broken single-knob mono mode
-// that used to ship: ``fixed_palette`` with one colour produced a
-// single cluster covering the whole image, which halftone then dot-
-// filled uniformly — image content was lost. We now use
-// ``luminance_bands`` to split the photograph into N grey shades; all
-// shades plot with the same physical pen, but each can carry its own
-// render algorithm (configurable per-shade in the Layers tab once
-// converted). The card exposes the pre-upload knobs that drive that:
-// pen slot, number of shades, image detail, default render style, and
-// the style's parameters.
+// Mono-ink rendering card driven by named modes (Pencil, Halftone,
+// Stippling, Engraving, Contours, Outline, TSP, Spiral). Each mode is
+// a recipe that combines segmentation + per-band algorithm overrides
+// — see data/monoModes.ts. The card exposes:
+//   - which pen plots every produced layer
+//   - which mode to use (8 visual styles)
+//   - bands count (only for shaded modes — binary modes ignore it)
+//   - binarisation threshold (only for binary modes)
+//   - image detail (max_dimension_px tiered as Fast/Standard/High/Ultra)
+//
+// All other algorithm-specific knobs (angles, density, spacing) are
+// owned by the mode recipe and applied per band post-upload via
+// /rerender (see SourceSection.applyMonoOverrides).
 
-// Lightweight shape — matches the relevant slice of BitmapDraft. The
-// card mutates these fields directly via the reactive prop (the
-// parent's deep watcher reschedules /preview).
 interface BitmapDraft {
   algorithm: string
+  algorithm_options: Record<string, unknown>
   num_bands: number
+  thresholds: number[]
   max_dimension_px: number
   drop_background: boolean
   background_luminance: number
-  cell_size_px: number
-  density: number
-  dot_radius_px: number
-  seed: number
-  crosshatch_angle_deg: number
-  crosshatch_spacing_px: number
-  crosshatch_crossed: boolean
-  contours_spacing_px: number
-  contours_max_rings: number
-  edges_stroke_width: number
-  spiral_spacing_px: number
-  spiral_samples_per_turn: number
-  scanlines_spacing_px: number
-  scanlines_wave_amp_px: number
-  scanlines_wave_period_px: number
+  segmentation_method: string
   [key: string]: unknown
 }
 
 const props = defineProps<{
   bitmap: BitmapDraft
   monoPenSlot: number
+  monoModeId: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:monoPenSlot', value: number): void
+  (e: 'update:monoModeId', value: string): void
 }>()
 
 const { t } = useI18n()
 const store = useJobStore()
 
 // ============================== PEN SLOT ==============================
-// One pen will plot every shade — the operator picks which slot. The
-// post-upload step in SourceSection then assigns ``target_pen_slot``
-// on every layer to this value.
 const penSlots = computed(() => {
   const profile = store.selectedProfile
   const pens = profile?.pens ?? []
@@ -78,69 +63,52 @@ function setSlot(index: number): void {
   emit('update:monoPenSlot', index)
 }
 
-// ============================== ALGO + PARAMS ==============================
-// Bridge between the AlgoParamsForm schema (algo-shape keys like
-// ``angle_deg``) and the scattered BitmapDraft fields (e.g.
-// ``crosshatch_angle_deg``). buildAlgorithmOptions in SourceSection
-// uses the same mapping to pack /upload payloads, so writing back via
-// onAlgoOption keeps the draft consistent end-to-end.
-const FIELD_MAP: Record<string, Record<string, string>> = {
-  halftone: { cell_size_px: 'cell_size_px' },
-  stippling: { density: 'density', dot_radius_px: 'dot_radius_px', seed: 'seed' },
-  crosshatch: {
-    angle_deg: 'crosshatch_angle_deg',
-    spacing_px: 'crosshatch_spacing_px',
-    crossed: 'crosshatch_crossed',
-  },
-  contours: { spacing_px: 'contours_spacing_px', max_rings: 'contours_max_rings' },
-  edges: { stroke_width: 'edges_stroke_width' },
-  spiral: { spacing_px: 'spiral_spacing_px', samples_per_turn: 'spiral_samples_per_turn' },
-  scanlines: {
-    spacing_px: 'scanlines_spacing_px',
-    wave_amp_px: 'scanlines_wave_amp_px',
-    wave_period_px: 'scanlines_wave_period_px',
-  },
-  tsp: { density: 'density', seed: 'seed' },
+// ============================== MODE PICKER ==============================
+// Selecting a mode rewrites the draft's segmentation + uniform
+// algorithm (used at /upload). Per-band overrides are applied
+// post-upload in SourceSection so they survive a /rerender flush.
+const activeMode = computed<MonoMode>(
+  () => MONO_MODES.find((m) => m.id === props.monoModeId) ?? MONO_MODES[0]!,
+)
+
+function selectMode(mode: MonoMode): void {
+  // Apply the mode's segmentation + algorithm choices into the draft;
+  // the parent's deep watcher reschedules /preview with the new
+  // payload. The numeric knobs (bands count / threshold) keep their
+  // current value if it's compatible, otherwise reset to the mode's
+  // default — so flipping between Pencil-3 and Halftone-3 doesn't
+  // wipe the operator's bands choice.
+  props.bitmap.segmentation_method = mode.segmentation_method
+  props.bitmap.drop_background = mode.drop_background
+  props.bitmap.background_luminance = mode.background_luminance
+  props.bitmap.algorithm = mode.default_algorithm
+  props.bitmap.algorithm_options = { ...mode.default_algorithm_options }
+  if (mode.segmentation_method === 'luminance_bands') {
+    if (props.bitmap.num_bands < 2 || props.bitmap.num_bands > 6) {
+      props.bitmap.num_bands = mode.default_bands
+    }
+  } else {
+    // Thresholds mode: a single split — defaults to the mode's preferred
+    // luminance cutoff. The list shape mirrors what buildSegmentationOptions
+    // expects (sorted floats in [0, 1]).
+    props.bitmap.thresholds = [mode.default_threshold]
+  }
+  emit('update:monoModeId', mode.id)
 }
 
-const algoValues = computed<Record<string, unknown>>(() => {
-  const map = FIELD_MAP[props.bitmap.algorithm] ?? {}
-  const out: Record<string, unknown> = {}
-  for (const [schemaKey, draftKey] of Object.entries(map)) {
-    out[schemaKey] = props.bitmap[draftKey]
-  }
-  return out
+// ============================== BANDS / THRESHOLD KNOBS ==============================
+// Only one of these is visible at a time, dictated by the active
+// mode's segmentation_method.
+const usesBands = computed(() => activeMode.value.segmentation_method === 'luminance_bands')
+
+const thresholdValue = computed({
+  get: () => props.bitmap.thresholds[0] ?? 0.5,
+  set: (v: number) => {
+    props.bitmap.thresholds = [Math.max(0, Math.min(1, v))]
+  },
 })
 
-function onPickStyle(style: PrintStyle): void {
-  props.bitmap.algorithm = style.algorithm
-  const map = FIELD_MAP[style.algorithm] ?? {}
-  // Seed the scattered fields from the preset so the very first
-  // /preview round-trip already exercises sensible knobs.
-  for (const [schemaKey, draftKey] of Object.entries(map)) {
-    if (schemaKey in style.algorithm_options) {
-      props.bitmap[draftKey] = style.algorithm_options[schemaKey]
-    }
-  }
-}
-
-function onResetStyle(): void {
-  // "Default" in mono context = crosshatch (best general-purpose shading
-  // for a pen plotter). Direct doesn't suit mono because it produces
-  // filled regions, not shaded lines.
-  props.bitmap.algorithm = 'crosshatch'
-}
-
-function onAlgoOption(key: string, value: unknown): void {
-  const draftKey = FIELD_MAP[props.bitmap.algorithm]?.[key]
-  if (draftKey) props.bitmap[draftKey] = value
-}
-
 // ============================== DETAIL LEVEL ==============================
-// max_dimension_px is the longest-edge resize cap applied before
-// segmentation. Higher = more detail, slower preview. 4 named tiers
-// instead of a raw number input so the operator can reach for
-// "high detail" without thinking about pixels.
 interface DetailLevel {
   id: 'fast' | 'standard' | 'high' | 'ultra'
   value: number
@@ -153,7 +121,6 @@ const detailLevels: DetailLevel[] = [
   { id: 'ultra', value: 2000, labelKey: 'mono.detailUltra' },
 ]
 
-// Snap a free-form max_dimension to the nearest preset for the highlight.
 const currentDetail = computed<DetailLevel['id']>(() => {
   const target = props.bitmap.max_dimension_px
   let best = detailLevels[0]!
@@ -201,8 +168,29 @@ function setDetail(value: number): void {
       </div>
     </div>
 
-    <!-- Number of shades -->
+    <!-- Mode picker -->
     <div class="space-y-1">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.modeLabel') }}</p>
+      <div class="grid grid-cols-2 gap-1">
+        <button
+          v-for="mode in MONO_MODES"
+          :key="mode.id"
+          type="button"
+          class="flex flex-col gap-0.5 rounded border px-2 py-1.5 text-left text-[11px] transition"
+          :class="monoModeId === mode.id
+            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+          :title="t(mode.descKey)"
+          @click="selectMode(mode)"
+        >
+          <span class="font-medium">{{ t(mode.labelKey) }}</span>
+          <span class="text-[9px] text-slate-500">{{ t(mode.descKey) }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bands count (shaded modes) or threshold (binary modes) -->
+    <div v-if="usesBands" class="space-y-1">
       <div class="flex items-center justify-between">
         <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.shades') }}</p>
         <span class="font-mono text-[11px] text-slate-300">{{ bitmap.num_bands }}</span>
@@ -216,6 +204,21 @@ function setDetail(value: number): void {
         class="w-full accent-emerald-500"
       />
       <p class="text-[10px] text-slate-500">{{ t('mono.shadesHint') }}</p>
+    </div>
+    <div v-else class="space-y-1">
+      <div class="flex items-center justify-between">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.threshold') }}</p>
+        <span class="font-mono text-[11px] text-slate-300">{{ thresholdValue.toFixed(2) }}</span>
+      </div>
+      <input
+        v-model.number="thresholdValue"
+        type="range"
+        min="0.1"
+        max="0.9"
+        step="0.05"
+        class="w-full accent-emerald-500"
+      />
+      <p class="text-[10px] text-slate-500">{{ t('mono.thresholdHint') }}</p>
     </div>
 
     <!-- Detail level -->
@@ -237,27 +240,6 @@ function setDetail(value: number): void {
         </button>
       </div>
       <p class="text-[10px] text-slate-500">{{ t('mono.detailHint') }}</p>
-    </div>
-
-    <!-- Render style + params -->
-    <div class="space-y-1.5">
-      <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('mono.style') }}</p>
-      <PrintStylePicker
-        kind="image"
-        :current-algorithm="bitmap.algorithm"
-        @select="onPickStyle"
-        @reset="onResetStyle"
-      />
-      <div
-        v-if="bitmap.algorithm && bitmap.algorithm !== 'direct'"
-        class="rounded border border-slate-700 bg-slate-900/50 p-2"
-      >
-        <AlgoParamsForm
-          :algorithm="bitmap.algorithm"
-          :values="algoValues"
-          @update="onAlgoOption"
-        />
-      </div>
     </div>
 
     <p class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-[10px] leading-snug text-slate-400">
