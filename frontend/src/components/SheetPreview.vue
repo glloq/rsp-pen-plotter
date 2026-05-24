@@ -380,20 +380,6 @@ function flipSelected(axis: 'h' | 'v'): void {
   const id = store.selectedPlacementId
   if (id) store.flipPlacement(id, axis)
 }
-function centerSelected(): void {
-  const id = store.selectedPlacementId
-  if (id) store.centerPlacement(id)
-}
-function duplicateSelected(): void {
-  const id = store.selectedPlacementId
-  if (!id) return
-  const newId = store.duplicatePlacement(id)
-  if (newId) store.selectPlacement(newId)
-}
-function resetSelected(): void {
-  const id = store.selectedPlacementId
-  if (id) store.resetPlacementTransform(id)
-}
 
 // CSS transform applied to the foreignObject content so the previewed
 // drawing matches the placement's rotation / mirror state. The inner
@@ -539,66 +525,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             <polygon points="4 13 8 9.5 12 13" fill="currentColor" />
           </svg>
         </button>
-        <button
-          type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-          :disabled="!hasSelection"
-          :title="t('sheet.centerPlacement')"
-          :aria-label="t('sheet.centerPlacement')"
-          @click="centerSelected"
-        >
-          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="2" y="2" width="12" height="12" />
-            <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
-            <line x1="8" y1="2" x2="8" y2="4" />
-            <line x1="8" y1="12" x2="8" y2="14" />
-            <line x1="2" y1="8" x2="4" y2="8" />
-            <line x1="12" y1="8" x2="14" y2="8" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-          :disabled="!hasSelection"
-          :title="t('sheet.duplicatePlacement')"
-          :aria-label="t('sheet.duplicatePlacement')"
-          @click="duplicateSelected"
-        >
-          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="5" y="5" width="9" height="9" />
-            <path d="M2 11V2h9" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-          :disabled="!hasSelection"
-          :title="t('sheet.resetTransform')"
-          @click="resetSelected"
-        >
-          {{ t('sheet.resetTransformShort') }}
-        </button>
       </div>
 
       <div class="h-5 w-px bg-slate-700 mx-1" />
 
-      <div class="flex items-center gap-1">
-        <span class="text-slate-500">{{ t('sheet.snap') }}</span>
-        <div class="flex overflow-hidden rounded border border-slate-700">
-          <button
-            v-for="opt in snapOptions"
-            :key="opt"
-            type="button"
-            class="px-2 py-1 transition"
-            :class="snapMm === opt
-              ? 'bg-slate-700 text-white'
-              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
-            @click="snapMm = opt"
-          >
+      <label class="flex items-center gap-1" :title="t('sheet.snap')">
+        <svg viewBox="0 0 16 16" class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 4h12M2 8h12M2 12h12M4 2v12M8 2v12M12 2v12" />
+        </svg>
+        <select
+          v-model.number="snapMm"
+          class="rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          :aria-label="t('sheet.snap')"
+        >
+          <option v-for="opt in snapOptions" :key="opt" :value="opt">
             {{ opt === 0 ? t('sheet.snapOff') : `${opt} mm` }}
-          </button>
-        </div>
-      </div>
+          </option>
+        </select>
+      </label>
 
       <div class="ml-auto flex items-center gap-2">
         <span v-if="placementCount" class="font-mono text-slate-400">
