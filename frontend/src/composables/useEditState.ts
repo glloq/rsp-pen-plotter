@@ -1,4 +1,4 @@
-import { computed, type ComputedRef, type Ref, ref } from 'vue'
+import { computed, type ComputedRef, type Ref, ref, watch } from 'vue'
 
 // Editor-pane state shared between the right-hand settings cards
 // (SourceSection) and the left-hand preview pane (EditPreviewPane). The
@@ -31,10 +31,28 @@ const _currentPage = ref<number>(0)
 // Override that lets the active tab steer what the preview pane shows.
 // ``auto`` falls back to the existing priority (live SVG → placement
 // SVG → raster thumbnail). ``source`` forces the raw raster with the
-// operator's preprocess adjustments overlaid, so the Image tab can
-// show what the source actually looks like after brightness/contrast/
-// crop/etc. without the SVG renderer hiding the effect.
-const _previewMode = ref<'auto' | 'source'>('auto')
+// operator's preprocess adjustments overlaid. ``split`` shows both
+// side-by-side (raster left, SVG right) so the operator can compare
+// preprocess-only changes against the full vectorisation — useful for
+// gamma / levels / sharpen which aren't representable in CSS.
+export type PreviewMode = 'auto' | 'source' | 'split'
+const _previewMode = ref<PreviewMode>('auto')
+// Preview quality tier. Picked by the operator in the preview pane
+// toolbar; defaults to Standard to match the historical /preview
+// latency. Persisted to localStorage so the choice survives a reload.
+export type PreviewQuality = 'draft' | 'standard' | 'final'
+const QUALITY_KEY = 'previewQuality'
+function _loadQuality(): PreviewQuality {
+  try {
+    const v = localStorage.getItem(QUALITY_KEY)
+    if (v === 'draft' || v === 'standard' || v === 'final') return v
+  } catch { /* localStorage unavailable — fall through */ }
+  return 'standard'
+}
+const _previewQuality = ref<PreviewQuality>(_loadQuality())
+watch(_previewQuality, (value) => {
+  try { localStorage.setItem(QUALITY_KEY, value) } catch { /* ignore */ }
+})
 let _goToPage: (page: number) => Promise<void> = async () => {}
 // Callbacks installed by SourceSection so the preview pane can cancel
 // or retry the in-flight /preview round-trip without reaching across to
@@ -65,7 +83,8 @@ export interface EditState {
   previewCached: Ref<boolean>
   previewPalette: Ref<string[]>
   kind: Ref<EditFileKind>
-  previewMode: Ref<'auto' | 'source'>
+  previewMode: Ref<PreviewMode>
+  previewQuality: Ref<PreviewQuality>
   pageCount: Ref<number>
   currentPage: Ref<number>
   goToPage: (page: number) => Promise<void>
@@ -89,6 +108,8 @@ export function resetEditState(): void {
   _previewResult.value = null
   _kind.value = 'none'
   _previewMode.value = 'auto'
+  // Note: _previewQuality is intentionally NOT reset — it's an operator
+  // preference that persists across sessions (see localStorage above).
   _pageCount.value = 0
   _currentPage.value = 0
   _goToPage = async () => {}
@@ -110,6 +131,7 @@ export function useEditState(): EditState {
     previewPalette: _previewPalette,
     kind: _kind,
     previewMode: _previewMode,
+    previewQuality: _previewQuality,
     pageCount: _pageCount,
     currentPage: _currentPage,
     goToPage: (page) => _goToPage(page),

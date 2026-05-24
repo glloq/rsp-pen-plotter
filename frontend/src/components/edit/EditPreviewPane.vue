@@ -119,24 +119,46 @@ const placementSvg = computed(() => {
 // ``source`` mode (set by EditModal when the Image tab is active)
 // forces the raster source + preprocess overlay even when an SVG
 // preview is ready, so the operator can see what their brightness /
-// contrast / crop tweaks are doing to the *source pixels*. Falls back
-// to the regular SVG flow on every other tab.
+// contrast / crop tweaks are doing to the *source pixels*. ``split``
+// shows both halves so the operator can compare CSS-only preprocess
+// (left) against the full vectorisation (right) — critical for
+// gamma / levels / sharpen which CSS can't express. ``auto`` falls
+// back to the regular SVG flow on every other tab.
 const sourceMode = computed(
   () =>
     edit.previewMode.value === 'source'
     && edit.kind.value === 'bitmap'
     && Boolean(edit.previewUrl.value),
 )
+// Split mode requires both halves to have content; if either is
+// missing we degrade to whichever single layer is available rather
+// than showing an awkward half-empty pane.
+const hasLiveSvg = computed(() => Boolean(edit?.previewSvg.value))
+const hasRaster = computed(
+  () => edit.kind.value === 'bitmap' && Boolean(edit.previewUrl.value),
+)
+const splitMode = computed(
+  () =>
+    edit.previewMode.value === 'split'
+    && hasRaster.value
+    && (hasLiveSvg.value || Boolean(placementSvg.value)),
+)
 const showLivePreview = computed(
-  () => !sourceMode.value && Boolean(edit?.previewSvg.value),
+  () => !sourceMode.value && !splitMode.value && hasLiveSvg.value,
 )
 const showPlacementSvg = computed(
-  () => !sourceMode.value && !showLivePreview.value && Boolean(placementSvg.value),
+  () =>
+    !sourceMode.value
+    && !splitMode.value
+    && !showLivePreview.value
+    && Boolean(placementSvg.value),
 )
 const showSourcePreview = computed(() => sourceMode.value)
+const showSplitPreview = computed(() => splitMode.value)
 const showThumbnail = computed(
   () =>
     !sourceMode.value
+    && !splitMode.value
     && !showLivePreview.value
     && !showPlacementSvg.value
     && edit?.kind.value === 'bitmap'
@@ -145,6 +167,7 @@ const showThumbnail = computed(
 const showTextPreview = computed(
   () =>
     !sourceMode.value
+    && !splitMode.value
     && !showLivePreview.value
     && !showPlacementSvg.value
     && edit?.kind.value === 'typography'
@@ -153,11 +176,34 @@ const showTextPreview = computed(
 const showEmptyHint = computed(
   () =>
     !sourceMode.value
+    && !splitMode.value
     && !showLivePreview.value
     && !showPlacementSvg.value
     && !showThumbnail.value
     && !showTextPreview.value,
 )
+
+// Which SVG should the right half of the split show? Prefer the live
+// /preview (reflects unsaved edits) over the committed placement SVG.
+const splitSvg = computed<string>(() =>
+  edit.previewSvg.value || placementSvg.value,
+)
+
+// Toolbar visibility: only meaningful when the source is a bitmap and
+// both raster + a vector representation could potentially be shown.
+const canToggleMode = computed(
+  () => edit.kind.value === 'bitmap' && hasRaster.value,
+)
+const QUALITY_TIERS: Array<{ id: 'draft' | 'standard' | 'final'; key: string }> = [
+  { id: 'draft', key: 'editPreview.qualityDraft' },
+  { id: 'standard', key: 'editPreview.qualityStandard' },
+  { id: 'final', key: 'editPreview.qualityFinal' },
+]
+const MODE_TOGGLES: Array<{ id: 'auto' | 'source' | 'split'; key: string }> = [
+  { id: 'auto', key: 'editPreview.modeAuto' },
+  { id: 'source', key: 'editPreview.modeSource' },
+  { id: 'split', key: 'editPreview.modeSplit' },
+]
 
 // CSS filter / transform / clip-path that mirror the operator's
 // PreprocessDraft so the raw source preview reflects their tweaks live
@@ -261,6 +307,53 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
     <header class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-700 bg-slate-900/60 px-3 py-2 text-xs">
       <div class="flex flex-wrap items-center gap-x-2">
         <span class="uppercase tracking-wide text-slate-400">{{ t('editPreview.title') }}</span>
+        <!-- View mode toggle: Auto (default flow), Source (raster +
+             CSS preprocess), Split (raster | vector compare). Hidden
+             when there's no raster to compare with — typography /
+             empty panes have nothing to toggle. -->
+        <div
+          v-if="canToggleMode"
+          class="flex items-center gap-px rounded-sm border border-slate-700 bg-slate-950/40 p-px"
+          role="group"
+          :aria-label="t('editPreview.modeGroup')"
+        >
+          <button
+            v-for="m in MODE_TOGGLES"
+            :key="m.id"
+            type="button"
+            class="rounded-sm px-1.5 py-0.5 text-[10px] uppercase tracking-wider transition"
+            :class="edit.previewMode.value === m.id
+              ? 'bg-sky-800/70 text-sky-100'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+            :title="t(`${m.key}Hint`)"
+            @click="edit.previewMode.value = m.id"
+          >
+            {{ t(m.key) }}
+          </button>
+        </div>
+        <!-- Quality tier: Draft for slider-drag latency, Standard
+             matches the historical /preview behaviour, Final pays for
+             10-restart k-means. Each tier has its own cache slot so
+             toggling between them stays cheap after the first warm-up. -->
+        <div
+          class="flex items-center gap-px rounded-sm border border-slate-700 bg-slate-950/40 p-px"
+          role="group"
+          :aria-label="t('editPreview.qualityGroup')"
+        >
+          <button
+            v-for="q in QUALITY_TIERS"
+            :key="q.id"
+            type="button"
+            class="rounded-sm px-1.5 py-0.5 text-[10px] uppercase tracking-wider transition"
+            :class="edit.previewQuality.value === q.id
+              ? 'bg-emerald-800/70 text-emerald-100'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+            :title="t(`${q.key}Hint`)"
+            @click="edit.previewQuality.value = q.id"
+          >
+            {{ t(q.key) }}
+          </button>
+        </div>
         <!-- LIVE vs SAVED badge: tells the operator at a glance whether
              the canvas is showing the freshly-rendered draft (every
              setting change updates it) or the last committed
@@ -268,7 +361,12 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
              this, settings changes that updated the live preview but
              not the placement looked like "nothing happened". -->
         <span
-          v-if="showSourcePreview"
+          v-if="showSplitPreview"
+          class="rounded-sm border border-violet-700 bg-violet-950/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-violet-300"
+          :title="t('editPreview.splitHint')"
+        >{{ t('editPreview.split') }}</span>
+        <span
+          v-else-if="showSourcePreview"
           class="rounded-sm border border-sky-700 bg-sky-950/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-sky-300"
           :title="t('editPreview.sourceHint')"
         >{{ t('editPreview.source') }}</span>
@@ -418,6 +516,81 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
               />
             </div>
           </template>
+        </div>
+        <!-- Split-screen compare: raster (left, with CSS preprocess
+             overlay) vs vectorisation (right). The divider sits at
+             50% with a thin labelled separator so the operator can
+             eyeball gamma / levels / sharpen — adjustments that CSS
+             can't express but that the backend pipeline applies in
+             full. Each half clip-paths the same content the single-
+             mode renderers use, so there's no duplicated style logic. -->
+        <div
+          v-else-if="showSplitPreview"
+          class="relative flex h-full w-full items-center justify-center"
+        >
+          <!-- Left half: source raster + CSS preprocess overlay. -->
+          <div
+            class="absolute inset-0 flex items-center justify-center overflow-hidden"
+            :style="{ clipPath: 'inset(0 50% 0 0)' }"
+          >
+            <img
+              :src="edit!.previewUrl.value!"
+              :alt="edit!.selectedFile.value?.name ?? ''"
+              class="block"
+              :style="sourceImageStyle"
+              draggable="false"
+            />
+            <template v-if="cropOverlay">
+              <div class="pointer-events-none absolute inset-0">
+                <div class="absolute inset-x-0 top-0 bg-black/55" :style="{ height: cropOverlay.y }" />
+                <div
+                  class="absolute inset-x-0 bottom-0 bg-black/55"
+                  :style="{ top: `calc(${cropOverlay.y} + ${cropOverlay.h})` }"
+                />
+                <div
+                  class="absolute bg-black/55"
+                  :style="{ top: cropOverlay.y, left: 0, width: cropOverlay.x, height: cropOverlay.h }"
+                />
+                <div
+                  class="absolute bg-black/55"
+                  :style="{
+                    top: cropOverlay.y,
+                    left: `calc(${cropOverlay.x} + ${cropOverlay.w})`,
+                    right: 0,
+                    height: cropOverlay.h,
+                  }"
+                />
+                <div
+                  class="absolute border-2 border-emerald-400/80"
+                  :style="{
+                    top: cropOverlay.y,
+                    left: cropOverlay.x,
+                    width: cropOverlay.w,
+                    height: cropOverlay.h,
+                  }"
+                />
+              </div>
+            </template>
+          </div>
+          <!-- Right half: full vectorisation. v-html is sanitised
+               upstream (placementSvg + previewSvg both run through
+               DOMPurify). -->
+          <div
+            class="absolute inset-0 flex items-center justify-center overflow-hidden [&_svg]:max-h-full [&_svg]:max-w-full"
+            :style="{ clipPath: 'inset(0 0 0 50%)' }"
+            v-html="splitSvg"
+          />
+          <!-- Divider + labels. The divider is non-interactive (no
+               drag handle in v1 — we revisit if operators ask). The
+               labels float above the canvas so they survive the
+               clip-paths. -->
+          <div class="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-400/70" />
+          <span
+            class="pointer-events-none absolute left-2 top-2 rounded-sm bg-slate-900/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-slate-200"
+          >{{ t('editPreview.source') }}</span>
+          <span
+            class="pointer-events-none absolute right-2 top-2 rounded-sm bg-slate-900/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-slate-200"
+          >{{ t('editPreview.vector') }}</span>
         </div>
         <!-- Vectorised placement SVG: the post-upload state, updated by
              /rerender when layer algorithms change. -->

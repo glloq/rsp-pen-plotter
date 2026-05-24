@@ -550,11 +550,13 @@ export async function previewBitmap(
   algorithm: string,
   options: Record<string, unknown> | undefined,
   signal?: AbortSignal,
+  quality: 'draft' | 'standard' | 'final' = 'standard',
 ): Promise<PreviewResponse> {
   const form = new FormData()
   form.append('file', file)
   form.append('algorithm', algorithm)
   if (options) form.append('options', JSON.stringify(options))
+  form.append('quality', quality)
   const response = await api.post<PreviewResponse>('/preview', form, {
     signal,
     // No timeout. Heavy styles (high-density stippling, fine

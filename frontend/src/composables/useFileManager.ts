@@ -79,6 +79,7 @@ export function useFileManager(t?: Translator) {
     algorithmGetter: () => draft.bitmap.value.algorithm,
     optionsBuilder: () => buildOptions(),
     shouldRun: () => kind.value === 'bitmap',
+    qualityGetter: () => edit.previewQuality.value,
     failedMessage: t?.('upload.failed') ?? 'preview failed',
     timeoutMessage: t?.('upload.previewTimeout')
       ?? 'Preview too slow — lower the detail tier or hit Apply to render anyway.',
@@ -241,6 +242,19 @@ export function useFileManager(t?: Translator) {
           previewer.schedule({ immediate: true })
         }
       }),
+      // Quality tier change: immediate /preview so the operator sees
+      // the tier they just picked. Standard ↔ Final affects k-means
+      // restarts; Draft additionally caps the sample resolution. Each
+      // tier owns its own slot in the backend LRU so toggling between
+      // tiers stays cheap once each has been warmed.
+      watch(
+        () => edit.previewQuality.value,
+        () => {
+          if (_selectedFile.value && kind.value === 'bitmap') {
+            previewer.schedule({ immediate: true })
+          }
+        },
+      ),
 
       // Switching placements (via FilesPane) drops the in-memory File
       // and rehydrates the draft so the modal mirrors the newly

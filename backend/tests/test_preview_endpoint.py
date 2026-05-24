@@ -95,3 +95,94 @@ def test_preview_rejects_bad_options(client: TestClient) -> None:
         files={"file": ("dot.png", _png_bytes(), "image/png")},
     )
     assert response.status_code == 400
+
+
+def test_preview_rejects_unknown_quality(client: TestClient) -> None:
+    response = client.post(
+        "/preview",
+        data={"algorithm": "direct", "quality": "ultra"},
+        files={"file": ("dot.png", _png_bytes(), "image/png")},
+    )
+    assert response.status_code == 400
+
+
+def test_preview_quality_tiers_are_independent_cache_slots(client: TestClient) -> None:
+    """Same image + same options at different tiers must miss each other's cache."""
+    payload = _png_bytes()
+    files = {"file": ("dot.png", payload, "image/png")}
+    base = {"algorithm": "direct", "options": json.dumps({"num_colors": 2})}
+
+    standard_first = client.post(
+        "/preview",
+        data={**base, "quality": "standard"},
+        files=files,
+    )
+    assert standard_first.status_code == 200 and standard_first.json()["cached"] is False
+
+    # Draft must miss the Standard slot.
+    draft_first = client.post(
+        "/preview",
+        data={**base, "quality": "draft"},
+        files={"file": ("dot.png", payload, "image/png")},
+    )
+    assert draft_first.status_code == 200
+    assert draft_first.json()["cached"] is False
+
+    # But a second Standard call hits its own slot.
+    standard_second = client.post(
+        "/preview",
+        data={**base, "quality": "standard"},
+        files={"file": ("dot.png", payload, "image/png")},
+    )
+    assert standard_second.json()["cached"] is True
+
+
+def test_preview_canonicalises_float_noise(client: TestClient) -> None:
+    """Sliders emit floats with rounding noise; canonical key shares the slot."""
+    payload = _png_bytes()
+    files = {"file": ("dot.png", payload, "image/png")}
+
+    first = client.post(
+        "/preview",
+        data={
+            "algorithm": "direct",
+            "options": json.dumps({"num_colors": 2, "preprocess": {"gamma": 1.2}}),
+        },
+        files=files,
+    )
+    assert first.status_code == 200 and first.json()["cached"] is False
+
+    # 1.2000000001 should round to 1.2 at 4 decimals and reuse the slot.
+    second = client.post(
+        "/preview",
+        data={
+            "algorithm": "direct",
+            "options": json.dumps({"num_colors": 2, "preprocess": {"gamma": 1.2000000001}}),
+        },
+        files={"file": ("dot.png", payload, "image/png")},
+    )
+    assert second.status_code == 200
+    assert second.json()["cached"] is True
+
+
+def test_preview_draft_caps_max_dimension(client: TestClient) -> None:
+    """Draft tier must cap max_dimension_px even when the operator picked higher."""
+    from pen_plotter.api import preview as preview_module
+
+    payload = _png_bytes()
+    response = client.post(
+        "/preview",
+        data={
+            "algorithm": "direct",
+            "quality": "draft",
+            "options": json.dumps({"num_colors": 2, "max_dimension_px": 2000}),
+        },
+        files={"file": ("dot.png", payload, "image/png")},
+    )
+    assert response.status_code == 200
+    # Inspect the cached entry's key — it includes the canonicalised options
+    # JSON, so we can assert the cap was applied before hashing.
+    keys = list(preview_module._cache.keys())
+    assert len(keys) == 1
+    assert '"max_dimension_px": 256' in keys[0]
+    assert '"max_dimension_px": 2000' not in keys[0]
