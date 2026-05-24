@@ -9,6 +9,27 @@ Skeletonisation uses ``scikit-image`` when available. If the optional
 dep is missing at runtime, the algorithm falls back to
 :class:`EdgesAlgorithm` rather than crashing, so deployments without
 the dep installed still produce *some* line output for this layer.
+
+Performance notes
+-----------------
+The chain tracer is the hot path on large schematics (4–8k px on the
+long edge): a million-pixel skeleton means a million walk steps. To
+keep the Python overhead per step small we:
+
+* Build a per-pixel **direction bitmask** (one byte / pixel) in 8
+  vectorised numpy passes — no per-pixel Python work. Bit ``di`` is
+  set iff the neighbour at offset ``_NEIGHBOURS_8[di]`` is also a
+  skeleton pixel. The walk then resolves "given I came from
+  direction X, where do I go next?" with two array lookups and a
+  bit op, with no dict involved.
+* Use ``scipy.ndimage.label`` to find closed-loop components in O(N)
+  C-time, *only* when there are unwalked edges left. The previous
+  implementation re-scanned every count==2 pixel of the skeleton in
+  Python, even though the overwhelming majority were already covered
+  by chains walked from endpoints / junctions — that pass alone
+  could take hundreds of seconds on a dense schematic.
+* Vectorise Chaikin smoothing so long chains don't pay per-vertex
+  Python overhead.
 """
 
 from __future__ import annotations
@@ -26,6 +47,19 @@ _NEIGHBOURS_8 = (
     (0, -1),           (0, 1),
     (1, -1),  (1, 0),  (1, 1),
 )
+_KERNEL_8 = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=np.int8)
+# For each of the 8 neighbour offsets, the index of the opposite offset:
+# (-1,-1) ↔ (1,1), (-1,0) ↔ (1,0), …  — symmetric, so simply 7 - i.
+_OPPOSITE_DIR = tuple(7 - i for i in range(8))
+# uint8 byte → index of its lowest set bit (8 if the byte is zero).
+# Used by the walker to pick the "other" neighbour at a count==2
+# pixel without iterating 8 candidates in Python.
+_LOWEST_SET_BIT = bytearray([8] * 256)
+for _v in range(1, 256):
+    _b = 0
+    while not (_v >> _b) & 1:
+        _b += 1
+    _LOWEST_SET_BIT[_v] = _b
 
 
 def _skeletonize(mask: NDArray[np.bool_]) -> NDArray[np.bool_] | None:
@@ -39,11 +73,36 @@ def _skeletonize(mask: NDArray[np.bool_]) -> NDArray[np.bool_] | None:
 
 def _neighbour_count(skel: NDArray[np.bool_]) -> NDArray[np.int8]:
     """Count of skeleton-pixel neighbours (8-connectivity) for each pixel."""
-    padded = np.pad(skel, 1, mode="constant", constant_values=False).astype(np.int8)
-    total = np.zeros_like(skel, dtype=np.int8)
-    for dy, dx in _NEIGHBOURS_8:
-        total += padded[1 + dy:1 + dy + skel.shape[0], 1 + dx:1 + dx + skel.shape[1]]
-    return total * skel.astype(np.int8)
+    try:
+        from scipy.ndimage import convolve
+        total = convolve(
+            skel.astype(np.int8), _KERNEL_8, mode="constant", cval=0
+        )
+    except ImportError:
+        padded = np.pad(skel, 1, mode="constant", constant_values=False).astype(np.int8)
+        total = np.zeros_like(skel, dtype=np.int8)
+        for dy, dx in _NEIGHBOURS_8:
+            total += padded[1 + dy:1 + dy + skel.shape[0], 1 + dx:1 + dx + skel.shape[1]]
+    return (total * skel.astype(np.int8)).astype(np.int8)
+
+
+def _direction_mask(skel: NDArray[np.bool_]) -> NDArray[np.uint8]:
+    """uint8 bitmask per pixel; bit ``di`` is set iff neighbour ``di`` is too.
+
+    Built in 8 vectorised passes (one per neighbour offset). The result
+    is a flat ``(h*w,)`` array — the walker indexes it directly by
+    flat pixel index, replacing what would otherwise be 8 bounds-checked
+    Python lookups per step.
+    """
+    h, w = skel.shape
+    padded = np.pad(skel, 1, mode="constant", constant_values=False)
+    mask = np.zeros(h * w, dtype=np.uint8)
+    for di, (dy, dx) in enumerate(_NEIGHBOURS_8):
+        shifted = padded[1 + dy:1 + dy + h, 1 + dx:1 + dx + w]
+        pair = (skel & shifted).ravel().view(np.uint8)
+        if pair.any():
+            mask |= pair << di
+    return mask
 
 
 def _trace_chains(
@@ -61,94 +120,178 @@ def _trace_chains(
     """
     if not skel.any():
         return []
-    counts = _neighbour_count(skel)
-    visited_edges: set[tuple[int, int, int, int]] = set()
-    chains: list[list[tuple[float, float]]] = []
 
-    def neighbours(y: int, x: int) -> list[tuple[int, int]]:
-        out: list[tuple[int, int]] = []
-        for dy, dx in _NEIGHBOURS_8:
-            ny, nx = y + dy, x + dx
-            if 0 <= ny < skel.shape[0] and 0 <= nx < skel.shape[1] and skel[ny, nx]:
-                out.append((ny, nx))
-        return out
+    h, w = skel.shape
+    counts_flat = _neighbour_count(skel).ravel()
+    dir_mask = _direction_mask(skel)
+    dir_deltas = tuple(dy * w + dx for dy, dx in _NEIGHBOURS_8)
+    lowest = _LOWEST_SET_BIT
+    opposite = _OPPOSITE_DIR
+    total_edges = int(counts_flat.sum()) // 2
+    visited_edges: set[tuple[int, int]] = set()
+    chains_flat: list[list[int]] = []
 
-    seeds_y, seeds_x = np.where((counts == 1) | (counts >= 3))
-    for sy, sx in zip(seeds_y.tolist(), seeds_x.tolist()):
-        for ny, nx in neighbours(sy, sx):
-            edge = (sy, sx, ny, nx) if (sy, sx) < (ny, nx) else (ny, nx, sy, sx)
-            if edge in visited_edges:
-                continue
-            chain: list[tuple[int, int]] = [(sy, sx)]
-            prev_y, prev_x = sy, sx
-            cur_y, cur_x = ny, nx
-            while True:
-                edge = (
-                    (prev_y, prev_x, cur_y, cur_x)
-                    if (prev_y, prev_x) < (cur_y, cur_x)
-                    else (cur_y, cur_x, prev_y, prev_x)
+    seeds = np.flatnonzero((counts_flat == 1) | (counts_flat >= 3)).tolist()
+    for s in seeds:
+        s = int(s)
+        m = int(dir_mask[s])
+        di = 0
+        while m:
+            if m & 1:
+                n = s + dir_deltas[di]
+                edge = (s, n) if s < n else (n, s)
+                if edge not in visited_edges:
+                    chain: list[int] = [s]
+                    prev = s
+                    cur = n
+                    cur_from = opposite[di]
+                    while True:
+                        e = (prev, cur) if prev < cur else (cur, prev)
+                        visited_edges.add(e)
+                        chain.append(cur)
+                        if counts_flat[cur] != 2:
+                            break
+                        # Pick the "other" set neighbour by clearing the
+                        # bit we came from; the byte then has exactly one
+                        # bit set whose index we look up in O(1).
+                        other = (int(dir_mask[cur]) & ~(1 << cur_from)) & 0xFF
+                        ex = lowest[other]
+                        nxt = cur + dir_deltas[ex]
+                        cur_from = opposite[ex]
+                        prev = cur
+                        cur = nxt
+                    if len(chain) - 1 >= min_branch_px:
+                        chains_flat.append(chain)
+            m >>= 1
+            di += 1
+
+    # Closed loops (cycles with no endpoints or junctions). Skip the
+    # whole pass when every edge was already walked — schematics
+    # without resistor loops, IC outlines etc. don't pay for it.
+    if len(visited_edges) < total_edges:
+        try:
+            from scipy.ndimage import label as _ndi_label
+        except ImportError:
+            _ndi_label = None
+        if _ndi_label is not None:
+            remaining = skel & (counts_flat.reshape(h, w) == 2)
+            if remaining.any():
+                labeled, n_comp = _ndi_label(
+                    remaining, structure=np.ones((3, 3), dtype=int)
                 )
-                visited_edges.add(edge)
-                chain.append((cur_y, cur_x))
-                if counts[cur_y, cur_x] != 2:
-                    break
-                nxts = [p for p in neighbours(cur_y, cur_x) if p != (prev_y, prev_x)]
-                if not nxts:
-                    break
-                prev_y, prev_x = cur_y, cur_x
-                cur_y, cur_x = nxts[0]
-            if len(chain) - 1 >= min_branch_px:
-                chains.append([(float(x), float(y)) for (y, x) in chain])
+                if n_comp > 0:
+                    flat_labeled = labeled.ravel()
+                    # Find one representative pixel per labeled component
+                    # via np.unique(return_index=True) — single C-time pass.
+                    uniq, first_idx = np.unique(flat_labeled, return_index=True)
+                    first_idx = first_idx[uniq != 0]
+                    for s in first_idx.tolist():
+                        s = int(s)
+                        m = int(dir_mask[s])
+                        if bin(m).count("1") < 2:
+                            continue
+                        # If any incident edge was already traced, this
+                        # component is the interior of a chain we walked.
+                        already_seen = False
+                        mm = m
+                        dd = 0
+                        while mm:
+                            if mm & 1:
+                                nb = s + dir_deltas[dd]
+                                ee = (s, nb) if s < nb else (nb, s)
+                                if ee in visited_edges:
+                                    already_seen = True
+                                    break
+                            mm >>= 1
+                            dd += 1
+                        if already_seen:
+                            continue
+                        # Walk the cycle.
+                        first_di = lowest[m]
+                        chain = [s]
+                        prev = s
+                        cur = s + dir_deltas[first_di]
+                        cur_from = opposite[first_di]
+                        e = (s, cur) if s < cur else (cur, s)
+                        visited_edges.add(e)
+                        chain.append(cur)
+                        while cur != s:
+                            if counts_flat[cur] != 2:
+                                break  # defensive — pure cycles stay count==2
+                            other = (int(dir_mask[cur]) & ~(1 << cur_from)) & 0xFF
+                            ex = lowest[other]
+                            nxt = cur + dir_deltas[ex]
+                            cur_from = opposite[ex]
+                            e = (cur, nxt) if cur < nxt else (nxt, cur)
+                            visited_edges.add(e)
+                            chain.append(nxt)
+                            prev = cur
+                            cur = nxt
+                        if len(chain) - 1 >= min_branch_px:
+                            chains_flat.append(chain)
 
-    # Closed loops (no endpoints, no junctions) are still possible — pick
-    # an arbitrary pixel and walk the cycle.
-    remaining = skel & (counts == 2)
-    for ey, ex in zip(*np.where(remaining)):
-        if remaining[ey, ex] == False:  # noqa: E712 — re-checked because we mutate below
-            continue
-        if any(
-            ((min(ey, ny), min(ex, nx), max(ey, ny), max(ex, nx)) in visited_edges)
-            for (ny, nx) in neighbours(int(ey), int(ex))
-        ):
-            continue
-        chain_yx: list[tuple[int, int]] = [(int(ey), int(ex))]
-        prev_y, prev_x = int(ey), int(ex)
-        nbrs = neighbours(prev_y, prev_x)
-        if not nbrs:
-            continue
-        cur_y, cur_x = nbrs[0]
-        while (cur_y, cur_x) != (int(ey), int(ex)):
-            chain_yx.append((cur_y, cur_x))
-            edge = (
-                (prev_y, prev_x, cur_y, cur_x)
-                if (prev_y, prev_x) < (cur_y, cur_x)
-                else (cur_y, cur_x, prev_y, prev_x)
-            )
-            visited_edges.add(edge)
-            nxts = [p for p in neighbours(cur_y, cur_x) if p != (prev_y, prev_x)]
-            if not nxts:
-                break
-            prev_y, prev_x = cur_y, cur_x
-            cur_y, cur_x = nxts[0]
-        chain_yx.append((int(ey), int(ex)))
-        if len(chain_yx) - 1 >= min_branch_px:
-            chains.append([(float(x), float(y)) for (y, x) in chain_yx])
-
-    return chains
+    # Return as (N, 2) float numpy arrays so downstream Chaikin /
+    # SVG formatting can stay vectorised — avoids two list↔ndarray
+    # round-trips per chain that showed up in profiles on long polylines.
+    out: list[NDArray[np.float64]] = []
+    for c in chains_flat:
+        idx = np.asarray(c, dtype=np.int64)
+        arr = np.empty((len(c), 2), dtype=np.float64)
+        arr[:, 0] = idx % w  # x
+        arr[:, 1] = idx // w  # y
+        out.append(arr)
+    return out
 
 
-def _chaikin(points: list[tuple[float, float]], *, iters: int = 1) -> list[tuple[float, float]]:
-    """Chaikin corner-cutting smoothing — keeps endpoints, softens kinks."""
+def _chaikin(points: NDArray[np.float64], *, iters: int = 1) -> NDArray[np.float64]:
+    """Chaikin corner-cutting smoothing — keeps endpoints, softens kinks.
+
+    Operates on (N, 2) numpy arrays end-to-end so each call is just a
+    handful of vectorised slices, with no Python-level iteration over
+    vertices. The prior implementation converted list↔array once per
+    chain and once per smoothing iteration — fine for small inputs but
+    a measurable cost when a schematic produces 25k+ chains.
+    """
     if len(points) < 3 or iters <= 0:
         return points
-    out = points
+    arr = points
     for _ in range(iters):
-        smoothed: list[tuple[float, float]] = [out[0]]
-        for (x0, y0), (x1, y1) in zip(out, out[1:]):
-            smoothed.append((0.75 * x0 + 0.25 * x1, 0.75 * y0 + 0.25 * y1))
-            smoothed.append((0.25 * x0 + 0.75 * x1, 0.25 * y0 + 0.75 * y1))
-        smoothed.append(out[-1])
-        out = smoothed
+        p0 = arr[:-1]
+        p1 = arr[1:]
+        q = 0.75 * p0 + 0.25 * p1
+        r = 0.25 * p0 + 0.75 * p1
+        out = np.empty((2 * len(p0) + 2, 2), dtype=np.float64)
+        out[0] = arr[0]
+        out[1:-1:2] = q
+        out[2:-1:2] = r
+        out[-1] = arr[-1]
+        arr = out
+    return arr
+
+
+def _format_chains_points(
+    chains: list[NDArray[np.float64]],
+) -> list[str]:
+    """Format every chain's ``"x0,y0 x1,y1 …"`` body.
+
+    Concatenates all chains into one ``(M, 2)`` array so the ndarray→
+    Python conversion happens in a single ``.tolist()`` call, then
+    formats each ``(x, y)`` pair with the ``%`` operator inside a list
+    comprehension. Benchmarked against ``np.char.mod`` and that
+    formatter pays ~2× the cost at this scale — CPython's float→string
+    is highly optimised and the per-call C-extension overhead of
+    ``_vec_string`` dominates for ``.2f`` precision.
+    """
+    if not chains:
+        return []
+    sizes = [len(c) for c in chains]
+    combined = np.concatenate(chains, axis=0).tolist()
+    pairs = ["%.2f,%.2f" % (x, y) for x, y in combined]
+    out: list[str] = []
+    idx = 0
+    for n in sizes:
+        out.append(" ".join(pairs[idx:idx + n]))
+        idx += n
     return out
 
 
@@ -188,10 +331,10 @@ class CenterlineAlgorithm(RasterAlgorithm):
         if smooth:
             chains = [_chaikin(c, iters=1) for c in chains]
 
+        drawable = [c for c in chains if len(c) >= 2]
+        bodies = _format_chains_points(drawable)
         paths = "".join(
-            '<polyline points="' + " ".join(f"{x:.2f},{y:.2f}" for x, y in chain) + '"/>'
-            for chain in chains
-            if len(chain) >= 2
+            '<polyline points="' + body + '"/>' for body in bodies
         )
         return (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
