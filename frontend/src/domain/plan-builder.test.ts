@@ -35,6 +35,8 @@ describe('toLayerPlan', () => {
       source_color: '#ff0000',
       color_label: 'Red',
       pause_before: 'auto',
+      optimize: true,
+      simplify_tolerance_mm: 0.05,
     })
   })
 
@@ -42,6 +44,15 @@ describe('toLayerPlan', () => {
     const plan = toLayerPlan(layer({ target_pen_slot: null, drawing_speed_mm_s: null }))
     expect(plan.target_pen_slot).toBeNull()
     expect(plan.drawing_speed_mm_s).toBeNull()
+  })
+
+  it('forwards optimize=false through the projection', () => {
+    // Regression guard for the L2 audit finding: editing this flag in
+    // the UI used to leave no trace in the plan sent to /preflight or
+    // /generate. It now rides along into the plan and the plan_hash.
+    const plan = toLayerPlan(layer({ optimize: false, simplify_tolerance_mm: 0.2 }))
+    expect(plan.optimize).toBe(false)
+    expect(plan.simplify_tolerance_mm).toBe(0.2)
   })
 })
 

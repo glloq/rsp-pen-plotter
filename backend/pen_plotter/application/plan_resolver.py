@@ -15,6 +15,7 @@ import hashlib
 import json
 
 from pen_plotter.domain.print_plan import (
+    _DEFAULT_SIMPLIFY_TOLERANCE_MM,
     LayerPlan,
     PrintPlan,
     ResolvedLayer,
@@ -47,6 +48,12 @@ def _resolve_layer(
         pen_slot_installed=(
             layer.target_pen_slot is None
             or layer.target_pen_slot in installed_slots
+        ),
+        optimize=layer.optimize,
+        simplify_tolerance_mm=(
+            layer.simplify_tolerance_mm
+            if layer.simplify_tolerance_mm is not None
+            else _DEFAULT_SIMPLIFY_TOLERANCE_MM
         ),
     )
 

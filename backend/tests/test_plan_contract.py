@@ -176,3 +176,65 @@ def test_resolver_marks_missing_pen_slot() -> None:
     )
     resolved = resolve_plan(plan, _profile())
     assert resolved.layers[0].pen_slot_installed is False
+
+
+def test_resolver_propagates_optimize_and_simplify_defaults() -> None:
+    """Defaults (optimize=True, simplify=0.05) survive the resolver."""
+    plan = _plan().model_copy(
+        update={"layers": [LayerPlan(layer_id="red")]}
+    )
+    resolved = resolve_plan(plan, _profile())
+    assert resolved.layers[0].optimize is True
+    assert resolved.layers[0].simplify_tolerance_mm == pytest.approx(0.05)
+
+
+def test_resolver_propagates_explicit_optimize_and_simplify() -> None:
+    """Explicit operator settings are carried over verbatim."""
+    plan = _plan().model_copy(
+        update={
+            "layers": [
+                LayerPlan(layer_id="red", optimize=False, simplify_tolerance_mm=0.2),
+            ]
+        }
+    )
+    resolved = resolve_plan(plan, _profile())
+    assert resolved.layers[0].optimize is False
+    assert resolved.layers[0].simplify_tolerance_mm == pytest.approx(0.2)
+
+
+def test_plan_hash_changes_when_optimize_toggled() -> None:
+    """Two plans differing only in ``optimize`` must NOT share a hash."""
+    plan = _plan()
+    baseline = resolve_plan(plan, _profile()).plan_hash
+    flipped = plan.model_copy(
+        update={
+            "layers": [
+                plan.layers[0].model_copy(update={"optimize": False}),
+                plan.layers[1],
+            ]
+        }
+    )
+    assert resolve_plan(flipped, _profile()).plan_hash != baseline
+
+
+def test_plan_hash_changes_when_simplify_tolerance_changed() -> None:
+    """Same SVG with different simplify tolerance must yield a fresh hash."""
+    plan = _plan()
+    baseline = resolve_plan(plan, _profile()).plan_hash
+    tweaked = plan.model_copy(
+        update={
+            "layers": [
+                plan.layers[0].model_copy(update={"simplify_tolerance_mm": 0.5}),
+                plan.layers[1],
+            ]
+        }
+    )
+    assert resolve_plan(tweaked, _profile()).plan_hash != baseline
+
+
+def test_resolver_rejects_negative_simplify_tolerance() -> None:
+    plan = _plan().model_copy(
+        update={"layers": [LayerPlan(layer_id="red", simplify_tolerance_mm=-0.1)]}
+    )
+    with pytest.raises(PlanResolutionError, match="simplify_tolerance_mm"):
+        resolve_plan(plan, _profile())
