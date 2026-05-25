@@ -41,6 +41,8 @@ function layer(layer_id: string): LayerInfo {
     drawing_speed_mm_s: null,
     color_label: null,
     pause_before: 'auto',
+    assigned_color_hex: null,
+    color_assignment: 'auto',
   }
 }
 

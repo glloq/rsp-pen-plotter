@@ -16,11 +16,15 @@
 // summary sub-component owns the visually independent header row,
 // and this file is left as the template that wires them together.
 
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LayerInfo } from '../api/client'
+import type { ColorAssignment, LayerInfo } from '../api/client'
+import { resolveEffectivePalette } from '../lib/effectivePalette'
+import { useAvailableColorsStore } from '../stores/availableColors'
 import { useJobStore } from '../stores/job'
+import { usePaletteSourceStore } from '../stores/paletteSource'
 import { useLayerCardState } from '../composables/useLayerCardState'
+import AssignedColorPicker from './edit/AssignedColorPicker.vue'
 import LayerCardSummary from './LayerCardSummary.vue'
 import PrintStylePicker from './edit/PrintStylePicker.vue'
 import LayerPassStack from './edit/LayerPassStack.vue'
@@ -68,6 +72,46 @@ const {
   onPickStyle,
   onResetStyle,
 } = useLayerCardState(layerRef)
+
+// Effective palette for the per-layer colour picker. Same resolution
+// rule as ``StyleTab`` — installed pens, the available-colours
+// inventory, or the union of both, driven by the operator's
+// ``palette_source`` setting. Recomputes when any input changes so the
+// picker swatches always mirror the Plotter > Couleurs tab.
+const paletteSource = usePaletteSourceStore()
+const availableColorsStore = useAvailableColorsStore()
+
+onMounted(() => {
+  if (!paletteSource.loaded) void paletteSource.refresh()
+  if (!availableColorsStore.loaded) void availableColorsStore.refresh()
+})
+
+const installedPenColors = computed<string[]>(() => {
+  const pens = store.selectedProfile?.pens ?? []
+  return pens.filter((p) => p.installed && p.color).map((p) => p.color)
+})
+
+const availableHexes = computed<string[]>(() =>
+  availableColorsStore.ordered.map((c) => c.hex),
+)
+
+const effectivePalette = computed<string[]>(() =>
+  resolveEffectivePalette(paletteSource.source, installedPenColors.value, availableHexes.value),
+)
+
+function onColorPick(payload: { hex: string; assignment: ColorAssignment }): void {
+  store.updateLayer(props.layer.layer_id, {
+    assigned_color_hex: payload.hex,
+    color_assignment: payload.assignment,
+  })
+}
+
+function onColorReset(payload: { hex: string | null }): void {
+  store.updateLayer(props.layer.layer_id, {
+    assigned_color_hex: payload.hex,
+    color_assignment: 'auto',
+  })
+}
 </script>
 
 <template>
@@ -216,6 +260,17 @@ const {
         {{ t('layers.optimize') }}
       </label>
     </div>
+
+    <!-- Per-layer colour assignment: shows the snapped ink + lets the
+         operator override from the active palette pool. Hidden when
+         collapsed to keep the row compact. -->
+    <AssignedColorPicker
+      v-if="!collapsed"
+      :layer="layer"
+      :effective-palette="effectivePalette"
+      @pick="onColorPick"
+      @reset="onColorReset"
+    />
 
     <!-- Print-style picker: tile grid for bitmap-derived layers. The
          schema-driven advanced form below is gated behind "Advanced".

@@ -205,6 +205,8 @@ export interface BoundingBox {
 
 export type PausePolicy = 'auto' | 'always' | 'never'
 
+export type ColorAssignment = 'auto' | 'manual'
+
 export interface LayerInfo {
   layer_id: string
   source_color: string
@@ -218,6 +220,15 @@ export interface LayerInfo {
   drawing_speed_mm_s: number | null
   color_label: string | null
   pause_before: PausePolicy
+  // Operator-facing colour pick: which hex from the active pool this
+  // layer should be drawn with. Populated by the auto-attribution
+  // step at /upload + /rerender; the operator can override per layer
+  // through the LayerCard picker. ``null`` falls back to source_color.
+  assigned_color_hex: string | null
+  // Tracks whether ``assigned_color_hex`` came from the auto-nearest
+  // step or from a manual override. ``"auto"`` rows refresh on
+  // pool changes; ``"manual"`` rows stay pinned.
+  color_assignment: ColorAssignment
 }
 
 export interface Job {

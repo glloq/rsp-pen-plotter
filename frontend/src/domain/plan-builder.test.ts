@@ -16,6 +16,8 @@ function layer(overrides: Partial<LayerInfo> = {}): LayerInfo {
     drawing_speed_mm_s: 60,
     color_label: 'Red',
     pause_before: 'auto',
+    assigned_color_hex: null,
+    color_assignment: 'auto',
     ...overrides,
   }
 }
