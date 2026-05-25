@@ -16,6 +16,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from pen_plotter.core.arcs import ArcTo, fit_arcs
 from pen_plotter.core.layers import labeled_group_fragments
+from pen_plotter.core.pause_logic import should_pause
 from pen_plotter.core.toolpath import _doc_from_svg
 from pen_plotter.domain.print_plan import LayerPlan, ScaleMode
 from pen_plotter.models import MachineProfile, Placement
@@ -246,27 +247,17 @@ def generate_gcode(
             color_label = setting.color_label if setting else None
             pause_before = setting.pause_before if setting else "auto"
 
-            slot_changed = slot is not None and slot != previous_slot
-            color_changed = (
-                mono_pen
-                and source_color is not None
-                and source_color != previous_color
+            decision = should_pause(
+                slot=slot,
+                source_color=source_color,
+                pause_before=pause_before,
+                previous_slot=previous_slot,
+                previous_color=previous_color,
+                mono_pen=mono_pen,
+                tool_change_method=profile.tool_change_method,
             )
-            # First pose on a mono-pen machine: ask the operator to install the
-            # initial pen before drawing anything. Multi-pen profiles still
-            # rely on the slot-change check above (covered by ``slot_changed``).
-            first_pose = (
-                mono_pen
-                and previous_color is None
-                and previous_slot is None
-                and source_color is not None
-            )
-
-            should_pause = profile.tool_change_method != "none" and pause_before != "never" and (
-                pause_before == "always" or slot_changed or color_changed or first_pose
-            )
-            if should_pause:
-                if slot_changed:
+            if decision.pause:
+                if decision.slot_changed:
                     pen = pens.get(slot)  # type: ignore[arg-type]
                     if pen is None or not pen.installed:
                         out.append(f"; WARNING: pen slot {slot} is not installed in the magazine")

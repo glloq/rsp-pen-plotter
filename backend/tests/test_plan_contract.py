@@ -281,3 +281,26 @@ def test_generate_aggregates_multiple_missing_slots() -> None:
     with pytest.raises(MissingPenSlotsError) as info:
         run_generate(plan, _profile())
     assert info.value.slots == [42, 99]
+
+
+def _count_pause_prompts(gcode: str) -> int:
+    """Count the M0 prompts that the streamer would intercept."""
+    # The G-code path emits "M0" on its own line for every pause point
+    # (tool change AND mono-pen colour change templates both end with M0).
+    return sum(1 for line in gcode.splitlines() if line.strip() == "M0")
+
+
+def test_preflight_pen_changes_matches_generated_pauses() -> None:
+    """End-to-end check that L3 was actually achieved: the count the
+    operator sees in preflight is byte-identical to what the streamer
+    will encounter at run-time.
+
+    Before extracting ``core/pause_logic``, this was held together by
+    two manually-synced predicates 200 LOC apart; any drift would have
+    surprised the operator at the wrong moment.
+    """
+    plan = _plan()
+    profile = _profile()
+    report = run_preflight(plan, profile).report
+    outcome = run_generate(plan, profile)
+    assert report.pen_changes == _count_pause_prompts(outcome.gcode)
