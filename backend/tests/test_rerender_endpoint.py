@@ -206,3 +206,115 @@ def test_upload_populates_cache_then_rerender_works(client: TestClient) -> None:
     )
     assert rerender.status_code == 200, rerender.text
     assert "<circle" in rerender.json()["svg"]
+
+
+def test_rerender_rehydrates_from_disk_after_cache_eviction(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    """Cache miss → re-segment from the on-disk original + persisted options.
+
+    Simulates a backend restart (the in-memory ``_CACHE`` is empty) and
+    proves that /rerender still works for a bitmap upload because the
+    rehydration path reads ``original.png`` + ``meta.bitmap_options`` from
+    the library on demand.
+    """
+    from pen_plotter.api import files as files_module
+    from pen_plotter.converters.defaults import register_default_converters
+    from pen_plotter.converters.registry import registry as _registry
+    from pen_plotter.persistence import FileRecord, engine
+    from sqlmodel import Session, delete
+
+    register_default_converters(_registry)
+    # Isolate library storage to the test's tmp_path so the seeded upload
+    # doesn't leak between runs and the DB row clean-up below is sufficient.
+    monkeypatch.setattr(files_module, "FILES_DIR", tmp_path / "files")
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
+
+    image = Image.new("RGB", (16, 16), (255, 255, 255))
+    for y in range(16):
+        for x in range(8):
+            image.putpixel((x, y), (0, 0, 0))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+
+    upload = client.post(
+        "/files",
+        data={
+            "options": json.dumps(
+                {"algorithm": "direct", "num_colors": 2, "drop_background": False}
+            ),
+        },
+        files={"file": ("split.png", buf.getvalue(), "image/png")},
+    )
+    assert upload.status_code == 200, upload.text
+    detail = upload.json()["file"]
+    file_id = detail["file_id"]
+    assert detail["rerenderable"] is True
+    assert file_id in rerender_module._CACHE
+
+    # Simulate a backend restart: drop the in-memory cache.
+    rerender_module._clear_cache_for_tests()
+    assert file_id not in rerender_module._CACHE
+
+    rerender = client.post(
+        "/rerender",
+        json={
+            "job_id": file_id,
+            "layers": [{"layer_id": "color-000000", "algorithm": "halftone"}],
+        },
+    )
+    assert rerender.status_code == 200, rerender.text
+    assert "<circle" in rerender.json()["svg"]
+    # And the rehydrated entry should now be in the cache for subsequent
+    # re-renders (no rehydration cost a second time).
+    assert file_id in rerender_module._CACHE
+
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
+
+
+def test_rerender_404_for_vector_source(client: TestClient, tmp_path, monkeypatch) -> None:
+    """Vector files (SVG/PDF) have no segmentation cache → 404 with no rehydration.
+
+    The /rerender endpoint should return 404 for files whose upload didn't
+    produce a bitmap segmentation, so the frontend knows to hide the
+    algorithm picker rather than silently doing nothing.
+    """
+    from pen_plotter.api import files as files_module
+    from pen_plotter.converters.defaults import register_default_converters
+    from pen_plotter.converters.registry import registry as _registry
+    from pen_plotter.persistence import FileRecord, engine
+    from sqlmodel import Session, delete
+
+    register_default_converters(_registry)
+    monkeypatch.setattr(files_module, "FILES_DIR", tmp_path / "files")
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
+
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" '
+        b'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
+        b'viewBox="0 0 100 100">'
+        b'<path d="M0 0 L50 50"/></svg>'
+    )
+    upload = client.post(
+        "/files",
+        files={"file": ("vec.svg", svg, "image/svg+xml")},
+    )
+    assert upload.status_code == 200, upload.text
+    detail = upload.json()["file"]
+    assert detail["rerenderable"] is False
+
+    rerender = client.post(
+        "/rerender",
+        json={"job_id": detail["file_id"], "layers": []},
+    )
+    assert rerender.status_code == 404
+
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()

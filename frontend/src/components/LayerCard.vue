@@ -47,7 +47,14 @@ onMounted(async () => {
 // re-rendered with a different algorithm — that's what the /rerender
 // cache holds. SVG / DXF / text / document layers come straight from
 // the converter as vector groups and have nothing to re-render.
-const isBitmapLayer = computed(() => /^color-/.test(props.layer.layer_id))
+// We also require the placement's ``rerenderable`` flag to be true:
+// a bitmap uploaded before the cache-rehydration feature shipped won't
+// have its segmentation options on disk, so /rerender would silently
+// 404 even though the layer label looks like a colour cluster.
+const isBitmapLayer = computed(() => {
+  if (!/^color-/.test(props.layer.layer_id)) return false
+  return store.selectedPlacement?.rerenderable !== false
+})
 const currentAlgorithm = computed(
   () => store.layerAlgorithms[props.layer.layer_id]?.algorithm ?? '',
 )

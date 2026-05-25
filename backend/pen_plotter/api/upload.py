@@ -34,6 +34,9 @@ class UploadResponse(BaseModel):
     svg: str
     warnings: list[str] = []
     metadata: dict[str, Any] = {}
+    # True when /rerender can re-run a different algorithm against a cached
+    # bitmap segmentation. False for vector sources (SVG, PDF).
+    rerenderable: bool = False
 
 
 @router.post("/upload")
@@ -74,4 +77,5 @@ async def upload(
         svg=converted.svg,
         warnings=converted.warnings,
         metadata=converted.metadata,
+        rerenderable=converted.bitmap_segmentation is not None,
     )

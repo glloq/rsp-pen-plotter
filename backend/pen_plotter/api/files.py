@@ -70,6 +70,21 @@ def _find_original(file_id: str) -> Path | None:
     return None
 
 
+def find_original(file_id: str) -> Path | None:
+    """Public accessor for the stored original file path, if present."""
+    return _find_original(file_id)
+
+
+def read_meta(file_id: str) -> "FileMeta | None":
+    """Return the parsed meta.json for ``file_id``, or ``None`` if absent."""
+    path = _meta_path(file_id)
+    if not path.is_file():
+        return None
+    with path.open("r", encoding="utf-8") as fp:
+        raw = json.load(fp)
+    return FileMeta.model_validate(raw)
+
+
 class FileRecordOut(BaseModel):
     """Public projection of a :class:`FileRecord`, ready for JSON."""
 
@@ -89,6 +104,16 @@ class FileMeta(BaseModel):
     layers: list[LayerInfo]
     warnings: list[str] = []
     upload_metadata: dict[str, Any] = {}
+    # True when the upload pipeline produced a bitmap segmentation cache,
+    # so /rerender can re-run a different algorithm against the same colour
+    # clusters. False for vector sources (SVG, PDF) where the geometry is
+    # used as-is and the algorithm picker has no effect.
+    rerenderable: bool = False
+    # BitmapOptions (as a dict) used at the original segmentation. Kept on
+    # disk so the /rerender cache can be rehydrated after a backend restart
+    # without re-uploading — re-segmenting the stored ``original.<ext>``
+    # bytes with these exact options reproduces the same labels + palette.
+    bitmap_options: dict[str, Any] | None = None
 
 
 class FileDetail(FileRecordOut):
@@ -98,6 +123,7 @@ class FileDetail(FileRecordOut):
     layers: list[LayerInfo]
     warnings: list[str] = []
     upload_metadata: dict[str, Any] = {}
+    rerenderable: bool = False
 
 
 class FileUploadResponse(BaseModel):
@@ -151,6 +177,7 @@ def _record_to_detail(record: FileRecord) -> FileDetail:
         layers=meta.layers,
         warnings=meta.warnings,
         upload_metadata=meta.upload_metadata,
+        rerenderable=meta.rerenderable,
     )
 
 
@@ -219,6 +246,12 @@ async def upload_to_library(
             layers=converted.layers,
             warnings=converted.warnings,
             upload_metadata=converted.metadata,
+            rerenderable=converted.bitmap_segmentation is not None,
+            bitmap_options=(
+                converted.bitmap_options.model_dump()
+                if converted.bitmap_options is not None
+                else None
+            ),
         )
         (staging / "meta.json").write_text(meta.model_dump_json(), encoding="utf-8")
         # Atomic on POSIX: rename within the same directory is one syscall,

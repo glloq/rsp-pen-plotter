@@ -6,20 +6,21 @@ a single layer in the UI, we don't want to re-segment — only re-render.
 This module caches the segmentation result (labels + palette) of each
 bitmap job by ``job_id`` so a second pass only pays for the rendering.
 
-The cache is bounded (LRU) and lives in process memory, so it's lost on
-backend restart. The UI tolerates a 404 from ``/rerender`` by falling
-back to a fresh upload — the only consequence of a miss is slower
-latency, not a broken state.
+The in-memory cache is bounded (LRU) and lost on backend restart, but
+when a cache miss happens we look the file up in the library, re-load
+the original bytes from disk, and re-segment using the BitmapOptions
+persisted in ``meta.json``. The result is then cached so subsequent
+re-renders are fast. This makes ``/rerender`` effectively persistent
+across restarts without paying the segmentation cost on every request.
 
 The capacity defaults to 64 (room for several placements being edited
 in a session) and is configurable via the ``RERENDER_CACHE_SIZE`` env
-var. A future enhancement (tracked separately) would back the cache
-with disk so segmentation survives restarts; today's in-memory store
-is a deliberate scope cap because the Pi target has tight RAM.
+var.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 from collections import OrderedDict
 from typing import Any
@@ -29,6 +30,8 @@ from pydantic import BaseModel, Field
 
 from pen_plotter.converters.bitmap import BitmapConverter, BitmapOptions, SegmentationResult
 from pen_plotter.core.sanitize import sanitize_svg
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -75,6 +78,48 @@ def forget_job(job_id: str) -> None:
 def _clear_cache_for_tests() -> None:
     """Test-only hook so the cache doesn't leak between cases."""
     _CACHE.clear()
+
+
+def _try_rehydrate(job_id: str) -> "_CacheEntry | None":
+    """Re-segment from disk when the in-memory cache lost the job.
+
+    Looks up ``job_id`` in the library; if a record exists, it's a bitmap
+    upload (``meta.rerenderable``), and ``meta.bitmap_options`` is set,
+    re-reads the stored original bytes and re-runs segmentation with the
+    same options the operator picked at upload time. The resulting entry
+    is stashed in ``_CACHE`` so further re-renders skip this rehydration.
+
+    Returns ``None`` when the file is unknown, vector-only, or the
+    original / options can't be loaded — the caller then raises 404.
+    """
+    # Imported lazily to avoid a top-level circular import between
+    # rerender.py and files.py (files.py imports remember_job).
+    from pen_plotter.api.files import find_original, read_meta
+    from pen_plotter.persistence import get_file_record
+
+    record = get_file_record(job_id)
+    if record is None:
+        return None
+    meta = read_meta(job_id)
+    if meta is None or not meta.rerenderable or not meta.bitmap_options:
+        return None
+    original = find_original(job_id)
+    if original is None or not original.is_file():
+        return None
+    try:
+        options = BitmapOptions.model_validate(meta.bitmap_options)
+        data = original.read_bytes()
+        _result, segmentation = BitmapConverter().segment_and_render(
+            data, options=meta.bitmap_options
+        )
+    except Exception as exc:
+        _log.warning("Rerender cache rehydration failed for %s: %s", job_id, exc)
+        return None
+    entry = _CacheEntry(segmentation, options)
+    _CACHE[job_id] = entry
+    while len(_CACHE) > _CACHE_SIZE:
+        _CACHE.popitem(last=False)
+    return entry
 
 
 class LayerPass(BaseModel):
@@ -136,10 +181,15 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
     """
     entry = _CACHE.get(request.job_id)
     if entry is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No cached segmentation for job {request.job_id!r}; re-upload to refresh.",
-        )
+        entry = _try_rehydrate(request.job_id)
+        if entry is None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"No cached segmentation for job {request.job_id!r}; "
+                    "re-upload to refresh."
+                ),
+            )
     # Refresh LRU position so frequently-tweaked jobs stay hot.
     _CACHE.move_to_end(request.job_id)
 

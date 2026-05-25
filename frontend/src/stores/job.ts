@@ -71,6 +71,10 @@ export interface Placement {
   source_file: string
   source_mime: string
   job_id: string | null
+  // True when /rerender can re-run a different algorithm against a cached
+  // bitmap segmentation. False for vector sources (SVG, PDF) where the
+  // algorithm picker has no effect — the UI hides it in that case.
+  rerenderable: boolean
   svg: string
   layers: LayerInfo[]
   source_bbox: BoundingBox
@@ -182,6 +186,7 @@ export const useJobStore = defineStore('job', () => {
       source_file: '',
       source_mime: '',
       job_id: null,
+      rerenderable: false,
       svg: '',
       layers: [],
       source_bbox: emptyBbox(),
@@ -741,6 +746,7 @@ export const useJobStore = defineStore('job', () => {
         source_mime: detail.source_mime,
         // ``file_id`` doubles as the cache key for /rerender (see api/files.py).
         job_id: detail.file_id,
+        rerenderable: detail.rerenderable ?? false,
         svg: detail.svg,
         layers: detail.layers.map((layer) =>
           autoOptimize.value ? { ...layer, optimize: true } : layer,
@@ -818,6 +824,7 @@ export const useJobStore = defineStore('job', () => {
       source_file: detail.source_file,
       source_mime: detail.source_mime,
       job_id: detail.file_id,
+      rerenderable: detail.rerenderable ?? false,
       svg: detail.svg,
       layers: detail.layers.map((layer) =>
         autoOptimize.value ? { ...layer, optimize: true } : layer,
@@ -1268,10 +1275,11 @@ export const useJobStore = defineStore('job', () => {
           const placement = {
             ...({
               library_file_id: null,
+              rerenderable: false,
               rotation: 0,
               flip_h: false,
               flip_v: false,
-            } as Pick<Placement, 'library_file_id' | 'rotation' | 'flip_h' | 'flip_v'>),
+            } as Pick<Placement, 'library_file_id' | 'rerenderable' | 'rotation' | 'flip_h' | 'flip_v'>),
             ...p,
             last_file: null,
           } as Placement
