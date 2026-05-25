@@ -89,6 +89,12 @@ const TOOL_CHANGE_COLOR_RE = /^;\s*Change pen:\s*(.+?)\s*\((#[0-9a-fA-F]{3,8})\)
 const LAYER_INFO_RE =
   /^;\s*LAYER\s+label="([^"]*)"\s+color=(#[0-9a-fA-F]{3,8})?\s+slot=(\d*)/
 
+// Bitmap-derived layers carry the palette hex in their label (and
+// composite-flattened ids prefix it with the placement). When ``color=``
+// is empty on the LAYER marker we recover the hex from the label so the
+// simulator can still colourise the segments.
+const COLOR_FROM_LABEL_RE = /color-([0-9a-fA-F]{6})$/
+
 function isPauseCommand(line: string, toolChangeCommand?: string): boolean {
   // Strip a trailing comment so ``M0 ; pause`` still matches.
   const code = line.split(';')[0]!.trim().toUpperCase()
@@ -153,7 +159,9 @@ export function parseGcode(gcode: string, options: ParseOptions): SimResult {
       const layerMatch = line.match(LAYER_INFO_RE)
       if (layerMatch) {
         const label = (layerMatch[1] ?? '').trim()
-        const hex = (layerMatch[2] ?? '').toLowerCase()
+        const labelHexMatch = label.match(COLOR_FROM_LABEL_RE)
+        const labelHex = labelHexMatch ? `#${labelHexMatch[1]!.toLowerCase()}` : ''
+        const hex = ((layerMatch[2] ?? '') || labelHex).toLowerCase()
         const slotStr = layerMatch[3] ?? ''
         const slot = slotStr === '' ? null : Number(slotStr)
         const changed =

@@ -17,6 +17,7 @@ from pen_plotter.core.gcode import (
     LayerGeneration,
     ScaleMode,
     _bounds_of,
+    _color_from_label,
     _make_transform,
     _read_layers,
 )
@@ -106,6 +107,8 @@ def generate_ebb(
             source_color = setting.source_color if setting else None
             color_label = setting.color_label if setting else None
             pause_before = setting.pause_before if setting else "auto"
+            if not source_color:
+                source_color = _color_from_label(layer.label)
             color_changed = (
                 mono_pen and source_color is not None and source_color != previous_color
             )

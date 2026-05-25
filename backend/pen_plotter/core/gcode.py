@@ -8,6 +8,7 @@ machine profile, so no plotter-specific logic lives here.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -74,6 +75,23 @@ class _Layer:
 
     label: str
     polylines: list[list[tuple[float, float]]] = field(default_factory=list)
+
+
+# Bitmap-derived layers carry their palette colour in the label
+# (``color-aabbcc``); composite-flattened ids prefix that with the
+# placement id (``placement-1__color-aabbcc``). Honour both shapes so the
+# LAYER marker stays colour-tagged even when the per-layer ``source_color``
+# override was dropped upstream (e.g. a rerender swapped the SVG palette
+# but the front-end didn't refresh its layer list).
+_COLOR_FROM_LABEL_RE = re.compile(r"color-([0-9a-fA-F]{6})$")
+
+
+def _color_from_label(label: str) -> str | None:
+    """Return ``#xxxxxx`` derived from ``label`` if it encodes a palette colour."""
+    match = _COLOR_FROM_LABEL_RE.search(label or "")
+    if match is None:
+        return None
+    return "#" + match.group(1).lower()
 
 
 def _read_layers(svg: str) -> list[_Layer]:
@@ -258,6 +276,13 @@ def generate_gcode(
             source_color = setting.source_color if setting else None
             color_label = setting.color_label if setting else None
             pause_before = setting.pause_before if setting else "auto"
+            # When the override didn't carry a colour (rerender swapped
+            # the SVG palette out from under the stored layer list, or a
+            # caller skipped the field), fall back to the colour encoded
+            # in the bitmap layer label so the LAYER marker still tags
+            # downstream consumers (simulator preview, pause prompts).
+            if not source_color:
+                source_color = _color_from_label(layer.label)
 
             slot_changed = slot is not None and slot != previous_slot
             color_changed = (

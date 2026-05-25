@@ -44,4 +44,29 @@ describe('parseGcode', () => {
     const result = parseGcode('M280 P0 S40\n', OPTIONS)
     expect(result.bounds).toEqual({ minX: 0, minY: 0, maxX: 1, maxY: 1 })
   })
+
+  it('derives the layer colour from the label when color= is empty', () => {
+    // Legacy G-code (or a backend that lost source_color across rerender)
+    // emits the LAYER marker with no hex. The label still encodes the
+    // palette colour for bitmap-derived layers, so the simulator should
+    // pick that up instead of leaving every segment uncolourised.
+    const gcode = [
+      'M280 P0 S40',
+      'G0 X0 Y0',
+      '; LAYER label="color-ff0000" color= slot=',
+      'M280 P0 S90',
+      'G1 X10 Y0 F3000',
+      'M280 P0 S40',
+      '; LAYER label="placement-1__color-00aa00" color= slot=1',
+      'M280 P0 S90',
+      'G1 X20 Y0 F3000',
+    ].join('\n')
+    const result = parseGcode(gcode, OPTIONS)
+    const drawing = result.segments.filter((s) => s.drawing)
+    expect(drawing.map((s) => s.colorHex)).toEqual(['#ff0000', '#00aa00'])
+    expect(result.colors.map((c) => c.hex).sort()).toEqual([
+      '#00aa00',
+      '#ff0000',
+    ])
+  })
 })

@@ -144,3 +144,35 @@ def test_layer_speed_override_sets_feed() -> None:
 def test_invalid_svg_raises() -> None:
     with pytest.raises(ValueError):
         generate_gcode("<svg><g></svg>", _profile())
+
+
+_BITMAP_LAYERS = (
+    f'<svg {NS} viewBox="0 0 100 100">'
+    '<g inkscape:label="color-ff0000" stroke="#ff0000"><path d="M10 10 L90 10"/></g>'
+    '<g inkscape:label="placement-1__color-00ff00" stroke="#00ff00">'
+    '<path d="M10 50 L90 50"/></g>'
+    "</svg>"
+)
+
+
+def test_layer_marker_falls_back_to_label_color() -> None:
+    # Mirrors the post-rerender scenario where the front-end's stored
+    # layer list got out of sync with the SVG palette: ``source_color``
+    # is missing from the overrides, but the label still encodes the
+    # palette hex. The simulator needs the LAYER marker tagged so the
+    # preview colourises segments instead of falling back to slate.
+    gcode = generate_gcode(
+        _BITMAP_LAYERS,
+        _profile(),
+        layers=[
+            LayerGeneration(layer_id="color-ff0000", target_pen_slot=0),
+            LayerGeneration(
+                layer_id="placement-1__color-00ff00", target_pen_slot=1
+            ),
+        ],
+    )
+    assert '; LAYER label="color-ff0000" color=#ff0000 slot=0' in gcode
+    assert (
+        '; LAYER label="placement-1__color-00ff00" color=#00ff00 slot=1'
+        in gcode
+    )
