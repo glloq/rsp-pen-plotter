@@ -1,12 +1,23 @@
-// Singleton owner of the edit modal's "what should we render" state:
+// Singleton owner of the edit modal's "what should we render" state.
 //
-//   - the BitmapDraft (segmentation method, palette, algorithm + knobs,
-//     post-process refinements, detail level)
-//   - the TypographyDraft (font, size, page geometry) — owned by
-//     ``useTypographyDraft`` since L6; re-exported here so existing
-//     consumers keep their import surface unchanged
-//   - the operator's mono pen-slot / master-style selection
+// Post-L6 split this composable is responsible for:
+//   - the BitmapDraft (preprocess + segmentation + algorithm + knobs)
+//   - the CurvesDraft (centerline_mode + simplify_tolerance_mm)
+//   - the multicolour master-style id + per-style knobs + recipe
+//     synthesis (``colorRecipeFromKnobs``)
 //   - the palette-follows-installed-pens toggle
+//   - the operator's manually-touched-segmentation tracker
+//   - the cross-slice orchestrators that cross composable boundaries
+//     (``rehydrateDraft``, ``setPrintMode``, ``setMasterStyle``,
+//     ``buildBitmapOptions``, ``buildBandRecipes``, ``isDirty``)
+//
+// The typography slice lives in ``useTypographyDraft`` (L6 #1) and
+// the mono recipe slice in ``useMonoRecipe`` (L6 #2); each owns its
+// own state, lifecycle and dirty tracking. This composable imports
+// their singleton refs + lifecycle helpers, re-exports their public
+// types / helpers, and delegates the per-slice rehydrate / commit /
+// dirty calls so callers keep a single ``useBitmapDraft()`` entry
+// point.
 //
 // Everything used to live inline at the top of SourceSection.vue. Hoisting
 // it into a module-level singleton (same pattern as ``useEditState``) is
@@ -31,12 +42,9 @@ import {
   lerp,
   type PrintStyle,
 } from '../data/printRegistry'
-// Typography lives in its own composable since L6 #1. We import the
-// singleton helpers + the shared ``typo`` ref so the bitmap draft stays
-// the entry-point consumers know (``useBitmapDraft().typo`` still
-// returns the same ref the EditModal's TypographyCard binds against),
-// while the lifecycle (defaults, rehydrate, dirty, commit, project) is
-// owned by ``useTypographyDraft``.
+// Typography slice — owned by ``useTypographyDraft`` since L6 #1.
+// The shared ``typographyRef`` keeps ``useBitmapDraft().typo`` pointing
+// at the same singleton TypographyCard binds against.
 import {
   buildTypographyOptions as _buildTypographyOptions,
   buildTypographyPlan as _buildTypographyPlan,
@@ -48,10 +56,9 @@ import {
   typographyRef,
   type TypographyDraft as _TypographyDraft,
 } from './useTypographyDraft'
-// Mono recipe lives in its own composable since L6 #2. We import the
-// singleton refs + helpers so ``buildBitmapOptions`` / ``_printMode``
-// / ``setMasterStyle`` keep reading the same mono state, and the
-// public composable still exposes every mono setter unchanged.
+// Mono recipe slice — owned by ``useMonoRecipe`` since L6 #2. Shared
+// refs keep ``_printMode`` / ``setMasterStyle`` / ``buildBitmapOptions``
+// reading the same mono state.
 import {
   buildMonoBandRecipes,
   defaultMono as _defaultMono,
@@ -138,11 +145,14 @@ export type CurvesDraft = {
   curve_fit: boolean
 }
 
-// Re-exported from ``useTypographyDraft`` (L6 split). Kept here so
-// every existing consumer (TypographyCard, EditModal, useFileManager,
-// the typography test suite, ``stores/job.ts``) continues to import
-// ``TypographyDraft`` from this module without a churn-PR.
+// Re-exported from the L6 sub-composables so every existing consumer
+// (TypographyCard, MasterStyleParams, EditModal, the test suites,
+// ``stores/job.ts``) continues to import these types from
+// ``useBitmapDraft`` unchanged. The actual definitions live in
+// ``useTypographyDraft.ts`` and ``useMonoRecipe.ts``.
 export type TypographyDraft = _TypographyDraft
+export type MonoStyleKnobs = _MonoStyleKnobs
+export type MonoKnobsDraft = _MonoKnobsDraft
 
 export function defaultPreprocess(): PreprocessDraft {
   return {
@@ -214,22 +224,6 @@ export function defaultCurves(): CurvesDraft {
   }
 }
 
-// Operator-tunable knobs that drive the single-pen preview. In
-// monochrome mode every gray level must come from algorithm density
-// (line spacing, hatch angle count, dot density, halftone cell size,
-// etc.) instead of from multiple ink colours. ``ink_color`` is the
-// stroke colour every layer's SVG uses; ``perStyle[id]`` carries the
-// per-master-style range knobs that ``buildBandRecipes`` interpolates
-// across bands.
-//
-// Re-exported from ``useMonoRecipe`` (L6 #2 split). Kept here so every
-// existing consumer (MasterStyleParams, the bitmap test suite, scene
-// persistence) continues to import these from ``useBitmapDraft``
-// without a churn-PR. The actual definitions live in
-// ``useMonoRecipe.ts``.
-export type MonoStyleKnobs = _MonoStyleKnobs
-export type MonoKnobsDraft = _MonoKnobsDraft
-
 // Operator-tunable knobs for the multicolour master styles. Same
 // shape as ``MonoStyleKnobs`` but only the fields each multicolour
 // recipe actually reads (no angle chips, no per-band override drawer
@@ -278,11 +272,6 @@ export type MulticolorKnobsDraft = {
   perStyle: Record<string, MulticolorStyleKnobs>
 }
 
-// Re-exported from ``useMonoRecipe`` (L6 #2 split). MasterStyleParams
-// and the bitmap test suite keep importing these from this module.
-export const defaultMonoStyleKnobs = _defaultMonoStyleKnobs
-export const defaultMono = _defaultMono
-
 export function defaultMulticolorStyleKnobs(styleId: string): MulticolorStyleKnobs {
   const src = MULTICOLOR_STYLE_DEFAULTS[styleId] ?? {}
   return { ...(src as MulticolorStyleKnobs) }
@@ -296,28 +285,26 @@ export function defaultMulticolor(): MulticolorKnobsDraft {
   return { perStyle }
 }
 
-// Re-exported so ``stores/job.ts`` (and any future caller) keeps the
-// single import surface it had before the L6 split.
+// Re-exported from the L6 sub-composables so ``stores/job.ts``,
+// MasterStyleParams and the bitmap test suite keep their import
+// surface unchanged after the split.
 export const defaultTypography = _defaultTypography
+export const defaultMono = _defaultMono
+export const defaultMonoStyleKnobs = _defaultMonoStyleKnobs
 
 // ---- Singleton state ----
 const _bitmap = ref<BitmapDraft>(defaultBitmap())
 const _curves = ref<CurvesDraft>(defaultCurves())
-// Typography state lives in ``useTypographyDraft``; we alias the
-// shared singleton ref locally so ``buildBitmapOptions`` (which still
-// ships ``font`` / ``stroke_width_mm`` / ``hershey_text`` on every
-// /upload payload) and the public ``typo`` field on this composable
-// keep pointing at the same underlying object.
+// Typography + mono state live in their own composables (L6 #1, #2).
+// Aliasing the shared singleton refs here keeps the existing reads
+// in ``_printMode`` / ``setMasterStyle`` / ``buildBitmapOptions`` and
+// the public ``useBitmapDraft()`` surface working unchanged — every
+// alias still points at the same underlying object the slice owns.
 const _typo = typographyRef
-// Mono recipe state lives in ``useMonoRecipe`` since L6 #2. Aliasing
-// the shared singleton refs locally keeps the existing reads in
-// ``setPrintMode`` / ``setMasterStyle`` / ``_printMode`` /
-// ``buildBitmapOptions`` working unchanged — they still see the same
-// underlying objects.
-const _monoPenSlot = monoPenSlotRef
-const _monoMasterStyleId = monoMasterStyleIdRef
-const _multicolorMasterStyleId = ref<string>(DEFAULT_MULTICOLOR_STYLE_ID)
 const _mono = monoRef
+const _monoMasterStyleId = monoMasterStyleIdRef
+const _monoPenSlot = monoPenSlotRef
+const _multicolorMasterStyleId = ref<string>(DEFAULT_MULTICOLOR_STYLE_ID)
 const _multicolor = ref<MulticolorKnobsDraft>(defaultMulticolor())
 const _paletteFollowsPens = ref<boolean>(true)
 
@@ -425,11 +412,15 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
     }
     _bitmap.value.preprocess = fresh as unknown as PreprocessDraft
   }
-  // Mono master-style id rehydrate (legacy ``master_style_id`` and
-  // explicit ``mono_master_style_id``) is delegated to the mono
-  // composable. The multicolour twin stays here because it lives
-  // alongside the multicolour knobs which are still owned by the
-  // bitmap composable.
+  // Typography + mono slice rehydrate is delegated to their
+  // composables — each helper consumes the same ``last_options``
+  // bag and reads its own subset of keys (font/page/etc. for typo;
+  // master_style_id / mono_master_style_id / mono_knobs /
+  // mono_ink_color for mono). The multicolour master id stays here
+  // because the multicolour knobs are still owned by this
+  // composable; both rehydrate side by side below.
+  rehydrateTypographyFromOptions(opts as Record<string, unknown>)
+  rehydrateMonoFromOptions(opts as Record<string, unknown>)
   const persistedMulti = (opts as Record<string, unknown>).multicolor_master_style_id
   if (typeof persistedMulti === 'string' && persistedMulti) {
     _multicolorMasterStyleId.value = persistedMulti
@@ -449,7 +440,6 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
       _bitmap.value.palette.every((c, i) => c === ctx.installedPenColors[i])
     _paletteFollowsPens.value = sameAsPens
   }
-  rehydrateTypographyFromOptions(opts as Record<string, unknown>)
   const curvesOpts = (opts as Record<string, unknown>).curves
   if (curvesOpts && typeof curvesOpts === 'object') {
     const fresh = defaultCurves() as Record<string, unknown>
@@ -460,11 +450,6 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
     }
     _curves.value = fresh as unknown as CurvesDraft
   }
-  // Mono master-style id + mono_knobs + mono_ink_color rehydrate is
-  // delegated to the mono composable. The bitmap composable still
-  // orchestrates the rehydrate so callers continue to call a single
-  // ``rehydrateDraft``.
-  rehydrateMonoFromOptions(opts as Record<string, unknown>)
   // Multicolour knobs — same merge shape as mono so a placement
   // committed before a freshly added field still hydrates cleanly.
   const multiOpts = (opts as Record<string, unknown>).multicolor_knobs
@@ -580,21 +565,12 @@ function applyStyleSegmentation(
   return wouldOverwrite
 }
 
-// Switch between multicolour and monochrome. Rewrites the segmentation
-// method, algorithm and post-process knobs to the active master style's
-// recipe (mono) or back to a sensible kmeans default (multi). Returns
-// the list of fields the operator had manually touched and that this
-// call overwrote; callers may surface a toast.
-// ---- Monochrome knob mutators ----
-// The mono setters (setMonoInkColor, setMonoAdvancedMode,
-// getMonoStyleKnobs, setMonoKnob, setMonoBandOverride,
-// resetMonoStyleKnobs) live in ``useMonoRecipe`` since L6 #2; this
-// composable re-exports them via the public ``useBitmapDraft()`` hook
-// so MasterStyleParams keeps a single import surface.
-
-// Multicolour twins of the mono knob mutators. Symmetric API so the
-// shared params components can use the same setter pattern regardless
-// of print mode.
+// ---- Multicolour knob mutators ----
+// Mono twins live in ``useMonoRecipe`` (L6 #2) and are exposed via
+// the public ``useBitmapDraft()`` return so MasterStyleParams keeps a
+// single import surface. Symmetric API so the shared params
+// components can use the same setter pattern regardless of print
+// mode.
 export function getMulticolorStyleKnobs(styleId: string): MulticolorStyleKnobs {
   if (!_multicolor.value.perStyle[styleId]) {
     _multicolor.value.perStyle[styleId] = defaultMulticolorStyleKnobs(styleId)
@@ -615,6 +591,11 @@ export function resetMulticolorStyleKnobs(styleId: string): void {
   _multicolor.value.perStyle[styleId] = defaultMulticolorStyleKnobs(styleId)
 }
 
+// Switch between multicolour and monochrome. Rewrites the segmentation
+// method, algorithm and post-process knobs to the active master style's
+// recipe (mono) or back to a sensible kmeans default (multi). Returns
+// the list of fields the operator had manually touched and that this
+// call overwrote; callers may surface a toast.
 export function setPrintMode(
   mode: 'multicolor' | 'monochrome',
   opts: { force?: boolean } = {},
@@ -683,12 +664,6 @@ export function buildSegmentationOptions(): Record<string, unknown> {
 export function buildAlgorithmOptions(): Record<string, unknown> {
   return { ..._bitmap.value.algorithm_options }
 }
-
-// Mono per-band recipe synthesis lives in ``useMonoRecipe`` since
-// L6 #2. ``pickAnglesForBand``, ``recipeFromKnobs`` and
-// ``interpolatedBandOptions`` moved with the mono slice; the mono
-// branch of ``buildBandRecipes`` below dispatches to
-// ``buildMonoBandRecipes``.
 
 // Build the per-band recipes for the current master style so the
 // backend's /preview applies them inline instead of just the uniform
@@ -1053,10 +1028,8 @@ export function buildBitmapOptions(): Record<string, unknown> {
   return payload
 }
 
-// Re-exported from the typography composable so existing imports
-// (``stores/job.ts``, the EditModal tests, etc.) keep working unchanged
-// after the L6 split. The implementations now live in
-// ``useTypographyDraft.ts``.
+// Re-exported from ``useTypographyDraft`` so ``stores/job.ts`` and
+// the EditModal tests keep their import surface unchanged.
 export const buildTypographyOptions = _buildTypographyOptions
 export const buildTypographyPlan = _buildTypographyPlan
 
