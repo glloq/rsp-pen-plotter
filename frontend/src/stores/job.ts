@@ -5,6 +5,7 @@ import { i18n } from '../i18n'
 import { validateUploadFile } from '../api/uploadValidation'
 import { useLibraryStore } from './library'
 import { useToastStore } from './toasts'
+import { useEditState } from '../composables/useEditState'
 import {
   deleteProfile as apiDeleteProfile,
   saveProfile as apiSaveProfile,
@@ -365,6 +366,24 @@ export const useJobStore = defineStore('job', () => {
   let rerenderController: AbortController | null = null
   let rerenderTimer: ReturnType<typeof setTimeout> | null = null
 
+  // Per-layer overrides are applied via /rerender against the committed
+  // placement SVG. The live /preview SVG (built from bitmap settings +
+  // band_recipes only — it ignores layer_algorithms) has display priority
+  // over placementSvg in EditPreviewPane, so an /rerender result alone
+  // would be invisible to the operator as long as the preview is still
+  // cached. Clearing the live preview SVG forces the pane to fall back
+  // to placementSvg, which /rerender just updated. The next bitmap
+  // tweak naturally re-runs /preview and re-installs a fresh preview
+  // SVG, so this clear is one-shot per layer-override action.
+  function clearLivePreviewSvg(): void {
+    try {
+      useEditState().previewSvg.value = ''
+    } catch {
+      // Pinia store accessed outside of a setup context — happens in
+      // tests; safe to ignore since there's no UI to wash out.
+    }
+  }
+
   async function applyLayerAlgorithm(
     layerId: string,
     algorithm: string,
@@ -379,6 +398,7 @@ export const useJobStore = defineStore('job', () => {
       },
     })
     autoSyncActiveVariant()
+    clearLivePreviewSvg()
     if (rerenderTimer) clearTimeout(rerenderTimer)
     rerenderTimer = setTimeout(triggerRerender, 250)
   }
@@ -391,6 +411,7 @@ export const useJobStore = defineStore('job', () => {
     delete next[layerId]
     patchSelected({ layer_algorithms: next })
     autoSyncActiveVariant()
+    clearLivePreviewSvg()
     if (rerenderTimer) clearTimeout(rerenderTimer)
     rerenderTimer = setTimeout(triggerRerender, 250)
   }
@@ -424,6 +445,7 @@ export const useJobStore = defineStore('job', () => {
       },
     })
     autoSyncActiveVariant()
+    clearLivePreviewSvg()
     if (rerenderTimer) clearTimeout(rerenderTimer)
     rerenderTimer = setTimeout(triggerRerender, 250)
   }
