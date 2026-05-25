@@ -73,6 +73,15 @@ class PreprocessOptions(BaseModel):
     invert: bool = False
     grayscale: bool = False
     auto_contrast: bool = False
+    # Floyd-Steinberg error diffusion: snaps every pixel to the closest
+    # entry in an N-level uniform grey ramp while distributing the
+    # rounding error across neighbours. Produces the classic Atkinson /
+    # newspaper-print stipple texture and pairs particularly well with
+    # ``halftone`` / ``stippling`` algorithms downstream by giving them
+    # well-separated dot positions instead of soft gradients to bucket.
+    # ``0`` (default) skips dithering entirely. ``2`` is pure binary; 4-8
+    # are the useful range for shaded mono modes.
+    dither_levels: int = Field(default=0, ge=0, le=16)
     rotate_deg: Rotation = 0
     flip_h: bool = False
     flip_v: bool = False
@@ -549,7 +558,46 @@ class BitmapConverter(Converter):
             )
         if opts.auto_contrast:
             out = ImageOps.autocontrast(out, cutoff=1)
+        if opts.dither_levels >= 2:
+            out = BitmapConverter._floyd_steinberg(out, opts.dither_levels)
         return out
+
+    @staticmethod
+    def _floyd_steinberg(image: Image.Image, levels: int) -> Image.Image:
+        """Floyd-Steinberg error diffusion onto an N-level grey ramp.
+
+        Quantises each pixel to the nearest of ``levels`` evenly-spaced
+        grey values (0..255 inclusive) and pushes the rounding error to
+        the 4 unprocessed neighbours via the standard Floyd-Steinberg
+        kernel (7/16 right, 3/16 down-left, 5/16 down, 1/16 down-right).
+        The output is RGB (grey replicated across channels) so the rest
+        of the segmentation pipeline keeps its 3-channel assumption.
+        """
+        levels = max(2, levels)
+        # Operate on a single greyscale plane — dithering each RGB
+        # channel independently produces colour shimmer that no plotter
+        # workflow benefits from, and the downstream segmentation snaps
+        # back to a small palette anyway.
+        grey = np.asarray(image.convert("L"), dtype=np.float32)
+        h, w = grey.shape
+        step = 255.0 / (levels - 1)
+        for y in range(h):
+            for x in range(w):
+                old = grey[y, x]
+                new = round(old / step) * step
+                grey[y, x] = new
+                err = old - new
+                if x + 1 < w:
+                    grey[y, x + 1] += err * 7 / 16
+                if y + 1 < h:
+                    if x > 0:
+                        grey[y + 1, x - 1] += err * 3 / 16
+                    grey[y + 1, x] += err * 5 / 16
+                    if x + 1 < w:
+                        grey[y + 1, x + 1] += err * 1 / 16
+        clipped = np.clip(grey, 0.0, 255.0).astype(np.uint8)
+        rgb = np.stack([clipped, clipped, clipped], axis=-1)
+        return Image.fromarray(rgb, mode="RGB")
 
     @staticmethod
     def _fit_within(image: Image.Image, max_dim: int) -> Image.Image:

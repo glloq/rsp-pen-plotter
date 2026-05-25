@@ -2,10 +2,12 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
-  masterStyles,
+  masterStylesByMode,
   resolveMasterStyle,
+  resolveMulticolorStyle,
   LEGACY_MASTER_ID_MAP,
   type PrintStyle,
+  type PrintStyleMode,
 } from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import StyleThumbnail from '../shared/StyleThumbnail.vue'
@@ -21,11 +23,15 @@ import StyleThumbnail from '../shared/StyleThumbnail.vue'
 // committed under the pre-merge ids (halftone / spiral / centerline)
 // so historical SVGs rehydrate to the renamed registry entries.
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   // Active style id — either the registry id (``pencil``,
   // ``halftone-shade``…) or a legacy mono-mode id (``halftone``…).
   modelValue: string
-}>()
+  // Master-style family to gallery. Defaults to ``monochrome`` so
+  // existing call sites (which never passed the prop) keep showing the
+  // mono masters.
+  mode?: PrintStyleMode
+}>(), { mode: 'monochrome' })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
@@ -34,7 +40,16 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const draft = useBitmapDraft()
 
-const styles = computed<PrintStyle[]>(() => masterStyles())
+const styles = computed<PrintStyle[]>(() => masterStylesByMode(props.mode))
+
+// Pick the right resolver for the active mode — falls back to the
+// mono-family default when called from the legacy mono call sites that
+// don't pass ``mode``.
+function resolve(id: string | null | undefined): PrintStyle {
+  return props.mode === 'multicolor'
+    ? resolveMulticolorStyle(id)
+    : resolveMasterStyle(id)
+}
 
 // "Custom" surfaces when the operator has touched segmentation or
 // algorithm knobs (typically on the SvgTab) so the live bitmap state
@@ -42,9 +57,9 @@ const styles = computed<PrintStyle[]>(() => masterStyles())
 // the picker silently keeps the previously-selected tile highlighted
 // even though the rendered output reflects a one-off configuration,
 // which the UX audit flagged as a recurring source of confusion.
-const activeStyleId = computed(() => resolveMasterStyle(props.modelValue).id)
+const activeStyleId = computed(() => resolve(props.modelValue).id)
 const isCustomised = computed<boolean>(() => {
-  const style = resolveMasterStyle(props.modelValue)
+  const style = resolve(props.modelValue)
   const seg = style.segmentation
   const b = draft.bitmap.value
   if (!seg) return false
@@ -63,11 +78,16 @@ const isCustomised = computed<boolean>(() => {
 
 // Match either by registry id or by mapped legacy id so the active
 // pill survives both old (``halftone``) and new (``halftone-shade``)
-// values living in the draft.
+// values living in the draft. Legacy ids only exist for the mono
+// family — multicolour masters are post-merge so there's no mapping
+// table to consult.
 function isActive(style: PrintStyle): boolean {
   if (style.id === props.modelValue) return true
-  const mapped = LEGACY_MASTER_ID_MAP[props.modelValue]
-  return mapped === style.id
+  if (props.mode === 'monochrome') {
+    const mapped = LEGACY_MASTER_ID_MAP[props.modelValue]
+    return mapped === style.id
+  }
+  return false
 }
 
 function select(style: PrintStyle): void {
@@ -80,7 +100,7 @@ function select(style: PrintStyle): void {
 
 // Resolve the active style for the descriptive footer at the bottom
 // of the card. Falls back to the default master if the id is unknown.
-const activeStyle = computed(() => resolveMasterStyle(props.modelValue))
+const activeStyle = computed(() => resolve(props.modelValue))
 </script>
 
 <template>
