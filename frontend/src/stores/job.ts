@@ -28,6 +28,7 @@ import {
 } from '../api/client'
 import { buildComposite } from '../lib/composite'
 import { buildPrintPlan } from '../domain/plan-builder'
+import { buildTypographyPlan } from '../composables/useBitmapDraft'
 import type { PrintPlan } from '../domain/print-plan'
 import {
   PipelineAbortedError,
@@ -1113,11 +1114,20 @@ export const useJobStore = defineStore('job', () => {
         sheet_height_mm: Math.max(1e-3, bbox.y_max - bbox.y_min),
       }
     }
+    // Forward the currently-edited typography draft into the plan when
+    // the (first) ready placement is a text source. The hash + persisted
+    // snapshot then reflect the font / size / weight the operator chose,
+    // closing the regression class where typo edits silently never
+    // reached the pivot. See ``buildTypographyPlan`` for the
+    // single-draft limitation acknowledged in this iteration.
+    const textPlacement = ready.find((p) => p.source_mime)
+    const typography = buildTypographyPlan(textPlacement?.source_mime)
     return buildPrintPlan({
       svg: result.svg,
       profileName: selectedProfileName.value,
       layers: result.layers,
       placement,
+      typography,
     })
   }
 

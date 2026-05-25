@@ -1320,6 +1320,77 @@ export function buildTypographyOptions(): Record<string, unknown> {
   return { ..._typo.value }
 }
 
+/**
+ * Project the current TypographyDraft to the backend ``TypographyPlan``
+ * shape so it can ride into the PrintPlan sent to /preflight + /generate.
+ *
+ * Returns ``null`` for non-text sources (the pivot stores ``null`` then;
+ * the plan_hash stays identical to a vector / bitmap plan).
+ *
+ * Today the draft is a singleton: the EditModal works on one placement
+ * at a time, so a multi-placement scene with several text sources falls
+ * back to whichever draft was last touched. Tracking typography per
+ * placement is a follow-up — for now this closes the regression where
+ * font / size edits never reached the pivot at all.
+ */
+export function buildTypographyPlan(
+  sourceMime: string | null | undefined,
+): TypographyPlanWire | null {
+  // Heuristic: text sources are the .txt / .md / docx / html / pdf
+  // chain that the Hershey path can re-render. For images / SVG / DXF
+  // the typography draft is irrelevant — emit null to keep their hash
+  // identical to a vector / bitmap plan.
+  if (!sourceMime || !isTextSource(sourceMime)) return null
+  const t = _typo.value
+  // ``alignment`` may be 'left' | 'center' | 'right' in the draft; the
+  // backend pivot also accepts 'justify'. Pass through verbatim.
+  return {
+    font: t.font,
+    font_size_mm: t.font_size_mm,
+    page_width_mm: t.page_width_mm,
+    page_height_mm: t.page_height_mm,
+    margin_mm: t.margin_mm,
+    line_spacing: t.line_spacing,
+    alignment: t.alignment,
+    stroke_width_mm: t.stroke_width_mm,
+    bold: t.bold,
+    italic: t.italic,
+    letter_spacing_mm: t.letter_spacing_mm,
+  }
+}
+
+function isTextSource(mime: string): boolean {
+  // Mime-type predicate kept here so the EditModal and the pipeline
+  // builder agree on what counts as a "text source" for typography
+  // purposes. Aligned with the backend's text-handling converters
+  // (text, markdown, html, docx, pdf).
+  return (
+    mime.startsWith('text/') ||
+    mime === 'application/pdf' ||
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mime === 'text/html' ||
+    mime === 'text/markdown'
+  )
+}
+
+// Wire shape only; the actual TypographyPlan type lives in
+// domain/print-plan.ts but importing it here would pull the OpenAPI
+// types into the composable. Keeping a minimal local mirror avoids the
+// cycle and the compiler still checks it against the call site.
+type TypographyPlanWire = {
+  font: string
+  font_size_mm: number
+  page_width_mm: number
+  page_height_mm: number
+  margin_mm: number
+  line_spacing: number
+  alignment: 'left' | 'center' | 'right'
+  stroke_width_mm: number
+  bold: boolean
+  italic: boolean
+  letter_spacing_mm: number
+}
+
 // Predicted number of layers the next /upload will produce. Drives the
 // inline "→ N calques" badges next to the sliders that change it
 // (bands, num_colors, palette length). Keeps the operator from
