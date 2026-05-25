@@ -24,11 +24,6 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'off',
     'vue/multi-word-component-names': 'off',
     'vue/no-v-html': 'off',
-    // TODO(L10): re-enable once SheetPreview / Simulator / LayerCard / Edit*
-    // god-components are split. The current mutations of `bitmap` / `typo`
-    // props are well-known dead-ends to be cleaned up in the frontend refactor
-    // lot; turning the rule on today would block CI on pre-existing debt.
-    'vue/no-mutating-props': 'off',
     'vue/attribute-hyphenation': 'off',
     'vue/v-on-event-hyphenation': 'off',
     'vue/html-self-closing': 'off',
