@@ -11,6 +11,7 @@ import BlockMapCard from '../BlockMapCard.vue'
 import ColorModeCard from '../colors/ColorModeCard.vue'
 import MasterStylePicker from '../render/MasterStylePicker.vue'
 import MasterStyleParams from '../render/MasterStyleParams.vue'
+import MultiColorMasterStyleParams from '../render/MultiColorMasterStyleParams.vue'
 import PaletteCard from '../source/PaletteCard.vue'
 import PenSlotPicker from '../shared/PenSlotPicker.vue'
 import PostProcessCard from '../style/PostProcessCard.vue'
@@ -185,6 +186,11 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
           mode="multicolor"
           :model-value="draft.multicolorMasterStyleId.value"
           @update:model-value="onMulticolorMasterStyleChange"
+        />
+
+        <MultiColorMasterStyleParams
+          :bitmap="bitmap"
+          :style-id="draft.multicolorMasterStyleId.value"
         />
       </div>
 

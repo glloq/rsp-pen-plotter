@@ -27,6 +27,7 @@ import {
   DEFAULT_MASTER_STYLE_ID,
   DEFAULT_MULTICOLOR_STYLE_ID,
   MONO_STYLE_DEFAULTS,
+  MULTICOLOR_STYLE_DEFAULTS,
   lerp,
   type PrintStyle,
 } from '../data/printRegistry'
@@ -221,6 +222,41 @@ export type MonoKnobsDraft = {
   perStyle: Record<string, MonoStyleKnobs>
 }
 
+// Operator-tunable knobs for the multicolour master styles. Same
+// shape as ``MonoStyleKnobs`` but only the fields each multicolour
+// recipe actually reads (no angle chips, no per-band override drawer
+// — multicolour clusters aren't ordered by darkness in a way that
+// would make pinning the i-th cluster meaningful without exposing the
+// cluster's source colour first).
+export type MulticolorStyleKnobs = {
+  spacing_min?: number
+  spacing_max?: number
+  density_min?: number
+  density_max?: number
+  rings_min?: number
+  rings_max?: number
+  amp_min?: number
+  amp_max?: number
+  seed_spacing_min?: number
+  seed_spacing_max?: number
+  dot_radius?: number
+  iterations?: number
+  cell_size?: number
+  angle_step?: number
+  crossed?: boolean
+  step_px?: number
+  max_steps?: number
+  noise_scale?: number
+  bidirectional?: boolean
+  period_px?: number
+  jitter?: number
+  max_rings?: number
+}
+
+export type MulticolorKnobsDraft = {
+  perStyle: Record<string, MulticolorStyleKnobs>
+}
+
 export function defaultMonoStyleKnobs(styleId: string): MonoStyleKnobs {
   const src = MONO_STYLE_DEFAULTS[styleId] ?? {}
   // Shallow clone with deep copy of the angles array so callers that
@@ -238,6 +274,19 @@ export function defaultMono(): MonoKnobsDraft {
     perStyle[id] = defaultMonoStyleKnobs(id)
   }
   return { ink_color: '#000000', advanced_mode: false, perStyle }
+}
+
+export function defaultMulticolorStyleKnobs(styleId: string): MulticolorStyleKnobs {
+  const src = MULTICOLOR_STYLE_DEFAULTS[styleId] ?? {}
+  return { ...(src as MulticolorStyleKnobs) }
+}
+
+export function defaultMulticolor(): MulticolorKnobsDraft {
+  const perStyle: Record<string, MulticolorStyleKnobs> = {}
+  for (const id of Object.keys(MULTICOLOR_STYLE_DEFAULTS)) {
+    perStyle[id] = defaultMulticolorStyleKnobs(id)
+  }
+  return { perStyle }
 }
 
 export function defaultTypography(): TypographyDraft {
@@ -261,6 +310,7 @@ const _monoPenSlot = ref<number>(0)
 const _monoMasterStyleId = ref<string>(DEFAULT_MASTER_STYLE_ID)
 const _multicolorMasterStyleId = ref<string>(DEFAULT_MULTICOLOR_STYLE_ID)
 const _mono = ref<MonoKnobsDraft>(defaultMono())
+const _multicolor = ref<MulticolorKnobsDraft>(defaultMulticolor())
 const _paletteFollowsPens = ref<boolean>(true)
 
 // Tracks the segmentation knobs the operator manually changed since the
@@ -336,6 +386,7 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   _monoMasterStyleId.value = DEFAULT_MASTER_STYLE_ID
   _multicolorMasterStyleId.value = DEFAULT_MULTICOLOR_STYLE_ID
   _mono.value = defaultMono()
+  _multicolor.value = defaultMulticolor()
   // Rehydrating wipes the touched tracker — the persisted last_options
   // ARE the baseline, so subsequent style switches shouldn't think the
   // operator has been hand-tweaking.
@@ -434,6 +485,22 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   // field.
   const inkTop = (opts as Record<string, unknown>).mono_ink_color
   if (typeof inkTop === 'string') _mono.value.ink_color = inkTop
+  // Multicolour knobs — same merge shape as mono so a placement
+  // committed before a freshly added field still hydrates cleanly.
+  const multiOpts = (opts as Record<string, unknown>).multicolor_knobs
+  if (multiOpts && typeof multiOpts === 'object') {
+    const m = multiOpts as Partial<MulticolorKnobsDraft>
+    if (m.perStyle && typeof m.perStyle === 'object') {
+      for (const [styleId, knobs] of Object.entries(m.perStyle)) {
+        if (knobs && typeof knobs === 'object') {
+          _multicolor.value.perStyle[styleId] = {
+            ...defaultMulticolorStyleKnobs(styleId),
+            ...(knobs as MulticolorStyleKnobs),
+          }
+        }
+      }
+    }
+  }
   // A placement that round-tripped through /upload is by definition
   // committed; we only flip back to dirty on the first user mutation
   // (handled by Phase 4's useDirtyTracker — for now we treat it as
@@ -589,6 +656,29 @@ export function setMonoBandOverride(
 
 export function resetMonoStyleKnobs(styleId: string): void {
   _mono.value.perStyle[styleId] = defaultMonoStyleKnobs(styleId)
+}
+
+// Multicolour twins of the mono knob mutators. Symmetric API so the
+// shared params components can use the same setter pattern regardless
+// of print mode.
+export function getMulticolorStyleKnobs(styleId: string): MulticolorStyleKnobs {
+  if (!_multicolor.value.perStyle[styleId]) {
+    _multicolor.value.perStyle[styleId] = defaultMulticolorStyleKnobs(styleId)
+  }
+  return _multicolor.value.perStyle[styleId]
+}
+
+export function setMulticolorKnob<K extends keyof MulticolorStyleKnobs>(
+  styleId: string,
+  key: K,
+  value: MulticolorStyleKnobs[K],
+): void {
+  const knobs = getMulticolorStyleKnobs(styleId)
+  knobs[key] = value
+}
+
+export function resetMulticolorStyleKnobs(styleId: string): void {
+  _multicolor.value.perStyle[styleId] = defaultMulticolorStyleKnobs(styleId)
 }
 
 export function setPrintMode(
@@ -884,7 +974,7 @@ function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
   // matched by cluster order (darkest first) regardless of segmentation
   // method, so the same payload field carries both kinds of overrides.
   const style = resolveMulticolorStyle(_multicolorMasterStyleId.value)
-  if (!style.colorRecipe) return undefined
+  if (!style.colorRecipe && !(style.id in MULTICOLOR_STYLE_DEFAULTS)) return undefined
   const b = _bitmap.value
   // For kmeans the cluster count is num_colors; for fixed_palette it's
   // the palette length. luminance_bands / thresholds aren't valid
@@ -895,15 +985,11 @@ function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
   if (b.segmentation_method === 'kmeans') total = b.num_colors
   else if (b.segmentation_method === 'fixed_palette') total = b.palette.length
   if (total < 1) return undefined
-  // ``hex`` is the cluster's RGB centroid; we don't have it client-side
-  // before /preview returns, so pass the cluster index encoded as a
-  // grey-ramp hex. Recipes that branch on hue (CMYK halftone) gracefully
-  // degrade to their fallback when the source colour is unknown, and
-  // hue-agnostic recipes (crosshatch, stipple, contours) don't read it.
+  const knobs = _multicolor.value.perStyle[style.id]
   return Array.from({ length: total }, (_, i) => {
     const grey = Math.round(255 * (i / Math.max(1, total - 1)))
     const hexFallback = `#${grey.toString(16).padStart(2, '0').repeat(3)}`
-    const recipe = style.colorRecipe!(i, total, hexFallback)
+    const recipe = colorRecipeFromKnobs(style, knobs, i, total, hexFallback)
     if (!recipe) {
       return {
         algorithm: style.defaultAlgorithm,
@@ -915,6 +1001,140 @@ function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
       algorithm_options: { ...recipe.algorithm_options },
     }
   })
+}
+
+// Synthesize a recipe for cluster ``i`` (of ``total``) from the
+// operator's per-style multicolour knobs. Falls back to the registry's
+// hardcoded ``colorRecipe`` when the knobs object is missing — keeps a
+// freshly-added multicolour master without a MULTICOLOR_STYLE_DEFAULTS
+// entry rendering via the legacy contract.
+function colorRecipeFromKnobs(
+  style: PrintStyle,
+  knobs: MulticolorStyleKnobs | undefined,
+  i: number,
+  total: number,
+  hex: string,
+): { algorithm: string; algorithm_options: Record<string, unknown> } | null {
+  if (!knobs) {
+    return style.colorRecipe ? style.colorRecipe(i, total, hex) : null
+  }
+  switch (style.id) {
+    case 'color-flat':
+      return { algorithm: 'direct', algorithm_options: {} }
+    case 'color-crosshatch': {
+      const baseAngles = [0, 45, 90, 135, 30, 75, 120, 165]
+      const step = knobs.angle_step ?? 45
+      const angle = (i * step + (baseAngles[i % baseAngles.length] ?? 0)) % 180
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      return {
+        algorithm: 'crosshatch',
+        algorithm_options: {
+          angle_deg: angle,
+          spacing_px: spacing,
+          crossed: knobs.crossed ?? false,
+        },
+      }
+    }
+    case 'color-stipple': {
+      // Darker clusters first → density_max at i=0, density_min at the
+      // lightest cluster. Mirrors the mono ``stippling-shade`` recipe so
+      // the slider direction is consistent between modes.
+      const density = lerp(
+        i, total,
+        knobs.density_max ?? 0.05,
+        knobs.density_min ?? 0.012,
+      )
+      return {
+        algorithm: 'voronoi_stipple',
+        algorithm_options: {
+          density,
+          dot_radius_px: knobs.dot_radius ?? 0.5,
+          iterations: knobs.iterations ?? 4,
+          seed: i * 13 + 7,
+        },
+      }
+    }
+    case 'color-halftone-cmyk': {
+      const r = parseInt(hex.slice(1, 3), 16) / 255
+      const g = parseInt(hex.slice(3, 5), 16) / 255
+      const bch = parseInt(hex.slice(5, 7), 16) / 255
+      const c = 1 - r, m = 1 - g, y = 1 - bch
+      let angle = 45
+      const max = Math.max(c, m, y)
+      if (max > 0.15) {
+        if (max === c) angle = 15
+        else if (max === m) angle = 75
+        else angle = 0
+      }
+      return {
+        algorithm: 'halftone',
+        algorithm_options: {
+          cell_size_px: knobs.cell_size ?? 5,
+          angle_deg: angle,
+        },
+      }
+    }
+    case 'color-contours-topo': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      // Darker clusters get more rings.
+      const rings = Math.round(lerp(
+        i, total,
+        knobs.rings_max ?? 30,
+        knobs.rings_min ?? 10,
+      ))
+      return {
+        algorithm: 'contours',
+        algorithm_options: { spacing_px: spacing, max_rings: rings },
+      }
+    }
+    case 'color-flowfield': {
+      const seedSpacing = lerp(
+        i, total,
+        knobs.seed_spacing_min ?? 6,
+        knobs.seed_spacing_max ?? 12,
+      )
+      return {
+        algorithm: 'flowfield',
+        algorithm_options: {
+          seed_spacing_px: seedSpacing,
+          step_px: knobs.step_px ?? 0.8,
+          max_steps: knobs.max_steps ?? 600,
+          bidirectional: knobs.bidirectional ?? true,
+          noise_scale: knobs.noise_scale ?? 48,
+          mode: 'gradient',
+          seed: i * 31 + 11,
+        },
+      }
+    }
+    case 'color-sketch': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 6)
+      const amp = lerp(i, total, knobs.amp_max ?? 1.8, knobs.amp_min ?? 0.6)
+      return {
+        algorithm: 'squiggle',
+        algorithm_options: {
+          spacing_px: spacing,
+          amp_px: amp,
+          period_px: knobs.period_px ?? 8,
+          jitter: knobs.jitter ?? 0.45,
+          mode: 'modulated',
+          seed: i * 17 + 23,
+        },
+      }
+    }
+    case 'color-spiral': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2, knobs.spacing_max ?? 5)
+      return {
+        algorithm: 'concentric_offset',
+        algorithm_options: {
+          spacing_px: spacing,
+          max_rings: knobs.max_rings ?? 40,
+          bridge: true,
+        },
+      }
+    }
+    default:
+      return style.colorRecipe ? style.colorRecipe(i, total, hex) : null
+  }
 }
 
 export function buildBitmapOptions(): Record<string, unknown> {
@@ -971,6 +1191,10 @@ export function buildBitmapOptions(): Record<string, unknown> {
     // rehydrate path reads it back. Deep clone so persisted snapshots
     // don't share refs with the live draft.
     mono_knobs: JSON.parse(JSON.stringify(_mono.value)) as MonoKnobsDraft,
+    // Multicolour knob set — same persistence contract as ``mono_knobs``.
+    // Backend ignores the field; the frontend rehydrate path reads it
+    // back so per-style range sliders survive a round-trip.
+    multicolor_knobs: JSON.parse(JSON.stringify(_multicolor.value)) as MulticolorKnobsDraft,
   }
   // Only ship ``mono_ink_color`` in monochrome mode; multicolor keeps
   // its per-cluster palette colours.
@@ -1028,12 +1252,14 @@ function snap(value: unknown): string {
 
 const _baselineCurves = ref<string>('')
 const _baselineMono = ref<string>('')
+const _baselineMulticolor = ref<string>('')
 
 const _isDirty = computed<boolean>(() => {
   return snap(_bitmap.value) !== _baselineBitmap.value
     || snap(_typo.value) !== _baselineTypo.value
     || snap(_curves.value) !== _baselineCurves.value
     || snap(_mono.value) !== _baselineMono.value
+    || snap(_multicolor.value) !== _baselineMulticolor.value
 })
 
 function markCommitted(): void {
@@ -1041,6 +1267,7 @@ function markCommitted(): void {
   _baselineTypo.value = snap(_typo.value)
   _baselineCurves.value = snap(_curves.value)
   _baselineMono.value = snap(_mono.value)
+  _baselineMulticolor.value = snap(_multicolor.value)
   _committed.value = true
 }
 
@@ -1067,6 +1294,7 @@ export function useBitmapDraft() {
     curves: _curves,
     typo: _typo,
     mono: _mono,
+    multicolor: _multicolor,
     monoPenSlot: _monoPenSlot,
     monoMasterStyleId: _monoMasterStyleId,
     multicolorMasterStyleId: _multicolorMasterStyleId,
@@ -1085,6 +1313,9 @@ export function useBitmapDraft() {
     setMonoKnob,
     setMonoBandOverride,
     resetMonoStyleKnobs,
+    getMulticolorStyleKnobs,
+    setMulticolorKnob,
+    resetMulticolorStyleKnobs,
     interpolatedBandOptions,
     markSegmentationTouched,
     rehydrateDraft: rehydrateDraftAndMark,

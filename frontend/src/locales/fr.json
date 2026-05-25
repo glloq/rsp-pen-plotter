@@ -353,7 +353,19 @@
     "sketch": "Croquis squiggle",
     "sketchDesc": "Hachures ondulées hand-drawn par couleur, amplitude modulée par la luminance.",
     "spiral": "Spirales offset",
-    "spiralDesc": "Spirales concentriques offset par couleur — espacement adapté à la densité."
+    "spiralDesc": "Spirales concentriques offset par couleur — espacement adapté à la densité.",
+    "numColors": "Nombre de couleurs",
+    "numColorsHint": "Combien de clusters K-means extraire de l'image — chaque cluster devient un calque.",
+    "numColorsLocked": "Verrouillé sur la palette manuelle. Modifie la liste des couleurs en-dessous.",
+    "flatNoKnobs": "Pas de paramètres pour les aplats — chaque cluster est tracé tel quel.",
+    "crosshatchSpacingHint": "Espacement serré (clusters sombres) → large (clusters clairs).",
+    "angleStep": "Rotation par couleur",
+    "angleStepHint": "Décalage d'angle ajouté pour chaque cluster supplémentaire — évite le moirage.",
+    "iterationsHint": "Plus d'itérations Lloyd = répartition plus uniforme mais aperçu plus lent.",
+    "cmykHint": "Les angles d'écran sont automatiquement choisis selon la couleur dominante (C 15° · M 75° · J 0°).",
+    "seedSpacingRange": "Espacement des graines (px)",
+    "seedSpacingHint": "Espacement entre points de départ des streamlines — plus large = moins de tracés.",
+    "ampRange": "Amplitude de squiggle (px)"
   },
   "printStyles": {
     "default": "Défaut",

@@ -364,6 +364,63 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
   },
 }
 
+// Defaults for the multicolour master family. Mirrors MONO_STYLE_DEFAULTS:
+// each entry is the operator-tunable knob set for one style, hoisted so
+// ``useBitmapDraft.defaultMulticolor()`` can pre-populate the params
+// card and the registry's ``colorRecipe`` can read the same values.
+// Ranges that lerp across clusters use ``_min`` (applied to the darkest
+// cluster) / ``_max`` (lightest cluster) pairs — same convention as
+// the mono recipes so the DualRangeSlider component is reusable.
+export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
+  'color-flat': {
+    // Aplats sans paramètres modulables ; gardé vide pour que la carte
+    // params affiche un placeholder explicite plutôt qu'un slider
+    // factice.
+  },
+  'color-crosshatch': {
+    spacing_min: 2.5,
+    spacing_max: 6,
+    angle_step: 45,
+    crossed: false,
+  },
+  'color-stipple': {
+    density_min: 0.012,
+    density_max: 0.05,
+    dot_radius: 0.5,
+    iterations: 4,
+  },
+  'color-halftone-cmyk': {
+    cell_size: 5,
+  },
+  'color-contours-topo': {
+    spacing_min: 2.5,
+    spacing_max: 6,
+    rings_min: 10,
+    rings_max: 30,
+  },
+  'color-flowfield': {
+    seed_spacing_min: 6,
+    seed_spacing_max: 12,
+    step_px: 0.8,
+    max_steps: 600,
+    noise_scale: 48,
+    bidirectional: true,
+  },
+  'color-sketch': {
+    spacing_min: 3,
+    spacing_max: 6,
+    amp_min: 0.6,
+    amp_max: 1.8,
+    period_px: 8,
+    jitter: 0.45,
+  },
+  'color-spiral': {
+    spacing_min: 2,
+    spacing_max: 5,
+    max_rings: 40,
+  },
+}
+
 // Naming convention to resolve old collisions between mono modes and
 // per-layer presets:
 //   - master shaded photo modes keep simple ids: pencil, halftone-shade,
