@@ -3,8 +3,6 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useUiStore, type SettingsTab } from '../stores/ui'
-import ProfileEditor from './ProfileEditor.vue'
-import MacroPanel from './MacroPanel.vue'
 import JobHistory from './JobHistory.vue'
 import AuditPanel from './AuditPanel.vue'
 import SystemPanel from './SystemPanel.vue'
@@ -14,11 +12,9 @@ const ui = useUiStore()
 const { settingsOpen, settingsTab } = storeToRefs(ui)
 
 const tabs: Array<{ id: SettingsTab; label: string }> = [
-  { id: 'profile', label: 'settings.profile' },
-  { id: 'macros', label: 'settings.macros' },
+  { id: 'system', label: 'settings.system' },
   { id: 'history', label: 'settings.history' },
   { id: 'audit', label: 'settings.audit' },
-  { id: 'system', label: 'settings.system' },
 ]
 
 function select(tab: SettingsTab): void {
@@ -72,11 +68,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </nav>
 
       <div class="flex-1 overflow-y-auto p-4">
-        <div v-show="settingsTab === 'profile'"><ProfileEditor /></div>
-        <div v-show="settingsTab === 'macros'"><MacroPanel /></div>
+        <div v-show="settingsTab === 'system'"><SystemPanel /></div>
         <div v-show="settingsTab === 'history'"><JobHistory /></div>
         <div v-show="settingsTab === 'audit'"><AuditPanel /></div>
-        <div v-show="settingsTab === 'system'"><SystemPanel /></div>
       </div>
     </div>
   </div>
