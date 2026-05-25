@@ -8,6 +8,7 @@ import SheetPreview from './SheetPreview.vue'
 import Simulator from './Simulator.vue'
 import GcodePreview from './GcodePreview.vue'
 import PlanRail from './PlanRail.vue'
+import SimRail from './SimRail.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
@@ -67,12 +68,15 @@ function select(tab: CanvasTab): void {
         </div>
         <PlanRail />
       </div>
-      <div v-show="canvasTab === 'simulator'" class="flex h-full min-h-0 flex-col">
-        <Simulator v-if="canSimulate && job.gcode" />
-        <p v-else-if="!canSimulate" class="text-sm text-slate-500">
-          {{ t('canvas.simulatorUnavailable') }}
-        </p>
-        <p v-else class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
+      <div v-show="canvasTab === 'simulator'" class="flex h-full min-h-0">
+        <div class="flex min-h-0 flex-1 flex-col">
+          <Simulator v-if="canSimulate && job.gcode" />
+          <p v-else-if="!canSimulate" class="text-sm text-slate-500">
+            {{ t('canvas.simulatorUnavailable') }}
+          </p>
+          <p v-else class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
+        </div>
+        <SimRail v-if="canSimulate && job.gcode" />
       </div>
       <div v-show="canvasTab === 'gcode'" class="flex h-full min-h-0 flex-col">
         <GcodePreview v-if="job.gcode" />

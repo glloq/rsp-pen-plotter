@@ -320,6 +320,9 @@
     "collapse": "Collapse panel",
     "expand": "Expand panel"
   },
+  "simRail": {
+    "title": "G-code"
+  },
   "blockMap": {
     "title": "Document blocks",
     "loading": "analysing…",
