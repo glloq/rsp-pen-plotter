@@ -607,9 +607,20 @@ export const useJobStore = defineStore('job', () => {
   }
 
   watch([scaleMode, marginMm, selectedProfileName], () => {
+    metrics.value = null
+    gcode.value = null
     preflight.value = null
   })
+  // Any edit to a placement — geometry, layer settings, pen assignments,
+  // visibility, algorithm overrides — invalidates the cached gcode and
+  // metrics so the Simulator / G-code tabs don't keep showing a stale
+  // toolpath that doesn't reflect the operator's latest choices. The
+  // operator must click Generate again to refresh; that's intentional
+  // (cheaper than auto-regenerating on every drag) but the stale state
+  // must NOT linger silently.
   watch(placements, () => {
+    metrics.value = null
+    gcode.value = null
     preflight.value = null
   }, { deep: true })
 
