@@ -87,6 +87,7 @@ overrides; for non-systemd use, set the same variables in the shell before
 | `OMNIPLOT_API_KEY`   | unset        | When set, machine-control endpoints require this key (header `X-API-Key` or `?token=` for WebSockets). Strongly recommended on a LAN. |
 | `OMNIPLOT_DB`        | `backend/data/omniplot.db` | SQLite database path. |
 | `OMNIPLOT_STATIC_DIR`| `frontend/dist` | Override where the built UI is served from. |
+| `OMNIPLOT_CORS_ORIGINS` | `http://localhost:5173` | Comma-separated browser origins allowed to call the API (CORS). Set this when the UI is reached from another device on the LAN, e.g. `https://plotter.local,https://192.168.1.42`. |
 
 ---
 

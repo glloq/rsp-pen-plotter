@@ -51,6 +51,47 @@ router = APIRouter()
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
+# Folder is a free-form label stored in the FileRecord row, never
+# joined onto a filesystem path on disk (the file_id — a UUID — is the
+# only path component). The guard below still rejects shapes that
+# could be misread by an admin tool, a CLI export, or a future
+# refactor that does build a path from this string — defence in depth
+# at the API edge.
+_FORBIDDEN_FOLDER_CHARS = ("/", "\\", "\x00")
+_MAX_FOLDER_LEN = 128
+
+
+def _sanitize_folder(folder: str) -> str:
+    """Validate the operator-supplied folder label.
+
+    Strips surrounding whitespace, rejects path separators / NULs /
+    parent-directory traversal hints, and caps the length so a single
+    pathological folder name can't blow up the search index.
+
+    Raises:
+        HTTPException: 400 if the label is unsafe. The error message
+            tells the operator what was wrong so they can correct it.
+    """
+    folder = folder.strip()
+    if not folder:
+        return ""
+    if len(folder) > _MAX_FOLDER_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Folder name must be at most {_MAX_FOLDER_LEN} characters.",
+        )
+    if any(c in folder for c in _FORBIDDEN_FOLDER_CHARS):
+        raise HTTPException(
+            status_code=400,
+            detail="Folder name cannot contain slashes, backslashes or NUL.",
+        )
+    if folder in {".", ".."} or folder.startswith(".."):
+        raise HTTPException(
+            status_code=400,
+            detail="Folder name cannot be '.' or '..' or start with '..'.",
+        )
+    return folder
+
 # Test compatibility: ``FILES_DIR`` is the conventional monkey-patch
 # point used by tests to redirect the library to a temp dir. The
 # application service reads this attribute at call time (see
@@ -268,6 +309,7 @@ async def upload_to_library(
     if mime is None:
         raise HTTPException(status_code=415, detail="Could not determine file type")
 
+    folder = _sanitize_folder(folder)
     data = await read_upload_safely(file, MAX_UPLOAD_BYTES)
     parsed_options = parse_options(options)
 
@@ -399,7 +441,7 @@ async def patch_file(file_id: str, patch: FilePatch) -> FileRecordOut:
             raise HTTPException(status_code=400, detail="source_file cannot be empty")
         record.source_file = name
     if patch.folder is not None:
-        record.folder = patch.folder.strip()
+        record.folder = _sanitize_folder(patch.folder)
     save_file_record(record)
     return _record_to_out(record)
 
