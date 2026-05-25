@@ -698,6 +698,10 @@ export interface LibraryFileDetail extends LibraryFileRecord {
   layers: LayerInfo[]
   warnings: string[]
   upload_metadata: Record<string, unknown>
+  // True when the upload produced a cached bitmap segmentation, so
+  // /rerender can re-run a different algorithm against it. False for
+  // vector sources (SVG, PDF) — the algorithm picker has no effect there.
+  rerenderable?: boolean
 }
 
 export interface LibraryUploadResponse {
