@@ -5,4 +5,7 @@
 {% endif -%}
 {{ "G20" if profile.units == "inch" else "G21" }}
 G90
+{% if profile.gcode_dialect in ("grbl", "marlin", "klipper") and profile.acceleration_mm_s2 > 0 -%}
+M204 S{{ "%.1f"|format(profile.acceleration_mm_s2) }}
+{% endif -%}
 {{ profile.pen_up_command }}

@@ -144,3 +144,46 @@ def test_layer_speed_override_sets_feed() -> None:
 def test_invalid_svg_raises() -> None:
     with pytest.raises(ValueError):
         generate_gcode("<svg><g></svg>", _profile())
+
+
+def test_travel_moves_carry_profile_feedrate() -> None:
+    """Rapid moves must explicitly set F=travel_speed*60 — firmwares otherwise
+    keep the previous F, which makes pen-up travel match drawing speed.
+    """
+    profile = _profile()
+    gcode = generate_gcode(TWO_LAYERS, profile)
+    travel_lines = [line for line in gcode.splitlines() if line.startswith("G0 ")]
+    assert travel_lines, "no G0 travel moves were emitted"
+    expected_feed = f"F{profile.travel_speed_mm_s * 60.0:.1f}"
+    for line in travel_lines:
+        assert expected_feed in line, f"travel line missing {expected_feed}: {line}"
+
+
+def test_acceleration_emitted_for_standard_dialects() -> None:
+    """M204 must appear once in the header for grbl/marlin/klipper profiles
+    with a non-zero acceleration. Firmwares otherwise use their compiled
+    default, ignoring the operator's profile value.
+    """
+    profile = _profile()
+    assert profile.gcode_dialect == "grbl"
+    gcode = generate_gcode(TWO_LAYERS, profile)
+    expected = f"M204 S{profile.acceleration_mm_s2:.1f}"
+    assert gcode.count(expected) == 1, gcode
+
+
+def test_acceleration_skipped_when_zero() -> None:
+    """A profile with acceleration=0 must NOT emit M204 (the zero would
+    paradoxically tell the firmware to stop accelerating).
+    """
+    profile = _profile().model_copy(update={"acceleration_mm_s2": 0.0})
+    gcode = generate_gcode(TWO_LAYERS, profile)
+    assert "M204" not in gcode
+
+
+def test_acceleration_skipped_for_custom_dialect() -> None:
+    """``custom`` and ``ebb`` dialects must not get M204 — they have their
+    own acceleration mechanism (or none at all).
+    """
+    profile = _profile().model_copy(update={"gcode_dialect": "custom"})
+    gcode = generate_gcode(TWO_LAYERS, profile)
+    assert "M204" not in gcode

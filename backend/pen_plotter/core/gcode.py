@@ -309,11 +309,13 @@ def generate_gcode(
             pen_up_line = (pen and pen.pen_up_command) or pen_up_t.render(profile=profile)
             pen_down_line = (pen and pen.pen_down_command) or pen_down_t.render(profile=profile)
 
+            travel_feed = profile.travel_speed_mm_s * 60.0
+
             for polyline in layer.polylines:
                 machine_points = [transform(px, py) for px, py in polyline]
                 start = machine_points[0]
                 out.append(pen_up_line)
-                out.append(travel_t.render(x=start[0], y=start[1]))
+                out.append(travel_t.render(x=start[0], y=start[1], feed=travel_feed))
                 out.append(pen_down_line)
                 if profile.supports_arcs:
                     prev = start
@@ -338,7 +340,10 @@ def generate_gcode(
 
     out.append(
         footer_t.render(
-            profile=profile, home_x=profile.workspace.x_min, home_y=profile.workspace.y_min
+            profile=profile,
+            home_x=profile.workspace.x_min,
+            home_y=profile.workspace.y_min,
+            travel_feed=profile.travel_speed_mm_s * 60.0,
         )
     )
     return "\n".join(out) + "\n"
