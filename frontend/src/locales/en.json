@@ -102,7 +102,12 @@
     "tabShortcut": "Press {key} to jump to this tab",
     "fileActions": "File actions",
     "resizeHandle": "Drag to resize · double-click to reset",
-    "unsavedWarning": "You have unsaved changes. Close anyway?"
+    "unsavedTitle": "Unapplied changes",
+    "unsavedWarning": "You have unsaved changes. Close anyway?",
+    "unsavedDiscard": "Close anyway",
+    "overwriteTitle": "Re-convert file",
+    "overwriteMessage": "This file already has a conversion. Overwrite the existing result?",
+    "overwriteConfirm": "Re-convert"
   },
   "source": {
     "perLayerHint": "Pick the rendering style and pen slot for each colour in the Layers tab.",
@@ -584,10 +589,12 @@
     "hide": "Hide pass (skip in next render)",
     "or": "or",
     "reuploadHint": "Re-uploading will reset the {count} multi-pass layer(s) you've configured.",
+    "reuploadTitle": "Multi-pass layers",
     "reuploadWarning": "Re-uploading will reset {count} multi-pass layer(s). Continue?"
   },
   "confirm": {
     "cancel": "Cancel",
+    "ok": "Continue",
     "deleteProfileTitle": "Delete profile",
     "deleteProfileMsg": "Delete profile \"{name}\"? This cannot be undone.",
     "deleteMacroTitle": "Delete macro",

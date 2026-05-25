@@ -37,16 +37,36 @@ interface TabSpec {
   labelKey: string
   shortcut: string
   count?: number
+  activeClass: string
+  hoverClass: string
 }
 
 // Shortcut keys mirror the global handler in EditModal.vue (the digits
 // 1-4). The labelled <kbd> badge below makes them discoverable
 // without forcing the operator to memorise an undocumented binding.
+// Each tab has a distinct active colour so operators recognise context
+// at a glance: Image=sky, SVG=amber, Style=violet, Layers=emerald.
 const tabs = computed<TabSpec[]>(() => [
-  { id: 'image', labelKey: 'editModal.tabImage', shortcut: '1' },
-  { id: 'svg', labelKey: 'editModal.tabSvg', shortcut: '2' },
-  { id: 'style', labelKey: 'editModal.tabStyle', shortcut: '3' },
-  { id: 'layers', labelKey: 'editModal.tabLayers', shortcut: '4', count: props.layerCount },
+  {
+    id: 'image', labelKey: 'editModal.tabImage', shortcut: '1',
+    activeClass: 'border-sky-600 bg-sky-950/60 text-sky-200',
+    hoverClass: 'hover:border-sky-800 hover:text-sky-300',
+  },
+  {
+    id: 'svg', labelKey: 'editModal.tabSvg', shortcut: '2',
+    activeClass: 'border-amber-600 bg-amber-950/60 text-amber-200',
+    hoverClass: 'hover:border-amber-800 hover:text-amber-300',
+  },
+  {
+    id: 'style', labelKey: 'editModal.tabStyle', shortcut: '3',
+    activeClass: 'border-violet-600 bg-violet-950/60 text-violet-200',
+    hoverClass: 'hover:border-violet-800 hover:text-violet-300',
+  },
+  {
+    id: 'layers', labelKey: 'editModal.tabLayers', shortcut: '4', count: props.layerCount,
+    activeClass: 'border-emerald-600 bg-emerald-950/60 text-emerald-200',
+    hoverClass: 'hover:border-emerald-800 hover:text-emerald-300',
+  },
 ])
 
 function select(id: EditTabId): void {
@@ -68,8 +88,8 @@ function select(id: EditTabId): void {
       :title="t('editModal.tabShortcut', { key: tab.shortcut })"
       class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] transition"
       :class="modelValue === tab.id
-        ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-        : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600 hover:text-slate-100'"
+        ? tab.activeClass
+        : ['border-slate-700 bg-slate-900 text-slate-400', tab.hoverClass]"
       @click="select(tab.id)"
     >
       <span>{{ t(tab.labelKey) }}</span>

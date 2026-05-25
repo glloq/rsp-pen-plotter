@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { resetEditState, useEditState } from '../composables/useEditState'
 import { resetFileManager, useFileManager } from '../composables/useFileManager'
 import { useBitmapDraft } from '../composables/useBitmapDraft'
+import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import EditPreviewPane from './edit/EditPreviewPane.vue'
@@ -27,20 +28,23 @@ const { editModalOpen } = storeToRefs(ui)
 
 // Guard close: if the operator changed knobs since the last Apply,
 // confirm before discarding. Wraps both the keyboard Escape path and
-// the click-on-overlay path; the explicit "Done" button has its own
+// the click-on-overlay path; the explicit close button has its own
 // handler so we can warn from there too.
-function closeWithConfirm(): void {
+async function closeWithConfirm(): Promise<void> {
   if (draft.isDirty.value) {
-    const ok = window.confirm(t('editModal.unsavedWarning'))
+    const ok = await confirmAction({
+      title: t('editModal.unsavedTitle'),
+      message: t('editModal.unsavedWarning'),
+      confirmLabel: t('editModal.unsavedDiscard'),
+      cancelLabel: t('confirm.cancel'),
+      danger: true,
+    })
     if (!ok) return
   }
   ui.closeEditModal()
 }
 
-const headerTitle = computed(() => {
-  const name = store.lastFile?.name ?? store.job?.source_file ?? null
-  return name ? `${t('editModal.title')} — ${name}` : t('editModal.title')
-})
+const sourceName = computed(() => fm.sourceName.value)
 
 // ============================== TABS ==============================
 // Right pane is split into Source / Layers / Variants tabs so the long
@@ -236,19 +240,33 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       class="flex h-full max-h-[95vh] w-full max-w-[1600px] flex-col rounded-lg border border-slate-700 bg-slate-900 shadow-2xl"
       :style="{ width: '95vw' }"
     >
-      <header class="flex items-center justify-between gap-3 border-b border-slate-700 px-4 py-3">
-        <h2 class="min-w-0 truncate text-base font-semibold text-slate-100" :title="headerTitle">
-          {{ headerTitle }}
-        </h2>
-        <div class="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            class="rounded bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700"
-            @click="closeWithConfirm"
-          >
-            {{ t('editModal.done') }}
-          </button>
+      <header class="flex items-center gap-3 border-b border-slate-700 px-3 py-2">
+        <!-- Filename chip -->
+        <div
+          class="flex shrink-0 items-center gap-1.5 rounded border border-slate-600 bg-slate-800/80 px-2 py-1 text-xs"
+          :title="sourceName || t('editModal.title')"
+        >
+          <svg class="h-3 w-3 shrink-0 text-slate-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M4 1h5.586L13 4.414V15H3V1h1zm0-1H3a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V4.414a1 1 0 0 0-.293-.707L9.293.293A1 1 0 0 0 8.586 0H4z"/>
+            <path d="M9 4V1l3.5 3.5H9.5A.5.5 0 0 1 9 4z"/>
+          </svg>
+          <span class="max-w-[200px] truncate font-mono text-slate-200">
+            {{ sourceName || t('editModal.title') }}
+          </span>
         </div>
+        <!-- Variants bar inline -->
+        <div class="min-w-0 flex-1">
+          <VariantsBar v-if="fm.hasSource.value" :inline="true" />
+        </div>
+        <!-- Close button (red × ) -->
+        <button
+          type="button"
+          class="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-red-700 text-sm font-bold text-white hover:bg-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          :title="t('editModal.close')"
+          @click="closeWithConfirm"
+        >
+          ✕
+        </button>
       </header>
 
       <!-- Split-pane: preview on the left, scrollable settings on the
@@ -293,7 +311,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             <EmptyPlacementDropzone />
           </template>
           <template v-else>
-            <VariantsBar />
             <EditTabs
               v-model="activeTab"
               :layer-count="layerCount"

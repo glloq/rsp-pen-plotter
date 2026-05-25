@@ -369,7 +369,7 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
              empty panes have nothing to toggle. -->
         <div
           v-if="canToggleMode"
-          class="flex items-center gap-px rounded-sm border border-slate-700 bg-slate-950/40 p-px"
+          class="flex overflow-hidden rounded border border-slate-600 bg-slate-950"
           role="group"
           :aria-label="t('editPreview.modeGroup')"
         >
@@ -377,10 +377,10 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
             v-for="m in MODE_TOGGLES"
             :key="m.id"
             type="button"
-            class="rounded-sm px-1.5 py-0.5 text-[10px] uppercase tracking-wider transition"
+            class="px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors"
             :class="edit.previewMode.value === m.id
-              ? 'bg-sky-800/70 text-sky-100'
-              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+              ? 'bg-sky-700 text-white'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'"
             :title="t(`${m.key}Hint`)"
             @click="edit.previewMode.value = m.id"
           >
@@ -392,7 +392,7 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
              10-restart k-means. Each tier has its own cache slot so
              toggling between them stays cheap after the first warm-up. -->
         <div
-          class="flex items-center gap-px rounded-sm border border-slate-700 bg-slate-950/40 p-px"
+          class="flex overflow-hidden rounded border border-slate-600 bg-slate-950"
           role="group"
           :aria-label="t('editPreview.qualityGroup')"
         >
@@ -400,10 +400,10 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
             v-for="q in QUALITY_TIERS"
             :key="q.id"
             type="button"
-            class="rounded-sm px-1.5 py-0.5 text-[10px] uppercase tracking-wider transition"
+            class="px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors"
             :class="edit.previewQuality.value === q.id
-              ? 'bg-emerald-800/70 text-emerald-100'
-              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+              ? 'bg-emerald-700 text-white'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'"
             :title="t(`${q.key}Hint`)"
             @click="edit.previewQuality.value = q.id"
           >
@@ -428,17 +428,14 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
         >{{ t('editPreview.source') }}</span>
         <span
           v-else-if="showLivePreview"
-          class="rounded-sm border border-emerald-700 bg-emerald-950/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-emerald-300"
+          class="rounded border border-amber-600 bg-amber-900/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-amber-200"
           :title="t('editPreview.livePreviewHint')"
         >{{ t('editPreview.live') }}</span>
         <span
           v-else-if="showPlacementSvg"
-          class="rounded-sm border border-slate-700 bg-slate-900/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-slate-400"
+          class="rounded border border-emerald-600 bg-emerald-900/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-emerald-200"
           :title="t('editPreview.savedHint')"
         >{{ t('editPreview.saved') }}</span>
-        <span v-if="edit?.selectedFile.value" class="truncate font-mono text-slate-300">
-          {{ edit.selectedFile.value.name }}
-        </span>
       </div>
       <div class="flex items-center gap-2">
         <!-- Cost estimate chip. Reads the per-(algorithm, quality) EMA
