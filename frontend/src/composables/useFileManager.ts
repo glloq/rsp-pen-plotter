@@ -231,16 +231,19 @@ export function useFileManager(t?: Translator) {
       watch(
         // Deep-watch the full draft surface that feeds /preview: the
         // bitmap options, the mono ink colour + per-style knobs + per-
-        // band overrides, the master-style id, the curves toggles. A
-        // single getter that returns every reactive bag is simpler — and
-        // less bug-prone — than maintaining one ``watch()`` per slice;
-        // missing one (as we did with ``draft.mono`` initially) silently
+        // band overrides, the multicolour per-style knobs, both master-
+        // style ids, the curves toggles. A single getter that returns
+        // every reactive bag is simpler — and less bug-prone — than
+        // maintaining one ``watch()`` per slice; missing one (as we did
+        // with ``draft.mono`` and later ``draft.multicolor``) silently
         // breaks the live preview for the knob the operator just moved.
         () => [
           draft.bitmap.value,
           draft.mono.value,
+          draft.multicolor.value,
           draft.curves.value,
           draft.monoMasterStyleId.value,
+          draft.multicolorMasterStyleId.value,
         ],
         () => {
           if (_selectedFile.value && kind.value === 'bitmap') {
