@@ -11,7 +11,7 @@
 // hasn't been propagated.
 
 import type { LayerInfo } from '../api/client'
-import type { LayerPlan, PlacementPlan, PrintPlan } from './print-plan'
+import type { LayerPlan, PlacementPlan, PrintPlan, TypographyPlan } from './print-plan'
 
 /** Project a ``LayerInfo`` (editor state) to a backend ``LayerPlan``. */
 export function toLayerPlan(layer: LayerInfo): LayerPlan {
@@ -40,6 +40,14 @@ export interface PrintPlanInputs {
   scaleMode?: PrintPlan['scale_mode']
   marginMm?: number
   clientVersion?: string
+  /**
+   * Typography intent for text sources. Forwarded into the plan so the
+   * persisted snapshot and the plan_hash both reflect the operator's
+   * font / size / weight choices, even though today the SVG itself is
+   * still rendered at /upload time. Lets a future in-pipeline text
+   * renderer act on this without changing the call sites here.
+   */
+  typography?: TypographyPlan | null
 }
 
 /**
@@ -57,6 +65,7 @@ export function buildPrintPlan(inputs: PrintPlanInputs): PrintPlan {
     scale_mode: inputs.scaleMode ?? 'actual',
     margin_mm: inputs.marginMm ?? 0,
     placement: inputs.placement,
+    typography: inputs.typography ?? null,
     metadata: {
       client_version: inputs.clientVersion,
       created_at: new Date().toISOString(),

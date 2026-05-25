@@ -12,5 +12,6 @@ export type PlanMetadata = components['schemas']['PlanMetadata']
 export type PrintPlan = components['schemas']['PrintPlan']
 export type ResolvedLayer = components['schemas']['ResolvedLayer']
 export type ResolvedPlan = components['schemas']['ResolvedPlan']
+export type TypographyPlan = components['schemas']['TypographyPlan']
 export type PausePolicy = NonNullable<LayerPlan['pause_before']>
 export type ScaleMode = NonNullable<PrintPlan['scale_mode']>
