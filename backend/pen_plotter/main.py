@@ -22,15 +22,16 @@ from pen_plotter.api.generate import router as generate_router
 from pen_plotter.api.jobs import router as jobs_router
 from pen_plotter.api.macros import router as macros_router
 from pen_plotter.api.optimize import router as optimize_router
+from pen_plotter.api.plans import router as plans_router
 from pen_plotter.api.plotter import router as plotter_router
 from pen_plotter.api.preflight import router as preflight_router
 from pen_plotter.api.presets import router as presets_router
 from pen_plotter.api.preview import router as preview_router
 from pen_plotter.api.preview_text import router as preview_text_router
-from pen_plotter.api.rerender import router as rerender_router
 from pen_plotter.api.profiles import router as profiles_router
 from pen_plotter.api.queue import print_queue
 from pen_plotter.api.queue import router as queue_router
+from pen_plotter.api.rerender import router as rerender_router
 from pen_plotter.api.system import router as system_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.auth import require_api_key
@@ -71,6 +72,7 @@ app.include_router(profiles_router)
 app.include_router(optimize_router)
 app.include_router(generate_router)
 app.include_router(preflight_router)
+app.include_router(plans_router)
 # Machine-control endpoints are guarded when OMNIPLOT_API_KEY is set.
 app.include_router(plotter_router, dependencies=[Depends(require_api_key)])
 app.include_router(queue_router)

@@ -1,63 +1,46 @@
-"""Pre-run check endpoint: bounds, estimates, and pen-magazine validation."""
+"""Pre-run check endpoint (thin adapter over ``run_preflight``)."""
 
 from __future__ import annotations
 
-from typing import Literal
-
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 
-from pen_plotter.api.generate import GenerateLayer
-from pen_plotter.core.gcode import LayerGeneration
-from pen_plotter.core.preflight import preflight_report
-from pen_plotter.models import Placement, PreflightReport
+from pen_plotter.application.plan_resolver import PlanResolutionError
+from pen_plotter.application.preflight_service import run_preflight
+from pen_plotter.domain.print_plan import PrintPlan
+from pen_plotter.models import PreflightReport
 from pen_plotter.profiles import get_profile
 
 router = APIRouter()
 
 
-class PreflightRequest(BaseModel):
-    """Request body for a pre-run check; mirrors the generate request."""
-
-    svg: str
-    profile_name: str
-    layers: list[GenerateLayer] = Field(default_factory=list)
-    scale_mode: Literal["fit", "actual"] = "fit"
-    margin_mm: float = 10.0
-    placement: Placement | None = None
+class PreflightRequest(PrintPlan):
+    """Wire model for ``POST /preflight`` — same shape as a print plan."""
 
 
-@router.post("/preflight")
+@router.post("/preflight", response_model=PreflightReport)
 async def preflight(request: PreflightRequest) -> PreflightReport:
-    """Validate and estimate a placed drawing before generating/sending it.
+    """Validate and estimate a placed drawing before generating it.
+
+    The response is a :class:`PreflightReport` with ``plan_hash`` set so
+    the frontend can verify it later matches the ``/generate`` hash.
 
     Raises:
-        HTTPException: 404 if the profile is unknown; 400 if the SVG cannot be
-            parsed.
+        HTTPException: 404 if the profile is unknown; 400 if the SVG
+            cannot be parsed or the plan fails business validation.
     """
     profile = get_profile(request.profile_name)
     if profile is None:
-        raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
-
-    layer_settings = [
-        LayerGeneration(
-            layer_id=layer.layer_id,
-            target_pen_slot=layer.target_pen_slot,
-            drawing_speed_mm_s=layer.drawing_speed_mm_s,
-            source_color=layer.source_color,
-            color_label=layer.color_label,
-            pause_before=layer.pause_before,
+        raise HTTPException(
+            status_code=404, detail=f"Unknown profile: {request.profile_name!r}"
         )
-        for layer in request.layers
-    ]
     try:
-        return preflight_report(
-            request.svg,
-            profile,
-            layers=layer_settings,
-            scale_mode=request.scale_mode,
-            margin_mm=request.margin_mm,
-            placement=request.placement,
-        )
+        outcome = run_preflight(request, profile)
+    except PlanResolutionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return outcome.report.model_copy(update={"plan_hash": outcome.resolved.plan_hash})
+
+
+__all__ = ["PreflightRequest", "router"]

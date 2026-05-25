@@ -264,48 +264,30 @@ export async function optimizeToolpaths(
   return response.data
 }
 
-export interface GenerateLayer {
-  layer_id: string
-  target_pen_slot: number | null
-  drawing_speed_mm_s: number | null
-  source_color?: string | null
-  color_label?: string | null
-  pause_before?: PausePolicy
-}
-
-export interface Placement {
-  sheet_width_mm: number
-  sheet_height_mm: number
-  offset_x_mm: number
-  offset_y_mm: number
-}
+// Generate / preflight request shapes are now defined by the backend
+// Pydantic models and exposed via ``domain/print-plan.ts``. Importing
+// from there guarantees front and back see the exact same contract.
+import type {
+  LayerPlan as GenerateLayer,
+  PlacementPlan as Placement,
+  PrintPlan,
+  ResolvedPlan,
+} from '../domain/print-plan'
+export type { GenerateLayer, Placement }
 
 export interface GenerateResponse {
   gcode: string
   line_count: number
+  plan_hash: string
+  resolved_plan: ResolvedPlan
 }
 
+/** Submit a :class:`PrintPlan` to ``/generate`` and return the G-code. */
 export async function generateGcode(
-  svg: string,
-  profileName: string,
-  layers: GenerateLayer[],
-  scaleMode: 'fit' | 'actual' = 'fit',
-  marginMm = 10,
-  placement?: Placement | null,
+  plan: PrintPlan,
   signal?: AbortSignal,
 ): Promise<GenerateResponse> {
-  const response = await api.post<GenerateResponse>(
-    '/generate',
-    {
-      svg,
-      profile_name: profileName,
-      layers,
-      scale_mode: scaleMode,
-      margin_mm: marginMm,
-      placement: placement ?? null,
-    },
-    { signal },
-  )
+  const response = await api.post<GenerateResponse>('/generate', plan, { signal })
   return response.data
 }
 
@@ -323,29 +305,24 @@ export interface PreflightReport {
   path_count: number
   missing_pen_slots: number[]
   warnings: string[]
+  // Set by ``/preflight`` so the frontend can correlate the report with
+  // the matching ``/generate`` response — equal hashes mean both
+  // endpoints resolved the plan identically.
+  plan_hash?: string | null
 }
 
+/** Submit a :class:`PrintPlan` to ``/preflight`` and return the report. */
 export async function preflightCheck(
-  svg: string,
-  profileName: string,
-  layers: GenerateLayer[],
-  scaleMode: 'fit' | 'actual' = 'fit',
-  marginMm = 10,
-  placement?: Placement | null,
+  plan: PrintPlan,
   signal?: AbortSignal,
 ): Promise<PreflightReport> {
-  const response = await api.post<PreflightReport>(
-    '/preflight',
-    {
-      svg,
-      profile_name: profileName,
-      layers,
-      scale_mode: scaleMode,
-      margin_mm: marginMm,
-      placement: placement ?? null,
-    },
-    { signal },
-  )
+  const response = await api.post<PreflightReport>('/preflight', plan, { signal })
+  return response.data
+}
+
+/** Fetch an archived resolved plan by its stable hash. */
+export async function getResolvedPlan(planHash: string): Promise<ResolvedPlan> {
+  const response = await api.get<ResolvedPlan>(`/plans/${encodeURIComponent(planHash)}`)
   return response.data
 }
 

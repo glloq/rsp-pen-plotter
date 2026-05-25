@@ -1,0 +1,5048 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OmniPlot",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/upload": {
+      "post": {
+        "summary": "Upload",
+        "description": "Accept a file, normalize it to SVG, extract layers, and create a job.\n\nRaises:\n    HTTPException: 400 for invalid options or input the converter rejects;\n        415 if the file's MIME type has no registered converter.",
+        "operationId": "upload_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files": {
+      "post": {
+        "summary": "Upload To Library",
+        "description": "Add a file to the library, deduplicating by content hash.\n\nIf a file with the same SHA-256 already exists, the existing record is\nreturned and ``existing`` is ``true`` \u2014 no second copy is stored.\nException: when the request carries conversion ``options`` (e.g. the\noperator changed the bitmap algorithm or palette in SourceSection and\nclicked Apply), and those options differ from what was used last time,\nwe re-process the file in place \u2014 overwriting ``normalized.svg`` and\n``meta.json`` \u2014 instead of silently returning the stale conversion.\nWithout this branch the operator's option edits would never reach the\nplotter, because the editor re-uploads the same bytes to apply changes.",
+        "operationId": "upload_to_library_files_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_to_library_files_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUploadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Files",
+        "description": "List library entries. Filters/sort applied server-side.",
+        "operationId": "list_files_files_get",
+        "parameters": [
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Folder"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "date",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "desc",
+              "title": "Order"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileRecordOut"
+                  },
+                  "title": "Response List Files Files Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/folders": {
+      "get": {
+        "summary": "List Folders",
+        "description": "Return the distinct folder names currently used by library entries.",
+        "operationId": "list_folders_files_folders_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response List Folders Files Folders Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{file_id}": {
+      "get": {
+        "summary": "Get File",
+        "description": "Return one library entry, including its SVG and layer metadata.",
+        "operationId": "get_file_files__file_id__get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Patch File",
+        "description": "Rename a library entry and/or move it to another folder.",
+        "operationId": "patch_file_files__file_id__patch",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileRecordOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete File",
+        "description": "Remove a library entry and its on-disk artifacts.",
+        "operationId": "delete_file_files__file_id__delete",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Delete File Files  File Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{file_id}/original": {
+      "get": {
+        "summary": "Download Original",
+        "description": "Stream the original uploaded bytes back to the client.",
+        "operationId": "download_original_files__file_id__original_get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/algorithms": {
+      "get": {
+        "summary": "List Algorithms",
+        "description": "List the raster algorithms the bitmap converter can apply.\n\nReturns:\n    One entry per registered algorithm, for the UI to offer as choices.",
+        "operationId": "list_algorithms_algorithms_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AlgorithmInfo"
+                  },
+                  "type": "array",
+                  "title": "Response List Algorithms Algorithms Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/fonts": {
+      "get": {
+        "summary": "List Fonts",
+        "description": "List the single-stroke Hershey fonts available for text rendering.\n\nReturns:\n    Sorted font names for the typography panel to offer as choices.",
+        "operationId": "list_fonts_fonts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response List Fonts Fonts Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profiles": {
+      "get": {
+        "summary": "List Profiles",
+        "description": "List the configured machine profiles, sorted by name.",
+        "operationId": "list_profiles_profiles_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MachineProfile"
+                  },
+                  "type": "array",
+                  "title": "Response List Profiles Profiles Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Or Update",
+        "description": "Create or update a profile from a JSON body and persist it.\n\nThe profile is written to the writable user directory, overriding any\nbundled profile with the same name. FastAPI returns 422 if the body fails\nvalidation.",
+        "operationId": "create_or_update_profiles_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MachineProfile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineProfile"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profiles/{name}": {
+      "get": {
+        "summary": "Get One",
+        "description": "Return a single profile by name.\n\nRaises:\n    HTTPException: 404 if no profile with the name exists.",
+        "operationId": "get_one_profiles__name__get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineProfile"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete One",
+        "description": "Delete a user profile by name.\n\nRaises:\n    HTTPException: 404 if no profile with the name exists; 400 if the\n        profile is bundled (read-only) and therefore cannot be deleted.",
+        "operationId": "delete_one_profiles__name__delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Delete One Profiles  Name  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profiles/{name}/export": {
+      "get": {
+        "summary": "Export One",
+        "description": "Export a profile as YAML.\n\nRaises:\n    HTTPException: 404 if no profile with the name exists.",
+        "operationId": "export_one_profiles__name__export_get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profiles/import": {
+      "post": {
+        "summary": "Import One",
+        "description": "Validate and persist an imported YAML profile.\n\nRaises:\n    HTTPException: 422 if the YAML is malformed or fails validation.",
+        "operationId": "import_one_profiles_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MachineProfile"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/optimize": {
+      "post": {
+        "summary": "Optimize",
+        "description": "Optimize toolpaths to reduce pen-up travel.\n\nArgs:\n    request: The SVG to optimize plus optional per-layer settings.\n\nReturns:\n    An :class:`OptimizeResponse` with the optimized SVG, refreshed layer\n    descriptors, and before/after travel metrics.\n\nRaises:\n    HTTPException: 400 if the SVG cannot be processed.",
+        "operationId": "optimize_optimize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptimizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptimizeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/generate": {
+      "post": {
+        "summary": "Generate",
+        "description": "Generate G-code for a print plan.\n\nReturns the program plus the resolved-plan snapshot (and its hash)\nthat produced it \u2014 the snapshot is also persisted to SQLite for\nlater inspection via ``GET /plans/{hash}``.\n\nRaises:\n    HTTPException: 404 if the profile is unknown; 400 if the plan\n        fails business validation; 422 if generation itself fails.",
+        "operationId": "generate_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preflight": {
+      "post": {
+        "summary": "Preflight",
+        "description": "Validate and estimate a placed drawing before generating it.\n\nThe response is a :class:`PreflightReport` with ``plan_hash`` set so\nthe frontend can verify it later matches the ``/generate`` hash.\n\nRaises:\n    HTTPException: 404 if the profile is unknown; 400 if the SVG\n        cannot be parsed or the plan fails business validation.",
+        "operationId": "preflight_preflight_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreflightRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreflightReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plans/{plan_hash}": {
+      "get": {
+        "summary": "Get Plan",
+        "description": "Return the resolved plan archived under ``plan_hash``.\n\nRaises:\n    HTTPException: 404 if no snapshot exists for that hash.",
+        "operationId": "get_plan_plans__plan_hash__get",
+        "parameters": [
+          {
+            "name": "plan_hash",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Plan Hash"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedPlan"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/status": {
+      "get": {
+        "summary": "Status",
+        "description": "Return the current connection and streaming status.",
+        "operationId": "status_plotter_status_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/connect": {
+      "post": {
+        "summary": "Connect",
+        "description": "Open a serial connection to the plotter.\n\nRaises:\n    HTTPException: 400 if the serial port cannot be opened.",
+        "operationId": "connect_plotter_connect_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/disconnect": {
+      "post": {
+        "summary": "Disconnect",
+        "description": "Disconnect from the plotter.",
+        "operationId": "disconnect_plotter_disconnect_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/jog": {
+      "post": {
+        "summary": "Jog",
+        "description": "Jog the head by a relative offset.",
+        "operationId": "jog_plotter_jog_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JogRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/goto": {
+      "post": {
+        "summary": "Goto",
+        "description": "Move the head to an absolute workspace position.",
+        "operationId": "goto_plotter_goto_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GotoRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/home": {
+      "post": {
+        "summary": "Home",
+        "description": "Home the machine.",
+        "operationId": "home_plotter_home_post",
+        "parameters": [
+          {
+            "name": "profile_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Profile Name"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/run": {
+      "post": {
+        "summary": "Run",
+        "description": "Start streaming a G-code job.",
+        "operationId": "run_plotter_run_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/pause": {
+      "post": {
+        "summary": "Pause",
+        "description": "Pause the running job.",
+        "operationId": "pause_plotter_pause_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/resume": {
+      "post": {
+        "summary": "Resume",
+        "description": "Resume a paused job.",
+        "operationId": "resume_plotter_resume_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plotter/abort": {
+      "post": {
+        "summary": "Abort",
+        "description": "Abort the running job.",
+        "operationId": "abort_plotter_abort_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queue": {
+      "get": {
+        "summary": "List Queue",
+        "description": "List print runs, active ones first.\n\nProtected because ``PrintRun.pause_points`` carries operator-facing\nprompts (e.g. \"Insert pen slot 1: Red\") that reveal the pen carousel\nconfiguration when an API key is configured.",
+        "operationId": "list_queue_queue_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PrintRun"
+                  },
+                  "title": "Response List Queue Queue Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create",
+        "description": "Enqueue a G-code program for the plotter.\n\nSupplying an ``Idempotency-Key`` header makes retries safe: if a run already\nexists with that key, it is returned instead of creating a duplicate.\n\nRaises:\n    HTTPException: 404 if the profile is unknown.",
+        "operationId": "create_queue_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrintRun"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queue/{run_id}": {
+      "get": {
+        "summary": "Get One",
+        "description": "Return a single print run.\n\nRaises:\n    HTTPException: 404 if the run is unknown.",
+        "operationId": "get_one_queue__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrintRun"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove",
+        "description": "Delete a run from the queue.\n\nRaises:\n    HTTPException: 404 if unknown; 409 if it is currently streaming.",
+        "operationId": "remove_queue__run_id__delete",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Remove Queue  Run Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queue/{run_id}/pause": {
+      "post": {
+        "summary": "Pause",
+        "description": "Pause a run that is currently streaming.",
+        "operationId": "pause_queue__run_id__pause_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrintRun"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queue/{run_id}/resume": {
+      "post": {
+        "summary": "Resume",
+        "description": "Resume a paused run, continuing it or re-queuing from its checkpoint.",
+        "operationId": "resume_queue__run_id__resume_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrintRun"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queue/{run_id}/cancel": {
+      "post": {
+        "summary": "Cancel",
+        "description": "Cancel a run, aborting it if it is currently streaming.",
+        "operationId": "cancel_queue__run_id__cancel_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrintRun"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit": {
+      "get": {
+        "summary": "Audit",
+        "description": "List recent sensitive actions, newest first.",
+        "operationId": "audit_audit_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEntry"
+                  },
+                  "type": "array",
+                  "title": "Response Audit Audit Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs": {
+      "get": {
+        "summary": "Jobs",
+        "description": "List recent processed jobs, newest first.",
+        "operationId": "jobs_jobs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobRecord"
+                  },
+                  "type": "array",
+                  "title": "Response Jobs Jobs Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "summary": "Job",
+        "description": "Return a single job record.\n\nRaises:\n    HTTPException: 404 if no job with the id exists.",
+        "operationId": "job_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobRecord"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/presets": {
+      "get": {
+        "summary": "Presets",
+        "description": "List the available raster conversion presets.",
+        "operationId": "presets_presets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Preset"
+                  },
+                  "type": "array",
+                  "title": "Response Presets Presets Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros": {
+      "get": {
+        "summary": "List Macros",
+        "description": "List the saved macros, sorted by name.",
+        "operationId": "list_macros_macros_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Macro"
+                  },
+                  "type": "array",
+                  "title": "Response List Macros Macros Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Or Update",
+        "description": "Create or update a macro from a JSON body and persist it.",
+        "operationId": "create_or_update_macros_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Macro"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Macro"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros/{name}": {
+      "delete": {
+        "summary": "Delete One",
+        "description": "Delete a macro by name.\n\nRaises:\n    HTTPException: 404 if no macro with the name exists.",
+        "operationId": "delete_one_macros__name__delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Delete One Macros  Name  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros/{name}/run": {
+      "post": {
+        "summary": "Run One",
+        "description": "Execute a macro's commands on the connected plotter.\n\nRaises:\n    HTTPException: 404 if the macro is unknown; 409 if not connected or a\n        job is running.",
+        "operationId": "run_one_macros__name__run_post",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Run One Macros  Name  Run Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preview": {
+      "post": {
+        "summary": "Preview",
+        "description": "Run a quick bitmap vectorisation and return the SVG.\n\nArgs:\n    file: Uploaded image (PNG / JPEG / TIFF / WebP / HEIC).\n    algorithm: ``direct`` / ``halftone`` / ``stippling``.\n    options: Optional JSON object mirroring ``BitmapOptions`` (the same\n        keys ``/upload`` accepts).\n    quality: ``draft`` / ``standard`` / ``final``. Trades latency for\n        fidelity \u2014 see ``_QUALITY_TIERS`` for the concrete knobs.\n\nReturns:\n    A :class:`PreviewResponse` with a fast-rendered SVG and the palette.\n\nRaises:\n    HTTPException: 415 if the MIME is not a supported raster image;\n        413 if the upload exceeds ``MAX_PREVIEW_BYTES``;\n        400 if options can't be parsed or the quality tier is unknown.",
+        "operationId": "preview_preview_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preview-text": {
+      "post": {
+        "summary": "Preview Text",
+        "description": "Render a typography draft to single-stroke Hershey SVG.\n\nArgs:\n    file: Uploaded ``.txt`` or ``.md`` source. Truncated to\n        ``MAX_PREVIEW_TEXT_BYTES`` so a runaway paste never pins the\n        event loop; the response flags whether truncation happened so\n        the UI can warn.\n    options: Optional JSON object mirroring\n        :class:`~pen_plotter.typography.TypographyOptions`.\n\nReturns:\n    A :class:`TypographyPreviewResponse` carrying the SVG ready for\n    the EditPreviewPane.\n\nRaises:\n    HTTPException: 415 if the MIME isn't text/markdown; 400 if the\n        options can't be parsed or the font name is unknown; 413 if\n        the upload is empty.",
+        "operationId": "preview_text_preview_text_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_text_preview_text_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TypographyPreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rerender": {
+      "post": {
+        "summary": "Rerender",
+        "description": "Re-render the cached bitmap job with optional per-layer algorithm overrides.\n\nArgs:\n    request: The job id and per-layer algorithm choices.\n\nReturns:\n    The freshly rendered SVG (sanitized) plus rendering warnings.\n\nRaises:\n    HTTPException: 404 if no segmentation cache exists for the job\n        (e.g. after a backend restart or LRU eviction); the UI then\n        re-uploads instead.",
+        "operationId": "rerender_rerender_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RerenderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RerenderResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/version": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Get Version",
+        "description": "Report the package version and (if available) the git checkout state.",
+        "operationId": "get_version_system_version_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/check-update": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Check Update",
+        "description": "Fetch from the remote and report whether a newer commit exists.\n\nThis is the polling endpoint behind the optional \"update available\"\nstartup toast; it never mutates the working tree (only ``git fetch``)\nand tolerates offline machines by returning ``update_available=False``\nwith an ``error`` string instead of raising.",
+        "operationId": "check_update_system_check_update_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckUpdateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system/update": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Trigger Update",
+        "description": "Run the bundled ``update.sh`` script and return its log.\n\nThe script pulls the latest commit on the current branch and rebuilds\nthe frontend. If a new commit is applied, the backend needs a restart\nto load the new Python code \u2014 we report that in the response so the UI\ncan prompt the operator.\n\nPass ``{\"force\": true}`` to discard uncommitted local changes before\npulling. Use sparingly \u2014 this is irreversible.",
+        "operationId": "trigger_update_system_update_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/UpdateRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/document/analyze": {
+      "post": {
+        "summary": "Analyze Document",
+        "description": "Extract text and image blocks for every page of a PDF.\n\nArgs:\n    file: A PDF upload; other MIME types are rejected with 415.\n\nReturns:\n    A :class:`DocumentAnalysis` listing the blocks of each page.\n\nRaises:\n    HTTPException: 415 when the upload is not a PDF; 413 if the\n        file exceeds the analysis size limit; 422 if PyMuPDF cannot\n        parse the document.",
+        "operationId": "analyze_document_document_analyze_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_analyze_document_document_analyze_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAnalysis"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "description": "Report that the API is reachable and which version is running.\n\nReturns:\n    A payload with a fixed ``ok`` status and the package version.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AlgorithmInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "fill",
+              "lines",
+              "mono_stroke"
+            ],
+            "title": "Kind",
+            "default": "fill"
+          },
+          "complexity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Complexity",
+            "default": "medium"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "AlgorithmInfo",
+        "description": "Metadata describing one raster algorithm choice."
+      },
+      "AuditEntry": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "AuditEntry",
+        "description": "One recorded sensitive action."
+      },
+      "Block": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image"
+            ],
+            "title": "Kind"
+          },
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bbox"
+          },
+          "text_sample": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Sample"
+          },
+          "char_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "bbox"
+        ],
+        "title": "Block",
+        "description": "One detected region on a PDF page.\n\nAttributes:\n    id: Stable identifier ``p<page>-<t|i><index>`` \u2014 see module docstring.\n    kind: ``\"text\"`` or ``\"image\"``.\n    bbox: ``[x_min, y_min, x_max, y_max]`` in millimetres, top-left origin.\n    text_sample: First ~60 characters of the block's text (text blocks only).\n    char_count: Number of non-whitespace characters (text blocks only)."
+      },
+      "Body_analyze_document_document_analyze_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_analyze_document_document_analyze_post"
+      },
+      "Body_preview_preview_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "algorithm": {
+            "type": "string",
+            "title": "Algorithm",
+            "default": "direct"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          },
+          "quality": {
+            "type": "string",
+            "title": "Quality",
+            "default": "standard"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_preview_preview_post"
+      },
+      "Body_preview_text_preview_text_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_preview_text_preview_text_post"
+      },
+      "Body_upload_to_library_files_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder",
+            "default": ""
+          },
+          "options": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_to_library_files_post"
+      },
+      "Body_upload_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "profile_name"
+        ],
+        "title": "Body_upload_upload_post"
+      },
+      "BoundingBox": {
+        "properties": {
+          "x_min": {
+            "type": "number",
+            "title": "X Min"
+          },
+          "y_min": {
+            "type": "number",
+            "title": "Y Min"
+          },
+          "x_max": {
+            "type": "number",
+            "title": "X Max"
+          },
+          "y_max": {
+            "type": "number",
+            "title": "Y Max"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x_min",
+          "y_min",
+          "x_max",
+          "y_max"
+        ],
+        "title": "BoundingBox",
+        "description": "Axis-aligned bounding box of a layer's geometry, in millimeters."
+      },
+      "CheckUpdateResponse": {
+        "properties": {
+          "update_available": {
+            "type": "boolean",
+            "title": "Update Available"
+          },
+          "current_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Commit"
+          },
+          "remote_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Commit"
+          },
+          "behind": {
+            "type": "integer",
+            "title": "Behind"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "update_available",
+          "current_commit",
+          "remote_commit",
+          "behind",
+          "branch"
+        ],
+        "title": "CheckUpdateResponse",
+        "description": "Result of ``GET /system/check-update``: is a newer commit available?"
+      },
+      "ConnectRequest": {
+        "properties": {
+          "port": {
+            "type": "string",
+            "title": "Port"
+          },
+          "baudrate": {
+            "type": "integer",
+            "title": "Baudrate",
+            "default": 115200
+          },
+          "terminator": {
+            "type": "string",
+            "enum": [
+              "cr",
+              "lf",
+              "crlf"
+            ],
+            "title": "Terminator",
+            "default": "lf"
+          }
+        },
+        "type": "object",
+        "required": [
+          "port"
+        ],
+        "title": "ConnectRequest",
+        "description": "Serial connection parameters."
+      },
+      "DocumentAnalysis": {
+        "properties": {
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/PageBlocks"
+            },
+            "type": "array",
+            "title": "Pages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pages"
+        ],
+        "title": "DocumentAnalysis",
+        "description": "Container returned by :func:`extract_blocks`."
+      },
+      "EbbConfig": {
+        "properties": {
+          "steps_per_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Steps Per Mm",
+            "description": "Motor steps per millimeter of Cartesian travel.",
+            "default": 80.0
+          },
+          "servo_up": {
+            "type": "integer",
+            "title": "Servo Up",
+            "description": "Servo pulse width for the pen-up position, in 83.3 ns units (EBB SP).",
+            "default": 16000
+          },
+          "servo_down": {
+            "type": "integer",
+            "title": "Servo Down",
+            "description": "Servo pulse width for the pen-down position, in 83.3 ns units (EBB SP).",
+            "default": 12000
+          },
+          "servo_rate": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Servo Rate",
+            "description": "Servo travel rate between up/down, in EBB SC units.",
+            "default": 400
+          },
+          "serial_terminator": {
+            "type": "string",
+            "enum": [
+              "cr",
+              "lf",
+              "crlf"
+            ],
+            "title": "Serial Terminator",
+            "description": "Line terminator the board expects; EiBotBoard uses CR.",
+            "default": "cr"
+          }
+        },
+        "type": "object",
+        "title": "EbbConfig",
+        "description": "EiBotBoard (AxiDraw-class) motion parameters.\n\nRequired only for profiles whose ``gcode_dialect`` is ``\"ebb\"``. The two\nmotors form an H-bot, so a Cartesian move maps to mixed motor steps."
+      },
+      "EnqueueRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "gcode": {
+            "type": "string",
+            "title": "Gcode"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "profile_name",
+          "gcode"
+        ],
+        "title": "EnqueueRequest",
+        "description": "Body for adding a run to the print queue."
+      },
+      "FileDetail": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "source_file": {
+            "type": "string",
+            "title": "Source File"
+          },
+          "source_mime": {
+            "type": "string",
+            "title": "Source Mime"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "layer_count": {
+            "type": "integer",
+            "title": "Layer Count"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerInfo"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          },
+          "upload_metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Upload Metadata",
+            "default": {}
+          },
+          "rerenderable": {
+            "type": "boolean",
+            "title": "Rerenderable",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "sha256",
+          "source_file",
+          "source_mime",
+          "size_bytes",
+          "layer_count",
+          "folder",
+          "created_at",
+          "svg",
+          "layers"
+        ],
+        "title": "FileDetail",
+        "description": "Library entry plus its converted SVG and per-file metadata."
+      },
+      "FilePatch": {
+        "properties": {
+          "source_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source File"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder"
+          }
+        },
+        "type": "object",
+        "title": "FilePatch",
+        "description": "In-place edit of a library entry \u2014 rename and/or move between folders."
+      },
+      "FileRecordOut": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "source_file": {
+            "type": "string",
+            "title": "Source File"
+          },
+          "source_mime": {
+            "type": "string",
+            "title": "Source Mime"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "layer_count": {
+            "type": "integer",
+            "title": "Layer Count"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "sha256",
+          "source_file",
+          "source_mime",
+          "size_bytes",
+          "layer_count",
+          "folder",
+          "created_at"
+        ],
+        "title": "FileRecordOut",
+        "description": "Public projection of a :class:`FileRecord`, ready for JSON."
+      },
+      "FileUploadResponse": {
+        "properties": {
+          "file": {
+            "$ref": "#/components/schemas/FileDetail"
+          },
+          "existing": {
+            "type": "boolean",
+            "title": "Existing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "existing"
+        ],
+        "title": "FileUploadResponse",
+        "description": "Result of uploading to the library; ``existing`` flags dedup hits."
+      },
+      "GenerateRequest": {
+        "properties": {
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerPlan"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "scale_mode": {
+            "type": "string",
+            "enum": [
+              "fit",
+              "actual"
+            ],
+            "title": "Scale Mode",
+            "default": "fit"
+          },
+          "margin_mm": {
+            "type": "number",
+            "title": "Margin Mm",
+            "default": 10.0
+          },
+          "placement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlacementPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PlanMetadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "svg",
+          "profile_name"
+        ],
+        "title": "GenerateRequest",
+        "description": "Wire model for ``POST /generate``.\n\nIdentical to :class:`PrintPlan` \u2014 kept as a named subclass so the\nOpenAPI schema (and therefore the generated TypeScript types) reads\n``GenerateRequest`` at the endpoint boundary, while the rest of the\nbackend manipulates the domain type."
+      },
+      "GenerateResponse": {
+        "properties": {
+          "gcode": {
+            "type": "string",
+            "title": "Gcode"
+          },
+          "line_count": {
+            "type": "integer",
+            "title": "Line Count"
+          },
+          "plan_hash": {
+            "type": "string",
+            "title": "Plan Hash"
+          },
+          "resolved_plan": {
+            "$ref": "#/components/schemas/ResolvedPlan"
+          }
+        },
+        "type": "object",
+        "required": [
+          "gcode",
+          "line_count",
+          "plan_hash",
+          "resolved_plan"
+        ],
+        "title": "GenerateResponse",
+        "description": "Generated G-code, its line count, and the resolved plan snapshot."
+      },
+      "GotoRequest": {
+        "properties": {
+          "x_mm": {
+            "type": "number",
+            "title": "X Mm"
+          },
+          "y_mm": {
+            "type": "number",
+            "title": "Y Mm"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x_mm",
+          "y_mm",
+          "profile_name"
+        ],
+        "title": "GotoRequest",
+        "description": "Absolute move parameters."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "version"
+        ],
+        "title": "HealthResponse",
+        "description": "Response body for the health check endpoint."
+      },
+      "ImportRequest": {
+        "properties": {
+          "yaml": {
+            "type": "string",
+            "title": "Yaml"
+          }
+        },
+        "type": "object",
+        "required": [
+          "yaml"
+        ],
+        "title": "ImportRequest",
+        "description": "A profile to import, as a YAML document."
+      },
+      "Job": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "source_file": {
+            "type": "string",
+            "title": "Source File"
+          },
+          "source_mime": {
+            "type": "string",
+            "title": "Source Mime"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerInfo"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "ready",
+              "running",
+              "done",
+              "error"
+            ],
+            "title": "Status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_file",
+          "source_mime",
+          "profile_name"
+        ],
+        "title": "Job",
+        "description": "Tracks a single file through the conversion-to-plot lifecycle."
+      },
+      "JobRecord": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "source_file": {
+            "type": "string",
+            "title": "Source File"
+          },
+          "source_mime": {
+            "type": "string",
+            "title": "Source Mime"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "layer_count": {
+            "type": "integer",
+            "title": "Layer Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "source_file",
+          "source_mime",
+          "profile_name",
+          "status",
+          "layer_count",
+          "created_at"
+        ],
+        "title": "JobRecord",
+        "description": "A persisted summary of one processed job."
+      },
+      "JogRequest": {
+        "properties": {
+          "dx_mm": {
+            "type": "number",
+            "title": "Dx Mm"
+          },
+          "dy_mm": {
+            "type": "number",
+            "title": "Dy Mm"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dx_mm",
+          "dy_mm",
+          "profile_name"
+        ],
+        "title": "JogRequest",
+        "description": "Relative jog parameters."
+      },
+      "LayerAlgorithm": {
+        "properties": {
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "algorithm": {
+            "type": "string",
+            "title": "Algorithm",
+            "default": ""
+          },
+          "algorithm_options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Algorithm Options"
+          },
+          "passes": {
+            "items": {
+              "$ref": "#/components/schemas/LayerPass"
+            },
+            "type": "array",
+            "title": "Passes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "layer_id"
+        ],
+        "title": "LayerAlgorithm",
+        "description": "A per-layer algorithm override applied on top of the cached defaults.\n\nBackwards compatible: callers can still pass a single ``algorithm`` /\n``algorithm_options`` pair (the legacy shape). When ``passes`` is set\nand non-empty, it overrides the single-algorithm fields and the layer\nis rendered as the stack of passes in order."
+      },
+      "LayerInfo": {
+        "properties": {
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "source_color": {
+            "type": "string",
+            "title": "Source Color"
+          },
+          "target_pen_slot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pen Slot"
+          },
+          "draw_order": {
+            "type": "integer",
+            "title": "Draw Order"
+          },
+          "total_length_mm": {
+            "type": "number",
+            "title": "Total Length Mm"
+          },
+          "path_count": {
+            "type": "integer",
+            "title": "Path Count"
+          },
+          "bbox": {
+            "$ref": "#/components/schemas/BoundingBox"
+          },
+          "optimize": {
+            "type": "boolean",
+            "title": "Optimize",
+            "default": true
+          },
+          "simplify_tolerance_mm": {
+            "type": "number",
+            "title": "Simplify Tolerance Mm",
+            "default": 0.05
+          },
+          "drawing_speed_mm_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drawing Speed Mm S"
+          },
+          "color_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Label"
+          },
+          "pause_before": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "title": "Pause Before",
+            "default": "auto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "layer_id",
+          "source_color",
+          "target_pen_slot",
+          "draw_order",
+          "total_length_mm",
+          "path_count",
+          "bbox"
+        ],
+        "title": "LayerInfo",
+        "description": "A single separated drawing layer and its plotting parameters."
+      },
+      "LayerOptimization": {
+        "properties": {
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "optimize": {
+            "type": "boolean",
+            "title": "Optimize",
+            "default": true
+          },
+          "simplify_tolerance_mm": {
+            "type": "number",
+            "title": "Simplify Tolerance Mm",
+            "default": 0.05
+          }
+        },
+        "type": "object",
+        "required": [
+          "layer_id"
+        ],
+        "title": "LayerOptimization",
+        "description": "Per-layer optimization settings supplied by the client."
+      },
+      "LayerPass": {
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "title": "Algorithm"
+          },
+          "algorithm_options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Algorithm Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "algorithm"
+        ],
+        "title": "LayerPass",
+        "description": "One rendering pass within a multi-pass layer override.\n\nA single colour can be drawn with several stacked algorithms \u2014 e.g.\n``contours`` for the outline followed by ``crosshatch`` for the fill\n\u2014 so the operator gets the visual effect of multiple inks while\nkeeping the layer on one physical pen."
+      },
+      "LayerPlan": {
+        "properties": {
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "target_pen_slot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pen Slot"
+          },
+          "drawing_speed_mm_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drawing Speed Mm S"
+          },
+          "source_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Color"
+          },
+          "color_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Label"
+          },
+          "pause_before": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "title": "Pause Before",
+            "default": "auto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "layer_id"
+        ],
+        "title": "LayerPlan",
+        "description": "Per-layer print settings \u2014 the unified type replacing the old\n``GenerateLayer`` Pydantic model and ``LayerGeneration`` dataclass.\n\nEvery field is optional except ``layer_id``; defaults are filled in\nlater by :func:`pen_plotter.application.plan_resolver.resolve_plan`\nusing the active machine profile."
+      },
+      "MachineProfile": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "units": {
+            "type": "string",
+            "enum": [
+              "mm",
+              "inch"
+            ],
+            "title": "Units"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceBounds"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "top_left",
+              "bottom_left",
+              "center"
+            ],
+            "title": "Origin"
+          },
+          "gcode_dialect": {
+            "type": "string",
+            "enum": [
+              "grbl",
+              "marlin",
+              "klipper",
+              "ebb",
+              "custom"
+            ],
+            "title": "Gcode Dialect"
+          },
+          "pen_up_command": {
+            "type": "string",
+            "title": "Pen Up Command"
+          },
+          "pen_down_command": {
+            "type": "string",
+            "title": "Pen Down Command"
+          },
+          "tool_change_method": {
+            "type": "string",
+            "enum": [
+              "manual_pause",
+              "carousel",
+              "rack",
+              "none"
+            ],
+            "title": "Tool Change Method"
+          },
+          "tool_change_command": {
+            "type": "string",
+            "title": "Tool Change Command"
+          },
+          "drawing_speed_mm_s": {
+            "type": "number",
+            "title": "Drawing Speed Mm S"
+          },
+          "travel_speed_mm_s": {
+            "type": "number",
+            "title": "Travel Speed Mm S"
+          },
+          "acceleration_mm_s2": {
+            "type": "number",
+            "title": "Acceleration Mm S2"
+          },
+          "pen_slot_count": {
+            "type": "integer",
+            "title": "Pen Slot Count"
+          },
+          "supports_arcs": {
+            "type": "boolean",
+            "title": "Supports Arcs",
+            "default": false
+          },
+          "arc_tolerance_mm": {
+            "type": "number",
+            "title": "Arc Tolerance Mm",
+            "default": 0.1
+          },
+          "ebb": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EbbConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pens": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PenSlot"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "units",
+          "workspace",
+          "origin",
+          "gcode_dialect",
+          "pen_up_command",
+          "pen_down_command",
+          "tool_change_method",
+          "tool_change_command",
+          "drawing_speed_mm_s",
+          "travel_speed_mm_s",
+          "acceleration_mm_s2",
+          "pen_slot_count"
+        ],
+        "title": "MachineProfile",
+        "description": "Describes a target pen plotter.\n\nAll machine-specific behavior lives in profile files rather than code, so a\nnew plotter can be supported by writing one of these (typically loaded from\nYAML) without touching the application."
+      },
+      "Macro": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[\\w \\-.]+$",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "commands": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Commands"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Macro",
+        "description": "A user-defined sequence of raw plotter commands triggerable as one action."
+      },
+      "OptimizeRequest": {
+        "properties": {
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerOptimization"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "merge_tolerance_mm": {
+            "type": "number",
+            "title": "Merge Tolerance Mm",
+            "default": 0.1
+          }
+        },
+        "type": "object",
+        "required": [
+          "svg"
+        ],
+        "title": "OptimizeRequest",
+        "description": "Request body for toolpath optimization."
+      },
+      "OptimizeResponse": {
+        "properties": {
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerInfo"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/ToolpathMetrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "svg",
+          "layers",
+          "metrics"
+        ],
+        "title": "OptimizeResponse",
+        "description": "Optimized SVG, re-extracted layers, and travel metrics."
+      },
+      "PageBlocks": {
+        "properties": {
+          "page_index": {
+            "type": "integer",
+            "title": "Page Index"
+          },
+          "width_mm": {
+            "type": "number",
+            "title": "Width Mm"
+          },
+          "height_mm": {
+            "type": "number",
+            "title": "Height Mm"
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array",
+            "title": "Blocks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page_index",
+          "width_mm",
+          "height_mm",
+          "blocks"
+        ],
+        "title": "PageBlocks",
+        "description": "All detected blocks on one PDF page."
+      },
+      "PaletteEntry": {
+        "properties": {
+          "color": {
+            "type": "string",
+            "title": "Color"
+          },
+          "coverage": {
+            "type": "number",
+            "title": "Coverage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "color",
+          "coverage"
+        ],
+        "title": "PaletteEntry",
+        "description": "One cluster colour and its share of the image (0..1)."
+      },
+      "PenSlot": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "color": {
+            "type": "string",
+            "title": "Color",
+            "default": "#000000"
+          },
+          "installed": {
+            "type": "boolean",
+            "title": "Installed",
+            "default": true
+          },
+          "position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pen_up_command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pen Up Command"
+          },
+          "pen_down_command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pen Down Command"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index"
+        ],
+        "title": "PenSlot",
+        "description": "A physical pen position in the machine's magazine."
+      },
+      "PlacementPlan": {
+        "properties": {
+          "sheet_width_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Sheet Width Mm"
+          },
+          "sheet_height_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Sheet Height Mm"
+          },
+          "offset_x_mm": {
+            "type": "number",
+            "title": "Offset X Mm",
+            "default": 0.0
+          },
+          "offset_y_mm": {
+            "type": "number",
+            "title": "Offset Y Mm",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "sheet_width_mm",
+          "sheet_height_mm"
+        ],
+        "title": "PlacementPlan",
+        "description": "Sheet placement inside the machine workspace.\n\nMirrors :class:`pen_plotter.models.Placement` \u2014 kept as a separate\ndomain model so the pivot is self-contained and doesn't pull legacy\ntypes into the new package boundary."
+      },
+      "PlanMetadata": {
+        "properties": {
+          "client_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "title": "PlanMetadata",
+        "description": "Provenance information attached to a plan.\n\nThe client may set ``client_version`` so a stored snapshot can later\nbe correlated with the UI release that produced it."
+      },
+      "Point": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "Point",
+        "description": "A point in the machine's coordinate space, in profile units."
+      },
+      "PreflightReport": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "within_bounds": {
+            "type": "boolean",
+            "title": "Within Bounds"
+          },
+          "width_mm": {
+            "type": "number",
+            "title": "Width Mm"
+          },
+          "height_mm": {
+            "type": "number",
+            "title": "Height Mm"
+          },
+          "scale": {
+            "type": "number",
+            "title": "Scale"
+          },
+          "drawing_length_mm": {
+            "type": "number",
+            "title": "Drawing Length Mm"
+          },
+          "travel_length_mm": {
+            "type": "number",
+            "title": "Travel Length Mm"
+          },
+          "estimated_seconds": {
+            "type": "number",
+            "title": "Estimated Seconds"
+          },
+          "pen_changes": {
+            "type": "integer",
+            "title": "Pen Changes"
+          },
+          "layer_count": {
+            "type": "integer",
+            "title": "Layer Count"
+          },
+          "path_count": {
+            "type": "integer",
+            "title": "Path Count"
+          },
+          "missing_pen_slots": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Missing Pen Slots"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "plan_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Hash"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "within_bounds",
+          "width_mm",
+          "height_mm",
+          "scale",
+          "drawing_length_mm",
+          "travel_length_mm",
+          "estimated_seconds",
+          "pen_changes",
+          "layer_count",
+          "path_count"
+        ],
+        "title": "PreflightReport",
+        "description": "Pre-run safety and estimation checks for a placed drawing."
+      },
+      "PreflightRequest": {
+        "properties": {
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerPlan"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "scale_mode": {
+            "type": "string",
+            "enum": [
+              "fit",
+              "actual"
+            ],
+            "title": "Scale Mode",
+            "default": "fit"
+          },
+          "margin_mm": {
+            "type": "number",
+            "title": "Margin Mm",
+            "default": 10.0
+          },
+          "placement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlacementPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PlanMetadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "svg",
+          "profile_name"
+        ],
+        "title": "PreflightRequest",
+        "description": "Wire model for ``POST /preflight`` \u2014 same shape as a print plan."
+      },
+      "Preset": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "options"
+        ],
+        "title": "Preset",
+        "description": "A named bundle of converter options."
+      },
+      "PreviewResponse": {
+        "properties": {
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "title": "Elapsed Ms"
+          },
+          "palette": {
+            "items": {
+              "$ref": "#/components/schemas/PaletteEntry"
+            },
+            "type": "array",
+            "title": "Palette"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "svg",
+          "elapsed_ms",
+          "palette"
+        ],
+        "title": "PreviewResponse",
+        "description": "Fast-preview output for the UI."
+      },
+      "PrintPlan": {
+        "properties": {
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerPlan"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "scale_mode": {
+            "type": "string",
+            "enum": [
+              "fit",
+              "actual"
+            ],
+            "title": "Scale Mode",
+            "default": "fit"
+          },
+          "margin_mm": {
+            "type": "number",
+            "title": "Margin Mm",
+            "default": 10.0
+          },
+          "placement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlacementPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/PlanMetadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "svg",
+          "profile_name"
+        ],
+        "title": "PrintPlan",
+        "description": "What the operator wants drawn, before profile defaults apply.\n\nThe same instance flows through ``/preflight`` and ``/generate`` so\nboth endpoints provably operate on identical inputs."
+      },
+      "PrintRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "gcode": {
+            "type": "string",
+            "title": "Gcode"
+          },
+          "total_lines": {
+            "type": "integer",
+            "title": "Total Lines"
+          },
+          "acked_lines": {
+            "type": "integer",
+            "title": "Acked Lines",
+            "default": 0
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "default": "queued"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority",
+            "default": 0
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "pause_points": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Pause Points"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "profile_name",
+          "gcode",
+          "total_lines"
+        ],
+        "title": "PrintRun",
+        "description": "A persisted print job in the production queue."
+      },
+      "RerenderRequest": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/LayerAlgorithm"
+            },
+            "type": "array",
+            "title": "Layers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id"
+        ],
+        "title": "RerenderRequest",
+        "description": "Request body for ``POST /rerender``."
+      },
+      "RerenderResponse": {
+        "properties": {
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "svg"
+        ],
+        "title": "RerenderResponse",
+        "description": "The freshly rendered SVG plus any non-fatal warnings."
+      },
+      "ResolvedLayer": {
+        "properties": {
+          "layer_id": {
+            "type": "string",
+            "title": "Layer Id"
+          },
+          "target_pen_slot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Pen Slot"
+          },
+          "drawing_speed_mm_s": {
+            "type": "number",
+            "title": "Drawing Speed Mm S"
+          },
+          "source_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Color"
+          },
+          "color_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Label"
+          },
+          "pause_before": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "title": "Pause Before"
+          },
+          "pen_slot_installed": {
+            "type": "boolean",
+            "title": "Pen Slot Installed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "layer_id",
+          "target_pen_slot",
+          "drawing_speed_mm_s",
+          "source_color",
+          "color_label",
+          "pause_before",
+          "pen_slot_installed"
+        ],
+        "title": "ResolvedLayer",
+        "description": "A layer with every setting resolved against the active profile.\n\nNo ``None`` survives here: ``drawing_speed_mm_s`` falls back to the\nprofile speed, and ``pause_before`` is replaced by the literal\ndecision (``\"pause\"`` / ``\"skip\"``) the engine will follow."
+      },
+      "ResolvedPlan": {
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/PrintPlan"
+          },
+          "layers": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedLayer"
+            },
+            "type": "array",
+            "title": "Layers"
+          },
+          "plan_hash": {
+            "type": "string",
+            "title": "Plan Hash"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          },
+          "profile_drawing_speed_mm_s": {
+            "type": "number",
+            "title": "Profile Drawing Speed Mm S"
+          },
+          "mono_pen": {
+            "type": "boolean",
+            "title": "Mono Pen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plan",
+          "layers",
+          "plan_hash",
+          "profile_name",
+          "profile_drawing_speed_mm_s",
+          "mono_pen"
+        ],
+        "title": "ResolvedPlan",
+        "description": "The plan after defaults + validation, ready to feed the engines.\n\nCarries the original ``PrintPlan`` plus the per-layer resolution and\na deterministic content hash. Engines never re-read the raw plan;\nthey read the resolved one. Snapshots stored in SQLite are exactly\ninstances of this model."
+      },
+      "RunRequest": {
+        "properties": {
+          "gcode": {
+            "type": "string",
+            "title": "Gcode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "gcode"
+        ],
+        "title": "RunRequest",
+        "description": "G-code job to stream."
+      },
+      "StatusResponse": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "sent": {
+            "type": "integer",
+            "title": "Sent"
+          },
+          "acked": {
+            "type": "integer",
+            "title": "Acked"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected",
+          "total",
+          "sent",
+          "acked",
+          "state"
+        ],
+        "title": "StatusResponse",
+        "description": "Connection and streaming status."
+      },
+      "ToolpathMetrics": {
+        "properties": {
+          "pen_up_before_mm": {
+            "type": "number",
+            "title": "Pen Up Before Mm"
+          },
+          "pen_up_after_mm": {
+            "type": "number",
+            "title": "Pen Up After Mm"
+          },
+          "reduction_pct": {
+            "type": "number",
+            "title": "Reduction Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pen_up_before_mm",
+          "pen_up_after_mm",
+          "reduction_pct"
+        ],
+        "title": "ToolpathMetrics",
+        "description": "Pen-up travel before and after optimization, in SVG user units."
+      },
+      "TypographyPreviewResponse": {
+        "properties": {
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "svg"
+        ],
+        "title": "TypographyPreviewResponse",
+        "description": "Hershey-rendered SVG plus the truncation flag the UI surfaces."
+      },
+      "UpdateRequest": {
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "UpdateRequest",
+        "description": "Optional knobs for ``POST /system/update``."
+      },
+      "UpdateResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "previous_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Commit"
+          },
+          "new_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Commit"
+          },
+          "updated": {
+            "type": "boolean",
+            "title": "Updated"
+          },
+          "log": {
+            "type": "string",
+            "title": "Log"
+          },
+          "needs_restart": {
+            "type": "boolean",
+            "title": "Needs Restart"
+          },
+          "forced": {
+            "type": "boolean",
+            "title": "Forced",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "previous_commit",
+          "new_commit",
+          "updated",
+          "log",
+          "needs_restart"
+        ],
+        "title": "UpdateResponse",
+        "description": "Result of a ``./update.sh`` invocation, suitable for the UI to render."
+      },
+      "UploadResponse": {
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/Job"
+          },
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "default": {}
+          },
+          "rerenderable": {
+            "type": "boolean",
+            "title": "Rerenderable",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "job",
+          "svg"
+        ],
+        "title": "UploadResponse",
+        "description": "Result of an upload.\n\nCarries the created job, the normalized SVG pivot, any non-fatal\nwarnings, and converter-specific metadata (e.g. ``page_count`` and the\nselected ``page`` for multi-page PDF / DOCX / HTML inputs)."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VersionResponse": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "dirty": {
+            "type": "boolean",
+            "title": "Dirty"
+          },
+          "dirty_files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dirty Files",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "commit",
+          "branch",
+          "dirty"
+        ],
+        "title": "VersionResponse",
+        "description": "Currently-installed OmniPlot version and git state."
+      },
+      "WorkspaceBounds": {
+        "properties": {
+          "x_min": {
+            "type": "number",
+            "title": "X Min"
+          },
+          "y_min": {
+            "type": "number",
+            "title": "Y Min"
+          },
+          "x_max": {
+            "type": "number",
+            "title": "X Max"
+          },
+          "y_max": {
+            "type": "number",
+            "title": "Y Max"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x_min",
+          "y_min",
+          "x_max",
+          "y_max"
+        ],
+        "title": "WorkspaceBounds",
+        "description": "Rectangular drawable area of a machine, expressed in profile units."
+      }
+    }
+  }
+}

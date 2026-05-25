@@ -11,7 +11,6 @@ import {
   deleteProfile as apiDeleteProfile,
   saveProfile as apiSaveProfile,
   downloadOriginalFile,
-  generateGcode,
   getPresets,
   getProfiles,
   optimizeToolpaths,
@@ -27,6 +26,13 @@ import {
   type ToolpathMetrics,
 } from '../api/client'
 import { buildComposite } from '../lib/composite'
+import { buildPrintPlan } from '../domain/plan-builder'
+import type { PrintPlan } from '../domain/print-plan'
+import {
+  PipelineAbortedError,
+  pipelineErrorMessage,
+  runGeneratePipeline,
+} from '../application/runGeneratePipeline'
 
 const DEFAULT_SPEED_MM_S = 60
 
@@ -1083,11 +1089,14 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
-  function compositePayload(): {
-    svg: string
-    layers: LayerInfo[]
-    placement: { sheet_width_mm: number; sheet_height_mm: number; offset_x_mm: number; offset_y_mm: number } | null
-  } | null {
+  // Build the ``PrintPlan`` sent to ``/preflight`` and ``/generate``.
+  //
+  // This is the only place that projects placements + layer settings
+  // into the backend's wire format — every consumer goes through it,
+  // so adding a new layer field means editing exactly one mapping
+  // (``toLayerPlan`` in ``domain/plan-builder.ts``) and the OpenAPI
+  // types catch anything that drifted.
+  function buildPlanPayload(): PrintPlan | null {
     const profile = selectedProfile.value
     if (!profile) return null
     const ready = placements.value.filter((p) => p.svg && p.layers.length)
@@ -1099,8 +1108,7 @@ export const useJobStore = defineStore('job', () => {
     // union of the rendered layer bboxes — region_center then matches
     // bbox_center and the transform collapses to identity.
     const bbox = unionBoxes(result.layers.map((l) => l.bbox))
-    let placement: ReturnType<typeof compositePayload> extends infer R
-      ? R extends { placement: infer P } ? P : never : never = null
+    let placement: PrintPlan['placement'] = null
     if (bbox) {
       const ws = profile.workspace
       placement = {
@@ -1110,36 +1118,27 @@ export const useJobStore = defineStore('job', () => {
         sheet_height_mm: Math.max(1e-3, bbox.y_max - bbox.y_min),
       }
     }
-    return { svg: result.svg, layers: result.layers, placement }
+    return buildPrintPlan({
+      svg: result.svg,
+      profileName: selectedProfileName.value,
+      layers: result.layers,
+      placement,
+    })
   }
 
   async function runPreflight(): Promise<void> {
     // Wait for any pending /rerender to land first — otherwise we'd
     // preflight against the previous variant's SVG.
     await flushRerender()
-    const payload = compositePayload()
-    if (!payload) return
+    const plan = buildPlanPayload()
+    if (!plan) return
     preflighting.value = true
     error.value = null
     errorScope.value = null
     const toasts = useToastStore()
     const toastId = toasts.progress(i18n.global.t('toast.preflighting'))
     try {
-      preflight.value = await preflightCheck(
-        payload.svg,
-        selectedProfileName.value,
-        payload.layers.map((layer) => ({
-          layer_id: layer.layer_id,
-          target_pen_slot: layer.target_pen_slot,
-          drawing_speed_mm_s: layer.drawing_speed_mm_s,
-          source_color: layer.source_color,
-          color_label: layer.color_label,
-          pause_before: layer.pause_before,
-        })),
-        'actual',
-        0,
-        payload.placement,
-      )
+      preflight.value = await preflightCheck(plan)
       toasts.update(toastId, 'success', i18n.global.t('toast.preflightOk'), 3000)
     } catch (err) {
       preflight.value = null
@@ -1150,47 +1149,6 @@ export const useJobStore = defineStore('job', () => {
     } finally {
       preflighting.value = false
     }
-  }
-
-  // Optimize every placement that has an SVG. Single-threaded — placements
-  // are processed in order so progress messages stay in sync. The shared
-  // abort signal stops the loop as soon as the operator cancels, even if
-  // the in-flight request itself doesn't honour the signal.
-  async function optimizeAllPlacements(signal: AbortSignal): Promise<ToolpathMetrics | null> {
-    let aggregate: ToolpathMetrics | null = null
-    let beforeSum = 0
-    let afterSum = 0
-    let hasMetrics = false
-    for (const placement of placements.value) {
-      if (signal.aborted) throw new DOMException('cancelled', 'AbortError')
-      if (!placement.svg || !placement.layers.length) continue
-      const result = await optimizeToolpaths(
-        placement.svg,
-        placement.layers.map((layer) => ({
-          layer_id: layer.layer_id,
-          optimize: layer.optimize,
-          simplify_tolerance_mm: layer.simplify_tolerance_mm,
-        })),
-        signal,
-      )
-      patchPlacement(placement.id, {
-        svg: result.svg,
-        layers: result.layers,
-        visibility: Object.fromEntries(result.layers.map((l) => [l.layer_id, true])),
-      })
-      beforeSum += result.metrics.pen_up_before_mm
-      afterSum += result.metrics.pen_up_after_mm
-      hasMetrics = true
-    }
-    if (hasMetrics) {
-      const reduction = beforeSum > 0 ? ((beforeSum - afterSum) / beforeSum) * 100 : 0
-      aggregate = {
-        pen_up_before_mm: beforeSum,
-        pen_up_after_mm: afterSum,
-        reduction_pct: reduction,
-      }
-    }
-    return aggregate
   }
 
   async function generate(): Promise<void> {
@@ -1212,66 +1170,48 @@ export const useJobStore = defineStore('job', () => {
     gcode.value = null
 
     // Single AbortController drives every step so the modal's Cancel
-    // button stops whatever is in flight. Optimize+preflight+generate
-    // all receive the same signal.
+    // button stops whatever is in flight. The pipeline use-case
+    // receives the signal and threads it through every API call.
     const ui = useUiStore()
     const controller = new AbortController()
     ui.startGcodeJob('optimize', i18n.global.t('gcodeJob.optimizing'), () => controller.abort())
 
     let phase: 'optimize' | 'preflight' | 'generate' = 'optimize'
     try {
-      // === Optimize all placements ====================================
-      const optimizedMetrics = await optimizeAllPlacements(controller.signal)
-      if (optimizedMetrics) metrics.value = optimizedMetrics
-      optimizing.value = false
-
-      // === Preflight composite ========================================
-      phase = 'preflight'
-      ui.updateGcodeJobStep('preflight', i18n.global.t('gcodeJob.preflighting'))
-      const payload = compositePayload()
-      if (!payload) {
-        ui.finishGcodeJob('error', i18n.global.t('layers.generateFailed'))
-        return
-      }
-      preflighting.value = true
-      preflight.value = await preflightCheck(
-        payload.svg,
-        selectedProfileName.value,
-        payload.layers.map((layer) => ({
-          layer_id: layer.layer_id,
-          target_pen_slot: layer.target_pen_slot,
-          drawing_speed_mm_s: layer.drawing_speed_mm_s,
-          source_color: layer.source_color,
-          color_label: layer.color_label,
-          pause_before: layer.pause_before,
+      const outcome = await runGeneratePipeline({
+        placements: placements.value.map((p) => ({
+          id: p.id,
+          svg: p.svg,
+          layers: p.layers,
         })),
-        'actual',
-        0,
-        payload.placement,
-        controller.signal,
-      )
-      preflighting.value = false
-
-      // === Generate G-code ============================================
-      phase = 'generate'
-      ui.updateGcodeJobStep('generate', i18n.global.t('gcodeJob.generating'))
-      const result = await generateGcode(
-        payload.svg,
-        selectedProfileName.value,
-        payload.layers.map((layer) => ({
-          layer_id: layer.layer_id,
-          target_pen_slot: layer.target_pen_slot,
-          drawing_speed_mm_s: layer.drawing_speed_mm_s,
-          source_color: layer.source_color,
-          color_label: layer.color_label,
-          pause_before: layer.pause_before,
-        })),
-        'actual',
-        0,
-        payload.placement,
-        controller.signal,
-      )
-      gcode.value = result.gcode
+        applyOptimized: (id, result) => {
+          patchPlacement(id, {
+            svg: result.svg,
+            layers: result.layers,
+            visibility: Object.fromEntries(result.layers.map((l) => [l.layer_id, true])),
+          })
+        },
+        buildPlan: buildPlanPayload,
+        onPhase: (next) => {
+          phase = next
+          if (next === 'optimize') {
+            // already started above
+          } else if (next === 'preflight') {
+            optimizing.value = false
+            preflighting.value = true
+            ui.updateGcodeJobStep('preflight', i18n.global.t('gcodeJob.preflighting'))
+          } else {
+            preflighting.value = false
+            ui.updateGcodeJobStep('generate', i18n.global.t('gcodeJob.generating'))
+          }
+        },
+        onMetrics: (m) => {
+          if (m) metrics.value = m
+        },
+        signal: controller.signal,
+      })
+      preflight.value = outcome.preflight
+      gcode.value = outcome.gcode
       ui.finishGcodeJob('success', i18n.global.t('gcodeJob.success'))
       // Auto-dismiss the success state after a short pause so the modal
       // doesn't linger — the operator can already see the generated
@@ -1282,18 +1222,13 @@ export const useJobStore = defineStore('job', () => {
     } catch (err) {
       const aborted =
         controller.signal.aborted ||
+        err instanceof PipelineAbortedError ||
         (err instanceof DOMException && err.name === 'AbortError') ||
         ((err as { code?: string })?.code === 'ERR_CANCELED')
       if (aborted) {
         ui.finishGcodeJob('cancelled', i18n.global.t('gcodeJob.cancelled'))
       } else {
-        const fallback =
-          phase === 'preflight'
-            ? i18n.global.t('preflight.failed')
-            : phase === 'optimize'
-              ? i18n.global.t('layers.optimizeFailed')
-              : i18n.global.t('layers.generateFailed')
-        const message = errorDetail(err, fallback)
+        const message = pipelineErrorMessage(phase, err)
         error.value = message
         errorScope.value = phase === 'optimize' ? 'optimize' : 'generate'
         ui.finishGcodeJob('error', message, message)
