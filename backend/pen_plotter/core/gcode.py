@@ -148,10 +148,20 @@ def _make_transform(
     region_cx = region_x + region_w / 2
     region_cy = region_y + region_h / 2
     y_up = profile.origin in ("bottom_left", "center")
+    # For Y-up profiles, the operator's mental model is "top of the work plan
+    # = top of the paper". The composite SVG carries geometry with Y growing
+    # downward, so we mirror around the workspace centre after positioning.
+    # Doing the flip at the bbox/region centre instead would mirror the
+    # content *inside* its own footprint — the on-screen sheet preview and
+    # the gcode simulator would no longer agree on where the drawing sits.
+    ws = profile.workspace
+    y_mirror = ws.y_min + ws.y_max
 
     def transform(x: float, y: float) -> tuple[float, float]:
         mx = region_cx + (x - bbox_cx) * scale
-        my = region_cy + (y - bbox_cy) * scale * (-1 if y_up else 1)
+        my = region_cy + (y - bbox_cy) * scale
+        if y_up:
+            my = y_mirror - my
         return mx, my
 
     return transform
