@@ -16,6 +16,23 @@ from pen_plotter.domain.print_plan import PrintPlan, ResolvedPlan
 from pen_plotter.models import MachineProfile, Placement
 
 
+class MissingPenSlotsError(RuntimeError):
+    """Raised when a plan targets pen slots that are not installed.
+
+    Surfaced as ``409 Conflict`` by the endpoint adapter so the UI can
+    prompt the operator to install the missing pens — or override with
+    ``allow_missing_slots=True`` if they intend to swap pens manually
+    when the firmware pauses on the M0 prompts.
+    """
+
+    def __init__(self, slots: list[int]) -> None:
+        """Store the deduplicated, sorted list of unsatisfied slot indices."""
+        self.slots = sorted(set(slots))
+        super().__init__(
+            f"Pen slots not installed: {', '.join(str(s) for s in self.slots)}"
+        )
+
+
 @dataclass
 class GenerateOutcome:
     """Bundle of everything ``run_generate`` produces.
@@ -42,12 +59,23 @@ def _placement_for_engine(resolved: ResolvedPlan) -> Placement | None:
     )
 
 
-def run_generate(plan: PrintPlan, profile: MachineProfile) -> GenerateOutcome:
+def run_generate(
+    plan: PrintPlan,
+    profile: MachineProfile,
+    *,
+    allow_missing_slots: bool = False,
+) -> GenerateOutcome:
     """Resolve and render a plan into engine-native output.
 
     Args:
         plan: The raw plan from the client.
         profile: The machine profile to render against.
+        allow_missing_slots: When ``False`` (the default), the call is
+            refused with :class:`MissingPenSlotsError` if any layer
+            targets a pen slot that is not installed in the magazine.
+            Set to ``True`` to override — typically after the operator
+            has been prompted and chosen to swap pens manually at the
+            firmware M0 pause.
 
     Returns:
         A :class:`GenerateOutcome` carrying the program and the
@@ -55,9 +83,21 @@ def run_generate(plan: PrintPlan, profile: MachineProfile) -> GenerateOutcome:
 
     Raises:
         PlanResolutionError: If the plan fails business validation.
+        MissingPenSlotsError: If a layer targets a non-installed slot
+            and the override is not set.
         ValueError: If the SVG is unparsable.
     """
     resolved = resolve_plan(plan, profile)
+
+    if not allow_missing_slots:
+        missing = [
+            layer.target_pen_slot
+            for layer in resolved.layers
+            if layer.target_pen_slot is not None and not layer.pen_slot_installed
+        ]
+        if missing:
+            raise MissingPenSlotsError(missing)
+
     generator = generate_ebb if profile.gcode_dialect == "ebb" else generate_gcode
     program = generator(
         resolved.plan.svg,

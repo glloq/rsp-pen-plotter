@@ -611,6 +611,14 @@
     "penChanges": "Changements de stylo",
     "missingPens": "Le(s) emplacement(s) {slots} sont assignés mais non installés ; installez-les ou réassignez avant de générer."
   },
+  "generate": {
+    "missingSlots": {
+      "title": "Emplacements de stylo non installés",
+      "message": "Des couches utilisent les emplacements de stylo {slots}, qui ne sont pas installés dans le magasin. Le traceur s'arrêtera sur un M0 et attendra que vous changiez le stylo manuellement à chaque fois. Continuer ?",
+      "confirm": "Générer quand même",
+      "cancel": "Annuler"
+    }
+  },
   "sheet": {
     "title": "Mise en page",
     "sheet": "Feuille",

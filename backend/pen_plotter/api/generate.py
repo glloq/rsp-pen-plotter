@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from pen_plotter.application.generate_service import run_generate
+from pen_plotter.application.generate_service import MissingPenSlotsError, run_generate
 from pen_plotter.application.plan_resolver import PlanResolutionError
 from pen_plotter.domain.print_plan import PrintPlan, ResolvedPlan
 from pen_plotter.persistence import save_plan_snapshot
@@ -17,10 +17,21 @@ router = APIRouter()
 class GenerateRequest(PrintPlan):
     """Wire model for ``POST /generate``.
 
-    Identical to :class:`PrintPlan` — kept as a named subclass so the
-    OpenAPI schema (and therefore the generated TypeScript types) reads
-    ``GenerateRequest`` at the endpoint boundary, while the rest of the
-    backend manipulates the domain type.
+    Identical to :class:`PrintPlan` plus an explicit override flag.
+    Kept as a named subclass so the OpenAPI schema (and therefore the
+    generated TypeScript types) reads ``GenerateRequest`` at the
+    endpoint boundary, while the rest of the backend manipulates the
+    domain type.
+    """
+
+    allow_missing_slots: bool = False
+    """Operator override for the missing-pen-slot guard.
+
+    Default ``False`` blocks generation if any layer targets a slot
+    that is not installed in the magazine; the response carries the
+    missing slots so the UI can prompt for installation. Set this to
+    ``True`` after the operator has acknowledged they will swap pens
+    manually during the firmware M0 pauses.
     """
 
 
@@ -51,9 +62,27 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
             status_code=404, detail=f"Unknown profile: {request.profile_name!r}"
         )
     try:
-        outcome = run_generate(request, profile)
+        outcome = run_generate(
+            request,
+            profile,
+            allow_missing_slots=request.allow_missing_slots,
+        )
     except PlanResolutionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except MissingPenSlotsError as exc:
+        # 409 Conflict + structured detail so the UI can offer the
+        # operator a deliberate override path instead of silently
+        # streaming G-code that asks for pens the magazine does not
+        # have. ``reason`` is machine-readable so the frontend can
+        # branch on it without parsing the human-readable message.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "reason": "missing_pen_slots",
+                "slots": exc.slots,
+                "message": str(exc),
+            },
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # template / geometry failures

@@ -54,6 +54,47 @@ async def test_generate_unknown_profile_returns_404() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_refuses_missing_pen_slot_by_default() -> None:
+    """/generate must refuse to ship G-code that asks for an absent pen.
+
+    The response surfaces the missing slot list in a machine-readable
+    shape so the UI can prompt the operator instead of letting the
+    plotter stall on an M0 that nobody can satisfy.
+    """
+    async with _client() as client:
+        response = await client.post(
+            "/generate",
+            json={
+                "svg": SVG,
+                "profile_name": "Custom CoreXY A3",
+                "layers": [{"layer_id": "red", "target_pen_slot": 99}],
+            },
+        )
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["reason"] == "missing_pen_slots"
+    assert detail["slots"] == [99]
+    assert "99" in detail["message"]
+
+
+@pytest.mark.asyncio
+async def test_generate_allows_missing_pen_slot_with_override() -> None:
+    """``allow_missing_slots=True`` is the deliberate operator override."""
+    async with _client() as client:
+        response = await client.post(
+            "/generate",
+            json={
+                "svg": SVG,
+                "profile_name": "Custom CoreXY A3",
+                "layers": [{"layer_id": "red", "target_pen_slot": 99}],
+                "allow_missing_slots": True,
+            },
+        )
+    assert response.status_code == 200
+    assert "G21" in response.json()["gcode"]
+
+
+@pytest.mark.asyncio
 async def test_plotter_status_and_jog_guard() -> None:
     async with _client() as client:
         status = await client.get("/plotter/status")

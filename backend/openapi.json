@@ -3357,6 +3357,11 @@
           },
           "metadata": {
             "$ref": "#/components/schemas/PlanMetadata"
+          },
+          "allow_missing_slots": {
+            "type": "boolean",
+            "title": "Allow Missing Slots",
+            "default": false
           }
         },
         "type": "object",
@@ -3365,7 +3370,7 @@
           "profile_name"
         ],
         "title": "GenerateRequest",
-        "description": "Wire model for ``POST /generate``.\n\nIdentical to :class:`PrintPlan` \u2014 kept as a named subclass so the\nOpenAPI schema (and therefore the generated TypeScript types) reads\n``GenerateRequest`` at the endpoint boundary, while the rest of the\nbackend manipulates the domain type."
+        "description": "Wire model for ``POST /generate``.\n\nIdentical to :class:`PrintPlan` plus an explicit override flag.\nKept as a named subclass so the OpenAPI schema (and therefore the\ngenerated TypeScript types) reads ``GenerateRequest`` at the\nendpoint boundary, while the rest of the backend manipulates the\ndomain type."
       },
       "GenerateResponse": {
         "properties": {

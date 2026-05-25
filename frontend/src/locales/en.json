@@ -611,6 +611,14 @@
     "penChanges": "Pen changes",
     "missingPens": "Pen slot(s) {slots} are assigned but not installed; install them or reassign before generating."
   },
+  "generate": {
+    "missingSlots": {
+      "title": "Pen slots not installed",
+      "message": "Layer(s) target pen slot(s) {slots}, which are not installed in the magazine. The plotter will pause on M0 and wait for you to swap the pen manually each time. Continue?",
+      "confirm": "Generate anyway",
+      "cancel": "Cancel"
+    }
+  },
   "sheet": {
     "title": "Sheet layout",
     "sheet": "Sheet",
