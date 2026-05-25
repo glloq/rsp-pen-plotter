@@ -225,3 +225,75 @@ def test_html_with_text_produces_text_layer() -> None:
     assert text_layer is not None
     assert text_layer.path_count > 0
     assert text_layer.total_length_mm > 0.0
+
+
+# Hershey re-render — when ``hershey_text=True``, the PDF converter
+# strips PyMuPDF's original glyph outlines and plays the text back as
+# single-stroke Hershey polylines at the same baseline positions. This
+# is the only legible way to plot document text with a pen, since
+# outline-traced TrueType glyphs paint as a double-traced silhouette.
+def _bold_text_pdf() -> bytes:
+    pdf = pymupdf.open()
+    page = pdf.new_page(width=210, height=297)
+    page.insert_text((50, 50), "Hello plotter", fontname="helv", fontsize=12)
+    page.insert_text((50, 80), "Bold heading", fontname="hebo", fontsize=20)
+    page.draw_rect((10, 10, 200, 100), color=(1, 0, 0))
+    return pdf.write()
+
+
+def test_pdf_hershey_strips_original_text_glyphs() -> None:
+    res = PdfConverter().convert(_bold_text_pdf(), options={"hershey_text": True})
+    # No PyMuPDF glyph traces left — neither the data-text marker nor
+    # the font_X_NN definitions.
+    assert "data-text" not in res.svg
+    assert "font_1_" not in res.svg
+
+
+def test_pdf_hershey_produces_drawings_and_text_layers() -> None:
+    """Hershey owns the ``text`` label; the rest goes to ``drawings``."""
+    res = PdfConverter().convert(_bold_text_pdf(), options={"hershey_text": True})
+    clean = sanitize_svg(res.svg)
+    labels = sorted(layer.layer_id for layer in extract_layers(clean))
+    assert labels == ["drawings", "text"]
+
+
+def test_pdf_hershey_text_layer_carries_continuous_strokes() -> None:
+    """Each Hershey glyph stroke is one continuous polyline (not a
+    series of disconnected M-L pairs the way the broken renderer
+    produced before the strokes_for_text fix)."""
+    res = PdfConverter().convert(
+        _bold_text_pdf(), options={"hershey_text": True, "font": "futural"}
+    )
+    # The text layer's path d-string has more L commands than M commands
+    # when strokes are continuous (M = pen down, L = line segment).
+    match = re.search(
+        r'inkscape:label="text"[^>]*>(.*?)</svg', res.svg, re.DOTALL
+    )
+    assert match is not None
+    body = match.group(1)
+    m_count = body.count("M")
+    l_count = body.count(" L")
+    assert m_count > 0
+    assert l_count > m_count, f"strokes should be continuous (M={m_count}, L={l_count})"
+
+
+def test_pdf_hershey_default_does_not_run() -> None:
+    """No ``hershey_text`` option means no Hershey re-render — the
+    original PyMuPDF glyph outlines stay intact for backward compat."""
+    res = PdfConverter().convert(_bold_text_pdf())
+    # data-text disappears after expand_use_refs, but the inlined glyph
+    # paths remain — many M commands and a single "text" layer (no
+    # separate "drawings" layer because Hershey wasn't injected).
+    labels = sorted(layer.layer_id for layer in extract_layers(sanitize_svg(res.svg)))
+    assert labels == ["text"]
+
+
+def test_pdf_hershey_font_choice_changes_output() -> None:
+    """Different Hershey faces produce visibly different geometry."""
+    res_a = PdfConverter().convert(
+        _bold_text_pdf(), options={"hershey_text": True, "font": "futural"}
+    )
+    res_b = PdfConverter().convert(
+        _bold_text_pdf(), options={"hershey_text": True, "font": "timesr"}
+    )
+    assert res_a.svg != res_b.svg

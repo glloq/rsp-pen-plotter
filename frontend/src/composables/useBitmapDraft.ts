@@ -111,6 +111,14 @@ export type TypographyDraft = {
   bold: boolean
   italic: boolean
   letter_spacing_mm: number
+  // When true on a PDF / DOCX / HTML source, the backend strips the
+  // document's original glyph outlines and replays every text span
+  // with single-stroke Hershey polylines at the same baseline
+  // positions. Required for legible pen plotting of document text —
+  // outline-traced TrueType glyphs paint as a double-traced silhouette
+  // no pen can fill convincingly. Ignored on .txt / .md (those always
+  // use Hershey).
+  hershey_text: boolean
 }
 
 export function defaultPreprocess(): PreprocessDraft {
@@ -325,6 +333,7 @@ export function defaultTypography(): TypographyDraft {
     bold: false,
     italic: false,
     letter_spacing_mm: 0.0,
+    hershey_text: false,
   }
 }
 
@@ -1349,6 +1358,18 @@ export function buildBitmapOptions(): Record<string, unknown> {
   } else {
     const bandRecipes = buildBandRecipes()
     if (bandRecipes) payload.band_recipes = bandRecipes
+  }
+  // Hershey text re-render for PDF / DOCX / HTML sources. The flag
+  // travels alongside the bitmap knobs because document conversions
+  // funnel through the bitmap-form options field; the backend's PDF
+  // converter strips the source's glyph outlines and replays each
+  // span with the requested Hershey face when ``hershey_text`` is
+  // truthy. ``stroke_width_mm`` doubles as the pen's stroke width on
+  // the re-rendered text.
+  if (_typo.value.hershey_text) {
+    payload.hershey_text = true
+    payload.font = _typo.value.font
+    payload.stroke_width_mm = _typo.value.stroke_width_mm
   }
   return payload
 }
