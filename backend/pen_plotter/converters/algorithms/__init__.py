@@ -25,9 +25,11 @@ from pen_plotter.converters.algorithms.halftone import HalftoneAlgorithm
 from pen_plotter.converters.algorithms.hilbert import HilbertFillAlgorithm
 from pen_plotter.converters.algorithms.scanlines import ScanlinesAlgorithm
 from pen_plotter.converters.algorithms.spiral import SpiralAlgorithm
+from pen_plotter.converters.algorithms.squiggle import SquiggleAlgorithm
 from pen_plotter.converters.algorithms.stippling import StipplingAlgorithm
 from pen_plotter.converters.algorithms.tsp import TspAlgorithm
 from pen_plotter.converters.algorithms.tsp_opt import TspOptimizedAlgorithm
+from pen_plotter.converters.algorithms.voronoi_stipple import VoronoiStippleAlgorithm
 
 AlgorithmKind = Literal["fill", "lines", "mono_stroke"]
 
@@ -60,6 +62,8 @@ _ALGORITHMS: dict[str, RasterAlgorithm] = {
         ConcentricOffsetAlgorithm(),
         FlowFieldAlgorithm(),
         TspOptimizedAlgorithm(),
+        VoronoiStippleAlgorithm(),
+        SquiggleAlgorithm(),
     )
 }
 
@@ -82,6 +86,8 @@ _KINDS: dict[str, AlgorithmKind] = {
     "concentric_offset": "mono_stroke",
     "flowfield": "fill",
     "tsp_opt": "mono_stroke",
+    "voronoi_stipple": "fill",
+    "squiggle": "mono_stroke",
 }
 
 # Rough cost class per algorithm — see ``AlgorithmComplexity`` above for
@@ -105,6 +111,8 @@ _COMPLEXITY: dict[str, AlgorithmComplexity] = {
     "concentric_offset": "medium",
     "flowfield": "high",      # streamline integration over the field
     "tsp_opt": "high",        # 2-opt sweep with kd-tree neighbours
+    "voronoi_stipple": "high",  # Lloyd relaxation iterations
+    "squiggle": "medium",       # sub-pixel sampling per scan row
 }
 
 
@@ -162,9 +170,11 @@ __all__ = [
     "RasterAlgorithm",
     "ScanlinesAlgorithm",
     "SpiralAlgorithm",
+    "SquiggleAlgorithm",
     "StipplingAlgorithm",
     "TspAlgorithm",
     "TspOptimizedAlgorithm",
+    "VoronoiStippleAlgorithm",
     "algorithm_complexity",
     "algorithm_kind",
     "available_algorithms",

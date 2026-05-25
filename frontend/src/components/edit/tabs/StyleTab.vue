@@ -110,6 +110,36 @@ async function onMasterStyleChange(id: string): Promise<void> {
     })
   }
 }
+
+// Multicolour twin of ``onMasterStyleChange`` — same warn-on-touched +
+// post-upload propagation logic, just driving the multicolour master.
+// Per-layer overrides survive across master switches identically to
+// the mono case (operator gets the same window.confirm).
+async function onMulticolorMasterStyleChange(id: string): Promise<void> {
+  const previous = draft.multicolorMasterStyleId.value
+  const overwritten = draft.setMulticolorMasterStyle(id)
+  if (overwritten.length > 0) {
+    toasts.warning(
+      t('render.styleOverwroteFields', {
+        fields: overwritten.map((f) => t(`render.field_${f}`)).join(', '),
+      }),
+    )
+  }
+
+  if (store.layers.length > 0 && previous !== id) {
+    const overrideCount = Object.keys(store.layerAlgorithms).length
+    if (overrideCount > 0) {
+      const ok = window.confirm(
+        t('render.replaceOverridesWarning', { count: overrideCount }),
+      )
+      if (!ok) return
+    }
+    // Multicolour styles don't have a target pen slot — each layer
+    // already carries its own ``target_pen_slot`` from segmentation /
+    // pen matching, so just push the default algorithm + options.
+    await applyMasterStyleToLayers(store, { styleId: id, penSlot: null })
+  }
+}
 </script>
 
 <template>
@@ -150,6 +180,14 @@ async function onMasterStyleChange(id: string): Promise<void> {
     </template>
 
     <template v-else>
+      <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
+        <MasterStylePicker
+          mode="multicolor"
+          :model-value="draft.multicolorMasterStyleId.value"
+          @update:model-value="onMulticolorMasterStyleChange"
+        />
+      </div>
+
       <PaletteCard
         :bitmap="bitmap"
         :palette-follows-pens="draft.paletteFollowsPens.value"

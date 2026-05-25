@@ -150,7 +150,11 @@
       "sharpen": "Sharpen",
       "blur": "Blur",
       "invert": "Invert colours",
-      "grayscale": "Convert to grayscale"
+      "grayscale": "Convert to grayscale",
+      "dither": "Floyd-Steinberg dither",
+      "ditherOff": "Off",
+      "ditherLevels": "levels",
+      "ditherHint": "Diffuses rounding error across neighbouring pixels to mimic newsprint — makes halftone / stippling read crisper by snapping gradients to discrete tones."
     },
     "transform": {
       "title": "Transform & crop",
@@ -333,6 +337,24 @@
     "slotTooltip": "Slot {index} — {color}",
     "manualSwap": "{count} of {total} colours have no pen slot — {count} manual swap(s) will be requested during the plot (only {slots} slots available)."
   },
+  "colorStyles": {
+    "flat": "Flat colours",
+    "flatDesc": "One coloured layer per cluster — direct trace, no textured fill.",
+    "crosshatch": "Colour crosshatch",
+    "crosshatchDesc": "Hatching at rotating angles per colour, tighter spacing on darker clusters.",
+    "stipple": "Colour stipple",
+    "stippleDesc": "Voronoi-relaxed stippling per colour, density varying with luminance.",
+    "halftoneCmyk": "CMYK halftone",
+    "halftoneCmykDesc": "Dot-grid halftone with canonical CMYK screen angles per dominant primary.",
+    "contoursTopo": "Colour topo",
+    "contoursTopoDesc": "Concentric rings per cluster, density tracking luminance.",
+    "flowfield": "Flow field",
+    "flowfieldDesc": "Colour streamlines along the gradient — variable density, organic look.",
+    "sketch": "Squiggle sketch",
+    "sketchDesc": "Hand-drawn wavy hatching per colour, amplitude modulated by luminance.",
+    "spiral": "Offset spirals",
+    "spiralDesc": "Concentric offset rings per colour with spacing adapted to density."
+  },
   "printStyles": {
     "default": "Default",
     "defaultDesc": "Whatever the converter chose",
@@ -355,7 +377,23 @@
     "scanlines": "Scanlines",
     "scanlinesDesc": "Horizontal lines",
     "centerline": "Centerline",
-    "centerlineDesc": "Trace strokes as single polylines (line art)"
+    "centerlineDesc": "Trace strokes as single polylines (line art)",
+    "voronoiStipple": "Voronoi stipple",
+    "voronoiStippleDesc": "Evenly-spaced dots via Lloyd relaxation, can weight by luminance.",
+    "squiggle": "Squiggle",
+    "squiggleDesc": "Wiggly lines with drifting amplitude / frequency — hand-drawn look.",
+    "flowfield": "Flow field",
+    "flowfieldDesc": "Streamlines following gradient or Perlin noise — few pen lifts.",
+    "hilbert": "Hilbert",
+    "hilbertDesc": "Hilbert curve fill — continuous fractal walk.",
+    "gosper": "Gosper",
+    "gosperDesc": "Gosper curve / flowsnake — organic fractal fill.",
+    "eulerianHatch": "Eulerian hatch",
+    "eulerianHatchDesc": "Hatching reordered as an Eulerian path — fewer pen lifts.",
+    "concentricOffset": "Concentric offset",
+    "concentricOffsetDesc": "Successive offset rings from the boundary, connected in a spiral.",
+    "tspOpt": "TSP optimised",
+    "tspOptDesc": "2-opt optimised tour on the points (Poisson-disk + time budget)."
   },
   "execute": {
     "connection": "Connection",
@@ -470,6 +508,9 @@
     "rerenderCacheMiss": "Server-side cache expired — click Apply to run the full render.",
     "generateMovedHint": "Generate G-code lives in the Plan header — close this dialog and click the green button on the top-right of the preview.",
     "algoSettings": "{algorithm} settings",
+    "nearestPenHint": "Pen #{slot} ({color}) — distance {distance}. Click to assign.",
+    "penWarning": "Source colour {color} has no perfect pen — closest is slot #{slot} ({penColor}).",
+    "penWarningNone": "No pen installed in the magazine.",
     "expandAll": "Expand all",
     "expandAllHint": "Open every layer card",
     "collapseAll": "Collapse all",
@@ -632,7 +673,19 @@
     "waveAmp": "Amplitude",
     "wavePeriod": "Period",
     "smooth": "Smooth",
-    "minBranch": "Min branch (px)"
+    "minBranch": "Min branch (px)",
+    "stepPx": "Step (px)",
+    "maxSteps": "Max steps",
+    "bidirectional": "Bidirectional",
+    "noiseScale": "Noise scale",
+    "minRunPx": "Min run (px)",
+    "gosperOrder": "Gosper order",
+    "bridge": "Bridge",
+    "maxPoints": "Max points",
+    "timeBudgetS": "Time budget (s)",
+    "poissonDisk": "Poisson disk",
+    "iterations": "Iterations",
+    "jitter": "Jitter"
   },
   "profile": {
     "title": "Machine profile",

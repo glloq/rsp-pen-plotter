@@ -23,7 +23,9 @@ import { computed, ref } from 'vue'
 import type { SegmentationMethod } from '../api/client'
 import {
   resolveMasterStyle,
+  resolveMulticolorStyle,
   DEFAULT_MASTER_STYLE_ID,
+  DEFAULT_MULTICOLOR_STYLE_ID,
   MONO_STYLE_DEFAULTS,
   lerp,
   type PrintStyle,
@@ -44,6 +46,11 @@ export type PreprocessDraft = {
   invert: boolean
   grayscale: boolean
   auto_contrast: boolean
+  // Floyd-Steinberg error diffusion to an N-level grey ramp. 0 = off,
+  // 2 = pure binary, 3..8 = the useful range for shaded mono modes
+  // and for pre-clustering before kmeans (snaps gradients to discrete
+  // tones, makes halftone / stippling read crisper).
+  dither_levels: number
   rotate_deg: 0 | 90 | 180 | 270
   flip_h: boolean
   flip_v: boolean
@@ -111,6 +118,7 @@ export function defaultPreprocess(): PreprocessDraft {
     invert: false,
     grayscale: false,
     auto_contrast: false,
+    dither_levels: 0,
     rotate_deg: 0,
     flip_h: false,
     flip_v: false,
@@ -133,6 +141,7 @@ export function isPreprocessNeutral(p: PreprocessDraft): boolean {
     && !p.invert
     && !p.grayscale
     && !p.auto_contrast
+    && p.dither_levels === 0
     && p.rotate_deg === 0
     && !p.flip_h
     && !p.flip_v
@@ -250,6 +259,7 @@ const _curves = ref<CurvesDraft>(defaultCurves())
 const _typo = ref<TypographyDraft>(defaultTypography())
 const _monoPenSlot = ref<number>(0)
 const _monoMasterStyleId = ref<string>(DEFAULT_MASTER_STYLE_ID)
+const _multicolorMasterStyleId = ref<string>(DEFAULT_MULTICOLOR_STYLE_ID)
 const _mono = ref<MonoKnobsDraft>(defaultMono())
 const _paletteFollowsPens = ref<boolean>(true)
 
@@ -324,6 +334,7 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   // recipes for every /preview round-trip even though the operator
   // never sees ``pencil`` highlighted in the picker.
   _monoMasterStyleId.value = DEFAULT_MASTER_STYLE_ID
+  _multicolorMasterStyleId.value = DEFAULT_MULTICOLOR_STYLE_ID
   _mono.value = defaultMono()
   // Rehydrating wipes the touched tracker — the persisted last_options
   // ARE the baseline, so subsequent style switches shouldn't think the
@@ -357,6 +368,17 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   const persistedStyleId = (opts as Record<string, unknown>).master_style_id
   if (typeof persistedStyleId === 'string' && persistedStyleId) {
     _monoMasterStyleId.value = persistedStyleId
+  }
+  // Explicit per-mode ids take precedence over the legacy single field
+  // when both are present (post-multicolour-master placements always
+  // ship the pair).
+  const persistedMono = (opts as Record<string, unknown>).mono_master_style_id
+  if (typeof persistedMono === 'string' && persistedMono) {
+    _monoMasterStyleId.value = persistedMono
+  }
+  const persistedMulti = (opts as Record<string, unknown>).multicolor_master_style_id
+  if (typeof persistedMulti === 'string' && persistedMulti) {
+    _multicolorMasterStyleId.value = persistedMulti
   }
   // algorithm_options is the single source of truth — already merged
   // by the generic key loop above. The legacy "scattered per-algo
@@ -501,6 +523,15 @@ function applyStyleSegmentation(
     }
   } else if (seg.method === 'thresholds') {
     b.thresholds = [seg.default_threshold ?? 0.5]
+  } else if (seg.method === 'kmeans') {
+    // Multicolour master styles carry a default cluster count that the
+    // operator can still override via the colour-mode num_colors slider.
+    // Only stomp num_colors when the operator hasn't touched it recently
+    // (out-of-range or first-time application).
+    const target = seg.default_num_colors ?? 4
+    if (b.num_colors < 1 || b.num_colors > 16) {
+      b.num_colors = target
+    }
   }
   // Style picker / print-mode flip resets the touched set: this is the
   // new baseline.
@@ -577,27 +608,14 @@ export function setPrintMode(
     _paletteFollowsPens.value = false
     return overwritten
   }
-  // Multicolour: bypass the per-style helper because we're leaving the
-  // master-style world entirely; "touched" fields stay touched only if
-  // they're still meaningful in kmeans (only background_luminance is).
-  const b = _bitmap.value
-  b.segmentation_method = 'kmeans'
-  b.num_colors = 4
-  b.background_luminance = 0.92
-  // Clear the master style's options dict so the multicolour path falls
-  // back to the per-algo scattered fields and respects any preset
-  // applied afterwards.
-  b.algorithm_options = {}
-  if (
-    b.algorithm !== 'direct'
-    && b.algorithm !== 'halftone'
-    && b.algorithm !== 'stippling'
-  ) {
-    b.algorithm = 'direct'
-  }
+  // Multicolour: apply the active multicolour master style so the
+  // segmentation method, num_colors, default algorithm and per-cluster
+  // recipe all line up with the operator's chosen preset. Same code
+  // path as monochrome, just resolved from the multicolour family.
+  const style = resolveMulticolorStyle(_multicolorMasterStyleId.value)
+  const overwritten = applyStyleSegmentation(style, opts)
   _paletteFollowsPens.value = true
-  _segmentationTouched.value = new Set()
-  return []
+  return overwritten
 }
 
 // Switch master style. Returns the list of touched fields overwritten
@@ -610,6 +628,18 @@ export function setMasterStyle(
 ): SegmentationField[] {
   _monoMasterStyleId.value = id
   return applyStyleSegmentation(resolveMasterStyle(id), opts)
+}
+
+// Multicolour twin of ``setMasterStyle``. Stores the active multicolour
+// master id and rewrites the segmentation / default algorithm exactly
+// the same way the mono path does — picker UX stays symmetric and the
+// returned touched-field list flows into the same toast machinery.
+export function setMulticolorMasterStyle(
+  id: string,
+  opts: { force?: boolean } = {},
+): SegmentationField[] {
+  _multicolorMasterStyleId.value = id
+  return applyStyleSegmentation(resolveMulticolorStyle(id), opts)
 }
 
 // ---- Payload builders ----
@@ -823,19 +853,57 @@ export function interpolatedBandOptions(
 // operator's global slider edits on /preview without requiring a
 // /rerender round-trip.
 function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
-  if (_printMode.value !== 'monochrome') return undefined
-  const segMethod = _bitmap.value.segmentation_method
-  if (segMethod !== 'luminance_bands' && segMethod !== 'thresholds') return undefined
-  const style = resolveMasterStyle(_monoMasterStyleId.value)
-  if (!style.bandRecipe && !(style.id in MONO_STYLE_DEFAULTS)) return undefined
-  // Binary mono modes render exactly one layer (drop_background drops
-  // the lighter side of the threshold), so emit a single recipe.
-  const total = segMethod === 'luminance_bands'
-    ? _bitmap.value.num_bands
-    : 1
-  const knobs = _mono.value.perStyle[style.id]
+  if (_printMode.value === 'monochrome') {
+    const segMethod = _bitmap.value.segmentation_method
+    if (segMethod !== 'luminance_bands' && segMethod !== 'thresholds') return undefined
+    const style = resolveMasterStyle(_monoMasterStyleId.value)
+    if (!style.bandRecipe && !(style.id in MONO_STYLE_DEFAULTS)) return undefined
+    // Binary mono modes render exactly one layer (drop_background drops
+    // the lighter side of the threshold), so emit a single recipe.
+    const total = segMethod === 'luminance_bands'
+      ? _bitmap.value.num_bands
+      : 1
+    const knobs = _mono.value.perStyle[style.id]
+    return Array.from({ length: total }, (_, i) => {
+      const recipe = recipeFromKnobs(style, knobs, i, total)
+      if (!recipe) {
+        return {
+          algorithm: style.defaultAlgorithm,
+          algorithm_options: { ...style.defaultAlgorithmOptions },
+        }
+      }
+      return {
+        algorithm: recipe.algorithm,
+        algorithm_options: { ...recipe.algorithm_options },
+      }
+    })
+  }
+  // Multicolour: expand the active multicolour master's ``colorRecipe``
+  // across the segmentation's predicted cluster count. The backend's
+  // existing band_recipes plumbing handles both modes — recipes are
+  // matched by cluster order (darkest first) regardless of segmentation
+  // method, so the same payload field carries both kinds of overrides.
+  const style = resolveMulticolorStyle(_multicolorMasterStyleId.value)
+  if (!style.colorRecipe) return undefined
+  const b = _bitmap.value
+  // For kmeans the cluster count is num_colors; for fixed_palette it's
+  // the palette length. luminance_bands / thresholds aren't valid
+  // multicolour segmentations, so they only show up if the operator
+  // hand-picked a method that doesn't match the master — fall through
+  // to a sensible default in that case.
+  let total = 4
+  if (b.segmentation_method === 'kmeans') total = b.num_colors
+  else if (b.segmentation_method === 'fixed_palette') total = b.palette.length
+  if (total < 1) return undefined
+  // ``hex`` is the cluster's RGB centroid; we don't have it client-side
+  // before /preview returns, so pass the cluster index encoded as a
+  // grey-ramp hex. Recipes that branch on hue (CMYK halftone) gracefully
+  // degrade to their fallback when the source colour is unknown, and
+  // hue-agnostic recipes (crosshatch, stipple, contours) don't read it.
   return Array.from({ length: total }, (_, i) => {
-    const recipe = recipeFromKnobs(style, knobs, i, total)
+    const grey = Math.round(255 * (i / Math.max(1, total - 1)))
+    const hexFallback = `#${grey.toString(16).padStart(2, '0').repeat(3)}`
+    const recipe = style.colorRecipe!(i, total, hexFallback)
     if (!recipe) {
       return {
         algorithm: style.defaultAlgorithm,
@@ -887,7 +955,14 @@ export function buildBitmapOptions(): Record<string, unknown> {
     // operator committed with. The backend tolerates unknown extras
     // (BitmapOptions ignores unrecognised keys); only the frontend
     // rehydrate path reads it back.
-    master_style_id: _monoMasterStyleId.value,
+    master_style_id: _printMode.value === 'monochrome'
+      ? _monoMasterStyleId.value
+      : _multicolorMasterStyleId.value,
+    // Both ids are persisted unconditionally so flipping print mode on
+    // a rehydrated placement restores the operator's last choice in
+    // each family (instead of resetting to the default).
+    mono_master_style_id: _monoMasterStyleId.value,
+    multicolor_master_style_id: _multicolorMasterStyleId.value,
     // Curves tab state — also a backend-unknown extra, read back by
     // ``rehydrateDraft`` so the toggles survive a round-trip.
     curves: { ...c },
@@ -994,6 +1069,7 @@ export function useBitmapDraft() {
     mono: _mono,
     monoPenSlot: _monoPenSlot,
     monoMasterStyleId: _monoMasterStyleId,
+    multicolorMasterStyleId: _multicolorMasterStyleId,
     paletteFollowsPens: _paletteFollowsPens,
     committed: _committed,
     isDirty: _isDirty,
@@ -1002,6 +1078,7 @@ export function useBitmapDraft() {
     segmentationTouched: _segmentationTouched,
     setPrintMode,
     setMasterStyle,
+    setMulticolorMasterStyle,
     setMonoInkColor,
     setMonoAdvancedMode,
     getMonoStyleKnobs,

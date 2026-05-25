@@ -8,6 +8,7 @@ import {
   type PausePolicy,
 } from '../api/client'
 import { formatLayerLabel } from '../lib/labels'
+import { nearestPen } from '../lib/penMatching'
 import { useJobStore, type LayerPass } from '../stores/job'
 import PrintStylePicker from './edit/PrintStylePicker.vue'
 import LayerPassStack from './edit/LayerPassStack.vue'
@@ -121,6 +122,42 @@ const selectedPen = computed(() =>
     ? null
     : (penSlots.value.find((p) => p.index === props.layer.target_pen_slot) ?? null),
 )
+
+// Nearest installed pen to this layer's source colour. Only meaningful
+// for bitmap-derived multicolour layers (mono layers always plot in
+// the single ink slot the operator picked, so a pen-match warning
+// would just be noise). Severity drives the badge colour: green for
+// exact / close matches, amber for ``far``, red for ``wrong`` or
+// ``none`` (no pen installed).
+const installedPenList = computed(() => {
+  const pens = store.selectedProfile?.pens ?? []
+  return pens
+    .filter((p) => (p.installed ?? false) && typeof p.color === 'string')
+    .map((p) => ({ index: p.index, color: p.color, installed: true }))
+})
+
+const penMatch = computed(() => {
+  if (!isBitmapLayer.value) return null
+  if (!store.isMultiColor) return null
+  return nearestPen(swatchColor.value, installedPenList.value)
+})
+
+// True when the operator hasn't already assigned a slot manually AND
+// the nearest pen is far enough that the operator probably wants to
+// see the warning. Once they pick a slot we stop nagging — the override
+// is intentional.
+const showPenWarning = computed(() => {
+  if (props.layer.target_pen_slot !== null) return false
+  const m = penMatch.value
+  if (!m) return false
+  return m.severity === 'far' || m.severity === 'wrong' || m.severity === 'none'
+})
+
+function applyNearestPen(): void {
+  const m = penMatch.value
+  if (!m || !m.pen) return
+  store.updateLayer(props.layer.layer_id, { target_pen_slot: m.pen.index })
+}
 
 function onPenSlot(event: Event): void {
   const value = (event.target as HTMLSelectElement).value
@@ -277,6 +314,35 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
             class="inline-block h-3 w-3 rounded-full border border-slate-600"
             :style="{ backgroundColor: selectedPen.color }"
           />
+          <!-- Nearest-pen badge: shown only when no slot is assigned
+               yet and the closest installed pen is far enough from the
+               source colour to deserve attention. Click to auto-assign
+               the suggested slot. ``exact``/``close`` matches stay
+               silent; we don't want to nag for matches the operator
+               wouldn't second-guess. -->
+          <button
+            v-if="penMatch && penMatch.severity !== 'none' && layer.target_pen_slot === null"
+            type="button"
+            class="inline-flex items-center gap-1 rounded border px-1 py-px text-[9px] font-mono transition"
+            :class="penMatch.severity === 'far'
+              ? 'border-amber-700 bg-amber-950/40 text-amber-200 hover:bg-amber-950'
+              : penMatch.severity === 'wrong'
+                ? 'border-red-700 bg-red-950/40 text-red-200 hover:bg-red-950'
+                : 'border-emerald-700 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-950'"
+            :title="t('layers.nearestPenHint', {
+              slot: penMatch.pen?.index ?? '?',
+              color: penMatch.pen?.color ?? '',
+              distance: Math.round(penMatch.distance),
+            })"
+            @click="applyNearestPen"
+          >
+            <span
+              v-if="penMatch.pen"
+              class="inline-block h-2 w-2 rounded-full border border-slate-600"
+              :style="{ backgroundColor: penMatch.pen.color }"
+            />
+            <span>≈ #{{ penMatch.pen?.index ?? '?' }}</span>
+          </button>
         </span>
         <select
           :value="layer.target_pen_slot ?? ''"
@@ -288,6 +354,22 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
             {{ pen.index }} — {{ pen.name }}
           </option>
         </select>
+        <p
+          v-if="showPenWarning && penMatch && penMatch.pen"
+          class="mt-0.5 text-[10px] text-amber-300"
+        >
+          {{ t('layers.penWarning', {
+            color: swatchColor,
+            slot: penMatch.pen.index,
+            penColor: penMatch.pen.color,
+          }) }}
+        </p>
+        <p
+          v-else-if="showPenWarning && penMatch && !penMatch.pen"
+          class="mt-0.5 text-[10px] text-red-300"
+        >
+          {{ t('layers.penWarningNone') }}
+        </p>
       </label>
       <!-- Mono-pen machines: colour label used in the pause prompt. -->
       <label v-else class="text-slate-400">

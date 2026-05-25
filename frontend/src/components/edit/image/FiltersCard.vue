@@ -66,6 +66,26 @@ const expanded = useAccordionPersistence('preprocess.filters', false)
         <input v-model="preprocess.grayscale" type="checkbox" class="accent-emerald-500" />
         <span>{{ t('preprocess.filters.grayscale') }}</span>
       </label>
+
+      <label class="block text-slate-400">
+        <div class="flex items-center justify-between">
+          <span>{{ t('preprocess.filters.dither') }}</span>
+          <span class="font-mono text-[10px] text-slate-500">
+            {{ preprocess.dither_levels === 0
+              ? t('preprocess.filters.ditherOff')
+              : `${preprocess.dither_levels} ${t('preprocess.filters.ditherLevels')}` }}
+          </span>
+        </div>
+        <input
+          v-model.number="preprocess.dither_levels"
+          type="range"
+          min="0"
+          max="8"
+          step="1"
+          class="mt-1 w-full"
+        />
+        <p class="mt-1 text-[10px] text-slate-500">{{ t('preprocess.filters.ditherHint') }}</p>
+      </label>
     </div>
   </div>
 </template>

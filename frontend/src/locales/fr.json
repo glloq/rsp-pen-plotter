@@ -150,7 +150,11 @@
       "sharpen": "Netteté",
       "blur": "Flou",
       "invert": "Inverser les couleurs",
-      "grayscale": "Convertir en niveaux de gris"
+      "grayscale": "Convertir en niveaux de gris",
+      "dither": "Tramage Floyd-Steinberg",
+      "ditherOff": "Désactivé",
+      "ditherLevels": "niveaux",
+      "ditherHint": "Diffuse l'erreur d'arrondi sur les pixels voisins pour obtenir un effet papier journal — booste les rendus halftone / stippling en cassant les dégradés en zones bien distinctes."
     },
     "transform": {
       "title": "Transformation & recadrage",
@@ -333,6 +337,24 @@
     "slotTooltip": "Slot {index} — {color}",
     "manualSwap": "{count} couleur(s) sur {total} n'ont pas de slot — {count} échange(s) manuel(s) seront demandés pendant le tracé ({slots} slots disponibles)."
   },
+  "colorStyles": {
+    "flat": "Aplats",
+    "flatDesc": "Un calque coloré par cluster — direct, sans remplissage texturé.",
+    "crosshatch": "Hachures couleur",
+    "crosshatchDesc": "Hachures à angle variable par couleur — espacement plus serré sur les zones sombres.",
+    "stipple": "Pointillisme couleur",
+    "stippleDesc": "Stippling Voronoi équilibré par couleur, densité variable selon la luminance.",
+    "halftoneCmyk": "Halftone CMJN",
+    "halftoneCmykDesc": "Trame de points avec les angles canoniques C/M/J/N selon le primaire dominant.",
+    "contoursTopo": "Topographique couleur",
+    "contoursTopoDesc": "Anneaux concentriques par cluster — densité ajustée à la luminance.",
+    "flowfield": "Champ de flux",
+    "flowfieldDesc": "Streamlines colorées suivant le gradient — densité variable par couleur, look organique.",
+    "sketch": "Croquis squiggle",
+    "sketchDesc": "Hachures ondulées hand-drawn par couleur, amplitude modulée par la luminance.",
+    "spiral": "Spirales offset",
+    "spiralDesc": "Spirales concentriques offset par couleur — espacement adapté à la densité."
+  },
   "printStyles": {
     "default": "Défaut",
     "defaultDesc": "Choix du convertisseur",
@@ -355,7 +377,23 @@
     "scanlines": "Lignes",
     "scanlinesDesc": "Lignes horizontales",
     "centerline": "Centerline",
-    "centerlineDesc": "Trace les traits comme polylignes uniques (line art)"
+    "centerlineDesc": "Trace les traits comme polylignes uniques (line art)",
+    "voronoiStipple": "Stipple Voronoi",
+    "voronoiStippleDesc": "Points espacés régulièrement (relaxation de Lloyd) — pondérables par luminance.",
+    "squiggle": "Squiggle",
+    "squiggleDesc": "Lignes ondulées dérivées avec amplitude / fréquence variables — look hand-drawn.",
+    "flowfield": "Flow field",
+    "flowfieldDesc": "Streamlines suivant le gradient ou un bruit Perlin — peu de levées de stylo.",
+    "hilbert": "Hilbert",
+    "hilbertDesc": "Remplissage par courbe de Hilbert — fractale continue.",
+    "gosper": "Gosper",
+    "gosperDesc": "Courbe de Gosper / île hexagonale — remplissage fractal organique.",
+    "eulerianHatch": "Hachures eulériennes",
+    "eulerianHatchDesc": "Hachures réordonnées en chemin eulérien — moins de levées de stylo.",
+    "concentricOffset": "Offset concentrique",
+    "concentricOffsetDesc": "Anneaux offset successifs depuis le bord, reliés en spirale.",
+    "tspOpt": "TSP optimisé",
+    "tspOptDesc": "Tournée optimisée 2-opt sur les points (Poisson-disk + budget temps)."
   },
   "execute": {
     "connection": "Connexion",
@@ -470,6 +508,9 @@
     "rerenderCacheMiss": "Cache expiré côté serveur — clique Appliquer pour relancer le rendu complet.",
     "generateMovedHint": "Le bouton « Générer le G-code » est maintenant en haut à droite du Plan — fermez ce dialogue puis cliquez sur le bouton vert en haut de l'aperçu.",
     "algoSettings": "Réglages {algorithm}",
+    "nearestPenHint": "Pen #{slot} ({color}) — distance {distance}. Cliquer pour assigner.",
+    "penWarning": "La couleur source {color} n'a pas de pen parfait — le plus proche est le slot #{slot} ({penColor}).",
+    "penWarningNone": "Aucun pen installé dans le magasin.",
     "expandAll": "Tout déplier",
     "expandAllHint": "Déplier toutes les cartes calque",
     "collapseAll": "Tout replier",
@@ -632,7 +673,19 @@
     "waveAmp": "Amplitude",
     "wavePeriod": "Période",
     "smooth": "Lissage",
-    "minBranch": "Branche min (px)"
+    "minBranch": "Branche min (px)",
+    "stepPx": "Pas (px)",
+    "maxSteps": "Étapes max",
+    "bidirectional": "Bidirectionnel",
+    "noiseScale": "Échelle bruit",
+    "minRunPx": "Run mini (px)",
+    "gosperOrder": "Ordre Gosper",
+    "bridge": "Pont",
+    "maxPoints": "Points max",
+    "timeBudgetS": "Budget temps (s)",
+    "poissonDisk": "Disque de Poisson",
+    "iterations": "Itérations",
+    "jitter": "Tremblement"
   },
   "profile": {
     "title": "Profil machine",

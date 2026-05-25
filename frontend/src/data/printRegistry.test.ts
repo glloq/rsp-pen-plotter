@@ -89,12 +89,15 @@ describe('printRegistry', () => {
     expect(resolveMasterStyle(undefined).id).toBe(DEFAULT_MASTER_STYLE_ID)
   })
 
-  it('LEGACY_MASTER_ID_MAP covers every shipped master style', () => {
+  it('LEGACY_MASTER_ID_MAP covers every shipped monochrome master style', () => {
     // Reverse the map so we can check that every modern id is reachable
     // from at least one legacy id — guarantees rehydration of saved
-    // placements never silently loses a style.
+    // placements never silently loses a style. Multicolour masters are
+    // post-merge so they don't have legacy aliases; restrict the check
+    // to the monochrome family that pre-dates the registry split.
     const modern = new Set(Object.values(LEGACY_MASTER_ID_MAP))
     for (const s of masterStyles()) {
+      if ((s.mode ?? 'monochrome') !== 'monochrome') continue
       expect(modern, `no legacy id maps to ${s.id}`).toContain(s.id)
     }
   })

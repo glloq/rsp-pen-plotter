@@ -57,6 +57,8 @@ def test_registry_lists_all_algorithms() -> None:
         "concentric_offset",
         "flowfield",
         "tsp_opt",
+        "voronoi_stipple",
+        "squiggle",
     }
 
 
