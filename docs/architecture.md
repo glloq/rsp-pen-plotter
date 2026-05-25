@@ -6,6 +6,12 @@ provides the studio UI. Real-time step generation is delegated to a
 microcontroller running Klipper (or FluidNC), because a general-purpose OS on
 the host cannot guarantee deterministic timing.
 
+The structural choices the rest of this document leans on — the SVG pivot,
+the vpype dependency, the Pydantic model layer, the SQLite store — each have
+a short write-up under [`docs/adr/`](./adr/) explaining why the alternatives
+lost. Read those first if you're trying to figure out whether a given
+constraint is load-bearing or accidental.
+
 ## Seven-layer model
 
 ```

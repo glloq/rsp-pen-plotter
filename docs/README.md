@@ -16,6 +16,7 @@ file (images, PDFs, documents, SVG, text) into plotted output on any pen plotter
 | [hardware_streaming.md](hardware_streaming.md) | Serial transport, the G-code streamer, EBB, and templates |
 | [frontend.md](frontend.md) | Vue component map, Pinia stores, i18n, and SVG safety |
 | [audit_report.md](audit_report.md) | Codebase audit findings and the fixes applied |
+| [adr/](adr/README.md) | Architecture Decision Records — load-bearing structural choices |
 
 ## Quick links
 
