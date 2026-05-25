@@ -92,6 +92,21 @@ else
   git merge --ff-only "origin/$BRANCH"
 fi
 
+# If the pull changed update.sh itself, re-exec with the freshly-pulled
+# version. Bash loads the script into memory at start, so any improvement
+# to the post-pull logic (e.g. the bytecode purge below, or a future
+# safety fix) would otherwise sit out the very upgrade that delivered it.
+# The ``OMNIPLOT_UPDATE_REEXEC`` guard prevents an infinite loop if a
+# bug ever made update.sh always claim it was modified.
+if [ -z "${OMNIPLOT_UPDATE_REEXEC:-}" ] && \
+   ! git diff --quiet "$PREV_COMMIT" "$NEW_COMMIT" -- update.sh; then
+  step "update.sh itself changed — re-executing with the new version"
+  export OMNIPLOT_UPDATE_REEXEC=1
+  # ``$@`` preserves the operator's original flags (--force / --no-restart
+  # etc.) across the re-exec, so the rerun continues with the same intent.
+  exec "$ROOT/update.sh" "$@"
+fi
+
 # Purge any stale Python bytecode before the reinstall + restart. Without
 # this step, a ``.pyc`` left behind in ``__pycache__`` whose source file
 # was renamed / moved / deleted in the new commit still satisfies the
