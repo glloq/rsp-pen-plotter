@@ -33,20 +33,31 @@ from pen_plotter.domain.print_plan import PrintPlan, TypographyPlan
 
 _log = logging.getLogger(__name__)
 
-# MIME types whose converters accept the full TypographyPlan field
-# set as their options dict. PDF / DOCX / HTML / etc. honour a
-# narrower subset (font + stroke_width + hershey_text), but the
-# converter ignores unrecognised keys so passing the full dict is
-# safe — see ``backend/pen_plotter/converters/{pdf,html,document}.py``.
+# MIME types eligible for the in-pipeline rerender. Restricted to the
+# two sources whose converter output is *already* in workspace
+# millimetres + self-contained (Hershey-rendered text positioned via
+# ``TypographyOptions``), so a fresh rerender produced at /generate
+# time slots cleanly into the slot the original composite occupied.
+#
+# PDF / DOCX / HTML / RTF / ODT are deliberately excluded:
+#   1. their converter output is in document-intrinsic units (points
+#      for PDF), so replacing the frontend's composite SVG — which
+#      has workspace-mm coordinates baked in by ``buildComposite``'s
+#      placement transform — produces strokes 2.83× too large and
+#      centred on the wrong region (the L5 rerender path strips the
+#      placement transform);
+#   2. ``TypographyPlan`` carries no ``page`` field, so a multi-page
+#      PDF would always rerender page 0 regardless of the page the
+#      operator selected on the plan tab.
+#
+# The PDF/DOCX/HTML Hershey-rerender intent is still reachable via
+# Apply in the editor (which re-uploads through ``store.upload`` and
+# regenerates a properly-composited placement); only the silent /
+# /generate-time rerender path is closed.
 _TEXT_MIMES: frozenset[str] = frozenset(
     {
         "text/plain",
         "text/markdown",
-        "text/html",
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.oasis.opendocument.text",
-        "application/rtf",
     }
 )
 
