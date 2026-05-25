@@ -72,8 +72,15 @@ git fetch --quiet origin "$BRANCH"
 NEW_COMMIT="$(git rev-parse "origin/$BRANCH")"
 
 if [ "$PREV_COMMIT" = "$NEW_COMMIT" ]; then
-  echo "Already up to date ($PREV_COMMIT)."
-  exit 0
+  # When the previous invocation re-execed us (because update.sh itself
+  # was modified by the pull), the upstream we already merged equals the
+  # current HEAD — but the purge / install / restart steps below still
+  # need to run. Skip the "already up to date" short-circuit on the
+  # re-exec leg; only exit early when we genuinely have nothing to do.
+  if [ -z "${OMNIPLOT_UPDATE_REEXEC:-}" ]; then
+    echo "Already up to date ($PREV_COMMIT)."
+    exit 0
+  fi
 fi
 
 if [ "$CHECK_ONLY" -eq 1 ]; then
@@ -81,15 +88,19 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
   exit 0
 fi
 
-step "Updating $PREV_COMMIT → $NEW_COMMIT"
-# --force already did a hard reset to local HEAD, which can lag behind the
-# remote. Use --ff-only as the default safe path; on --force we additionally
-# allow a hard reset to the remote so divergent local commits (rare in
-# practice) don't block the update.
-if [ "$FORCE" -eq 1 ]; then
-  git reset --hard "origin/$BRANCH"
+if [ -n "${OMNIPLOT_UPDATE_REEXEC:-}" ]; then
+  step "Resuming after re-exec (HEAD is already at $NEW_COMMIT)"
 else
-  git merge --ff-only "origin/$BRANCH"
+  step "Updating $PREV_COMMIT → $NEW_COMMIT"
+  # --force already did a hard reset to local HEAD, which can lag behind the
+  # remote. Use --ff-only as the default safe path; on --force we additionally
+  # allow a hard reset to the remote so divergent local commits (rare in
+  # practice) don't block the update.
+  if [ "$FORCE" -eq 1 ]; then
+    git reset --hard "origin/$BRANCH"
+  else
+    git merge --ff-only "origin/$BRANCH"
+  fi
 fi
 
 # If the pull changed update.sh itself, re-exec with the freshly-pulled
