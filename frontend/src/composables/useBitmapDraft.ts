@@ -312,7 +312,10 @@ export function defaultMulticolor(): MulticolorKnobsDraft {
 export function defaultTypography(): TypographyDraft {
   return {
     font: 'futural',
-    font_size_mm: 4.0,
+    // 10 mm is the smallest body size that stays readable in the
+    // simulator's default workspace-fit view. The Pydantic default
+    // mirrors this — keep them in sync.
+    font_size_mm: 10.0,
     line_spacing: 1.5,
     alignment: 'left',
     stroke_width_mm: 0.3,

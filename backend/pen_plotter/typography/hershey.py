@@ -49,7 +49,14 @@ class TypographyOptions(BaseModel):
     """Layout parameters for rendering text with a Hershey font."""
 
     font: str = "futural"
-    font_size_mm: float = Field(default=4.0, gt=0.0, le=200.0)
+    # Default is the size of typical readable body text on a pen plotter.
+    # 4 mm — what the prototype shipped with — looks fine in the SVG
+    # preview but is roughly 3 px tall in the simulator's default
+    # workspace-fit view, well below the resolving power of a Hershey
+    # glyph. 10 mm is the smallest size that stays comfortably readable
+    # both on paper and in the simulator without forcing the operator
+    # to zoom in.
+    font_size_mm: float = Field(default=10.0, gt=0.0, le=200.0)
     page_width_mm: float = Field(default=210.0, gt=0.0)
     page_height_mm: float = Field(default=297.0, gt=0.0)
     margin_mm: float = Field(default=15.0, ge=0.0)

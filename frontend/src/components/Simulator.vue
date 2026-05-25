@@ -71,10 +71,49 @@ function isColorVisible(hex: string | null): boolean {
 const viewZoom = ref(1)
 const viewPanX = ref(0)
 const viewPanY = ref(0)
+
+// Auto-fit to the drawing when it is small relative to the workspace.
+// Without this, plotting a 50 mm signature on an A3 bed produces a
+// blob of pixels in the corner of the simulator preview — the strokes
+// are correct but unreadable. We compute a viewZoom + pan that places
+// the drawing's centre at the canvas centre, filling ~80 % of it.
+// The base projection still uses workspace bounds so the workspace
+// outline stays visible when the user zooms back out.
 function resetView(): void {
-  viewZoom.value = 1
-  viewPanX.value = 0
-  viewPanY.value = 0
+  const s = sim.value
+  const f = frameBounds.value
+  const fw = f.maxX - f.minX
+  const fh = f.maxY - f.minY
+  const bw = s ? s.bounds.maxX - s.bounds.minX : 0
+  const bh = s ? s.bounds.maxY - s.bounds.minY : 0
+  const meaningful = bw > 1e-3 && bh > 1e-3 && fw > 1e-3 && fh > 1e-3
+  const small = meaningful && (bw < fw / 2 || bh < fh / 2)
+  if (!small) {
+    viewZoom.value = 1
+    viewPanX.value = 0
+    viewPanY.value = 0
+    draw()
+    return
+  }
+  // ``project()`` scales workspace units to the canvas; ``viewZoom``
+  // multiplies that. To make the drawing fill ~80 % of the canvas we
+  // need (fillRatio * frame / drawing), clamped to the manual zoom
+  // limits so very tiny drawings don't disappear past the upper bound.
+  const fillRatio = 0.8
+  const zoom = Math.max(1, Math.min(12, Math.min((fw * fillRatio) / bw, (fh * fillRatio) / bh)))
+  viewZoom.value = zoom
+  // Now pan so the drawing's centre lands on the canvas centre. We
+  // re-derive the same base scale ``project`` uses (note: NOT the
+  // post-zoom scale) and undo the offset that would otherwise leave
+  // the drawing where the workspace centre projects to.
+  const base = Math.min((WIDTH - 2 * PAD) / fw, (HEIGHT - 2 * PAD) / fh)
+  const flip = store.selectedProfile?.origin !== 'top_left'
+  const bcx = (s!.bounds.minX + s!.bounds.maxX) / 2
+  const bcy = (s!.bounds.minY + s!.bounds.maxY) / 2
+  const cxCanvas = PAD + (bcx - f.minX) * base
+  const cyCanvas = flip ? PAD + (f.maxY - bcy) * base : PAD + (bcy - f.minY) * base
+  viewPanX.value = -(cxCanvas - WIDTH / 2) * zoom
+  viewPanY.value = -(cyCanvas - HEIGHT / 2) * zoom
   draw()
 }
 function zoomIn(): void {
