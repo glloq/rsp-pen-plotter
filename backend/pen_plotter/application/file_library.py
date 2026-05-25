@@ -95,6 +95,28 @@ def find_original(file_id: str) -> Path | None:
     return None
 
 
+def read_original_bytes(file_id: str) -> bytes | None:
+    """Return the raw bytes of the original upload for ``file_id``.
+
+    Tiny wrapper over :func:`find_original` + ``Path.read_bytes`` so
+    callers — primarily the application-layer text rerender path —
+    don't have to remember the disk layout. Returns ``None`` when the
+    file is absent (deleted between library reads + the
+    /preflight or /generate call).
+    """
+    path = find_original(file_id)
+    if path is None:
+        return None
+    try:
+        return path.read_bytes()
+    except OSError:
+        # Concurrent delete or transient I/O failure — surface as a
+        # "missing" rather than crash the generation pipeline. The
+        # caller decides whether to fall back to ``plan.svg``.
+        _log.warning("read_original_bytes: %s vanished mid-read", path)
+        return None
+
+
 # ----------------------------------------------------------------------
 # Persisted metadata
 # ----------------------------------------------------------------------

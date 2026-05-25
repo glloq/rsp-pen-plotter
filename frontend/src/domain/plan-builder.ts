@@ -43,11 +43,27 @@ export interface PrintPlanInputs {
   /**
    * Typography intent for text sources. Forwarded into the plan so the
    * persisted snapshot and the plan_hash both reflect the operator's
-   * font / size / weight choices, even though today the SVG itself is
-   * still rendered at /upload time. Lets a future in-pipeline text
-   * renderer act on this without changing the call sites here.
+   * font / size / weight choices. Paired with ``libraryFileId`` +
+   * ``sourceMime`` the backend re-renders the text source at /preflight
+   * + /generate time from the original bytes — no re-upload needed.
+   * See ``backend/pen_plotter/application/text_render.py``.
    */
   typography?: TypographyPlan | null
+  /**
+   * Reference to the original uploaded file in the library. When the
+   * backend sees this paired with a ``typography`` block and a
+   * recognised ``sourceMime``, it re-renders the text source from
+   * those bytes so the operator's typography edits land without a
+   * re-upload. ``null`` keeps the legacy upload-time render — the
+   * plan's ``svg`` is used as-is.
+   */
+  libraryFileId?: string | null
+  /**
+   * MIME of the original library file. Required for the in-pipeline
+   * text rerender path to engage; the backend uses it to route the
+   * bytes back through the correct converter.
+   */
+  sourceMime?: string | null
 }
 
 /**
@@ -66,6 +82,8 @@ export function buildPrintPlan(inputs: PrintPlanInputs): PrintPlan {
     margin_mm: inputs.marginMm ?? 0,
     placement: inputs.placement,
     typography: inputs.typography ?? null,
+    library_file_id: inputs.libraryFileId ?? null,
+    source_mime: inputs.sourceMime ?? null,
     metadata: {
       client_version: inputs.clientVersion,
       created_at: new Date().toISOString(),

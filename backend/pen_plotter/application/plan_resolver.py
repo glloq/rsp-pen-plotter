@@ -109,10 +109,17 @@ def resolve_plan(plan: PrintPlan, profile: MachineProfile) -> ResolvedPlan:
         "placement": plan.placement.model_dump() if plan.placement else None,
         # Include typography in the hash so two plans differing only in
         # font / size / weight can no longer collide on the same SVG.
-        # Today this is traceability data (see TypographyPlan docstring);
-        # the hash dependency guards against future re-render paths
-        # accidentally returning a stale snapshot.
+        # The in-pipeline text rerender path (post-L5) reads the same
+        # fields at /generate time; carrying them in the hash guards
+        # against a stale snapshot ever being returned.
         "typography": plan.typography.model_dump() if plan.typography else None,
+        # The library reference fields participate in the hash so two
+        # plans pointing at different uploaded files (or carrying the
+        # same bytes through a different converter via ``source_mime``)
+        # can't collide on the same SVG payload. Together with the
+        # typography block they're the inputs the rerender path reads.
+        "library_file_id": plan.library_file_id,
+        "source_mime": plan.source_mime,
         "layers": [layer.model_dump() for layer in resolved_layers],
     }
 

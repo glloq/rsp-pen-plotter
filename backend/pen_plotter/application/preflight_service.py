@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from pen_plotter.application.generate_service import _placement_for_engine
 from pen_plotter.application.plan_resolver import resolve_plan
+from pen_plotter.application.text_render import rerender_text_svg
 from pen_plotter.core.preflight import preflight_report
 from pen_plotter.domain.print_plan import PrintPlan, ResolvedPlan
 from pen_plotter.models import MachineProfile, PreflightReport
@@ -41,8 +42,15 @@ def run_preflight(plan: PrintPlan, profile: MachineProfile) -> PreflightOutcome:
         ValueError: If the SVG is unparsable.
     """
     resolved = resolve_plan(plan, profile)
+    # Match generate_service: when the plan carries a TypographyPlan
+    # + library_file_id + source_mime, re-render the text source so
+    # the preflight metrics (path length, drawing time, bounds) reflect
+    # the operator's latest typography edits — not the SVG that was
+    # rendered at upload time. The rerender is opt-in + safe-fallback;
+    # see ``application/text_render.py`` for the gating rules.
+    svg = rerender_text_svg(resolved.plan) or resolved.plan.svg
     report = preflight_report(
-        resolved.plan.svg,
+        svg,
         profile,
         layers=resolved.plan.layers,
         scale_mode=resolved.plan.scale_mode,
