@@ -4103,6 +4103,26 @@
             ],
             "title": "Pause Before",
             "default": "auto"
+          },
+          "assigned_color_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Color Hex"
+          },
+          "color_assignment": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "manual"
+            ],
+            "title": "Color Assignment",
+            "default": "auto"
           }
         },
         "type": "object",

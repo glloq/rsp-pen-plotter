@@ -19,6 +19,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from pen_plotter.application.color_assignment import auto_assign_layer_colors
 from pen_plotter.application.file_library import (
     FileMeta,
     IntegrityReport,
@@ -31,6 +32,7 @@ from pen_plotter.application.file_library import (
     read_svg,
     remember_job,
 )
+from pen_plotter.application.palette_pool import available_color_hexes
 from pen_plotter.converters.pipeline import (
     convert_file,
     parse_options,
@@ -229,8 +231,14 @@ def _reprocess_existing(
         if stale.is_file() and stale.stem == "original" and stale != original_target:
             stale.unlink(missing_ok=True)
     original_target.write_bytes(data)
+    # Auto-attribute every cluster centroid to its nearest available
+    # ink before the meta is sealed. The library upload is profile-
+    # agnostic so the pool comes from the global available-colours
+    # inventory only; the active profile's pens get re-evaluated at
+    # /generate time so the G-code prompt matches the actual rack.
+    assigned_layers = auto_assign_layer_colors(converted.layers, available_color_hexes())
     meta = FileMeta(
-        layers=converted.layers,
+        layers=assigned_layers,
         warnings=converted.warnings,
         upload_metadata=converted.metadata,
         rerenderable=converted.bitmap_segmentation is not None,
@@ -326,6 +334,11 @@ async def upload_to_library(
     converted = convert_file(data, file.filename, mime, parsed_options)
 
     file_id = str(uuid.uuid4())
+    # Same auto-attribution as ``_reprocess_existing`` — keep the two
+    # paths bit-identical so a re-upload-with-changed-options doesn't
+    # accidentally regress to raw centroid colours when the inventory
+    # is populated.
+    assigned_layers = auto_assign_layer_colors(converted.layers, available_color_hexes())
     # Write all artefacts into a staging directory and only rename it to
     # its final name once every file is on disk. Guarantees an interrupted
     # upload can never leave the library half-populated.
@@ -337,7 +350,7 @@ async def upload_to_library(
         original = staging / f"original{_ext_for(file.filename, converted.source_mime)}"
         original.write_bytes(data)
         meta = FileMeta(
-            layers=converted.layers,
+            layers=assigned_layers,
             warnings=converted.warnings,
             upload_metadata=converted.metadata,
             rerenderable=converted.bitmap_segmentation is not None,
