@@ -26,7 +26,7 @@ import { useUiStore } from '../stores/ui'
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'tiff', 'webp', 'heic']
 const TYPOGRAPHY_EXT = ['txt', 'md']
-const DOCUMENT_EXT = ['pdf', 'svg', 'eps', 'ps', 'ai', 'docx', 'odt', 'rtf', 'html']
+const DOCUMENT_EXT = ['pdf', 'svg', 'eps', 'ps', 'ai', 'docx', 'odt', 'rtf', 'html', 'dxf']
 export const FILE_ACCEPT
   = '.svg,.png,.jpg,.jpeg,.tiff,.webp,.heic,.pdf,.dxf,.eps,.ps,.ai,.txt,.md,.html,.docx,.odt,.rtf'
 
@@ -96,7 +96,12 @@ export function useFileManager(t?: Translator) {
     fileGetter: () => _selectedFile.value,
     algorithmGetter: () => draft.bitmap.value.algorithm,
     optionsBuilder: () => buildOptions(),
-    shouldRun: () => kind.value === 'bitmap',
+    // Typography sources (.txt / .md) now get a live Hershey preview
+    // too, served by ``/preview-text``. Document sources still fall
+    // through to ``/upload`` (the bitmap-form preview only makes sense
+    // when there's a raster to segment).
+    shouldRun: () => kind.value === 'bitmap' || kind.value === 'typography',
+    modeGetter: () => (kind.value === 'typography' ? 'text' : 'bitmap'),
     qualityGetter: () => edit.previewQuality.value,
     failedMessage: t?.('upload.failed') ?? 'preview failed',
     timeoutMessage: t?.('upload.previewTimeout')
@@ -299,14 +304,28 @@ export function useFileManager(t?: Translator) {
         () => {
           if (_selectedFile.value && kind.value === 'bitmap') {
             previewer.schedule()
-          } else {
+          } else if (kind.value !== 'typography') {
             previewer.clear()
           }
         },
         { deep: true },
       ),
+      // Typography draft has its own deep watcher: every font / size /
+      // alignment / margin tweak schedules a debounced ``/preview-text``
+      // round-trip so the editor pane mirrors the chosen Hershey face
+      // without the operator having to hit Apply.
+      watch(
+        () => draft.typo.value,
+        () => {
+          if (_selectedFile.value && kind.value === 'typography') {
+            previewer.schedule()
+          }
+        },
+        { deep: true },
+      ),
       watch(_selectedFile, () => {
-        if (_selectedFile.value && kind.value === 'bitmap') {
+        if (!_selectedFile.value) return
+        if (kind.value === 'bitmap' || kind.value === 'typography') {
           previewer.schedule({ immediate: true })
         }
       }),

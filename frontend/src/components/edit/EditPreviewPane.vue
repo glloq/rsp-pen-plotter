@@ -229,6 +229,10 @@ const showTextPreview = computed(
     && edit?.kind.value === 'typography'
     && Boolean(edit?.textPreview.value),
 )
+// Typography sources also drive ``/preview-text`` now, so the live
+// preview path (``showLivePreview``) wins ahead of the raw-text fallback
+// once the first Hershey SVG is back from the server. The text-only
+// pane stays as the empty-state placeholder until then.
 const showEmptyHint = computed(
   () =>
     !sourceMode.value

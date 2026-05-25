@@ -232,11 +232,18 @@ class HersheyRenderer:
             blocks: Ordered blocks to lay out top to bottom.
 
         Returns:
-            A complete SVG document string.
+            A complete SVG document string. The returned SVG's viewBox
+            covers ``page_height_mm`` exactly; if the laid-out content
+            extends past the bottom margin the SVG is grown vertically
+            so every glyph is reachable inside the plotter's workspace
+            and the operator sees the overflow instead of having text
+            silently clipped at the page boundary.
         """
         usable_w = self.opts.page_width_mm - 2 * self.opts.margin_mm
+        usable_bottom = self.opts.page_height_mm - self.opts.margin_mm
         cursor_y = self.opts.margin_mm
         paths: list[str] = []
+        max_baseline = cursor_y
 
         for block in blocks:
             self._set_size(block.size_mm)
@@ -245,8 +252,14 @@ class HersheyRenderer:
                 for line in self._wrap(paragraph, usable_w):
                     paths.append(self._render_line(line, block.size_mm, cursor_y, usable_w))
                     cursor_y += line_height
+                    max_baseline = max(max_baseline, cursor_y)
 
-        return self._wrap_svg([p for p in paths if p])
+        # Grow the page when content overflowed so nothing is clipped.
+        # The margin is preserved at the new bottom edge.
+        effective_height = self.opts.page_height_mm
+        if max_baseline > usable_bottom:
+            effective_height = max_baseline + self.opts.margin_mm
+        return self._wrap_svg([p for p in paths if p], height_mm=effective_height)
 
     def _set_size(self, size_mm: float) -> None:
         """Configure the font's rendering scale if it changed."""
@@ -393,9 +406,17 @@ class HersheyRenderer:
             return slack
         return 0.0
 
-    def _wrap_svg(self, paths: list[str]) -> str:
-        """Assemble path strings into a complete SVG document."""
-        w, h = self.opts.page_width_mm, self.opts.page_height_mm
+    def _wrap_svg(self, paths: list[str], *, height_mm: float | None = None) -> str:
+        """Assemble path strings into a complete SVG document.
+
+        ``height_mm`` overrides ``opts.page_height_mm`` so the laid-out
+        content can grow the viewBox vertically when text overflows the
+        configured page (see :meth:`render_blocks`). Width is fixed by
+        the operator-configured ``page_width_mm`` — word wrap already
+        keeps every line within it.
+        """
+        w = self.opts.page_width_mm
+        h = height_mm if height_mm is not None else self.opts.page_height_mm
         header = (
             '<svg xmlns="http://www.w3.org/2000/svg" '
             'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '

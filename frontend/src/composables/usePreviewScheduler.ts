@@ -22,7 +22,7 @@
 
 import { computed, ref } from 'vue'
 import DOMPurify from 'dompurify'
-import { previewBitmap, type PreviewResponse } from '../api/client'
+import { previewBitmap, previewText, type PreviewResponse } from '../api/client'
 import { useToastStore } from '../stores/toasts'
 
 export interface PreviewSchedulerOptions {
@@ -72,6 +72,12 @@ export interface PreviewSchedulerOptions {
   // under this threshold never surface a toast — keeps the UI calm
   // for the typical sub-second case.
   toastDelayMs?: number
+  // Selects which backend endpoint feeds the preview. ``'bitmap'`` hits
+  // ``/preview`` (k-means + per-cluster algorithm); ``'text'`` hits
+  // ``/preview-text`` (Hershey single-stroke layout). The scheduler
+  // shape stays identical — the same debounce / abort / staleness
+  // guards apply to both paths.
+  modeGetter?: () => 'bitmap' | 'text'
 }
 
 export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
@@ -159,13 +165,32 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
     previewError.value = null
     startToast()
     try {
-      const result = await previewBitmap(
-        file,
-        opts.algorithmGetter(),
-        opts.optionsBuilder(),
-        c.signal,
-        opts.qualityGetter?.() ?? 'standard',
-      )
+      const mode = opts.modeGetter?.() ?? 'bitmap'
+      let result: PreviewResponse
+      if (mode === 'text') {
+        const textResult = await previewText(file, opts.optionsBuilder(), c.signal)
+        // Shim the typography response into the PreviewResponse shape so
+        // downstream consumers (EditPreviewPane, palette swatch strip)
+        // don't need to branch on mode — typography has no palette and
+        // no elapsed-ms metric to report.
+        result = {
+          svg: textResult.svg,
+          elapsed_ms: 0,
+          palette: [],
+          warnings: textResult.truncated
+            ? ['Preview truncated to the first 256 KB of text.']
+            : [],
+          cached: false,
+        }
+      } else {
+        result = await previewBitmap(
+          file,
+          opts.algorithmGetter(),
+          opts.optionsBuilder(),
+          c.signal,
+          opts.qualityGetter?.() ?? 'standard',
+        )
+      }
       // Two-layer staleness guard: abort signal AND revision compare.
       // The revision check protects against a resolved promise being
       // flushed before the abort has propagated, or future callers
