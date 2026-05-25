@@ -17,6 +17,7 @@ from pen_plotter.core.gcode import (
     _read_layers,
     sheet_exceeds_workspace,
 )
+from pen_plotter.core.pause_logic import should_pause
 from pen_plotter.domain.print_plan import LayerPlan, ScaleMode
 from pen_plotter.models import MachineProfile, Placement, PreflightReport
 
@@ -86,22 +87,18 @@ def preflight_report(
             if pen is None or not pen.installed:
                 missing.append(slot)
 
-        # Mirror the pause logic in ``generate_gcode`` so the count matches the
-        # number of operator prompts the streamer will actually surface.
-        slot_changed = slot is not None and slot != previous_slot
-        color_changed = (
-            mono_pen and source_color is not None and source_color != previous_color
-        )
-        first_pose = (
-            mono_pen
-            and previous_color is None
-            and previous_slot is None
-            and source_color is not None
-        )
-        will_pause = profile.tool_change_method != "none" and pause_before != "never" and (
-            pause_before == "always" or slot_changed or color_changed or first_pose
-        )
-        if will_pause:
+        # Share the predicate with ``generate_gcode`` so the reported
+        # ``pen_changes`` count exactly matches the M0 prompts the
+        # streamer will surface — see core/pause_logic.
+        if should_pause(
+            slot=slot,
+            source_color=source_color,
+            pause_before=pause_before,
+            previous_slot=previous_slot,
+            previous_color=previous_color,
+            mono_pen=mono_pen,
+            tool_change_method=profile.tool_change_method,
+        ).pause:
             pen_changes += 1
         if slot is not None:
             previous_slot = slot
