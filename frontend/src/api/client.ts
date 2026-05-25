@@ -907,3 +907,28 @@ export async function patchAvailableColor(
 export async function deleteAvailableColor(colorId: string): Promise<void> {
   await api.delete(`/available-colors/${encodeURIComponent(colorId)}`)
 }
+
+// --- Palette source setting ----------------------------------------------
+//
+// Three-way toggle the operator picks in the Plotter drawer's Couleurs
+// tab. Decides where the per-layer colour picker reads from: the
+// installed pens magazine, the global available-colours inventory, or
+// the union of both (dedup by hex).
+
+export type PaletteSource = 'pens' | 'available' | 'union'
+
+export interface PaletteSourceResponse {
+  source: PaletteSource
+}
+
+export async function getPaletteSource(): Promise<PaletteSource> {
+  const response = await api.get<PaletteSourceResponse>('/settings/palette-source')
+  return response.data.source
+}
+
+export async function setPaletteSource(source: PaletteSource): Promise<PaletteSource> {
+  const response = await api.put<PaletteSourceResponse>('/settings/palette-source', {
+    source,
+  })
+  return response.data.source
+}

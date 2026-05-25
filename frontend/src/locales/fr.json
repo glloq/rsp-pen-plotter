@@ -916,6 +916,17 @@
     "macrosHint": "Séquences de commandes réutilisables — homing, parking stylo, calibration. Lance-les ici quand le traceur est au repos.",
     "queueHint": "Envoie le travail courant au traceur ou empile-le pour plus tard. Les travaux actifs affichent leur progression et peuvent être mis en pause ou annulés."
   },
+  "paletteSource": {
+    "title": "Source de la palette",
+    "pens": "Stylos montés",
+    "pensHint": "Les calques piochent parmi les stylos actuellement dans le magasin.",
+    "available": "Couleurs disponibles",
+    "availableHint": "Les calques piochent parmi l'inventaire global ci-dessous.",
+    "union": "Les deux (union)",
+    "unionHint": "Les calques piochent dans les stylos montés ET l'inventaire, dédupliqués.",
+    "loadFailed": "Impossible de charger la source de palette.",
+    "updateFailed": "Impossible de mettre à jour la source de palette."
+  },
   "availableColors": {
     "hint": "Inventaire global des feutres que tu possèdes. Déclare une fois chaque Sharpie / fineliner ; les calques pourront piocher dedans quand la source de palette est réglée sur \"couleurs disponibles\".",
     "add": "Ajouter une couleur",

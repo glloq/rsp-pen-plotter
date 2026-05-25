@@ -13,10 +13,23 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { PaletteSource } from '../api/client'
 import { useAvailableColorsStore } from '../stores/availableColors'
+import { usePaletteSourceStore } from '../stores/paletteSource'
 
 const { t } = useI18n()
 const store = useAvailableColorsStore()
+const sourceStore = usePaletteSourceStore()
+
+const sources: Array<{ id: PaletteSource; labelKey: string; hintKey: string }> = [
+  { id: 'pens', labelKey: 'paletteSource.pens', hintKey: 'paletteSource.pensHint' },
+  {
+    id: 'available',
+    labelKey: 'paletteSource.available',
+    hintKey: 'paletteSource.availableHint',
+  },
+  { id: 'union', labelKey: 'paletteSource.union', hintKey: 'paletteSource.unionHint' },
+]
 
 const newHex = ref('#000000')
 const newName = ref('')
@@ -33,7 +46,12 @@ const editHex = ref('#000000')
 
 onMounted(() => {
   if (!store.loaded) void store.refresh()
+  if (!sourceStore.loaded) void sourceStore.refresh()
 })
+
+function pickSource(id: PaletteSource): void {
+  void sourceStore.update(id)
+}
 
 async function addColor(): Promise<void> {
   if (!newHex.value) return
@@ -104,6 +122,33 @@ function displayLabel(name: string, hex: string): string {
 <template>
   <div class="space-y-3">
     <p class="text-xs text-slate-400">{{ t('availableColors.hint') }}</p>
+
+    <!-- Palette source toggle -->
+    <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400">
+        {{ t('paletteSource.title') }}
+      </p>
+      <div class="flex overflow-hidden rounded border border-slate-700">
+        <button
+          v-for="opt in sources"
+          :key="opt.id"
+          type="button"
+          class="flex-1 px-2 py-1 text-[11px] transition"
+          :class="
+            sourceStore.source === opt.id
+              ? 'bg-slate-700 text-slate-100'
+              : 'text-slate-400 hover:bg-slate-800'
+          "
+          :aria-pressed="sourceStore.source === opt.id"
+          @click="pickSource(opt.id)"
+        >
+          {{ t(opt.labelKey) }}
+        </button>
+      </div>
+      <p class="text-[10px] text-slate-500">
+        {{ t(sources.find((s) => s.id === sourceStore.source)?.hintKey ?? 'paletteSource.pensHint') }}
+      </p>
+    </section>
 
     <!-- Add a colour -->
     <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2">

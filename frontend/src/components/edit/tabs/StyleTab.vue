@@ -5,7 +5,10 @@ import { getFonts } from '../../../api/client'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { useFileManager } from '../../../composables/useFileManager'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
+import { resolveEffectivePalette } from '../../../lib/effectivePalette'
+import { useAvailableColorsStore } from '../../../stores/availableColors'
 import { useJobStore } from '../../../stores/job'
+import { usePaletteSourceStore } from '../../../stores/paletteSource'
 import { useToastStore } from '../../../stores/toasts'
 import BlockMapCard from '../BlockMapCard.vue'
 import ColorModeCard from '../colors/ColorModeCard.vue'
@@ -47,13 +50,35 @@ const installedPenColors = computed<string[]>(() => {
 
 const penSlotCount = computed(() => store.selectedProfile?.pen_slot_count ?? 0)
 
-// When palette-follows-pens is on AND there are installed pens, mirror
-// them into the draft palette + lock the segmentation method to
-// ``fixed_palette``. Guarded against stomping a mono-mode rehydrate
-// (see ColorsTab's original comment) — only seed for genuine
-// multicolour placements.
+// Effective palette = the pool the per-layer picker reads from, driven
+// by the operator's palette-source toggle in the Plotter drawer. The
+// legacy ``paletteFollowsPens`` boolean still exists in the bitmap
+// draft for back-compat with persisted placements (rehydrate reads it
+// from ``last_options``); the new ``palette_source`` setting takes
+// precedence at render time.
+const paletteSource = usePaletteSourceStore()
+const availableColorsStore = useAvailableColorsStore()
+
+onMounted(() => {
+  if (!paletteSource.loaded) void paletteSource.refresh()
+  if (!availableColorsStore.loaded) void availableColorsStore.refresh()
+})
+
+const availableHexes = computed<string[]>(() =>
+  availableColorsStore.ordered.map((c) => c.hex),
+)
+
+const effectivePalette = computed<string[]>(() =>
+  resolveEffectivePalette(paletteSource.source, installedPenColors.value, availableHexes.value),
+)
+
+// When the operator turned ``palette-follows-pens`` on AND the
+// effective palette has at least one chip, mirror it into the draft
+// palette + lock the segmentation method to ``fixed_palette``.
+// Guarded against stomping a mono-mode rehydrate (only seed genuine
+// multicolour placements).
 watch(
-  [draft.paletteFollowsPens, installedPenColors],
+  [draft.paletteFollowsPens, effectivePalette],
   ([follows, colors]) => {
     if (printMode.value !== 'multicolor') return
     if (follows && colors.length) {
@@ -206,7 +231,7 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
       <PaletteCard
         :bitmap="bitmap"
         :palette-follows-pens="draft.paletteFollowsPens.value"
-        :installed-pen-colors="installedPenColors"
+        :installed-pen-colors="effectivePalette"
         :pen-slot-count="penSlotCount"
         :manual-swap-count="manualSwapCount"
         @update:palette-follows-pens="setPaletteFollowsPens"
