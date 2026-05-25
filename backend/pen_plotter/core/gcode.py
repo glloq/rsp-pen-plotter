@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, meta
 
 from pen_plotter.core.arcs import ArcTo, fit_arcs
 from pen_plotter.core.layers import labeled_group_fragments
@@ -29,6 +29,60 @@ _env = Environment(
     trim_blocks=True,
     lstrip_blocks=True,
 )
+
+# Variables each template is expected to receive from ``generate_gcode``.
+# Verified at import time against the template AST: if a template grows
+# a new ``{{ ... }}`` reference and gcode.py isn't updated to pass it,
+# the backend refuses to boot with a precise error pointing at the
+# deployment desync instead of failing at the next /generate with a
+# generic ``'X' is undefined`` 422. Add to this map whenever a new
+# template variable is introduced; the verifier will tell you what's
+# missing.
+_TEMPLATE_EXPECTED_VARS: dict[str, frozenset[str]] = {
+    "header.j2": frozenset({"profile"}),
+    "footer.j2": frozenset({"profile", "home_x", "home_y", "travel_feed"}),
+    "pen_up.j2": frozenset({"profile"}),
+    "pen_down.j2": frozenset({"profile"}),
+    "tool_change.j2": frozenset({"profile", "slot", "pen_name"}),
+    "pen_color_change.j2": frozenset({"profile", "color", "label"}),
+    "line.j2": frozenset({"x", "y", "feed"}),
+    "travel.j2": frozenset({"x", "y", "feed"}),
+    "arc.j2": frozenset({"x", "y", "i", "j", "clockwise", "feed"}),
+}
+
+
+def _verify_template_contract() -> None:
+    """Boot-time guard: refuse to start if templates use undeclared variables.
+
+    The class of bug this catches is a deployment desync — usually a
+    stale ``__pycache__`` next to freshly-pulled templates, or a partial
+    rebuild that updated one half of the (template, gcode.py) pair but
+    not the other. Without this check the first /generate call surfaces
+    as ``Generation failed: '<var>' is undefined`` (a 422 from a generic
+    Exception catch), which is opaque to the operator and untraceable
+    in logs. With this check, the same desync raises a precise
+    ``RuntimeError`` at module import with the offending variable name +
+    a fix-it hint, so it ends up in the uvicorn startup log instead of
+    blocking the operator's first print.
+    """
+    for name, expected in _TEMPLATE_EXPECTED_VARS.items():
+        source, _, _ = _env.loader.get_source(_env, name)  # type: ignore[union-attr]
+        ast = _env.parse(source)
+        used = meta.find_undeclared_variables(ast)
+        unexpected = used - expected
+        if unexpected:
+            raise RuntimeError(
+                f"G-code template {name!r} uses variable(s) "
+                f"{sorted(unexpected)} that ``generate_gcode`` does not pass. "
+                "This is a deployment desync — the templates on disk are "
+                "newer than the compiled Python in ``__pycache__`` (or vice "
+                "versa). Purge __pycache__ + restart, or update "
+                "``_TEMPLATE_EXPECTED_VARS`` in core/gcode.py if you added "
+                "a new variable to this template intentionally."
+            )
+
+
+_verify_template_contract()
 
 # Legacy alias kept so older test modules (and any external callers)
 # importing ``LayerGeneration`` from ``core.gcode`` keep working after

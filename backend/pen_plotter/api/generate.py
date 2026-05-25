@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from jinja2 import UndefinedError
 from pydantic import BaseModel
 
 from pen_plotter.application.generate_service import MissingPenSlotsError, run_generate
@@ -85,6 +86,22 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except UndefinedError as exc:
+        # A Jinja ``UndefinedError`` reaching here means the boot-time
+        # template-contract check missed something — either a brand-new
+        # variable that ``_TEMPLATE_EXPECTED_VARS`` doesn't declare, or
+        # a runtime path that conditionally uses an extra binding. The
+        # detail steers the operator to the deployment-desync fix path
+        # instead of a bare ``'feed' is undefined`` that reads like a
+        # mystery firmware error.
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Generation failed: {exc}. This usually means the backend "
+                "templates and compiled Python are out of sync — purge "
+                "``__pycache__`` + restart the backend after a git pull."
+            ),
+        ) from exc
     except Exception as exc:  # template / geometry failures
         raise HTTPException(status_code=422, detail=f"Generation failed: {exc}") from exc
 
