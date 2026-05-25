@@ -202,22 +202,6 @@ function extractPlacementChunk(
   const e = cxBox - (a * cxVb + c * cyVb)
   const f = cyBox - (b * cxVb + d * cyVb)
 
-  // Serialize each top-level child (rewrite labels on group elements).
-  const parts: string[] = []
-  for (const child of Array.from(root.children)) {
-    if (!(child instanceof Element)) continue
-    if (child.tagName.toLowerCase() === 'g') {
-      const label
-        = child.getAttribute('inkscape:label')
-        ?? child.getAttributeNS(INKSCAPE_NS, 'label')
-        ?? null
-      if (label && p.visibility[label] === false) continue
-      parts.push(serializeGroup(child, label ? compositeLayerId(p.id, label) : null))
-    } else {
-      parts.push(serializeElement(child))
-    }
-  }
-
   // Emit a simpler ``translate(...) scale(...)`` when there's no
   // rotation or flip, both so the SVG stays human-readable and so the
   // existing test suite (which asserts that exact substring) keeps
@@ -226,12 +210,50 @@ function extractPlacementChunk(
   const transformAttr = isIdentityRigidBody
     ? `translate(${e} ${f}) scale(${sx} ${sy})`
     : `matrix(${a} ${b} ${c} ${d} ${e} ${f})`
-  const wrapper
-    = `<g data-placement-id="${escapeAttr(p.id)}" transform="${transformAttr}">`
-    + parts.join('')
-    + '</g>'
+
+  // Each labeled inner group becomes a TOP-LEVEL ``<g>`` in the composite,
+  // carrying the placement transform directly on it. The backend's
+  // ``labeled_group_fragments`` only sees groups that are direct children
+  // of ``<svg>``, so nesting labeled groups inside an outer transform
+  // wrapper hides them from the layer-extraction pipeline — per-layer
+  // pen / speed / pause overrides keyed by the composite layer id would
+  // never match anything and every layer would silently fall back to the
+  // profile defaults. Hoisting them keeps the SVG semantics: each labeled
+  // group is a layer, transformed into workspace coordinates.
+  const chunks: string[] = []
+  const unlabeled: string[] = []
+  for (const child of Array.from(root.children)) {
+    if (!(child instanceof Element)) continue
+    if (child.tagName.toLowerCase() === 'g') {
+      const label
+        = child.getAttribute('inkscape:label')
+        ?? child.getAttributeNS(INKSCAPE_NS, 'label')
+        ?? null
+      if (label) {
+        if (p.visibility[label] === false) continue
+        chunks.push(serializeLabeledGroup(child, compositeLayerId(p.id, label), transformAttr, p.id))
+        continue
+      }
+    }
+    unlabeled.push(serializeElement(child))
+  }
+  // Sources that have no labeled groups (single-colour uploads) are
+  // surfaced as a single ``${placement}__layer-1`` layer so per-layer
+  // overrides keyed on that id still apply. Honour the visibility flag
+  // for ``layer-1`` if the operator hid it.
+  if (unlabeled.length && p.visibility['layer-1'] !== false) {
+    const synthLabel = compositeLayerId(p.id, 'layer-1')
+    chunks.push(
+      `<g inkscape:label="${escapeAttr(synthLabel)}" `
+      + `data-placement-id="${escapeAttr(p.id)}" `
+      + `transform="${transformAttr}">`
+      + unlabeled.join('')
+      + '</g>',
+    )
+  }
+
   return {
-    svgChunk: wrapper,
+    svgChunk: chunks.join(''),
     a,
     b,
     c,
@@ -242,18 +264,36 @@ function extractPlacementChunk(
   }
 }
 
-function serializeGroup(el: Element, newLabel: string | null): string {
-  if (newLabel === null) return serializeElement(el)
-  // Reserialize the group with the rewritten label. We strip any
-  // existing inkscape:label / inkscape:label-ns attributes so the
-  // output has exactly one of them with the prefixed value.
+function serializeLabeledGroup(
+  el: Element,
+  newLabel: string,
+  outerTransform: string,
+  placementId: string,
+): string {
+  // Re-emit the labeled group with the composite layer id, the placement
+  // transform applied as the outermost transform, and the original
+  // attributes preserved. If the source already had a ``transform``, we
+  // prepend the placement transform: in SVG, transforms are applied
+  // right-to-left, so listing the placement transform first means it
+  // wraps the inner one — equivalent to ``M_outer · M_inner``.
+  let existingTransform: string | null = null
   const attrs: string[] = []
   for (const attr of Array.from(el.attributes)) {
     if (attr.name === 'inkscape:label') continue
     if (attr.localName === 'label' && attr.namespaceURI === INKSCAPE_NS) continue
+    if (attr.name === 'transform') {
+      existingTransform = attr.value
+      continue
+    }
+    if (attr.name === 'data-placement-id') continue
     attrs.push(`${attr.name}="${escapeAttr(attr.value)}"`)
   }
   attrs.push(`inkscape:label="${escapeAttr(newLabel)}"`)
+  attrs.push(`data-placement-id="${escapeAttr(placementId)}"`)
+  const composed = existingTransform
+    ? `${outerTransform} ${existingTransform}`
+    : outerTransform
+  attrs.push(`transform="${escapeAttr(composed)}"`)
   const inner = Array.from(el.childNodes)
     .map((node) => serializeNode(node))
     .join('')

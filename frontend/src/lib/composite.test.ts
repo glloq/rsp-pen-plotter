@@ -144,6 +144,62 @@ describe('buildComposite', () => {
     expect(composedRed.bbox.x_max).toBeCloseTo(100, 4)
   })
 
+  it('emits each labeled group as a top-level child of the svg root', () => {
+    // Regression: the prior implementation wrapped the placement's labeled
+    // groups in an outer ``<g data-placement-id ...>`` carrying the
+    // transform. The backend's ``labeled_group_fragments`` only inspects
+    // direct ``<g>`` children of the ``<svg>`` root for ``inkscape:label``,
+    // so the nested labels were invisible — every layer collapsed to a
+    // single ``layer-1`` and per-layer overrides (pen slot, speed, pause)
+    // never matched anything. The fix hoists each labeled group to the
+    // top level with the placement transform applied directly.
+    const result = buildComposite([snapshot('p1', 10, 20, 50, 50)], profile())
+    // Parse the produced SVG and confirm every labeled group is a direct
+    // child of the root.
+    const doc = new DOMParser().parseFromString(result.svg, 'image/svg+xml')
+    const root = doc.documentElement
+    const labeled: string[] = []
+    for (const child of Array.from(root.children)) {
+      const label = child.getAttribute('inkscape:label')
+      if (child.tagName.toLowerCase() === 'g' && label) labeled.push(label)
+    }
+    expect(labeled).toContain('p1__color-ff0000')
+    expect(labeled).toContain('p1__color-00ff00')
+    // Each labeled group carries the placement transform.
+    for (const label of labeled) {
+      const node = root.querySelector(`g[inkscape\\:label="${label}"]`)
+      expect(node?.getAttribute('transform')).toBe('translate(10 20) scale(0.5 0.5)')
+    }
+  })
+
+  it('wraps unlabeled source content in a synthetic ``layer-1`` group', () => {
+    // Files that have no labeled groups (single-colour SVGs) still need
+    // a labeled wrapper in the composite so the backend treats them as a
+    // proper layer with the matching ``${p.id}__layer-1`` id, and so
+    // per-layer overrides keyed on that id apply.
+    const snap: PlacementSnapshot = {
+      id: 'p1',
+      svg:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        + '<path d="M0 0 L100 100"/>'
+        + '</svg>',
+      layers: [{ ...layer('layer-1'), bbox: { x_min: 0, y_min: 0, x_max: 100, y_max: 100 } }],
+      source_bbox: { x_min: 0, y_min: 0, x_max: 100, y_max: 100 },
+      visibility: { 'layer-1': true },
+      x_mm: 0,
+      y_mm: 0,
+      width_mm: 100,
+      height_mm: 100,
+    }
+    const result = buildComposite([snap], profile())
+    const doc = new DOMParser().parseFromString(result.svg, 'image/svg+xml')
+    const root = doc.documentElement
+    const labels = Array.from(root.children)
+      .map((c) => c.getAttribute('inkscape:label'))
+      .filter((l): l is string => Boolean(l))
+    expect(labels).toContain('p1__layer-1')
+  })
+
   it('scales the source bbox into workspace coordinates', () => {
     const result = buildComposite([snapshot('p1', 50, 50, 200, 100)], profile())
     const composedRed = result.layers[0]!
