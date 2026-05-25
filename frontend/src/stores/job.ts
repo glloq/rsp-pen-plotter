@@ -364,6 +364,32 @@ export const useJobStore = defineStore('job', () => {
   // ====== /rerender ======================================================
   let rerenderController: AbortController | null = null
   let rerenderTimer: ReturnType<typeof setTimeout> | null = null
+  // Promise of the currently in-flight ``triggerRerender`` call. Used by
+  // ``flushRerender`` so /preflight and /generate can wait for any
+  // pending rerender to finish before consuming ``placement.svg`` —
+  // closes the race window between switching a variant on the canvas
+  // and immediately clicking Generate.
+  let rerenderInFlight: Promise<void> | null = null
+
+  function trackRerender(): void {
+    const promise = triggerRerender().finally(() => {
+      if (rerenderInFlight === promise) rerenderInFlight = null
+    })
+    rerenderInFlight = promise
+  }
+
+  // Drain any debounced + in-flight rerender so callers can safely read
+  // ``placement.svg`` afterwards. Safe to call when nothing is pending.
+  async function flushRerender(): Promise<void> {
+    if (rerenderTimer) {
+      clearTimeout(rerenderTimer)
+      rerenderTimer = null
+      trackRerender()
+    }
+    while (rerenderInFlight) {
+      await rerenderInFlight
+    }
+  }
 
   async function applyLayerAlgorithm(
     layerId: string,
@@ -380,7 +406,7 @@ export const useJobStore = defineStore('job', () => {
     })
     autoSyncActiveVariant()
     if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(triggerRerender, 250)
+    rerenderTimer = setTimeout(trackRerender, 250)
   }
 
   async function clearLayerAlgorithm(layerId: string): Promise<void> {
@@ -392,7 +418,7 @@ export const useJobStore = defineStore('job', () => {
     patchSelected({ layer_algorithms: next })
     autoSyncActiveVariant()
     if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(triggerRerender, 250)
+    rerenderTimer = setTimeout(trackRerender, 250)
   }
 
   // Apply a multi-pass stack to one layer: ``passes`` is the ordered list
@@ -425,7 +451,7 @@ export const useJobStore = defineStore('job', () => {
     })
     autoSyncActiveVariant()
     if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(triggerRerender, 250)
+    rerenderTimer = setTimeout(trackRerender, 250)
   }
 
   async function triggerRerender(): Promise<void> {
@@ -801,7 +827,7 @@ export const useJobStore = defineStore('job', () => {
     // the library detail endpoint.
     if (activeVariantForRerender && Object.keys(activeVariantForRerender.layer_algorithms).length) {
       if (rerenderTimer) clearTimeout(rerenderTimer)
-      rerenderTimer = setTimeout(triggerRerender, 50)
+      rerenderTimer = setTimeout(trackRerender, 50)
     }
     return placement.id
   }
@@ -966,6 +992,9 @@ export const useJobStore = defineStore('job', () => {
   }
 
   async function runPreflight(): Promise<void> {
+    // Wait for any pending /rerender to land first — otherwise we'd
+    // preflight against the previous variant's SVG.
+    await flushRerender()
     const payload = compositePayload()
     if (!payload) return
     preflighting.value = true
@@ -1002,6 +1031,11 @@ export const useJobStore = defineStore('job', () => {
   }
 
   async function generate(): Promise<void> {
+    // Wait for any pending /rerender to land first — otherwise the
+    // composite would bake in the previous variant's SVG, and the
+    // operator would be confused why their just-picked print style
+    // didn't make it into the toolpath.
+    await flushRerender()
     const payload = compositePayload()
     if (!payload) return
     generating.value = true
@@ -1136,7 +1170,7 @@ export const useJobStore = defineStore('job', () => {
       visibility: { ...variant.visibility },
     })
     if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(triggerRerender, 50)
+    rerenderTimer = setTimeout(trackRerender, 50)
   }
 
   function setActiveVariant(variantId: string): void {
@@ -1329,6 +1363,7 @@ export const useJobStore = defineStore('job', () => {
     optimize,
     runPreflight,
     generate,
+    flushRerender,
     // Variants
     activeVariant,
     addVariant,

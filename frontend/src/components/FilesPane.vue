@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
 import { FILE_ACCEPT } from '../composables/useFileManager'
 import { validateUploadFile } from '../api/uploadValidation'
+import { shortMime } from '../lib/labels'
 import { useJobStore } from '../stores/job'
 import { useLibraryStore } from '../stores/library'
 import { useToastStore } from '../stores/toasts'
@@ -275,12 +276,6 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function shortMime(mime: string): string {
-  // Render compact: "image/svg+xml" → "SVG", "application/pdf" → "PDF".
-  const subtype = mime.split('/')[1] ?? mime
-  return subtype.replace(/\+.*$/, '').replace(/^vnd\..+\./, '').toUpperCase()
 }
 
 function onDragStart(event: DragEvent, file: LibraryFileRecord): void {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
+import { libraryFileOriginalUrl } from '../api/client'
+import { shortMime } from '../lib/labels'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import type { Placement } from '../stores/job'
@@ -31,6 +33,11 @@ interface RenderedPlacement {
   footprint: { x_min: number; y_min: number; x_max: number; y_max: number }
   exceeds: boolean
   cleanSvg: string
+  // URL to the original uploaded bytes, only when the file is an image
+  // we can display directly in the browser (raster + SVG sources). Empty
+  // for PDFs / typography / other formats — those fall back to the
+  // plotter SVG (tier 2) immediately.
+  previewUrl: string
 }
 
 // DOMPurify.sanitize is expensive on large SVGs; without memoization it
@@ -39,6 +46,28 @@ interface RenderedPlacement {
 // reused across recomputations. Entries are evicted for placements that
 // disappear from the plan.
 const sanitizedCache = new Map<string, { svg: string; clean: string }>()
+
+// Per-library-file load status for the source-preview image. ``reactive``
+// so onload / onerror on the SVG ``<image>`` re-trigger the template
+// without recomputing the heavy ``renderedPlacements`` chain.
+type PreviewStatus = 'loading' | 'loaded' | 'failed'
+const previewStatus = reactive<Record<string, PreviewStatus>>({})
+
+function isDisplayableMime(mime: string): boolean {
+  // Anything the browser can paint into an SVG ``<image>`` without a
+  // server-side render step. SVG counts here because we draw it through
+  // the bytes endpoint, which serves it with the right content type.
+  if (!mime) return false
+  if (mime.startsWith('image/')) return true
+  return false
+}
+
+function onPreviewLoad(fileId: string): void {
+  previewStatus[fileId] = 'loaded'
+}
+function onPreviewError(fileId: string): void {
+  previewStatus[fileId] = 'failed'
+}
 
 const renderedPlacements = computed<RenderedPlacement[]>(() => {
   const w = workspace.value
@@ -67,11 +96,19 @@ const renderedPlacements = computed<RenderedPlacement[]>(() => {
     } else {
       sanitizedCache.delete(p.id)
     }
+    // Tier 1 source preview is only attempted when (a) we have a library
+    // entry to read bytes from, and (b) the MIME is one the browser can
+    // paint without an extra server-side render step.
+    const previewUrl
+      = p.library_file_id && isDisplayableMime(p.source_mime)
+        ? libraryFileOriginalUrl(p.library_file_id)
+        : ''
     return {
       placement: p,
       footprint: { x_min, y_min, x_max, y_max },
       exceeds,
       cleanSvg,
+      previewUrl,
     }
   })
   for (const id of sanitizedCache.keys()) {
@@ -79,6 +116,32 @@ const renderedPlacements = computed<RenderedPlacement[]>(() => {
   }
   return out
 })
+
+// Should tier 1 (source preview <image>) actually be shown for this
+// placement? True when we have a URL and the load hasn't failed.
+function showsPreviewImage(rp: RenderedPlacement): boolean {
+  if (!rp.previewUrl) return false
+  const status = previewStatus[rp.placement.library_file_id ?? '']
+  return status !== 'failed'
+}
+
+// Should tier 2 (inline plotter SVG) be shown? Hide it when tier 1 has
+// fully loaded, so we don't double-paint the same drawing. Show it as
+// the fallback whenever tier 1 isn't usable.
+function showsPlotterSvg(rp: RenderedPlacement): boolean {
+  if (!rp.cleanSvg) return false
+  if (!rp.previewUrl) return true
+  const status = previewStatus[rp.placement.library_file_id ?? '']
+  return status !== 'loaded'
+}
+
+// Tier 3: nothing else worked — render a small MIME badge so the
+// placement footprint isn't visually empty.
+function showsMimeBadge(rp: RenderedPlacement): boolean {
+  if (rp.cleanSvg) return false
+  if (showsPreviewImage(rp)) return false
+  return true
+}
 
 const anyExceeds = computed(() => renderedPlacements.value.some((r) => r.exceeds))
 
@@ -688,10 +751,36 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             pointer-events="none"
           />
 
-          <!-- Each placement: drawing content + interactive bbox + handles. -->
+          <!-- Each placement: drawing content + interactive bbox + handles.
+               Display fallback chain — tier 1 source preview (raster /
+               SVG bytes as uploaded), tier 2 plotter SVG, tier 3 MIME
+               badge placeholder. Tiers 1 and 2 share ``placementInnerStyle``
+               so rotation / flip handling stays in one place. -->
           <template v-for="rp in renderedPlacements" :key="rp.placement.id">
             <foreignObject
-              v-if="rp.cleanSvg"
+              v-if="showsPreviewImage(rp)"
+              :x="rp.footprint.x_min"
+              :y="rp.footprint.y_min"
+              :width="Math.max(rp.footprint.x_max - rp.footprint.x_min, 0.01)"
+              :height="Math.max(rp.footprint.y_max - rp.footprint.y_min, 0.01)"
+            >
+              <div
+                xmlns="http://www.w3.org/1999/xhtml"
+                class="pointer-events-none overflow-hidden"
+                :style="placementInnerStyle(rp)"
+              >
+                <img
+                  :src="rp.previewUrl"
+                  alt=""
+                  draggable="false"
+                  class="h-full w-full select-none object-fill"
+                  @load="onPreviewLoad(rp.placement.library_file_id ?? '')"
+                  @error="onPreviewError(rp.placement.library_file_id ?? '')"
+                />
+              </div>
+            </foreignObject>
+            <foreignObject
+              v-if="showsPlotterSvg(rp)"
               :x="rp.footprint.x_min"
               :y="rp.footprint.y_min"
               :width="Math.max(rp.footprint.x_max - rp.footprint.x_min, 0.01)"
@@ -703,6 +792,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
                 :style="placementInnerStyle(rp)"
                 v-html="rp.cleanSvg"
               />
+            </foreignObject>
+            <foreignObject
+              v-if="showsMimeBadge(rp)"
+              :x="rp.footprint.x_min"
+              :y="rp.footprint.y_min"
+              :width="Math.max(rp.footprint.x_max - rp.footprint.x_min, 0.01)"
+              :height="Math.max(rp.footprint.y_max - rp.footprint.y_min, 0.01)"
+            >
+              <div
+                xmlns="http://www.w3.org/1999/xhtml"
+                class="pointer-events-none flex h-full w-full items-center justify-center bg-slate-100/50 font-mono text-[10px] uppercase tracking-wider text-slate-500"
+              >
+                {{ shortMime(rp.placement.source_mime || 'application/octet-stream') }}
+              </div>
             </foreignObject>
             <rect
               :x="rp.footprint.x_min"
