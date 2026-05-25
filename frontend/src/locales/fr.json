@@ -645,6 +645,16 @@
     "flipH": "Miroir horizontal",
     "flipV": "Miroir vertical"
   },
+  "typography": {
+    "fontSection": "Police",
+    "fontHint": "Polices monolinéaires pour traceur",
+    "layoutSection": "Mise en page",
+    "pageSection": "Page",
+    "pageHint": "autour de la zone imprimable",
+    "alignLeft": "Gauche",
+    "alignCenter": "Centré",
+    "alignRight": "Droite"
+  },
   "convert": {
     "options": "Options de conversion",
     "embeddedImageOptions": "Vectorisation des images intégrées",
