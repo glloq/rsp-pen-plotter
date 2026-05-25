@@ -2657,6 +2657,214 @@
         }
       }
     },
+    "/available-colors": {
+      "get": {
+        "summary": "List Colors",
+        "description": "Return every available-colour entry, ordered by position.",
+        "operationId": "list_colors_available_colors_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AvailableColorOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Colors Available Colors Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Color",
+        "description": "Add an entry to the inventory.\n\nIdempotent on the hex value: re-adding an existing colour returns\nthe existing record (its name may be updated if a non-empty name\nis supplied in the request) instead of erroring with 409. This\nmatches the library / file dedup semantics \u2014 declaring the same\nink twice should be a no-op, not a failure.",
+        "operationId": "create_color_available_colors_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailableColorCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailableColorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/available-colors/{color_id}": {
+      "patch": {
+        "summary": "Patch Color",
+        "description": "Rewrite ``name`` / ``hex`` / ``position`` on one entry.",
+        "operationId": "patch_color_available_colors__color_id__patch",
+        "parameters": [
+          {
+            "name": "color_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Color Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailableColorPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailableColorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Color",
+        "description": "Remove one entry. Returns ``{\"deleted\": true}`` on success.",
+        "operationId": "delete_color_available_colors__color_id__delete",
+        "parameters": [
+          {
+            "name": "color_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Color Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Delete Color Available Colors  Color Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/palette-source": {
+      "get": {
+        "summary": "Read Palette Source",
+        "description": "Return the active palette source the per-layer picker reads from.",
+        "operationId": "read_palette_source_settings_palette_source_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaletteSourceResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Write Palette Source",
+        "description": "Persist the operator's palette-source choice.",
+        "operationId": "write_palette_source_settings_palette_source_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaletteSourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaletteSourceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -2752,6 +2960,101 @@
         ],
         "title": "AuditEntry",
         "description": "One recorded sensitive action."
+      },
+      "AvailableColorCreate": {
+        "properties": {
+          "hex": {
+            "type": "string",
+            "title": "Hex"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "hex"
+        ],
+        "title": "AvailableColorCreate",
+        "description": "Request body for ``POST /available-colors``."
+      },
+      "AvailableColorOut": {
+        "properties": {
+          "color_id": {
+            "type": "string",
+            "title": "Color Id"
+          },
+          "hex": {
+            "type": "string",
+            "title": "Hex"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "color_id",
+          "hex",
+          "name",
+          "position",
+          "created_at"
+        ],
+        "title": "AvailableColorOut",
+        "description": "Wire shape returned by every available-colour endpoint."
+      },
+      "AvailableColorPatch": {
+        "properties": {
+          "hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hex"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "type": "object",
+        "title": "AvailableColorPatch",
+        "description": "Partial update body for ``PATCH /available-colors/{id}``."
       },
       "Block": {
         "properties": {
@@ -4201,6 +4504,44 @@
         ],
         "title": "PaletteEntry",
         "description": "One cluster colour and its share of the image (0..1)."
+      },
+      "PaletteSourceResponse": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "pens",
+              "available",
+              "union"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "PaletteSourceResponse",
+        "description": "Wire shape returned by ``GET /settings/palette-source``."
+      },
+      "PaletteSourceUpdate": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "pens",
+              "available",
+              "union"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "PaletteSourceUpdate",
+        "description": "Request body for ``PUT /settings/palette-source``."
       },
       "PenSlot": {
         "properties": {

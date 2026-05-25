@@ -865,3 +865,70 @@ export async function patchLibraryFile(
 export async function deleteLibraryFile(fileId: string): Promise<void> {
   await api.delete(`/files/${encodeURIComponent(fileId)}`)
 }
+
+// --- Available colours ----------------------------------------------------
+//
+// Global app-wide inventory of inks the operator owns but doesn't necessarily
+// mount in the magazine. Feeds the per-layer colour picker when the operator
+// selects the ``available`` or ``union`` palette source.
+
+export interface AvailableColor {
+  color_id: string
+  hex: string
+  name: string
+  position: number
+  created_at: string
+}
+
+export async function listAvailableColors(): Promise<AvailableColor[]> {
+  const response = await api.get<AvailableColor[]>('/available-colors')
+  return response.data
+}
+
+export async function createAvailableColor(
+  hex: string,
+  name: string = '',
+): Promise<AvailableColor> {
+  const response = await api.post<AvailableColor>('/available-colors', { hex, name })
+  return response.data
+}
+
+export async function patchAvailableColor(
+  colorId: string,
+  patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position'>>,
+): Promise<AvailableColor> {
+  const response = await api.patch<AvailableColor>(
+    `/available-colors/${encodeURIComponent(colorId)}`,
+    patch,
+  )
+  return response.data
+}
+
+export async function deleteAvailableColor(colorId: string): Promise<void> {
+  await api.delete(`/available-colors/${encodeURIComponent(colorId)}`)
+}
+
+// --- Palette source setting ----------------------------------------------
+//
+// Three-way toggle the operator picks in the Plotter drawer's Couleurs
+// tab. Decides where the per-layer colour picker reads from: the
+// installed pens magazine, the global available-colours inventory, or
+// the union of both (dedup by hex).
+
+export type PaletteSource = 'pens' | 'available' | 'union'
+
+export interface PaletteSourceResponse {
+  source: PaletteSource
+}
+
+export async function getPaletteSource(): Promise<PaletteSource> {
+  const response = await api.get<PaletteSourceResponse>('/settings/palette-source')
+  return response.data.source
+}
+
+export async function setPaletteSource(source: PaletteSource): Promise<PaletteSource> {
+  const response = await api.put<PaletteSourceResponse>('/settings/palette-source', {
+    source,
+  })
+  return response.data.source
+}

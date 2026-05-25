@@ -71,6 +71,48 @@ class FileRecord(SQLModel, table=True):
     created_at: datetime
 
 
+class AppSettingRecord(SQLModel, table=True):
+    """Generic key/value store for small global app settings.
+
+    Used today for the ``palette_source`` toggle that picks where the
+    per-layer colour picker reads from (installed pens / available
+    colours / union). The shape stays generic so future single-value
+    settings can land without another migration: each setting is one
+    row, ``key`` is the namespaced identifier, ``value`` carries the
+    string-encoded payload (JSON for non-string types).
+    """
+
+    key: str = Field(primary_key=True)
+    value: str
+
+
+class AvailableColorRecord(SQLModel, table=True):
+    """An ink the operator has on hand but doesn't necessarily mount.
+
+    The library is a global app-wide inventory of pen colours — independent
+    of any specific machine profile. It feeds the editor's per-layer
+    colour picker so the operator can pre-declare every Sharpie / fineliner
+    they own once, then assign them to layers without typing ``#`` codes
+    each time. ``hex`` is the only mandatory field; ``name`` is optional
+    (UI falls back to the hex code) and ``position`` drives the display
+    order so the operator can rearrange the swatch strip.
+    """
+
+    color_id: str = Field(primary_key=True)
+    # Lowercased ``#rrggbb``. Indexed unique so duplicates can't sneak in
+    # through the API even if the client doesn't dedupe; the endpoint
+    # surfaces the existing entry instead of returning a 409.
+    hex: str = Field(index=True, unique=True)
+    # Free-form operator label ("Cyan Sharpie 04", "Rouge cerise"); empty
+    # string when unset. The picker shows the hex when this is blank.
+    name: str = Field(default="")
+    # Display ordering. Auto-assigned to ``max(position) + 1`` at create
+    # time so new entries land at the end of the strip; can be rewritten
+    # by the PATCH endpoint to reorder.
+    position: int = Field(default=0, index=True)
+    created_at: datetime
+
+
 engine: Engine = create_engine(f"sqlite:///{_DB_PATH}")
 
 
@@ -308,3 +350,111 @@ def get_job(job_id: str, target: Engine = engine) -> JobRecord | None:
     """
     with Session(target) as session:
         return session.get(JobRecord, job_id)
+
+
+# ---------------------------------------------------------------- available colours
+
+
+def list_available_colors(target: Engine = engine) -> list[AvailableColorRecord]:
+    """Return every available-colour entry in display order.
+
+    Args:
+        target: The engine to read from.
+
+    Returns:
+        Records ordered by ``position`` ascending, ties broken by
+        ``created_at`` so a freshly-inserted row stays at the end of
+        the strip rather than jumping above a sibling with the same
+        position.
+    """
+    with Session(target) as session:
+        statement = select(AvailableColorRecord).order_by(
+            AvailableColorRecord.position,
+            AvailableColorRecord.created_at,
+        )
+        return list(session.exec(statement).all())
+
+
+def get_available_color(
+    color_id: str, target: Engine = engine
+) -> AvailableColorRecord | None:
+    """Return one entry by id, or ``None`` if it doesn't exist."""
+    with Session(target) as session:
+        return session.get(AvailableColorRecord, color_id)
+
+
+def get_available_color_by_hex(
+    hex_value: str, target: Engine = engine
+) -> AvailableColorRecord | None:
+    """Return the (at most one) entry matching this hex, lookup helper for dedup."""
+    with Session(target) as session:
+        statement = select(AvailableColorRecord).where(
+            AvailableColorRecord.hex == hex_value
+        )
+        return session.exec(statement).first()
+
+
+def save_available_color(
+    record: AvailableColorRecord, target: Engine = engine
+) -> AvailableColorRecord:
+    """Insert or update an available-colour entry.
+
+    Uses ``session.merge`` so the same call works for both create and
+    update — the API adapter picks which path applies based on whether
+    the ``color_id`` already exists.
+    """
+    with Session(target) as session:
+        session.merge(record)
+        session.commit()
+    return record
+
+
+def delete_available_color(color_id: str, target: Engine = engine) -> bool:
+    """Remove one entry by id. Returns ``True`` if a row was deleted.
+
+    Args:
+        color_id: The identifier of the entry to drop.
+        target: The engine to write to.
+
+    Returns:
+        ``True`` if the row existed and was removed, ``False`` if the
+        id was already absent (so the endpoint can map to 404).
+    """
+    with Session(target) as session:
+        record = session.get(AvailableColorRecord, color_id)
+        if record is None:
+            return False
+        session.delete(record)
+        session.commit()
+        return True
+
+
+def next_available_color_position(target: Engine = engine) -> int:
+    """Return ``max(position) + 1`` so new entries land at the end of the strip.
+
+    Returns ``0`` when the table is empty so the first inserted row
+    starts at position 0.
+    """
+    with Session(target) as session:
+        statement = select(AvailableColorRecord).order_by(
+            desc(AvailableColorRecord.position)
+        )
+        last = session.exec(statement).first()
+        return 0 if last is None else last.position + 1
+
+
+# ---------------------------------------------------------------- app settings
+
+
+def get_setting(key: str, target: Engine = engine) -> str | None:
+    """Return the raw string value of a setting, or ``None`` when unset."""
+    with Session(target) as session:
+        record = session.get(AppSettingRecord, key)
+        return None if record is None else record.value
+
+
+def set_setting(key: str, value: str, target: Engine = engine) -> None:
+    """Upsert a setting. ``value`` is stored as-is; callers JSON-encode if needed."""
+    with Session(target) as session:
+        session.merge(AppSettingRecord(key=key, value=value))
+        session.commit()

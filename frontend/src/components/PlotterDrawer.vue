@@ -8,6 +8,7 @@ import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useQueueStore } from '../stores/queue'
 import { useUiStore, type PlotterTab } from '../stores/ui'
+import AvailableColorsPanel from './AvailableColorsPanel.vue'
 import JogControls from './JogControls.vue'
 import ProfileEditor from './ProfileEditor.vue'
 import MacroPanel from './MacroPanel.vue'
@@ -49,6 +50,7 @@ const canSend = computed(() => Boolean(job.gcode))
 const tabs: Array<{ id: PlotterTab; label: string; icon: string }> = [
   { id: 'connection', label: 'plotter.tabConnection', icon: '⚡' },
   { id: 'profile', label: 'plotter.tabProfile', icon: '⚙' },
+  { id: 'colors', label: 'plotter.tabColors', icon: '◐' },
   { id: 'macros', label: 'plotter.tabMacros', icon: '⌘' },
   { id: 'queue', label: 'plotter.tabQueue', icon: '☰' },
 ]
@@ -331,6 +333,11 @@ onBeforeUnmount(() => {
           <!-- PROFILE TAB -->
           <div v-show="plotterTab === 'profile'">
             <ProfileEditor />
+          </div>
+
+          <!-- COLORS TAB -->
+          <div v-show="plotterTab === 'colors'">
+            <AvailableColorsPanel />
           </div>
 
           <!-- MACROS TAB -->

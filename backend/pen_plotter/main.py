@@ -17,6 +17,7 @@ from pen_plotter import __version__
 from pen_plotter.api.algorithms import router as algorithms_router
 from pen_plotter.api.analyze import router as analyze_router
 from pen_plotter.api.audit import router as audit_router
+from pen_plotter.api.available_colors import router as available_colors_router
 from pen_plotter.api.files import router as files_router
 from pen_plotter.api.fonts import router as fonts_router
 from pen_plotter.api.generate import router as generate_router
@@ -33,6 +34,7 @@ from pen_plotter.api.profiles import router as profiles_router
 from pen_plotter.api.queue import print_queue
 from pen_plotter.api.queue import router as queue_router
 from pen_plotter.api.rerender import router as rerender_router
+from pen_plotter.api.settings import router as settings_router
 from pen_plotter.api.system import router as system_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.application.file_library import integrity_scan
@@ -135,6 +137,8 @@ app.include_router(preview_text_router)
 app.include_router(rerender_router)
 app.include_router(system_router)
 app.include_router(analyze_router)
+app.include_router(available_colors_router)
+app.include_router(settings_router)
 
 
 class HealthResponse(BaseModel):
