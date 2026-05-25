@@ -40,6 +40,43 @@ class ConvertedFile:
     bitmap_options: BitmapOptions | None
 
 
+# Hard cap on filename length we agree to store / log. Browsers and most
+# filesystems allow up to 255 bytes, but anything beyond that on our side
+# is almost certainly an attacker probing for path / log overflow bugs.
+MAX_FILENAME_BYTES = 255
+
+
+async def read_upload_safely(upload: UploadFile, max_bytes: int) -> bytes:
+    """Read an ``UploadFile`` in chunks, capped at ``max_bytes``.
+
+    Raises HTTP 413 as soon as the cumulative size crosses the limit so a
+    malicious 1 GB body never sits fully in memory. Empty uploads raise
+    HTTP 400 — every accepted converter needs at least a few bytes of input
+    and the downstream code reads ``data[0]`` in several places.
+    """
+    if upload.filename and len(upload.filename.encode("utf-8")) > MAX_FILENAME_BYTES:
+        raise HTTPException(status_code=400, detail="Filename is too long")
+    chunks: list[bytes] = []
+    total = 0
+    chunk_size = 1024 * 1024  # 1 MiB
+    while True:
+        chunk = await upload.read(chunk_size)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            # Stop draining the stream — starlette will release it when
+            # the response is returned.
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds the {max_bytes // (1024 * 1024)} MB limit",
+            )
+        chunks.append(chunk)
+    if total == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    return b"".join(chunks)
+
+
 def resolve_mime(upload: UploadFile) -> str | None:
     """Best-effort MIME detection from the client header or filename."""
     content_type = upload.content_type

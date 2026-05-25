@@ -9,6 +9,9 @@
     "uploaded": "\"{name}\" loaded ({count} layers).",
     "moreWarnings": "+{count} more warnings.",
     "uploading": "Uploading \"{name}\"…",
+    "uploadingPercent": "Uploading \"{name}\" — {percent}%…",
+    "convertingOnServer": "Converting \"{name}\" on the server…",
+    "uploadCancelled": "Upload cancelled.",
     "libraryLoading": "Loading library…",
     "converting": "Converting…",
     "converted": "Conversion done.",
@@ -75,7 +78,9 @@
     "moveTo": "Move to folder",
     "rename": "Rename",
     "placements": "{count} on plan",
-    "deleteConfirm": "Delete \"{name}\" from the library? Placements on the plan will keep their content."
+    "deleteConfirm": "Delete \"{name}\" from the library? Placements on the plan will keep their content.",
+    "dropToImport": "Drop to add to the library",
+    "uploadInProgress": "An upload is already in progress."
   },
   "library": {
     "loadFailed": "Couldn't load the file library.",
@@ -441,6 +446,11 @@
     "choose": "Upload & convert",
     "converting": "Converting…",
     "failed": "Upload failed. Check the file type and that the API is running.",
+    "tooLarge": "File too large (max {max} MB).",
+    "emptyFile": "File is empty.",
+    "invalidType": "Unsupported file type: .{ext}",
+    "nameTooLong": "Filename is too long (255 chars max).",
+    "cancel": "Cancel",
     "previewTimeout": "Preview too slow for this style. Lower the Detail tier or hit Apply to render anyway.",
     "previewProgress": "Rendering preview… ({seconds}s)",
     "previewCancel": "Cancel",

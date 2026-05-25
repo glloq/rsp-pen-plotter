@@ -22,7 +22,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from pen_plotter.api.rerender import remember_job
-from pen_plotter.converters.pipeline import convert_file, parse_options, resolve_mime
+from pen_plotter.converters.pipeline import (
+    convert_file,
+    parse_options,
+    read_upload_safely,
+    resolve_mime,
+)
 from pen_plotter.models import LayerInfo
 from pen_plotter.persistence import (
     FileRecord,
@@ -187,11 +192,7 @@ async def upload_to_library(
     if mime is None:
         raise HTTPException(status_code=415, detail="Could not determine file type")
 
-    data = await file.read()
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=413, detail=f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit"
-        )
+    data = await read_upload_safely(file, MAX_UPLOAD_BYTES)
 
     digest = hashlib.sha256(data).hexdigest()
     existing = get_file_record_by_hash(digest)
@@ -202,17 +203,31 @@ async def upload_to_library(
     converted = convert_file(data, file.filename, mime, parsed_options)
 
     file_id = str(uuid.uuid4())
-    directory = _file_dir(file_id)
-    directory.mkdir(parents=True, exist_ok=True)
-    _svg_path(file_id).write_text(converted.svg, encoding="utf-8")
-    original = directory / f"original{_ext_for(file.filename, converted.source_mime)}"
-    original.write_bytes(data)
-    meta = FileMeta(
-        layers=converted.layers,
-        warnings=converted.warnings,
-        upload_metadata=converted.metadata,
-    )
-    _meta_path(file_id).write_text(meta.model_dump_json(), encoding="utf-8")
+    # Write all artefacts into a staging directory and only rename it to
+    # its final name once every file is on disk. Guarantees an interrupted
+    # upload can never leave the library half-populated — a crash mid-write
+    # surfaces as a leftover ``.tmp-*`` dir that startup or the next upload
+    # can sweep, not as an orphan record pointing at missing SVG / meta.
+    final_dir = _file_dir(file_id)
+    staging = final_dir.with_name(f".tmp-{file_id}")
+    try:
+        staging.mkdir(parents=True, exist_ok=False)
+        (staging / "normalized.svg").write_text(converted.svg, encoding="utf-8")
+        original = staging / f"original{_ext_for(file.filename, converted.source_mime)}"
+        original.write_bytes(data)
+        meta = FileMeta(
+            layers=converted.layers,
+            warnings=converted.warnings,
+            upload_metadata=converted.metadata,
+        )
+        (staging / "meta.json").write_text(meta.model_dump_json(), encoding="utf-8")
+        # Atomic on POSIX: rename within the same directory is one syscall,
+        # so either the final path exists with every file or it doesn't
+        # exist at all.
+        staging.rename(final_dir)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
 
     record = FileRecord(
         file_id=file_id,

@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFileManager, FILE_ACCEPT } from '../../composables/useFileManager'
+import { validateUploadFile } from '../../api/uploadValidation'
+import { useToastStore } from '../../stores/toasts'
 
 // Edge-case overlay shown when the modal opens on a placement that
 // has no attached file at all (rare: typically a placement created via
@@ -17,6 +19,7 @@ import { useFileManager, FILE_ACCEPT } from '../../composables/useFileManager'
 
 const { t } = useI18n()
 const fm = useFileManager(t)
+const toasts = useToastStore()
 const dragOver = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -24,16 +27,30 @@ function openPicker(): void {
   fileInput.value?.click()
 }
 
+// Run client-side validation before staging the file in the editor.
+// Without this, an oversize / wrong-type drop would silently feed the
+// /preview scheduler and only surface as an error round-trips later —
+// and the operator would lose any draft edits when the upload finally
+// failed at the network layer.
+function acceptFile(file: File | null): void {
+  if (!file) return
+  const issue = validateUploadFile(file)
+  if (issue) {
+    toasts.error(issue.message)
+    return
+  }
+  fm.setFile(file)
+}
+
 function onFileChange(event: Event): void {
   const target = event.target as HTMLInputElement
-  fm.setFile(target.files?.[0] ?? null)
+  acceptFile(target.files?.[0] ?? null)
   target.value = ''
 }
 
 function onDrop(event: DragEvent): void {
   dragOver.value = false
-  const file = event.dataTransfer?.files?.[0]
-  if (file) fm.setFile(file)
+  acceptFile(event.dataTransfer?.files?.[0] ?? null)
 }
 
 function onDragOver(event: DragEvent): void {

@@ -15,6 +15,7 @@ import {
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
 import { useToastStore } from './toasts'
+import { validateUploadFile } from '../api/uploadValidation'
 
 // The library is the canonical store of uploaded sources. One entry per
 // unique SHA-256 (deduplication happens on the backend); placements on the
@@ -94,12 +95,36 @@ export const useLibraryStore = defineStore('library', () => {
 
   async function upload(
     file: File,
-    options: { folder?: string; convertOptions?: Record<string, unknown> } = {},
+    options: {
+      folder?: string
+      convertOptions?: Record<string, unknown>
+      onProgress?: (percent: number) => void
+      signal?: AbortSignal
+      // Skip surfacing toasts from this store — the upper-layer caller
+      // (job store) wants to drive its own progress toast and would
+      // otherwise show duplicates. Warnings + dedup info still get
+      // toasted because they have no equivalent on the caller side.
+      silent?: boolean
+    } = {},
   ): Promise<{ file: LibraryFileDetail; existing: boolean } | null> {
+    // Client-side guard — refuse before opening a network round-trip
+    // so the operator gets immediate feedback and an oversize / wrong-
+    // type file never even hits the server.
+    const validation = validateUploadFile(file)
+    if (validation) {
+      error.value = validation.message
+      if (!options.silent) useToastStore().error(validation.message)
+      return null
+    }
     loading.value = true
     error.value = null
     try {
-      const result = await uploadToLibrary(file, options.folder ?? '', options.convertOptions)
+      const result = await uploadToLibrary(
+        file,
+        options.folder ?? '',
+        options.convertOptions,
+        { onProgress: options.onProgress, signal: options.signal },
+      )
       _mergeRecord(result.file)
       detailCache.value = { ...detailCache.value, [result.file.file_id]: result.file }
       const toasts = useToastStore()
@@ -116,9 +141,21 @@ export const useLibraryStore = defineStore('library', () => {
       }
       return result
     } catch (err) {
+      // ``CanceledError`` is what axios throws when an AbortController
+      // fires; we surface a discreet info toast (not an error) and let
+      // the caller decide whether to retry.
+      const isCancelled = (err as { name?: string; code?: string }).name === 'CanceledError'
+        || (err as { code?: string }).code === 'ERR_CANCELED'
+      if (isCancelled) {
+        error.value = null
+        if (!options.silent) {
+          useToastStore().info(i18n.global.t('toast.uploadCancelled'))
+        }
+        return null
+      }
       const message = errorDetail(err, i18n.global.t('upload.failed'))
       error.value = message
-      useToastStore().error(message)
+      if (!options.silent) useToastStore().error(message)
       return null
     } finally {
       loading.value = false

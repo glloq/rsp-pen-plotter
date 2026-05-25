@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
+import { validateUploadFile } from '../api/uploadValidation'
 import { useLibraryStore } from './library'
 import { useToastStore } from './toasts'
 import {
@@ -574,7 +575,30 @@ export const useJobStore = defineStore('job', () => {
   // backend (deduplicated by SHA-256) and the selected placement is then
   // populated from the library entry. If no placement exists yet, a fresh
   // one is created so the rest of the editor has something to act on.
+  //
+  // Reactive AbortController for the in-flight POST. Exposed so the
+  // progress toast's Cancel button can fire ``abort()`` without keeping
+  // a closure-captured reference around — and so a second upload click
+  // bails before clobbering the placement.
+  let uploadController: AbortController | null = null
+
   async function upload(file: File, optionsOverride?: Record<string, unknown>): Promise<void> {
+    // Single-flight guard: a duplicate click while a POST is already
+    // in-flight would race with patchPlacement and could end up with
+    // ``last_file`` pointing at one bytes blob and the resulting SVG
+    // coming from the other.
+    if (loading.value) return
+    // Client-side validation (size, empty, extension). Surfaces the
+    // same error the backend would have returned, but without paying
+    // the upload cost — particularly important for large files.
+    const validation = validateUploadFile(file)
+    if (validation) {
+      const toasts = useToastStore()
+      toasts.error(validation.message)
+      error.value = validation.message
+      errorScope.value = 'upload'
+      return
+    }
     const preset = presets.value.find((p) => p.name === selectedPresetName.value)
     const options =
       preset?.options || optionsOverride ? { ...preset?.options, ...optionsOverride } : undefined
@@ -597,16 +621,51 @@ export const useJobStore = defineStore('job', () => {
     preflight.value = null
     const toasts = useToastStore()
     const library = useLibraryStore()
-    const toastId = toasts.progress(i18n.global.t('toast.uploading', { name: file.name }))
+    uploadController = new AbortController()
+    const controller = uploadController
+    // Show the initial "Uploading <name> (0%)" toast with an inline
+    // Cancel action. Once the body is fully transmitted, the message
+    // switches to "Converting on server…" — the operator sees the
+    // transition from network upload to server-side work, instead of
+    // a single opaque spinner.
+    const toastId = toasts.progress(
+      i18n.global.t('toast.uploadingPercent', { name: file.name, percent: 0 }),
+      {
+        label: i18n.global.t('upload.cancel'),
+        onClick: () => controller.abort(),
+      },
+    )
     try {
-      const result = await library.upload(file, { convertOptions: options })
+      const result = await library.upload(file, {
+        convertOptions: options,
+        signal: controller.signal,
+        silent: true,
+        onProgress: (percent: number) => {
+          if (controller.signal.aborted) return
+          const message = percent >= 100
+            ? i18n.global.t('toast.convertingOnServer', { name: file.name })
+            : i18n.global.t('toast.uploadingPercent', { name: file.name, percent })
+          toasts.update(toastId, 'progress', message, 0)
+        },
+      })
       if (!result) {
-        // library.upload already surfaced the error toast; just clear the
-        // progress one and bail.
-        toasts.dismiss(toastId)
+        if (controller.signal.aborted) {
+          // Operator cancelled — turn the progress toast into a brief
+          // info note so they see the action took effect.
+          toasts.update(
+            toastId,
+            'info',
+            i18n.global.t('toast.uploadCancelled'),
+            3000,
+          )
+        } else {
+          // library.upload swallowed the error silently; show the
+          // generic upload-failed message on the same toast.
+          toasts.update(toastId, 'error', i18n.global.t('upload.failed'), 6000)
+        }
         patchPlacement(targetId, { svg: '', layers: [] })
-        error.value = i18n.global.t('upload.failed')
-        errorScope.value = 'upload'
+        error.value = controller.signal.aborted ? null : i18n.global.t('upload.failed')
+        errorScope.value = controller.signal.aborted ? null : 'upload'
         return
       }
       const detail = result.file
@@ -648,7 +707,15 @@ export const useJobStore = defineStore('job', () => {
       toasts.update(toastId, 'error', message, 6000)
     } finally {
       loading.value = false
+      if (uploadController === controller) uploadController = null
     }
+  }
+
+  // Imperative cancel hook for callers (e.g. modal close, navigation
+  // guard) that need to abort an in-flight upload without going through
+  // the toast button.
+  function cancelUpload(): void {
+    uploadController?.abort()
   }
 
   // Create a new placement on the plan from an existing library entry.
@@ -1180,6 +1247,7 @@ export const useJobStore = defineStore('job', () => {
     saveProfile,
     deleteProfile,
     upload,
+    cancelUpload,
     createPlacementFromLibrary,
     optimize,
     runPreflight,
