@@ -1433,10 +1433,11 @@ export interface components {
          * GenerateRequest
          * @description Wire model for ``POST /generate``.
          *
-         *     Identical to :class:`PrintPlan` — kept as a named subclass so the
-         *     OpenAPI schema (and therefore the generated TypeScript types) reads
-         *     ``GenerateRequest`` at the endpoint boundary, while the rest of the
-         *     backend manipulates the domain type.
+         *     Identical to :class:`PrintPlan` plus an explicit override flag.
+         *     Kept as a named subclass so the OpenAPI schema (and therefore the
+         *     generated TypeScript types) reads ``GenerateRequest`` at the
+         *     endpoint boundary, while the rest of the backend manipulates the
+         *     domain type.
          */
         GenerateRequest: {
             /** Svg */
@@ -1458,6 +1459,11 @@ export interface components {
             margin_mm: number;
             placement?: components["schemas"]["PlacementPlan"] | null;
             metadata?: components["schemas"]["PlanMetadata"];
+            /**
+             * Allow Missing Slots
+             * @default false
+             */
+            allow_missing_slots: boolean;
         };
         /**
          * GenerateResponse

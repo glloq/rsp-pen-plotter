@@ -6,10 +6,12 @@
 
 import { errorDetail } from '../api/error'
 import {
+  asMissingPenSlots,
   generateGcode,
   optimizeToolpaths,
   preflightCheck,
   type LayerInfo,
+  type MissingPenSlotsDetail,
   type PreflightReport,
   type ToolpathMetrics,
 } from '../api/client'
@@ -41,6 +43,14 @@ export interface GeneratePipelineDeps {
   onPhase: (phase: Phase) => void
   /** Surface the aggregate optimize metrics. */
   onMetrics: (metrics: ToolpathMetrics | null) => void
+  /**
+   * Ask the operator whether to generate despite missing pen slots.
+   *
+   * Called when /generate returns 409. Returning ``true`` retries the
+   * call with ``allow_missing_slots=true``; returning ``false`` aborts
+   * the pipeline with a localized error.
+   */
+  confirmMissingPenSlots?: (detail: MissingPenSlotsDetail) => Promise<boolean>
   /** External abort signal — cancels every in-flight request. */
   signal: AbortSignal
 }
@@ -87,12 +97,27 @@ export async function runGeneratePipeline(
   // --- generate ---------------------------------------------------------
   if (deps.signal.aborted) throw new PipelineAbortedError()
   deps.onPhase('generate')
-  const generated = await generateGcode(plan, deps.signal)
+  const generated = await tryGenerateWithSlotOverride(plan, deps)
 
   return {
     gcode: generated.gcode,
     preflight,
     planHash: generated.plan_hash,
+  }
+}
+
+async function tryGenerateWithSlotOverride(
+  plan: PrintPlan,
+  deps: GeneratePipelineDeps,
+): Promise<Awaited<ReturnType<typeof generateGcode>>> {
+  try {
+    return await generateGcode(plan, deps.signal)
+  } catch (err) {
+    const missing = asMissingPenSlots(err)
+    if (!missing || !deps.confirmMissingPenSlots) throw err
+    const proceed = await deps.confirmMissingPenSlots(missing)
+    if (!proceed) throw err
+    return await generateGcode(plan, deps.signal, { allowMissingSlots: true })
   }
 }
 

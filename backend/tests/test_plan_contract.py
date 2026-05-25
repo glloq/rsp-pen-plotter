@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from pen_plotter.application.generate_service import run_generate
+from pen_plotter.application.generate_service import MissingPenSlotsError, run_generate
 from pen_plotter.application.plan_resolver import (
     PlanResolutionError,
     resolve_plan,
@@ -238,3 +238,46 @@ def test_resolver_rejects_negative_simplify_tolerance() -> None:
     )
     with pytest.raises(PlanResolutionError, match="simplify_tolerance_mm"):
         resolve_plan(plan, _profile())
+
+
+def test_generate_refuses_missing_pen_slot_by_default() -> None:
+    """The application service must refuse to render G-code asking for
+    pens the magazine does not have. Preflight already detected this;
+    generate now blocks instead of silently emitting M0 for a phantom
+    slot.
+    """
+    plan = _plan().model_copy(
+        update={"layers": [LayerPlan(layer_id="red", target_pen_slot=99)]}
+    )
+    with pytest.raises(MissingPenSlotsError) as info:
+        run_generate(plan, _profile())
+    assert info.value.slots == [99]
+
+
+def test_generate_allows_missing_pen_slot_when_overridden() -> None:
+    """The override is the deliberate path for operators who plan to
+    swap pens manually at the firmware M0 pause.
+    """
+    plan = _plan().model_copy(
+        update={"layers": [LayerPlan(layer_id="red", target_pen_slot=99)]}
+    )
+    outcome = run_generate(plan, _profile(), allow_missing_slots=True)
+    assert outcome.gcode  # non-empty
+    assert outcome.resolved.layers[0].pen_slot_installed is False
+
+
+def test_generate_aggregates_multiple_missing_slots() -> None:
+    """A plan with several missing slots reports them all at once so
+    the operator can install them in a single intervention.
+    """
+    plan = _plan().model_copy(
+        update={
+            "layers": [
+                LayerPlan(layer_id="red", target_pen_slot=99),
+                LayerPlan(layer_id="blue", target_pen_slot=42),
+            ]
+        }
+    )
+    with pytest.raises(MissingPenSlotsError) as info:
+        run_generate(plan, _profile())
+    assert info.value.slots == [42, 99]

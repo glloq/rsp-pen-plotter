@@ -7,6 +7,7 @@ import { useLibraryStore } from './library'
 import { useToastStore } from './toasts'
 import { useUiStore } from './ui'
 import { useEditState } from '../composables/useEditState'
+import { confirmAction } from '../composables/confirm'
 import {
   deleteProfile as apiDeleteProfile,
   saveProfile as apiSaveProfile,
@@ -1201,6 +1202,20 @@ export const useJobStore = defineStore('job', () => {
         },
         onMetrics: (m) => {
           if (m) metrics.value = m
+        },
+        confirmMissingPenSlots: async (detail) => {
+          // 409 from /generate. Surface a blocking dialog with the
+          // specific slot list so the operator decides knowingly.
+          // Confirming retries the call with allow_missing_slots=true.
+          return await confirmAction({
+            title: i18n.global.t('generate.missingSlots.title'),
+            message: i18n.global.t('generate.missingSlots.message', {
+              slots: detail.slots.join(', '),
+            }),
+            confirmLabel: i18n.global.t('generate.missingSlots.confirm'),
+            cancelLabel: i18n.global.t('generate.missingSlots.cancel'),
+            danger: true,
+          })
         },
         signal: controller.signal,
       })

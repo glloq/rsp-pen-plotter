@@ -281,9 +281,38 @@ export interface GenerateResponse {
 export async function generateGcode(
   plan: PrintPlan,
   signal?: AbortSignal,
+  options: { allowMissingSlots?: boolean } = {},
 ): Promise<GenerateResponse> {
-  const response = await api.post<GenerateResponse>('/generate', plan, { signal })
+  const body = options.allowMissingSlots ? { ...plan, allow_missing_slots: true } : plan
+  const response = await api.post<GenerateResponse>('/generate', body, { signal })
   return response.data
+}
+
+/** Shape of the 409 ``detail`` returned when /generate refuses missing slots. */
+export interface MissingPenSlotsDetail {
+  reason: 'missing_pen_slots'
+  slots: number[]
+  message: string
+}
+
+/**
+ * Recognise the structured 409 response from /generate so the UI can
+ * branch on it (prompt the operator, offer the override) instead of
+ * dumping the JSON detail into a toast.
+ */
+export function asMissingPenSlots(err: unknown): MissingPenSlotsDetail | null {
+  const status = (err as { response?: { status?: number } })?.response?.status
+  if (status !== 409) return null
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (
+    detail &&
+    typeof detail === 'object' &&
+    (detail as { reason?: unknown }).reason === 'missing_pen_slots' &&
+    Array.isArray((detail as { slots?: unknown }).slots)
+  ) {
+    return detail as MissingPenSlotsDetail
+  }
+  return null
 }
 
 export interface PreflightReport {
