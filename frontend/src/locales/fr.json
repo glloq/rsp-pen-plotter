@@ -799,7 +799,15 @@
     "zoomOut": "Zoom −",
     "resetView": "Recentrer",
     "manualPenChange": "Changement stylo manuel",
-    "manualPenChangeHint": "Pause avant chaque calque pour permuter le stylo à la main."
+    "manualPenChangeHint": "Pause avant chaque calque pour permuter le stylo à la main.",
+    "show": "Afficher",
+    "optTravel": "Déplacements",
+    "optPenEvents": "Levées / descentes",
+    "optColorChanges": "Changements de couleur",
+    "optPauses": "Pauses",
+    "colors": "Couleurs",
+    "colorAll": "Toutes",
+    "colorClickHint": "Cliquer pour basculer · double-cliquer pour isoler cette couleur."
   },
   "plotter": {
     "title": "Traceur",
@@ -922,5 +930,24 @@
     "cacheShortcut": "Raccourci : Ctrl + Maj + R (⌘ + Maj + R sur Mac)",
     "reloadNow": "Recharger maintenant",
     "close": "Fermer"
+  },
+  "gcodeJob": {
+    "titleRunning": "Calcul du G-code",
+    "titleSuccess": "G-code généré",
+    "titleCancelled": "Calcul annulé",
+    "titleError": "Échec du calcul",
+    "optimizing": "Optimisation des trajectoires…",
+    "preflighting": "Vérification pré-tracé…",
+    "generating": "Génération du G-code…",
+    "success": "Le G-code est prêt.",
+    "cancelled": "Le calcul a été interrompu.",
+    "elapsed": "Temps écoulé : {seconds} s",
+    "cancel": "Annuler le calcul",
+    "close": "Fermer",
+    "step": {
+      "optimize": "Optimisation des trajectoires",
+      "preflight": "Vérification pré-tracé",
+      "generate": "Génération du G-code"
+    }
   }
 }

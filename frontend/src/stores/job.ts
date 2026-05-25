@@ -5,6 +5,7 @@ import { i18n } from '../i18n'
 import { validateUploadFile } from '../api/uploadValidation'
 import { useLibraryStore } from './library'
 import { useToastStore } from './toasts'
+import { useUiStore } from './ui'
 import { useEditState } from '../composables/useEditState'
 import {
   deleteProfile as apiDeleteProfile,
@@ -1070,20 +1071,109 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
+  // Optimize every placement that has an SVG. Single-threaded — placements
+  // are processed in order so progress messages stay in sync. The shared
+  // abort signal stops the loop as soon as the operator cancels, even if
+  // the in-flight request itself doesn't honour the signal.
+  async function optimizeAllPlacements(signal: AbortSignal): Promise<ToolpathMetrics | null> {
+    let aggregate: ToolpathMetrics | null = null
+    let beforeSum = 0
+    let afterSum = 0
+    let hasMetrics = false
+    for (const placement of placements.value) {
+      if (signal.aborted) throw new DOMException('cancelled', 'AbortError')
+      if (!placement.svg || !placement.layers.length) continue
+      const result = await optimizeToolpaths(
+        placement.svg,
+        placement.layers.map((layer) => ({
+          layer_id: layer.layer_id,
+          optimize: layer.optimize,
+          simplify_tolerance_mm: layer.simplify_tolerance_mm,
+        })),
+        signal,
+      )
+      patchPlacement(placement.id, {
+        svg: result.svg,
+        layers: result.layers,
+        visibility: Object.fromEntries(result.layers.map((l) => [l.layer_id, true])),
+      })
+      beforeSum += result.metrics.pen_up_before_mm
+      afterSum += result.metrics.pen_up_after_mm
+      hasMetrics = true
+    }
+    if (hasMetrics) {
+      const reduction = beforeSum > 0 ? ((beforeSum - afterSum) / beforeSum) * 100 : 0
+      aggregate = {
+        pen_up_before_mm: beforeSum,
+        pen_up_after_mm: afterSum,
+        reduction_pct: reduction,
+      }
+    }
+    return aggregate
+  }
+
   async function generate(): Promise<void> {
     // Wait for any pending /rerender to land first — otherwise the
     // composite would bake in the previous variant's SVG, and the
     // operator would be confused why their just-picked print style
     // didn't make it into the toolpath.
     await flushRerender()
-    const payload = compositePayload()
-    if (!payload) return
+
+    const ready = placements.value.some((p) => p.svg && p.layers.length)
+    if (!ready) return
+
     generating.value = true
+    optimizing.value = true
     error.value = null
     errorScope.value = null
-    const toasts = useToastStore()
-    const toastId = toasts.progress(i18n.global.t('toast.generating'))
+    metrics.value = null
+    preflight.value = null
+    gcode.value = null
+
+    // Single AbortController drives every step so the modal's Cancel
+    // button stops whatever is in flight. Optimize+preflight+generate
+    // all receive the same signal.
+    const ui = useUiStore()
+    const controller = new AbortController()
+    ui.startGcodeJob('optimize', i18n.global.t('gcodeJob.optimizing'), () => controller.abort())
+
+    let phase: 'optimize' | 'preflight' | 'generate' = 'optimize'
     try {
+      // === Optimize all placements ====================================
+      const optimizedMetrics = await optimizeAllPlacements(controller.signal)
+      if (optimizedMetrics) metrics.value = optimizedMetrics
+      optimizing.value = false
+
+      // === Preflight composite ========================================
+      phase = 'preflight'
+      ui.updateGcodeJobStep('preflight', i18n.global.t('gcodeJob.preflighting'))
+      const payload = compositePayload()
+      if (!payload) {
+        ui.finishGcodeJob('error', i18n.global.t('layers.generateFailed'))
+        return
+      }
+      preflighting.value = true
+      preflight.value = await preflightCheck(
+        payload.svg,
+        selectedProfileName.value,
+        payload.layers.map((layer) => ({
+          layer_id: layer.layer_id,
+          target_pen_slot: layer.target_pen_slot,
+          drawing_speed_mm_s: layer.drawing_speed_mm_s,
+          source_color: layer.source_color,
+          color_label: layer.color_label,
+          pause_before: layer.pause_before,
+        })),
+        'actual',
+        0,
+        payload.placement,
+        controller.signal,
+      )
+      preflighting.value = false
+
+      // === Generate G-code ============================================
+      phase = 'generate'
+      ui.updateGcodeJobStep('generate', i18n.global.t('gcodeJob.generating'))
       const result = await generateGcode(
         payload.svg,
         selectedProfileName.value,
@@ -1098,16 +1188,39 @@ export const useJobStore = defineStore('job', () => {
         'actual',
         0,
         payload.placement,
+        controller.signal,
       )
       gcode.value = result.gcode
-      toasts.update(toastId, 'success', i18n.global.t('toast.generated'), 3000)
+      ui.finishGcodeJob('success', i18n.global.t('gcodeJob.success'))
+      // Auto-dismiss the success state after a short pause so the modal
+      // doesn't linger — the operator can already see the generated
+      // G-code / simulator tab update behind it.
+      setTimeout(() => {
+        if (ui.gcodeJobState.phase === 'success') ui.dismissGcodeJob()
+      }, 1500)
     } catch (err) {
-      const message = errorDetail(err, i18n.global.t('layers.generateFailed'))
-      error.value = message
-      errorScope.value = 'generate'
-      toasts.update(toastId, 'error', message, 6000)
+      const aborted =
+        controller.signal.aborted ||
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        ((err as { code?: string })?.code === 'ERR_CANCELED')
+      if (aborted) {
+        ui.finishGcodeJob('cancelled', i18n.global.t('gcodeJob.cancelled'))
+      } else {
+        const fallback =
+          phase === 'preflight'
+            ? i18n.global.t('preflight.failed')
+            : phase === 'optimize'
+              ? i18n.global.t('layers.optimizeFailed')
+              : i18n.global.t('layers.generateFailed')
+        const message = errorDetail(err, fallback)
+        error.value = message
+        errorScope.value = phase === 'optimize' ? 'optimize' : 'generate'
+        ui.finishGcodeJob('error', message, message)
+      }
     } finally {
       generating.value = false
+      optimizing.value = false
+      preflighting.value = false
     }
   }
 

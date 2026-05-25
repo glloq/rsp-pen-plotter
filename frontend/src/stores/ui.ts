@@ -11,6 +11,22 @@ export interface PreviewSheet {
 
 export type UpdatePhase = 'idle' | 'running' | 'success' | 'noop' | 'error'
 
+// State machine for the G-code generation progress modal. Mirrors the
+// shape of UpdateModalState but is driven by the job store's generate()
+// flow (optimize → preflight → generate). ``cancelled`` is a terminal
+// phase distinct from ``error`` so the modal can show a neutral message.
+export type GcodeJobPhase = 'idle' | 'running' | 'success' | 'cancelled' | 'error'
+
+export type GcodeJobStep = 'optimize' | 'preflight' | 'generate'
+
+export interface GcodeJobState {
+  phase: GcodeJobPhase
+  step: GcodeJobStep | null
+  message: string
+  error: string | null
+  startedAt: number | null
+}
+
 export interface UpdateModalState {
   phase: UpdatePhase
   // Free-form status line shown under the spinner (e.g. "Pulling latest…").
@@ -60,6 +76,67 @@ export const useUiStore = defineStore('ui', () => {
     forced: false,
     newCommitApplied: false,
   })
+
+  // G-code generation progress modal. ``cancelFn`` is the AbortController
+  // hook installed by job.generate(); the modal's Cancel button calls it
+  // to abort the in-flight POST. Lives on the store (rather than as a
+  // closure on the modal) so any caller — keyboard escape handler,
+  // toast, navigation guard — can trigger cancellation uniformly.
+  const gcodeJobState = ref<GcodeJobState>({
+    phase: 'idle',
+    step: null,
+    message: '',
+    error: null,
+    startedAt: null,
+  })
+  const gcodeJobCancel = ref<(() => void) | null>(null)
+
+  function startGcodeJob(step: GcodeJobStep, message: string, cancel: () => void): void {
+    gcodeJobCancel.value = cancel
+    gcodeJobState.value = {
+      phase: 'running',
+      step,
+      message,
+      error: null,
+      startedAt: Date.now(),
+    }
+  }
+
+  function updateGcodeJobStep(step: GcodeJobStep, message: string): void {
+    if (gcodeJobState.value.phase !== 'running') return
+    gcodeJobState.value = { ...gcodeJobState.value, step, message }
+  }
+
+  function finishGcodeJob(
+    phase: Exclude<GcodeJobPhase, 'idle' | 'running'>,
+    message: string,
+    error: string | null = null,
+  ): void {
+    gcodeJobCancel.value = null
+    gcodeJobState.value = {
+      phase,
+      step: gcodeJobState.value.step,
+      message,
+      error,
+      startedAt: gcodeJobState.value.startedAt,
+    }
+  }
+
+  function dismissGcodeJob(): void {
+    gcodeJobCancel.value = null
+    gcodeJobState.value = {
+      phase: 'idle',
+      step: null,
+      message: '',
+      error: null,
+      startedAt: null,
+    }
+  }
+
+  function cancelGcodeJob(): void {
+    const fn = gcodeJobCancel.value
+    if (fn) fn()
+  }
 
   const updateNotificationsEnabled = ref(loadUpdateNotifications())
   watch(updateNotificationsEnabled, (value) => {
@@ -162,5 +239,12 @@ export const useUiStore = defineStore('ui', () => {
     setUpdateMessage,
     finishUpdate,
     dismissUpdate,
+    gcodeJobState,
+    gcodeJobCancel,
+    startGcodeJob,
+    updateGcodeJobStep,
+    finishGcodeJob,
+    dismissGcodeJob,
+    cancelGcodeJob,
   }
 })
