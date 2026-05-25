@@ -181,6 +181,95 @@ def _record_to_detail(record: FileRecord) -> FileDetail:
     )
 
 
+def _options_changed(file_id: str, new_options: dict[str, Any]) -> bool:
+    """True when the operator's new conversion options differ from those
+    that produced the stored file. Empty / missing ``new_options`` is
+    treated as "no change" — a plain library-pick re-upload that just
+    wants the existing entry, not a settings edit.
+    """
+    if not new_options:
+        return False
+    meta = _read_meta(file_id)
+    stored = meta.bitmap_options or {}
+    # Use BitmapOptions to normalize both sides (drops keys the model
+    # doesn't know about, fills defaults). This way a request that only
+    # sets ``algorithm`` is compared against the same fully-populated
+    # object as the stored one — no false positives on missing-key vs
+    # default-value.
+    try:
+        from pen_plotter.converters.bitmap import BitmapOptions
+
+        a = BitmapOptions.model_validate(stored).model_dump()
+        b = BitmapOptions.model_validate({**stored, **new_options}).model_dump()
+        return a != b
+    except Exception:
+        # Non-bitmap source (no BitmapOptions): fall back to raw dict
+        # compare. Any new key or changed value re-processes.
+        return {**stored, **new_options} != stored
+
+
+def _reprocess_existing(
+    record: FileRecord,
+    data: bytes,
+    mime: str,
+    new_options: dict[str, Any],
+) -> FileRecord:
+    """Re-convert and overwrite the stored artefacts for an existing entry.
+
+    Keeps ``file_id`` and the SHA-256 stable so library references / the
+    /rerender cache key don't break; the operator's settings edit is
+    visible on the next /files/<id> read. Also refreshes the rerender
+    cache so the next /rerender skips the rehydration step.
+    """
+    from pen_plotter.api.rerender import forget_job, remember_job
+
+    converted = convert_file(data, record.source_file, mime, new_options)
+    directory = _file_dir(record.file_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "normalized.svg").write_text(converted.svg, encoding="utf-8")
+    # Refresh the on-disk original too — extension may differ if the
+    # operator re-uploaded the same content under a different filename.
+    original_target = directory / f"original{_ext_for(record.source_file, converted.source_mime)}"
+    for stale in directory.iterdir():
+        if stale.is_file() and stale.stem == "original" and stale != original_target:
+            stale.unlink(missing_ok=True)
+    original_target.write_bytes(data)
+    meta = FileMeta(
+        layers=converted.layers,
+        warnings=converted.warnings,
+        upload_metadata=converted.metadata,
+        rerenderable=converted.bitmap_segmentation is not None,
+        bitmap_options=(
+            converted.bitmap_options.model_dump()
+            if converted.bitmap_options is not None
+            else None
+        ),
+    )
+    (directory / "meta.json").write_text(meta.model_dump_json(), encoding="utf-8")
+
+    # Update DB row: layer_count and source_mime may have shifted; keep
+    # file_id, sha256, folder, created_at.
+    updated = FileRecord(
+        file_id=record.file_id,
+        sha256=record.sha256,
+        source_file=record.source_file,
+        source_mime=converted.source_mime,
+        size_bytes=len(data),
+        layer_count=len(converted.layers),
+        folder=record.folder,
+        created_at=record.created_at,
+    )
+    save_file_record(updated)
+
+    # Refresh the /rerender cache so the segmentation matches the new
+    # SVG. Dropping the old entry first avoids a stale palette + new
+    # algorithm mismatch on the next request.
+    forget_job(record.file_id)
+    if converted.bitmap_segmentation is not None and converted.bitmap_options is not None:
+        remember_job(record.file_id, converted.bitmap_segmentation, converted.bitmap_options)
+    return updated
+
+
 def _ext_for(filename: str | None, mime: str) -> str:
     """Pick a sensible extension for the stored original."""
     if filename and "." in filename:
@@ -214,19 +303,29 @@ async def upload_to_library(
 
     If a file with the same SHA-256 already exists, the existing record is
     returned and ``existing`` is ``true`` — no second copy is stored.
+    Exception: when the request carries conversion ``options`` (e.g. the
+    operator changed the bitmap algorithm or palette in SourceSection and
+    clicked Apply), and those options differ from what was used last time,
+    we re-process the file in place — overwriting ``normalized.svg`` and
+    ``meta.json`` — instead of silently returning the stale conversion.
+    Without this branch the operator's option edits would never reach the
+    plotter, because the editor re-uploads the same bytes to apply changes.
     """
     mime = resolve_mime(file)
     if mime is None:
         raise HTTPException(status_code=415, detail="Could not determine file type")
 
     data = await read_upload_safely(file, MAX_UPLOAD_BYTES)
+    parsed_options = parse_options(options)
 
     digest = hashlib.sha256(data).hexdigest()
     existing = get_file_record_by_hash(digest)
     if existing is not None:
+        if _options_changed(existing.file_id, parsed_options):
+            updated = _reprocess_existing(existing, data, mime, parsed_options)
+            return FileUploadResponse(file=_record_to_detail(updated), existing=True)
         return FileUploadResponse(file=_record_to_detail(existing), existing=True)
 
-    parsed_options = parse_options(options)
     converted = convert_file(data, file.filename, mime, parsed_options)
 
     file_id = str(uuid.uuid4())
