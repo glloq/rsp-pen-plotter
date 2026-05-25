@@ -1669,12 +1669,22 @@ export interface components {
         };
         /**
          * LayerPlan
-         * @description Per-layer print settings — the unified type replacing the old
-         *     ``GenerateLayer`` Pydantic model and ``LayerGeneration`` dataclass.
+         * @description Per-layer print settings — the unified pivot type.
          *
-         *     Every field is optional except ``layer_id``; defaults are filled in
-         *     later by :func:`pen_plotter.application.plan_resolver.resolve_plan`
-         *     using the active machine profile.
+         *     Replaces the old ``GenerateLayer`` Pydantic model and
+         *     ``LayerGeneration`` dataclass. Every field is optional except
+         *     ``layer_id``; defaults are filled in later by
+         *     :func:`pen_plotter.application.plan_resolver.resolve_plan` using
+         *     the active machine profile.
+         *
+         *     Note on ``optimize`` / ``simplify_tolerance_mm``: today the SVG
+         *     inside the surrounding :class:`PrintPlan` is already optimized by
+         *     the frontend's ``optimize → preflight → generate`` pipeline, so
+         *     these fields are traceability data — they ride along into the
+         *     resolved plan and the persisted snapshot, and they participate in
+         *     ``plan_hash`` so equal SVG + different optimize intent cannot
+         *     collide. A later refactor (lot L3+) will let the application
+         *     services drive optimization directly from these fields.
          */
         LayerPlan: {
             /** Layer Id */
@@ -1693,6 +1703,13 @@ export interface components {
              * @enum {string}
              */
             pause_before: "auto" | "always" | "never";
+            /**
+             * Optimize
+             * @default true
+             */
+            optimize: boolean;
+            /** Simplify Tolerance Mm */
+            simplify_tolerance_mm?: number | null;
         };
         /**
          * MachineProfile
@@ -2094,8 +2111,9 @@ export interface components {
          * @description A layer with every setting resolved against the active profile.
          *
          *     No ``None`` survives here: ``drawing_speed_mm_s`` falls back to the
-         *     profile speed, and ``pause_before`` is replaced by the literal
-         *     decision (``"pause"`` / ``"skip"``) the engine will follow.
+         *     profile speed, ``simplify_tolerance_mm`` falls back to the engine
+         *     default (0.05), and ``pause_before`` keeps the operator's choice
+         *     (``"auto"`` / ``"always"`` / ``"never"``) for the engine to act on.
          */
         ResolvedLayer: {
             /** Layer Id */
@@ -2115,6 +2133,10 @@ export interface components {
             pause_before: "auto" | "always" | "never";
             /** Pen Slot Installed */
             pen_slot_installed: boolean;
+            /** Optimize */
+            optimize: boolean;
+            /** Simplify Tolerance Mm */
+            simplify_tolerance_mm: number;
         };
         /**
          * ResolvedPlan

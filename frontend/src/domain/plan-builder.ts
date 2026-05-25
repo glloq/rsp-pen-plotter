@@ -22,6 +22,13 @@ export function toLayerPlan(layer: LayerInfo): LayerPlan {
     source_color: layer.source_color,
     color_label: layer.color_label,
     pause_before: layer.pause_before,
+    // ``optimize`` / ``simplify_tolerance_mm`` are operator-controlled
+    // per-layer settings already consumed by the upstream /optimize call
+    // (see runGeneratePipeline). We forward them into the plan so that
+    // the resolved snapshot, the plan_hash and any future in-pipeline
+    // optimizer all observe the same intent.
+    optimize: layer.optimize,
+    simplify_tolerance_mm: layer.simplify_tolerance_mm,
   }
 }
 

@@ -30,6 +30,11 @@ def validate_layer(layer: LayerPlan) -> None:
             f"Layer {layer.layer_id!r}: target_pen_slot must be >= 0 "
             f"(got {layer.target_pen_slot})."
         )
+    if layer.simplify_tolerance_mm is not None and layer.simplify_tolerance_mm < 0:
+        raise PlanValidationError(
+            f"Layer {layer.layer_id!r}: simplify_tolerance_mm must be >= 0 "
+            f"(got {layer.simplify_tolerance_mm})."
+        )
 
 
 def validate_plan(plan: PrintPlan) -> None:

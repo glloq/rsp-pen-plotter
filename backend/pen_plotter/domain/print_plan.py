@@ -40,6 +40,15 @@ class LayerPlan(BaseModel):
     ``layer_id``; defaults are filled in later by
     :func:`pen_plotter.application.plan_resolver.resolve_plan` using
     the active machine profile.
+
+    Note on ``optimize`` / ``simplify_tolerance_mm``: today the SVG
+    inside the surrounding :class:`PrintPlan` is already optimized by
+    the frontend's ``optimize → preflight → generate`` pipeline, so
+    these fields are traceability data — they ride along into the
+    resolved plan and the persisted snapshot, and they participate in
+    ``plan_hash`` so equal SVG + different optimize intent cannot
+    collide. A later refactor (lot L3+) will let the application
+    services drive optimization directly from these fields.
     """
 
     layer_id: str
@@ -48,6 +57,8 @@ class LayerPlan(BaseModel):
     source_color: str | None = None
     color_label: str | None = None
     pause_before: PausePolicy = "auto"
+    optimize: bool = True
+    simplify_tolerance_mm: float | None = None
 
 
 class PlanMetadata(BaseModel):
@@ -79,12 +90,16 @@ class PrintPlan(BaseModel):
     metadata: PlanMetadata = Field(default_factory=PlanMetadata)
 
 
+_DEFAULT_SIMPLIFY_TOLERANCE_MM = 0.05
+
+
 class ResolvedLayer(BaseModel):
     """A layer with every setting resolved against the active profile.
 
     No ``None`` survives here: ``drawing_speed_mm_s`` falls back to the
-    profile speed, and ``pause_before`` is replaced by the literal
-    decision (``"pause"`` / ``"skip"``) the engine will follow.
+    profile speed, ``simplify_tolerance_mm`` falls back to the engine
+    default (0.05), and ``pause_before`` keeps the operator's choice
+    (``"auto"`` / ``"always"`` / ``"never"``) for the engine to act on.
     """
 
     layer_id: str
@@ -94,6 +109,8 @@ class ResolvedLayer(BaseModel):
     color_label: str | None
     pause_before: PausePolicy
     pen_slot_installed: bool
+    optimize: bool
+    simplify_tolerance_mm: float
 
 
 class ResolvedPlan(BaseModel):

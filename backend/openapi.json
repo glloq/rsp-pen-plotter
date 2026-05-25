@@ -3812,6 +3812,22 @@
             ],
             "title": "Pause Before",
             "default": "auto"
+          },
+          "optimize": {
+            "type": "boolean",
+            "title": "Optimize",
+            "default": true
+          },
+          "simplify_tolerance_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simplify Tolerance Mm"
           }
         },
         "type": "object",
@@ -3819,7 +3835,7 @@
           "layer_id"
         ],
         "title": "LayerPlan",
-        "description": "Per-layer print settings \u2014 the unified type replacing the old\n``GenerateLayer`` Pydantic model and ``LayerGeneration`` dataclass.\n\nEvery field is optional except ``layer_id``; defaults are filled in\nlater by :func:`pen_plotter.application.plan_resolver.resolve_plan`\nusing the active machine profile."
+        "description": "Per-layer print settings \u2014 the unified pivot type.\n\nReplaces the old ``GenerateLayer`` Pydantic model and\n``LayerGeneration`` dataclass. Every field is optional except\n``layer_id``; defaults are filled in later by\n:func:`pen_plotter.application.plan_resolver.resolve_plan` using\nthe active machine profile.\n\nNote on ``optimize`` / ``simplify_tolerance_mm``: today the SVG\ninside the surrounding :class:`PrintPlan` is already optimized by\nthe frontend's ``optimize \u2192 preflight \u2192 generate`` pipeline, so\nthese fields are traceability data \u2014 they ride along into the\nresolved plan and the persisted snapshot, and they participate in\n``plan_hash`` so equal SVG + different optimize intent cannot\ncollide. A later refactor (lot L3+) will let the application\nservices drive optimization directly from these fields."
       },
       "MachineProfile": {
         "properties": {
@@ -4658,6 +4674,14 @@
           "pen_slot_installed": {
             "type": "boolean",
             "title": "Pen Slot Installed"
+          },
+          "optimize": {
+            "type": "boolean",
+            "title": "Optimize"
+          },
+          "simplify_tolerance_mm": {
+            "type": "number",
+            "title": "Simplify Tolerance Mm"
           }
         },
         "type": "object",
@@ -4668,10 +4692,12 @@
           "source_color",
           "color_label",
           "pause_before",
-          "pen_slot_installed"
+          "pen_slot_installed",
+          "optimize",
+          "simplify_tolerance_mm"
         ],
         "title": "ResolvedLayer",
-        "description": "A layer with every setting resolved against the active profile.\n\nNo ``None`` survives here: ``drawing_speed_mm_s`` falls back to the\nprofile speed, and ``pause_before`` is replaced by the literal\ndecision (``\"pause\"`` / ``\"skip\"``) the engine will follow."
+        "description": "A layer with every setting resolved against the active profile.\n\nNo ``None`` survives here: ``drawing_speed_mm_s`` falls back to the\nprofile speed, ``simplify_tolerance_mm`` falls back to the engine\ndefault (0.05), and ``pause_before`` keeps the operator's choice\n(``\"auto\"`` / ``\"always\"`` / ``\"never\"``) for the engine to act on."
       },
       "ResolvedPlan": {
         "properties": {
