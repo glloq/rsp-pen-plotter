@@ -12,7 +12,6 @@ import math
 from typing import Any, ClassVar
 from xml.sax.saxutils import quoteattr
 
-import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms.base import RasterAlgorithm

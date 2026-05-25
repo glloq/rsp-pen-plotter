@@ -75,7 +75,7 @@ def find_original(file_id: str) -> Path | None:
     return _find_original(file_id)
 
 
-def read_meta(file_id: str) -> "FileMeta | None":
+def read_meta(file_id: str) -> FileMeta | None:
     """Return the parsed meta.json for ``file_id``, or ``None`` if absent."""
     path = _meta_path(file_id)
     if not path.is_file():

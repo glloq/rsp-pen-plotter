@@ -59,7 +59,7 @@ class _CacheEntry:
         self.options = options
 
 
-_CACHE: "OrderedDict[str, _CacheEntry]" = OrderedDict()
+_CACHE: OrderedDict[str, _CacheEntry] = OrderedDict()
 
 
 def remember_job(job_id: str, segmentation: SegmentationResult, options: BitmapOptions) -> None:
@@ -80,7 +80,7 @@ def _clear_cache_for_tests() -> None:
     _CACHE.clear()
 
 
-def _try_rehydrate(job_id: str) -> "_CacheEntry | None":
+def _try_rehydrate(job_id: str) -> _CacheEntry | None:
     """Re-segment from disk when the in-memory cache lost the job.
 
     Looks up ``job_id`` in the library; if a record exists, it's a bitmap

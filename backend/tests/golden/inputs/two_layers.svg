@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="200" height="200" viewBox="0 0 200 200">
+  <g inkscape:groupmode="layer" inkscape:label="red">
+    <path d="M 20 20 L 80 20 L 80 80 L 20 80 Z" fill="none" stroke="#ff0000" stroke-width="1"/>
+  </g>
+  <g inkscape:groupmode="layer" inkscape:label="blue">
+    <path d="M 120 120 L 180 120 L 180 180 L 120 180 Z" fill="none" stroke="#0000ff" stroke-width="1"/>
+  </g>
+</svg>

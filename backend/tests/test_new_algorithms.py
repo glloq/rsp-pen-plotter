@@ -21,7 +21,6 @@ from pen_plotter.converters.algorithms import (
     FlowFieldAlgorithm,
     GosperFillAlgorithm,
     HilbertFillAlgorithm,
-    ScanlinesAlgorithm,
     SpiralAlgorithm,
     TspAlgorithm,
     TspOptimizedAlgorithm,
