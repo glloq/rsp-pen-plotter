@@ -42,6 +42,11 @@ const panX = ref(0)
 const panY = ref(0)
 const snapMm = ref(0)
 const snapOptions = [0, 1, 5, 10]
+// Aspect-ratio lock for resize gestures. Defaults to locked because
+// plotter sources (typography, vectors, raster bitmaps) almost always
+// want to preserve proportions; the toolbar toggle lets the operator
+// stretch a placement deliberately.
+const aspectLock = ref(true)
 
 // Reactive sources for the geometry composable. The composable
 // recomputes when any of these change; the SheetCanvas + PlacementHandles
@@ -462,6 +467,51 @@ function pxToMm(): number {
 
       <div class="h-5 w-px bg-slate-700 mx-1" />
 
+      <button
+        type="button"
+        class="rounded border px-2 py-1 hover:bg-slate-800"
+        :class="
+          aspectLock
+            ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300'
+        "
+        :title="aspectLock ? t('sheet.aspectLockOn') : t('sheet.aspectLockOff')"
+        :aria-label="aspectLock ? t('sheet.aspectLockOn') : t('sheet.aspectLockOff')"
+        :aria-pressed="aspectLock"
+        @click="aspectLock = !aspectLock"
+      >
+        <svg
+          v-if="aspectLock"
+          viewBox="0 0 16 16"
+          class="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3.5" y="7" width="9" height="6" rx="1" />
+          <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+        </svg>
+        <svg
+          v-else
+          viewBox="0 0 16 16"
+          class="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3.5" y="7" width="9" height="6" rx="1" />
+          <path d="M5.5 7V5a2.5 2.5 0 0 1 4.6-1" />
+        </svg>
+      </button>
+
+      <div class="h-5 w-px bg-slate-700 mx-1" />
+
       <label class="flex items-center gap-1" :title="t('sheet.snap')">
         <svg
           viewBox="0 0 16 16"
@@ -555,6 +605,7 @@ function pxToMm(): number {
             :px-to-mm="pxToMm"
             :snap="snap"
             :snap-active="snapMm > 0"
+            :aspect-lock="aspectLock"
             :loading="store.loading"
             @select="onPlacementSelect"
             @move="onPlacementMove"

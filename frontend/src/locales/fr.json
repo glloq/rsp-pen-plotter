@@ -664,7 +664,9 @@
     "rotateLeft": "Rotation −90°",
     "rotateRight": "Rotation +90°",
     "flipH": "Miroir horizontal",
-    "flipV": "Miroir vertical"
+    "flipV": "Miroir vertical",
+    "aspectLockOn": "Proportions verrouillées — cliquer pour redimensionner librement",
+    "aspectLockOff": "Redimensionnement libre — cliquer pour verrouiller les proportions"
   },
   "typography": {
     "fontSection": "Police",
