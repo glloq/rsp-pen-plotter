@@ -432,107 +432,121 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 
 <template>
   <section v-if="sim" class="flex h-full min-h-0 flex-col rounded-lg border border-slate-700 bg-slate-800/60">
-    <div class="flex flex-wrap items-center gap-2 border-b border-slate-700 px-4 py-2">
-      <h2 class="mr-auto text-sm uppercase tracking-wide text-slate-400">
-        {{ t('simulator.title') }}
-      </h2>
+    <!-- Single compact toolbar — playback, zoom and display toggles all
+         live on the same row. The zoom group is rendered with a heavier
+         border + larger glyphs so it remains the most visually obvious
+         control cluster (operators reach for it constantly during scrub
+         playback). Display toggles are pill buttons that highlight when
+         active, which fits more controls in less vertical space than a
+         checkbox grid did. -->
+    <div class="flex flex-wrap items-center gap-1.5 border-b border-slate-700 px-3 py-1.5 text-xs">
       <button
         type="button"
-        class="rounded bg-emerald-600 hover:bg-emerald-500 px-3 py-1 text-sm text-white"
+        class="rounded bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 font-medium text-white"
         @click="playing ? pause() : play()"
       >
         {{ playing ? t('simulator.pause') : t('simulator.play') }}
       </button>
       <button
         type="button"
-        class="rounded bg-slate-700 hover:bg-slate-600 px-3 py-1 text-sm text-slate-100"
+        class="rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-slate-100"
+        :title="t('simulator.restart')"
         @click="restart"
-      >
-        {{ t('simulator.restart') }}
-      </button>
+      >⟲</button>
       <button
         v-for="s in speeds"
         :key="s"
         type="button"
-        class="rounded px-2 py-1 text-sm"
-        :class="speed === s ? 'bg-sky-600 text-white' : 'bg-slate-700 text-slate-200'"
+        class="rounded px-1.5 py-1 font-mono"
+        :class="speed === s ? 'bg-sky-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'"
         @click="speed = s"
       >
         {{ s }}×
       </button>
       <button
         type="button"
-        class="rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-sm text-slate-100"
+        class="rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-slate-100"
+        :title="t('simulator.end')"
         @click="jumpToEnd"
-      >
-        {{ t('simulator.end') }}
-      </button>
-    </div>
+      >⏭</button>
 
-    <div class="flex flex-wrap items-center gap-2 border-b border-slate-700 px-4 py-1.5 text-xs">
-      <div class="flex items-center gap-1">
+      <!-- Zoom cluster — boxed, bold, slightly taller than its neighbours. -->
+      <div
+        class="ml-1 flex items-center gap-0.5 rounded-md border border-sky-700/70 bg-slate-900 px-0.5 py-0.5 shadow-sm"
+      >
         <button
           type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800"
+          class="rounded px-2 py-0.5 text-base font-bold text-sky-200 hover:bg-slate-800"
           :title="t('simulator.zoomOut')"
           @click="zoomOut"
         >−</button>
-        <span class="w-12 text-center font-mono text-slate-300">{{ Math.round(viewZoom * 100) }}%</span>
+        <span class="w-11 text-center font-mono text-[11px] text-slate-300">{{ Math.round(viewZoom * 100) }}%</span>
         <button
           type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800"
+          class="rounded px-2 py-0.5 text-base font-bold text-sky-200 hover:bg-slate-800"
           :title="t('simulator.zoomIn')"
           @click="zoomIn"
         >+</button>
         <button
           type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:bg-slate-800"
+          class="rounded px-1.5 py-0.5 text-slate-200 hover:bg-slate-800"
+          :title="t('simulator.resetView')"
           @click="resetView"
-        >
-          {{ t('simulator.resetView') }}
-        </button>
+        >⤢</button>
       </div>
+
+      <!-- Display toggles as pill buttons. Each pill highlights with a
+           colour that matches its marker glyph on the canvas so the
+           legend is implicit (travel = sky, pen events = amber, etc.). -->
+      <button
+        type="button"
+        class="rounded border px-1.5 py-1"
+        :class="showTravel
+          ? 'border-sky-500 bg-sky-600/30 text-sky-100'
+          : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'"
+        :title="t('simulator.optTravel')"
+        @click="showTravel = !showTravel"
+      >⤳</button>
+      <button
+        type="button"
+        class="rounded border px-1.5 py-1"
+        :class="showPenEvents
+          ? 'border-amber-500 bg-amber-600/30 text-amber-100'
+          : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'"
+        :title="t('simulator.optPenEvents')"
+        @click="showPenEvents = !showPenEvents"
+      >▲▼</button>
+      <button
+        type="button"
+        class="rounded border px-1.5 py-1"
+        :class="showColorChanges
+          ? 'border-emerald-500 bg-emerald-600/30 text-emerald-100'
+          : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'"
+        :title="t('simulator.optColorChanges')"
+        @click="showColorChanges = !showColorChanges"
+      >●</button>
+      <button
+        type="button"
+        class="rounded border px-1.5 py-1"
+        :class="showPauses
+          ? 'border-amber-500 bg-amber-600/30 text-amber-100'
+          : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'"
+        :title="t('simulator.optPauses')"
+        @click="showPauses = !showPauses"
+      >❚❚</button>
 
       <label
         v-if="!isMultiColor"
-        class="ml-auto flex items-center gap-2 text-slate-300"
+        class="ml-auto flex items-center gap-1.5 text-slate-300"
         :title="t('simulator.manualPenChangeHint')"
       >
         <input
           type="checkbox"
           :checked="manualPenChange"
-          class="h-4 w-4 accent-emerald-500"
+          class="h-3.5 w-3.5 accent-emerald-500"
           @change="(e) => (manualPenChange = (e.target as HTMLInputElement).checked)"
         />
         {{ t('simulator.manualPenChange') }}
-      </label>
-    </div>
-
-    <!-- Display-option toggles. Each toggles a different layer of preview
-         data; the user can mix-and-match (e.g. only show travel + colour
-         changes to audit the toolpath, or filter by colour to inspect a
-         single ink). The colour chips below appear only when the parsed
-         G-code carried tool-change markers — otherwise there's nothing
-         useful to filter on. -->
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-700 px-4 py-1.5 text-xs">
-      <span class="font-medium uppercase tracking-wide text-slate-500">
-        {{ t('simulator.show') }}
-      </span>
-      <label class="flex items-center gap-1.5 text-slate-300">
-        <input v-model="showTravel" type="checkbox" class="h-4 w-4 accent-sky-500" />
-        {{ t('simulator.optTravel') }}
-      </label>
-      <label class="flex items-center gap-1.5 text-slate-300">
-        <input v-model="showPenEvents" type="checkbox" class="h-4 w-4 accent-amber-500" />
-        {{ t('simulator.optPenEvents') }}
-      </label>
-      <label class="flex items-center gap-1.5 text-slate-300">
-        <input v-model="showColorChanges" type="checkbox" class="h-4 w-4 accent-emerald-500" />
-        {{ t('simulator.optColorChanges') }}
-      </label>
-      <label class="flex items-center gap-1.5 text-slate-300">
-        <input v-model="showPauses" type="checkbox" class="h-4 w-4 accent-amber-400" />
-        {{ t('simulator.optPauses') }}
       </label>
     </div>
 
