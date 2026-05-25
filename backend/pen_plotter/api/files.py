@@ -398,6 +398,88 @@ async def upload_to_library(
     return FileUploadResponse(file=_record_to_detail(record), existing=False)
 
 
+class IntegrityIssue(BaseModel):
+    """One library entry that cannot be re-rendered today.
+
+    Surfaced by :func:`integrity_scan` so the UI can show a banner and
+    let the operator re-upload the affected files rather than discover
+    the problem when they click Edit.
+    """
+
+    file_id: str
+    source_file: str
+    reason: str
+
+
+class IntegrityReport(BaseModel):
+    """Summary returned by ``GET /files/integrity``."""
+
+    checked: int
+    rerenderable: int
+    issues: list[IntegrityIssue]
+
+
+def integrity_scan() -> IntegrityReport:
+    """Walk the library and flag rerenderable entries that have lost their state.
+
+    Detects the same failure modes the rerender rehydration path checks
+    (missing bitmap_options, missing original bytes, corrupt options) so
+    operators get a single place to see and resolve them.
+    """
+    issues: list[IntegrityIssue] = []
+    records = list_file_records()
+    rerenderable_count = 0
+    for record in records:
+        meta = read_meta(record.file_id)
+        if meta is None or not meta.rerenderable:
+            continue
+        rerenderable_count += 1
+        if not meta.bitmap_options:
+            issues.append(
+                IntegrityIssue(
+                    file_id=record.file_id,
+                    source_file=record.source_file,
+                    reason="missing_bitmap_options",
+                )
+            )
+            continue
+        original = _find_original(record.file_id)
+        if original is None or not original.is_file():
+            issues.append(
+                IntegrityIssue(
+                    file_id=record.file_id,
+                    source_file=record.source_file,
+                    reason="missing_original_bytes",
+                )
+            )
+            continue
+        try:
+            from pen_plotter.converters.bitmap import BitmapOptions
+
+            BitmapOptions.model_validate(meta.bitmap_options)
+        except Exception:
+            issues.append(
+                IntegrityIssue(
+                    file_id=record.file_id,
+                    source_file=record.source_file,
+                    reason="corrupt_bitmap_options",
+                )
+            )
+    return IntegrityReport(
+        checked=len(records), rerenderable=rerenderable_count, issues=issues
+    )
+
+
+@router.get("/files/integrity")
+async def files_integrity() -> IntegrityReport:
+    """Return the integrity report for the file library.
+
+    Lets the UI surface a banner ("3 file(s) need re-upload to support
+    style editing") instead of failing on the next /rerender click.
+    """
+    return integrity_scan()
+
+
 @router.get("/files")
 async def list_files(
     folder: str | None = Query(default=None),

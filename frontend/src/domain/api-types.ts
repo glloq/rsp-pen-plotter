@@ -62,6 +62,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/files/integrity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Files Integrity
+         * @description Return the integrity report for the file library.
+         *
+         *     Lets the UI surface a banner ("3 file(s) need re-upload to support
+         *     style editing") instead of failing on the next /rerender click.
+         */
+        get: operations["files_integrity_files_integrity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files/folders": {
         parameters: {
             query?: never;
@@ -1514,6 +1537,34 @@ export interface components {
             yaml: string;
         };
         /**
+         * IntegrityIssue
+         * @description One library entry that cannot be re-rendered today.
+         *
+         *     Surfaced by :func:`integrity_scan` so the UI can show a banner and
+         *     let the operator re-upload the affected files rather than discover
+         *     the problem when they click Edit.
+         */
+        IntegrityIssue: {
+            /** File Id */
+            file_id: string;
+            /** Source File */
+            source_file: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * IntegrityReport
+         * @description Summary returned by ``GET /files/integrity``.
+         */
+        IntegrityReport: {
+            /** Checked */
+            checked: number;
+            /** Rerenderable */
+            rerenderable: number;
+            /** Issues */
+            issues: components["schemas"]["IntegrityIssue"][];
+        };
+        /**
          * Job
          * @description Tracks a single file through the conversion-to-plot lifecycle.
          */
@@ -2432,6 +2483,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    files_integrity_files_integrity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrityReport"];
                 };
             };
         };

@@ -80,7 +80,19 @@ def _clear_cache_for_tests() -> None:
     _CACHE.clear()
 
 
-def _try_rehydrate(job_id: str) -> _CacheEntry | None:
+# Rehydration outcomes. The endpoint exposes the failure reason as a
+# machine-readable ``detail.reason`` so the UI can pick a precise prompt
+# ("re-upload this file") instead of a generic 404 toast.
+REHYDRATE_OK = "ok"
+REHYDRATE_UNKNOWN = "unknown_job"
+REHYDRATE_VECTOR = "not_rerenderable"
+REHYDRATE_NO_OPTIONS = "missing_bitmap_options"
+REHYDRATE_NO_ORIGINAL = "missing_original_bytes"
+REHYDRATE_CORRUPT_OPTIONS = "corrupt_bitmap_options"
+REHYDRATE_SEGMENT_FAILED = "segmentation_failed"
+
+
+def _try_rehydrate(job_id: str) -> tuple[_CacheEntry | None, str]:
     """Re-segment from disk when the in-memory cache lost the job.
 
     Looks up ``job_id`` in the library; if a record exists, it's a bitmap
@@ -89,8 +101,9 @@ def _try_rehydrate(job_id: str) -> _CacheEntry | None:
     same options the operator picked at upload time. The resulting entry
     is stashed in ``_CACHE`` so further re-renders skip this rehydration.
 
-    Returns ``None`` when the file is unknown, vector-only, or the
-    original / options can't be loaded — the caller then raises 404.
+    Returns a ``(entry, reason)`` pair: ``entry`` is ``None`` on every
+    failure path and ``reason`` carries one of the ``REHYDRATE_*`` codes
+    above so the caller can surface a precise 404 detail.
     """
     # Imported lazily to avoid a top-level circular import between
     # rerender.py and files.py (files.py imports remember_job).
@@ -99,27 +112,40 @@ def _try_rehydrate(job_id: str) -> _CacheEntry | None:
 
     record = get_file_record(job_id)
     if record is None:
-        return None
+        return None, REHYDRATE_UNKNOWN
     meta = read_meta(job_id)
-    if meta is None or not meta.rerenderable or not meta.bitmap_options:
-        return None
+    if meta is None or not meta.rerenderable:
+        return None, REHYDRATE_VECTOR
+    if not meta.bitmap_options:
+        # Legacy file uploaded before bitmap_options was persisted, or
+        # meta.json edited / corrupted. Operator must re-upload to
+        # restore the rerender capability.
+        _log.warning(
+            "Rerender rehydration: %s has rerenderable=True but no bitmap_options", job_id
+        )
+        return None, REHYDRATE_NO_OPTIONS
     original = find_original(job_id)
     if original is None or not original.is_file():
-        return None
+        _log.warning("Rerender rehydration: %s has no original bytes on disk", job_id)
+        return None, REHYDRATE_NO_ORIGINAL
     try:
         options = BitmapOptions.model_validate(meta.bitmap_options)
+    except Exception as exc:
+        _log.warning("Rerender rehydration: %s has invalid bitmap_options: %s", job_id, exc)
+        return None, REHYDRATE_CORRUPT_OPTIONS
+    try:
         data = original.read_bytes()
         _result, segmentation = BitmapConverter().segment_and_render(
             data, options=meta.bitmap_options
         )
     except Exception as exc:
-        _log.warning("Rerender cache rehydration failed for %s: %s", job_id, exc)
-        return None
+        _log.warning("Rerender rehydration: %s segmentation failed: %s", job_id, exc)
+        return None, REHYDRATE_SEGMENT_FAILED
     entry = _CacheEntry(segmentation, options)
     _CACHE[job_id] = entry
     while len(_CACHE) > _CACHE_SIZE:
         _CACHE.popitem(last=False)
-    return entry
+    return entry, REHYDRATE_OK
 
 
 class LayerPass(BaseModel):
@@ -181,14 +207,21 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
     """
     entry = _CACHE.get(request.job_id)
     if entry is None:
-        entry = _try_rehydrate(request.job_id)
+        entry, reason = _try_rehydrate(request.job_id)
         if entry is None:
+            # Structured detail mirrors the L8 missing-pen-slots shape so
+            # the UI can branch on ``reason`` to pick a precise prompt
+            # (re-upload vs unsupported file type vs ...).
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    f"No cached segmentation for job {request.job_id!r}; "
-                    "re-upload to refresh."
-                ),
+                detail={
+                    "reason": reason,
+                    "job_id": request.job_id,
+                    "message": (
+                        f"No cached segmentation for job {request.job_id!r}; "
+                        "re-upload to refresh."
+                    ),
+                },
             )
     # Refresh LRU position so frequently-tweaked jobs stay hot.
     _CACHE.move_to_end(request.job_id)
