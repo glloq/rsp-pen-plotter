@@ -179,6 +179,21 @@ function resetSplit(): void {
   }
 }
 
+// Typography sources only have meaningful controls under the Style and
+// Layers tabs — the Image (photo adjustments) and SVG (vectorisation
+// knobs) tabs render a "not applicable" message. Force the operator
+// onto Style when they open the modal on a .txt / .md file so the
+// font / size / bold / italic controls are actually visible. Without
+// this, the operator's last-used tab (typically Image, since that's
+// the default for bitmaps) silently hides every typography knob and
+// the modal looks like it has no font settings at all.
+function ensureTabAppliesToSource(): void {
+  if (fm.kind.value !== 'typography') return
+  if (activeTab.value === 'image' || activeTab.value === 'svg') {
+    activeTab.value = 'style'
+  }
+}
+
 // Wipe the singleton edit-state + file-manager composables whenever
 // the modal closes or its selected placement changes, so the preview
 // pane never renders the previous session's stale file / SVG /
@@ -191,6 +206,7 @@ watch(editModalOpen, (open) => {
     // resetEditState) runs before this watch, so without re-applying
     // here the Image tab would land on 'auto' on first open instead of
     // its intended 'source' default.
+    ensureTabAppliesToSource()
     applyTabPreviewMode()
   } else {
     resetEditState()
@@ -204,10 +220,15 @@ watch(
       resetEditState()
       // Re-apply tab→mode after the reset so a placement switch within
       // the modal doesn't drop us out of the Image tab's source mode.
+      ensureTabAppliesToSource()
       applyTabPreviewMode()
     }
   },
 )
+// Source kind changes (rare — usually the operator drags a different
+// file onto an existing placement) also need the auto-jump so they
+// don't end up staring at the wrong tab for the new file type.
+watch(() => fm.kind.value, ensureTabAppliesToSource)
 
 // Auto-jump after upload: when the placement first acquires layers
 // (i.e. the operator just hit Apply), land them on the Layers tab so

@@ -71,9 +71,24 @@ export function useFileManager(t?: Translator) {
   )
 
   function buildOptions(): Record<string, unknown> | undefined {
-    if (showsBitmapForm.value) return draft.buildBitmapOptions()
-    if (kind.value === 'typography') return draft.buildTypographyOptions()
-    return undefined
+    let opts: Record<string, unknown> | undefined
+    if (showsBitmapForm.value) opts = draft.buildBitmapOptions()
+    else if (kind.value === 'typography') opts = draft.buildTypographyOptions()
+    else return undefined
+    // Multi-page sources (PDF, DOCX): preserve the page currently shown
+    // in the preview when re-uploading. Without this the Apply button
+    // re-runs the conversion against the default (first) page and the
+    // operator has to navigate back from page 1 every single time they
+    // tweak a setting.
+    if (opts) {
+      const placement = store.selectedPlacement
+      const pageCount = Number(placement?.upload_metadata?.page_count ?? 0)
+      const currentPage = Number(placement?.upload_metadata?.page ?? 0)
+      if (pageCount > 1 && currentPage > 0) {
+        opts.page = currentPage
+      }
+    }
+    return opts
   }
 
   // ---- Preview scheduler ----
