@@ -1156,6 +1156,30 @@ export interface paths {
         patch: operations["patch_color_available_colors__color_id__patch"];
         trace?: never;
     };
+    "/settings/palette-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Palette Source
+         * @description Return the active palette source the per-layer picker reads from.
+         */
+        get: operations["read_palette_source_settings_palette_source_get"];
+        /**
+         * Write Palette Source
+         * @description Persist the operator's palette-source choice.
+         */
+        put: operations["write_palette_source_settings_palette_source_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1992,6 +2016,28 @@ export interface components {
             color: string;
             /** Coverage */
             coverage: number;
+        };
+        /**
+         * PaletteSourceResponse
+         * @description Wire shape returned by ``GET /settings/palette-source``.
+         */
+        PaletteSourceResponse: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "pens" | "available" | "union";
+        };
+        /**
+         * PaletteSourceUpdate
+         * @description Request body for ``PUT /settings/palette-source``.
+         */
+        PaletteSourceUpdate: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "pens" | "available" | "union";
         };
         /**
          * PenSlot
@@ -4344,6 +4390,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AvailableColorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_palette_source_settings_palette_source_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaletteSourceResponse"];
+                };
+            };
+        };
+    };
+    write_palette_source_settings_palette_source_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaletteSourceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaletteSourceResponse"];
                 };
             };
             /** @description Validation Error */

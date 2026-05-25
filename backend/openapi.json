@@ -2809,6 +2809,62 @@
         }
       }
     },
+    "/settings/palette-source": {
+      "get": {
+        "summary": "Read Palette Source",
+        "description": "Return the active palette source the per-layer picker reads from.",
+        "operationId": "read_palette_source_settings_palette_source_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaletteSourceResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Write Palette Source",
+        "description": "Persist the operator's palette-source choice.",
+        "operationId": "write_palette_source_settings_palette_source_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaletteSourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaletteSourceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -4448,6 +4504,44 @@
         ],
         "title": "PaletteEntry",
         "description": "One cluster colour and its share of the image (0..1)."
+      },
+      "PaletteSourceResponse": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "pens",
+              "available",
+              "union"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "PaletteSourceResponse",
+        "description": "Wire shape returned by ``GET /settings/palette-source``."
+      },
+      "PaletteSourceUpdate": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "pens",
+              "available",
+              "union"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "PaletteSourceUpdate",
+        "description": "Request body for ``PUT /settings/palette-source``."
       },
       "PenSlot": {
         "properties": {

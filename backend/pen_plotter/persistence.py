@@ -71,6 +71,21 @@ class FileRecord(SQLModel, table=True):
     created_at: datetime
 
 
+class AppSettingRecord(SQLModel, table=True):
+    """Generic key/value store for small global app settings.
+
+    Used today for the ``palette_source`` toggle that picks where the
+    per-layer colour picker reads from (installed pens / available
+    colours / union). The shape stays generic so future single-value
+    settings can land without another migration: each setting is one
+    row, ``key`` is the namespaced identifier, ``value`` carries the
+    string-encoded payload (JSON for non-string types).
+    """
+
+    key: str = Field(primary_key=True)
+    value: str
+
+
 class AvailableColorRecord(SQLModel, table=True):
     """An ink the operator has on hand but doesn't necessarily mount.
 
@@ -426,3 +441,20 @@ def next_available_color_position(target: Engine = engine) -> int:
         )
         last = session.exec(statement).first()
         return 0 if last is None else last.position + 1
+
+
+# ---------------------------------------------------------------- app settings
+
+
+def get_setting(key: str, target: Engine = engine) -> str | None:
+    """Return the raw string value of a setting, or ``None`` when unset."""
+    with Session(target) as session:
+        record = session.get(AppSettingRecord, key)
+        return None if record is None else record.value
+
+
+def set_setting(key: str, value: str, target: Engine = engine) -> None:
+    """Upsert a setting. ``value`` is stored as-is; callers JSON-encode if needed."""
+    with Session(target) as session:
+        session.merge(AppSettingRecord(key=key, value=value))
+        session.commit()
