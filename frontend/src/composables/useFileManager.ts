@@ -157,19 +157,36 @@ export function useFileManager(t?: Translator) {
     const wasMono = draft.printMode.value === 'monochrome'
     await store.upload(_selectedFile.value, buildOptions())
     previewer.clear()
+    // Push the master style's per-cluster recipe onto the freshly
+    // produced layers in BOTH print modes. Monochrome's ``bandRecipe``
+    // and multicolour's ``colorRecipe`` are how a style like Pencil
+    // shaded / Halftone-CMYK / Crosshatch-colour expresses "draw
+    // cluster N differently from cluster N-1" — without this call the
+    // uniform default algorithm baked in at /upload time wins and the
+    // operator's style choice is invisible past the first cluster.
     if (wasMono) {
       await applyMasterStyleToLayers(store, {
         styleId: draft.monoMasterStyleId.value,
         penSlot: draft.monoPenSlot.value,
       })
-      // Refresh the live preview so the canvas reflects the per-band
-      // recipes that ``applyMasterStyleToLayers`` just installed via
-      // /rerender. Without this, the pane would either stay blank
-      // (previewer.clear() above) until the placement SVG arrives, or
-      // keep the pre-Apply uniform-algo preview visible — confusing
-      // the operator who expected to see the result of their changes.
-      previewer.schedule({ immediate: true })
+    } else {
+      // Multicolour styles don't pin every layer to one slot — each
+      // cluster already carries its segmentation-derived ``target_pen_slot``
+      // (or stays null pending pen matching). Pass ``penSlot: null`` so
+      // the propagation only touches the algorithm overrides.
+      await applyMasterStyleToLayers(store, {
+        styleId: draft.multicolorMasterStyleId.value,
+        penSlot: null,
+      })
     }
+    // Refresh the live preview so the canvas reflects the per-band /
+    // per-cluster recipes that ``applyMasterStyleToLayers`` just
+    // installed via /rerender. Without this, the pane would either
+    // stay blank (previewer.clear() above) until the placement SVG
+    // arrives, or keep the pre-Apply uniform-algo preview visible —
+    // confusing the operator who expected to see the result of their
+    // changes.
+    previewer.schedule({ immediate: true })
     // Pin the new baseline so the dirty tracker flips back to false
     // — Apply button greys out, close-modal warning won't fire.
     draft.markCommitted()
