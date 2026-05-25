@@ -16,6 +16,9 @@ interface TypographyDraft {
   margin_mm: number
   page_width_mm: number
   page_height_mm: number
+  bold: boolean
+  italic: boolean
+  letter_spacing_mm: number
 }
 
 defineProps<{
@@ -54,13 +57,16 @@ const expanded = useAccordionPersistence('typography', false)
           </select>
         </label>
         <label class="block text-slate-400">{{ t('convert.fontSize') }}
-          <input v-model.number="typo.font_size_mm" type="number" step="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          <input v-model.number="typo.font_size_mm" type="number" step="0.5" min="1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
         </label>
         <label class="block text-slate-400">{{ t('convert.lineSpacing') }}
-          <input v-model.number="typo.line_spacing" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          <input v-model.number="typo.line_spacing" type="number" step="0.1" min="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
         </label>
         <label class="block text-slate-400">{{ t('convert.strokeWidth') }}
-          <input v-model.number="typo.stroke_width_mm" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          <input v-model.number="typo.stroke_width_mm" type="number" step="0.1" min="0.05" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+        </label>
+        <label class="block text-slate-400">{{ t('convert.letterSpacing') }}
+          <input v-model.number="typo.letter_spacing_mm" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
         </label>
         <label class="block text-slate-400">{{ t('convert.margin') }}
           <input v-model.number="typo.margin_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
@@ -70,6 +76,20 @@ const expanded = useAccordionPersistence('typography', false)
         </label>
         <label class="block text-slate-400">{{ t('convert.pageHeight') }}
           <input v-model.number="typo.page_height_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+        </label>
+      </div>
+      <!-- Synthetic style toggles. Hershey fonts are single-stroke so
+           "bold" double-passes each glyph with a small offset and
+           "italic" shears every point along x by ~12°. They sit next to
+           each other so the operator can see both states at a glance. -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+        <label class="flex items-center gap-1.5 text-slate-300">
+          <input v-model="typo.bold" type="checkbox" class="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-sky-500" />
+          <span class="font-semibold">{{ t('convert.bold') }}</span>
+        </label>
+        <label class="flex items-center gap-1.5 text-slate-300">
+          <input v-model="typo.italic" type="checkbox" class="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-sky-500" />
+          <span class="italic">{{ t('convert.italic') }}</span>
         </label>
       </div>
     </div>

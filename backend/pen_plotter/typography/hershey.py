@@ -3,10 +3,15 @@
 Renders text as open polylines (no fills), laying out paragraphs with word
 wrap, alignment, and configurable page geometry. Output coordinates are in
 millimeters so they map directly onto a machine's workspace.
+
+Each character stroke is emitted as one continuous SVG sub-path so the
+downstream toolpath optimizer and G-code generator can draw it in a single
+pen-down pass instead of lifting the pen between every line segment.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal
@@ -16,6 +21,18 @@ from HersheyFonts import HersheyFonts
 from pydantic import BaseModel, Field
 
 Alignment = Literal["left", "center", "right"]
+
+# Synthetic-italic slant (degrees) applied when ``TypographyOptions.italic``
+# is set on a font that has no native italic variant. Matches the typical
+# slant of TrueType italic faces (~12°) — steep enough to read as italic
+# without distorting the glyph beyond recognition.
+_ITALIC_SLANT_DEG = 12.0
+
+# Synthetic-bold pass offset, expressed as a fraction of the cap height.
+# We emit the strokes twice with a small offset so the pen physically
+# paints a thicker line — the SVG ``stroke-width`` attribute is cosmetic
+# on a pen plotter and does not actually broaden the drawn strokes.
+_BOLD_OFFSET_RATIO = 0.06
 
 
 @lru_cache(maxsize=1)
@@ -39,6 +56,17 @@ class TypographyOptions(BaseModel):
     line_spacing: float = Field(default=1.5, gt=0.0)
     alignment: Alignment = "left"
     stroke_width_mm: float = Field(default=0.3, gt=0.0)
+    # Synthetic style toggles. Hershey fonts are single-stroke so there is
+    # no real "bold" or "italic" face; these flags emulate them at render
+    # time. ``bold`` draws each stroke twice with a small offset to widen
+    # the visible line; ``italic`` shears every point along x by an angle
+    # proportional to its height above the baseline.
+    bold: bool = False
+    italic: bool = False
+    # Extra horizontal space inserted between characters, in millimeters.
+    # Negative values tighten the spacing (use with care — letters may
+    # collide). Applied uniformly to every character on every line.
+    letter_spacing_mm: float = Field(default=0.0, ge=-10.0, le=50.0)
 
 
 @dataclass
@@ -108,12 +136,60 @@ class HersheyRenderer:
             self._font.normalize_rendering(size_mm)
             self._current_size = size_mm
 
+    def _strokes(self, text: str) -> list[list[tuple[float, float]]]:
+        """Return continuous stroke polylines for ``text`` with kerning applied.
+
+        ``strokes_for_text`` already returns one polyline per pen-down so
+        each glyph stays connected. We extend it with optional uniform
+        ``letter_spacing_mm`` by re-laying out one character at a time
+        when the operator asked for non-zero spacing — the underlying
+        library has no kerning knob.
+        """
+        if self.opts.letter_spacing_mm == 0.0:
+            return [list(stroke) for stroke in self._font.strokes_for_text(text)]
+
+        strokes: list[list[tuple[float, float]]] = []
+        cursor_x = 0.0
+        spacing = self.opts.letter_spacing_mm
+        for ch in text:
+            if ch == " ":
+                # Use the font's own space advance and add the spacing tweak.
+                space_w = self._char_advance(" ")
+                cursor_x += space_w + spacing
+                continue
+            char_strokes = [list(s) for s in self._font.strokes_for_text(ch)]
+            advance = self._char_advance(ch)
+            for stroke in char_strokes:
+                strokes.append([(cursor_x + x, y) for x, y in stroke])
+            cursor_x += advance + spacing
+        return strokes
+
+    def _char_advance(self, ch: str) -> float:
+        """Approximate the advance width of ``ch`` in current font units."""
+        max_x = 0.0
+        for stroke in self._font.strokes_for_text(ch):
+            for x, _ in stroke:
+                if x > max_x:
+                    max_x = x
+        # Spaces have no strokes; fall back to half the cap height so we
+        # still advance the cursor on whitespace.
+        if max_x == 0.0:
+            return self._current_size * 0.4
+        return max_x
+
     def _measure(self, line: str) -> float:
         """Return the rendered width of a line in millimeters."""
-        max_x = 0.0
-        for (x0, _), (x1, _) in self._font.lines_for_text(line):
-            max_x = max(max_x, x0, x1)
-        return max_x
+        x_min = math.inf
+        x_max = -math.inf
+        for stroke in self._strokes(line):
+            for x, _ in stroke:
+                if x < x_min:
+                    x_min = x
+                if x > x_max:
+                    x_max = x
+        if x_max == -math.inf:
+            return 0.0
+        return x_max - min(x_min, 0.0)
 
     def _wrap(self, paragraph: str, usable_w: float) -> list[str]:
         """Greedily word-wrap a paragraph to the usable width."""
@@ -132,21 +208,63 @@ class HersheyRenderer:
         lines.append(current)
         return lines
 
+    def _transform(
+        self, x: float, y: float, x_offset: float, baseline_y: float
+    ) -> tuple[float, float]:
+        """Convert a font-space point to page-space, applying italic shear.
+
+        Font coordinates are y-up with the baseline at ``y=0``. We flip y
+        against ``baseline_y`` to map into the SVG y-down system and then
+        apply the italic shear in page space so the slant follows the
+        upright character height.
+        """
+        if self.opts.italic:
+            shear = math.tan(math.radians(_ITALIC_SLANT_DEG))
+            x = x + y * shear
+        return x_offset + x, baseline_y - y
+
+    def _stroke_to_path(
+        self,
+        stroke: list[tuple[float, float]],
+        x_offset: float,
+        baseline_y: float,
+    ) -> str:
+        """Serialize one polyline as a single ``M ... L ...`` sub-path."""
+        if len(stroke) < 2:
+            return ""
+        points = [self._transform(x, y, x_offset, baseline_y) for x, y in stroke]
+        head = f"M{points[0][0]:.2f} {points[0][1]:.2f}"
+        tail = " ".join(f"L{px:.2f} {py:.2f}" for px, py in points[1:])
+        return f"{head} {tail}"
+
     def _render_line(self, line: str, size_mm: float, top_y: float, usable_w: float) -> str:
         """Render one already-wrapped line as an SVG path string."""
         if not line.strip():
             return ""
         baseline_y = top_y + size_mm
         x_offset = self.opts.margin_mm + self._align_shift(self._measure(line), usable_w)
-        segments: list[str] = []
-        for (x0, y0), (x1, y1) in self._font.lines_for_text(line):
-            segments.append(
-                f"M{x_offset + x0:.2f} {baseline_y - y0:.2f} "
-                f"L{x_offset + x1:.2f} {baseline_y - y1:.2f}"
-            )
-        if not segments:
+
+        strokes = self._strokes(line)
+        subpaths: list[str] = []
+        for stroke in strokes:
+            sub = self._stroke_to_path(stroke, x_offset, baseline_y)
+            if sub:
+                subpaths.append(sub)
+
+        if self.opts.bold:
+            # Second pass slightly offset so the pen physically paints a
+            # wider line. Scale by the font size so the effect tracks the
+            # cap height instead of being invisible at large sizes.
+            offset = size_mm * _BOLD_OFFSET_RATIO
+            for stroke in strokes:
+                shifted = [(x + offset, y) for x, y in stroke]
+                sub = self._stroke_to_path(shifted, x_offset, baseline_y)
+                if sub:
+                    subpaths.append(sub)
+
+        if not subpaths:
             return ""
-        return f'<path d="{" ".join(segments)}"/>'
+        return f'<path d="{" ".join(subpaths)}"/>'
 
     def _align_shift(self, line_width: float, usable_w: float) -> float:
         """Return the horizontal offset for the configured alignment."""
