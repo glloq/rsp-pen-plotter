@@ -68,16 +68,11 @@ function newBlankProfile(): MachineProfile {
 }
 
 function syncDraft(): void {
-  // While an unsaved draft is in flight, the profile-list watch shouldn't
-  // wipe it just because /profiles re-loaded.
   if (isUnsavedDraft.value) return
   if (!store.selectedProfile) {
     draft.value = null
     return
   }
-  // ``toRaw`` peels off Pinia's reactive Proxy; otherwise ``structuredClone``
-  // raises DataCloneError on Chromium for any reactive object, which used to
-  // leave ``draft`` null and silently hide the EBB fieldset on profile switch.
   const clone = structuredClone(toRaw(store.selectedProfile))
   normalizePens(clone)
   draft.value = clone
@@ -94,6 +89,13 @@ watch(() => store.selectedProfileName, syncDraft, { immediate: true })
 watch(() => store.profiles, syncDraft)
 
 const isEbb = computed(() => draft.value?.gcode_dialect === 'ebb')
+
+const workspaceSize = computed(() => {
+  if (!draft.value) return { w: 0, h: 0 }
+  const w = draft.value.workspace.x_max - draft.value.workspace.x_min
+  const h = draft.value.workspace.y_max - draft.value.workspace.y_min
+  return { w, h }
+})
 
 watch(
   () => draft.value?.gcode_dialect,
@@ -117,9 +119,6 @@ async function save(): Promise<void> {
   try {
     if (!isEbb.value) draft.value.ebb = null
     await store.saveProfile(structuredClone(toRaw(draft.value)))
-    // Successful POST → the new profile is now in the store. Drop the
-    // "unsaved" guard so subsequent profile-list updates can re-sync the
-    // draft from the canonical version.
     isUnsavedDraft.value = false
   } catch (err) {
     error.value = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -170,7 +169,7 @@ async function downloadYaml(): Promise<void> {
 
 <template>
   <div class="space-y-4 text-sm">
-    <!-- Profile + preset pickers (moved here from the AppHeader) -->
+    <!-- Active profile picker — pinned at the top -->
     <div class="space-y-2 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
       <label class="block text-xs text-slate-400">
         {{ t('profile.select') }}
@@ -210,179 +209,270 @@ async function downloadYaml(): Promise<void> {
       </p>
     </div>
 
-    <div v-if="draft" class="space-y-4">
-      <label class="block text-slate-400">
-        {{ t('profile.name') }}
-        <input v-model="draft.name" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-      </label>
-
-      <fieldset class="space-y-2">
-        <legend class="text-xs uppercase tracking-wide text-slate-500">{{ t('profile.sheet') }}</legend>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-slate-400">{{ t('profile.units') }}
-            <select v-model="draft.units" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-              <option value="mm">mm</option>
-              <option value="inch">inch</option>
-            </select>
-          </label>
-          <label class="block text-slate-400">{{ t('profile.origin') }}
-            <select v-model="draft.origin" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-              <option value="top_left">top_left</option>
-              <option value="bottom_left">bottom_left</option>
-              <option value="center">center</option>
-            </select>
-          </label>
-          <label class="block text-slate-400">X min
-            <input v-model.number="draft.workspace.x_min" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">Y min
-            <input v-model.number="draft.workspace.y_min" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">X max
-            <input v-model.number="draft.workspace.x_max" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">Y max
-            <input v-model.number="draft.workspace.y_max" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset class="space-y-2">
-        <legend class="text-xs uppercase tracking-wide text-slate-500">{{ t('profile.motion') }}</legend>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-slate-400">{{ t('profile.drawingSpeed') }}
-            <input v-model.number="draft.drawing_speed_mm_s" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('profile.travelSpeed') }}
-            <input v-model.number="draft.travel_speed_mm_s" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="col-span-2 block text-slate-400">{{ t('profile.acceleration') }}
-            <input v-model.number="draft.acceleration_mm_s2" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset class="space-y-2">
-        <legend class="text-xs uppercase tracking-wide text-slate-500">{{ t('profile.pen') }}</legend>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-slate-400">{{ t('profile.penUp') }}
-            <input v-model="draft.pen_up_command" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('profile.penDown') }}
-            <input v-model="draft.pen_down_command" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('profile.toolChangeMethod') }}
-            <select v-model="draft.tool_change_method" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-              <option value="manual_pause">manual_pause</option>
-              <option value="carousel">carousel</option>
-              <option value="rack">rack</option>
-              <option value="none">none</option>
-            </select>
-          </label>
-          <label class="block text-slate-400">{{ t('profile.toolChangeCommand') }}
-            <input v-model="draft.tool_change_command" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('profile.penSlots') }}
-            <input v-model.number="draft.pen_slot_count" type="number" min="1" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset v-if="draft.pens" class="space-y-2">
-        <legend class="text-xs uppercase tracking-wide text-slate-500">{{ t('profile.magazine') }}</legend>
-        <div
-          v-for="pen in draft.pens"
-          :key="pen.index"
-          class="rounded border border-slate-700 bg-slate-900/50 p-2"
-        >
-          <div class="flex items-center gap-2">
-            <span class="w-6 shrink-0 text-center font-mono text-slate-500">{{ pen.index }}</span>
-            <input v-model="pen.color" type="color" class="h-7 w-9 shrink-0 rounded border border-slate-700 bg-slate-900" />
+    <div v-if="draft" class="space-y-3">
+      <!-- IDENTITY -->
+      <details open class="group rounded-lg border border-slate-700 bg-slate-800/40">
+        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+          <span>① {{ t('profile.sectionIdentity') }}</span>
+          <span class="text-[10px] text-slate-500 group-open:hidden">{{ draft.name }}</span>
+        </summary>
+        <div class="space-y-3 border-t border-slate-700 p-3">
+          <label class="block text-slate-400">
+            {{ t('profile.name') }}
             <input
-              v-model="pen.name"
+              v-model="draft.name"
               type="text"
-              :placeholder="`Pen ${pen.index}`"
-              class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
             />
-            <label class="flex shrink-0 items-center gap-1 text-xs text-slate-400">
-              <input v-model="pen.installed" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
-              {{ t('profile.installed') }}
-            </label>
-          </div>
-          <label class="mt-1 flex items-center gap-2 text-xs text-slate-400">
-            <input
-              type="checkbox"
-              :checked="pen.position !== null"
-              class="rounded border-slate-600 bg-slate-900"
-              @change="(e) => (pen.position = (e.target as HTMLInputElement).checked ? { x: 0, y: 0 } : null)"
-            />
-            {{ t('profile.pickupPosition') }}
+            <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.nameHint') }}</span>
           </label>
-          <div v-if="pen.position" class="mt-1 grid grid-cols-2 gap-2">
-            <input v-model.number="pen.position.x" type="number" step="any" placeholder="X" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            <input v-model.number="pen.position.y" type="number" step="any" placeholder="Y" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+          <label class="block text-slate-400">
+            {{ t('profile.dialect') }}
+            <select
+              v-model="draft.gcode_dialect"
+              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            >
+              <option value="grbl">GRBL</option>
+              <option value="marlin">Marlin</option>
+              <option value="klipper">Klipper</option>
+              <option value="ebb">EBB (EiBotBoard / AxiDraw)</option>
+              <option value="custom">{{ t('profile.dialectCustom') }}</option>
+            </select>
+            <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.dialectHint') }}</span>
+          </label>
+        </div>
+      </details>
+
+      <!-- WORKSPACE -->
+      <details open class="group rounded-lg border border-slate-700 bg-slate-800/40">
+        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+          <span>② {{ t('profile.sectionWorkspace') }}</span>
+          <span class="text-[10px] text-slate-500 group-open:hidden">
+            {{ Math.round(workspaceSize.w) }} × {{ Math.round(workspaceSize.h) }} {{ draft.units }}
+          </span>
+        </summary>
+        <div class="space-y-3 border-t border-slate-700 p-3">
+          <p class="text-[11px] text-slate-500">{{ t('profile.workspaceHint') }}</p>
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px]">
+            <div class="space-y-2">
+              <div class="grid grid-cols-2 gap-2">
+                <label class="block text-slate-400">{{ t('profile.units') }}
+                  <select v-model="draft.units" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+                    <option value="mm">mm</option>
+                    <option value="inch">inch</option>
+                  </select>
+                </label>
+                <label class="block text-slate-400">{{ t('profile.origin') }}
+                  <select v-model="draft.origin" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+                    <option value="top_left">{{ t('profile.originTopLeft') }}</option>
+                    <option value="bottom_left">{{ t('profile.originBottomLeft') }}</option>
+                    <option value="center">{{ t('profile.originCenter') }}</option>
+                  </select>
+                </label>
+                <label class="block text-slate-400">X min ({{ draft.units }})
+                  <input v-model.number="draft.workspace.x_min" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                </label>
+                <label class="block text-slate-400">Y min ({{ draft.units }})
+                  <input v-model.number="draft.workspace.y_min" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                </label>
+                <label class="block text-slate-400">X max ({{ draft.units }})
+                  <input v-model.number="draft.workspace.x_max" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                </label>
+                <label class="block text-slate-400">Y max ({{ draft.units }})
+                  <input v-model.number="draft.workspace.y_max" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                </label>
+              </div>
+              <p class="text-[11px] text-slate-500">{{ t('profile.originHint') }}</p>
+            </div>
+
+            <!-- Workspace preview -->
+            <div class="flex items-start justify-center rounded border border-slate-700 bg-slate-900/60 p-2">
+              <svg viewBox="0 0 100 80" class="h-32 w-full" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                <rect x="10" y="10" width="80" height="60" fill="none" stroke="#475569" stroke-width="0.8" stroke-dasharray="2 2" />
+                <text x="50" y="42" text-anchor="middle" fill="#94a3b8" font-size="6" font-family="ui-monospace, monospace">
+                  {{ Math.round(workspaceSize.w) }} × {{ Math.round(workspaceSize.h) }}
+                </text>
+                <!-- Origin marker -->
+                <g v-if="draft.origin === 'top_left'">
+                  <circle cx="10" cy="10" r="2" fill="#10b981" />
+                  <text x="14" y="9" fill="#10b981" font-size="5">0,0</text>
+                </g>
+                <g v-else-if="draft.origin === 'bottom_left'">
+                  <circle cx="10" cy="70" r="2" fill="#10b981" />
+                  <text x="14" y="73" fill="#10b981" font-size="5">0,0</text>
+                </g>
+                <g v-else>
+                  <circle cx="50" cy="40" r="2" fill="#10b981" />
+                  <text x="54" y="39" fill="#10b981" font-size="5">0,0</text>
+                </g>
+              </svg>
+            </div>
           </div>
-          <div class="mt-1 grid grid-cols-2 gap-2">
-            <label class="block text-slate-500">{{ t('profile.penUpOverride') }}
-              <input v-model="pen.pen_up_command" type="text" :placeholder="draft.pen_up_command" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+        </div>
+      </details>
+
+      <!-- MOTION -->
+      <details open class="group rounded-lg border border-slate-700 bg-slate-800/40">
+        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+          <span>③ {{ t('profile.motion') }}</span>
+          <span class="text-[10px] text-slate-500 group-open:hidden">
+            {{ draft.drawing_speed_mm_s }} / {{ draft.travel_speed_mm_s }} mm/s
+          </span>
+        </summary>
+        <div class="space-y-3 border-t border-slate-700 p-3">
+          <div class="grid grid-cols-2 gap-2">
+            <label class="block text-slate-400">{{ t('profile.drawingSpeed') }}
+              <input v-model.number="draft.drawing_speed_mm_s" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.drawingSpeedHint') }}</span>
             </label>
-            <label class="block text-slate-500">{{ t('profile.penDownOverride') }}
-              <input v-model="pen.pen_down_command" type="text" :placeholder="draft.pen_down_command" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+            <label class="block text-slate-400">{{ t('profile.travelSpeed') }}
+              <input v-model.number="draft.travel_speed_mm_s" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.travelSpeedHint') }}</span>
+            </label>
+            <label class="col-span-2 block text-slate-400">{{ t('profile.acceleration') }}
+              <input v-model.number="draft.acceleration_mm_s2" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.accelerationHint') }}</span>
             </label>
           </div>
         </div>
-      </fieldset>
+      </details>
 
-      <fieldset class="space-y-2">
-        <legend class="text-xs uppercase tracking-wide text-slate-500">{{ t('profile.advanced') }}</legend>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-slate-400">{{ t('profile.dialect') }}
-            <select v-model="draft.gcode_dialect" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-              <option value="grbl">grbl</option>
-              <option value="marlin">marlin</option>
-              <option value="klipper">klipper</option>
-              <option value="ebb">ebb</option>
-              <option value="custom">custom</option>
-            </select>
-          </label>
-          <label class="flex items-center gap-2 self-end text-slate-400">
+      <!-- PENS & TOOL -->
+      <details open class="group rounded-lg border border-slate-700 bg-slate-800/40">
+        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+          <span>④ {{ t('profile.pen') }}</span>
+          <span class="text-[10px] text-slate-500 group-open:hidden">{{ draft.pen_slot_count }} slot(s)</span>
+        </summary>
+        <div class="space-y-3 border-t border-slate-700 p-3">
+          <div class="grid grid-cols-2 gap-2">
+            <label class="block text-slate-400">{{ t('profile.penUp') }}
+              <input v-model="draft.pen_up_command" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.penUpHint') }}</span>
+            </label>
+            <label class="block text-slate-400">{{ t('profile.penDown') }}
+              <input v-model="draft.pen_down_command" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.penDownHint') }}</span>
+            </label>
+            <label class="block text-slate-400">{{ t('profile.toolChangeMethod') }}
+              <select v-model="draft.tool_change_method" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+                <option value="manual_pause">{{ t('profile.tcManualPause') }}</option>
+                <option value="carousel">{{ t('profile.tcCarousel') }}</option>
+                <option value="rack">{{ t('profile.tcRack') }}</option>
+                <option value="none">{{ t('profile.tcNone') }}</option>
+              </select>
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.toolChangeMethodHint') }}</span>
+            </label>
+            <label class="block text-slate-400">{{ t('profile.toolChangeCommand') }}
+              <input v-model="draft.tool_change_command" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+            </label>
+            <label class="col-span-2 block text-slate-400">{{ t('profile.penSlots') }}
+              <input v-model.number="draft.pen_slot_count" type="number" min="1" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.penSlotsHint') }}</span>
+            </label>
+          </div>
+
+          <div v-if="draft.pens && draft.pens.length" class="space-y-2 border-t border-slate-700 pt-3">
+            <h4 class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('profile.magazine') }}</h4>
+            <div
+              v-for="pen in draft.pens"
+              :key="pen.index"
+              class="rounded border border-slate-700 bg-slate-900/50 p-2"
+            >
+              <div class="flex items-center gap-2">
+                <span class="w-6 shrink-0 text-center font-mono text-slate-500">{{ pen.index }}</span>
+                <input v-model="pen.color" type="color" class="h-7 w-9 shrink-0 rounded border border-slate-700 bg-slate-900" />
+                <input
+                  v-model="pen.name"
+                  type="text"
+                  :placeholder="`Pen ${pen.index}`"
+                  class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                />
+                <label class="flex shrink-0 items-center gap-1 text-xs text-slate-400">
+                  <input v-model="pen.installed" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
+                  {{ t('profile.installed') }}
+                </label>
+              </div>
+              <label class="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                <input
+                  type="checkbox"
+                  :checked="pen.position !== null"
+                  class="rounded border-slate-600 bg-slate-900"
+                  @change="(e) => (pen.position = (e.target as HTMLInputElement).checked ? { x: 0, y: 0 } : null)"
+                />
+                {{ t('profile.pickupPosition') }}
+              </label>
+              <div v-if="pen.position" class="mt-1 grid grid-cols-2 gap-2">
+                <input v-model.number="pen.position.x" type="number" step="any" placeholder="X" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <input v-model.number="pen.position.y" type="number" step="any" placeholder="Y" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+              </div>
+              <div class="mt-1 grid grid-cols-2 gap-2">
+                <label class="block text-slate-500">{{ t('profile.penUpOverride') }}
+                  <input v-model="pen.pen_up_command" type="text" :placeholder="draft.pen_up_command" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+                </label>
+                <label class="block text-slate-500">{{ t('profile.penDownOverride') }}
+                  <input v-model="pen.pen_down_command" type="text" :placeholder="draft.pen_down_command" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <!-- ADVANCED -->
+      <details class="group rounded-lg border border-slate-700 bg-slate-800/40">
+        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+          <span>⑤ {{ t('profile.advanced') }}</span>
+          <span class="text-[10px] text-slate-500">{{ t('profile.advancedHint') }}</span>
+        </summary>
+        <div class="space-y-3 border-t border-slate-700 p-3">
+          <label class="flex items-center gap-2 text-slate-400">
             <input v-model="draft.supports_arcs" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
             {{ t('profile.supportsArcs') }}
           </label>
           <label v-if="draft.supports_arcs" class="block text-slate-400">{{ t('profile.arcTolerance') }}
             <input v-model.number="draft.arc_tolerance_mm" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+            <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.arcToleranceHint') }}</span>
           </label>
-        </div>
 
-        <div v-if="isEbb && draft.ebb" class="mt-2 grid grid-cols-2 gap-2 rounded border border-slate-700 bg-slate-900/50 p-2">
-          <label class="block text-slate-400">steps/mm
-            <input v-model.number="draft.ebb.steps_per_mm" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">servo rate
-            <input v-model.number="draft.ebb.servo_rate" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">servo up
-            <input v-model.number="draft.ebb.servo_up" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">servo down
-            <input v-model.number="draft.ebb.servo_down" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-          </label>
-          <label class="block text-slate-400">{{ t('profile.serialTerminator') }}
-            <select
-              v-model="draft.ebb.serial_terminator"
-              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-            >
-              <option value="cr">CR</option>
-              <option value="lf">LF</option>
-              <option value="crlf">CRLF</option>
-            </select>
-          </label>
+          <div v-if="isEbb && draft.ebb" class="space-y-2 rounded border border-slate-700 bg-slate-900/50 p-3">
+            <h4 class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('profile.ebbSection') }}</h4>
+            <p class="text-[11px] text-slate-500">{{ t('profile.ebbHint') }}</p>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block text-slate-400">steps/mm
+                <input v-model.number="draft.ebb.steps_per_mm" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.stepsPerMmHint') }}</span>
+              </label>
+              <label class="block text-slate-400">servo rate
+                <input v-model.number="draft.ebb.servo_rate" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.servoRateHint') }}</span>
+              </label>
+              <label class="block text-slate-400">servo up
+                <input v-model.number="draft.ebb.servo_up" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.servoUpHint') }}</span>
+              </label>
+              <label class="block text-slate-400">servo down
+                <input v-model.number="draft.ebb.servo_down" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.servoDownHint') }}</span>
+              </label>
+              <label class="col-span-2 block text-slate-400">{{ t('profile.serialTerminator') }}
+                <select
+                  v-model="draft.ebb.serial_terminator"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                >
+                  <option value="cr">CR (\r) — EBB default</option>
+                  <option value="lf">LF (\n)</option>
+                  <option value="crlf">CRLF (\r\n)</option>
+                </select>
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.serialTerminatorHint') }}</span>
+              </label>
+            </div>
+          </div>
         </div>
-      </fieldset>
+      </details>
 
       <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
 
-      <div class="flex flex-wrap gap-2">
+      <div class="sticky bottom-0 -mx-4 -mb-4 flex flex-wrap gap-2 border-t border-slate-700 bg-slate-900/95 px-4 py-3 backdrop-blur">
         <button type="button" class="flex-1 rounded bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50" :disabled="saving" @click="save">
           {{ saving ? t('profile.saving') : t('profile.save') }}
         </button>

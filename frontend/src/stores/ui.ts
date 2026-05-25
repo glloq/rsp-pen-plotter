@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
 export type CanvasTab = 'sheet' | 'simulator' | 'gcode'
-export type SettingsTab = 'profile' | 'macros' | 'history' | 'audit' | 'system'
+export type SettingsTab = 'system' | 'history' | 'audit'
+export type PlotterTab = 'connection' | 'profile' | 'macros' | 'queue'
 
 export interface PreviewSheet {
   width_mm: number
@@ -61,8 +62,9 @@ function loadUpdateNotifications(): boolean {
 export const useUiStore = defineStore('ui', () => {
   const canvasTab = ref<CanvasTab>('sheet')
   const settingsOpen = ref(false)
-  const settingsTab = ref<SettingsTab>('profile')
+  const settingsTab = ref<SettingsTab>('system')
   const plotterDrawerOpen = ref(false)
+  const plotterTab = ref<PlotterTab>('connection')
   const editModalOpen = ref(false)
   // Display-only sheet overlay shown on the workspace plan, positioned at
   // the top-left. Set when the user picks a sheet format in LayoutSection.
@@ -161,7 +163,8 @@ export const useUiStore = defineStore('ui', () => {
     settingsOpen.value = false
   }
 
-  function openPlotterDrawer(): void {
+  function openPlotterDrawer(tab?: PlotterTab): void {
+    if (tab) plotterTab.value = tab
     plotterDrawerOpen.value = true
   }
 
@@ -224,6 +227,7 @@ export const useUiStore = defineStore('ui', () => {
     settingsOpen,
     settingsTab,
     plotterDrawerOpen,
+    plotterTab,
     editModalOpen,
     previewSheet,
     updateState,
