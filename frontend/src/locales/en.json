@@ -358,7 +358,19 @@
     "sketch": "Squiggle sketch",
     "sketchDesc": "Hand-drawn wavy hatching per colour, amplitude modulated by luminance.",
     "spiral": "Offset spirals",
-    "spiralDesc": "Concentric offset rings per colour with spacing adapted to density."
+    "spiralDesc": "Concentric offset rings per colour with spacing adapted to density.",
+    "numColors": "Colour count",
+    "numColorsHint": "How many K-means clusters to extract — each cluster becomes one layer.",
+    "numColorsLocked": "Locked to the manual palette. Edit the colour list below.",
+    "flatNoKnobs": "No knobs for flat colours — each cluster is traced as-is.",
+    "crosshatchSpacingHint": "Tight spacing (darker clusters) → loose (lighter clusters).",
+    "angleStep": "Per-colour rotation",
+    "angleStepHint": "Angle offset added per cluster — avoids moiré when inks overlap.",
+    "iterationsHint": "More Lloyd iterations = smoother spread but slower preview.",
+    "cmykHint": "Screen angles auto-picked per dominant primary (C 15° · M 75° · Y 0°).",
+    "seedSpacingRange": "Seed spacing (px)",
+    "seedSpacingHint": "Distance between streamline seed points — wider = fewer paths.",
+    "ampRange": "Squiggle amplitude (px)"
   },
   "printStyles": {
     "default": "Default",
