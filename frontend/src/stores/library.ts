@@ -16,6 +16,18 @@ import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
 import { useToastStore } from './toasts'
 import { validateUploadFile } from '../api/uploadValidation'
+import type { Variant } from './job'
+
+// File-level snapshot of the print settings (variants) for a library
+// entry. Persisted across sessions so every new placement of the same
+// file starts from the operator's last-applied settings, instead of the
+// default conversion.
+export interface SavedFileVariants {
+  variants: Variant[]
+  active_variant_id: string
+}
+
+const FILE_VARIANTS_KEY = 'omniplot.fileVariants.v1'
 
 // The library is the canonical store of uploaded sources. One entry per
 // unique SHA-256 (deduplication happens on the backend); placements on the
@@ -37,6 +49,71 @@ export const useLibraryStore = defineStore('library', () => {
 
   // Detail cache: ``file_id`` -> full record with SVG + layers + metadata.
   const detailCache = ref<Record<string, LibraryFileDetail>>({})
+
+  // Per-file saved variants — keyed by file_id, persisted in localStorage.
+  // Hydrated lazily from storage on first access; subsequent mutations
+  // through ``saveFileVariants`` keep storage in sync.
+  const fileVariants = ref<Record<string, SavedFileVariants>>(loadFileVariants())
+
+  function loadFileVariants(): Record<string, SavedFileVariants> {
+    try {
+      const raw = localStorage.getItem(FILE_VARIANTS_KEY)
+      if (!raw) return {}
+      const parsed = JSON.parse(raw) as Record<string, SavedFileVariants>
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+
+  function persistFileVariants(): void {
+    try {
+      localStorage.setItem(FILE_VARIANTS_KEY, JSON.stringify(fileVariants.value))
+    } catch {
+      // localStorage unavailable / full — non-fatal, settings just won't
+      // survive the next reload.
+    }
+  }
+
+  function cloneVariants(variants: Variant[]): Variant[] {
+    return variants.map((v) => ({
+      ...v,
+      layer_algorithms: { ...v.layer_algorithms },
+      visibility: { ...v.visibility },
+    }))
+  }
+
+  function saveFileVariants(fileId: string, variants: Variant[], activeId: string): void {
+    if (!fileId) return
+    fileVariants.value = {
+      ...fileVariants.value,
+      [fileId]: { variants: cloneVariants(variants), active_variant_id: activeId },
+    }
+    persistFileVariants()
+  }
+
+  function getFileVariants(fileId: string): SavedFileVariants | null {
+    const saved = fileVariants.value[fileId]
+    if (!saved) return null
+    return { variants: cloneVariants(saved.variants), active_variant_id: saved.active_variant_id }
+  }
+
+  // A file is considered "configured" when at least one of its saved
+  // variants has an explicit per-layer algorithm — i.e. the operator has
+  // actually tweaked the conversion. Drives the green accent in FilesPane.
+  function hasFileSettings(fileId: string): boolean {
+    const saved = fileVariants.value[fileId]
+    if (!saved) return false
+    return saved.variants.some((v) => Object.keys(v.layer_algorithms ?? {}).length > 0)
+  }
+
+  function dropFileVariants(fileId: string): void {
+    if (!(fileId in fileVariants.value)) return
+    const next = { ...fileVariants.value }
+    delete next[fileId]
+    fileVariants.value = next
+    persistFileVariants()
+  }
 
   const filteredSorted = computed<LibraryFileRecord[]>(() => {
     const q = search.value.trim().toLowerCase()
@@ -228,6 +305,7 @@ export const useLibraryStore = defineStore('library', () => {
       const next = { ...detailCache.value }
       delete next[fileId]
       detailCache.value = next
+      dropFileVariants(fileId)
       try {
         folders.value = await apiListFolders()
       } catch {
@@ -253,6 +331,7 @@ export const useLibraryStore = defineStore('library', () => {
     sortOrder,
     folderFilter,
     detailCache,
+    fileVariants,
     // getters
     filteredSorted,
     // actions
@@ -265,5 +344,9 @@ export const useLibraryStore = defineStore('library', () => {
     setFolder,
     remove,
     clearCache,
+    saveFileVariants,
+    getFileVariants,
+    hasFileSettings,
+    dropFileVariants,
   }
 })

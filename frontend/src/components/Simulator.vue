@@ -3,10 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
+import { useUiStore } from '../stores/ui'
 import { parseGcode, type SimBounds, type SimResult } from '../lib/gcode'
 
 const { t } = useI18n()
 const store = useJobStore()
+const ui = useUiStore()
 const { gcode } = storeToRefs(store)
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -229,9 +231,25 @@ function reparse(): void {
     travelSpeedMmS: profile.travel_speed_mm_s,
     defaultDrawSpeedMmS: profile.drawing_speed_mm_s,
   })
-  simTime.value = 0
-  draw()
+  // Default to the final frame so the operator sees the full result the
+  // moment they open the tab. Press Restart / Play to scrub back to the
+  // start of the plot.
+  simTime.value = sim.value.totalTimeSeconds
+  resetView()
 }
+
+// When the operator switches into the simulator tab, jump straight to
+// the end of the plot and recentre on the workspace — the default view
+// shows the finished drawing, not an empty canvas.
+watch(
+  () => ui.canvasTab,
+  (tab) => {
+    if (tab !== 'simulator' || !sim.value) return
+    pause()
+    simTime.value = sim.value.totalTimeSeconds
+    resetView()
+  },
+)
 
 // Pan/zoom interaction on the canvas.
 const isPanning = ref(false)
