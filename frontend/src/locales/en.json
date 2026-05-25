@@ -664,7 +664,9 @@
     "rotateLeft": "Rotate −90°",
     "rotateRight": "Rotate +90°",
     "flipH": "Mirror horizontally",
-    "flipV": "Mirror vertically"
+    "flipV": "Mirror vertically",
+    "aspectLockOn": "Aspect ratio locked — click to allow free resize",
+    "aspectLockOff": "Free resize — click to lock aspect ratio"
   },
   "typography": {
     "fontSection": "Font",

@@ -30,6 +30,10 @@ const props = defineProps<{
   /** True when ``snapMm > 0`` — used to clamp the resize lower bound
    *  to a snap multiple instead of the raw 5mm floor. */
   snapActive: boolean
+  /** When true, resize gestures preserve the placement's original
+   *  width:height ratio. Corner handles drive a uniform scale; edge
+   *  handles derive the other dimension from the dragged one. */
+  aspectLock: boolean
   loading: boolean
 }>()
 
@@ -137,19 +141,64 @@ function onPointerMove(event: PointerEvent): void {
     let y = startRegion.y_mm
     let w = startRegion.width_mm
     let h = startRegion.height_mm
-    if (handle.value.includes('w')) {
-      const newW = Math.max(minSize, startRegion.width_mm - dxMm)
-      x = startRegion.x_mm + (startRegion.width_mm - newW)
-      w = newW
-    } else if (handle.value.includes('e')) {
-      w = Math.max(minSize, startRegion.width_mm + dxMm)
-    }
-    if (handle.value.includes('n')) {
-      const newH = Math.max(minSize, startRegion.height_mm - dyMm)
-      y = startRegion.y_mm + (startRegion.height_mm - newH)
-      h = newH
-    } else if (handle.value.includes('s')) {
-      h = Math.max(minSize, startRegion.height_mm + dyMm)
+    const isCornerHandle = handle.value.length === 2
+    const aspect =
+      startRegion.height_mm > 0 ? startRegion.width_mm / startRegion.height_mm : 1
+    if (props.aspectLock && isCornerHandle) {
+      // Corner drag with the ratio locked: pick whichever axis the
+      // operator moved more (in proportional terms) and drive both
+      // dimensions off it.
+      const sxRaw = handle.value.includes('w') ? -dxMm : dxMm
+      const syRaw = handle.value.includes('n') ? -dyMm : dyMm
+      const candW = startRegion.width_mm + sxRaw
+      const candH = startRegion.height_mm + syRaw
+      const sW = candW / startRegion.width_mm
+      const sH = candH / startRegion.height_mm
+      const scale = Math.abs(sW - 1) >= Math.abs(sH - 1) ? sW : sH
+      w = Math.max(minSize, startRegion.width_mm * scale)
+      h = Math.max(minSize, startRegion.height_mm * scale)
+      // Re-clamp the other axis if either hit the floor so the ratio
+      // is preserved at the corner of the allowed region.
+      if (w === minSize) h = Math.max(minSize, minSize / aspect)
+      if (h === minSize) w = Math.max(minSize, minSize * aspect)
+      if (handle.value.includes('w')) x = startRegion.x_mm + (startRegion.width_mm - w)
+      if (handle.value.includes('n')) y = startRegion.y_mm + (startRegion.height_mm - h)
+    } else if (props.aspectLock && !isCornerHandle) {
+      // Edge drag with the ratio locked: derive the perpendicular
+      // dimension from the dragged one, growing symmetrically around
+      // the unchanged axis so the placement doesn't drift sideways.
+      if (handle.value === 'w' || handle.value === 'e') {
+        w =
+          handle.value === 'w'
+            ? Math.max(minSize, startRegion.width_mm - dxMm)
+            : Math.max(minSize, startRegion.width_mm + dxMm)
+        h = Math.max(minSize, w / aspect)
+        if (handle.value === 'w') x = startRegion.x_mm + (startRegion.width_mm - w)
+        y = startRegion.y_mm + (startRegion.height_mm - h) / 2
+      } else {
+        h =
+          handle.value === 'n'
+            ? Math.max(minSize, startRegion.height_mm - dyMm)
+            : Math.max(minSize, startRegion.height_mm + dyMm)
+        w = Math.max(minSize, h * aspect)
+        if (handle.value === 'n') y = startRegion.y_mm + (startRegion.height_mm - h)
+        x = startRegion.x_mm + (startRegion.width_mm - w) / 2
+      }
+    } else {
+      if (handle.value.includes('w')) {
+        const newW = Math.max(minSize, startRegion.width_mm - dxMm)
+        x = startRegion.x_mm + (startRegion.width_mm - newW)
+        w = newW
+      } else if (handle.value.includes('e')) {
+        w = Math.max(minSize, startRegion.width_mm + dxMm)
+      }
+      if (handle.value.includes('n')) {
+        const newH = Math.max(minSize, startRegion.height_mm - dyMm)
+        y = startRegion.y_mm + (startRegion.height_mm - newH)
+        h = newH
+      } else if (handle.value.includes('s')) {
+        h = Math.max(minSize, startRegion.height_mm + dyMm)
+      }
     }
     emit('resize', {
       id: activePlacementId.value,

@@ -30,6 +30,8 @@ const i18n = createI18n({
         flipV: 'Flip V',
         snap: 'Snap',
         snapOff: 'Off',
+        aspectLockOn: 'Aspect locked',
+        aspectLockOff: 'Free resize',
         placements: 'Placements: {count}',
         outOfBounds: 'Some placements exceed the workspace',
         removePlacement: 'Remove',
@@ -167,10 +169,13 @@ describe('SheetPreview with a profile seeded', () => {
   it('renders the workspace outline rect at the profile bounds', async () => {
     const wrapper = mountSheet()
     await nextTick()
-    // The first ``<rect>`` inside the SVG is the white sheet outline
-    // — its width/height should match the profile workspace.
-    const rect = wrapper.find('svg rect')
-    expect(rect.attributes('width')).toBe('297')
-    expect(rect.attributes('height')).toBe('420')
+    // The workspace SVG lives inside the canvas area, not the toolbar
+    // (which now also holds icon ``<svg>``s). Find the rect that
+    // matches the profile bounds rather than the first one.
+    const rects = wrapper.findAll('rect')
+    const ws = rects.find(
+      (r) => r.attributes('width') === '297' && r.attributes('height') === '420',
+    )
+    expect(ws).toBeDefined()
   })
 })

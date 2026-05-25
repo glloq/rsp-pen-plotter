@@ -69,6 +69,7 @@ function mountHandles(selectedId: string | null = null) {
       pxToMm: () => 1,
       snap: (v: number) => v,
       snapActive: false,
+      aspectLock: true,
       loading: false,
     },
     global: { plugins: [i18n] },
