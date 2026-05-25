@@ -5,11 +5,12 @@ import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
 import { FILE_ACCEPT } from '../composables/useFileManager'
 import { validateUploadFile } from '../api/uploadValidation'
-import { shortMime } from '../lib/labels'
 import { useJobStore } from '../stores/job'
 import { useLibraryStore } from '../stores/library'
 import { useToastStore } from '../stores/toasts'
 import { useUiStore } from '../stores/ui'
+import FileLibraryFilters from './FileLibraryFilters.vue'
+import FileListRow from './FileListRow.vue'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -274,12 +275,6 @@ async function removeFile(file: LibraryFileRecord): Promise<void> {
   await library.remove(file.file_id)
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
   if (!event.dataTransfer) return
   event.dataTransfer.setData('application/x-omniplot-library', file.file_id)
@@ -338,46 +333,18 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
         }}
       </p>
 
-      <div class="mt-2 space-y-1">
-        <input
-          v-model="searchInput"
-          type="search"
-          :placeholder="t('files.search')"
-          class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
-          @input="onSearchInput"
-        />
-        <div class="flex items-center gap-1 text-[11px]">
-          <select
-            :value="library.sortKey"
-            class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-1 py-1 text-slate-100"
-            :title="t('files.sort')"
-            @change="onSortChange"
-          >
-            <option value="name">{{ t('files.sortName') }}</option>
-            <option value="date">{{ t('files.sortDate') }}</option>
-            <option value="type">{{ t('files.sortType') }}</option>
-          </select>
-          <button
-            type="button"
-            class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 hover:border-slate-500"
-            :title="library.sortOrder === 'asc' ? t('files.sortAsc') : t('files.sortDesc')"
-            @click="onOrderToggle"
-          >
-            {{ library.sortOrder === 'asc' ? '▲' : '▼' }}
-          </button>
-          <select
-            :value="library.folderFilter === null ? '__all__' : library.folderFilter"
-            class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-1 py-1 text-slate-100"
-            :title="t('files.folder')"
-            @change="onFolderChange"
-          >
-            <option value="__all__">{{ t('files.allFolders') }}</option>
-            <option value="">{{ t('files.rootFolder') }}</option>
-            <option v-for="f in library.folders" :key="f" :value="f">{{ f }}</option>
-            <option value="__new__">{{ t('files.newFolder') }}</option>
-          </select>
-        </div>
-      </div>
+      <FileLibraryFilters
+        :search-input="searchInput"
+        :sort-key="library.sortKey"
+        :sort-order="library.sortOrder"
+        :folder-filter="library.folderFilter"
+        :folders="library.folders"
+        @update:search-input="(v) => (searchInput = v)"
+        @search-input="onSearchInput"
+        @sort-change="onSortChange"
+        @order-toggle="onOrderToggle"
+        @folder-change="onFolderChange"
+      />
     </header>
 
     <div class="flex-1 overflow-y-auto p-2">
@@ -397,81 +364,18 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
       </div>
 
       <ul v-else class="space-y-1">
-        <li
+        <FileListRow
           v-for="row in rows"
           :key="row.file.file_id"
-          class="group flex items-center gap-2 rounded border bg-slate-800 px-2 py-1.5 text-xs cursor-grab active:cursor-grabbing"
-          :class="
-            row.configured
-              ? 'border-emerald-600 bg-emerald-950/30 hover:border-emerald-400'
-              : 'border-slate-700 hover:border-slate-500'
-          "
-          draggable="true"
-          :title="t('files.dragHint')"
-          @dragstart="(e) => onDragStart(e, row.file)"
-          @dblclick="editFile(row.file.file_id)"
-        >
-          <div
-            class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border bg-white"
-            :class="row.configured ? 'border-emerald-500/50' : 'border-slate-600'"
-            :title="row.file.source_mime"
-          >
-            <div
-              v-if="previewSvg(row.file.file_id)"
-              v-html="previewSvg(row.file.file_id)"
-              class="files-thumb h-full w-full"
-            />
-            <span v-else class="font-mono text-[9px] uppercase tracking-wider text-slate-500">
-              {{ shortMime(row.file.source_mime) }}
-            </span>
-          </div>
-          <div class="min-w-0 flex-1">
-            <p
-              class="truncate text-sm"
-              :class="row.configured ? 'text-emerald-100' : 'text-slate-100'"
-              :title="row.file.source_file"
-            >
-              {{ row.file.source_file }}
-            </p>
-            <p class="truncate text-[10px] text-slate-500">
-              {{ formatSize(row.file.size_bytes) }}
-              <span class="text-slate-700"> · </span>
-              {{ row.file.layer_count }} {{ t('upload.layers', row.file.layer_count) }}
-              <span v-if="row.placementCount" class="text-slate-700"> · </span>
-              <span v-if="row.placementCount" class="text-emerald-400">
-                {{ t('files.placements', { count: row.placementCount }) }}
-              </span>
-              <span v-if="row.file.folder" class="text-slate-700"> · </span>
-              <span v-if="row.file.folder" class="text-slate-400">📁 {{ row.file.folder }}</span>
-            </p>
-          </div>
-          <div class="flex shrink-0 items-center gap-0.5 opacity-60 group-hover:opacity-100">
-            <button
-              type="button"
-              class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
-              :title="t('files.editTitle')"
-              @click.stop="editFile(row.file.file_id)"
-            >
-              ✎
-            </button>
-            <button
-              type="button"
-              class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
-              :title="t('files.moveTo')"
-              @click.stop="moveFile(row.file)"
-            >
-              📁
-            </button>
-            <button
-              type="button"
-              class="rounded text-slate-500 hover:text-red-300 px-1"
-              :title="t('files.remove')"
-              @click.stop="removeFile(row.file)"
-            >
-              ✕
-            </button>
-          </div>
-        </li>
+          :file="row.file"
+          :placement-count="row.placementCount"
+          :configured="row.configured"
+          :preview-svg="previewSvg(row.file.file_id) ?? ''"
+          @edit="editFile"
+          @move="moveFile"
+          @remove="removeFile"
+          @dragstart="onDragStart"
+        />
       </ul>
     </div>
 
