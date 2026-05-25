@@ -33,6 +33,7 @@ import {
   pipelineErrorMessage,
   runGeneratePipeline,
 } from '../application/runGeneratePipeline'
+import { attachScenePersistence } from '../infrastructure/storage/sceneStorage'
 
 const DEFAULT_SPEED_MM_S = 60
 
@@ -1363,109 +1364,18 @@ export const useJobStore = defineStore('job', () => {
     setActiveVariant(variantId)
   }
 
-  const SCENE_KEY = 'omniplot.scene.v4'
-  const LEGACY_SCENE_KEYS = ['omniplot.scene.v3', 'omniplot.scene.v2']
-
-  interface SerializableScene {
-    placements: Placement[]
-    selectedPlacementId: string | null
-    selectedProfileName: string
-    scaleMode: 'fit' | 'actual'
-    marginMm: number
-    autoOptimize: boolean
-  }
-
-  function persistScene(): void {
-    try {
-      const data: SerializableScene = {
-        // ``last_file`` is a File handle — can't survive JSON.
-        placements: placements.value.map((p) => ({ ...p, last_file: null })),
-        selectedPlacementId: selectedPlacementId.value,
-        selectedProfileName: selectedProfileName.value,
-        scaleMode: scaleMode.value,
-        marginMm: marginMm.value,
-        autoOptimize: autoOptimize.value,
-      }
-      localStorage.setItem(SCENE_KEY, JSON.stringify(data))
-    } catch {
-      // localStorage may be unavailable (private browsing) or full.
-    }
-  }
-
-  function hydrateScene(): void {
-    try {
-      let raw = localStorage.getItem(SCENE_KEY)
-      let migratingFrom: string | null = null
-      if (!raw) {
-        for (const legacy of LEGACY_SCENE_KEYS) {
-          const legacyRaw = localStorage.getItem(legacy)
-          if (legacyRaw) {
-            raw = legacyRaw
-            migratingFrom = legacy
-            break
-          }
-        }
-        if (!raw) return
-      }
-      const data = JSON.parse(raw) as Partial<SerializableScene>
-      if (Array.isArray(data.placements)) {
-        placements.value = data.placements.map((p) => {
-          // Default the new ``library_file_id`` field for placements
-          // persisted before the library existed.
-          const placement = {
-            ...({
-              library_file_id: null,
-              rerenderable: false,
-              rotation: 0,
-              flip_h: false,
-              flip_v: false,
-            } as Pick<Placement, 'library_file_id' | 'rerenderable' | 'rotation' | 'flip_h' | 'flip_v'>),
-            ...p,
-            last_file: null,
-          } as Placement
-          // v2 → v3 migration: wrap legacy placement state in a default
-          // variant so the variant API has a snapshot to point at.
-          if (!Array.isArray(placement.variants) || !placement.variants.length) {
-            const variant: Variant = {
-              id: newVariantId(),
-              name: i18n.global.t('variants.default'),
-              layer_algorithms: { ...(placement.layer_algorithms ?? {}) },
-              visibility: { ...(placement.visibility ?? {}) },
-            }
-            placement.variants = [variant]
-            placement.active_variant_id = variant.id
-          }
-          return placement
-        })
-      }
-      if (data.selectedPlacementId !== undefined) {
-        selectedPlacementId.value = data.selectedPlacementId
-      }
-      if (data.selectedProfileName) selectedProfileName.value = data.selectedProfileName
-      if (data.scaleMode) scaleMode.value = data.scaleMode
-      if (typeof data.marginMm === 'number') marginMm.value = data.marginMm
-      if (typeof data.autoOptimize === 'boolean') autoOptimize.value = data.autoOptimize
-      if (migratingFrom) {
-        for (const legacy of LEGACY_SCENE_KEYS) localStorage.removeItem(legacy)
-        persistScene()
-      }
-    } catch {
-      // Malformed JSON / no localStorage — start fresh.
-    }
-  }
-
-  let persistTimer: ReturnType<typeof setTimeout> | null = null
-  function schedulePersist(): void {
-    if (persistTimer) clearTimeout(persistTimer)
-    persistTimer = setTimeout(persistScene, 300)
-  }
-
-  hydrateScene()
-  watch(
-    [placements, selectedPlacementId, selectedProfileName, scaleMode, marginMm, autoOptimize],
-    schedulePersist,
-    { deep: true },
-  )
+  // Hydrate from localStorage and auto-persist on changes. The full
+  // (de)serialisation + legacy-key migration logic lives in
+  // ``infrastructure/storage/sceneStorage.ts``.
+  attachScenePersistence({
+    placements,
+    selectedPlacementId,
+    selectedProfileName,
+    scaleMode,
+    marginMm,
+    autoOptimize,
+    makeDefaultVariant: defaultVariant,
+  })
 
   return {
     // Placements API

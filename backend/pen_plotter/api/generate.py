@@ -7,22 +7,11 @@ from pydantic import BaseModel
 
 from pen_plotter.application.generate_service import run_generate
 from pen_plotter.application.plan_resolver import PlanResolutionError
-from pen_plotter.domain.print_plan import (
-    LayerPlan,
-    PlacementPlan,
-    PrintPlan,
-    ResolvedPlan,
-)
+from pen_plotter.domain.print_plan import PrintPlan, ResolvedPlan
 from pen_plotter.persistence import save_plan_snapshot
 from pen_plotter.profiles import get_profile
 
 router = APIRouter()
-
-
-# Legacy alias kept so any external integration importing
-# ``GenerateLayer`` still finds it. New code should use ``LayerPlan``
-# from ``pen_plotter.domain.print_plan`` directly.
-GenerateLayer = LayerPlan
 
 
 class GenerateRequest(PrintPlan):
@@ -83,10 +72,4 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
     )
 
 
-__all__ = [
-    "GenerateLayer",
-    "GenerateRequest",
-    "GenerateResponse",
-    "PlacementPlan",
-    "router",
-]
+__all__ = ["GenerateRequest", "GenerateResponse", "router"]

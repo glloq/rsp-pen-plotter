@@ -1,10 +1,9 @@
 """Use-case services that sit between API adapters and the core engines.
 
-The endpoints under ``adapters/api`` (and the legacy ``api/`` package)
-should not import from ``core`` directly anymore — they hand a
-:class:`PrintPlan` to a service, which resolves defaults, validates
-invariants, calls the engine and returns the result alongside the
-resolved snapshot used for traceability.
+The endpoints in ``pen_plotter.api`` should not import from ``core``
+directly — they hand a :class:`PrintPlan` to a service, which resolves
+defaults, validates invariants, calls the engine and returns the
+result alongside the resolved snapshot used for traceability.
 """
 
 from pen_plotter.application.generate_service import (

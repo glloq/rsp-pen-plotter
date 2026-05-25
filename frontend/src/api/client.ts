@@ -264,16 +264,11 @@ export async function optimizeToolpaths(
   return response.data
 }
 
-// Generate / preflight request shapes are now defined by the backend
-// Pydantic models and exposed via ``domain/print-plan.ts``. Importing
-// from there guarantees front and back see the exact same contract.
-import type {
-  LayerPlan as GenerateLayer,
-  PlacementPlan as Placement,
-  PrintPlan,
-  ResolvedPlan,
-} from '../domain/print-plan'
-export type { GenerateLayer, Placement }
+// Generate / preflight request shapes are defined by the backend
+// Pydantic models and exposed via ``domain/print-plan.ts``. Consumers
+// that need the layer / placement / plan types should import them
+// directly from there.
+import type { PrintPlan, ResolvedPlan } from '../domain/print-plan'
 
 export interface GenerateResponse {
   gcode: string
