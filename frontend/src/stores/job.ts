@@ -752,7 +752,11 @@ export const useJobStore = defineStore('job', () => {
       const detail = result.file
       const bboxes = detail.layers.map((l) => l.bbox)
       const sourceBbox = unionBoxes(bboxes) ?? emptyBbox()
-      const layoutPatch = computeInitialLayout(sourceBbox, targetId)
+      const layoutPatch = computeInitialLayout(
+        sourceBbox,
+        targetId,
+        intrinsicPageSize(detail.upload_metadata),
+      )
       patchPlacement(targetId, {
         library_file_id: detail.file_id,
         source_file: detail.source_file,
@@ -815,7 +819,11 @@ export const useJobStore = defineStore('job', () => {
     const sourceBbox = unionBoxes(bboxes) ?? emptyBbox()
     placements.value = [...placements.value, placement]
     selectedPlacementId.value = placement.id
-    const layoutPatch = computeInitialLayout(sourceBbox, placement.id)
+    const layoutPatch = computeInitialLayout(
+      sourceBbox,
+      placement.id,
+      intrinsicPageSize(detail.upload_metadata),
+    )
     // If this library entry has previously-saved variants, hydrate them
     // onto the new placement so the file renders with its last-used print
     // settings instead of the default conversion. Otherwise fall back to
@@ -877,19 +885,41 @@ export const useJobStore = defineStore('job', () => {
   function computeInitialLayout(
     sourceBbox: BoundingBox,
     placementId: string,
+    intrinsicSize?: { width_mm: number; height_mm: number } | null,
   ): Partial<Placement> {
     const profile = selectedProfile.value
     if (!profile) return {}
     const ws = profile.workspace
     const wsW = ws.x_max - ws.x_min
     const wsH = ws.y_max - ws.y_min
-    const bboxW = Math.max(sourceBbox.x_max - sourceBbox.x_min, 1e-6)
-    const bboxH = Math.max(sourceBbox.y_max - sourceBbox.y_min, 1e-6)
     const usableW = Math.max(wsW - 2 * marginMm.value, wsW * 0.5)
     const usableH = Math.max(wsH - 2 * marginMm.value, wsH * 0.5)
-    const scale = Math.min(usableW / bboxW, usableH / bboxH)
-    const width = bboxW * scale
-    const height = bboxH * scale
+    let width: number
+    let height: number
+    if (
+      intrinsicSize
+      && intrinsicSize.width_mm > 0
+      && intrinsicSize.height_mm > 0
+    ) {
+      // PDF / DOCX / HTML: the converter reports the source page
+      // dimensions in mm so an A4 doc lands at 210×297 mm on the
+      // workspace instead of being scaled to whatever fraction of the
+      // workspace the drawn content happened to cover. Clamp down (but
+      // never up) if the page is larger than the usable area.
+      const fit = Math.min(
+        1,
+        usableW / intrinsicSize.width_mm,
+        usableH / intrinsicSize.height_mm,
+      )
+      width = intrinsicSize.width_mm * fit
+      height = intrinsicSize.height_mm * fit
+    } else {
+      const bboxW = Math.max(sourceBbox.x_max - sourceBbox.x_min, 1e-6)
+      const bboxH = Math.max(sourceBbox.y_max - sourceBbox.y_min, 1e-6)
+      const scale = Math.min(usableW / bboxW, usableH / bboxH)
+      width = bboxW * scale
+      height = bboxH * scale
+    }
     // Preserve existing x/y if the placement already had real content;
     // otherwise centre. We detect "fresh" by checking source_file empty
     // before this upload mutated it — but at this point we've already
@@ -905,6 +935,21 @@ export const useJobStore = defineStore('job', () => {
       }
     }
     return { width_mm: width, height_mm: height }
+  }
+
+  // Pulls the optional native page dimensions out of an upload-metadata
+  // bag. PDF / DOCX / HTML converters report ``page_width_mm`` and
+  // ``page_height_mm``; other formats omit them, in which case the
+  // caller falls back to scaling the content bbox to fit.
+  function intrinsicPageSize(
+    metadata: Record<string, unknown> | undefined,
+  ): { width_mm: number; height_mm: number } | null {
+    const w = Number(metadata?.page_width_mm)
+    const h = Number(metadata?.page_height_mm)
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+      return null
+    }
+    return { width_mm: w, height_mm: h }
   }
 
   function clearJob(): void {
@@ -956,7 +1001,23 @@ export const useJobStore = defineStore('job', () => {
       const result = await uploadFile(file, selectedProfileName.value, next)
       const bboxes = result.job.layers.map((l) => l.bbox)
       const sourceBbox = unionBoxes(bboxes) ?? emptyBbox()
-      const layoutPatch = computeInitialLayout(sourceBbox, targetId)
+      // Force-resize to the new page's native dimensions: each PDF page
+      // may have its own size (a brochure can mix A4 inserts with an A3
+      // cover) and the operator explicitly asked for "if page A4 then
+      // prepare A4" — so we override ``wasFresh`` and always emit
+      // ``x_mm`` / ``y_mm`` recentred on the new page.
+      const intrinsic = intrinsicPageSize(result.metadata)
+      const layoutPatch = computeInitialLayout(sourceBbox, targetId, intrinsic)
+      const profile = selectedProfile.value
+      if (intrinsic && profile) {
+        const ws = profile.workspace
+        const wsW = ws.x_max - ws.x_min
+        const wsH = ws.y_max - ws.y_min
+        const w = layoutPatch.width_mm ?? intrinsic.width_mm
+        const h = layoutPatch.height_mm ?? intrinsic.height_mm
+        layoutPatch.x_mm = Math.max(0, (wsW - w) / 2)
+        layoutPatch.y_mm = Math.max(0, (wsH - h) / 2)
+      }
       patchPlacement(targetId, {
         source_file: result.job.source_file,
         source_mime: result.job.source_mime,

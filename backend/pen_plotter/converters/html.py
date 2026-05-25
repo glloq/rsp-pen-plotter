@@ -48,11 +48,16 @@ class HtmlConverter(Converter):
         } or None
         html = data.decode("utf-8", errors="replace")
         pdf_bytes = HTML(string=html).write_pdf()
-        raw_svg, page_count = pdf_bytes_to_svg(pdf_bytes, page_index)
+        raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(pdf_bytes, page_index)
         svg, warnings = postprocess_pdf_svg(raw_svg, bitmap_options=bitmap_options)
         return ConversionResult(
             svg=svg,
             source_mime="image/svg+xml",
             warnings=warnings,
-            metadata={"page_count": page_count, "page": page_index},
+            metadata={
+                "page_count": page_count,
+                "page": page_index,
+                "page_width_mm": width_mm,
+                "page_height_mm": height_mm,
+            },
         )

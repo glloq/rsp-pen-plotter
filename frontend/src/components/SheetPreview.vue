@@ -334,6 +334,32 @@ function onVariantChange(event: Event, placementId: string): void {
   store.setPlacementActiveVariant(placementId, select.value)
 }
 
+// PDF page navigation from the in-canvas placement chip. The select
+// shows up next to the variant picker whenever the source document
+// has more than one page (PDF / DOCX / HTML go through the converter
+// that reports ``page_count`` in upload metadata). Changing the
+// selection re-converts the source for the new page and refits the
+// placement to that page's native millimetre dimensions — see
+// ``changePage`` in the job store.
+function placementPageCount(p: { upload_metadata: Record<string, unknown> }): number {
+  return Number(p.upload_metadata?.page_count ?? 0)
+}
+function placementCurrentPage(p: { upload_metadata: Record<string, unknown> }): number {
+  return Number(p.upload_metadata?.page ?? 0)
+}
+async function onPageChange(event: Event, placementId: string): Promise<void> {
+  const select = event.target as HTMLSelectElement
+  const value = Number(select.value)
+  if (!Number.isFinite(value)) return
+  // The chip belongs to the SELECTED placement, but ``changePage``
+  // implicitly targets the currently selected one — bail if the
+  // selection got out from under us between mousedown and change.
+  if (store.selectedPlacementId !== placementId) {
+    store.selectPlacement(placementId)
+  }
+  await store.changePage(value)
+}
+
 function startResize(h: typeof handle.value, event: PointerEvent, id: string): void {
   if (event.button !== 0) return
   mode.value = 'resize'
@@ -840,15 +866,37 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             </g>
             <foreignObject
               v-if="store.selectedPlacementId === rp.placement.id"
-              :x="rp.footprint.x_max - 160"
+              :x="rp.footprint.x_max - 240"
               :y="rp.footprint.y_min - 26"
-              width="160"
+              width="240"
               height="22"
             >
               <div
                 xmlns="http://www.w3.org/1999/xhtml"
                 class="flex items-center justify-end gap-1"
               >
+                <select
+                  v-if="placementPageCount(rp.placement) > 1"
+                  class="max-w-[100px] truncate rounded border border-sky-600 bg-sky-950 px-1 py-0.5 text-[11px] text-sky-100 shadow focus:outline-none focus:ring-1 focus:ring-sky-400"
+                  :value="placementCurrentPage(rp.placement)"
+                  :title="t('upload.pageOf', {
+                    current: placementCurrentPage(rp.placement) + 1,
+                    total: placementPageCount(rp.placement),
+                  })"
+                  :disabled="store.loading"
+                  @change="(e) => onPageChange(e, rp.placement.id)"
+                  @pointerdown.stop
+                  @click.stop
+                  @dblclick.stop
+                >
+                  <option
+                    v-for="n in placementPageCount(rp.placement)"
+                    :key="n - 1"
+                    :value="n - 1"
+                  >
+                    {{ t('upload.pageOf', { current: n, total: placementPageCount(rp.placement) }) }}
+                  </option>
+                </select>
                 <select
                   v-if="rp.placement.variants.length > 1"
                   class="max-w-[120px] truncate rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-[11px] text-slate-100 shadow focus:outline-none focus:ring-1 focus:ring-emerald-500"

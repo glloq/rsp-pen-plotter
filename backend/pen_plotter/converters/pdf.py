@@ -17,8 +17,11 @@ import pymupdf
 from pen_plotter.converters.base import ConversionResult, Converter
 from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
 
+# PDF user-space units are points (1 pt = 1/72 inch).
+PT_TO_MM = 25.4 / 72.0
 
-def pdf_bytes_to_svg(data: bytes, page_index: int) -> tuple[str, int]:
+
+def pdf_bytes_to_svg(data: bytes, page_index: int) -> tuple[str, int, float, float]:
     """Render one page of a PDF document to raw SVG (pre-postprocessing).
 
     Args:
@@ -26,7 +29,10 @@ def pdf_bytes_to_svg(data: bytes, page_index: int) -> tuple[str, int]:
         page_index: Zero-based index of the page to render.
 
     Returns:
-        A ``(svg, page_count)`` pair.
+        A ``(svg, page_count, page_width_mm, page_height_mm)`` tuple. The
+        page dimensions come from the PDF's MediaBox so a downstream
+        consumer can size an A4 page at 210 × 297 mm without having to
+        re-parse the PDF.
 
     Raises:
         ValueError: If the PDF has no pages or the index is out of range.
@@ -37,8 +43,11 @@ def pdf_bytes_to_svg(data: bytes, page_index: int) -> tuple[str, int]:
             raise ValueError("PDF has no pages")
         if not 0 <= page_index < page_count:
             raise ValueError(f"page {page_index} out of range (0..{page_count - 1})")
-        svg = doc[page_index].get_svg_image()
-    return svg, page_count
+        page = doc[page_index]
+        svg = page.get_svg_image()
+        width_mm = float(page.rect.width) * PT_TO_MM
+        height_mm = float(page.rect.height) * PT_TO_MM
+    return svg, page_count, width_mm, height_mm
 
 
 class PdfConverter(Converter):
@@ -78,11 +87,16 @@ class PdfConverter(Converter):
             if key in opts
         } or None
 
-        raw_svg, page_count = pdf_bytes_to_svg(data, page_index)
+        raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(data, page_index)
         svg, warnings = postprocess_pdf_svg(raw_svg, bitmap_options=bitmap_options)
         return ConversionResult(
             svg=svg,
             source_mime="image/svg+xml",
-            metadata={"page_count": page_count, "page": page_index},
+            metadata={
+                "page_count": page_count,
+                "page": page_index,
+                "page_width_mm": width_mm,
+                "page_height_mm": height_mm,
+            },
             warnings=warnings,
         )

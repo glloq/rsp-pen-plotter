@@ -92,6 +92,6 @@ class EpsConverter(Converter):
             if key in opts
         } or None
         pdf_bytes = _eps_to_pdf(data)
-        raw_svg, _ = pdf_bytes_to_svg(pdf_bytes, 0)
+        raw_svg, *_ = pdf_bytes_to_svg(pdf_bytes, 0)
         svg, warnings = postprocess_pdf_svg(raw_svg, bitmap_options=bitmap_options)
         return ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings)
