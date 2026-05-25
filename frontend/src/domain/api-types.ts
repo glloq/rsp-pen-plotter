@@ -1899,6 +1899,8 @@ export interface components {
             optimize: boolean;
             /** Simplify Tolerance Mm */
             simplify_tolerance_mm?: number | null;
+            /** Assigned Color Hex */
+            assigned_color_hex?: string | null;
         };
         /**
          * MachineProfile

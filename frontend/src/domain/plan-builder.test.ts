@@ -39,6 +39,7 @@ describe('toLayerPlan', () => {
       pause_before: 'auto',
       optimize: true,
       simplify_tolerance_mm: 0.05,
+      assigned_color_hex: null,
     })
   })
 

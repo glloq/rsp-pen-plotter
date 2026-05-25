@@ -297,6 +297,15 @@ def generate_gcode(
     previous_slot: int | None = None
     previous_color: str | None = None
 
+    # Pre-compute hex → installed-pen-slot index so the assignment can
+    # promote a mono-pen swap into a tool-change when the operator's
+    # picked hex matches a mounted slot. Lower-cased lookup so case
+    # differences across the inventory ↔ profile YAML don't miss matches.
+    pen_hex_to_slot: dict[str, int] = {}
+    for pen_index, slot_pen in pens.items():
+        if slot_pen.installed and slot_pen.color:
+            pen_hex_to_slot.setdefault(slot_pen.color.lower(), pen_index)
+
     if not bounds.empty:
         for layer in layer_geometry:
             setting = overrides.get(layer.label)
@@ -304,10 +313,24 @@ def generate_gcode(
             source_color = setting.source_color if setting else None
             color_label = setting.color_label if setting else None
             pause_before = setting.pause_before if setting else "auto"
+            assigned_hex = setting.assigned_color_hex if setting else None
+
+            # L7: when the operator picked an assigned colour AND it
+            # matches an installed pen by hex, promote the prompt to a
+            # proper tool-change with the magazine slot. Without a
+            # matching pen we still surface the assigned hex in the
+            # mono-pen swap prompt so the operator knows which Sharpie
+            # to grab — the assignment was made against the active
+            # pool (pens / available / union) at /upload time.
+            promoted_slot: int | None = None
+            if assigned_hex and slot is None:
+                promoted_slot = pen_hex_to_slot.get(assigned_hex.lower())
+            effective_slot = slot if slot is not None else promoted_slot
+            effective_color = assigned_hex or source_color
 
             decision = should_pause(
-                slot=slot,
-                source_color=source_color,
+                slot=effective_slot,
+                source_color=effective_color,
                 pause_before=pause_before,
                 previous_slot=previous_slot,
                 previous_color=previous_color,
@@ -316,26 +339,36 @@ def generate_gcode(
             )
             if decision.pause:
                 if decision.slot_changed:
-                    pen = pens.get(slot)  # type: ignore[arg-type]
-                    if pen is None or not pen.installed:
-                        out.append(f"; WARNING: pen slot {slot} is not installed in the magazine")
-                    pen_name = pen.name if pen and pen.name else f"Pen {slot}"
+                    prompt_pen = (
+                        pens.get(effective_slot) if effective_slot is not None else None
+                    )
+                    if prompt_pen is None or not prompt_pen.installed:
+                        out.append(
+                            f"; WARNING: pen slot {effective_slot} is not installed in the magazine"
+                        )
+                    pen_name = (
+                        prompt_pen.name
+                        if prompt_pen and prompt_pen.name
+                        else f"Pen {effective_slot}"
+                    )
                     out.append(
-                        tool_change_t.render(profile=profile, slot=slot, pen_name=pen_name)
+                        tool_change_t.render(
+                            profile=profile, slot=effective_slot, pen_name=pen_name
+                        )
                     )
                 else:
                     # Mono-pen path (or "always"/initial pause without slot): emit
                     # a colour-themed prompt so the streamer can guide the swap.
-                    color = source_color or "#000000"
+                    color = effective_color or "#000000"
                     label = color_label or color
                     out.append(
                         pen_color_change_t.render(profile=profile, color=color, label=label)
                     )
 
-            if slot is not None:
-                previous_slot = slot
-            if source_color is not None:
-                previous_color = source_color
+            if effective_slot is not None:
+                previous_slot = effective_slot
+            if effective_color is not None:
+                previous_color = effective_color
 
             # Always emit a layer-info marker so downstream consumers (the
             # simulator UI in particular) can attribute every G-code line
@@ -343,12 +376,16 @@ def generate_gcode(
             # triggered. The comment is purely informational — firmwares
             # ignore it — and machine-readable: a fixed-shape key/value
             # block so the frontend parser can split on whitespace.
-            layer_color = source_color or ""
+            # ``layer_color`` reflects the *assigned* hex when set so the
+            # simulator highlights the chosen ink rather than the raw
+            # centroid the operator overrode.
+            layer_color = effective_color or ""
             layer_label = (color_label or layer.label or "").replace('"', "'")
-            layer_slot = "" if slot is None else str(slot)
+            layer_slot = "" if effective_slot is None else str(effective_slot)
             out.append(
                 f'; LAYER label="{layer_label}" color={layer_color} slot={layer_slot}'
             )
+            slot = effective_slot
 
             speed = (setting.drawing_speed_mm_s if setting else None) or profile.drawing_speed_mm_s
             feed = speed * 60.0

@@ -4256,6 +4256,17 @@
               }
             ],
             "title": "Simplify Tolerance Mm"
+          },
+          "assigned_color_hex": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Color Hex"
           }
         },
         "type": "object",

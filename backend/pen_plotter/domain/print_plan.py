@@ -89,6 +89,11 @@ class LayerPlan(BaseModel):
     pause_before: PausePolicy = "auto"
     optimize: bool = True
     simplify_tolerance_mm: float | None = None
+    # Operator-picked colour from the active pool (L5/L6). When set,
+    # the G-code prompt names this hex instead of the raw centroid;
+    # when the hex also matches an installed pen the tool-change path
+    # uses the pen slot rather than the mono-pen swap prompt.
+    assigned_color_hex: str | None = None
 
 
 class PlanMetadata(BaseModel):
