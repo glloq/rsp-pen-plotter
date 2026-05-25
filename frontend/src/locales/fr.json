@@ -653,7 +653,10 @@
     "pageHint": "autour de la zone imprimable",
     "alignLeft": "Gauche",
     "alignCenter": "Centré",
-    "alignRight": "Droite"
+    "alignRight": "Droite",
+    "docHeader": "Rendu du texte",
+    "hersheyToggle": "Re-rendre le texte avec une police Hershey monolinéaire",
+    "hersheyToggleHint": "Remplace les contours TrueType du document par des polylignes monolinéaires aux mêmes positions et tailles — seule façon de tracer lisiblement du texte de document avec un stylo."
   },
   "convert": {
     "options": "Options de conversion",

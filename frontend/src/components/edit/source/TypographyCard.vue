@@ -20,12 +20,22 @@ interface TypographyDraft {
   bold: boolean
   italic: boolean
   letter_spacing_mm: number
+  hershey_text: boolean
 }
 
-defineProps<{
-  typo: TypographyDraft
-  fonts: string[]
-}>()
+// ``mode`` decides which slice of the form is relevant for the active
+// source: ``typography`` (.txt / .md) drives every knob because the
+// renderer lays text out from scratch; ``document`` (PDF / DOCX / HTML)
+// only needs the font face + stroke width because per-span size and
+// position come from the source document.
+withDefaults(
+  defineProps<{
+    typo: TypographyDraft
+    fonts: string[]
+    mode?: 'typography' | 'document'
+  }>(),
+  { mode: 'typography' },
+)
 
 const { t } = useI18n()
 
@@ -119,15 +129,43 @@ function sortedFonts(fonts: string[]): FontOption[] {
 </script>
 
 <template>
-  <!-- Live preview lives in the left pane; this card is the form. Three
-       sections keep the knobs grouped by concern: Font (face + size +
-       weight + slant), Style (alignment + spacing + stroke width) and
-       Page (margins + page size). All visible by default — collapsing
-       hid the controls and the operator reported "no font controls at
-       all". -->
+  <!-- Live preview lives in the left pane; this card is the form.
+       Typography sources (.txt / .md) get the full layout grid — font,
+       size, bold / italic, alignment, line spacing, stroke width,
+       margins and page size — because the renderer lays out from
+       scratch. Document sources (PDF / DOCX / HTML) only expose the
+       Hershey toggle + face + stroke width because the document
+       itself dictates per-span size and position; everything else
+       gets ignored by the backend re-render path. -->
   <div class="space-y-3">
+    <!-- =================== DOCUMENT MODE TOGGLE =================== -->
+    <section
+      v-if="mode === 'document'"
+      class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs"
+    >
+      <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+        {{ t('typography.docHeader') }}
+      </h3>
+      <label class="flex items-start gap-2 text-slate-300">
+        <input
+          v-model="typo.hershey_text"
+          type="checkbox"
+          class="mt-0.5 h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-sky-500"
+        />
+        <span>
+          <span class="font-medium">{{ t('typography.hersheyToggle') }}</span>
+          <span class="block text-[10px] text-slate-500 leading-snug">
+            {{ t('typography.hersheyToggleHint') }}
+          </span>
+        </span>
+      </label>
+    </section>
+
     <!-- =================== FONT =================== -->
-    <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2.5 text-xs">
+    <section
+      v-if="mode === 'typography' || typo.hershey_text"
+      class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2.5 text-xs"
+    >
       <header class="flex items-baseline justify-between">
         <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
           {{ t('typography.fontSection') }}
@@ -149,7 +187,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
         </select>
       </label>
 
-      <div class="grid grid-cols-2 gap-2">
+      <div v-if="mode === 'typography'" class="grid grid-cols-2 gap-2">
         <label class="block text-slate-400">
           {{ t('convert.fontSize') }}
           <input
@@ -171,11 +209,10 @@ function sortedFonts(fonts: string[]): FontOption[] {
         </label>
       </div>
 
-      <!-- Bold / Italic. Hershey fonts are single-stroke so "bold"
-           double-passes each glyph with a small offset and "italic"
-           shears every point by ~12°. The visual treatment of the
-           label (bold / italic text) hints at the effect. -->
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <!-- Bold / Italic only matter when laying out from scratch.
+           Document spans carry their own bold/italic flags that the
+           backend reads from the source. -->
+      <div v-if="mode === 'typography'" class="flex flex-wrap items-center gap-x-4 gap-y-2">
         <label class="flex items-center gap-1.5 text-slate-300">
           <input
             v-model="typo.bold"
@@ -193,10 +230,26 @@ function sortedFonts(fonts: string[]): FontOption[] {
           <span class="italic">{{ t('convert.italic') }}</span>
         </label>
       </div>
+
+      <!-- Stroke width applies in both modes (cosmetic SVG attribute
+           plus the visual hint to the simulator). -->
+      <label class="block text-slate-400">
+        {{ t('convert.strokeWidth') }}
+        <input
+          v-model.number="typo.stroke_width_mm"
+          type="number"
+          step="0.1"
+          min="0.05"
+          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+        />
+      </label>
     </section>
 
-    <!-- =================== STYLE =================== -->
-    <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+    <!-- =================== LAYOUT (typography sources only) =================== -->
+    <section
+      v-if="mode === 'typography'"
+      class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs"
+    >
       <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
         {{ t('typography.layoutSection') }}
       </h3>
@@ -222,21 +275,14 @@ function sortedFonts(fonts: string[]): FontOption[] {
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
           />
         </label>
-        <label class="block text-slate-400 col-span-2">
-          {{ t('convert.strokeWidth') }}
-          <input
-            v-model.number="typo.stroke_width_mm"
-            type="number"
-            step="0.1"
-            min="0.05"
-            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-          />
-        </label>
       </div>
     </section>
 
-    <!-- =================== PAGE =================== -->
-    <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+    <!-- =================== PAGE (typography sources only) =================== -->
+    <section
+      v-if="mode === 'typography'"
+      class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs"
+    >
       <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
         {{ t('typography.pageSection') }}
       </h3>

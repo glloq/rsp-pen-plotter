@@ -3,8 +3,17 @@
 from pen_plotter.typography.hershey import (
     Block,
     HersheyRenderer,
+    PlacedSpan,
     TypographyOptions,
     available_fonts,
+    render_placed_spans,
 )
 
-__all__ = ["Block", "HersheyRenderer", "TypographyOptions", "available_fonts"]
+__all__ = [
+    "Block",
+    "HersheyRenderer",
+    "PlacedSpan",
+    "TypographyOptions",
+    "available_fonts",
+    "render_placed_spans",
+]

@@ -84,6 +84,117 @@ class Block:
     size_mm: float
 
 
+@dataclass
+class PlacedSpan:
+    """A text run rendered at a fixed page position.
+
+    Used by the PDF / DOCX / HTML re-render pipeline, where the
+    surrounding document already places each text span at an absolute
+    location with its own font size. Coordinates are in the surrounding
+    SVG's user units — typically points for PyMuPDF output, millimeters
+    for our own typography flow — and ``baseline_y`` follows SVG
+    convention (y grows down). ``size`` is the font em-height in the
+    same units; the renderer normalizes Hershey output so a capital
+    letter is ~70 % of that height, matching the cap-height convention
+    of TrueType faces.
+    """
+
+    text: str
+    x: float
+    baseline_y: float
+    size: float
+    bold: bool = False
+    italic: bool = False
+
+
+def render_placed_spans(
+    spans: list[PlacedSpan],
+    *,
+    font: str = "futural",
+    stroke_width: float = 0.3,
+    label: str = "text",
+) -> str:
+    """Render placed text spans as a labeled single-stroke SVG group.
+
+    Each span is drawn at its own ``(x, baseline_y)`` using its own
+    ``size`` (and optional bold / italic). Returns one
+    ``<g inkscape:label="…">`` holding one ``<path>`` per span, ready to
+    be appended to a host SVG document. Returns an empty string when
+    every span is blank.
+
+    Args:
+        spans: Ordered text spans to render.
+        font: Bundled Hershey font name. Falls back to ``futural`` if
+            the request names an unknown face.
+        stroke_width: SVG ``stroke-width`` attribute (cosmetic; the pen
+            plotter ignores it but downstream consumers may render it).
+        label: ``inkscape:label`` for the group — drives the layer name
+            that ``extract_layers`` produces.
+    """
+    if not spans:
+        return ""
+    if font not in available_fonts():
+        font = "futural"
+    hf = HersheyFonts()
+    hf.load_default_font(font)
+
+    current_size = 0.0
+    paths: list[str] = []
+    for span in spans:
+        if span.size <= 0 or not span.text.strip():
+            continue
+        if span.size != current_size:
+            hf.normalize_rendering(span.size)
+            current_size = span.size
+        path_d = _placed_span_path(hf, span)
+        if path_d:
+            paths.append(f'<path d="{path_d}"/>')
+
+    if not paths:
+        return ""
+    # ``xmlns:inkscape`` is declared inline so the fragment parses
+    # standalone — callers that splice it into a host SVG via
+    # ``xml.etree`` would otherwise hit an "unbound prefix" error
+    # because the host's namespace declarations aren't visible to
+    # ``ET.fromstring``.
+    return (
+        '<g xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
+        f'fill="none" stroke="black" stroke-width="{stroke_width}" '
+        f"inkscape:label={quoteattr(label)}>" + "".join(paths) + "</g>"
+    )
+
+
+def _placed_span_path(hf: HersheyFonts, span: PlacedSpan) -> str:
+    """Serialize one placed span's strokes to an SVG path ``d`` value.
+
+    Handles the same synthetic style transforms as :class:`HersheyRenderer`
+    (bold = double-pass with a small x offset; italic = ~12° x-shear)
+    so the placed flow and the laid-out flow paint identical glyphs.
+    """
+    italic_shear = math.tan(math.radians(_ITALIC_SLANT_DEG)) if span.italic else 0.0
+    bold_offset = span.size * _BOLD_OFFSET_RATIO if span.bold else 0.0
+    passes = (0.0, bold_offset) if span.bold else (0.0,)
+
+    subpaths: list[str] = []
+    for offset_x in passes:
+        for stroke in hf.strokes_for_text(span.text):
+            pts = list(stroke)
+            if len(pts) < 2:
+                continue
+            placed = [
+                (
+                    span.x + offset_x + x + y * italic_shear,
+                    span.baseline_y - y,
+                )
+                for x, y in pts
+            ]
+            head = f"M{placed[0][0]:.2f} {placed[0][1]:.2f}"
+            tail = " ".join(f"L{px:.2f} {py:.2f}" for px, py in placed[1:])
+            subpaths.append(f"{head} {tail}")
+    return " ".join(subpaths)
+
+
 class HersheyRenderer:
     """Lays out text blocks into a single-stroke SVG document."""
 

@@ -653,7 +653,10 @@
     "pageHint": "around the printable area",
     "alignLeft": "Left",
     "alignCenter": "Centered",
-    "alignRight": "Right"
+    "alignRight": "Right",
+    "docHeader": "Text rendering",
+    "hersheyToggle": "Re-render text with Hershey single-stroke font",
+    "hersheyToggleHint": "Replaces the document's TrueType glyph outlines with single-stroke polylines at the same positions and sizes — the only legible way to plot document text with a pen."
   },
   "convert": {
     "options": "Conversion options",

@@ -146,13 +146,23 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
 <template>
   <!-- Typography source: dedicated card replaces the bitmap content. -->
   <section v-if="fm.kind.value === 'typography'" class="space-y-3">
-    <TypographyCard :typo="draft.typo.value" :fonts="fonts" />
+    <TypographyCard :typo="draft.typo.value" :fonts="fonts" mode="typography" />
   </section>
 
   <!-- Bitmap or document (PDF). Document gets a BlockMapCard on top
        of the standard bitmap controls because the PDF's raster
-       regions still go through the same segmentation pipeline. -->
+       regions still go through the same segmentation pipeline. The
+       Hershey text re-render card sits at the very top of the
+       document case so the operator's first reflex on "I want to
+       plot this PDF" lands on the toggle that makes the text
+       legible. -->
   <section v-else-if="fm.showsBitmapForm.value" class="space-y-3">
+    <TypographyCard
+      v-if="fm.kind.value === 'document'"
+      :typo="draft.typo.value"
+      :fonts="fonts"
+      mode="document"
+    />
     <BlockMapCard v-if="fm.kind.value === 'document'" />
 
     <ColorModeCard :mode="printMode" @update:mode="(mode) => draft.setPrintMode(mode)" />

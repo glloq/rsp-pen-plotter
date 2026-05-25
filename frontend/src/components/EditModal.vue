@@ -187,8 +187,13 @@ function resetSplit(): void {
 // this, the operator's last-used tab (typically Image, since that's
 // the default for bitmaps) silently hides every typography knob and
 // the modal looks like it has no font settings at all.
+//
+// Documents (PDF / DOCX / HTML) also need the jump because the
+// Hershey-text re-render toggle — the only way to plot legible text
+// from those sources — lives on the Style tab. The operator's first
+// reaction otherwise is "the modal has no font controls".
 function ensureTabAppliesToSource(): void {
-  if (fm.kind.value !== 'typography') return
+  if (fm.kind.value !== 'typography' && fm.kind.value !== 'document') return
   if (activeTab.value === 'image' || activeTab.value === 'svg') {
     activeTab.value = 'style'
   }

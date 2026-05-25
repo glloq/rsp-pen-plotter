@@ -10,7 +10,7 @@ from typing import Any, ClassVar
 from weasyprint import HTML
 
 from pen_plotter.converters.base import ConversionResult, Converter
-from pen_plotter.converters.pdf import pdf_bytes_to_svg
+from pen_plotter.converters.pdf import build_hershey_text_group, pdf_bytes_to_svg
 from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
 
 
@@ -49,7 +49,12 @@ class HtmlConverter(Converter):
         html = data.decode("utf-8", errors="replace")
         pdf_bytes = HTML(string=html).write_pdf()
         raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(pdf_bytes, page_index)
-        svg, warnings = postprocess_pdf_svg(raw_svg, bitmap_options=bitmap_options)
+        hershey_group = build_hershey_text_group(pdf_bytes, page_index, opts)
+        svg, warnings = postprocess_pdf_svg(
+            raw_svg,
+            bitmap_options=bitmap_options,
+            hershey_text_group=hershey_group or None,
+        )
         return ConversionResult(
             svg=svg,
             source_mime="image/svg+xml",

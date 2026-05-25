@@ -82,6 +82,51 @@ def _combined_transform(use: ET.Element) -> str | None:
     return " ".join(parts) if parts else None
 
 
+def strip_text_glyphs(root: ET.Element) -> int:
+    """Remove PyMuPDF text glyphs and their <use> instances.
+
+    PyMuPDF emits PDF text as ``<use data-text="X" xlink:href="#font_..."/>``
+    referencing ``<defs><path id="font_..." .../></defs>``. The
+    Hershey re-render path wants the SVG to carry every non-text
+    drawing untouched but no text content, so the caller can layer
+    single-stroke text on top at the operator's chosen font / size.
+
+    Both the references and their orphaned glyph definitions are
+    dropped. Returns the number of ``<use>`` elements removed.
+    """
+    removed = 0
+    parent_map = {child: parent for parent in root.iter() for child in parent}
+    for use in list(root.iter()):
+        if _local(use.tag) != "use":
+            continue
+        href = (
+            use.get("href")
+            or use.get(_XLINK_HREF)
+            or use.get("xlink:href")
+            or ""
+        ).lstrip("#")
+        # PyMuPDF tags every text-glyph reference with ``data-text``
+        # and points it at an id starting with ``font_``. Either signal
+        # is enough — accept both so a future PyMuPDF version that
+        # tweaks one of them still works.
+        is_text = use.get("data-text") is not None or href.startswith("font_")
+        if not is_text:
+            continue
+        parent = parent_map.get(use)
+        if parent is not None:
+            parent.remove(use)
+            removed += 1
+    # Drop the now-unreferenced glyph definitions so the SVG stays lean.
+    for defs in list(root.iter()):
+        if _local(defs.tag) != "defs":
+            continue
+        for child in list(defs):
+            cid = child.get("id") or ""
+            if cid.startswith("font_"):
+                defs.remove(child)
+    return removed
+
+
 def expand_use_refs(root: ET.Element) -> int:
     """Replace every ``<use>`` whose target is local with the referenced geometry.
 
@@ -384,6 +429,7 @@ def postprocess_pdf_svg(
     svg: str,
     *,
     bitmap_options: dict[str, Any] | None = None,
+    hershey_text_group: str | None = None,
 ) -> tuple[str, list[str]]:
     """Run the full PDF-SVG post-processing chain.
 
@@ -392,10 +438,23 @@ def postprocess_pdf_svg(
     remaining vector content into a ``text`` layer. The output is a
     self-contained pivot SVG ready for sanitize + extract_layers.
 
+    When ``hershey_text_group`` is supplied, the function instead
+    strips every PyMuPDF text glyph from the input (so the operator's
+    original-font outlines don't double up with our re-render) and
+    appends the provided SVG fragment as a new top-level group. The
+    fragment is expected to be a single ``<g inkscape:label="...">``
+    element — usually produced by
+    :func:`pen_plotter.typography.render_placed_spans` — so it lands at
+    the same nesting level as the existing labeled layers and
+    ``extract_layers`` picks it up unchanged.
+
     Args:
         svg: Raw PyMuPDF SVG output.
         bitmap_options: Optional dictionary forwarded to the bitmap
             converter for raster vectorization (algorithm, palette, etc.).
+        hershey_text_group: Optional SVG ``<g>`` fragment to inject in
+            place of the original PDF text. When provided the original
+            text glyphs are removed first.
 
     Returns:
         ``(svg, warnings)``: the post-processed SVG plus any per-image
@@ -406,10 +465,28 @@ def postprocess_pdf_svg(
     except ET.ParseError:
         return svg, ["Could not parse SVG for post-processing."]
 
+    if hershey_text_group:
+        # Remove the original text BEFORE expanding <use>s, otherwise
+        # the glyph paths get inlined and we can no longer tell them
+        # apart from real drawings.
+        strip_text_glyphs(root)
     expand_use_refs(root)
     _, image_warnings = vectorize_embedded_images(root, bitmap_options=bitmap_options)
     hoist_labeled_groups(root)
-    wrap_text_layer(root)
+    # When Hershey is taking over the "text" label, the catch-all
+    # wrapper for the document's remaining vector content (rules,
+    # shapes, lines, …) needs a different layer name. Otherwise the
+    # operator ends up with two distinct "text" layers — one with the
+    # Hershey strokes, one with the non-text drawings — and the
+    # per-layer pen-slot UI can't tell them apart.
+    wrap_text_layer(root, label="drawings" if hershey_text_group else "text")
+
+    if hershey_text_group:
+        try:
+            fragment = ET.fromstring(hershey_text_group)
+            root.append(fragment)
+        except ET.ParseError:
+            image_warnings.append("Hershey text group was not valid SVG; skipped.")
 
     # Ensure xmlns:inkscape is on the root so downstream parsers see the
     # labels we just added.
