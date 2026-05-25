@@ -285,7 +285,7 @@ def _format_chains_points(
         return []
     sizes = [len(c) for c in chains]
     combined = np.concatenate(chains, axis=0).tolist()
-    pairs = ["%.2f,%.2f" % (x, y) for x, y in combined]
+    pairs = [f"{x:.2f},{y:.2f}" for x, y in combined]
     out: list[str] = []
     idx = 0
     for n in sizes:

@@ -205,6 +205,10 @@ def generate_gcode(
         scale_mode: ``"fit"`` scales the drawing to the workspace (centered with
             a margin); ``"actual"`` maps one user unit to one millimeter.
         margin_mm: Margin used when ``scale_mode`` is ``"fit"``.
+        placement: Optional sheet rectangle inside the workspace. When
+            supplied, ``scale_mode`` operates against this sub-region
+            instead of the full workspace, and the homing G0 lands at
+            the rectangle's offset rather than the workspace origin.
 
     Returns:
         The generated G-code as a single string.

@@ -152,12 +152,13 @@ def fixed_palette(
 def drop_small_regions(
     labels: NDArray[np.intp], min_pixels: int
 ) -> NDArray[np.intp]:
-    """Reassign connected components smaller than ``min_pixels`` to their
-    most-frequent neighbouring label.
+    """Repaint connected components smaller than ``min_pixels`` over their neighbours.
 
-    No-op when ``min_pixels <= 0`` or the input is uniform. We use
-    ``scipy.ndimage.label`` to identify components within each cluster, then
-    repaint each small one to the modal label among its 4-connected
+    Each small component is reassigned to the most-frequent label among
+    its 4-connected neighbours. No-op when ``min_pixels <= 0`` or the
+    input is uniform. We use ``scipy.ndimage.label`` to identify
+    components within each cluster, then repaint each small one to the
+    modal label among its 4-connected
     neighbours.
     """
     if min_pixels <= 0:
@@ -257,7 +258,9 @@ def _rgb_to_lab(rgb: NDArray[np.float64]) -> NDArray[np.float64]:
     f = xyz / white
     eps = (6 / 29) ** 3
     f = np.where(f > eps, np.cbrt(f), f / (3 * (6 / 29) ** 2) + 4 / 29)
-    L = 116.0 * f[..., 1] - 16.0
+    # Lab channel names are uppercase L by convention (CIE definition);
+    # keep the lowercase a / b to match the spec naming exactly.
+    L = 116.0 * f[..., 1] - 16.0  # noqa: N806
     a = 500.0 * (f[..., 0] - f[..., 1])
     b = 200.0 * (f[..., 1] - f[..., 2])
     return np.stack([L, a, b], axis=-1)

@@ -46,6 +46,9 @@ def preflight_report(
         layers: Per-layer pen-slot and speed settings.
         scale_mode: Placement mode, mirroring G-code generation.
         margin_mm: Margin used when ``scale_mode`` is ``"fit"``.
+        placement: Optional sheet rectangle inside the workspace.
+            Mirrors the engine's behaviour so the report's bounds /
+            warnings match what generation will actually do.
 
     Returns:
         A report with bounds, estimates, and any blocking warnings.

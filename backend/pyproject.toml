@@ -59,16 +59,6 @@ ignore = ["D203", "D213"]
 # Algorithm classes all inherit from RasterAlgorithm and override `render_layer`
 # with a uniform signature; the class-level docstring is the canonical doc.
 "pen_plotter/converters/algorithms/*.py" = ["D102"]
-# Pre-existing baseline debt — to be cleaned up incrementally; CI still catches
-# new violations on any other file. Tracked alongside the L0 lot.
-"pen_plotter/api/files.py" = ["D205"]
-"pen_plotter/api/system.py" = ["B904"]
-"pen_plotter/converters/algorithms/centerline.py" = ["UP031"]
-"pen_plotter/converters/bitmap.py" = ["N806", "D417"]
-"pen_plotter/converters/segmentation.py" = ["D205", "N806"]
-"pen_plotter/core/ebb.py" = ["D417"]
-"pen_plotter/core/gcode.py" = ["D417"]
-"pen_plotter/core/preflight.py" = ["D417"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

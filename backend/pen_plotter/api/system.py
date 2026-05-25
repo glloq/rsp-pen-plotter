@@ -292,10 +292,12 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
         # slow but shouldn't legitimately exceed this. Past that, something is
         # wrong and we'd rather surface the timeout than hang the request.
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=600)
-    except TimeoutError:
+    except TimeoutError as exc:
         process.kill()
         record("system.update_timeout")
-        raise HTTPException(status_code=504, detail="update timed out after 10 minutes")
+        raise HTTPException(
+            status_code=504, detail="update timed out after 10 minutes"
+        ) from exc
 
     log = stdout.decode("utf-8", errors="replace") if stdout else ""
     ok = process.returncode == 0

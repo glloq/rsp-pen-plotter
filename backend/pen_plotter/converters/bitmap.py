@@ -399,7 +399,9 @@ class BitmapConverter(Converter):
         overrides = per_layer_overrides or {}
         warnings: list[str] = []
         # (mask, color_hex, ink_hex, label, algo_name, algo_options, passes)
-        _LayerJob = tuple[
+        # Local type alias; uppercase matches the convention for type
+        # constructions even though Ruff's N806 flags it as a variable.
+        _LayerJob = tuple[  # noqa: N806
             NDArray[np.bool_],
             str,
             str,
@@ -640,6 +642,10 @@ class BitmapConverter(Converter):
         """Dispatch to the segmentation method selected in ``opts``.
 
         Args:
+            image: The pre-loaded RGB Pillow image to segment.
+            opts: Validated bitmap options driving method selection and
+                tuning knobs (``num_colors``, ``segmentation_options``,
+                post-processing thresholds).
             n_init: K-means restarts. Only consumed when ``segmentation_method``
                 is ``kmeans``; the preview path drops it to 1 for speed.
 
