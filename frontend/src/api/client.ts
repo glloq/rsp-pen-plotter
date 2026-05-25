@@ -865,3 +865,45 @@ export async function patchLibraryFile(
 export async function deleteLibraryFile(fileId: string): Promise<void> {
   await api.delete(`/files/${encodeURIComponent(fileId)}`)
 }
+
+// --- Available colours ----------------------------------------------------
+//
+// Global app-wide inventory of inks the operator owns but doesn't necessarily
+// mount in the magazine. Feeds the per-layer colour picker when the operator
+// selects the ``available`` or ``union`` palette source.
+
+export interface AvailableColor {
+  color_id: string
+  hex: string
+  name: string
+  position: number
+  created_at: string
+}
+
+export async function listAvailableColors(): Promise<AvailableColor[]> {
+  const response = await api.get<AvailableColor[]>('/available-colors')
+  return response.data
+}
+
+export async function createAvailableColor(
+  hex: string,
+  name: string = '',
+): Promise<AvailableColor> {
+  const response = await api.post<AvailableColor>('/available-colors', { hex, name })
+  return response.data
+}
+
+export async function patchAvailableColor(
+  colorId: string,
+  patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position'>>,
+): Promise<AvailableColor> {
+  const response = await api.patch<AvailableColor>(
+    `/available-colors/${encodeURIComponent(colorId)}`,
+    patch,
+  )
+  return response.data
+}
+
+export async function deleteAvailableColor(colorId: string): Promise<void> {
+  await api.delete(`/available-colors/${encodeURIComponent(colorId)}`)
+}
