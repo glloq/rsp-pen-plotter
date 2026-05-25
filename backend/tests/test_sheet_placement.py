@@ -4,7 +4,7 @@ workspace, and exceeding the workspace surfaces a warning.
 
 from __future__ import annotations
 
-from pen_plotter.core.gcode import generate_gcode
+from pen_plotter.core.gcode import LayerGeneration, _read_layers, generate_gcode
 from pen_plotter.core.preflight import preflight_report
 from pen_plotter.models import Placement
 from pen_plotter.profiles import get_profile
@@ -175,6 +175,63 @@ def test_top_left_profile_keeps_drawing_at_offset() -> None:
                     ys.append(float(token[1:]))
     assert ys
     assert min(ys) >= 9.5 and max(ys) <= 110.5
+
+
+def test_composite_with_top_level_labeled_groups_extracts_each_layer() -> None:
+    """Regression: the frontend composite emits each labeled group as a
+    direct child of the SVG root with the placement transform applied. The
+    backend's layer extractor must see each one as a separate layer so
+    per-layer pen / speed / pause overrides keyed on the composite layer
+    id actually match.
+
+    The previous frontend wrapped them in an outer ``<g data-placement-id>``
+    that carried the transform; ``labeled_group_fragments`` only inspects
+    direct ``<g>`` children of the root, so every layer collapsed to a
+    single ``layer-1`` and per-layer settings silently went unused.
+    """
+    composite = (
+        f'<svg {NS} viewBox="0 0 300 300" width="300mm" height="300mm">'
+        '<g inkscape:label="p1__color-ff0000" '
+        'data-placement-id="p1" '
+        'transform="translate(10 10) scale(0.5 0.5)" '
+        'stroke="#ff0000"><path d="M0 0 L100 0"/></g>'
+        '<g inkscape:label="p1__color-0000ff" '
+        'data-placement-id="p1" '
+        'transform="translate(10 10) scale(0.5 0.5)" '
+        'stroke="#0000ff"><path d="M0 50 L100 50"/></g>'
+        '</svg>'
+    )
+    layers = _read_layers(composite)
+    labels = {layer.label for layer in layers}
+    assert labels == {"p1__color-ff0000", "p1__color-0000ff"}, labels
+
+
+def test_per_layer_pen_assignments_apply_to_composite_layers() -> None:
+    """End-to-end: per-layer pen slots keyed on composite layer ids actually
+    drive tool changes in the generated G-code.
+    """
+    composite = (
+        f'<svg {NS} viewBox="0 0 300 300" width="300mm" height="300mm">'
+        '<g inkscape:label="p1__color-ff0000" '
+        'transform="translate(10 10) scale(0.5 0.5)" '
+        'stroke="#ff0000"><path d="M0 0 L100 0"/></g>'
+        '<g inkscape:label="p1__color-0000ff" '
+        'transform="translate(10 10) scale(0.5 0.5)" '
+        'stroke="#0000ff"><path d="M0 50 L100 50"/></g>'
+        '</svg>'
+    )
+    profile = _grbl_profile().model_copy(update={"origin": "top_left"})
+    gcode = generate_gcode(
+        composite,
+        profile,
+        scale_mode="actual",
+        layers=[
+            LayerGeneration(layer_id="p1__color-ff0000", target_pen_slot=0),
+            LayerGeneration(layer_id="p1__color-0000ff", target_pen_slot=3),
+        ],
+    )
+    assert "Change to pen slot 0" in gcode
+    assert "Change to pen slot 3" in gcode
 
 
 def test_sheet_warning_in_generated_gcode() -> None:
