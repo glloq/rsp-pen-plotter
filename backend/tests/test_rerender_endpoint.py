@@ -318,3 +318,120 @@ def test_rerender_404_for_vector_source(client: TestClient, tmp_path, monkeypatc
     with Session(engine) as session:
         session.exec(delete(FileRecord))
         session.commit()
+
+
+def test_reupload_with_changed_options_reprocesses_in_place(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    """SourceSection edit → Apply → /files dedup hit should still apply.
+
+    Reproduces the operator's report that changing the global algorithm
+    in SourceSection and clicking Apply silently did nothing: the
+    /files endpoint used to dedup-by-hash unconditionally, returning
+    the prior conversion and dropping the new options on the floor.
+    """
+    from pen_plotter.api import files as files_module
+    from pen_plotter.converters.defaults import register_default_converters
+    from pen_plotter.converters.registry import registry as _registry
+    from pen_plotter.persistence import FileRecord, engine
+    from sqlmodel import Session, delete
+
+    register_default_converters(_registry)
+    monkeypatch.setattr(files_module, "FILES_DIR", tmp_path / "files")
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
+
+    # 16x16 PNG, left-black / right-white — two-cluster segmentation,
+    # easy to tell algorithms apart by output element type.
+    image = Image.new("RGB", (16, 16), (255, 255, 255))
+    for y in range(16):
+        for x in range(8):
+            image.putpixel((x, y), (0, 0, 0))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    png_bytes = buf.getvalue()
+
+    # First upload: scanlines → SVG should contain polylines.
+    first = client.post(
+        "/files",
+        data={"options": json.dumps({"algorithm": "scanlines", "num_colors": 2, "drop_background": False})},
+        files={"file": ("dot.png", png_bytes, "image/png")},
+    )
+    assert first.status_code == 200, first.text
+    detail1 = first.json()["file"]
+    file_id = detail1["file_id"]
+    assert "<polyline" in detail1["svg"]
+    assert "<circle" not in detail1["svg"]
+
+    # Second upload, same bytes, DIFFERENT options (halftone → circles).
+    # Pre-fix: dedup returned the scanline SVG unchanged. Post-fix: the
+    # endpoint re-processes in place, file_id stays stable, SVG flips
+    # to halftone.
+    second = client.post(
+        "/files",
+        data={"options": json.dumps({"algorithm": "halftone", "num_colors": 2, "drop_background": False})},
+        files={"file": ("dot.png", png_bytes, "image/png")},
+    )
+    assert second.status_code == 200, second.text
+    detail2 = second.json()["file"]
+    assert detail2["file_id"] == file_id, "file_id must stay stable on reprocess"
+    assert second.json()["existing"] is True
+    assert "<circle" in detail2["svg"], "halftone should emit circles"
+    assert detail2["svg"] != detail1["svg"], "SVG must reflect the new algorithm"
+
+    # And the /rerender cache is refreshed so subsequent re-renders use
+    # the new segmentation (not the stale scanline one).
+    assert file_id in rerender_module._CACHE
+
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
+
+
+def test_reupload_without_options_keeps_dedup_silent(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    """No options on the request → preserve the existing conversion.
+
+    A library-pick re-upload (e.g. drag-and-drop the same PNG to add a
+    second placement) MUST NOT re-process — that would burn CPU on a
+    no-op and risk shifting palette indices on the operator's other
+    placements of the same file.
+    """
+    from pen_plotter.api import files as files_module
+    from pen_plotter.converters.defaults import register_default_converters
+    from pen_plotter.converters.registry import registry as _registry
+    from pen_plotter.persistence import FileRecord, engine
+    from sqlmodel import Session, delete
+
+    register_default_converters(_registry)
+    monkeypatch.setattr(files_module, "FILES_DIR", tmp_path / "files")
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
+
+    image = Image.new("RGB", (16, 16), (255, 255, 255))
+    for y in range(16):
+        for x in range(8):
+            image.putpixel((x, y), (0, 0, 0))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    png_bytes = buf.getvalue()
+
+    first = client.post(
+        "/files",
+        data={"options": json.dumps({"algorithm": "scanlines", "num_colors": 2, "drop_background": False})},
+        files={"file": ("dot.png", png_bytes, "image/png")},
+    )
+    detail1 = first.json()["file"]
+    second = client.post(
+        "/files",
+        files={"file": ("dot.png", png_bytes, "image/png")},
+    )
+    detail2 = second.json()["file"]
+    assert detail1["svg"] == detail2["svg"]
+
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
