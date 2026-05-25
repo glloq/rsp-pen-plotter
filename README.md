@@ -320,6 +320,8 @@ new machine profile YAML — no code changes required.
 
 Full documentation lives in [`docs/`](docs/README.md): architecture, API
 reference, profile format, adding a converter, hardware streaming, and more.
+[Architecture Decision Records](docs/adr/README.md) capture the structural
+choices the codebase rests on (SVG pivot, vpype, Pydantic, SQLite).
 
 ---
 
