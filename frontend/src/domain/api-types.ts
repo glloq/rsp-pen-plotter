@@ -1812,6 +1812,14 @@ export interface components {
              * @enum {string}
              */
             pause_before: "auto" | "always" | "never";
+            /** Assigned Color Hex */
+            assigned_color_hex?: string | null;
+            /**
+             * Color Assignment
+             * @default auto
+             * @enum {string}
+             */
+            color_assignment: "auto" | "manual";
         };
         /**
          * LayerOptimization
@@ -1891,6 +1899,8 @@ export interface components {
             optimize: boolean;
             /** Simplify Tolerance Mm */
             simplify_tolerance_mm?: number | null;
+            /** Assigned Color Hex */
+            assigned_color_hex?: string | null;
         };
         /**
          * MachineProfile

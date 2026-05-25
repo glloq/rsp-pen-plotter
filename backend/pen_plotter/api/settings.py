@@ -37,12 +37,14 @@ class PaletteSourceUpdate(BaseModel):
     source: PaletteSource
 
 
-def _load_palette_source() -> PaletteSource:
+def load_palette_source() -> PaletteSource:
     """Read the stored setting, falling back to the default.
 
     A stored value that doesn't match the current enum (older schema,
     manual DB tinkering) silently degrades to the default rather than
     blowing up — the UI surfaces the source it actually applies.
+    Public — used by the application layer (auto-attribution) to keep
+    backend + frontend in lock-step on which pool to snap against.
     """
     raw = get_setting(_PALETTE_SOURCE_KEY)
     if raw in ("pens", "available", "union"):
@@ -53,7 +55,7 @@ def _load_palette_source() -> PaletteSource:
 @router.get("/settings/palette-source", response_model=PaletteSourceResponse)
 async def read_palette_source() -> PaletteSourceResponse:
     """Return the active palette source the per-layer picker reads from."""
-    return PaletteSourceResponse(source=_load_palette_source())
+    return PaletteSourceResponse(source=load_palette_source())
 
 
 @router.put("/settings/palette-source", response_model=PaletteSourceResponse)
@@ -67,5 +69,6 @@ __all__ = [
     "PaletteSource",
     "PaletteSourceResponse",
     "PaletteSourceUpdate",
+    "load_palette_source",
     "router",
 ]

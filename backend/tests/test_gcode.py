@@ -189,6 +189,79 @@ def test_acceleration_skipped_for_custom_dialect() -> None:
     assert "M204" not in gcode
 
 
+def test_assigned_color_drives_mono_pen_swap_prompt() -> None:
+    """``assigned_color_hex`` lands in the mono-pen-swap pause prompt.
+
+    The operator-picked hex from the editor's per-layer picker replaces
+    the raw cluster centroid in the ``; Change pen: ...`` comment, so
+    the streamer's pop-up names the actual ink the operator owns
+    instead of an arbitrary ``#a3b4c5`` mix.
+    """
+    profile = _profile().model_copy(update={"pen_slot_count": 1})  # mono-pen
+    plan_red = LayerGeneration(
+        layer_id="red",
+        target_pen_slot=None,
+        source_color="#a3b4c5",
+        color_label=None,
+        assigned_color_hex="#ff8800",
+    )
+    plan_blue = LayerGeneration(
+        layer_id="blue",
+        target_pen_slot=None,
+        source_color="#112233",
+        color_label=None,
+        assigned_color_hex="#0044ff",
+    )
+    gcode = generate_gcode(TWO_LAYERS, profile, layers=[plan_red, plan_blue])
+    # The pen-change comments name the assigned hexes, NOT the centroids.
+    assert "; Change pen: #ff8800 (#ff8800)" in gcode
+    assert "; Change pen: #0044ff (#0044ff)" in gcode
+    assert "#a3b4c5" not in gcode
+    assert "#112233" not in gcode
+
+
+def test_assigned_color_promotes_to_tool_change_when_pen_installed() -> None:
+    """When the operator's picked hex matches an installed pen, the
+    G-code emits a proper tool-change instead of a mono-pen swap prompt.
+
+    Lets the operator declare "this red layer goes on pen slot 3"
+    implicitly: they pick the red hex, the backend matches it against
+    the magazine, and the firmware gets a tool-change directive instead
+    of a generic colour pop-up.
+    """
+    from pen_plotter.models import PenSlot
+
+    profile = _profile().model_copy(
+        update={
+            "pen_slot_count": 2,
+            "pens": [
+                PenSlot(index=0, name="Black", color="#000000", installed=True),
+                PenSlot(index=1, name="Red", color="#ff0000", installed=True),
+            ],
+        }
+    )
+    plan_red = LayerGeneration(
+        layer_id="red",
+        target_pen_slot=None,
+        source_color="#abc123",
+        color_label=None,
+        assigned_color_hex="#ff0000",  # matches slot 1
+    )
+    plan_blue = LayerGeneration(
+        layer_id="blue",
+        target_pen_slot=None,
+        source_color="#zzzzzz",  # ignored for the match
+        color_label=None,
+        assigned_color_hex="#000000",  # matches slot 0
+    )
+    gcode = generate_gcode(TWO_LAYERS, profile, layers=[plan_red, plan_blue])
+    assert "; Change to pen slot 1 (Red)" in gcode
+    assert "; Change to pen slot 0 (Black)" in gcode
+    # Layer marker should reflect the promoted slot + assigned colour.
+    assert 'slot=1' in gcode
+    assert 'slot=0' in gcode
+
+
 def test_template_contract_blocks_undeclared_variable_at_import() -> None:
     """A template growing a ``{{ feed }}`` reference that ``generate_gcode``
     doesn't pass must fail loudly — at module import time — rather than

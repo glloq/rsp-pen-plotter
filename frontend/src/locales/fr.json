@@ -916,6 +916,15 @@
     "macrosHint": "Séquences de commandes réutilisables — homing, parking stylo, calibration. Lance-les ici quand le traceur est au repos.",
     "queueHint": "Envoie le travail courant au traceur ou empile-le pour plus tard. Les travaux actifs affichent leur progression et peuvent être mis en pause ou annulés."
   },
+  "assignedColor": {
+    "title": "Couleur du calque",
+    "auto": "auto",
+    "manual": "manuel",
+    "reset": "auto",
+    "resetTitle": "Revenir à la couleur perceptivement la plus proche dans la palette active",
+    "pickHint": "Choisis une couleur dans la palette active pour remplacer le choix automatique.",
+    "emptyPool": "Aucune couleur dans la palette active — ajoute des feutres dans Traceur ▸ Couleurs ou monte des stylos."
+  },
   "paletteSource": {
     "title": "Source de la palette",
     "pens": "Stylos montés",

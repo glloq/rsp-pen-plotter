@@ -16,6 +16,8 @@ function layer(overrides: Partial<LayerInfo> = {}): LayerInfo {
     drawing_speed_mm_s: 60,
     color_label: 'Red',
     pause_before: 'auto',
+    assigned_color_hex: null,
+    color_assignment: 'auto',
     ...overrides,
   }
 }
@@ -37,6 +39,7 @@ describe('toLayerPlan', () => {
       pause_before: 'auto',
       optimize: true,
       simplify_tolerance_mm: 0.05,
+      assigned_color_hex: null,
     })
   })
 

@@ -29,6 +29,7 @@ export function toLayerPlan(layer: LayerInfo): LayerPlan {
     // optimizer all observe the same intent.
     optimize: layer.optimize,
     simplify_tolerance_mm: layer.simplify_tolerance_mm,
+    assigned_color_hex: layer.assigned_color_hex,
   }
 }
 

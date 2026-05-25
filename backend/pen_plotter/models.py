@@ -159,6 +159,20 @@ class LayerInfo(BaseModel):
     #     break on a layer of the same colour);
     #   - "never": never pause, even if the slot or colour changed.
     pause_before: Literal["auto", "always", "never"] = "auto"
+    # Operator-facing colour pick: which hex from the active pool (pens /
+    # available / union) this layer should be drawn with. Populated by the
+    # auto-attribution step at /upload + /rerender time using the cluster
+    # centroid's nearest match (CIE Lab ΔE). The operator can override it
+    # per layer through the editor's picker. ``None`` falls back to
+    # ``source_color`` — the legacy path stays intact for placements that
+    # predate the assignment surface.
+    assigned_color_hex: str | None = None
+    # Tracks whether the current ``assigned_color_hex`` came from the
+    # auto-nearest step or from a manual operator override. Used by the
+    # "↻ reset to auto" affordance on the layer card so re-running the
+    # auto step is idempotent: it skips layers the operator pinned and
+    # only refreshes ``"auto"`` rows.
+    color_assignment: Literal["auto", "manual"] = "auto"
 
 
 class PreflightReport(BaseModel):
