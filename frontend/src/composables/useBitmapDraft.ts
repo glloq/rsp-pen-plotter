@@ -251,6 +251,19 @@ export type MulticolorStyleKnobs = {
   period_px?: number
   jitter?: number
   max_rings?: number
+  // Knobs shared by the second-wave colour masters (edges, centerline,
+  // spiral-classic, scanlines, tsp / tsp_opt, hilbert, gosper, eulerian
+  // hatch). Each keeps the same naming as its mono counterpart so the
+  // params card stays readable when the cards share sliders.
+  stroke_width?: number
+  min_branch_px?: number
+  samples_per_turn?: number
+  wave_amp_px?: number
+  wave_period_px?: number
+  min_run_px?: number
+  order?: number
+  max_points?: number
+  time_budget_s?: number
 }
 
 export type MulticolorKnobsDraft = {
@@ -1129,6 +1142,121 @@ function colorRecipeFromKnobs(
           spacing_px: spacing,
           max_rings: knobs.max_rings ?? 40,
           bridge: true,
+        },
+      }
+    }
+    case 'color-stippling-classic': {
+      const density = lerp(
+        i, total,
+        knobs.density_max ?? 0.05,
+        knobs.density_min ?? 0.012,
+      )
+      return {
+        algorithm: 'stippling',
+        algorithm_options: {
+          density,
+          dot_radius_px: knobs.dot_radius ?? 0.5,
+          seed: i * 7 + 13,
+        },
+      }
+    }
+    case 'color-edges': {
+      return {
+        algorithm: 'edges',
+        algorithm_options: { stroke_width: knobs.stroke_width ?? 0.8 },
+      }
+    }
+    case 'color-centerline': {
+      return {
+        algorithm: 'centerline',
+        algorithm_options: {
+          stroke_width: knobs.stroke_width ?? 0.8,
+          smooth: true,
+          min_branch_px: knobs.min_branch_px ?? 3,
+        },
+      }
+    }
+    case 'color-spiral-classic': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2, knobs.spacing_max ?? 5)
+      return {
+        algorithm: 'spiral',
+        algorithm_options: {
+          spacing_px: spacing,
+          samples_per_turn: knobs.samples_per_turn ?? 64,
+        },
+      }
+    }
+    case 'color-scanlines': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      return {
+        algorithm: 'scanlines',
+        algorithm_options: {
+          spacing_px: spacing,
+          wave_amp_px: knobs.wave_amp_px ?? 0,
+          wave_period_px: knobs.wave_period_px ?? 12,
+        },
+      }
+    }
+    case 'color-tsp': {
+      const density = lerp(
+        i, total,
+        knobs.density_max ?? 0.05,
+        knobs.density_min ?? 0.012,
+      )
+      return {
+        algorithm: 'tsp',
+        algorithm_options: { density, seed: i * 11 + 5 },
+      }
+    }
+    case 'color-hilbert': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      return {
+        algorithm: 'hilbert',
+        algorithm_options: {
+          spacing_px: spacing,
+          min_run_px: knobs.min_run_px ?? 3,
+        },
+      }
+    }
+    case 'color-gosper': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 5)
+      return {
+        algorithm: 'gosper',
+        algorithm_options: {
+          order: knobs.order ?? 4,
+          spacing_px: spacing,
+          rotation_deg: (i * 30) % 360,
+        },
+      }
+    }
+    case 'color-eulerian': {
+      const baseAngles = [0, 45, 90, 135, 30, 75, 120, 165]
+      const step = knobs.angle_step ?? 45
+      const angle = (i * step + (baseAngles[i % baseAngles.length] ?? 0)) % 180
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      return {
+        algorithm: 'eulerian_hatch',
+        algorithm_options: {
+          spacing_px: spacing,
+          angle_deg: angle,
+          crossed: knobs.crossed ?? false,
+        },
+      }
+    }
+    case 'color-tsp-opt': {
+      const density = lerp(
+        i, total,
+        knobs.density_max ?? 0.05,
+        knobs.density_min ?? 0.012,
+      )
+      return {
+        algorithm: 'tsp_opt',
+        algorithm_options: {
+          density,
+          max_points: knobs.max_points ?? 4000,
+          time_budget_s: knobs.time_budget_s ?? 1.5,
+          poisson_disk: true,
+          seed: i * 19 + 3,
         },
       }
     }

@@ -357,6 +357,289 @@ const effectiveColorCount = computed(() =>
       </div>
     </div>
 
+    <!-- ===== Stippling classique couleur: density range + dot radius ===== -->
+    <div v-else-if="styleId === 'color-stippling-classic'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.density_min ?? 0.012"
+        :model-value-max="knobs.density_max ?? 0.05"
+        :min="0.005" :max="0.1" :step="0.001"
+        @update:model-value-min="(v) => setKnob('density_min', v)"
+        @update:model-value-max="(v) => setKnob('density_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.densityRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('mono.dotRadius') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.dot_radius ?? 0.5).toFixed(2) }}</span>
+        </p>
+        <input
+          type="range" min="0.3" max="1.5" step="0.05"
+          :value="knobs.dot_radius ?? 0.5"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('dot_radius', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+    </div>
+
+    <!-- ===== Edges couleur: épaisseur de trait ===== -->
+    <div v-else-if="styleId === 'color-edges'" class="space-y-1 border-t border-slate-800 pt-3">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400">
+        {{ t('mono.strokeWidth') }}
+        <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.stroke_width ?? 0.8).toFixed(2) }}</span>
+      </p>
+      <input
+        type="range" min="0.4" max="2.0" step="0.1"
+        :value="knobs.stroke_width ?? 0.8"
+        class="w-full accent-emerald-500"
+        @input="(e) => setKnob('stroke_width', Number((e.target as HTMLInputElement).value))"
+      />
+    </div>
+
+    <!-- ===== Centerline couleur: stroke width + min branch ===== -->
+    <div v-else-if="styleId === 'color-centerline'" class="space-y-3 border-t border-slate-800 pt-3">
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('mono.strokeWidth') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.stroke_width ?? 0.8).toFixed(2) }}</span>
+        </p>
+        <input
+          type="range" min="0.4" max="2.0" step="0.1"
+          :value="knobs.stroke_width ?? 0.8"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('stroke_width', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.minBranch') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.min_branch_px ?? 3) }} px</span>
+        </p>
+        <input
+          type="range" min="1" max="20" step="1"
+          :value="knobs.min_branch_px ?? 3"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('min_branch_px', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+    </div>
+
+    <!-- ===== Spirale classique couleur: spacing range + samples/tour ===== -->
+    <div v-else-if="styleId === 'color-spiral-classic'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 2"
+        :model-value-max="knobs.spacing_max ?? 5"
+        :min="1" :max="8" :step="0.5" unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.samplesPerTurn') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.samples_per_turn ?? 64) }}</span>
+        </p>
+        <input
+          type="range" min="16" max="256" step="4"
+          :value="knobs.samples_per_turn ?? 64"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('samples_per_turn', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+    </div>
+
+    <!-- ===== Scanlines couleur: spacing range + wave amp + wave period ===== -->
+    <div v-else-if="styleId === 'color-scanlines'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 2.5"
+        :model-value-max="knobs.spacing_max ?? 6"
+        :min="1" :max="10" :step="0.5" unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.waveAmp') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.wave_amp_px ?? 0).toFixed(1) }} px</span>
+        </p>
+        <input
+          type="range" min="0" max="6" step="0.2"
+          :value="knobs.wave_amp_px ?? 0"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('wave_amp_px', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.wavePeriod') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.wave_period_px ?? 12) }} px</span>
+        </p>
+        <input
+          type="range" min="2" max="40" step="1"
+          :value="knobs.wave_period_px ?? 12"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('wave_period_px', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+    </div>
+
+    <!-- ===== TSP couleur: density range ===== -->
+    <div v-else-if="styleId === 'color-tsp'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.density_min ?? 0.012"
+        :model-value-max="knobs.density_max ?? 0.05"
+        :min="0.005" :max="0.1" :step="0.001"
+        @update:model-value-min="(v) => setKnob('density_min', v)"
+        @update:model-value-max="(v) => setKnob('density_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.densityRange') }}</span>
+        </template>
+        <template #hint>
+          <p class="text-[10px] text-slate-500">{{ t('colorStyles.tspHint') }}</p>
+        </template>
+      </DualRangeSlider>
+    </div>
+
+    <!-- ===== Hilbert couleur: spacing range + min run ===== -->
+    <div v-else-if="styleId === 'color-hilbert'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 2.5"
+        :model-value-max="knobs.spacing_max ?? 6"
+        :min="1" :max="10" :step="0.5" unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.minRunPx') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.min_run_px ?? 3) }} px</span>
+        </p>
+        <input
+          type="range" min="1" max="20" step="1"
+          :value="knobs.min_run_px ?? 3"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('min_run_px', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+    </div>
+
+    <!-- ===== Gosper couleur: ordre fractal + spacing range ===== -->
+    <div v-else-if="styleId === 'color-gosper'" class="space-y-3 border-t border-slate-800 pt-3">
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.gosperOrder') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.order ?? 4) }}</span>
+        </p>
+        <input
+          type="range" min="1" max="6" step="1"
+          :value="knobs.order ?? 4"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('order', Number((e.target as HTMLInputElement).value))"
+        />
+        <p class="text-[10px] text-slate-500">{{ t('colorStyles.gosperOrderHint') }}</p>
+      </div>
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 3"
+        :model-value-max="knobs.spacing_max ?? 5"
+        :min="1" :max="8" :step="0.5" unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+    </div>
+
+    <!-- ===== Hachures eulériennes couleur: spacing range + angle step + crossed ===== -->
+    <div v-else-if="styleId === 'color-eulerian'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 2.5"
+        :model-value-max="knobs.spacing_max ?? 6"
+        :min="1" :max="10" :step="0.5" unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('colorStyles.angleStep') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.angle_step ?? 45) }}°</span>
+        </p>
+        <input
+          type="range" min="0" max="90" step="5"
+          :value="knobs.angle_step ?? 45"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('angle_step', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+      <label class="flex items-center gap-2 text-[11px] text-slate-300">
+        <input
+          type="checkbox"
+          class="accent-emerald-500"
+          :checked="knobs.crossed ?? false"
+          @change="(e) => setKnob('crossed', (e.target as HTMLInputElement).checked)"
+        />
+        {{ t('convert.crossed') }}
+      </label>
+    </div>
+
+    <!-- ===== TSP optimisé couleur: density range + max points + budget temps ===== -->
+    <div v-else-if="styleId === 'color-tsp-opt'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.density_min ?? 0.012"
+        :model-value-max="knobs.density_max ?? 0.05"
+        :min="0.005" :max="0.1" :step="0.001"
+        @update:model-value-min="(v) => setKnob('density_min', v)"
+        @update:model-value-max="(v) => setKnob('density_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.densityRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.maxPoints') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.max_points ?? 4000) }}</span>
+        </p>
+        <input
+          type="range" min="500" max="12000" step="500"
+          :value="knobs.max_points ?? 4000"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('max_points', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.timeBudgetS') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.time_budget_s ?? 1.5).toFixed(1) }} s</span>
+        </p>
+        <input
+          type="range" min="0.2" max="6" step="0.1"
+          :value="knobs.time_budget_s ?? 1.5"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('time_budget_s', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+    </div>
+
     <p class="text-[10px] text-slate-500">
       {{ style.descriptionKey ? t(style.descriptionKey) : '' }}
     </p>
