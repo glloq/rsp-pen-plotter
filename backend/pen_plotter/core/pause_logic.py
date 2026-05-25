@@ -9,10 +9,12 @@ two implementations drifted any time someone touched one and
 forgot the other. Folding both call sites onto :func:`should_pause`
 makes the contract enforceable.
 
-This is intentionally limited to the standard G-code path. The EBB
-generator (``core/ebb.py``) has its own pause semantics — single-pen
-hardware, no slot_changed, stricter ``tool_change_method`` /
-``tool_change_command`` checks — and is left alone for now.
+The EBB generator (``core/ebb.py``) has its own pause semantics —
+single-pen hardware, no ``slot_changed``, stricter requirements on
+``tool_change_method`` and ``tool_change_command``. It now consumes
+:func:`should_pause_ebb` in this module so the colour-change /
+first-pose predicates are shared with the G-code path even though
+the surrounding decision rule stays specific.
 """
 
 from __future__ import annotations
@@ -92,6 +94,46 @@ def should_pause(
     return PauseDecision(
         pause=pause,
         slot_changed=slot_changed,
+        color_changed=color_changed,
+        first_pose=first_pose,
+    )
+
+
+def should_pause_ebb(
+    *,
+    source_color: str | None,
+    pause_before: PausePolicy,
+    previous_color: str | None,
+    tool_change_method: str,
+    tool_change_command: str,
+) -> PauseDecision:
+    """EBB-specific variant of :func:`should_pause`.
+
+    EBB plotters (AxiDraw-class) have a single physical pen, so the
+    pause decision tracks **colour changes** (the operator swaps the
+    ink mid-print) instead of slot changes. The hardware requirements
+    are stricter too:
+
+    - ``tool_change_method`` must be exactly ``"manual_pause"`` (the
+      board has no carousel / rack notion to enable an automated swap)
+    - ``tool_change_command`` must be a non-empty string (the streamer
+      uses it as the line to intercept and gate)
+
+    Returns the same :class:`PauseDecision` shape as :func:`should_pause`
+    so callers can share downstream code; ``slot_changed`` is always
+    ``False`` on this path since EBB has no slot concept.
+    """
+    color_changed = source_color is not None and source_color != previous_color
+    first_pose = previous_color is None and source_color is not None
+    pause = (
+        tool_change_method == "manual_pause"
+        and bool(tool_change_command.strip())
+        and pause_before != "never"
+        and (pause_before == "always" or color_changed or first_pose)
+    )
+    return PauseDecision(
+        pause=pause,
+        slot_changed=False,
         color_changed=color_changed,
         first_pose=first_pose,
     )

@@ -18,6 +18,7 @@ from pen_plotter.core.gcode import (
     _make_transform,
     _read_layers,
 )
+from pen_plotter.core.pause_logic import should_pause_ebb
 from pen_plotter.domain.print_plan import LayerPlan, ScaleMode
 from pen_plotter.models import EbbConfig, MachineProfile, Placement
 
@@ -88,7 +89,6 @@ def generate_ebb(
         cur_x, cur_y = x_mm, y_mm
         return f"SM,{duration_ms},{da},{db}"
 
-    mono_pen = profile.pen_slot_count <= 1
     previous_color: str | None = None
 
     if not bounds.empty:
@@ -105,19 +105,14 @@ def generate_ebb(
             source_color = setting.source_color if setting else None
             color_label = setting.color_label if setting else None
             pause_before = setting.pause_before if setting else "auto"
-            color_changed = (
-                mono_pen and source_color is not None and source_color != previous_color
+            decision = should_pause_ebb(
+                source_color=source_color,
+                pause_before=pause_before,
+                previous_color=previous_color,
+                tool_change_method=profile.tool_change_method,
+                tool_change_command=profile.tool_change_command,
             )
-            first_pose = (
-                mono_pen and previous_color is None and source_color is not None
-            )
-            should_pause = (
-                profile.tool_change_method == "manual_pause"
-                and profile.tool_change_command.strip()
-                and pause_before != "never"
-                and (pause_before == "always" or color_changed or first_pose)
-            )
-            if should_pause:
+            if decision.pause:
                 label = color_label or source_color or "#000000"
                 color = source_color or "#000000"
                 out.append(f"; Change pen: {label} ({color})")

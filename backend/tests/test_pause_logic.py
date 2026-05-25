@@ -127,3 +127,85 @@ def test_decision_carries_individual_flags_for_caller_branching() -> None:
 def test_always_policy_pauses_even_when_nothing_changed(policy: str, expected: bool) -> None:
     decision = _decide(slot=1, previous_slot=1, pause_before=policy)
     assert decision.pause is expected
+
+
+# ---------- EBB-specific path ----------------------------------------------
+
+from pen_plotter.core.pause_logic import should_pause_ebb  # noqa: E402
+
+
+def _ebb(**overrides):
+    """Helper: defaults the EBB predicate to a fresh-first-pose baseline."""
+    base = {
+        "source_color": "#000000",
+        "pause_before": "auto",
+        "previous_color": None,
+        "tool_change_method": "manual_pause",
+        "tool_change_command": "M0",
+    }
+    base.update(overrides)
+    return should_pause_ebb(**base)
+
+
+def test_ebb_first_pose_pauses() -> None:
+    """Loading the first colour on a fresh EBB session prompts the
+    operator. ``previous_color is None`` is the EBB-specific first
+    pose signal (no slot concept).
+    """
+    decision = _ebb()
+    assert decision.pause is True
+    assert decision.first_pose is True
+    assert decision.color_changed is True  # None → '#000000' counts
+    assert decision.slot_changed is False  # EBB never uses slots
+
+
+def test_ebb_color_change_pauses() -> None:
+    decision = _ebb(source_color="#ff0000", previous_color="#000000")
+    assert decision.pause is True
+    assert decision.color_changed is True
+
+
+def test_ebb_same_color_does_not_pause_under_auto() -> None:
+    decision = _ebb(source_color="#000000", previous_color="#000000")
+    assert decision.pause is False
+
+
+def test_ebb_never_policy_overrides_color_change() -> None:
+    decision = _ebb(
+        source_color="#ff0000", previous_color="#000000", pause_before="never"
+    )
+    assert decision.pause is False
+
+
+def test_ebb_always_policy_pauses_on_repeat_colour() -> None:
+    decision = _ebb(
+        source_color="#000000", previous_color="#000000", pause_before="always"
+    )
+    assert decision.pause is True
+
+
+def test_ebb_requires_manual_pause_method() -> None:
+    """``tool_change_method`` must be exactly ``"manual_pause"`` — the
+    EBB board has no carousel / rack notion to support automated
+    swaps. ``"none"``, ``"carousel"``, ``"rack"`` all suppress.
+    """
+    for method in ("none", "carousel", "rack"):
+        assert _ebb(tool_change_method=method).pause is False, method
+
+
+def test_ebb_requires_non_empty_tool_change_command() -> None:
+    """An empty / whitespace command means the streamer has nothing to
+    intercept — silently suppress the pause rather than emit a useless
+    blank line that the EBB board would either ignore or reject.
+    """
+    assert _ebb(tool_change_command="").pause is False
+    assert _ebb(tool_change_command="   ").pause is False
+    assert _ebb(tool_change_command="M0").pause is True
+
+
+def test_ebb_decision_never_reports_slot_changed() -> None:
+    """EBB has no slot concept; ``slot_changed`` must stay ``False``
+    even when the policy or colour would flip it on the G-code side.
+    """
+    for policy in ("auto", "always", "never"):
+        assert _ebb(pause_before=policy).slot_changed is False, policy
