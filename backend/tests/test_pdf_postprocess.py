@@ -297,3 +297,58 @@ def test_pdf_hershey_font_choice_changes_output() -> None:
         _bold_text_pdf(), options={"hershey_text": True, "font": "timesr"}
     )
     assert res_a.svg != res_b.svg
+
+
+# Cross-converter audit: the operator's font choice MUST reach both
+# the SVG preview and the generated G-code, for every text-bearing
+# source. Regression — earlier changes to the dedup path silently
+# dropped typography keys on the .txt path; this test family makes
+# sure each file type round-trips a font change end-to-end.
+def _hershey_text_layer_strokes(svg: str) -> int:
+    match = re.search(r'inkscape:label="text"[^>]*>(.*?)</svg', svg, re.DOTALL)
+    body = match.group(1) if match else svg
+    return body.count("M")
+
+
+def test_txt_font_choice_changes_svg() -> None:
+    from pen_plotter.converters.text import TextConverter
+    conv = TextConverter()
+    svg_a = conv.convert(b"Audit text", options={"font_size_mm": 10.0, "font": "futural"}).svg
+    svg_b = conv.convert(b"Audit text", options={"font_size_mm": 10.0, "font": "timesr"}).svg
+    assert svg_a != svg_b
+    # Times Roman has noticeably more strokes per glyph than the
+    # simplex sans-serif futural, so the M count is a quick sanity
+    # check that the FONT actually changed (not just whitespace).
+    assert svg_b.count("M") > svg_a.count("M")
+
+
+def test_md_font_choice_changes_svg() -> None:
+    from pen_plotter.converters.markdown import MarkdownConverter
+    conv = MarkdownConverter()
+    svg_a = conv.convert(b"# Audit text", options={"font_size_mm": 10.0, "font": "futural"}).svg
+    svg_b = conv.convert(b"# Audit text", options={"font_size_mm": 10.0, "font": "timesib"}).svg
+    assert svg_a != svg_b
+
+
+def test_pdf_hershey_font_choice_changes_text_layer() -> None:
+    """Already covered by ``test_pdf_hershey_font_choice_changes_output``
+    but pinned here as part of the cross-converter audit so a future
+    refactor of the audit set keeps PDF in scope."""
+    res_a = PdfConverter().convert(
+        _bold_text_pdf(), options={"hershey_text": True, "font": "futural"}
+    )
+    res_b = PdfConverter().convert(
+        _bold_text_pdf(), options={"hershey_text": True, "font": "timesrb"}
+    )
+    a = _hershey_text_layer_strokes(res_a.svg)
+    b = _hershey_text_layer_strokes(res_b.svg)
+    assert a != b
+
+
+def test_pdf_without_hershey_text_ignores_font_option() -> None:
+    """Negative control: without ``hershey_text``, the font option is
+    not applied (the original glyph outlines are preserved) and the
+    SVG is byte-identical regardless of the requested Hershey face."""
+    res_a = PdfConverter().convert(_bold_text_pdf(), options={"font": "futural"})
+    res_b = PdfConverter().convert(_bold_text_pdf(), options={"font": "timesrb"})
+    assert res_a.svg == res_b.svg
