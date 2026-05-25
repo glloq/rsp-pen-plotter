@@ -26,14 +26,12 @@ import type { SegmentationMethod } from '../api/client'
 import {
   resolveMasterStyle,
   resolveMulticolorStyle,
-  DEFAULT_MASTER_STYLE_ID,
   DEFAULT_MULTICOLOR_STYLE_ID,
-  MONO_STYLE_DEFAULTS,
   MULTICOLOR_STYLE_DEFAULTS,
   lerp,
   type PrintStyle,
 } from '../data/printRegistry'
-// Typography lives in its own composable since L6. We import the
+// Typography lives in its own composable since L6 #1. We import the
 // singleton helpers + the shared ``typo`` ref so the bitmap draft stays
 // the entry-point consumers know (``useBitmapDraft().typo`` still
 // returns the same ref the EditModal's TypographyCard binds against),
@@ -50,6 +48,32 @@ import {
   typographyRef,
   type TypographyDraft as _TypographyDraft,
 } from './useTypographyDraft'
+// Mono recipe lives in its own composable since L6 #2. We import the
+// singleton refs + helpers so ``buildBitmapOptions`` / ``_printMode``
+// / ``setMasterStyle`` keep reading the same mono state, and the
+// public composable still exposes every mono setter unchanged.
+import {
+  buildMonoBandRecipes,
+  defaultMono as _defaultMono,
+  defaultMonoStyleKnobs as _defaultMonoStyleKnobs,
+  getMonoStyleKnobs,
+  interpolatedBandOptions,
+  isMonoDirty,
+  markMonoCommitted,
+  monoMasterStyleIdRef,
+  monoPenSlotRef,
+  monoRef,
+  rehydrateMonoFromOptions,
+  resetMonoRecipe,
+  resetMonoStyleKnobs,
+  setMonoAdvancedMode,
+  setMonoBandOverride,
+  setMonoInkColor,
+  setMonoKnob,
+  setMonoMasterStyleId,
+  type MonoKnobsDraft as _MonoKnobsDraft,
+  type MonoStyleKnobs as _MonoStyleKnobs,
+} from './useMonoRecipe'
 
 // Photo-editor adjustments the operator can apply before segmentation.
 // Mirrors ``PreprocessOptions`` on the backend; every field defaults to
@@ -198,43 +222,13 @@ export function defaultCurves(): CurvesDraft {
 // per-master-style range knobs that ``buildBandRecipes`` interpolates
 // across bands.
 //
-// Each ``MonoStyleKnobs`` field is optional so a freshly added master
-// style without a defaults entry in ``MONO_STYLE_DEFAULTS`` still
-// renders via the legacy ``bandRecipe`` fallback in ``printRegistry``.
-// ``perBand[i]`` is a sparse override map: present band indices skip
-// interpolation and use the literal options dict instead.
-export type MonoStyleKnobs = {
-  spacing_min?: number
-  spacing_max?: number
-  density_min?: number
-  density_max?: number
-  cell_min?: number
-  cell_max?: number
-  rings_min?: number
-  rings_max?: number
-  wave_min?: number
-  wave_max?: number
-  wave_period?: number
-  dot_radius?: number
-  angles?: number[]
-  crossed_on_darkest?: boolean
-  stroke_width?: number
-  // Single-value knobs for binary styles where there's no min/max
-  // gradient — TSP density and Spiral spacing each control darkness
-  // via one number rather than an interpolated range.
-  density?: number
-  spacing_px?: number
-  perBand?: Record<number, Record<string, unknown>>
-}
-
-export type MonoKnobsDraft = {
-  ink_color: string
-  // When true, the per-band override drawer is shown and the operator
-  // can pin individual band recipes. Default false keeps the UI simple
-  // for the typical operator who only needs the global range sliders.
-  advanced_mode: boolean
-  perStyle: Record<string, MonoStyleKnobs>
-}
+// Re-exported from ``useMonoRecipe`` (L6 #2 split). Kept here so every
+// existing consumer (MasterStyleParams, the bitmap test suite, scene
+// persistence) continues to import these from ``useBitmapDraft``
+// without a churn-PR. The actual definitions live in
+// ``useMonoRecipe.ts``.
+export type MonoStyleKnobs = _MonoStyleKnobs
+export type MonoKnobsDraft = _MonoKnobsDraft
 
 // Operator-tunable knobs for the multicolour master styles. Same
 // shape as ``MonoStyleKnobs`` but only the fields each multicolour
@@ -284,24 +278,10 @@ export type MulticolorKnobsDraft = {
   perStyle: Record<string, MulticolorStyleKnobs>
 }
 
-export function defaultMonoStyleKnobs(styleId: string): MonoStyleKnobs {
-  const src = MONO_STYLE_DEFAULTS[styleId] ?? {}
-  // Shallow clone with deep copy of the angles array so callers that
-  // mutate one band's knobs don't accidentally rewrite the shared
-  // defaults dict.
-  const out: MonoStyleKnobs = { ...(src as MonoStyleKnobs) }
-  if (Array.isArray(out.angles)) out.angles = [...out.angles]
-  out.perBand = {}
-  return out
-}
-
-export function defaultMono(): MonoKnobsDraft {
-  const perStyle: Record<string, MonoStyleKnobs> = {}
-  for (const id of Object.keys(MONO_STYLE_DEFAULTS)) {
-    perStyle[id] = defaultMonoStyleKnobs(id)
-  }
-  return { ink_color: '#000000', advanced_mode: false, perStyle }
-}
+// Re-exported from ``useMonoRecipe`` (L6 #2 split). MasterStyleParams
+// and the bitmap test suite keep importing these from this module.
+export const defaultMonoStyleKnobs = _defaultMonoStyleKnobs
+export const defaultMono = _defaultMono
 
 export function defaultMulticolorStyleKnobs(styleId: string): MulticolorStyleKnobs {
   const src = MULTICOLOR_STYLE_DEFAULTS[styleId] ?? {}
@@ -329,10 +309,15 @@ const _curves = ref<CurvesDraft>(defaultCurves())
 // /upload payload) and the public ``typo`` field on this composable
 // keep pointing at the same underlying object.
 const _typo = typographyRef
-const _monoPenSlot = ref<number>(0)
-const _monoMasterStyleId = ref<string>(DEFAULT_MASTER_STYLE_ID)
+// Mono recipe state lives in ``useMonoRecipe`` since L6 #2. Aliasing
+// the shared singleton refs locally keeps the existing reads in
+// ``setPrintMode`` / ``setMasterStyle`` / ``_printMode`` /
+// ``buildBitmapOptions`` working unchanged — they still see the same
+// underlying objects.
+const _monoPenSlot = monoPenSlotRef
+const _monoMasterStyleId = monoMasterStyleIdRef
 const _multicolorMasterStyleId = ref<string>(DEFAULT_MULTICOLOR_STYLE_ID)
-const _mono = ref<MonoKnobsDraft>(defaultMono())
+const _mono = monoRef
 const _multicolor = ref<MulticolorKnobsDraft>(defaultMulticolor())
 const _paletteFollowsPens = ref<boolean>(true)
 
@@ -411,9 +396,8 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   // Halftone after editing a Pencil one would keep generating Pencil
   // recipes for every /preview round-trip even though the operator
   // never sees ``pencil`` highlighted in the picker.
-  _monoMasterStyleId.value = DEFAULT_MASTER_STYLE_ID
+  resetMonoRecipe()
   _multicolorMasterStyleId.value = DEFAULT_MULTICOLOR_STYLE_ID
-  _mono.value = defaultMono()
   _multicolor.value = defaultMulticolor()
   // Rehydrating wipes the touched tracker — the persisted last_options
   // ARE the baseline, so subsequent style switches shouldn't think the
@@ -441,20 +425,11 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
     }
     _bitmap.value.preprocess = fresh as unknown as PreprocessDraft
   }
-  // Restore the master-style id when the placement was committed with
-  // one. Falls back to the default if the field is missing (older
-  // placements predate the field) or unparseable.
-  const persistedStyleId = (opts as Record<string, unknown>).master_style_id
-  if (typeof persistedStyleId === 'string' && persistedStyleId) {
-    _monoMasterStyleId.value = persistedStyleId
-  }
-  // Explicit per-mode ids take precedence over the legacy single field
-  // when both are present (post-multicolour-master placements always
-  // ship the pair).
-  const persistedMono = (opts as Record<string, unknown>).mono_master_style_id
-  if (typeof persistedMono === 'string' && persistedMono) {
-    _monoMasterStyleId.value = persistedMono
-  }
+  // Mono master-style id rehydrate (legacy ``master_style_id`` and
+  // explicit ``mono_master_style_id``) is delegated to the mono
+  // composable. The multicolour twin stays here because it lives
+  // alongside the multicolour knobs which are still owned by the
+  // bitmap composable.
   const persistedMulti = (opts as Record<string, unknown>).multicolor_master_style_id
   if (typeof persistedMulti === 'string' && persistedMulti) {
     _multicolorMasterStyleId.value = persistedMulti
@@ -485,31 +460,11 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
     }
     _curves.value = fresh as unknown as CurvesDraft
   }
-  // Monochrome knobs — merge over defaultMono() so a placement that
-  // pre-dates a newly added style still gets its defaults populated
-  // from MONO_STYLE_DEFAULTS. Persisted ink_color and per-style
-  // overrides win where present.
-  const monoOpts = (opts as Record<string, unknown>).mono_knobs
-  if (monoOpts && typeof monoOpts === 'object') {
-    const m = monoOpts as Partial<MonoKnobsDraft>
-    if (typeof m.ink_color === 'string') _mono.value.ink_color = m.ink_color
-    if (m.perStyle && typeof m.perStyle === 'object') {
-      for (const [styleId, knobs] of Object.entries(m.perStyle)) {
-        if (knobs && typeof knobs === 'object') {
-          _mono.value.perStyle[styleId] = {
-            ...defaultMonoStyleKnobs(styleId),
-            ...(knobs as MonoStyleKnobs),
-          }
-        }
-      }
-    }
-  }
-  // ``mono_ink_color`` is also accepted at the top level as a
-  // belt-and-braces shortcut; mono_knobs.ink_color is the canonical
-  // source but persisted older formats can drop just the top-level
-  // field.
-  const inkTop = (opts as Record<string, unknown>).mono_ink_color
-  if (typeof inkTop === 'string') _mono.value.ink_color = inkTop
+  // Mono master-style id + mono_knobs + mono_ink_color rehydrate is
+  // delegated to the mono composable. The bitmap composable still
+  // orchestrates the rehydrate so callers continue to call a single
+  // ``rehydrateDraft``.
+  rehydrateMonoFromOptions(opts as Record<string, unknown>)
   // Multicolour knobs — same merge shape as mono so a placement
   // committed before a freshly added field still hydrates cleanly.
   const multiOpts = (opts as Record<string, unknown>).multicolor_knobs
@@ -631,51 +586,11 @@ function applyStyleSegmentation(
 // the list of fields the operator had manually touched and that this
 // call overwrote; callers may surface a toast.
 // ---- Monochrome knob mutators ----
-// Setters keep the live draft and the dirty-tracker in sync; UI
-// components import these instead of mutating ``_mono`` directly so
-// future side-effects (e.g. emitting an analytics event when angles
-// change) have one place to land.
-export function setMonoInkColor(color: string): void {
-  _mono.value.ink_color = color
-}
-
-export function setMonoAdvancedMode(value: boolean): void {
-  _mono.value.advanced_mode = value
-}
-
-export function getMonoStyleKnobs(styleId: string): MonoStyleKnobs {
-  if (!_mono.value.perStyle[styleId]) {
-    _mono.value.perStyle[styleId] = defaultMonoStyleKnobs(styleId)
-  }
-  return _mono.value.perStyle[styleId]
-}
-
-export function setMonoKnob<K extends keyof MonoStyleKnobs>(
-  styleId: string,
-  key: K,
-  value: MonoStyleKnobs[K],
-): void {
-  const knobs = getMonoStyleKnobs(styleId)
-  knobs[key] = value
-}
-
-export function setMonoBandOverride(
-  styleId: string,
-  bandIndex: number,
-  override: Record<string, unknown> | null,
-): void {
-  const knobs = getMonoStyleKnobs(styleId)
-  if (!knobs.perBand) knobs.perBand = {}
-  if (override === null) {
-    delete knobs.perBand[bandIndex]
-  } else {
-    knobs.perBand[bandIndex] = { ...override }
-  }
-}
-
-export function resetMonoStyleKnobs(styleId: string): void {
-  _mono.value.perStyle[styleId] = defaultMonoStyleKnobs(styleId)
-}
+// The mono setters (setMonoInkColor, setMonoAdvancedMode,
+// getMonoStyleKnobs, setMonoKnob, setMonoBandOverride,
+// resetMonoStyleKnobs) live in ``useMonoRecipe`` since L6 #2; this
+// composable re-exports them via the public ``useBitmapDraft()`` hook
+// so MasterStyleParams keeps a single import surface.
 
 // Multicolour twins of the mono knob mutators. Symmetric API so the
 // shared params components can use the same setter pattern regardless
@@ -731,8 +646,15 @@ export function setPrintMode(
 // (callers surface a toast). Mirrors setPrintMode's signature so the
 // StyleTab can share the warning code path. Caller is still
 // responsible for the post-upload ``applyMasterStyleToLayers`` push.
+//
+// Stays in this composable because it crosses the L6 #2 boundary:
+// updating the active mono master both rewrites mono state
+// (delegated to ``setMonoMasterStyleId``) AND rewrites bitmap
+// segmentation (via ``applyStyleSegmentation``). Splitting it would
+// either leave the caller orchestrating two calls or smuggle a
+// bitmap dependency into ``useMonoRecipe``.
 export function setMasterStyle(id: string, opts: { force?: boolean } = {}): SegmentationField[] {
-  _monoMasterStyleId.value = id
+  setMonoMasterStyleId(id)
   return applyStyleSegmentation(resolveMasterStyle(id), opts)
 }
 
@@ -762,161 +684,11 @@ export function buildAlgorithmOptions(): Record<string, unknown> {
   return { ..._bitmap.value.algorithm_options }
 }
 
-// Pick the i-th angle for a pencil-style band, cycling through the
-// operator's chosen angle list. ``angles`` must be non-empty; callers
-// guarantee this by falling back to MONO_STYLE_DEFAULTS.pencil.angles
-// when the operator clears the list.
-function pickAnglesForBand(i: number, _total: number, angles: number[]): number[] {
-  if (angles.length === 0) return [45]
-  // Single-angle list → every band uses that single angle (operator
-  // explicitly asked for a uniform direction). Otherwise pick a
-  // different angle per band so darker bands get visually denser
-  // multi-direction hatching just from band-to-band rotation.
-  if (angles.length === 1) return [angles[0]!]
-  const idx = i % angles.length
-  return [angles[idx]!]
-}
-
-// Synthesize a recipe for band ``i`` (of ``total``) from the operator's
-// per-style knobs. Falls back to the master style's hardcoded
-// ``bandRecipe`` when the knobs object is missing — keeps a freshly
-// added master style without a MONO_STYLE_DEFAULTS entry rendering via
-// the legacy contract.
-function recipeFromKnobs(
-  style: PrintStyle,
-  knobs: MonoStyleKnobs | undefined,
-  i: number,
-  total: number,
-): { algorithm: string; algorithm_options: Record<string, unknown> } | null {
-  // Per-band override wins outright — operator opened the "Advanced"
-  // drawer and pinned this band's options literally.
-  if (knobs?.perBand && i in knobs.perBand) {
-    return {
-      algorithm: style.defaultAlgorithm,
-      algorithm_options: { ...knobs.perBand[i] },
-    }
-  }
-  if (!knobs) {
-    return style.bandRecipe ? style.bandRecipe(i, total) : null
-  }
-  switch (style.id) {
-    case 'pencil': {
-      const angles =
-        knobs.angles && knobs.angles.length > 0
-          ? knobs.angles
-          : ((MONO_STYLE_DEFAULTS.pencil?.angles as number[] | undefined) ?? [45, 135])
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6.5)
-      return {
-        algorithm: 'crosshatch',
-        algorithm_options: {
-          angles: pickAnglesForBand(i, total, angles),
-          spacing_px: spacing,
-          crossed: i === 0 && (knobs.crossed_on_darkest ?? true) && total > 1,
-        },
-      }
-    }
-    case 'halftone-shade': {
-      const cell = lerp(i, total, knobs.cell_min ?? 3, knobs.cell_max ?? 9)
-      return {
-        algorithm: 'halftone',
-        algorithm_options: { cell_size_px: cell },
-      }
-    }
-    case 'stippling-shade': {
-      // Darker bands need MORE dots → density_max applies at i=0,
-      // density_min at i=total-1. Matches the legacy lerp(0.06, 0.012)
-      // contract while letting the operator tune both endpoints.
-      const density = lerp(i, total, knobs.density_max ?? 0.06, knobs.density_min ?? 0.012)
-      return {
-        algorithm: 'stippling',
-        algorithm_options: {
-          density,
-          dot_radius_px: knobs.dot_radius ?? 0.5,
-          seed: i * 7 + 13,
-        },
-      }
-    }
-    case 'engraving': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 1.8, knobs.spacing_max ?? 5)
-      const wave = lerp(i, total, knobs.wave_min ?? 0.6, knobs.wave_max ?? 1.6)
-      return {
-        algorithm: 'scanlines',
-        algorithm_options: {
-          spacing_px: spacing,
-          wave_amp_px: wave,
-          wave_period_px: knobs.wave_period ?? 14,
-        },
-      }
-    }
-    case 'contours-topo': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
-      // Darker bands → more rings; rings_max at i=0, rings_min at i=total-1.
-      const rings = Math.round(lerp(i, total, knobs.rings_max ?? 30, knobs.rings_min ?? 10))
-      return {
-        algorithm: 'contours',
-        algorithm_options: { spacing_px: spacing, max_rings: rings },
-      }
-    }
-    case 'tsp': {
-      // Binary mono style: a single band, one knob (dot density). The
-      // bandRecipe path is still consulted (rather than letting the
-      // backend reuse a static algorithm_options) so the operator's
-      // slider takes effect on /preview without /rerender.
-      return {
-        algorithm: 'tsp',
-        algorithm_options: { density: knobs.density ?? 0.04, seed: 0 },
-      }
-    }
-    case 'spiral-master': {
-      // Same single-band shape as TSP: spacing_px is the only darkness
-      // lever, fed through the recipe so the slider edit re-fires
-      // /preview with the new value.
-      return {
-        algorithm: 'spiral',
-        algorithm_options: {
-          spacing_px: knobs.spacing_px ?? 3,
-          samples_per_turn: 64,
-        },
-      }
-    }
-    case 'outline': {
-      return {
-        algorithm: 'edges',
-        algorithm_options: { stroke_width: knobs.stroke_width ?? 0.8 },
-      }
-    }
-    case 'centerline-trace': {
-      return {
-        algorithm: 'centerline',
-        algorithm_options: {
-          stroke_width: knobs.stroke_width ?? 0.8,
-          smooth: true,
-          min_branch_px: 3,
-        },
-      }
-    }
-    default:
-      return style.bandRecipe ? style.bandRecipe(i, total) : null
-  }
-}
-
-// Compute the synthesized algorithm_options for band ``i`` exactly as
-// ``buildBandRecipes`` would emit them, *ignoring* any pinned perBand
-// override. Used by the "Advanced (per band)" drawer to pre-fill each
-// card with the current interpolated value before the operator pins it.
-export function interpolatedBandOptions(i: number, total: number): Record<string, unknown> {
-  const style = resolveMasterStyle(_monoMasterStyleId.value)
-  const knobs = _mono.value.perStyle[style.id]
-  // Synthesize without consulting perBand by passing knobs minus the
-  // override map.
-  const interp = recipeFromKnobs(
-    style,
-    knobs ? { ...knobs, perBand: undefined } : undefined,
-    i,
-    total,
-  )
-  return interp?.algorithm_options ?? { ...style.defaultAlgorithmOptions }
-}
+// Mono per-band recipe synthesis lives in ``useMonoRecipe`` since
+// L6 #2. ``pickAnglesForBand``, ``recipeFromKnobs`` and
+// ``interpolatedBandOptions`` moved with the mono slice; the mono
+// branch of ``buildBandRecipes`` below dispatches to
+// ``buildMonoBandRecipes``.
 
 // Build the per-band recipes for the current master style so the
 // backend's /preview applies them inline instead of just the uniform
@@ -927,27 +699,7 @@ export function interpolatedBandOptions(i: number, total: number): Record<string
 // /rerender round-trip.
 function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
   if (_printMode.value === 'monochrome') {
-    const segMethod = _bitmap.value.segmentation_method
-    if (segMethod !== 'luminance_bands' && segMethod !== 'thresholds') return undefined
-    const style = resolveMasterStyle(_monoMasterStyleId.value)
-    if (!style.bandRecipe && !(style.id in MONO_STYLE_DEFAULTS)) return undefined
-    // Binary mono modes render exactly one layer (drop_background drops
-    // the lighter side of the threshold), so emit a single recipe.
-    const total = segMethod === 'luminance_bands' ? _bitmap.value.num_bands : 1
-    const knobs = _mono.value.perStyle[style.id]
-    return Array.from({ length: total }, (_, i) => {
-      const recipe = recipeFromKnobs(style, knobs, i, total)
-      if (!recipe) {
-        return {
-          algorithm: style.defaultAlgorithm,
-          algorithm_options: { ...style.defaultAlgorithmOptions },
-        }
-      }
-      return {
-        algorithm: recipe.algorithm,
-        algorithm_options: { ...recipe.algorithm_options },
-      }
-    })
+    return buildMonoBandRecipes(_bitmap.value.segmentation_method, _bitmap.value.num_bands)
   }
   // Multicolour: expand the active multicolour master's ``colorRecipe``
   // across the segmentation's predicted cluster count. The backend's
@@ -1334,8 +1086,9 @@ const _expectedLayerCount = computed<number>(() => {
 // a successful /upload and by ``rehydrateDraft`` when loading an
 // existing placement. Compared against the live drafts in
 // ``isDirty`` so the UI can warn before close + disable Apply when
-// nothing has drifted. The typography slice's snapshot lives in
-// ``useTypographyDraft``; we OR its dirty bit in below.
+// nothing has drifted. The typography and mono slices each own their
+// own baseline (``isTypographyDirty`` / ``isMonoDirty``); we OR their
+// dirty bits in below.
 const _baselineBitmap = ref<string>('')
 
 function snap(value: unknown): string {
@@ -1347,15 +1100,14 @@ function snap(value: unknown): string {
 }
 
 const _baselineCurves = ref<string>('')
-const _baselineMono = ref<string>('')
 const _baselineMulticolor = ref<string>('')
 
 const _isDirty = computed<boolean>(() => {
   return (
     snap(_bitmap.value) !== _baselineBitmap.value ||
     isTypographyDirty.value ||
+    isMonoDirty.value ||
     snap(_curves.value) !== _baselineCurves.value ||
-    snap(_mono.value) !== _baselineMono.value ||
     snap(_multicolor.value) !== _baselineMulticolor.value
   )
 })
@@ -1363,8 +1115,8 @@ const _isDirty = computed<boolean>(() => {
 function markCommitted(): void {
   _baselineBitmap.value = snap(_bitmap.value)
   markTypographyCommitted()
+  markMonoCommitted()
   _baselineCurves.value = snap(_curves.value)
-  _baselineMono.value = snap(_mono.value)
   _baselineMulticolor.value = snap(_multicolor.value)
   _committed.value = true
 }
