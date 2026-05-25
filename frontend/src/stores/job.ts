@@ -10,6 +10,7 @@ import { useEditState } from '../composables/useEditState'
 import {
   deleteProfile as apiDeleteProfile,
   saveProfile as apiSaveProfile,
+  downloadOriginalFile,
   generateGcode,
   getPresets,
   getProfiles,
@@ -923,7 +924,26 @@ export const useJobStore = defineStore('job', () => {
   // uploaded bytes, only the rendered SVG / layers change here.
   async function changePage(page: number): Promise<void> {
     const p = selectedPlacement.value
-    if (!p?.last_file) return
+    if (!p) return
+    // ``last_file`` is only populated in-memory after a fresh /upload
+    // round-trip. Library drag-drop placements and post-reload sessions
+    // arrive with ``last_file: null`` but a valid ``library_file_id`` —
+    // re-fetch the original bytes from disk so page navigation still
+    // works in those cases.
+    let file = p.last_file
+    if (!file && p.library_file_id && p.source_file) {
+      try {
+        file = await downloadOriginalFile(
+          p.library_file_id,
+          p.source_file,
+          p.source_mime || 'application/octet-stream',
+        )
+        patchPlacement(p.id, { last_file: file })
+      } catch {
+        return
+      }
+    }
+    if (!file) return
     const targetId = p.id
     const next = { ...(p.last_options ?? {}), page }
     loading.value = true
@@ -933,7 +953,7 @@ export const useJobStore = defineStore('job', () => {
     const toasts = useToastStore()
     const toastId = toasts.progress(i18n.global.t('toast.converting'))
     try {
-      const result = await uploadFile(p.last_file, selectedProfileName.value, next)
+      const result = await uploadFile(file, selectedProfileName.value, next)
       const bboxes = result.job.layers.map((l) => l.bbox)
       const sourceBbox = unionBoxes(bboxes) ?? emptyBbox()
       const layoutPatch = computeInitialLayout(sourceBbox, targetId)
