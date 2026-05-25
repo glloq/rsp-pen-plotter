@@ -104,6 +104,13 @@ export type TypographyDraft = {
   margin_mm: number
   page_width_mm: number
   page_height_mm: number
+  // Synthetic style toggles — Hershey fonts are single-stroke, so bold
+  // double-passes each glyph with a small offset and italic shears every
+  // point by ~12°. Letter spacing inserts extra millimeters between
+  // characters; negative values tighten the rendering.
+  bold: boolean
+  italic: boolean
+  letter_spacing_mm: number
 }
 
 export function defaultPreprocess(): PreprocessDraft {
@@ -312,6 +319,9 @@ export function defaultTypography(): TypographyDraft {
     margin_mm: 15.0,
     page_width_mm: 210.0,
     page_height_mm: 297.0,
+    bold: false,
+    italic: false,
+    letter_spacing_mm: 0.0,
   }
 }
 
