@@ -187,3 +187,35 @@ def test_acceleration_skipped_for_custom_dialect() -> None:
     profile = _profile().model_copy(update={"gcode_dialect": "custom"})
     gcode = generate_gcode(TWO_LAYERS, profile)
     assert "M204" not in gcode
+
+
+def test_template_contract_blocks_undeclared_variable_at_import() -> None:
+    """A template growing a ``{{ feed }}`` reference that ``generate_gcode``
+    doesn't pass must fail loudly — at module import time — rather than
+    silently returning a 422 ``'feed' is undefined`` on the next
+    /generate call.
+
+    This is the defence against deployment desync: stale ``__pycache__``
+    next to fresh templates (or vice versa) used to surface as the
+    opaque ``Generation failed: 'feed' is undefined`` error reported by
+    operators. With the boot-time check in place the failure happens
+    once at startup, in the uvicorn log, naming the offending template +
+    variable.
+    """
+    import importlib
+
+    from pen_plotter.core import gcode as gcode_module
+
+    # Pen-up.j2 today only uses ``profile``. Pretend it grew a new
+    # ``{{ feed }}`` reference and verify the contract rejects it.
+    template_path = gcode_module._TEMPLATES_DIR / "pen_up.j2"
+    original = template_path.read_text()
+    template_path.write_text(original + "\nF{{ feed }}\n")
+    try:
+        with pytest.raises(RuntimeError, match=r"pen_up\.j2.*feed"):
+            importlib.reload(gcode_module)
+    finally:
+        template_path.write_text(original)
+        # Restore the canonical module so subsequent tests see the real
+        # ``generate_gcode`` rather than the half-reloaded broken state.
+        importlib.reload(gcode_module)
