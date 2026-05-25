@@ -11,14 +11,13 @@ from __future__ import annotations
 import math
 
 from pen_plotter.core.gcode import (
-    LayerGeneration,
-    ScaleMode,
     _bounds_of,
     _exceeds_workspace,
     _make_transform,
     _read_layers,
     sheet_exceeds_workspace,
 )
+from pen_plotter.domain.print_plan import LayerPlan, ScaleMode
 from pen_plotter.models import MachineProfile, Placement, PreflightReport
 
 
@@ -33,7 +32,7 @@ def preflight_report(
     svg: str,
     profile: MachineProfile,
     *,
-    layers: list[LayerGeneration] | None = None,
+    layers: list[LayerPlan] | None = None,
     scale_mode: ScaleMode = "fit",
     margin_mm: float = 10.0,
     placement: Placement | None = None,

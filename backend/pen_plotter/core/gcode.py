@@ -11,13 +11,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from pen_plotter.core.arcs import ArcTo, fit_arcs
 from pen_plotter.core.layers import labeled_group_fragments
 from pen_plotter.core.toolpath import _doc_from_svg
+from pen_plotter.domain.print_plan import LayerPlan, ScaleMode
 from pen_plotter.models import MachineProfile, Placement
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -29,23 +29,10 @@ _env = Environment(
     lstrip_blocks=True,
 )
 
-ScaleMode = Literal["fit", "actual"]
-
-
-@dataclass
-class LayerGeneration:
-    """Per-layer generation settings."""
-
-    layer_id: str
-    target_pen_slot: int | None = None
-    drawing_speed_mm_s: float | None = None
-    # Pause-prompt metadata (see ``LayerInfo``). ``source_color`` and
-    # ``color_label`` drive the operator message emitted by
-    # ``pen_color_change.j2`` for mono-pen machines; ``pause_before``
-    # overrides the auto policy on a per-layer basis.
-    source_color: str | None = None
-    color_label: str | None = None
-    pause_before: Literal["auto", "always", "never"] = "auto"
+# Legacy alias kept so older test modules (and any external callers)
+# importing ``LayerGeneration`` from ``core.gcode`` keep working after
+# the dataclass was promoted to a Pydantic model in ``domain.print_plan``.
+LayerGeneration = LayerPlan
 
 
 @dataclass
@@ -203,7 +190,7 @@ def generate_gcode(
     svg: str,
     profile: MachineProfile,
     *,
-    layers: list[LayerGeneration] | None = None,
+    layers: list[LayerPlan] | None = None,
     scale_mode: ScaleMode = "fit",
     margin_mm: float = 10.0,
     placement: Placement | None = None,

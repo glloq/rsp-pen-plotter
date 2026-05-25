@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import Engine, inspect, text
 from sqlmodel import Field, Session, SQLModel, create_engine, desc, select
 
+from pen_plotter.domain.print_plan import ResolvedPlan
 from pen_plotter.models import Job
 
 _log = logging.getLogger(__name__)
@@ -33,6 +34,23 @@ class JobRecord(SQLModel, table=True):
     status: str
     layer_count: int
     created_at: datetime
+
+
+class PlanSnapshotRecord(SQLModel, table=True):
+    """A resolved :class:`PrintPlan` archived for diagnostics.
+
+    Keyed by the deterministic ``plan_hash`` produced by
+    :func:`pen_plotter.application.plan_resolver.resolve_plan`, so the
+    same logical plan only ever occupies one row regardless of how many
+    times it's submitted. ``plan_json`` carries the full resolved plan
+    so an operator can replay or compare it later.
+    """
+
+    plan_hash: str = Field(primary_key=True)
+    profile_name: str = Field(index=True)
+    layer_count: int
+    created_at: datetime
+    plan_json: str
 
 
 class FileRecord(SQLModel, table=True):
@@ -206,6 +224,39 @@ def delete_file_record(file_id: str, target: Engine = engine) -> bool:
         session.delete(record)
         session.commit()
         return True
+
+
+def save_plan_snapshot(
+    resolved: ResolvedPlan, target: Engine = engine
+) -> PlanSnapshotRecord:
+    """Persist a resolved plan; idempotent on ``plan_hash``.
+
+    Best-effort by design: a DB failure should not prevent the
+    generated G-code from being returned, so callers are expected to
+    log + swallow exceptions rather than propagating them.
+    """
+    record = PlanSnapshotRecord(
+        plan_hash=resolved.plan_hash,
+        profile_name=resolved.profile_name,
+        layer_count=len(resolved.layers),
+        created_at=datetime.now(UTC),
+        plan_json=resolved.model_dump_json(),
+    )
+    try:
+        with Session(target) as session:
+            session.merge(record)
+            session.commit()
+    except Exception:  # pragma: no cover — diagnostics, never fatal
+        _log.exception("Failed to persist plan snapshot %s", resolved.plan_hash)
+    return record
+
+
+def get_plan_snapshot(
+    plan_hash: str, target: Engine = engine
+) -> PlanSnapshotRecord | None:
+    """Return a stored snapshot by its hash, or ``None``."""
+    with Session(target) as session:
+        return session.get(PlanSnapshotRecord, plan_hash)
 
 
 def get_job(job_id: str, target: Engine = engine) -> JobRecord | None:

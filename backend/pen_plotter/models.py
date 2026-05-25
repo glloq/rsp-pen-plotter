@@ -177,6 +177,12 @@ class PreflightReport(BaseModel):
     path_count: int
     missing_pen_slots: list[int] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    # Stable hash of the resolved plan that produced this report. Lets the
+    # frontend correlate a preflight result with the matching ``/generate``
+    # call: both endpoints route through ``resolve_plan`` so equal inputs
+    # MUST yield equal hashes. Optional so historical callers that don't
+    # mind the field keep deserialising.
+    plan_hash: str | None = None
 
 
 class Macro(BaseModel):

@@ -1,93 +1,75 @@
-"""G-code generation endpoint."""
+"""G-code generation endpoint (thin adapter over ``run_generate``)."""
 
 from __future__ import annotations
 
-from typing import Literal
-
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from pen_plotter.core.ebb import generate_ebb
-from pen_plotter.core.gcode import LayerGeneration, generate_gcode
-from pen_plotter.models import Placement
+from pen_plotter.application.generate_service import run_generate
+from pen_plotter.application.plan_resolver import PlanResolutionError
+from pen_plotter.domain.print_plan import PrintPlan, ResolvedPlan
+from pen_plotter.persistence import save_plan_snapshot
 from pen_plotter.profiles import get_profile
 
 router = APIRouter()
 
 
-class GenerateLayer(BaseModel):
-    """Per-layer generation settings."""
+class GenerateRequest(PrintPlan):
+    """Wire model for ``POST /generate``.
 
-    layer_id: str
-    target_pen_slot: int | None = None
-    drawing_speed_mm_s: float | None = None
-    # Pause-prompt metadata. ``source_color`` is required for mono-pen colour
-    # changes; ``color_label`` is the operator-friendly name surfaced in the
-    # prompt; ``pause_before`` lets the operator force or skip a pause.
-    source_color: str | None = None
-    color_label: str | None = None
-    pause_before: Literal["auto", "always", "never"] = "auto"
-
-
-class GenerateRequest(BaseModel):
-    """Request body for G-code generation."""
-
-    svg: str
-    profile_name: str
-    layers: list[GenerateLayer] = Field(default_factory=list)
-    scale_mode: Literal["fit", "actual"] = "fit"
-    margin_mm: float = 10.0
-    placement: Placement | None = None
+    Identical to :class:`PrintPlan` — kept as a named subclass so the
+    OpenAPI schema (and therefore the generated TypeScript types) reads
+    ``GenerateRequest`` at the endpoint boundary, while the rest of the
+    backend manipulates the domain type.
+    """
 
 
 class GenerateResponse(BaseModel):
-    """Generated G-code and basic statistics."""
+    """Generated G-code, its line count, and the resolved plan snapshot."""
 
     gcode: str
     line_count: int
+    plan_hash: str
+    resolved_plan: ResolvedPlan
 
 
 @router.post("/generate")
 async def generate(request: GenerateRequest) -> GenerateResponse:
-    """Generate G-code for an SVG against a named machine profile.
+    """Generate G-code for a print plan.
 
-    Args:
-        request: The SVG, profile name, and per-layer settings.
-
-    Returns:
-        A :class:`GenerateResponse` with the G-code and its line count.
+    Returns the program plus the resolved-plan snapshot (and its hash)
+    that produced it — the snapshot is also persisted to SQLite for
+    later inspection via ``GET /plans/{hash}``.
 
     Raises:
-        HTTPException: 404 if the profile is unknown; 400 if generation fails.
+        HTTPException: 404 if the profile is unknown; 400 if the plan
+            fails business validation; 422 if generation itself fails.
     """
     profile = get_profile(request.profile_name)
     if profile is None:
-        raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
-
-    generator = generate_ebb if profile.gcode_dialect == "ebb" else generate_gcode
-    layer_settings = [
-        LayerGeneration(
-            layer_id=layer.layer_id,
-            target_pen_slot=layer.target_pen_slot,
-            drawing_speed_mm_s=layer.drawing_speed_mm_s,
-            source_color=layer.source_color,
-            color_label=layer.color_label,
-            pause_before=layer.pause_before,
+        raise HTTPException(
+            status_code=404, detail=f"Unknown profile: {request.profile_name!r}"
         )
-        for layer in request.layers
-    ]
     try:
-        program = generator(
-            request.svg,
-            profile,
-            layers=layer_settings,
-            scale_mode=request.scale_mode,
-            margin_mm=request.margin_mm,
-            placement=request.placement,
-        )
+        outcome = run_generate(request, profile)
+    except PlanResolutionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # template/geometry failures
+    except Exception as exc:  # template / geometry failures
         raise HTTPException(status_code=422, detail=f"Generation failed: {exc}") from exc
 
-    return GenerateResponse(gcode=program, line_count=program.count("\n"))
+    # Best-effort persistence: snapshots are a diagnostics aid, not a
+    # blocking concern. If the DB is unreachable we still return the
+    # G-code so the operator's print isn't held hostage by traceability.
+    save_plan_snapshot(outcome.resolved)
+
+    return GenerateResponse(
+        gcode=outcome.gcode,
+        line_count=outcome.line_count,
+        plan_hash=outcome.resolved.plan_hash,
+        resolved_plan=outcome.resolved,
+    )
+
+
+__all__ = ["GenerateRequest", "GenerateResponse", "router"]
