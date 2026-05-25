@@ -89,6 +89,19 @@
     "deleteFailed": "Impossible de supprimer le fichier.",
     "dedupedToast": "« {name} » est déjà dans la bibliothèque."
   },
+  "integrity": {
+    "title": "{count} fichier(s) à re-uploader pour restaurer l'édition de style.",
+    "andMore": " (+{count} autres)",
+    "dismiss": "Fermer",
+    "reason": {
+      "missing_bitmap_options": "Options bitmap perdues",
+      "missing_original_bytes": "Octets d'origine manquants sur disque",
+      "corrupt_bitmap_options": "Options bitmap corrompues",
+      "not_rerenderable": "Non re-rendable",
+      "segmentation_failed": "Échec de la segmentation",
+      "unknown_job": "Fichier inconnu"
+    }
+  },
   "editModal": {
     "title": "Réglages du fichier",
     "close": "Fermer",

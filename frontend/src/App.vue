@@ -13,6 +13,7 @@ import SettingsDrawer from './components/SettingsDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
 import GenerateProgressModal from './components/GenerateProgressModal.vue'
+import IntegrityBanner from './components/IntegrityBanner.vue'
 import { useJobStore } from './stores/job'
 import { useLibraryStore } from './stores/library'
 import { useToastStore } from './stores/toasts'
@@ -109,6 +110,11 @@ onMounted(async () => {
   // Fire-and-forget: the toast is purely advisory, no need to block the
   // rest of the startup sequence on the (potentially slow) git fetch.
   void checkForUpdatesOnStartup()
+  // Library integrity is best-effort: the banner stays hidden when the
+  // call fails, so a transient network blip never turns into a false
+  // alert. Refreshed only on boot — the backend boot scan is the
+  // authoritative trigger.
+  void library.refreshIntegrity()
 })
 
 onBeforeUnmount(() => {
@@ -122,6 +128,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex h-screen flex-col bg-slate-900 text-slate-100">
     <AppHeader />
+    <IntegrityBanner />
 
     <main
       class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]"

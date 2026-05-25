@@ -89,6 +89,19 @@
     "deleteFailed": "Couldn't delete the file.",
     "dedupedToast": "\"{name}\" is already in the library."
   },
+  "integrity": {
+    "title": "{count} file(s) need to be re-uploaded to restore style editing.",
+    "andMore": " (+{count} more)",
+    "dismiss": "Dismiss",
+    "reason": {
+      "missing_bitmap_options": "Lost bitmap options",
+      "missing_original_bytes": "Original bytes missing on disk",
+      "corrupt_bitmap_options": "Bitmap options corrupted",
+      "not_rerenderable": "Not re-renderable",
+      "segmentation_failed": "Segmentation failed",
+      "unknown_job": "Unknown file"
+    }
+  },
   "editModal": {
     "title": "File settings",
     "close": "Close",
