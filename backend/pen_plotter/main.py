@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -16,6 +17,7 @@ from pen_plotter import __version__
 from pen_plotter.api.algorithms import router as algorithms_router
 from pen_plotter.api.analyze import router as analyze_router
 from pen_plotter.api.audit import router as audit_router
+from pen_plotter.api.files import integrity_scan
 from pen_plotter.api.files import router as files_router
 from pen_plotter.api.fonts import router as fonts_router
 from pen_plotter.api.generate import router as generate_router
@@ -40,12 +42,42 @@ from pen_plotter.converters.registry import registry
 from pen_plotter.persistence import init_db
 from pen_plotter.queue import recover_interrupted
 
+_log = logging.getLogger(__name__)
+
+
+def _log_library_integrity() -> None:
+    """Scan the file library at boot and warn about rerender-broken entries.
+
+    Lets the operator see in the logs (and via /files/integrity) that
+    some bitmap uploads cannot be re-rendered today, instead of finding
+    out at the next Edit click.
+    """
+    try:
+        report = integrity_scan()
+    except Exception:
+        _log.exception("Library integrity scan failed")
+        return
+    if not report.issues:
+        _log.info(
+            "Library integrity ok: %d rerenderable file(s) / %d total",
+            report.rerenderable,
+            report.checked,
+        )
+        return
+    _log.warning(
+        "Library integrity: %d issue(s) — files needing re-upload to restore rerender:",
+        len(report.issues),
+    )
+    for issue in report.issues:
+        _log.warning("  - %s (%s): %s", issue.source_file, issue.file_id, issue.reason)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Initialize converters and the database, then run the print-queue worker."""
     register_default_converters(registry)
     init_db()
+    _log_library_integrity()
     recover_interrupted()
     print_queue.start()
     try:

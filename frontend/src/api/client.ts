@@ -566,6 +566,58 @@ export async function rerenderJob(
   return response.data
 }
 
+/** Shape of the structured ``detail`` returned by /rerender on a 404. */
+export type RerenderUnavailableReason =
+  | 'unknown_job'
+  | 'not_rerenderable'
+  | 'missing_bitmap_options'
+  | 'missing_original_bytes'
+  | 'corrupt_bitmap_options'
+  | 'segmentation_failed'
+
+export interface RerenderUnavailableDetail {
+  reason: RerenderUnavailableReason
+  job_id: string
+  message: string
+}
+
+/**
+ * Recognise the structured 404 from /rerender so the UI can pick a
+ * precise prompt — "re-upload this file" vs "not a bitmap source" vs
+ * a generic toast — instead of just dumping the message.
+ */
+export function asRerenderUnavailable(err: unknown): RerenderUnavailableDetail | null {
+  const status = (err as { response?: { status?: number } })?.response?.status
+  if (status !== 404) return null
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (
+    detail &&
+    typeof detail === 'object' &&
+    typeof (detail as { reason?: unknown }).reason === 'string'
+  ) {
+    return detail as RerenderUnavailableDetail
+  }
+  return null
+}
+
+export interface IntegrityIssue {
+  file_id: string
+  source_file: string
+  reason: string
+}
+
+export interface IntegrityReport {
+  checked: number
+  rerenderable: number
+  issues: IntegrityIssue[]
+}
+
+/** Library integrity snapshot — see backend ``GET /files/integrity``. */
+export async function getFilesIntegrity(): Promise<IntegrityReport> {
+  const response = await api.get<IntegrityReport>('/files/integrity')
+  return response.data
+}
+
 export interface TypographyPreviewResponse {
   svg: string
   truncated: boolean

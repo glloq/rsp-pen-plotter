@@ -439,3 +439,144 @@ def test_reupload_without_options_keeps_dedup_silent(
     with Session(engine) as session:
         session.exec(delete(FileRecord))
         session.commit()
+
+
+# ---------- L4: rehydration failure modes + integrity endpoint ----------
+
+
+def _seed_library_png(
+    client: TestClient,
+    tmp_path,
+    monkeypatch,
+    *,
+    filename: str = "img.png",
+) -> str:
+    """Helper: upload a bitmap and return its file_id, isolated to tmp_path."""
+    from sqlmodel import Session, delete
+
+    from pen_plotter.api import files as files_module
+    from pen_plotter.converters.defaults import register_default_converters
+    from pen_plotter.converters.registry import registry as _registry
+    from pen_plotter.persistence import FileRecord, engine
+
+    register_default_converters(_registry)
+    monkeypatch.setattr(files_module, "FILES_DIR", tmp_path / "files")
+    with Session(engine) as session:
+        session.exec(delete(FileRecord))
+        session.commit()
+
+    image = Image.new("RGB", (16, 16), (255, 255, 255))
+    for y in range(16):
+        for x in range(8):
+            image.putpixel((x, y), (0, 0, 0))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+
+    upload = client.post(
+        "/files",
+        data={
+            "options": json.dumps(
+                {"algorithm": "direct", "num_colors": 2, "drop_background": False}
+            ),
+        },
+        files={"file": (filename, buf.getvalue(), "image/png")},
+    )
+    assert upload.status_code == 200, upload.text
+    detail = upload.json()["file"]
+    assert detail["rerenderable"] is True
+    return detail["file_id"]
+
+
+def test_rerender_404_detail_is_structured(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    """The L4 contract: every 404 carries a machine-readable ``reason``.
+
+    The frontend used to receive a free-text detail and could only show
+    a generic toast. With the structured shape it can branch (re-upload,
+    different file type, etc.) and present a specific prompt.
+    """
+    response = client.post("/rerender", json={"job_id": "no-such-job", "layers": []})
+    assert response.status_code == 404
+    detail = response.json()["detail"]
+    assert isinstance(detail, dict)
+    assert detail["reason"] == "unknown_job"
+    assert detail["job_id"] == "no-such-job"
+    assert "message" in detail
+
+
+def test_rerender_404_when_original_bytes_disappeared(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    """Cache cleared + original.png deleted ⇒ structured 404, no crash."""
+    from pen_plotter.api import files as files_module
+
+    file_id = _seed_library_png(client, tmp_path, monkeypatch)
+    rerender_module._clear_cache_for_tests()
+    # Wipe the stored original to simulate disk loss / manual cleanup.
+    original = files_module._find_original(file_id)
+    assert original is not None
+    original.unlink()
+
+    response = client.post(
+        "/rerender",
+        json={
+            "job_id": file_id,
+            "layers": [{"layer_id": "color-000000", "algorithm": "halftone"}],
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["reason"] == "missing_original_bytes"
+
+
+def test_rerender_404_when_bitmap_options_corrupted(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    """meta.json without bitmap_options (legacy / edited) ⇒ structured 404."""
+    from pen_plotter.api import files as files_module
+
+    file_id = _seed_library_png(client, tmp_path, monkeypatch)
+    rerender_module._clear_cache_for_tests()
+    # Strip bitmap_options from meta.json to simulate a legacy file or
+    # an externally-tampered library entry.
+    meta_path = files_module._meta_path(file_id)
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["bitmap_options"] = None
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    response = client.post(
+        "/rerender",
+        json={
+            "job_id": file_id,
+            "layers": [{"layer_id": "color-000000", "algorithm": "halftone"}],
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"]["reason"] == "missing_bitmap_options"
+
+
+def test_files_integrity_endpoint_lists_broken_entries(
+    client: TestClient, tmp_path, monkeypatch
+) -> None:
+    """The /files/integrity endpoint surfaces the same diagnoses the UI
+    needs to disable Edit / show a re-upload banner.
+    """
+    from pen_plotter.api import files as files_module
+
+    file_id = _seed_library_png(client, tmp_path, monkeypatch)
+    # Healthy snapshot first.
+    healthy = client.get("/files/integrity").json()
+    assert healthy["rerenderable"] >= 1
+    assert healthy["issues"] == []
+
+    # Now break the entry on disk and re-run the scan.
+    meta_path = files_module._meta_path(file_id)
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["bitmap_options"] = None
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+
+    broken = client.get("/files/integrity").json()
+    assert any(
+        issue["file_id"] == file_id and issue["reason"] == "missing_bitmap_options"
+        for issue in broken["issues"]
+    )

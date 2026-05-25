@@ -168,6 +168,25 @@
         }
       }
     },
+    "/files/integrity": {
+      "get": {
+        "summary": "Files Integrity",
+        "description": "Return the integrity report for the file library.\n\nLets the UI surface a banner (\"3 file(s) need re-upload to support\nstyle editing\") instead of failing on the next /rerender click.",
+        "operationId": "files_integrity_files_integrity_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrityReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/files/folders": {
       "get": {
         "summary": "List Folders",
@@ -3469,6 +3488,57 @@
         ],
         "title": "ImportRequest",
         "description": "A profile to import, as a YAML document."
+      },
+      "IntegrityIssue": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id"
+          },
+          "source_file": {
+            "type": "string",
+            "title": "Source File"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "source_file",
+          "reason"
+        ],
+        "title": "IntegrityIssue",
+        "description": "One library entry that cannot be re-rendered today.\n\nSurfaced by :func:`integrity_scan` so the UI can show a banner and\nlet the operator re-upload the affected files rather than discover\nthe problem when they click Edit."
+      },
+      "IntegrityReport": {
+        "properties": {
+          "checked": {
+            "type": "integer",
+            "title": "Checked"
+          },
+          "rerenderable": {
+            "type": "integer",
+            "title": "Rerenderable"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/IntegrityIssue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checked",
+          "rerenderable",
+          "issues"
+        ],
+        "title": "IntegrityReport",
+        "description": "Summary returned by ``GET /files/integrity``."
       },
       "Job": {
         "properties": {
