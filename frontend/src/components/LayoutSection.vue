@@ -10,7 +10,9 @@ const store = useJobStore()
 const toasts = useToastStore()
 const ui = useUiStore()
 
-const showSheet = ref(false)
+// Open by default: the sheet format is the primary control of the Plan tab
+// and operators expect to see it on entry, not have to expand it first.
+const showSheet = ref(true)
 
 // Drafts mirror the saved sheet so the user can tweak without overwriting on
 // each keystroke. We commit on Apply / preset click / explicit centre.
