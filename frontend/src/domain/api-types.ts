@@ -1102,6 +1102,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/available-colors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Colors
+         * @description Return every available-colour entry, ordered by position.
+         */
+        get: operations["list_colors_available_colors_get"];
+        put?: never;
+        /**
+         * Create Color
+         * @description Add an entry to the inventory.
+         *
+         *     Idempotent on the hex value: re-adding an existing colour returns
+         *     the existing record (its name may be updated if a non-empty name
+         *     is supplied in the request) instead of erroring with 409. This
+         *     matches the library / file dedup semantics — declaring the same
+         *     ink twice should be a no-op, not a failure.
+         */
+        post: operations["create_color_available_colors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/available-colors/{color_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Color
+         * @description Remove one entry. Returns ``{"deleted": true}`` on success.
+         */
+        delete: operations["delete_color_available_colors__color_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Color
+         * @description Rewrite ``name`` / ``hex`` / ``position`` on one entry.
+         */
+        patch: operations["patch_color_available_colors__color_id__patch"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1170,6 +1224,50 @@ export interface components {
              * @default
              */
             detail: string;
+        };
+        /**
+         * AvailableColorCreate
+         * @description Request body for ``POST /available-colors``.
+         */
+        AvailableColorCreate: {
+            /** Hex */
+            hex: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+        };
+        /**
+         * AvailableColorOut
+         * @description Wire shape returned by every available-colour endpoint.
+         */
+        AvailableColorOut: {
+            /** Color Id */
+            color_id: string;
+            /** Hex */
+            hex: string;
+            /** Name */
+            name: string;
+            /** Position */
+            position: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AvailableColorPatch
+         * @description Partial update body for ``PATCH /available-colors/{id}``.
+         */
+        AvailableColorPatch: {
+            /** Hex */
+            hex?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Position */
+            position?: number | null;
         };
         /**
          * Block
@@ -4125,6 +4223,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentAnalysis"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_colors_available_colors_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableColorOut"][];
+                };
+            };
+        };
+    };
+    create_color_available_colors_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailableColorCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableColorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_color_available_colors__color_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                color_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_color_available_colors__color_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                color_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailableColorPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableColorOut"];
                 };
             };
             /** @description Validation Error */
