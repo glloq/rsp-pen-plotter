@@ -21,7 +21,15 @@ import { resolveMasterStyle } from '../data/printRegistry'
 // Minimal store surface the composable needs. Avoids importing the
 // concrete pinia store so this file stays trivial to unit test.
 export interface StylePropagationStore {
-  layers: ReadonlyArray<{ layer_id: string; target_pen_slot?: number | null }>
+  layers: ReadonlyArray<{
+    layer_id: string
+    target_pen_slot?: number | null
+    // Cluster hex (``#rrggbb``) for multicolour master styles whose
+    // ``colorRecipe`` branches on hue (CMYK halftone angles, complement
+    // crosshatch, etc.). Optional so legacy callers / tests can hand in
+    // bare layers without breaking the contract.
+    source_color?: string
+  }>
   updateLayer: (layerId: string, patch: { target_pen_slot?: number | null }) => void
   applyLayerAlgorithm: (
     layerId: string,
@@ -69,14 +77,19 @@ export async function applyMasterStyleToLayers(
     ) {
       store.updateLayer(layer.layer_id, { target_pen_slot: options.penSlot })
     }
-    // Prefer the per-band recipe (master shaded modes). Fall back to
-    // the style's default algorithm so binary master modes still
-    // install something instead of leaving the layer at /upload's
-    // default.
-    const recipe = style.bandRecipe?.(i, total) ?? {
-      algorithm: style.defaultAlgorithm,
-      algorithm_options: { ...style.defaultAlgorithmOptions },
-    }
+    // Multicolour masters branch on the cluster hex via ``colorRecipe``
+    // (e.g. CMYK halftone picks an angle per ink, watercolour shifts
+    // density by source hue). Mono shaded masters use ``bandRecipe``
+    // keyed only by the band index. Try each in turn before falling
+    // back to the style's flat default — that way single-recipe styles
+    // and dual-mode helpers keep working untouched.
+    const hex = layer.source_color ?? '#000000'
+    const recipe = style.colorRecipe?.(i, total, hex)
+      ?? style.bandRecipe?.(i, total)
+      ?? {
+        algorithm: style.defaultAlgorithm,
+        algorithm_options: { ...style.defaultAlgorithmOptions },
+      }
     await store.applyLayerAlgorithm(
       layer.layer_id,
       recipe.algorithm,
