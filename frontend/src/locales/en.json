@@ -645,6 +645,16 @@
     "flipH": "Mirror horizontally",
     "flipV": "Mirror vertically"
   },
+  "typography": {
+    "fontSection": "Font",
+    "fontHint": "Single-stroke fonts designed for pen plotters",
+    "layoutSection": "Layout",
+    "pageSection": "Page",
+    "pageHint": "around the printable area",
+    "alignLeft": "Left",
+    "alignCenter": "Centered",
+    "alignRight": "Right"
+  },
   "convert": {
     "options": "Conversion options",
     "embeddedImageOptions": "Embedded image vectorization",

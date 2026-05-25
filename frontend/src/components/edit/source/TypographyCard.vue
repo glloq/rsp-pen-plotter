@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import { useAccordionPersistence } from '../../../composables/useAccordionPersistence'
 
-// Typography card: font + sizing knobs for plain-text and markdown
-// sources. Only rendered when the active source is a typography file
-// (.txt / .md). The typo reactive object is passed by reference so
-// v-model binds straight to its fields and parent watchers fire.
+// Typography card — the *only* settings card the Style tab shows for
+// .txt / .md sources, so it's flat (no accordion) and split into
+// always-visible sections so the operator sees every text-printing
+// knob the second they land on the tab. The earlier accordion shape
+// kept everything hidden behind a "+", which made the modal look like
+// it had no font controls at all.
 
 interface TypographyDraft {
   font: string
@@ -28,70 +29,252 @@ defineProps<{
 
 const { t } = useI18n()
 
-const expanded = useAccordionPersistence('typography', false)
+// Hershey-name → friendly label. Operators don't recognise "futural"
+// as "Sans" or "timesrb" as "Serif bold". The dropdown still keys on
+// the raw name so the value the backend receives is unchanged.
+const FONT_LABELS: Record<string, string> = {
+  futural: 'Sans (futural)',
+  futuram: 'Sans medium (futuram)',
+  rowmans: 'Roman (rowmans)',
+  rowmand: 'Roman duplex (rowmand)',
+  rowmant: 'Roman triplex (rowmant)',
+  timesr: 'Times Roman (timesr)',
+  timesrb: 'Times Roman bold (timesrb)',
+  timesi: 'Times italic (timesi)',
+  timesib: 'Times italic bold (timesib)',
+  timesg: 'Times Gothic (timesg)',
+  scripts: 'Script (scripts)',
+  scriptc: 'Script complex (scriptc)',
+  cursive: 'Cursive',
+  gothiceng: 'Gothic English',
+  gothicger: 'Gothic German',
+  gothicita: 'Gothic Italian',
+  gothgbt: 'Gothic GBT',
+  gothgrt: 'Gothic GRT',
+  gothitt: 'Gothic IT',
+  greek: 'Greek',
+  greekc: 'Greek complex',
+  greeks: 'Greek simplex',
+  cyrillic: 'Cyrillic',
+  cyrilc_1: 'Cyrillic 1',
+  japanese: 'Japanese',
+  mathlow: 'Math lower',
+  mathupp: 'Math upper',
+  symbolic: 'Symbols',
+  astrology: 'Astrology',
+  meteorology: 'Meteorology',
+  music: 'Music',
+  markers: 'Markers',
+}
+
+// Pen-plotter-friendly fonts come first so the operator finds them
+// without scrolling. Specialty / symbol fonts drop to the bottom but
+// stay listed in case the source contains glyphs from them.
+const PREFERRED_ORDER = [
+  'futural', 'futuram',
+  'rowmans', 'rowmand', 'rowmant',
+  'timesr', 'timesrb', 'timesi', 'timesib', 'timesg',
+  'scripts', 'scriptc', 'cursive',
+  'gothiceng', 'gothicger', 'gothicita', 'gothgbt', 'gothgrt', 'gothitt',
+  'greek', 'greekc', 'greeks',
+  'cyrillic', 'cyrilc_1', 'japanese',
+  'mathlow', 'mathupp', 'symbolic',
+  'astrology', 'meteorology', 'music', 'markers',
+]
+
+interface FontOption {
+  value: string
+  label: string
+}
+
+function labelFor(name: string): string {
+  return FONT_LABELS[name] ?? name
+}
+
+function sortedFonts(fonts: string[]): FontOption[] {
+  const known = new Set(fonts)
+  const ordered: string[] = []
+  for (const name of PREFERRED_ORDER) {
+    if (known.has(name)) {
+      ordered.push(name)
+      known.delete(name)
+    }
+  }
+  // Append anything we didn't list (future Hershey additions etc.) so
+  // nothing gets silently hidden.
+  for (const name of [...known].sort()) ordered.push(name)
+  // ``/fonts`` may still be in flight when the modal first renders
+  // (empty array) — surface a minimal pen-plotter font list as a
+  // fallback so the dropdown isn't blank and the bound value stays
+  // visible.
+  if (ordered.length === 0) {
+    return [
+      { value: 'futural', label: labelFor('futural') },
+      { value: 'rowmans', label: labelFor('rowmans') },
+      { value: 'timesr', label: labelFor('timesr') },
+    ]
+  }
+  return ordered.map((name) => ({ value: name, label: labelFor(name) }))
+}
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800">
-    <button
-      type="button"
-      class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
-      :aria-expanded="expanded"
-      @click="expanded = !expanded"
-    >
-      {{ t('convert.options') }}
-      <span class="text-slate-500">{{ expanded ? '−' : '+' }}</span>
-    </button>
-    <div v-if="expanded" class="space-y-2 border-t border-slate-700 p-3 text-xs">
+  <!-- Live preview lives in the left pane; this card is the form. Three
+       sections keep the knobs grouped by concern: Font (face + size +
+       weight + slant), Style (alignment + spacing + stroke width) and
+       Page (margins + page size). All visible by default — collapsing
+       hid the controls and the operator reported "no font controls at
+       all". -->
+  <div class="space-y-3">
+    <!-- =================== FONT =================== -->
+    <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2.5 text-xs">
+      <header class="flex items-baseline justify-between">
+        <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+          {{ t('typography.fontSection') }}
+        </h3>
+        <span class="text-[10px] text-slate-500">{{ t('typography.fontHint') }}</span>
+      </header>
+
+      <label class="block text-slate-400">
+        {{ t('convert.font') }}
+        <select
+          v-model="typo.font"
+          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+        >
+          <option
+            v-for="opt in sortedFonts(fonts)"
+            :key="opt.value"
+            :value="opt.value"
+          >{{ opt.label }}</option>
+        </select>
+      </label>
+
       <div class="grid grid-cols-2 gap-2">
-        <label class="block text-slate-400">{{ t('convert.font') }}
-          <select v-model="typo.font" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-            <option v-for="font in fonts" :key="font" :value="font">{{ font }}</option>
-          </select>
+        <label class="block text-slate-400">
+          {{ t('convert.fontSize') }}
+          <input
+            v-model.number="typo.font_size_mm"
+            type="number"
+            step="0.5"
+            min="1"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          />
         </label>
-        <label class="block text-slate-400">{{ t('convert.alignment') }}
-          <select v-model="typo.alignment" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
-            <option value="left">left</option>
-            <option value="center">center</option>
-            <option value="right">right</option>
-          </select>
-        </label>
-        <label class="block text-slate-400">{{ t('convert.fontSize') }}
-          <input v-model.number="typo.font_size_mm" type="number" step="0.5" min="1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-        </label>
-        <label class="block text-slate-400">{{ t('convert.lineSpacing') }}
-          <input v-model.number="typo.line_spacing" type="number" step="0.1" min="0.5" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-        </label>
-        <label class="block text-slate-400">{{ t('convert.strokeWidth') }}
-          <input v-model.number="typo.stroke_width_mm" type="number" step="0.1" min="0.05" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-        </label>
-        <label class="block text-slate-400">{{ t('convert.letterSpacing') }}
-          <input v-model.number="typo.letter_spacing_mm" type="number" step="0.1" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-        </label>
-        <label class="block text-slate-400">{{ t('convert.margin') }}
-          <input v-model.number="typo.margin_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-        </label>
-        <label class="block text-slate-400">{{ t('convert.pageWidth') }}
-          <input v-model.number="typo.page_width_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-        </label>
-        <label class="block text-slate-400">{{ t('convert.pageHeight') }}
-          <input v-model.number="typo.page_height_mm" type="number" step="any" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+        <label class="block text-slate-400">
+          {{ t('convert.letterSpacing') }}
+          <input
+            v-model.number="typo.letter_spacing_mm"
+            type="number"
+            step="0.1"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          />
         </label>
       </div>
-      <!-- Synthetic style toggles. Hershey fonts are single-stroke so
-           "bold" double-passes each glyph with a small offset and
-           "italic" shears every point along x by ~12°. They sit next to
-           each other so the operator can see both states at a glance. -->
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+
+      <!-- Bold / Italic. Hershey fonts are single-stroke so "bold"
+           double-passes each glyph with a small offset and "italic"
+           shears every point by ~12°. The visual treatment of the
+           label (bold / italic text) hints at the effect. -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
         <label class="flex items-center gap-1.5 text-slate-300">
-          <input v-model="typo.bold" type="checkbox" class="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-sky-500" />
-          <span class="font-semibold">{{ t('convert.bold') }}</span>
+          <input
+            v-model="typo.bold"
+            type="checkbox"
+            class="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-sky-500"
+          />
+          <span class="font-bold">{{ t('convert.bold') }}</span>
         </label>
         <label class="flex items-center gap-1.5 text-slate-300">
-          <input v-model="typo.italic" type="checkbox" class="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-sky-500" />
+          <input
+            v-model="typo.italic"
+            type="checkbox"
+            class="h-3.5 w-3.5 rounded border-slate-700 bg-slate-900 text-sky-500"
+          />
           <span class="italic">{{ t('convert.italic') }}</span>
         </label>
       </div>
-    </div>
+    </section>
+
+    <!-- =================== STYLE =================== -->
+    <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+      <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+        {{ t('typography.layoutSection') }}
+      </h3>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="block text-slate-400">
+          {{ t('convert.alignment') }}
+          <select
+            v-model="typo.alignment"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          >
+            <option value="left">{{ t('typography.alignLeft') }}</option>
+            <option value="center">{{ t('typography.alignCenter') }}</option>
+            <option value="right">{{ t('typography.alignRight') }}</option>
+          </select>
+        </label>
+        <label class="block text-slate-400">
+          {{ t('convert.lineSpacing') }}
+          <input
+            v-model.number="typo.line_spacing"
+            type="number"
+            step="0.1"
+            min="0.5"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          />
+        </label>
+        <label class="block text-slate-400 col-span-2">
+          {{ t('convert.strokeWidth') }}
+          <input
+            v-model.number="typo.stroke_width_mm"
+            type="number"
+            step="0.1"
+            min="0.05"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          />
+        </label>
+      </div>
+    </section>
+
+    <!-- =================== PAGE =================== -->
+    <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+      <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+        {{ t('typography.pageSection') }}
+      </h3>
+      <div class="grid grid-cols-2 gap-2">
+        <label class="block text-slate-400">
+          {{ t('convert.margin') }}
+          <input
+            v-model.number="typo.margin_mm"
+            type="number"
+            step="any"
+            min="0"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          />
+        </label>
+        <span class="self-end text-[10px] text-slate-500 leading-snug">
+          {{ t('typography.pageHint') }}
+        </span>
+        <label class="block text-slate-400">
+          {{ t('convert.pageWidth') }}
+          <input
+            v-model.number="typo.page_width_mm"
+            type="number"
+            step="any"
+            min="1"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          />
+        </label>
+        <label class="block text-slate-400">
+          {{ t('convert.pageHeight') }}
+          <input
+            v-model.number="typo.page_height_mm"
+            type="number"
+            step="any"
+            min="1"
+            class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          />
+        </label>
+      </div>
+    </section>
   </div>
 </template>
