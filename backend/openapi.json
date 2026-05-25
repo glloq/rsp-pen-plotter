@@ -2367,7 +2367,7 @@
     "/rerender": {
       "post": {
         "summary": "Rerender",
-        "description": "Re-render the cached bitmap job with optional per-layer algorithm overrides.\n\nArgs:\n    request: The job id and per-layer algorithm choices.\n\nReturns:\n    The freshly rendered SVG (sanitized) plus rendering warnings.\n\nRaises:\n    HTTPException: 404 if no segmentation cache exists for the job\n        (e.g. after a backend restart or LRU eviction); the UI then\n        re-uploads instead.",
+        "description": "Re-render the cached bitmap job with optional per-layer algorithm overrides.\n\nArgs:\n    request: The job id and per-layer algorithm choices.\n\nReturns:\n    The freshly rendered SVG (sanitized) plus rendering warnings.\n\nRaises:\n    HTTPException: 404 with a structured ``{reason, job_id, message}``\n        detail when no cached segmentation exists and rehydration\n        cannot reconstruct one \u2014 see\n        ``application.file_library.REHYDRATE_*`` for the reason codes.",
         "operationId": "rerender_rerender_post",
         "requestBody": {
           "content": {
@@ -3194,9 +3194,7 @@
             "title": "Svg"
           },
           "layers": {
-            "items": {
-              "$ref": "#/components/schemas/LayerInfo"
-            },
+            "items": {},
             "type": "array",
             "title": "Layers"
           },
@@ -3384,6 +3382,28 @@
               }
             ]
           },
+          "library_file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library File Id"
+          },
+          "source_mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Mime"
+          },
           "metadata": {
             "$ref": "#/components/schemas/PlanMetadata"
           },
@@ -3521,7 +3541,7 @@
           "reason"
         ],
         "title": "IntegrityIssue",
-        "description": "One library entry that cannot be re-rendered today.\n\nSurfaced by :func:`integrity_scan` so the UI can show a banner and\nlet the operator re-upload the affected files rather than discover\nthe problem when they click Edit."
+        "description": "One library entry that cannot be re-rendered today."
       },
       "IntegrityReport": {
         "properties": {
@@ -4456,6 +4476,28 @@
               }
             ]
           },
+          "library_file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library File Id"
+          },
+          "source_mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Mime"
+          },
           "metadata": {
             "$ref": "#/components/schemas/PlanMetadata"
           }
@@ -4583,6 +4625,28 @@
                 "type": "null"
               }
             ]
+          },
+          "library_file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library File Id"
+          },
+          "source_mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Mime"
           },
           "metadata": {
             "$ref": "#/components/schemas/PlanMetadata"

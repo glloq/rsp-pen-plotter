@@ -986,9 +986,10 @@ export interface paths {
          *         The freshly rendered SVG (sanitized) plus rendering warnings.
          *
          *     Raises:
-         *         HTTPException: 404 if no segmentation cache exists for the job
-         *             (e.g. after a backend restart or LRU eviction); the UI then
-         *             re-uploads instead.
+         *         HTTPException: 404 with a structured ``{reason, job_id, message}``
+         *             detail when no cached segmentation exists and rehydration
+         *             cannot reconstruct one — see
+         *             ``application.file_library.REHYDRATE_*`` for the reason codes.
          */
         post: operations["rerender_rerender_post"];
         delete?: never;
@@ -1389,7 +1390,7 @@ export interface components {
             /** Svg */
             svg: string;
             /** Layers */
-            layers: components["schemas"]["LayerInfo"][];
+            layers: unknown[];
             /**
              * Warnings
              * @default []
@@ -1482,6 +1483,10 @@ export interface components {
             margin_mm: number;
             placement?: components["schemas"]["PlacementPlan"] | null;
             typography?: components["schemas"]["TypographyPlan"] | null;
+            /** Library File Id */
+            library_file_id?: string | null;
+            /** Source Mime */
+            source_mime?: string | null;
             metadata?: components["schemas"]["PlanMetadata"];
             /**
              * Allow Missing Slots
@@ -1540,10 +1545,6 @@ export interface components {
         /**
          * IntegrityIssue
          * @description One library entry that cannot be re-rendered today.
-         *
-         *     Surfaced by :func:`integrity_scan` so the UI can show a banner and
-         *     let the operator re-upload the affected files rather than discover
-         *     the problem when they click Edit.
          */
         IntegrityIssue: {
             /** File Id */
@@ -2030,6 +2031,10 @@ export interface components {
             margin_mm: number;
             placement?: components["schemas"]["PlacementPlan"] | null;
             typography?: components["schemas"]["TypographyPlan"] | null;
+            /** Library File Id */
+            library_file_id?: string | null;
+            /** Source Mime */
+            source_mime?: string | null;
             metadata?: components["schemas"]["PlanMetadata"];
         };
         /**
@@ -2095,6 +2100,10 @@ export interface components {
             margin_mm: number;
             placement?: components["schemas"]["PlacementPlan"] | null;
             typography?: components["schemas"]["TypographyPlan"] | null;
+            /** Library File Id */
+            library_file_id?: string | null;
+            /** Source Mime */
+            source_mime?: string | null;
             metadata?: components["schemas"]["PlanMetadata"];
         };
         /**

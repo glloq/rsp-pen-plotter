@@ -374,3 +374,21 @@ def test_plan_hash_unchanged_when_typography_absent() -> None:
     assert plan.typography is None
     other = _plan()
     assert resolve_plan(plan, _profile()).plan_hash == resolve_plan(other, _profile()).plan_hash
+
+
+def test_plan_hash_changes_when_library_file_id_or_source_mime_changes() -> None:
+    """The pivot extensions for in-pipeline text rerender (post-L5)
+    must participate in the hash so two plans differing only in which
+    library file they re-render from get different snapshots.
+    """
+    plan = _plan()
+    baseline = resolve_plan(plan, _profile()).plan_hash
+    with_file = plan.model_copy(
+        update={"library_file_id": "abc123", "source_mime": "text/plain"}
+    )
+    assert resolve_plan(with_file, _profile()).plan_hash != baseline
+    flipped_mime = with_file.model_copy(update={"source_mime": "text/markdown"})
+    assert (
+        resolve_plan(flipped_mime, _profile()).plan_hash
+        != resolve_plan(with_file, _profile()).plan_hash
+    )

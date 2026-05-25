@@ -119,9 +119,23 @@ class PrintPlan(BaseModel):
     placement: PlacementPlan | None = None
     # Typography settings for text-source plans. ``None`` means "not a
     # text source" or "rely on the SVG that already shipped with this
-    # plan". See :class:`TypographyPlan` docstring for the staged
-    # transition from upload-time render to plan-driven render.
+    # plan".
     typography: TypographyPlan | None = None
+    # Reference to the original uploaded file in the library, used by
+    # the application services to re-render text from the source bytes
+    # at /preflight + /generate time when the operator changes the
+    # typography (font, size, hershey toggle, etc.) without re-uploading.
+    # ``None`` means "render-from-bytes is not available; use ``svg``
+    # as-is" (the legacy path, still supported for vector / bitmap
+    # placements + for older clients).
+    library_file_id: str | None = None
+    # MIME of the original library file. Required for ``library_file_id``
+    # to be useful — the application services route the bytes back
+    # through ``converters.registry.for_mime(...)`` and need the
+    # original content type to find the right text converter. Kept as a
+    # separate field rather than re-fetched from the FileRecord so the
+    # plan stays self-contained for tests + tracing.
+    source_mime: str | None = None
     metadata: PlanMetadata = Field(default_factory=PlanMetadata)
 
 

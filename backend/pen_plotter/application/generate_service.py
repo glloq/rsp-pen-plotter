@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pen_plotter.application.plan_resolver import resolve_plan
+from pen_plotter.application.text_render import rerender_text_svg
 from pen_plotter.core.ebb import generate_ebb
 from pen_plotter.core.gcode import generate_gcode
 from pen_plotter.domain.print_plan import PrintPlan, ResolvedPlan
@@ -98,9 +99,20 @@ def run_generate(
         if missing:
             raise MissingPenSlotsError(missing)
 
+    # In-pipeline text rerender (post-L5): when the plan carries a
+    # TypographyPlan + library_file_id + source_mime, re-render the
+    # text source from the library bytes so the operator's font / page
+    # / Hershey edits land without a re-upload. Falls back to the
+    # plan's pre-rendered SVG when the rerender isn't applicable —
+    # see ``application/text_render.py`` for the gating rules. The
+    # rerender doesn't alter ``resolved`` (the plan_hash is computed
+    # from typography fields, not from the SVG payload) so /preflight
+    # + /generate keep agreeing on the same hash.
+    svg = rerender_text_svg(resolved.plan) or resolved.plan.svg
+
     generator = generate_ebb if profile.gcode_dialect == "ebb" else generate_gcode
     program = generator(
-        resolved.plan.svg,
+        svg,
         profile,
         layers=resolved.plan.layers,
         scale_mode=resolved.plan.scale_mode,

@@ -1114,11 +1114,15 @@ export const useJobStore = defineStore('job', () => {
         sheet_height_mm: Math.max(1e-3, bbox.y_max - bbox.y_min),
       }
     }
-    // Forward the currently-edited typography draft into the plan when
-    // the (first) ready placement is a text source. The hash + persisted
-    // snapshot then reflect the font / size / weight the operator chose,
-    // closing the regression class where typo edits silently never
-    // reached the pivot. See ``buildTypographyPlan`` for the
+    // Forward the currently-edited typography draft into the plan
+    // when the (first) ready placement is a text source. The hash +
+    // persisted snapshot then reflect the font / size / weight the
+    // operator chose, closing the regression class where typo edits
+    // silently never reached the pivot. Pair with the placement's
+    // ``library_file_id`` + ``source_mime`` so the backend's
+    // in-pipeline text rerender (post-L5) can re-render straight from
+    // the library bytes — no re-upload needed when the operator
+    // tweaks the font. See ``buildTypographyPlan`` for the
     // single-draft limitation acknowledged in this iteration.
     const textPlacement = ready.find((p) => p.source_mime)
     const typography = buildTypographyPlan(textPlacement?.source_mime)
@@ -1128,6 +1132,8 @@ export const useJobStore = defineStore('job', () => {
       layers: result.layers,
       placement,
       typography,
+      libraryFileId: textPlacement?.library_file_id ?? null,
+      sourceMime: textPlacement?.source_mime ?? null,
     })
   }
 

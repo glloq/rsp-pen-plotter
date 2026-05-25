@@ -125,4 +125,36 @@ describe('buildPrintPlan', () => {
     })
     expect(plan.typography).toBeNull()
   })
+
+  it('forwards libraryFileId + sourceMime so backend can rerender text', () => {
+    // The post-L5 in-pipeline text rerender path engages only when
+    // these two are non-null AND the typography block is present.
+    // Pin the projection: a future store change that forgets to pass
+    // them through would silently revert to the upload-time render.
+    const plan = buildPrintPlan({
+      svg: '<svg/>',
+      profileName: 'Test',
+      layers: [],
+      placement: null,
+      libraryFileId: 'lib-abc',
+      sourceMime: 'text/plain',
+    })
+    expect(plan.library_file_id).toBe('lib-abc')
+    expect(plan.source_mime).toBe('text/plain')
+  })
+
+  it('defaults libraryFileId + sourceMime to null when omitted', () => {
+    // Backwards compat: non-text placements never populate these so
+    // the plan must serialise them as ``null`` rather than ``undefined``
+    // (the backend Pydantic model rejects unknown / missing-required
+    // discriminators on strict-mode endpoints).
+    const plan = buildPrintPlan({
+      svg: '<svg/>',
+      profileName: 'Test',
+      layers: [],
+      placement: null,
+    })
+    expect(plan.library_file_id).toBeNull()
+    expect(plan.source_mime).toBeNull()
+  })
 })
