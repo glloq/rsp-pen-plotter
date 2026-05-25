@@ -2,7 +2,9 @@
 //
 //   - the BitmapDraft (segmentation method, palette, algorithm + knobs,
 //     post-process refinements, detail level)
-//   - the TypographyDraft (font, size, page geometry)
+//   - the TypographyDraft (font, size, page geometry) — owned by
+//     ``useTypographyDraft`` since L6; re-exported here so existing
+//     consumers keep their import surface unchanged
 //   - the operator's mono pen-slot / master-style selection
 //   - the palette-follows-installed-pens toggle
 //
@@ -31,6 +33,23 @@ import {
   lerp,
   type PrintStyle,
 } from '../data/printRegistry'
+// Typography lives in its own composable since L6. We import the
+// singleton helpers + the shared ``typo`` ref so the bitmap draft stays
+// the entry-point consumers know (``useBitmapDraft().typo`` still
+// returns the same ref the EditModal's TypographyCard binds against),
+// while the lifecycle (defaults, rehydrate, dirty, commit, project) is
+// owned by ``useTypographyDraft``.
+import {
+  buildTypographyOptions as _buildTypographyOptions,
+  buildTypographyPlan as _buildTypographyPlan,
+  defaultTypography as _defaultTypography,
+  isTypographyDirty,
+  markTypographyCommitted,
+  rehydrateTypographyFromOptions,
+  resetTypography,
+  typographyRef,
+  type TypographyDraft as _TypographyDraft,
+} from './useTypographyDraft'
 
 // Photo-editor adjustments the operator can apply before segmentation.
 // Mirrors ``PreprocessOptions`` on the backend; every field defaults to
@@ -95,31 +114,11 @@ export type CurvesDraft = {
   curve_fit: boolean
 }
 
-export type TypographyDraft = {
-  font: string
-  font_size_mm: number
-  line_spacing: number
-  alignment: 'left' | 'center' | 'right'
-  stroke_width_mm: number
-  margin_mm: number
-  page_width_mm: number
-  page_height_mm: number
-  // Synthetic style toggles — Hershey fonts are single-stroke, so bold
-  // double-passes each glyph with a small offset and italic shears every
-  // point by ~12°. Letter spacing inserts extra millimeters between
-  // characters; negative values tighten the rendering.
-  bold: boolean
-  italic: boolean
-  letter_spacing_mm: number
-  // When true on a PDF / DOCX / HTML source, the backend strips the
-  // document's original glyph outlines and replays every text span
-  // with single-stroke Hershey polylines at the same baseline
-  // positions. Required for legible pen plotting of document text —
-  // outline-traced TrueType glyphs paint as a double-traced silhouette
-  // no pen can fill convincingly. Ignored on .txt / .md (those always
-  // use Hershey).
-  hershey_text: boolean
-}
+// Re-exported from ``useTypographyDraft`` (L6 split). Kept here so
+// every existing consumer (TypographyCard, EditModal, useFileManager,
+// the typography test suite, ``stores/job.ts``) continues to import
+// ``TypographyDraft`` from this module without a churn-PR.
+export type TypographyDraft = _TypographyDraft
 
 export function defaultPreprocess(): PreprocessDraft {
   return {
@@ -317,30 +316,19 @@ export function defaultMulticolor(): MulticolorKnobsDraft {
   return { perStyle }
 }
 
-export function defaultTypography(): TypographyDraft {
-  return {
-    font: 'futural',
-    // 10 mm is the smallest body size that stays readable in the
-    // simulator's default workspace-fit view. The Pydantic default
-    // mirrors this — keep them in sync.
-    font_size_mm: 10.0,
-    line_spacing: 1.5,
-    alignment: 'left',
-    stroke_width_mm: 0.3,
-    margin_mm: 15.0,
-    page_width_mm: 210.0,
-    page_height_mm: 297.0,
-    bold: false,
-    italic: false,
-    letter_spacing_mm: 0.0,
-    hershey_text: false,
-  }
-}
+// Re-exported so ``stores/job.ts`` (and any future caller) keeps the
+// single import surface it had before the L6 split.
+export const defaultTypography = _defaultTypography
 
 // ---- Singleton state ----
 const _bitmap = ref<BitmapDraft>(defaultBitmap())
 const _curves = ref<CurvesDraft>(defaultCurves())
-const _typo = ref<TypographyDraft>(defaultTypography())
+// Typography state lives in ``useTypographyDraft``; we alias the
+// shared singleton ref locally so ``buildBitmapOptions`` (which still
+// ships ``font`` / ``stroke_width_mm`` / ``hershey_text`` on every
+// /upload payload) and the public ``typo`` field on this composable
+// keep pointing at the same underlying object.
+const _typo = typographyRef
 const _monoPenSlot = ref<number>(0)
 const _monoMasterStyleId = ref<string>(DEFAULT_MASTER_STYLE_ID)
 const _multicolorMasterStyleId = ref<string>(DEFAULT_MULTICOLOR_STYLE_ID)
@@ -412,7 +400,7 @@ export interface RehydrateContext {
 export function rehydrateDraft(ctx: RehydrateContext): void {
   _bitmap.value = defaultBitmap()
   _curves.value = defaultCurves()
-  _typo.value = defaultTypography()
+  resetTypography()
   _paletteFollowsPens.value = true
   _committed.value = false
   // Reset the master-style id so a stale value from a previous
@@ -486,10 +474,7 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
       _bitmap.value.palette.every((c, i) => c === ctx.installedPenColors[i])
     _paletteFollowsPens.value = sameAsPens
   }
-  const typoTarget = _typo.value as Record<string, unknown>
-  for (const key of Object.keys(typoTarget)) {
-    if (key in opts) typoTarget[key] = opts[key]
-  }
+  rehydrateTypographyFromOptions(opts as Record<string, unknown>)
   const curvesOpts = (opts as Record<string, unknown>).curves
   if (curvesOpts && typeof curvesOpts === 'object') {
     const fresh = defaultCurves() as Record<string, unknown>
@@ -1316,80 +1301,12 @@ export function buildBitmapOptions(): Record<string, unknown> {
   return payload
 }
 
-export function buildTypographyOptions(): Record<string, unknown> {
-  return { ..._typo.value }
-}
-
-/**
- * Project the current TypographyDraft to the backend ``TypographyPlan``
- * shape so it can ride into the PrintPlan sent to /preflight + /generate.
- *
- * Returns ``null`` for non-text sources (the pivot stores ``null`` then;
- * the plan_hash stays identical to a vector / bitmap plan).
- *
- * Today the draft is a singleton: the EditModal works on one placement
- * at a time, so a multi-placement scene with several text sources falls
- * back to whichever draft was last touched. Tracking typography per
- * placement is a follow-up — for now this closes the regression where
- * font / size edits never reached the pivot at all.
- */
-export function buildTypographyPlan(
-  sourceMime: string | null | undefined,
-): TypographyPlanWire | null {
-  // Heuristic: text sources are the .txt / .md / docx / html / pdf
-  // chain that the Hershey path can re-render. For images / SVG / DXF
-  // the typography draft is irrelevant — emit null to keep their hash
-  // identical to a vector / bitmap plan.
-  if (!sourceMime || !isTextSource(sourceMime)) return null
-  const t = _typo.value
-  // ``alignment`` may be 'left' | 'center' | 'right' in the draft; the
-  // backend pivot also accepts 'justify'. Pass through verbatim.
-  return {
-    font: t.font,
-    font_size_mm: t.font_size_mm,
-    page_width_mm: t.page_width_mm,
-    page_height_mm: t.page_height_mm,
-    margin_mm: t.margin_mm,
-    line_spacing: t.line_spacing,
-    alignment: t.alignment,
-    stroke_width_mm: t.stroke_width_mm,
-    bold: t.bold,
-    italic: t.italic,
-    letter_spacing_mm: t.letter_spacing_mm,
-  }
-}
-
-function isTextSource(mime: string): boolean {
-  // Mime-type predicate kept here so the EditModal and the pipeline
-  // builder agree on what counts as a "text source" for typography
-  // purposes. Aligned with the backend's text-handling converters
-  // (text, markdown, html, docx, pdf).
-  return (
-    mime.startsWith('text/') ||
-    mime === 'application/pdf' ||
-    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    mime === 'text/html' ||
-    mime === 'text/markdown'
-  )
-}
-
-// Wire shape only; the actual TypographyPlan type lives in
-// domain/print-plan.ts but importing it here would pull the OpenAPI
-// types into the composable. Keeping a minimal local mirror avoids the
-// cycle and the compiler still checks it against the call site.
-type TypographyPlanWire = {
-  font: string
-  font_size_mm: number
-  page_width_mm: number
-  page_height_mm: number
-  margin_mm: number
-  line_spacing: number
-  alignment: 'left' | 'center' | 'right'
-  stroke_width_mm: number
-  bold: boolean
-  italic: boolean
-  letter_spacing_mm: number
-}
+// Re-exported from the typography composable so existing imports
+// (``stores/job.ts``, the EditModal tests, etc.) keep working unchanged
+// after the L6 split. The implementations now live in
+// ``useTypographyDraft.ts``.
+export const buildTypographyOptions = _buildTypographyOptions
+export const buildTypographyPlan = _buildTypographyPlan
 
 // Predicted number of layers the next /upload will produce. Drives the
 // inline "→ N calques" badges next to the sliders that change it
@@ -1417,9 +1334,9 @@ const _expectedLayerCount = computed<number>(() => {
 // a successful /upload and by ``rehydrateDraft`` when loading an
 // existing placement. Compared against the live drafts in
 // ``isDirty`` so the UI can warn before close + disable Apply when
-// nothing has drifted.
+// nothing has drifted. The typography slice's snapshot lives in
+// ``useTypographyDraft``; we OR its dirty bit in below.
 const _baselineBitmap = ref<string>('')
-const _baselineTypo = ref<string>('')
 
 function snap(value: unknown): string {
   try {
@@ -1436,7 +1353,7 @@ const _baselineMulticolor = ref<string>('')
 const _isDirty = computed<boolean>(() => {
   return (
     snap(_bitmap.value) !== _baselineBitmap.value ||
-    snap(_typo.value) !== _baselineTypo.value ||
+    isTypographyDirty.value ||
     snap(_curves.value) !== _baselineCurves.value ||
     snap(_mono.value) !== _baselineMono.value ||
     snap(_multicolor.value) !== _baselineMulticolor.value
@@ -1445,7 +1362,7 @@ const _isDirty = computed<boolean>(() => {
 
 function markCommitted(): void {
   _baselineBitmap.value = snap(_bitmap.value)
-  _baselineTypo.value = snap(_typo.value)
+  markTypographyCommitted()
   _baselineCurves.value = snap(_curves.value)
   _baselineMono.value = snap(_mono.value)
   _baselineMulticolor.value = snap(_multicolor.value)
