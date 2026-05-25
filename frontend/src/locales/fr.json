@@ -102,7 +102,12 @@
     "tabShortcut": "Appuyer sur {key} pour ouvrir cet onglet",
     "fileActions": "Actions sur le fichier",
     "resizeHandle": "Glisser pour redimensionner · double-clic pour réinitialiser",
-    "unsavedWarning": "Tu as des changements non appliqués. Fermer quand même ?"
+    "unsavedTitle": "Modifications non appliquées",
+    "unsavedWarning": "Tu as des changements non appliqués. Fermer quand même ?",
+    "unsavedDiscard": "Fermer sans appliquer",
+    "overwriteTitle": "Re-convertir le fichier",
+    "overwriteMessage": "Ce fichier a déjà une conversion. Écraser le résultat existant ?",
+    "overwriteConfirm": "Re-convertir"
   },
   "source": {
     "perLayerHint": "Choisis le style de rendu et le stylo pour chaque couleur dans l'onglet Calques.",
@@ -584,10 +589,12 @@
     "hide": "Masquer la passe (ignorée au prochain rendu)",
     "or": "ou",
     "reuploadHint": "Ré-importer va réinitialiser les {count} calque(s) multi-passes que tu as configurés.",
+    "reuploadTitle": "Calques multi-passes",
     "reuploadWarning": "Ré-importer va réinitialiser {count} calque(s) multi-passes. Continuer ?"
   },
   "confirm": {
     "cancel": "Annuler",
+    "ok": "Continuer",
     "deleteProfileTitle": "Supprimer le profil",
     "deleteProfileMsg": "Supprimer le profil « {name} » ? Cette action est irréversible.",
     "deleteMacroTitle": "Supprimer la macro",

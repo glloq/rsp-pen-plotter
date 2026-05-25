@@ -15,6 +15,7 @@
 
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { downloadOriginalFile } from '../api/client'
+import { confirmAction } from './confirm'
 import { useEditState } from './useEditState'
 import { useBitmapDraft } from './useBitmapDraft'
 import { usePreviewScheduler } from './usePreviewScheduler'
@@ -148,10 +149,28 @@ export function useFileManager(t?: Translator) {
 
   async function uploadSelected(): Promise<void> {
     if (!_selectedFile.value) return
+
+    // Ask for overwrite confirmation when a conversion already exists.
+    if (store.job) {
+      const ok = await confirmAction({
+        title: t?.('editModal.overwriteTitle') ?? 'Re-convert file',
+        message: t?.('editModal.overwriteMessage') ?? 'This file already has a conversion. Overwrite the existing result?',
+        confirmLabel: t?.('editModal.overwriteConfirm') ?? 'Re-convert',
+        cancelLabel: t?.('confirm.cancel') ?? 'Cancel',
+        danger: false,
+      })
+      if (!ok) return
+    }
+
     if (multiPassLayerCount.value > 0) {
-      const message = t?.('passes.reuploadWarning', { count: multiPassLayerCount.value })
-        ?? `${multiPassLayerCount.value} layer(s) have multi-pass overrides that will be lost. Continue?`
-      const ok = window.confirm(message)
+      const ok = await confirmAction({
+        title: t?.('passes.reuploadTitle') ?? 'Multi-pass layers',
+        message: t?.('passes.reuploadWarning', { count: multiPassLayerCount.value })
+          ?? `${multiPassLayerCount.value} layer(s) have multi-pass overrides that will be lost. Continue?`,
+        confirmLabel: t?.('confirm.ok') ?? 'Continue',
+        cancelLabel: t?.('confirm.cancel') ?? 'Cancel',
+        danger: true,
+      })
       if (!ok) return
     }
     const wasMono = draft.printMode.value === 'monochrome'

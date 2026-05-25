@@ -11,6 +11,8 @@ import { useJobStore } from '../../stores/job'
 // "{active} · N variants" summary so the bar doesn't eat vertical
 // space when the operator isn't using it.
 
+const props = defineProps<{ inline?: boolean }>()
+
 const { t } = useI18n()
 const store = useJobStore()
 
@@ -82,7 +84,8 @@ function onRemove(id: string): void {
 <template>
   <div
     v-if="store.selectedPlacement"
-    class="flex items-center gap-1 border-b border-slate-700 bg-slate-900/80 px-2 py-1 backdrop-blur"
+    class="flex items-center gap-1 px-2 py-1"
+    :class="!props.inline ? 'border-b border-slate-700 bg-slate-900/80 backdrop-blur' : 'min-w-0 flex-1'"
   >
     <button
       type="button"
