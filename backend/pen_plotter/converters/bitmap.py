@@ -462,10 +462,34 @@ class BitmapConverter(Converter):
             warnings.append("No drawable layers detected (image may be entirely background).")
         return cls._wrap_svg(seg.width, seg.height, groups), warnings
 
+    # Upper bound on the number of pixels in an uploaded raster image.
+    # 16 Mpx covers anything an A3 plotter could conceivably need
+    # (4000×4000 ≈ A3 at ~300 dpi) and keeps a single image well under
+    # 200 MB of RGB after decode — enough headroom for the algorithm
+    # passes without giving a malicious upload a way to OOM the Pi.
+    MAX_PIXELS = 16_000_000
+
     @staticmethod
     def _load_rgb(data: bytes) -> Image.Image:
-        """Decode image bytes into an RGB Pillow image."""
-        return Image.open(io.BytesIO(data)).convert("RGB")
+        """Decode image bytes into an RGB Pillow image.
+
+        Refuses images whose declared dimensions would exceed
+        :attr:`BitmapConverter.MAX_PIXELS` before the pixel data is
+        actually materialised. Pillow exposes ``size`` after
+        ``Image.open`` without reading the full bitmap, so the guard
+        runs in O(header bytes) rather than O(width * height) — a
+        20 000×20 000 PNG bomb is rejected before any RAM is committed.
+        """
+        img = Image.open(io.BytesIO(data))
+        width, height = img.size
+        total = width * height
+        if total > BitmapConverter.MAX_PIXELS:
+            raise ValueError(
+                f"Image is too large ({width}×{height} = {total:,} px); "
+                f"max is {BitmapConverter.MAX_PIXELS:,} px. Resize the source "
+                "or split it into smaller plots."
+            )
+        return img.convert("RGB")
 
     @staticmethod
     def _is_preprocess_neutral(opts: PreprocessOptions) -> bool:

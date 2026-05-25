@@ -88,9 +88,27 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="OmniPlot", version=__version__, lifespan=lifespan)
 
+
+def _cors_origins() -> list[str]:
+    """Resolve the CORS allow-list from ``OMNIPLOT_CORS_ORIGINS``.
+
+    A comma-separated list of origins (e.g.
+    ``http://localhost:5173,https://plotter.local``). Defaults to the
+    Vite dev server so the development workflow keeps working out of
+    the box; a Pi appliance behind a LAN domain should set this env
+    var so browsers from other devices can reach the UI.
+
+    Empty / unset env var ⇒ default (Vite dev server only).
+    """
+    raw = os.environ.get("OMNIPLOT_CORS_ORIGINS", "").strip()
+    if not raw:
+        return ["http://localhost:5173"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
