@@ -21,6 +21,14 @@ const COLOR_RE = /^color-([0-9a-fA-F]{6})$/
 const IMAGE_RE = /^image-(\d+)$/
 const GENERIC_RE = /^layer-(\d+)$/
 
+// Render a MIME string as a short uppercase badge — "image/svg+xml" → "SVG",
+// "application/pdf" → "PDF". Used as the fallback label when no preview
+// thumbnail is available for a library entry.
+export function shortMime(mime: string): string {
+  const subtype = mime.split('/')[1] ?? mime
+  return subtype.replace(/\+.*$/, '').replace(/^vnd\..+\./, '').toUpperCase()
+}
+
 export function formatLayerLabel(id: string): FormattedLayerLabel {
   if (id === 'text') return { kind: 'text', display: 'Text' }
   const image = IMAGE_RE.exec(id)

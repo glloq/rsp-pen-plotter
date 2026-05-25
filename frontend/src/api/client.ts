@@ -674,6 +674,14 @@ export async function downloadOriginalFile(
   return new File([response.data], filename, { type: mime })
 }
 
+// Absolute URL for the same ``/files/{id}/original`` route, suitable for
+// dropping straight into an ``<img>`` / SVG ``<image href>`` so the
+// browser HTTP cache covers repeat loads. Used by the canvas to show the
+// source preview instead of the plotter SVG.
+export function libraryFileOriginalUrl(fileId: string): string {
+  return `${baseURL}/files/${encodeURIComponent(fileId)}/original`
+}
+
 export interface LibraryFileRecord {
   file_id: string
   sha256: string
