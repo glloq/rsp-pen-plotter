@@ -17,7 +17,7 @@ from pen_plotter.application.plan_resolver import (
     resolve_plan,
 )
 from pen_plotter.application.preflight_service import run_preflight
-from pen_plotter.domain.print_plan import LayerPlan, PrintPlan
+from pen_plotter.domain.print_plan import LayerPlan, PrintPlan, TypographyPlan
 from pen_plotter.profiles import get_profile
 
 NS = (
@@ -304,3 +304,73 @@ def test_preflight_pen_changes_matches_generated_pauses() -> None:
     report = run_preflight(plan, profile).report
     outcome = run_generate(plan, profile)
     assert report.pen_changes == _count_pause_prompts(outcome.gcode)
+
+
+def test_typography_survives_into_resolved_plan() -> None:
+    """``PrintPlan.typography`` rides through the resolver and the
+    persisted ``ResolvedPlan.plan`` carries it intact. Today this is
+    traceability data; tomorrow the rerender path can act on it.
+    """
+    plan = _plan().model_copy(
+        update={
+            "typography": TypographyPlan(
+                font="rowmant",
+                font_size_mm=20.0,
+                bold=True,
+                italic=True,
+                letter_spacing_mm=1.5,
+            )
+        }
+    )
+    resolved = resolve_plan(plan, _profile())
+    assert resolved.plan.typography is not None
+    assert resolved.plan.typography.font == "rowmant"
+    assert resolved.plan.typography.font_size_mm == 20.0
+    assert resolved.plan.typography.bold is True
+
+
+def test_plan_hash_changes_when_font_changes() -> None:
+    """Same SVG with different font intent must NOT share a hash —
+    otherwise a future in-pipeline rerender would silently return the
+    stale snapshot.
+    """
+    plan = _plan().model_copy(
+        update={"typography": TypographyPlan(font="futural", font_size_mm=10.0)}
+    )
+    baseline = resolve_plan(plan, _profile()).plan_hash
+    flipped = plan.model_copy(
+        update={"typography": TypographyPlan(font="rowmant", font_size_mm=10.0)}
+    )
+    assert resolve_plan(flipped, _profile()).plan_hash != baseline
+
+
+def test_plan_hash_changes_when_font_size_changes() -> None:
+    plan = _plan().model_copy(
+        update={"typography": TypographyPlan(font="futural", font_size_mm=10.0)}
+    )
+    baseline = resolve_plan(plan, _profile()).plan_hash
+    tweaked = plan.model_copy(
+        update={"typography": TypographyPlan(font="futural", font_size_mm=18.0)}
+    )
+    assert resolve_plan(tweaked, _profile()).plan_hash != baseline
+
+
+def test_plan_hash_changes_when_bold_italic_flip() -> None:
+    plan = _plan().model_copy(update={"typography": TypographyPlan()})
+    baseline = resolve_plan(plan, _profile()).plan_hash
+    bold = plan.model_copy(update={"typography": TypographyPlan(bold=True)})
+    italic = plan.model_copy(update={"typography": TypographyPlan(italic=True)})
+    assert resolve_plan(bold, _profile()).plan_hash != baseline
+    assert resolve_plan(italic, _profile()).plan_hash != baseline
+    assert resolve_plan(bold, _profile()).plan_hash != resolve_plan(italic, _profile()).plan_hash
+
+
+def test_plan_hash_unchanged_when_typography_absent() -> None:
+    """Plans without a typography block (vector / bitmap sources) must
+    keep their existing hash — backwards compat for every non-text
+    upload already in the snapshot table.
+    """
+    plan = _plan()  # no typography
+    assert plan.typography is None
+    other = _plan()
+    assert resolve_plan(plan, _profile()).plan_hash == resolve_plan(other, _profile()).plan_hash

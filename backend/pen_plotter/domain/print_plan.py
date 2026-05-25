@@ -16,6 +16,36 @@ from pydantic import BaseModel, ConfigDict, Field
 
 PausePolicy = Literal["auto", "always", "never"]
 ScaleMode = Literal["fit", "actual"]
+TypographyAlignment = Literal["left", "center", "right", "justify"]
+
+
+class TypographyPlan(BaseModel):
+    """Typography settings for text sources, carried through the pivot.
+
+    Mirrors :class:`pen_plotter.typography.TypographyOptions` but lives
+    in the domain layer (no Pillow / hershey-fonts dependency). The
+    fields are forwarded into the resolved snapshot and the
+    ``plan_hash`` so two plans differing only in font / size / weight
+    can no longer collide.
+
+    Today this rides as traceability data: the actual text→SVG render
+    still happens at ``/upload`` time (or via ``_reprocess_existing``
+    when the operator changes a setting and the frontend re-uploads).
+    A later lot can let the application services re-render text
+    directly from this plan; the data is ready for that day.
+    """
+
+    font: str = "futural"
+    font_size_mm: float = Field(default=10.0, gt=0.0, le=200.0)
+    page_width_mm: float = Field(default=210.0, gt=0.0)
+    page_height_mm: float = Field(default=297.0, gt=0.0)
+    margin_mm: float = Field(default=15.0, ge=0.0)
+    line_spacing: float = Field(default=1.5, gt=0.0)
+    alignment: TypographyAlignment = "left"
+    stroke_width_mm: float = Field(default=0.3, gt=0.0)
+    bold: bool = False
+    italic: bool = False
+    letter_spacing_mm: float = Field(default=0.0, ge=-10.0, le=50.0)
 
 
 class PlacementPlan(BaseModel):
@@ -87,6 +117,11 @@ class PrintPlan(BaseModel):
     scale_mode: ScaleMode = "fit"
     margin_mm: float = 10.0
     placement: PlacementPlan | None = None
+    # Typography settings for text-source plans. ``None`` means "not a
+    # text source" or "rely on the SVG that already shipped with this
+    # plan". See :class:`TypographyPlan` docstring for the staged
+    # transition from upload-time render to plan-driven render.
+    typography: TypographyPlan | None = None
     metadata: PlanMetadata = Field(default_factory=PlanMetadata)
 
 

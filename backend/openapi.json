@@ -3374,6 +3374,16 @@
               }
             ]
           },
+          "typography": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TypographyPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "metadata": {
             "$ref": "#/components/schemas/PlanMetadata"
           },
@@ -4436,6 +4446,16 @@
               }
             ]
           },
+          "typography": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TypographyPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "metadata": {
             "$ref": "#/components/schemas/PlanMetadata"
           }
@@ -4548,6 +4568,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PlacementPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "typography": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TypographyPlan"
               },
               {
                 "type": "null"
@@ -4897,6 +4927,83 @@
         ],
         "title": "ToolpathMetrics",
         "description": "Pen-up travel before and after optimization, in SVG user units."
+      },
+      "TypographyPlan": {
+        "properties": {
+          "font": {
+            "type": "string",
+            "title": "Font",
+            "default": "futural"
+          },
+          "font_size_mm": {
+            "type": "number",
+            "maximum": 200.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Font Size Mm",
+            "default": 10.0
+          },
+          "page_width_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Page Width Mm",
+            "default": 210.0
+          },
+          "page_height_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Page Height Mm",
+            "default": 297.0
+          },
+          "margin_mm": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Margin Mm",
+            "default": 15.0
+          },
+          "line_spacing": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Line Spacing",
+            "default": 1.5
+          },
+          "alignment": {
+            "type": "string",
+            "enum": [
+              "left",
+              "center",
+              "right",
+              "justify"
+            ],
+            "title": "Alignment",
+            "default": "left"
+          },
+          "stroke_width_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Stroke Width Mm",
+            "default": 0.3
+          },
+          "bold": {
+            "type": "boolean",
+            "title": "Bold",
+            "default": false
+          },
+          "italic": {
+            "type": "boolean",
+            "title": "Italic",
+            "default": false
+          },
+          "letter_spacing_mm": {
+            "type": "number",
+            "maximum": 50.0,
+            "minimum": -10.0,
+            "title": "Letter Spacing Mm",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "title": "TypographyPlan",
+        "description": "Typography settings for text sources, carried through the pivot.\n\nMirrors :class:`pen_plotter.typography.TypographyOptions` but lives\nin the domain layer (no Pillow / hershey-fonts dependency). The\nfields are forwarded into the resolved snapshot and the\n``plan_hash`` so two plans differing only in font / size / weight\ncan no longer collide.\n\nToday this rides as traceability data: the actual text\u2192SVG render\nstill happens at ``/upload`` time (or via ``_reprocess_existing``\nwhen the operator changes a setting and the frontend re-uploads).\nA later lot can let the application services re-render text\ndirectly from this plan; the data is ready for that day."
       },
       "TypographyPreviewResponse": {
         "properties": {

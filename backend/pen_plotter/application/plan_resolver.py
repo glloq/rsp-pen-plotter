@@ -107,6 +107,12 @@ def resolve_plan(plan: PrintPlan, profile: MachineProfile) -> ResolvedPlan:
         "scale_mode": plan.scale_mode,
         "margin_mm": plan.margin_mm,
         "placement": plan.placement.model_dump() if plan.placement else None,
+        # Include typography in the hash so two plans differing only in
+        # font / size / weight can no longer collide on the same SVG.
+        # Today this is traceability data (see TypographyPlan docstring);
+        # the hash dependency guards against future re-render paths
+        # accidentally returning a stale snapshot.
+        "typography": plan.typography.model_dump() if plan.typography else None,
         "layers": [layer.model_dump() for layer in resolved_layers],
     }
 

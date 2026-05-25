@@ -1481,6 +1481,7 @@ export interface components {
              */
             margin_mm: number;
             placement?: components["schemas"]["PlacementPlan"] | null;
+            typography?: components["schemas"]["TypographyPlan"] | null;
             metadata?: components["schemas"]["PlanMetadata"];
             /**
              * Allow Missing Slots
@@ -2028,6 +2029,7 @@ export interface components {
              */
             margin_mm: number;
             placement?: components["schemas"]["PlacementPlan"] | null;
+            typography?: components["schemas"]["TypographyPlan"] | null;
             metadata?: components["schemas"]["PlanMetadata"];
         };
         /**
@@ -2092,6 +2094,7 @@ export interface components {
              */
             margin_mm: number;
             placement?: components["schemas"]["PlacementPlan"] | null;
+            typography?: components["schemas"]["TypographyPlan"] | null;
             metadata?: components["schemas"]["PlanMetadata"];
         };
         /**
@@ -2254,6 +2257,80 @@ export interface components {
             pen_up_after_mm: number;
             /** Reduction Pct */
             reduction_pct: number;
+        };
+        /**
+         * TypographyPlan
+         * @description Typography settings for text sources, carried through the pivot.
+         *
+         *     Mirrors :class:`pen_plotter.typography.TypographyOptions` but lives
+         *     in the domain layer (no Pillow / hershey-fonts dependency). The
+         *     fields are forwarded into the resolved snapshot and the
+         *     ``plan_hash`` so two plans differing only in font / size / weight
+         *     can no longer collide.
+         *
+         *     Today this rides as traceability data: the actual text→SVG render
+         *     still happens at ``/upload`` time (or via ``_reprocess_existing``
+         *     when the operator changes a setting and the frontend re-uploads).
+         *     A later lot can let the application services re-render text
+         *     directly from this plan; the data is ready for that day.
+         */
+        TypographyPlan: {
+            /**
+             * Font
+             * @default futural
+             */
+            font: string;
+            /**
+             * Font Size Mm
+             * @default 10
+             */
+            font_size_mm: number;
+            /**
+             * Page Width Mm
+             * @default 210
+             */
+            page_width_mm: number;
+            /**
+             * Page Height Mm
+             * @default 297
+             */
+            page_height_mm: number;
+            /**
+             * Margin Mm
+             * @default 15
+             */
+            margin_mm: number;
+            /**
+             * Line Spacing
+             * @default 1.5
+             */
+            line_spacing: number;
+            /**
+             * Alignment
+             * @default left
+             * @enum {string}
+             */
+            alignment: "left" | "center" | "right" | "justify";
+            /**
+             * Stroke Width Mm
+             * @default 0.3
+             */
+            stroke_width_mm: number;
+            /**
+             * Bold
+             * @default false
+             */
+            bold: boolean;
+            /**
+             * Italic
+             * @default false
+             */
+            italic: boolean;
+            /**
+             * Letter Spacing Mm
+             * @default 0
+             */
+            letter_spacing_mm: number;
         };
         /**
          * TypographyPreviewResponse

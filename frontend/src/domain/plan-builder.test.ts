@@ -86,4 +86,43 @@ describe('buildPrintPlan', () => {
     const planB = buildPrintPlan({ svg: 'x', profileName: 'P', layers, placement: null })
     expect(planA.layers).toEqual(planB.layers)
   })
+
+  it('forwards typography into the PrintPlan when supplied', () => {
+    // Regression guard for the L5 audit finding: font / size / bold /
+    // italic edits used to leave no trace in the plan sent to
+    // /preflight or /generate. They now ride along into the plan and
+    // the plan_hash.
+    const plan = buildPrintPlan({
+      svg: '<svg/>',
+      profileName: 'Test',
+      layers: [],
+      placement: null,
+      typography: {
+        font: 'rowmant',
+        font_size_mm: 18,
+        page_width_mm: 210,
+        page_height_mm: 297,
+        margin_mm: 15,
+        line_spacing: 1.5,
+        alignment: 'left',
+        stroke_width_mm: 0.3,
+        bold: true,
+        italic: false,
+        letter_spacing_mm: 0,
+      },
+    })
+    expect(plan.typography?.font).toBe('rowmant')
+    expect(plan.typography?.font_size_mm).toBe(18)
+    expect(plan.typography?.bold).toBe(true)
+  })
+
+  it('omits typography (null) for non-text sources', () => {
+    const plan = buildPrintPlan({
+      svg: '<svg/>',
+      profileName: 'Test',
+      layers: [],
+      placement: null,
+    })
+    expect(plan.typography).toBeNull()
+  })
 })
