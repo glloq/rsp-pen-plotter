@@ -130,3 +130,61 @@ async def test_list_rejects_bad_sort() -> None:
     async with _client() as client:
         response = await client.get("/files", params={"sort": "bogus"})
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_empty_file() -> None:
+    async with _client() as client:
+        response = await client.post(
+            "/files",
+            files={"file": ("empty.svg", b"", "image/svg+xml")},
+        )
+    assert response.status_code == 400
+    assert "empty" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_oversize_payload() -> None:
+    """Stream guard fires before the body is fully buffered."""
+    from pen_plotter.api.files import MAX_UPLOAD_BYTES
+
+    huge = b"x" * (MAX_UPLOAD_BYTES + 1024)
+    async with _client() as client:
+        response = await client.post(
+            "/files",
+            files={"file": ("big.svg", huge, "image/svg+xml")},
+        )
+    assert response.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_overlong_filename() -> None:
+    long_name = ("a" * 300) + ".svg"
+    async with _client() as client:
+        response = await client.post(
+            "/files",
+            files={"file": (long_name, SVG_A, "image/svg+xml")},
+        )
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_upload_failure_leaves_no_partial_directory() -> None:
+    """A converter crash must not leave a half-populated library dir."""
+    # An "svg" payload that's actually garbage will trip the layer
+    # extractor and surface as a server-side error. Whatever the failure
+    # mode, the atomic-rename strategy must have swept the staging dir.
+    bad = b"\x00\x01not actually svg" * 50
+    async with _client() as client:
+        try:
+            await client.post(
+                "/files",
+                files={"file": ("bad.svg", bad, "image/svg+xml")},
+            )
+        except Exception:
+            # ASGI may surface uncaught server exceptions as transport
+            # errors here — that's fine, we only care about disk state.
+            pass
+    if FILES_DIR.exists():
+        leftover = list(FILES_DIR.glob(".tmp-*"))
+        assert not leftover, f"leftover staging dirs: {leftover}"

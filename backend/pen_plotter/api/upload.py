@@ -8,7 +8,12 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from pen_plotter.api.rerender import remember_job
-from pen_plotter.converters.pipeline import convert_file, parse_options, resolve_mime
+from pen_plotter.converters.pipeline import (
+    convert_file,
+    parse_options,
+    read_upload_safely,
+    resolve_mime,
+)
 from pen_plotter.models import Job
 from pen_plotter.persistence import save_job
 
@@ -47,11 +52,9 @@ async def upload(
     if mime is None:
         raise HTTPException(status_code=415, detail="Could not determine file type")
 
-    data = await file.read()
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=413, detail=f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit"
-        )
+    # Stream-read with a cumulative size cap so a malicious / accidental
+    # giant body never gets fully buffered into RAM before the size check.
+    data = await read_upload_safely(file, MAX_UPLOAD_BYTES)
 
     parsed_options = parse_options(options)
     converted = convert_file(data, file.filename, mime, parsed_options)

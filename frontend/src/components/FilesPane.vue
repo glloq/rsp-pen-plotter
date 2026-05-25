@@ -3,14 +3,33 @@ import DOMPurify from 'dompurify'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
+import { FILE_ACCEPT } from '../composables/useFileManager'
+import { validateUploadFile } from '../api/uploadValidation'
 import { useJobStore } from '../stores/job'
 import { useLibraryStore } from '../stores/library'
+import { useToastStore } from '../stores/toasts'
 import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
 const store = useJobStore()
 const library = useLibraryStore()
+const toasts = useToastStore()
 const ui = useUiStore()
+
+// Per-pane upload state. The library store has its own ``loading`` flag
+// but it's also used by the initial ``/files`` listing fetch, so we keep
+// a dedicated counter for the upload flow — drives the button label,
+// disables re-entry while a batch is in progress.
+const uploadingCount = ref(0)
+const uploadingTotal = ref(0)
+const uploadProgress = ref<{ name: string; percent: number } | null>(null)
+// AbortController for the in-flight upload (one at a time — uploads are
+// sequential so we only ever need a single handle). ``Cancel`` on the
+// button aborts the current file; the loop catches the rejection and
+// stops on its own.
+let activeController: AbortController | null = null
+
+const isUploading = computed(() => uploadingCount.value > 0)
 
 onMounted(() => {
   void library.refresh()
@@ -112,17 +131,107 @@ function onFolderChange(event: Event): void {
 const fileInput = ref<HTMLInputElement | null>(null)
 
 function addFile(): void {
+  if (isUploading.value) {
+    // Operator clicked while a batch is in progress — interpret that as
+    // a cancel request for the current file rather than queueing a new
+    // file picker dialog.
+    activeController?.abort()
+    return
+  }
   fileInput.value?.click()
+}
+
+// Sequentially upload a list of files through the library store with
+// client-side validation, per-file progress, and cancel support. Errors
+// on one file don't abort the batch — the failed file gets a toast and
+// the next one starts.
+async function uploadFiles(files: File[]): Promise<void> {
+  if (files.length === 0) return
+  // Up-front validation — surface every issue at once so the operator
+  // sees the rejected files before any network work starts.
+  const accepted: File[] = []
+  for (const file of files) {
+    const issue = validateUploadFile(file)
+    if (issue) {
+      toasts.error(`${file.name}: ${issue.message}`)
+    } else {
+      accepted.push(file)
+    }
+  }
+  if (accepted.length === 0) return
+  uploadingTotal.value = accepted.length
+  uploadingCount.value = accepted.length
+  try {
+    for (const file of accepted) {
+      const controller = new AbortController()
+      activeController = controller
+      uploadProgress.value = { name: file.name, percent: 0 }
+      try {
+        await library.upload(file, {
+          signal: controller.signal,
+          onProgress: (percent: number) => {
+            if (controller.signal.aborted) return
+            uploadProgress.value = { name: file.name, percent }
+          },
+        })
+      } finally {
+        if (activeController === controller) activeController = null
+        uploadingCount.value -= 1
+      }
+    }
+  } finally {
+    uploadingCount.value = 0
+    uploadingTotal.value = 0
+    uploadProgress.value = null
+    activeController = null
+  }
 }
 
 async function onFileInputChange(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files ?? [])
-  for (const file of files) {
-    await library.upload(file)
-  }
-  // Reset so picking the same file twice in a row still fires ``change``.
+  // Reset the value first — if the upload throws we still want
+  // ``change`` to fire next time the same file is picked.
   input.value = ''
+  await uploadFiles(files)
+}
+
+// Pane-level drag-and-drop. Lets the operator drop files straight into
+// the library list without going through the file picker. Defensively
+// guarded by ``isUploading`` so an in-flight batch can finish before a
+// new one starts (no concurrent uploads racing on disk dedup).
+const paneDragOver = ref(false)
+
+function onPaneDragOver(event: DragEvent): void {
+  // Only respond to drags that carry actual files. ``dataTransfer.types``
+  // includes ``"Files"`` only for OS-level drags, never for in-app drags
+  // (which use our ``application/x-omniplot-*`` mime).
+  if (!event.dataTransfer?.types?.includes('Files')) return
+  event.preventDefault()
+  paneDragOver.value = true
+}
+
+function onPaneDragLeave(event: DragEvent): void {
+  // Ignore the bubbling dragleave fired when the pointer enters a
+  // child element — only clear the highlight when the pointer leaves
+  // the pane entirely.
+  if (event.currentTarget instanceof Node
+    && event.relatedTarget instanceof Node
+    && event.currentTarget.contains(event.relatedTarget)) {
+    return
+  }
+  paneDragOver.value = false
+}
+
+async function onPaneDrop(event: DragEvent): Promise<void> {
+  paneDragOver.value = false
+  if (!event.dataTransfer?.files?.length) return
+  event.preventDefault()
+  if (isUploading.value) {
+    toasts.info(t('files.uploadInProgress'))
+    return
+  }
+  await uploadFiles(Array.from(event.dataTransfer.files))
 }
 
 async function editFile(fileId: string): Promise<void> {
@@ -175,21 +284,52 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
 </script>
 
 <template>
-  <aside class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900/40">
+  <aside
+    class="relative flex min-h-0 flex-col overflow-hidden rounded-lg border bg-slate-900/40 transition-colors"
+    :class="paneDragOver ? 'border-emerald-500 bg-emerald-950/30' : 'border-slate-700'"
+    @dragenter.prevent="onPaneDragOver"
+    @dragover.prevent="onPaneDragOver"
+    @dragleave="onPaneDragLeave"
+    @drop="onPaneDrop"
+  >
     <header class="border-b border-slate-700 px-3 py-2">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-2">
         <h2 class="text-xs uppercase tracking-wider text-slate-500">
           {{ t('files.title') }}
           <span v-if="rows.length" class="ml-1 text-slate-600">({{ rows.length }})</span>
         </h2>
         <button
           type="button"
-          class="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500"
+          class="flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-white transition-colors disabled:cursor-not-allowed"
+          :class="isUploading
+            ? 'bg-slate-600 hover:bg-slate-500'
+            : 'bg-emerald-600 hover:bg-emerald-500'"
+          :title="isUploading ? t('upload.cancel') : t('files.addFile')"
           @click="addFile"
         >
-          + {{ t('files.addFile') }}
+          <span
+            v-if="isUploading"
+            class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-300 border-t-white"
+            aria-hidden="true"
+          />
+          <span class="truncate">
+            <template v-if="!isUploading">+ {{ t('files.addFile') }}</template>
+            <template v-else-if="uploadProgress && uploadProgress.percent < 100">
+              {{ uploadProgress.percent }}%
+            </template>
+            <template v-else>{{ t('upload.converting') }}</template>
+          </span>
         </button>
       </div>
+      <p
+        v-if="isUploading && uploadProgress"
+        class="mt-1 truncate text-[10px] text-slate-400"
+        :title="uploadProgress.name"
+      >
+        {{ uploadingTotal > 1
+          ? `(${uploadingTotal - uploadingCount + 1}/${uploadingTotal}) ${uploadProgress.name}`
+          : uploadProgress.name }}
+      </p>
 
       <div class="mt-2 space-y-1">
         <input
@@ -234,6 +374,12 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
     </header>
 
     <div class="flex-1 overflow-y-auto p-2">
+      <div
+        v-if="paneDragOver"
+        class="pointer-events-none absolute inset-0 flex items-center justify-center bg-emerald-950/60 text-emerald-100"
+      >
+        <p class="text-sm font-medium">📥 {{ t('files.dropToImport') }}</p>
+      </div>
       <div
         v-if="!rows.length"
         class="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-500"
@@ -327,6 +473,7 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
       ref="fileInput"
       type="file"
       multiple
+      :accept="FILE_ACCEPT"
       class="hidden"
       @change="onFileInputChange"
     />

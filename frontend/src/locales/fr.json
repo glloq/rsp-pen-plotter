@@ -9,6 +9,9 @@
     "uploaded": "« {name} » importé ({count} calques).",
     "moreWarnings": "+{count} avertissements supplémentaires.",
     "uploading": "Importation de « {name} »…",
+    "uploadingPercent": "Envoi de « {name} » — {percent}%…",
+    "convertingOnServer": "Conversion de « {name} » sur le serveur…",
+    "uploadCancelled": "Envoi annulé.",
     "libraryLoading": "Chargement de la bibliothèque…",
     "converting": "Conversion en cours…",
     "converted": "Conversion terminée.",
@@ -75,7 +78,9 @@
     "moveTo": "Déplacer vers le dossier",
     "rename": "Renommer",
     "placements": "{count} sur le plan",
-    "deleteConfirm": "Supprimer « {name} » de la bibliothèque ? Les instances déjà placées sur le plan conserveront leur contenu."
+    "deleteConfirm": "Supprimer « {name} » de la bibliothèque ? Les instances déjà placées sur le plan conserveront leur contenu.",
+    "dropToImport": "Déposer pour ajouter à la bibliothèque",
+    "uploadInProgress": "Un envoi est déjà en cours."
   },
   "library": {
     "loadFailed": "Impossible de charger la bibliothèque.",
@@ -403,6 +408,11 @@
     "choose": "Importer & convertir",
     "converting": "Conversion…",
     "failed": "Échec de l'envoi. Vérifiez le type de fichier et que l'API fonctionne.",
+    "tooLarge": "Fichier trop volumineux (max {max} Mo).",
+    "emptyFile": "Le fichier est vide.",
+    "invalidType": "Type de fichier non pris en charge : .{ext}",
+    "nameTooLong": "Nom de fichier trop long (255 caractères max).",
+    "cancel": "Annuler",
     "previewTimeout": "Aperçu trop lent pour ce style. Réduis le Détail ou clique Appliquer pour rendre quand même.",
     "previewProgress": "Calcul de l'aperçu… ({seconds}s)",
     "previewCancel": "Annuler",

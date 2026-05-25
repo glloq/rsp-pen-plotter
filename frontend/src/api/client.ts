@@ -616,10 +616,22 @@ export async function analyzeDocument(
   return response.data
 }
 
+// Per-upload options every uploader can opt into without changing call
+// sites that don't need them. ``onProgress`` is called whenever axios
+// reports new bytes pushed to the server — once the body is fully sent,
+// we emit one final ``100`` and the server starts its (untimed)
+// conversion work, which the UI surfaces as a separate "converting"
+// phase. ``signal`` lets the caller abort the in-flight POST.
+export interface UploadOptions {
+  onProgress?: (percent: number) => void
+  signal?: AbortSignal
+}
+
 export async function uploadFile(
   file: File,
   profileName: string,
   options?: Record<string, unknown>,
+  upload?: UploadOptions,
 ): Promise<UploadResponse> {
   const form = new FormData()
   form.append('file', file)
@@ -628,10 +640,19 @@ export async function uploadFile(
     form.append('options', JSON.stringify(options))
   }
   // No timeout: /upload with a high-res native source + a heavy
-  // algorithm can legitimately take minutes. The Apply button shows
-  // a loading state; future work can promote it to a progress toast
-  // with cancel like /preview now does.
-  const response = await api.post<UploadResponse>('/upload', form, { timeout: 0 })
+  // algorithm can legitimately take minutes. ``onProgress`` drives a
+  // cancellable progress toast in the upload flow; before the toast
+  // change, the Apply button only ever showed a generic spinner.
+  const response = await api.post<UploadResponse>('/upload', form, {
+    timeout: 0,
+    signal: upload?.signal,
+    onUploadProgress: upload?.onProgress
+      ? (e) => {
+        if (!e.total) return
+        upload.onProgress!(Math.round((e.loaded / e.total) * 100))
+      }
+      : undefined,
+  })
   return response.data
 }
 
@@ -683,6 +704,7 @@ export async function uploadToLibrary(
   file: File,
   folder = '',
   options?: Record<string, unknown>,
+  upload?: UploadOptions,
 ): Promise<LibraryUploadResponse> {
   const form = new FormData()
   form.append('file', file)
@@ -690,7 +712,19 @@ export async function uploadToLibrary(
   if (options) {
     form.append('options', JSON.stringify(options))
   }
-  const response = await api.post<LibraryUploadResponse>('/files', form)
+  // ``timeout: 0`` so a heavy converter on a Pi-class device isn't
+  // killed at the default 30 s deadline. Cancellation belongs to the
+  // operator via ``signal``, not to an arbitrary axios timeout.
+  const response = await api.post<LibraryUploadResponse>('/files', form, {
+    timeout: 0,
+    signal: upload?.signal,
+    onUploadProgress: upload?.onProgress
+      ? (e) => {
+        if (!e.total) return
+        upload.onProgress!(Math.round((e.loaded / e.total) * 100))
+      }
+      : undefined,
+  })
   return response.data
 }
 
