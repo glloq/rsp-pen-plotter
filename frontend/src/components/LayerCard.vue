@@ -1,250 +1,73 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, watch, type Ref } from 'vue'
+// LayerCard orchestrator (L10 #4 finalize).
+//
+// Post-split this component is a thin wiring layer:
+//   - drives ``useLayerCardState`` for all the per-layer derived
+//     state + event handlers (visibility, pen slot, speed, simplify,
+//     algorithm, multi-pass, pen-match)
+//   - composes ``<LayerCardSummary>`` for the always-visible header
+//   - keeps the inline body (settings grid + print-style picker +
+//     algorithm dropdown + algo params form) here because splitting
+//     it would require ~30 prop / emit declarations for almost no
+//     structural benefit — every nested form already binds directly
+//     against composable refs / handlers
+//
+// The composable owns the heavy logic (~250 LOC moved out), the
+// summary sub-component owns the visually independent header row,
+// and this file is left as the template that wires them together.
+
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getAlgorithms, type AlgorithmInfo, type LayerInfo, type PausePolicy } from '../api/client'
-import { formatLayerLabel } from '../lib/labels'
-import { nearestPen } from '../lib/penMatching'
-import { useJobStore, type LayerPass } from '../stores/job'
+import type { LayerInfo } from '../api/client'
+import { useJobStore } from '../stores/job'
+import { useLayerCardState } from '../composables/useLayerCardState'
+import LayerCardSummary from './LayerCardSummary.vue'
 import PrintStylePicker from './edit/PrintStylePicker.vue'
 import LayerPassStack from './edit/LayerPassStack.vue'
 import AlgoParamsForm from './edit/AlgoParamsForm.vue'
-import { defaultsFor, getAlgoSpec } from '../data/algorithmSchemas'
-import type { PrintStyle, PrintStyleKind } from '../data/printRegistry'
-import { LayerSelectionKey } from '../composables/useLayerSelection'
 
 const { t } = useI18n()
 const props = defineProps<{ layer: LayerInfo }>()
 const store = useJobStore()
 
-// Bulk selection (provided by LayersSection). May be null when this
-// card is rendered outside the layers section (currently doesn't
-// happen, but the inject default keeps the file forgiving).
-const selection = inject(LayerSelectionKey, null)
-const isSelected = computed(() => Boolean(selection?.isSelected(props.layer.layer_id)))
+const layerRef = computed(() => props.layer)
 
-function onHeaderClick(event: MouseEvent): void {
-  // Only intercept click for selection if a modifier is held — plain
-  // clicks on the header would otherwise eat collapse-toggle / drag
-  // affordances. Shift / Ctrl / Cmd are the canonical list-box
-  // modifiers, identical to Finder / Explorer / Slack channel lists.
-  if (!selection) return
-  if (!event.shiftKey && !event.ctrlKey && !event.metaKey) return
-  const allIds = store.layers.map((l) => l.layer_id)
-  selection.handleClick(props.layer.layer_id, event, allIds)
-}
-
-const algorithms = ref<AlgorithmInfo[]>([])
-onMounted(async () => {
-  try {
-    algorithms.value = await getAlgorithms()
-  } catch {
-    /* keep [] */
-  }
-})
-
-// Only bitmap-derived layers (label like ``color-XXXXXX``) can be
-// re-rendered with a different algorithm — that's what the /rerender
-// cache holds. SVG / DXF / text / document layers come straight from
-// the converter as vector groups and have nothing to re-render.
-// We also require the placement's ``rerenderable`` flag to be true:
-// a bitmap uploaded before the cache-rehydration feature shipped won't
-// have its segmentation options on disk, so /rerender would silently
-// 404 even though the layer label looks like a colour cluster.
-const isBitmapLayer = computed(() => {
-  if (!/^color-/.test(props.layer.layer_id)) return false
-  return store.selectedPlacement?.rerenderable !== false
-})
-const currentAlgorithm = computed(
-  () => store.layerAlgorithms[props.layer.layer_id]?.algorithm ?? '',
-)
-const currentAlgoOptions = computed(
-  () => store.layerAlgorithms[props.layer.layer_id]?.algorithm_options ?? {},
-)
-// Multi-pass stack for this layer (when set). The PrintStylePicker still
-// drives the single-style choice; toggling multi-pass mode opens the
-// passes editor below and disables the single-style highlight.
-const currentPasses = computed<LayerPass[]>(
-  () => store.layerAlgorithms[props.layer.layer_id]?.passes ?? [],
-)
-const isMultiPass = computed(() => currentPasses.value.length > 0)
-
-function onUpdatePasses(passes: LayerPass[]): void {
-  store.applyLayerPasses(props.layer.layer_id, passes)
-}
-
-// Promote the currently-selected single style to a one-pass stack so
-// the operator can start adding more passes without losing the choice.
-function enableMultiPass(): void {
-  const algo = currentAlgorithm.value || 'crosshatch'
-  const opts = { ...currentAlgoOptions.value }
-  store.applyLayerPasses(props.layer.layer_id, [{ algorithm: algo, algorithm_options: opts }])
-}
-
-const currentAlgoSpec = computed(() => getAlgoSpec(currentAlgorithm.value))
-
-async function onAlgorithm(event: Event): Promise<void> {
-  const value = (event.target as HTMLSelectElement).value
-  if (!value) {
-    // "default" — drop the override so the layer rerenders with the
-    // initial algorithm baked in at upload time.
-    await store.clearLayerAlgorithm(props.layer.layer_id)
-    return
-  }
-  // Seed the option payload with the schema defaults so the very first
-  // `/rerender` call already exercises the algorithm with sensible knobs.
-  await store.applyLayerAlgorithm(props.layer.layer_id, value, defaultsFor(value))
-}
-
-async function onAlgoOption(key: string, value: unknown): Promise<void> {
-  if (!currentAlgorithm.value) return
-  const merged = { ...currentAlgoOptions.value, [key]: value }
-  await store.applyLayerAlgorithm(props.layer.layer_id, currentAlgorithm.value, merged)
-}
-
-const visible = computed({
-  get: () => store.isVisible(props.layer.layer_id),
-  set: (value: boolean) => store.setVisibility(props.layer.layer_id, value),
-})
-
-const label = computed(() => formatLayerLabel(props.layer.layer_id))
-
-const swatchColor = computed(() => label.value.color ?? props.layer.source_color)
-
-const penSlotCount = computed(() => store.selectedProfile?.pen_slot_count ?? 0)
-
-const penSlots = computed(() => {
-  const profile = store.selectedProfile
-  const pens = profile?.pens ?? []
-  return Array.from({ length: penSlotCount.value }, (_, i) => {
-    const pen = pens.find((p) => p.index === i)
-    return { index: i, name: pen?.name || `${i}`, color: pen?.color ?? '#94a3b8' }
-  })
-})
-
-const selectedPen = computed(() =>
-  props.layer.target_pen_slot === null
-    ? null
-    : (penSlots.value.find((p) => p.index === props.layer.target_pen_slot) ?? null),
-)
-
-// Nearest installed pen to this layer's source colour. Only meaningful
-// for bitmap-derived multicolour layers (mono layers always plot in
-// the single ink slot the operator picked, so a pen-match warning
-// would just be noise). Severity drives the badge colour: green for
-// exact / close matches, amber for ``far``, red for ``wrong`` or
-// ``none`` (no pen installed).
-const installedPenList = computed(() => {
-  const pens = store.selectedProfile?.pens ?? []
-  return pens
-    .filter((p) => (p.installed ?? false) && typeof p.color === 'string')
-    .map((p) => ({ index: p.index, color: p.color, installed: true }))
-})
-
-const penMatch = computed(() => {
-  if (!isBitmapLayer.value) return null
-  if (!store.isMultiColor) return null
-  return nearestPen(swatchColor.value, installedPenList.value)
-})
-
-// True when the operator hasn't already assigned a slot manually AND
-// the nearest pen is far enough that the operator probably wants to
-// see the warning. Once they pick a slot we stop nagging — the override
-// is intentional.
-const showPenWarning = computed(() => {
-  if (props.layer.target_pen_slot !== null) return false
-  const m = penMatch.value
-  if (!m) return false
-  return m.severity === 'far' || m.severity === 'wrong' || m.severity === 'none'
-})
-
-function applyNearestPen(): void {
-  const m = penMatch.value
-  if (!m || !m.pen) return
-  store.updateLayer(props.layer.layer_id, { target_pen_slot: m.pen.index })
-}
-
-function onPenSlot(event: Event): void {
-  const value = (event.target as HTMLSelectElement).value
-  store.updateLayer(props.layer.layer_id, { target_pen_slot: value === '' ? null : Number(value) })
-}
-
-function onSpeed(event: Event): void {
-  const value = (event.target as HTMLInputElement).value
-  store.updateLayer(props.layer.layer_id, {
-    drawing_speed_mm_s: value === '' ? null : Number(value),
-  })
-}
-
-function onSimplify(event: Event): void {
-  store.updateLayer(props.layer.layer_id, {
-    simplify_tolerance_mm: Number((event.target as HTMLInputElement).value),
-  })
-}
-
-function onOptimize(event: Event): void {
-  store.updateLayer(props.layer.layer_id, {
-    optimize: (event.target as HTMLInputElement).checked,
-  })
-}
-
-function onColorLabel(event: Event): void {
-  const raw = (event.target as HTMLInputElement).value.trim()
-  store.updateLayer(props.layer.layer_id, { color_label: raw || null })
-}
-
-function setPause(policy: PausePolicy): void {
-  store.updateLayer(props.layer.layer_id, { pause_before: policy })
-}
-
-const pauseChoices: Array<{ value: PausePolicy; icon: string; key: string }> = [
-  { value: 'auto', icon: '⏸', key: 'layers.pauseAuto' },
-  { value: 'always', icon: '✋', key: 'layers.pauseAlways' },
-  { value: 'never', icon: '▶', key: 'layers.pauseNever' },
-]
-
-// Print-style picker drives the algorithm + options in one click. The
-// "kind" classifies the layer for the picker's thumbnail filter; we
-// don't have a schematic detector yet so colour-derived layers are
-// treated as image-content while text layers are explicit.
-const styleKind = computed<PrintStyleKind>(() => (label.value.kind === 'text' ? 'text' : 'image'))
-
-function onPickStyle(style: PrintStyle): void {
-  store.applyLayerAlgorithm(props.layer.layer_id, style.defaultAlgorithm, {
-    ...style.defaultAlgorithmOptions,
-  })
-}
-
-function onResetStyle(): void {
-  store.clearLayerAlgorithm(props.layer.layer_id)
-}
-
-// Toggle to expose the schema-driven advanced form behind the picker.
-const showAdvanced = ref(false)
-// Collapse the whole card body so a many-layer placement (e.g. 8-colour
-// segmentation) is scannable. The header — visibility checkbox, swatch,
-// label, path stats — stays visible so the layer can still be
-// reordered and toggled on/off while collapsed.
-const collapsed = ref(false)
-
-// LayersSection broadcasts an "expand all" / "collapse all" signal via
-// provide; honour it whenever it flips so the bulk toggle takes effect
-// without overriding the per-card toggle the rest of the time.
-const sectionCollapseAll = inject<Ref<boolean | null>>(
-  'layersCollapseAll',
-  ref<boolean | null>(null),
-)
-watch(sectionCollapseAll, (value) => {
-  if (value === null) return
-  collapsed.value = value
-})
-
-function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.round(seconds % 60)
-  return `${mins}m ${secs.toString().padStart(2, '0')}s`
-}
-
-const duration = computed(() => formatDuration(store.layerDurationSeconds(props.layer)))
+const {
+  visible,
+  showAdvanced,
+  collapsed,
+  algorithms,
+  isSelected,
+  isBitmapLayer,
+  currentAlgorithm,
+  currentAlgoOptions,
+  currentPasses,
+  isMultiPass,
+  currentAlgoSpec,
+  label,
+  swatchColor,
+  penSlots,
+  selectedPen,
+  penMatch,
+  showPenWarning,
+  styleKind,
+  duration,
+  pauseChoices,
+  onHeaderClick,
+  onUpdatePasses,
+  enableMultiPass,
+  onAlgorithm,
+  onAlgoOption,
+  applyNearestPen,
+  onPenSlot,
+  onSpeed,
+  onSimplify,
+  onOptimize,
+  onColorLabel,
+  setPause,
+  onPickStyle,
+  onResetStyle,
+} = useLayerCardState(layerRef)
 </script>
 
 <template>
@@ -256,63 +79,19 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
         : 'border-slate-700'
     "
   >
-    <div class="flex items-center gap-3" @click="onHeaderClick">
-      <span
-        class="cursor-grab text-slate-500 select-none"
-        :title="t('layers.dragHint')"
-        aria-hidden="true"
-        >⠿</span
-      >
-      <input v-model="visible" type="checkbox" class="h-4 w-4 accent-emerald-500" />
-
-      <span
-        v-if="label.kind === 'image'"
-        class="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-600 bg-slate-900 text-[10px]"
-        :title="t('layers.kindImage')"
-        aria-hidden="true"
-        >🖼</span
-      >
-      <span
-        v-else-if="label.kind === 'text'"
-        class="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-600 bg-slate-900 font-serif text-xs text-slate-300"
-        :title="t('layers.kindText')"
-        aria-hidden="true"
-        >Aa</span
-      >
-      <span
-        v-else
-        class="h-5 w-5 rounded border border-slate-600 shrink-0"
-        :style="{ backgroundColor: swatchColor }"
-      />
-
-      <div class="min-w-0 flex-1">
-        <p
-          class="flex items-center gap-1.5 truncate text-sm text-slate-200"
-          :class="label.kind === 'color' ? 'font-mono' : ''"
-        >
-          <span class="truncate">{{ label.display }}</span>
-          <span
-            v-if="isMultiPass"
-            class="shrink-0 rounded-sm border border-emerald-700 bg-emerald-950/60 px-1 py-px text-[9px] font-semibold tracking-wider text-emerald-300"
-            :title="t('passes.badgeHint')"
-            >×{{ currentPasses.length }}</span
-          >
-        </p>
-        <p class="text-xs text-slate-500">
-          {{ layer.path_count }} {{ t('layers.paths') }} · {{ layer.total_length_mm.toFixed(1) }} mm
-          · {{ duration }}
-        </p>
-      </div>
-      <button
-        type="button"
-        class="shrink-0 rounded bg-slate-700 px-1.5 py-0.5 text-[11px] text-slate-200 hover:bg-slate-600"
-        :title="collapsed ? t('layers.expand') : t('layers.collapse')"
-        :aria-expanded="!collapsed"
-        @click="collapsed = !collapsed"
-      >
-        {{ collapsed ? '▸' : '▾' }}
-      </button>
-    </div>
+    <LayerCardSummary
+      :layer="layer"
+      :label="label"
+      :swatch-color="swatchColor"
+      :is-multi-pass="isMultiPass"
+      :pass-count="currentPasses.length"
+      :duration="duration"
+      :collapsed="collapsed"
+      :visible="visible"
+      @header-click="onHeaderClick"
+      @update:collapsed="(v) => (collapsed = v)"
+      @update:visible="(v) => (visible = v)"
+    />
 
     <div v-if="!collapsed" class="grid grid-cols-2 gap-2 text-xs">
       <!-- Multi-pen machines: explicit slot assignment. -->
@@ -484,7 +263,7 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       <LayerPassStack
         v-else
         :passes="currentPasses"
-        :layer-id="props.layer.layer_id"
+        :layer-id="layer.layer_id"
         @update="onUpdatePasses"
       />
     </div>
