@@ -153,6 +153,35 @@ def test_rerender_text_svg_returns_none_for_non_text_mime() -> None:
     assert rerender_text_svg(plan) is None
 
 
+@pytest.mark.parametrize(
+    "mime",
+    [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.oasis.opendocument.text",
+        "application/rtf",
+        "text/html",
+    ],
+)
+def test_rerender_text_svg_skips_document_sources(mime: str) -> None:
+    """PDF / DOCX / HTML / RTF / ODT are not eligible for the in-pipeline rerender.
+
+    Regression cover: when these MIMEs were on the eligible list, the
+    /generate path replaced the frontend's composite SVG (workspace-mm
+    coordinates) with the converter's raw output (document-intrinsic
+    units, e.g. PDF points). Combined with ``scale_mode="actual"``,
+    strokes ended up 2.83× too large and centred on the wrong region.
+    Multi-page PDFs additionally lost the operator's page selection
+    because ``TypographyPlan`` carries no ``page`` field.
+    """
+    plan = _text_plan(
+        library_file_id="abc",
+        source_mime=mime,
+        typography=TypographyPlan(),
+    )
+    assert rerender_text_svg(plan) is None
+
+
 def test_rerender_text_svg_returns_none_when_library_file_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
