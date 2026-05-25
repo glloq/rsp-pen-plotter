@@ -258,8 +258,9 @@ export interface OptimizeResponse {
 export async function optimizeToolpaths(
   svg: string,
   layers: LayerOptimization[],
+  signal?: AbortSignal,
 ): Promise<OptimizeResponse> {
-  const response = await api.post<OptimizeResponse>('/optimize', { svg, layers })
+  const response = await api.post<OptimizeResponse>('/optimize', { svg, layers }, { signal })
   return response.data
 }
 
@@ -291,15 +292,20 @@ export async function generateGcode(
   scaleMode: 'fit' | 'actual' = 'fit',
   marginMm = 10,
   placement?: Placement | null,
+  signal?: AbortSignal,
 ): Promise<GenerateResponse> {
-  const response = await api.post<GenerateResponse>('/generate', {
-    svg,
-    profile_name: profileName,
-    layers,
-    scale_mode: scaleMode,
-    margin_mm: marginMm,
-    placement: placement ?? null,
-  })
+  const response = await api.post<GenerateResponse>(
+    '/generate',
+    {
+      svg,
+      profile_name: profileName,
+      layers,
+      scale_mode: scaleMode,
+      margin_mm: marginMm,
+      placement: placement ?? null,
+    },
+    { signal },
+  )
   return response.data
 }
 
@@ -326,15 +332,20 @@ export async function preflightCheck(
   scaleMode: 'fit' | 'actual' = 'fit',
   marginMm = 10,
   placement?: Placement | null,
+  signal?: AbortSignal,
 ): Promise<PreflightReport> {
-  const response = await api.post<PreflightReport>('/preflight', {
-    svg,
-    profile_name: profileName,
-    layers,
-    scale_mode: scaleMode,
-    margin_mm: marginMm,
-    placement: placement ?? null,
-  })
+  const response = await api.post<PreflightReport>(
+    '/preflight',
+    {
+      svg,
+      profile_name: profileName,
+      layers,
+      scale_mode: scaleMode,
+      margin_mm: marginMm,
+      placement: placement ?? null,
+    },
+    { signal },
+  )
   return response.data
 }
 

@@ -12,6 +12,7 @@ import PlotterDrawer from './components/PlotterDrawer.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
+import GenerateProgressModal from './components/GenerateProgressModal.vue'
 import { useJobStore } from './stores/job'
 import { useLibraryStore } from './stores/library'
 import { useToastStore } from './stores/toasts'
@@ -135,6 +136,7 @@ onBeforeUnmount(() => {
     <EditModal />
     <ConfirmDialog />
     <UpdateProgressModal />
+    <GenerateProgressModal />
     <Toasts />
 
     <div

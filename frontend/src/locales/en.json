@@ -799,7 +799,15 @@
     "zoomOut": "Zoom out",
     "resetView": "Reset view",
     "manualPenChange": "Manual pen change",
-    "manualPenChangeHint": "Pause before each layer so you can swap the pen by hand."
+    "manualPenChangeHint": "Pause before each layer so you can swap the pen by hand.",
+    "show": "Show",
+    "optTravel": "Travel moves",
+    "optPenEvents": "Pen up / down",
+    "optColorChanges": "Colour changes",
+    "optPauses": "Pauses",
+    "colors": "Colours",
+    "colorAll": "All",
+    "colorClickHint": "Click to toggle · double-click to isolate this colour."
   },
   "plotter": {
     "title": "Plotter",
@@ -922,5 +930,24 @@
     "cacheShortcut": "Shortcut: Ctrl + Shift + R (⌘ + Shift + R on Mac)",
     "reloadNow": "Reload now",
     "close": "Close"
+  },
+  "gcodeJob": {
+    "titleRunning": "Computing G-code",
+    "titleSuccess": "G-code generated",
+    "titleCancelled": "Calculation cancelled",
+    "titleError": "Calculation failed",
+    "optimizing": "Optimizing toolpaths…",
+    "preflighting": "Running pre-plot check…",
+    "generating": "Generating G-code…",
+    "success": "G-code is ready.",
+    "cancelled": "The calculation was interrupted.",
+    "elapsed": "Elapsed: {seconds}s",
+    "cancel": "Cancel calculation",
+    "close": "Close",
+    "step": {
+      "optimize": "Optimize toolpaths",
+      "preflight": "Pre-plot check",
+      "generate": "Generate G-code"
+    }
   }
 }

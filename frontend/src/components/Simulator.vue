@@ -25,6 +25,48 @@ let last = 0
 
 const speeds = [1, 5, 100]
 
+// ===== Display options ===================================================
+// Each toggle scopes a different piece of information the operator might
+// want to inspect on the preview. They all default to "show" so the
+// initial view matches the previous behaviour (drawing + travel + pen).
+// ``colorFilter`` stores the set of HEX strings to draw; an empty filter
+// means "draw all colours" (treated as a wildcard so the user doesn't
+// stare at a blank canvas when no tool-change markers were emitted).
+const showTravel = ref(true)
+const showPenEvents = ref(false)
+const showColorChanges = ref(true)
+const showPauses = ref(true)
+const colorFilter = ref<Set<string>>(new Set())
+
+function toggleColor(hex: string): void {
+  const next = new Set(colorFilter.value)
+  if (next.has(hex)) next.delete(hex)
+  else next.add(hex)
+  colorFilter.value = next
+  draw()
+}
+
+function selectAllColors(): void {
+  colorFilter.value = new Set()
+  draw()
+}
+
+function selectOnlyColor(hex: string): void {
+  colorFilter.value = new Set([hex])
+  draw()
+}
+
+const distinctColors = computed(() => sim.value?.colors ?? [])
+const hasColorInfo = computed(() => distinctColors.value.length > 0)
+
+function isColorVisible(hex: string | null): boolean {
+  if (colorFilter.value.size === 0) return true
+  // Segments emitted before any tool_change marker have ``null`` as their
+  // colour. Keep them visible whenever the filter contains a sentinel
+  // empty string or matches the actual hex.
+  return colorFilter.value.has(hex ?? '')
+}
+
 // View transform (zoom/pan) — applied on top of the fit-to-canvas projection.
 const viewZoom = ref(1)
 const viewPanX = ref(0)
@@ -145,6 +187,17 @@ function draw(): void {
 
   for (const seg of r.segments) {
     if (seg.startTime >= t) break
+    // Apply the colour filter — only to drawing segments; travel moves
+    // inherit visibility from ``showTravel`` instead because they have
+    // no inherent colour.
+    if (seg.drawing && !isColorVisible(seg.colorHex)) {
+      pen = project(seg.x1, seg.y1, bounds)
+      continue
+    }
+    if (!seg.drawing && !showTravel.value) {
+      pen = project(seg.x1, seg.y1, bounds)
+      continue
+    }
     const frac = seg.duration > 0 ? Math.min(1, (t - seg.startTime) / seg.duration) : 1
     const ex = seg.x0 + (seg.x1 - seg.x0) * frac
     const ey = seg.y0 + (seg.y1 - seg.y0) * frac
@@ -154,7 +207,10 @@ function draw(): void {
     ctx.moveTo(ax, ay)
     ctx.lineTo(bx, by)
     if (seg.drawing) {
-      ctx.strokeStyle = '#0f172a'
+      // Use the segment's colour when available so a colour-filtered
+      // view actually reads as multi-ink; fall back to slate ink when
+      // the G-code didn't carry a tool-change marker.
+      ctx.strokeStyle = seg.colorHex || '#0f172a'
       ctx.lineWidth = 1.2
       ctx.setLineDash([])
     } else {
@@ -167,12 +223,85 @@ function draw(): void {
     pen = [bx, by]
   }
 
+  // === Event markers =====================================================
+  // Plotted on top of the segments so they're never hidden. Each kind
+  // gets a distinct glyph + colour so the operator can pick them out
+  // without a legend.
+  for (const ev of r.events) {
+    if (ev.time > t) break
+    const [ex, ey] = project(ev.x, ev.y, bounds)
+    if (ev.type === 'pen_up' || ev.type === 'pen_down') {
+      if (!showPenEvents.value) continue
+      drawPenEventMarker(ctx, ex, ey, ev.type === 'pen_up')
+    } else if (ev.type === 'tool_change') {
+      if (!showColorChanges.value) continue
+      drawToolChangeMarker(ctx, ex, ey, ev.colorHex || '#f59e0b')
+    } else if (ev.type === 'pause') {
+      if (!showPauses.value) continue
+      drawPauseMarker(ctx, ex, ey)
+    }
+  }
+
   if (pen) {
     ctx.beginPath()
     ctx.arc(pen[0], pen[1], 3, 0, Math.PI * 2)
     ctx.fillStyle = '#10b981'
     ctx.fill()
   }
+}
+
+function drawPenEventMarker(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  up: boolean,
+): void {
+  // Small triangle: pointing up for pen-up, pointing down for pen-down.
+  ctx.beginPath()
+  if (up) {
+    ctx.moveTo(x, y - 4)
+    ctx.lineTo(x - 3, y + 2)
+    ctx.lineTo(x + 3, y + 2)
+  } else {
+    ctx.moveTo(x, y + 4)
+    ctx.lineTo(x - 3, y - 2)
+    ctx.lineTo(x + 3, y - 2)
+  }
+  ctx.closePath()
+  ctx.fillStyle = up ? '#7dd3fc' : '#fcd34d'
+  ctx.strokeStyle = '#0f172a'
+  ctx.lineWidth = 0.6
+  ctx.fill()
+  ctx.stroke()
+}
+
+function drawToolChangeMarker(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  color: string,
+): void {
+  ctx.beginPath()
+  ctx.arc(x, y, 5, 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.lineWidth = 1.2
+  ctx.strokeStyle = '#0f172a'
+  ctx.stroke()
+}
+
+function drawPauseMarker(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  // Two vertical bars inside a ring — universal "pause" glyph.
+  ctx.beginPath()
+  ctx.arc(x, y, 6, 0, Math.PI * 2)
+  ctx.fillStyle = '#fef3c7'
+  ctx.strokeStyle = '#b45309'
+  ctx.lineWidth = 1
+  ctx.fill()
+  ctx.stroke()
+  ctx.fillStyle = '#b45309'
+  ctx.fillRect(x - 2.5, y - 3, 1.5, 6)
+  ctx.fillRect(x + 1, y - 3, 1.5, 6)
 }
 
 function frame(now: number): void {
@@ -230,7 +359,11 @@ function reparse(): void {
     penDownCommand: profile.pen_down_command,
     travelSpeedMmS: profile.travel_speed_mm_s,
     defaultDrawSpeedMmS: profile.drawing_speed_mm_s,
+    toolChangeCommand: profile.tool_change_command,
   })
+  // Reset colour filter on every reparse — chips for the previous plot's
+  // colours would otherwise hide every segment of the new one.
+  colorFilter.value = new Set()
   // Default to the final frame so the operator sees the full result the
   // moment they open the tab. Press Restart / Play to scrub back to the
   // start of the plot.
@@ -286,6 +419,11 @@ function onCanvasPointerUp(event: PointerEvent): void {
   isPanning.value = false
   ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
 }
+
+// Display-option toggles update the canvas immediately so the operator
+// gets instant feedback. ``deep`` isn't needed: each ref is replaced
+// outright when a toggle flips or the colour filter is rebuilt.
+watch([showTravel, showPenEvents, showColorChanges, showPauses, colorFilter], () => draw())
 
 watch(gcode, () => reparse())
 onMounted(() => reparse())
@@ -368,6 +506,73 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
         />
         {{ t('simulator.manualPenChange') }}
       </label>
+    </div>
+
+    <!-- Display-option toggles. Each toggles a different layer of preview
+         data; the user can mix-and-match (e.g. only show travel + colour
+         changes to audit the toolpath, or filter by colour to inspect a
+         single ink). The colour chips below appear only when the parsed
+         G-code carried tool-change markers — otherwise there's nothing
+         useful to filter on. -->
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-700 px-4 py-1.5 text-xs">
+      <span class="font-medium uppercase tracking-wide text-slate-500">
+        {{ t('simulator.show') }}
+      </span>
+      <label class="flex items-center gap-1.5 text-slate-300">
+        <input v-model="showTravel" type="checkbox" class="h-4 w-4 accent-sky-500" />
+        {{ t('simulator.optTravel') }}
+      </label>
+      <label class="flex items-center gap-1.5 text-slate-300">
+        <input v-model="showPenEvents" type="checkbox" class="h-4 w-4 accent-amber-500" />
+        {{ t('simulator.optPenEvents') }}
+      </label>
+      <label class="flex items-center gap-1.5 text-slate-300">
+        <input v-model="showColorChanges" type="checkbox" class="h-4 w-4 accent-emerald-500" />
+        {{ t('simulator.optColorChanges') }}
+      </label>
+      <label class="flex items-center gap-1.5 text-slate-300">
+        <input v-model="showPauses" type="checkbox" class="h-4 w-4 accent-amber-400" />
+        {{ t('simulator.optPauses') }}
+      </label>
+    </div>
+
+    <div
+      v-if="hasColorInfo"
+      class="flex flex-wrap items-center gap-2 border-b border-slate-700 px-4 py-1.5 text-xs"
+    >
+      <span class="font-medium uppercase tracking-wide text-slate-500">
+        {{ t('simulator.colors') }}
+      </span>
+      <button
+        type="button"
+        class="rounded border border-slate-700 px-2 py-0.5 text-slate-200 hover:bg-slate-800"
+        :class="colorFilter.size === 0 ? 'bg-slate-700' : 'bg-slate-900'"
+        @click="selectAllColors"
+      >
+        {{ t('simulator.colorAll') }}
+      </button>
+      <button
+        v-for="c in distinctColors"
+        :key="c.hex || c.label"
+        type="button"
+        class="flex items-center gap-1.5 rounded border px-2 py-0.5"
+        :class="
+          colorFilter.size === 0 || colorFilter.has(c.hex)
+            ? 'border-slate-500 bg-slate-700 text-slate-100'
+            : 'border-slate-700 bg-slate-900 text-slate-400'
+        "
+        :title="t('simulator.colorClickHint')"
+        @click="toggleColor(c.hex)"
+        @dblclick="selectOnlyColor(c.hex)"
+      >
+        <span
+          class="inline-block h-3 w-3 rounded-sm border border-slate-600"
+          :style="{ backgroundColor: c.hex || '#94a3b8' }"
+          aria-hidden="true"
+        />
+        <span class="font-mono">{{ c.label || c.hex || '—' }}</span>
+        <span class="text-slate-500">({{ c.segmentCount }})</span>
+      </button>
     </div>
 
     <canvas

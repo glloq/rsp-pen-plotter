@@ -17,25 +17,13 @@ function formatDuration(seconds: number): string {
     <h2 class="px-1 text-xs uppercase tracking-wider text-slate-500">{{ t('prepare.output') }}</h2>
 
     <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2">
-      <div class="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-50"
-          :disabled="store.optimizing"
-          @click="store.optimize()"
-        >
-          {{ store.optimizing ? t('layers.optimizing') : t('layers.optimizeButton') }}
-        </button>
-        <button
-          type="button"
-          class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-50"
-          :disabled="store.preflighting"
-          @click="store.runPreflight()"
-        >
-          {{ store.preflighting ? t('preflight.running') : t('preflight.button') }}
-        </button>
-      </div>
-
+      <!--
+        Optimize + preflight used to live here as opt-in buttons. They're
+        now always-on: ``store.generate()`` runs the full pipeline
+        (optimize → preflight → generate) and surfaces progress in the
+        GenerateProgressModal. The results panels below are kept so the
+        operator can still inspect the metrics after generation lands.
+      -->
       <div
         v-if="store.metrics"
         class="rounded border border-sky-800 bg-sky-950/30 px-2 py-1.5 text-xs text-sky-200"
