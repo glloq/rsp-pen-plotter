@@ -6,7 +6,9 @@ import {
   listLibraryFiles as apiList,
   listLibraryFolders as apiListFolders,
   patchLibraryFile as apiPatch,
+  getFilesIntegrity,
   uploadToLibrary,
+  type IntegrityIssue,
   type LibraryFileDetail,
   type LibraryFileRecord,
   type LibrarySortKey,
@@ -54,6 +56,21 @@ export const useLibraryStore = defineStore('library', () => {
   // Hydrated lazily from storage on first access; subsequent mutations
   // through ``saveFileVariants`` keep storage in sync.
   const fileVariants = ref<Record<string, SavedFileVariants>>(loadFileVariants())
+
+  // Library integrity issues surfaced by the backend boot scan
+  // (``GET /files/integrity`` — see backend lot L4). Lets the UI show a
+  // banner and disable Edit on files that have lost the state needed
+  // for /rerender, instead of letting the operator hit a 404 mid-flow.
+  const integrityIssues = ref<IntegrityIssue[]>([])
+  const integrityCheckedAt = ref<string | null>(null)
+
+  // Quick lookup so a Vue component can disable the Edit button on a
+  // broken card without iterating ``integrityIssues`` each render.
+  const brokenFileIds = computed(() => {
+    const s = new Set<string>()
+    for (const issue of integrityIssues.value) s.add(issue.file_id)
+    return s
+  })
 
   function loadFileVariants(): Record<string, SavedFileVariants> {
     try {
@@ -315,6 +332,25 @@ export const useLibraryStore = defineStore('library', () => {
     detailCache.value = {}
   }
 
+  async function refreshIntegrity(): Promise<void> {
+    // Best-effort: a transient network blip shouldn't gate the UI, so
+    // failures leave the previous report in place. The banner consumer
+    // reads ``integrityIssues.value`` directly and shows nothing when
+    // it's empty (the normal, healthy case).
+    try {
+      const report = await getFilesIntegrity()
+      integrityIssues.value = report.issues
+      integrityCheckedAt.value = new Date().toISOString()
+    } catch {
+      // Keep stale data — don't blank out a known-issue list on a
+      // momentary fetch failure.
+    }
+  }
+
+  function isFileBroken(fileId: string): boolean {
+    return brokenFileIds.value.has(fileId)
+  }
+
   return {
     // state
     files,
@@ -327,10 +363,15 @@ export const useLibraryStore = defineStore('library', () => {
     folderFilter,
     detailCache,
     fileVariants,
+    integrityIssues,
+    integrityCheckedAt,
     // getters
     filteredSorted,
+    brokenFileIds,
     // actions
     refresh,
+    refreshIntegrity,
+    isFileBroken,
     upload,
     ensureDetail,
     getDetail,

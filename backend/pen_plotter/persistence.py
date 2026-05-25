@@ -104,6 +104,42 @@ def _add_missing_columns(target: Engine) -> None:
             _log.info("Added missing column %s.%s", table_name, column.name)
 
 
+def _install_audit_immutability_triggers(target: Engine) -> None:
+    """Install SQLite triggers that make the ``auditentry`` table append-only.
+
+    The application code never updates or deletes audit rows, but a
+    rogue debug session, a misconfigured admin tool or a future ORM
+    misuse could. Triggers at the DB level make the immutability a
+    hard guarantee instead of a code-review convention.
+
+    SQLite-only by design: the production deployment ships a SQLite
+    file (``omniplot.db``). If the engine is ever pointed at another
+    backend the triggers are skipped — those dialects need their own
+    equivalent (e.g. PostgreSQL ``RAISE EXCEPTION`` in a BEFORE trigger
+    function).
+    """
+    if target.dialect.name != "sqlite":
+        return
+    inspector = inspect(target)
+    if not inspector.has_table("auditentry"):
+        return
+    with target.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TRIGGER IF NOT EXISTS auditentry_no_update "
+                "BEFORE UPDATE ON auditentry BEGIN "
+                "SELECT RAISE(ABORT, 'audit log is append-only'); END"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE TRIGGER IF NOT EXISTS auditentry_no_delete "
+                "BEFORE DELETE ON auditentry BEGIN "
+                "SELECT RAISE(ABORT, 'audit log is append-only'); END"
+            )
+        )
+
+
 def init_db(target: Engine = engine) -> None:
     """Create the database directory and tables, then apply additive migrations.
 
@@ -114,6 +150,7 @@ def init_db(target: Engine = engine) -> None:
         Path(target.url.database).parent.mkdir(parents=True, exist_ok=True)
     SQLModel.metadata.create_all(target)
     _add_missing_columns(target)
+    _install_audit_immutability_triggers(target)
 
 
 def save_job(job: Job, target: Engine = engine) -> JobRecord:
