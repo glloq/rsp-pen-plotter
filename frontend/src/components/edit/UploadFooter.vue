@@ -22,8 +22,8 @@ const store = useJobStore()
 // produce something (a bitmap source the operator hasn't applied yet)
 // — adding it to the "Loading source file…" or "Converting…" states
 // would be noise.
-const showExpectedCount = computed(() =>
-  fm.showsBitmapForm.value && !store.loading && Boolean(fm.selectedFile.value),
+const showExpectedCount = computed(
+  () => fm.showsBitmapForm.value && !store.loading && Boolean(fm.selectedFile.value),
 )
 </script>
 
@@ -63,17 +63,21 @@ const showExpectedCount = computed(() =>
       :title="!fm.selectedFile.value ? t('source.waitingForFile') : ''"
       @click="fm.uploadSelected"
     >
-      {{ !fm.selectedFile.value
-        ? t('source.waitingForFile')
-        : store.loading
-          ? t('upload.converting')
-          : store.job
-            ? t('source.applyChanges')
-            : t('upload.choose') }}
+      {{
+        !fm.selectedFile.value
+          ? t('source.waitingForFile')
+          : store.loading
+            ? t('upload.converting')
+            : store.job
+              ? t('source.applyChanges')
+              : t('upload.choose')
+      }}
       <span
         v-if="showExpectedCount"
         class="ml-2 inline-block rounded-sm bg-emerald-800/80 px-1.5 py-px font-mono text-[10px] text-emerald-100"
-      >→ {{ draft.expectedLayerCount.value }} {{ t('upload.layers', draft.expectedLayerCount.value) }}</span>
+        >→ {{ draft.expectedLayerCount.value }}
+        {{ t('upload.layers', draft.expectedLayerCount.value) }}</span
+      >
     </button>
 
     <p

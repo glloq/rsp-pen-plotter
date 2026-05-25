@@ -61,12 +61,18 @@ function _load(): Samples {
     if (!raw) return {}
     const parsed = JSON.parse(raw)
     if (parsed && typeof parsed === 'object') return parsed as Samples
-  } catch { /* corrupt or unavailable — start fresh */ }
+  } catch {
+    /* corrupt or unavailable — start fresh */
+  }
   return {}
 }
 
 function _save(samples: Samples): void {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(samples)) } catch { /* ignore */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(samples))
+  } catch {
+    /* ignore */
+  }
 }
 
 // Module-level singleton so every consumer reads the same EMA. The
@@ -78,7 +84,11 @@ export interface PreviewCostEstimator {
   // quality. Falls back to the complexity seed × quality factor when
   // no real sample has been observed yet. Always returns a positive
   // number so the UI can render unconditionally.
-  estimateMs: (algorithm: string, quality: PreviewQuality, complexity?: AlgorithmComplexity) => number
+  estimateMs: (
+    algorithm: string,
+    quality: PreviewQuality,
+    complexity?: AlgorithmComplexity,
+  ) => number
   // Record an observed /preview latency. Cache hits should be filtered
   // out by the caller (they aren't representative of compute cost).
   record: (algorithm: string, quality: PreviewQuality, elapsedMs: number) => void
@@ -109,9 +119,10 @@ export function usePreviewCostEstimator(): PreviewCostEstimator {
     if (!Number.isFinite(elapsedMs) || elapsedMs < MIN_SAMPLE_MS) return
     const key = _key(algorithm, quality)
     const prev = _samples.value[key]
-    const next = typeof prev === 'number' && prev > 0
-      ? prev * (1 - EMA_ALPHA) + elapsedMs * EMA_ALPHA
-      : elapsedMs
+    const next =
+      typeof prev === 'number' && prev > 0
+        ? prev * (1 - EMA_ALPHA) + elapsedMs * EMA_ALPHA
+        : elapsedMs
     _samples.value = { ..._samples.value, [key]: Math.round(next) }
     _save(_samples.value)
   }

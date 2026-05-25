@@ -79,11 +79,11 @@ const renderedPlacements = computed<RenderedPlacement[]>(() => {
     const y_min = w.ws.y_min + p.y_mm
     const x_max = x_min + p.width_mm
     const y_max = y_min + p.height_mm
-    const exceeds
-      = x_min < w.ws.x_min - 0.01
-      || y_min < w.ws.y_min - 0.01
-      || x_max > w.ws.x_max + 0.01
-      || y_max > w.ws.y_max + 0.01
+    const exceeds =
+      x_min < w.ws.x_min - 0.01 ||
+      y_min < w.ws.y_min - 0.01 ||
+      x_max > w.ws.x_max + 0.01 ||
+      y_max > w.ws.y_max + 0.01
     let cleanSvg = ''
     if (p.svg) {
       const cached = sanitizedCache.get(p.id)
@@ -99,8 +99,8 @@ const renderedPlacements = computed<RenderedPlacement[]>(() => {
     // Tier 1 source preview is only attempted when (a) we have a library
     // entry to read bytes from, and (b) the MIME is one the browser can
     // paint without an extra server-side render step.
-    const previewUrl
-      = p.library_file_id && isDisplayableMime(p.source_mime)
+    const previewUrl =
+      p.library_file_id && isDisplayableMime(p.source_mime)
         ? libraryFileOriginalUrl(p.library_file_id)
         : ''
     return {
@@ -200,7 +200,10 @@ function zoomIn(): void {
 function zoomOut(): void {
   zoom.value = Math.max(zoom.value / 1.25, 0.2)
 }
-watch(() => store.selectedProfileName, () => resetView())
+watch(
+  () => store.selectedProfileName,
+  () => resetView(),
+)
 
 // Snap-to-grid: 0 = off, otherwise grid step in mm.
 const snapMm = ref(0)
@@ -244,7 +247,8 @@ function onPointerDown(event: PointerEvent): void {
     // A placement gesture was pre-armed by its handler — record its
     // current position so the move/resize can compute deltas from it.
     const p = store.placements.find((pl) => pl.id === activePlacementId.value)
-    if (p) startRegion = { x_mm: p.x_mm, y_mm: p.y_mm, width_mm: p.width_mm, height_mm: p.height_mm }
+    if (p)
+      startRegion = { x_mm: p.x_mm, y_mm: p.y_mm, width_mm: p.width_mm, height_mm: p.height_mm }
   }
 }
 
@@ -564,14 +568,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800"
           :title="t('sheet.zoomOut')"
           @click="zoomOut"
-        >−</button>
+        >
+          −
+        </button>
         <span class="w-12 text-center font-mono text-slate-300">{{ Math.round(zoom * 100) }}%</span>
         <button
           type="button"
           class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800"
           :title="t('sheet.zoomIn')"
           @click="zoomIn"
-        >+</button>
+        >
+          +
+        </button>
         <button
           type="button"
           class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:bg-slate-800"
@@ -592,7 +600,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           :aria-label="t('sheet.rotateLeft')"
           @click="rotateSelected(-90)"
         >
-          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            viewBox="0 0 16 16"
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M3 8a5 5 0 1 0 5-5" />
             <polyline points="3 3 3 7 7 7" />
           </svg>
@@ -605,7 +622,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           :aria-label="t('sheet.rotateRight')"
           @click="rotateSelected(90)"
         >
-          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            viewBox="0 0 16 16"
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <path d="M13 8a5 5 0 1 1-5-5" />
             <polyline points="13 3 13 7 9 7" />
           </svg>
@@ -618,7 +644,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           :aria-label="t('sheet.flipH')"
           @click="flipSelected('h')"
         >
-          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            viewBox="0 0 16 16"
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <line x1="8" y1="2" x2="8" y2="14" stroke-dasharray="1.5 1.5" />
             <polygon points="3 4 6.5 8 3 12" fill="currentColor" />
             <polygon points="13 4 9.5 8 13 12" fill="currentColor" />
@@ -632,7 +667,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           :aria-label="t('sheet.flipV')"
           @click="flipSelected('v')"
         >
-          <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg
+            viewBox="0 0 16 16"
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
             <line x1="2" y1="8" x2="14" y2="8" stroke-dasharray="1.5 1.5" />
             <polygon points="4 3 8 6.5 12 3" fill="currentColor" />
             <polygon points="4 13 8 9.5 12 13" fill="currentColor" />
@@ -643,7 +687,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <div class="h-5 w-px bg-slate-700 mx-1" />
 
       <label class="flex items-center gap-1" :title="t('sheet.snap')">
-        <svg viewBox="0 0 16 16" class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg
+          viewBox="0 0 16 16"
+          class="h-4 w-4 text-slate-400"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <path d="M2 4h12M2 8h12M2 12h12M4 2v12M8 2v12M12 2v12" />
         </svg>
         <select
@@ -665,7 +718,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           type="button"
           class="rounded bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="!canGenerate"
-          :title="store.missingPenSlots.length ? t('preflight.missingPens', { slots: store.missingPenSlots.join(', ') }) : ''"
+          :title="
+            store.missingPenSlots.length
+              ? t('preflight.missingPens', { slots: store.missingPenSlots.join(', ') })
+              : ''
+          "
           @click="generateAndShow"
         >
           {{ store.generating ? t('layers.generating') : t('layers.generate') }}
@@ -676,7 +733,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     <div
       ref="container"
       class="relative min-h-0 flex-1 overflow-hidden rounded border select-none"
-      :class="dragOver ? 'border-emerald-400 bg-emerald-950/30' : 'border-slate-700 bg-slate-900/40'"
+      :class="
+        dragOver ? 'border-emerald-400 bg-emerald-950/30' : 'border-slate-700 bg-slate-900/40'
+      "
       :style="{ touchAction: 'none', cursor: containerCursor }"
       @wheel="onWheel"
       @pointerdown="onPointerDown"
@@ -690,7 +749,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
     >
       <div
         class="absolute inset-0"
-        :style="{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})`, transformOrigin: '50% 50%' }"
+        :style="{
+          transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+          transformOrigin: '50% 50%',
+        }"
       >
         <svg
           ref="svgEl"
@@ -839,11 +901,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               :width="rp.footprint.x_max - rp.footprint.x_min"
               :height="rp.footprint.y_max - rp.footprint.y_min"
               fill="transparent"
-              :stroke="rp.exceeds ? '#dc2626' : store.selectedPlacementId === rp.placement.id ? '#10b981' : '#475569'"
+              :stroke="
+                rp.exceeds
+                  ? '#dc2626'
+                  : store.selectedPlacementId === rp.placement.id
+                    ? '#10b981'
+                    : '#475569'
+              "
               :stroke-width="store.selectedPlacementId === rp.placement.id ? 2 : 1"
               :stroke-dasharray="store.selectedPlacementId === rp.placement.id ? undefined : '4 3'"
               vector-effect="non-scaling-stroke"
-              style="cursor: grab;"
+              style="cursor: grab"
               @pointerdown="(e) => startMoveDrawing(e, rp.placement.id)"
               @dblclick="(e) => onPlacementDblClick(e, rp.placement.id)"
             />
@@ -853,13 +921,34 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               fill="#0f172a"
               stroke-width="1.5"
             >
-              <template v-for="h in (['nw','n','ne','e','se','s','sw','w'] as const)" :key="h">
+              <template v-for="h in ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const" :key="h">
                 <circle
-                  :cx="h.includes('w') ? rp.footprint.x_min : h.includes('e') ? rp.footprint.x_max : (rp.footprint.x_min + rp.footprint.x_max) / 2"
-                  :cy="h.includes('n') ? rp.footprint.y_min : h.includes('s') ? rp.footprint.y_max : (rp.footprint.y_min + rp.footprint.y_max) / 2"
+                  :cx="
+                    h.includes('w')
+                      ? rp.footprint.x_min
+                      : h.includes('e')
+                        ? rp.footprint.x_max
+                        : (rp.footprint.x_min + rp.footprint.x_max) / 2
+                  "
+                  :cy="
+                    h.includes('n')
+                      ? rp.footprint.y_min
+                      : h.includes('s')
+                        ? rp.footprint.y_max
+                        : (rp.footprint.y_min + rp.footprint.y_max) / 2
+                  "
                   r="5"
                   vector-effect="non-scaling-stroke"
-                  :style="{ cursor: (h === 'n' || h === 's') ? 'ns-resize' : (h === 'e' || h === 'w') ? 'ew-resize' : (h === 'nw' || h === 'se') ? 'nwse-resize' : 'nesw-resize' }"
+                  :style="{
+                    cursor:
+                      h === 'n' || h === 's'
+                        ? 'ns-resize'
+                        : h === 'e' || h === 'w'
+                          ? 'ew-resize'
+                          : h === 'nw' || h === 'se'
+                            ? 'nwse-resize'
+                            : 'nesw-resize',
+                  }"
                   @pointerdown="(e) => startResize(h, e, rp.placement.id)"
                 />
               </template>
@@ -871,30 +960,27 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               width="240"
               height="22"
             >
-              <div
-                xmlns="http://www.w3.org/1999/xhtml"
-                class="flex items-center justify-end gap-1"
-              >
+              <div xmlns="http://www.w3.org/1999/xhtml" class="flex items-center justify-end gap-1">
                 <select
                   v-if="placementPageCount(rp.placement) > 1"
                   class="max-w-[100px] truncate rounded border border-sky-600 bg-sky-950 px-1 py-0.5 text-[11px] text-sky-100 shadow focus:outline-none focus:ring-1 focus:ring-sky-400"
                   :value="placementCurrentPage(rp.placement)"
-                  :title="t('upload.pageOf', {
-                    current: placementCurrentPage(rp.placement) + 1,
-                    total: placementPageCount(rp.placement),
-                  })"
+                  :title="
+                    t('upload.pageOf', {
+                      current: placementCurrentPage(rp.placement) + 1,
+                      total: placementPageCount(rp.placement),
+                    })
+                  "
                   :disabled="store.loading"
                   @change="(e) => onPageChange(e, rp.placement.id)"
                   @pointerdown.stop
                   @click.stop
                   @dblclick.stop
                 >
-                  <option
-                    v-for="n in placementPageCount(rp.placement)"
-                    :key="n - 1"
-                    :value="n - 1"
-                  >
-                    {{ t('upload.pageOf', { current: n, total: placementPageCount(rp.placement) }) }}
+                  <option v-for="n in placementPageCount(rp.placement)" :key="n - 1" :value="n - 1">
+                    {{
+                      t('upload.pageOf', { current: n, total: placementPageCount(rp.placement) })
+                    }}
                   </option>
                 </select>
                 <select

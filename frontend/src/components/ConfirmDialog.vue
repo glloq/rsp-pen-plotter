@@ -28,7 +28,9 @@ const state = useConfirmState()
         <button
           type="button"
           class="rounded px-4 py-2 text-sm font-medium text-white"
-          :class="state.danger ? 'bg-red-700 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-500'"
+          :class="
+            state.danger ? 'bg-red-700 hover:bg-red-600' : 'bg-emerald-600 hover:bg-emerald-500'
+          "
           @click="resolveConfirm(true)"
         >
           {{ state.confirmLabel }}

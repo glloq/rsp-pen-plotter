@@ -44,11 +44,7 @@ function setPenForAll(slot: number): void {
 
 function applyStyleToAll(style: PrintStyle): void {
   for (const id of selectedIds.value) {
-    void store.applyLayerAlgorithm(
-      id,
-      style.defaultAlgorithm,
-      { ...style.defaultAlgorithmOptions },
-    )
+    void store.applyLayerAlgorithm(id, style.defaultAlgorithm, { ...style.defaultAlgorithmOptions })
   }
   showStyle.value = false
 }
@@ -70,6 +66,16 @@ function clearSelection(): void {
   showPen.value = false
   showStyle.value = false
 }
+
+function togglePen(): void {
+  showPen.value = !showPen.value
+  showStyle.value = false
+}
+
+function toggleStyle(): void {
+  showStyle.value = !showStyle.value
+  showPen.value = false
+}
 </script>
 
 <template>
@@ -86,7 +92,7 @@ function clearSelection(): void {
       <button
         type="button"
         class="rounded border border-emerald-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-emerald-500"
-        @click="showPen = !showPen; showStyle = false"
+        @click="togglePen"
       >
         {{ t('layers.bulkPen') }} ▾
       </button>
@@ -94,11 +100,7 @@ function clearSelection(): void {
         v-if="showPen"
         class="absolute left-0 top-full z-20 mt-1 w-64 rounded border border-slate-700 bg-slate-900 p-2 shadow-lg"
       >
-        <PenSlotPicker
-          :model-value="-1"
-          :show-label="false"
-          @update:model-value="setPenForAll"
-        />
+        <PenSlotPicker :model-value="-1" :show-label="false" @update:model-value="setPenForAll" />
       </div>
     </div>
 
@@ -107,7 +109,7 @@ function clearSelection(): void {
       <button
         type="button"
         class="rounded border border-emerald-700 bg-slate-900 px-2 py-0.5 text-slate-200 hover:border-emerald-500"
-        @click="showStyle = !showStyle; showPen = false"
+        @click="toggleStyle"
       >
         {{ t('layers.bulkStyle') }} ▾
       </button>

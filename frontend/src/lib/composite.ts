@@ -129,10 +129,7 @@ function transformBbox(box: BoundingBox, chunk: PlacementChunk): BoundingBox {
   return { x_min, y_min, x_max, y_max }
 }
 
-function extractPlacementChunk(
-  parser: DOMParser,
-  p: PlacementSnapshot,
-): PlacementChunk | null {
+function extractPlacementChunk(parser: DOMParser, p: PlacementSnapshot): PlacementChunk | null {
   const doc = parser.parseFromString(p.svg, 'image/svg+xml')
   if (doc.querySelector('parsererror')) return null
   const root = doc.documentElement
@@ -225,13 +222,13 @@ function extractPlacementChunk(
   for (const child of Array.from(root.children)) {
     if (!(child instanceof Element)) continue
     if (child.tagName.toLowerCase() === 'g') {
-      const label
-        = child.getAttribute('inkscape:label')
-        ?? child.getAttributeNS(INKSCAPE_NS, 'label')
-        ?? null
+      const label =
+        child.getAttribute('inkscape:label') ?? child.getAttributeNS(INKSCAPE_NS, 'label') ?? null
       if (label) {
         if (p.visibility[label] === false) continue
-        chunks.push(serializeLabeledGroup(child, compositeLayerId(p.id, label), transformAttr, p.id))
+        chunks.push(
+          serializeLabeledGroup(child, compositeLayerId(p.id, label), transformAttr, p.id),
+        )
         continue
       }
     }
@@ -244,11 +241,11 @@ function extractPlacementChunk(
   if (unlabeled.length && p.visibility['layer-1'] !== false) {
     const synthLabel = compositeLayerId(p.id, 'layer-1')
     chunks.push(
-      `<g inkscape:label="${escapeAttr(synthLabel)}" `
-      + `data-placement-id="${escapeAttr(p.id)}" `
-      + `transform="${transformAttr}">`
-      + unlabeled.join('')
-      + '</g>',
+      `<g inkscape:label="${escapeAttr(synthLabel)}" ` +
+        `data-placement-id="${escapeAttr(p.id)}" ` +
+        `transform="${transformAttr}">` +
+        unlabeled.join('') +
+        '</g>',
     )
   }
 
@@ -290,9 +287,7 @@ function serializeLabeledGroup(
   }
   attrs.push(`inkscape:label="${escapeAttr(newLabel)}"`)
   attrs.push(`data-placement-id="${escapeAttr(placementId)}"`)
-  const composed = existingTransform
-    ? `${outerTransform} ${existingTransform}`
-    : outerTransform
+  const composed = existingTransform ? `${outerTransform} ${existingTransform}` : outerTransform
   attrs.push(`transform="${escapeAttr(composed)}"`)
   const inner = Array.from(el.childNodes)
     .map((node) => serializeNode(node))
@@ -330,8 +325,8 @@ function escapeText(value: string): string {
 
 function openSvg(x: number, y: number, w: number, h: number): string {
   return (
-    `<svg xmlns="${SVG_NS}" xmlns:inkscape="${INKSCAPE_NS}" `
-    + `viewBox="${x} ${y} ${w} ${h}" width="${w}mm" height="${h}mm">`
+    `<svg xmlns="${SVG_NS}" xmlns:inkscape="${INKSCAPE_NS}" ` +
+    `viewBox="${x} ${y} ${w} ${h}" width="${w}mm" height="${h}mm">`
   )
 }
 

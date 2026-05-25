@@ -81,15 +81,38 @@ const FONT_LABELS: Record<string, string> = {
 // without scrolling. Specialty / symbol fonts drop to the bottom but
 // stay listed in case the source contains glyphs from them.
 const PREFERRED_ORDER = [
-  'futural', 'futuram',
-  'rowmans', 'rowmand', 'rowmant',
-  'timesr', 'timesrb', 'timesi', 'timesib', 'timesg',
-  'scripts', 'scriptc', 'cursive',
-  'gothiceng', 'gothicger', 'gothicita', 'gothgbt', 'gothgrt', 'gothitt',
-  'greek', 'greekc', 'greeks',
-  'cyrillic', 'cyrilc_1', 'japanese',
-  'mathlow', 'mathupp', 'symbolic',
-  'astrology', 'meteorology', 'music', 'markers',
+  'futural',
+  'futuram',
+  'rowmans',
+  'rowmand',
+  'rowmant',
+  'timesr',
+  'timesrb',
+  'timesi',
+  'timesib',
+  'timesg',
+  'scripts',
+  'scriptc',
+  'cursive',
+  'gothiceng',
+  'gothicger',
+  'gothicita',
+  'gothgbt',
+  'gothgrt',
+  'gothitt',
+  'greek',
+  'greekc',
+  'greeks',
+  'cyrillic',
+  'cyrilc_1',
+  'japanese',
+  'mathlow',
+  'mathupp',
+  'symbolic',
+  'astrology',
+  'meteorology',
+  'music',
+  'markers',
 ]
 
 interface FontOption {
@@ -179,11 +202,9 @@ function sortedFonts(fonts: string[]): FontOption[] {
           v-model="typo.font"
           class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
         >
-          <option
-            v-for="opt in sortedFonts(fonts)"
-            :key="opt.value"
-            :value="opt.value"
-          >{{ opt.label }}</option>
+          <option v-for="opt in sortedFonts(fonts)" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </option>
         </select>
       </label>
 

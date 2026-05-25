@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from pen_plotter.api import rerender as rerender_module
-from pen_plotter.converters.bitmap import BitmapConverter, BitmapOptions, SegmentationResult
+from pen_plotter.converters.bitmap import BitmapOptions, SegmentationResult
 from pen_plotter.main import app
 
 
@@ -218,11 +218,12 @@ def test_rerender_rehydrates_from_disk_after_cache_eviction(
     rehydration path reads ``original.png`` + ``meta.bitmap_options`` from
     the library on demand.
     """
+    from sqlmodel import Session, delete
+
     from pen_plotter.api import files as files_module
     from pen_plotter.converters.defaults import register_default_converters
     from pen_plotter.converters.registry import registry as _registry
     from pen_plotter.persistence import FileRecord, engine
-    from sqlmodel import Session, delete
 
     register_default_converters(_registry)
     # Isolate library storage to the test's tmp_path so the seeded upload
@@ -283,11 +284,12 @@ def test_rerender_404_for_vector_source(client: TestClient, tmp_path, monkeypatc
     produce a bitmap segmentation, so the frontend knows to hide the
     algorithm picker rather than silently doing nothing.
     """
+    from sqlmodel import Session, delete
+
     from pen_plotter.api import files as files_module
     from pen_plotter.converters.defaults import register_default_converters
     from pen_plotter.converters.registry import registry as _registry
     from pen_plotter.persistence import FileRecord, engine
-    from sqlmodel import Session, delete
 
     register_default_converters(_registry)
     monkeypatch.setattr(files_module, "FILES_DIR", tmp_path / "files")
@@ -330,11 +332,12 @@ def test_reupload_with_changed_options_reprocesses_in_place(
     /files endpoint used to dedup-by-hash unconditionally, returning
     the prior conversion and dropping the new options on the floor.
     """
+    from sqlmodel import Session, delete
+
     from pen_plotter.api import files as files_module
     from pen_plotter.converters.defaults import register_default_converters
     from pen_plotter.converters.registry import registry as _registry
     from pen_plotter.persistence import FileRecord, engine
-    from sqlmodel import Session, delete
 
     register_default_converters(_registry)
     monkeypatch.setattr(files_module, "FILES_DIR", tmp_path / "files")
@@ -399,11 +402,12 @@ def test_reupload_without_options_keeps_dedup_silent(
     no-op and risk shifting palette indices on the operator's other
     placements of the same file.
     """
+    from sqlmodel import Session, delete
+
     from pen_plotter.api import files as files_module
     from pen_plotter.converters.defaults import register_default_converters
     from pen_plotter.converters.registry import registry as _registry
     from pen_plotter.persistence import FileRecord, engine
-    from sqlmodel import Session, delete
 
     register_default_converters(_registry)
     monkeypatch.setattr(files_module, "FILES_DIR", tmp_path / "files")

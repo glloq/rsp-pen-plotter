@@ -45,7 +45,10 @@ export const useToastStore = defineStore('toasts', () => {
     const id = nextId++
     toasts.value = [...toasts.value, { id, kind, message, ttl, action }]
     if (ttl > 0) {
-      timers.set(id, setTimeout(() => dismiss(id), ttl))
+      timers.set(
+        id,
+        setTimeout(() => dismiss(id), ttl),
+      )
     }
     return id
   }
@@ -75,11 +78,12 @@ export const useToastStore = defineStore('toasts', () => {
       clearTimeout(timer)
       timers.delete(id)
     }
-    toasts.value = toasts.value.map((t) =>
-      t.id === id ? { ...t, kind, message, ttl } : t,
-    )
+    toasts.value = toasts.value.map((t) => (t.id === id ? { ...t, kind, message, ttl } : t))
     if (ttl > 0) {
-      timers.set(id, setTimeout(() => dismiss(id), ttl))
+      timers.set(
+        id,
+        setTimeout(() => dismiss(id), ttl),
+      )
     }
     return id
   }

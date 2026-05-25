@@ -48,10 +48,7 @@ function selectLevel(value: number): void {
 // blindly clicking Ultra. Returns "" until enough samples exist so the
 // chip stays clean on first contact.
 function tierEstimateMs(tierValue: number): number {
-  const ms = costEstimator.estimateMs(
-    draft.bitmap.value.algorithm,
-    edit.previewQuality.value,
-  )
+  const ms = costEstimator.estimateMs(draft.bitmap.value.algorithm, edit.previewQuality.value)
   const current = Math.max(1, props.modelValue)
   const ratio = (tierValue / current) ** 2
   return ms * ratio
@@ -79,10 +76,7 @@ const tierEstimates = computed(() =>
 
 <template>
   <div class="space-y-1">
-    <p
-      v-if="showLabel !== false"
-      class="text-[10px] uppercase tracking-wider text-slate-400"
-    >
+    <p v-if="showLabel !== false" class="text-[10px] uppercase tracking-wider text-slate-400">
       {{ t('mono.detail') }}
     </p>
     <div class="grid grid-cols-5 gap-1">
@@ -91,9 +85,11 @@ const tierEstimates = computed(() =>
         :key="level.id"
         type="button"
         class="flex flex-col items-center rounded border px-2 py-1.5 text-[11px] leading-tight transition"
-        :class="currentDetail() === level.id
-          ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+        :class="
+          currentDetail() === level.id
+            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+        "
         @click="selectLevel(level.value)"
       >
         <span>{{ t(level.labelKey) }}</span>
@@ -102,7 +98,8 @@ const tierEstimates = computed(() =>
           v-if="tierEstimates[i]?.label"
           class="text-[9px] font-mono"
           :class="tierEstimates[i]?.klass"
-        >{{ tierEstimates[i]?.label }}</span>
+          >{{ tierEstimates[i]?.label }}</span
+        >
       </button>
     </div>
     <p class="text-[10px] text-slate-500">{{ hint ?? t('mono.detailHint') }}</p>

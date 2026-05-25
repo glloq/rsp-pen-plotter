@@ -15,9 +15,24 @@ export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 // drag-and-drop (which bypasses the browser's accept filter) can run the
 // same check.
 export const ACCEPTED_EXTENSIONS = new Set([
-  'svg', 'png', 'jpg', 'jpeg', 'tiff', 'webp', 'heic',
-  'pdf', 'dxf', 'eps', 'ps', 'ai',
-  'txt', 'md', 'html', 'docx', 'odt', 'rtf',
+  'svg',
+  'png',
+  'jpg',
+  'jpeg',
+  'tiff',
+  'webp',
+  'heic',
+  'pdf',
+  'dxf',
+  'eps',
+  'ps',
+  'ai',
+  'txt',
+  'md',
+  'html',
+  'docx',
+  'odt',
+  'rtf',
 ])
 
 export interface UploadValidationError {

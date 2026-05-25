@@ -50,9 +50,7 @@ const HIDDEN_BY_LAYER: Map<string, Record<number, boolean>> = reactive(new Map()
 
 // Available algorithms in the stack picker — everything in the
 // registry except ``direct`` (stacking direct on top is a no-op visually).
-const algoChoices = computed(() =>
-  Object.values(ALGORITHMS).filter((a) => a.id !== 'direct'),
-)
+const algoChoices = computed(() => Object.values(ALGORITHMS).filter((a) => a.id !== 'direct'))
 
 // Per-row expanded toggle for the params form. Default collapsed so
 // a tall stack stays scannable; the operator opens the row they want
@@ -97,7 +95,10 @@ function pushUpdate(next: LayerPass[]): void {
 // for upstream-visible mutations like add/remove/reorder. The hidden
 // filter is reapplied on the next emit.
 function pushRaw(next: LayerPass[]): void {
-  emit('update', next.filter((_, i) => !hidden.value[i]))
+  emit(
+    'update',
+    next.filter((_, i) => !hidden.value[i]),
+  )
 }
 
 // Two-way binding for vuedraggable. ``draggablePasses`` is the model
@@ -188,15 +189,24 @@ const passPresets: PassPreset[] = [
     labelKey: 'passes.presetOutlineFill',
     passes: [
       { algorithm: 'edges', algorithm_options: { stroke_width: 0.8 } },
-      { algorithm: 'crosshatch', algorithm_options: { angle_deg: 45, spacing_px: 4, crossed: false } },
+      {
+        algorithm: 'crosshatch',
+        algorithm_options: { angle_deg: 45, spacing_px: 4, crossed: false },
+      },
     ],
   },
   {
     id: 'crossed-hatch',
     labelKey: 'passes.presetCrossedHatch',
     passes: [
-      { algorithm: 'crosshatch', algorithm_options: { angle_deg: 45, spacing_px: 4, crossed: false } },
-      { algorithm: 'crosshatch', algorithm_options: { angle_deg: 135, spacing_px: 4, crossed: false } },
+      {
+        algorithm: 'crosshatch',
+        algorithm_options: { angle_deg: 45, spacing_px: 4, crossed: false },
+      },
+      {
+        algorithm: 'crosshatch',
+        algorithm_options: { angle_deg: 135, spacing_px: 4, crossed: false },
+      },
     ],
   },
   {
@@ -212,10 +222,12 @@ const passPresets: PassPreset[] = [
 function applyPreset(preset: PassPreset): void {
   hidden.value = {}
   expanded.value = {}
-  pushRaw(preset.passes.map((p) => ({
-    algorithm: p.algorithm,
-    algorithm_options: { ...p.algorithm_options },
-  })))
+  pushRaw(
+    preset.passes.map((p) => ({
+      algorithm: p.algorithm,
+      algorithm_options: { ...p.algorithm_options },
+    })),
+  )
 }
 
 function clearAll(): void {
@@ -227,7 +239,9 @@ function clearAll(): void {
 
 <template>
   <div class="space-y-2 rounded border border-slate-700 bg-slate-900/40 p-2">
-    <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
+    <div
+      class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500"
+    >
       <span>{{ t('passes.title') }}</span>
       <span v-if="passes.length" class="text-slate-600">{{ passes.length }}</span>
     </div>
@@ -289,21 +303,26 @@ function clearAll(): void {
               class="pass-handle cursor-grab rounded px-1 py-0.5 text-[12px] text-slate-500 hover:bg-slate-800 hover:text-slate-300 active:cursor-grabbing"
               :title="t('passes.dragHandle')"
               tabindex="-1"
-            >⠿</button>
+            >
+              ⠿
+            </button>
             <button
               type="button"
               class="rounded px-1 py-0.5 text-[11px] hover:bg-slate-800"
               :class="hidden[i] ? 'text-amber-500' : 'text-slate-300'"
               :title="hidden[i] ? t('passes.show') : t('passes.hide')"
               @click="toggleHidden(i)"
-            >{{ hidden[i] ? '◌' : '●' }}</button>
+            >
+              {{ hidden[i] ? '◌' : '●' }}
+            </button>
             <span class="relative inline-flex">
               <StyleThumbnail :algorithm="pass.algorithm" size="sm" />
               <span
                 v-if="hidden[i]"
                 class="pointer-events-none absolute inset-0 flex items-center justify-center text-[14px] font-bold leading-none text-amber-400"
                 aria-hidden="true"
-              >⊘</span>
+                >⊘</span
+              >
             </span>
             <select
               :value="pass.algorithm"
@@ -322,19 +341,25 @@ function clearAll(): void {
               :class="expanded[i] ? 'text-emerald-300' : ''"
               :title="t('passes.toggleOptions')"
               @click="toggleExpanded(i)"
-            >⚙</button>
+            >
+              ⚙
+            </button>
             <button
               type="button"
               class="rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-300 hover:bg-slate-700"
               :title="t('passes.duplicate')"
               @click="duplicatePass(i)"
-            >⎘</button>
+            >
+              ⎘
+            </button>
             <button
               type="button"
               class="rounded bg-slate-800 px-1 py-0.5 text-[10px] text-rose-300 hover:bg-rose-900/60"
               :title="t('passes.remove')"
               @click="removePass(i)"
-            >✕</button>
+            >
+              ✕
+            </button>
           </div>
 
           <!-- Per-pass parameter form — collapsed by default so a tall

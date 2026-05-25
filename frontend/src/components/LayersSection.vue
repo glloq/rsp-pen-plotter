@@ -28,9 +28,7 @@ function groupLayersByPen(): void {
 // whole drawing prints in one ink, without re-uploading. Useful when
 // the user picked multi-colour at upload but then realised they only
 // have one pen to swap manually.
-const canMergeToOnePen = computed(
-  () => store.layers.some((l) => l.target_pen_slot !== 0),
-)
+const canMergeToOnePen = computed(() => store.layers.some((l) => l.target_pen_slot !== 0))
 
 function mergeToOnePen(): void {
   for (const layer of store.layers) {
@@ -59,7 +57,10 @@ const selection = createLayerSelection()
 provide(LayerSelectionKey, selection)
 // Drop the selection whenever the layer set itself changes (re-upload,
 // placement switch) so stale ids don't leak into bulk operations.
-watch(() => store.layers.map((l) => l.layer_id).join(','), () => selection.clear())
+watch(
+  () => store.layers.map((l) => l.layer_id).join(','),
+  () => selection.clear(),
+)
 
 // Estimation footer for the layer set: total path length + duration so
 // the operator sees the cost of the current layer choices at a glance.
@@ -73,15 +74,11 @@ function formatDuration(seconds: number): string {
   return `${mins}m ${secs.toString().padStart(2, '0')}s`
 }
 
-const totalLength = computed(() =>
-  store.layers.reduce((s, l) => s + l.total_length_mm, 0),
-)
+const totalLength = computed(() => store.layers.reduce((s, l) => s + l.total_length_mm, 0))
 const totalDuration = computed(() =>
   store.layers.reduce((s, l) => s + store.layerDurationSeconds(l), 0),
 )
-const totalPaths = computed(() =>
-  store.layers.reduce((s, l) => s + l.path_count, 0),
-)
+const totalPaths = computed(() => store.layers.reduce((s, l) => s + l.path_count, 0))
 </script>
 
 <template>
@@ -90,7 +87,9 @@ const totalPaths = computed(() =>
       <h2 class="text-xs uppercase tracking-wider text-slate-500">
         {{ t('layers.title') }}<span v-if="store.layers.length"> ({{ store.layers.length }})</span>
       </h2>
-      <span v-if="store.layers.length" class="text-[10px] text-slate-600">{{ t('layers.dragHint') }}</span>
+      <span v-if="store.layers.length" class="text-[10px] text-slate-600">{{
+        t('layers.dragHint')
+      }}</span>
     </div>
 
     <!-- Empty state: the section stays visible before conversion so the

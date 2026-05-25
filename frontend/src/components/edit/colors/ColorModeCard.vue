@@ -25,9 +25,11 @@ const { t } = useI18n()
       <button
         type="button"
         class="rounded border px-2 py-1.5 text-left text-[11px] transition"
-        :class="mode === 'multicolor'
-          ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+        :class="
+          mode === 'multicolor'
+            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+        "
         @click="emit('update:mode', 'multicolor')"
       >
         <span class="block font-medium">{{ t('printMode.multicolor') }}</span>
@@ -36,9 +38,11 @@ const { t } = useI18n()
       <button
         type="button"
         class="rounded border px-2 py-1.5 text-left text-[11px] transition"
-        :class="mode === 'monochrome'
-          ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+        :class="
+          mode === 'monochrome'
+            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+        "
         @click="emit('update:mode', 'monochrome')"
       >
         <span class="block font-medium">{{ t('printMode.monochrome') }}</span>

@@ -45,12 +45,12 @@ function layer(layer_id: string): LayerInfo {
 }
 
 function snapshot(id: string, x: number, y: number, w = 100, h = 100): PlacementSnapshot {
-  const svg
-    = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
-    + 'viewBox="0 0 100 100">'
-    + '<g inkscape:label="color-ff0000"><rect width="50" height="50" /></g>'
-    + '<g inkscape:label="color-00ff00"><rect width="20" height="20" /></g>'
-    + '</svg>'
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" ' +
+    'viewBox="0 0 100 100">' +
+    '<g inkscape:label="color-ff0000"><rect width="50" height="50" /></g>' +
+    '<g inkscape:label="color-00ff00"><rect width="20" height="20" /></g>' +
+    '</svg>'
   return {
     id,
     svg,
@@ -88,10 +88,7 @@ describe('buildComposite', () => {
   })
 
   it('keeps layer ids unique across placements', () => {
-    const result = buildComposite(
-      [snapshot('p1', 0, 0), snapshot('p2', 200, 0)],
-      profile(),
-    )
+    const result = buildComposite([snapshot('p1', 0, 0), snapshot('p2', 200, 0)], profile())
     const ids = result.layers.map((l) => l.layer_id)
     expect(new Set(ids).size).toBe(ids.length)
     expect(ids).toContain('p1__color-ff0000')
@@ -133,7 +130,9 @@ describe('buildComposite', () => {
     snap.flip_h = true
     const result = buildComposite([snap], profile())
     // matrix(a b c d e f) — flipping H makes ``a`` negative.
-    const match = result.svg.match(/matrix\(([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+)\)/)
+    const match = result.svg.match(
+      /matrix\(([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+) ([-0-9.]+)\)/,
+    )
     expect(match).toBeTruthy()
     const [, a, , , d] = match!.map(Number)
     expect(a).toBeLessThan(0)
@@ -180,9 +179,9 @@ describe('buildComposite', () => {
     const snap: PlacementSnapshot = {
       id: 'p1',
       svg:
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-        + '<path d="M0 0 L100 100"/>'
-        + '</svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+        '<path d="M0 0 L100 100"/>' +
+        '</svg>',
       layers: [{ ...layer('layer-1'), bbox: { x_min: 0, y_min: 0, x_max: 100, y_max: 100 } }],
       source_bbox: { x_min: 0, y_min: 0, x_max: 100, y_max: 100 },
       visibility: { 'layer-1': true },

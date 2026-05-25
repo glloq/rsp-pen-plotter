@@ -49,7 +49,7 @@ function onSimplifyChange(event: Event): void {
     <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
       <DetailPicker
         :model-value="bitmap.max_dimension_px"
-        @update:model-value="(v) => bitmap.max_dimension_px = v"
+        @update:model-value="(v) => (bitmap.max_dimension_px = v)"
       />
 
       <div class="border-t border-slate-700 pt-3 space-y-3">
@@ -106,7 +106,9 @@ function onSimplifyChange(event: Event): void {
           <span class="flex-1">
             <span class="block font-medium">
               {{ t('svg.curveFit') }}
-              <span class="ml-1 rounded bg-slate-700 px-1 py-px font-mono text-[9px] text-slate-300">
+              <span
+                class="ml-1 rounded bg-slate-700 px-1 py-px font-mono text-[9px] text-slate-300"
+              >
                 {{ t('svg.curveFitTodo') }}
               </span>
             </span>
@@ -119,10 +121,7 @@ function onSimplifyChange(event: Event): void {
     </div>
 
     <!-- Segmentation method (how the bitmap gets split into masks) -->
-    <SegmentationMethodCard
-      :bitmap="bitmap"
-      :is-document="fm.kind.value === 'document'"
-    />
+    <SegmentationMethodCard :bitmap="bitmap" :is-document="fm.kind.value === 'document'" />
   </section>
 
   <p v-else-if="!fm.hasSource.value" class="text-[11px] text-slate-500">

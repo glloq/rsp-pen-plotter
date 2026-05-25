@@ -6,11 +6,7 @@ import { useJobStore } from '../../stores/job'
 import { useEditState } from '../../composables/useEditState'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
 import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimator'
-import {
-  getAlgorithms,
-  type AlgorithmComplexity,
-  type AlgorithmInfo,
-} from '../../api/client'
+import { getAlgorithms, type AlgorithmComplexity, type AlgorithmInfo } from '../../api/client'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -24,7 +20,11 @@ const costEstimator = usePreviewCostEstimator()
 // undefined, so the chip still renders.
 const algorithmsInfo = ref<AlgorithmInfo[]>([])
 onMounted(async () => {
-  try { algorithmsInfo.value = await getAlgorithms() } catch { /* offline / 404 — fall through */ }
+  try {
+    algorithmsInfo.value = await getAlgorithms()
+  } catch {
+    /* offline / 404 — fall through */
+  }
 })
 const currentComplexity = computed<AlgorithmComplexity>(() => {
   const algo = algorithmsInfo.value.find((a) => a.name === draft.bitmap.value.algorithm)
@@ -146,10 +146,7 @@ function zoomOut(): void {
 
 // Reset zoom/pan when the source content changes so a new file always
 // lands fit-to-view.
-watch(
-  [() => edit.selectedFile.value, () => edit.currentPage.value],
-  resetView,
-)
+watch([() => edit.selectedFile.value, () => edit.currentPage.value], resetView)
 
 // Variant chips in the toolbar mirror the right-pane VariantsCard for
 // quick switching while keeping eyes on the preview.
@@ -182,52 +179,45 @@ const placementSvg = computed(() => {
 // back to the regular SVG flow on every other tab.
 const sourceMode = computed(
   () =>
-    edit.previewMode.value === 'source'
-    && edit.kind.value === 'bitmap'
-    && Boolean(edit.previewUrl.value),
+    edit.previewMode.value === 'source' &&
+    edit.kind.value === 'bitmap' &&
+    Boolean(edit.previewUrl.value),
 )
 // Split mode requires both halves to have content; if either is
 // missing we degrade to whichever single layer is available rather
 // than showing an awkward half-empty pane.
 const hasLiveSvg = computed(() => Boolean(edit?.previewSvg.value))
-const hasRaster = computed(
-  () => edit.kind.value === 'bitmap' && Boolean(edit.previewUrl.value),
-)
+const hasRaster = computed(() => edit.kind.value === 'bitmap' && Boolean(edit.previewUrl.value))
 const splitMode = computed(
   () =>
-    edit.previewMode.value === 'split'
-    && hasRaster.value
-    && (hasLiveSvg.value || Boolean(placementSvg.value)),
+    edit.previewMode.value === 'split' &&
+    hasRaster.value &&
+    (hasLiveSvg.value || Boolean(placementSvg.value)),
 )
-const showLivePreview = computed(
-  () => !sourceMode.value && !splitMode.value && hasLiveSvg.value,
-)
+const showLivePreview = computed(() => !sourceMode.value && !splitMode.value && hasLiveSvg.value)
 const showPlacementSvg = computed(
   () =>
-    !sourceMode.value
-    && !splitMode.value
-    && !showLivePreview.value
-    && Boolean(placementSvg.value),
+    !sourceMode.value && !splitMode.value && !showLivePreview.value && Boolean(placementSvg.value),
 )
 const showSourcePreview = computed(() => sourceMode.value)
 const showSplitPreview = computed(() => splitMode.value)
 const showThumbnail = computed(
   () =>
-    !sourceMode.value
-    && !splitMode.value
-    && !showLivePreview.value
-    && !showPlacementSvg.value
-    && edit?.kind.value === 'bitmap'
-    && Boolean(edit?.previewUrl.value),
+    !sourceMode.value &&
+    !splitMode.value &&
+    !showLivePreview.value &&
+    !showPlacementSvg.value &&
+    edit?.kind.value === 'bitmap' &&
+    Boolean(edit?.previewUrl.value),
 )
 const showTextPreview = computed(
   () =>
-    !sourceMode.value
-    && !splitMode.value
-    && !showLivePreview.value
-    && !showPlacementSvg.value
-    && edit?.kind.value === 'typography'
-    && Boolean(edit?.textPreview.value),
+    !sourceMode.value &&
+    !splitMode.value &&
+    !showLivePreview.value &&
+    !showPlacementSvg.value &&
+    edit?.kind.value === 'typography' &&
+    Boolean(edit?.textPreview.value),
 )
 // Typography sources also drive ``/preview-text`` now, so the live
 // preview path (``showLivePreview``) wins ahead of the raw-text fallback
@@ -235,25 +225,21 @@ const showTextPreview = computed(
 // pane stays as the empty-state placeholder until then.
 const showEmptyHint = computed(
   () =>
-    !sourceMode.value
-    && !splitMode.value
-    && !showLivePreview.value
-    && !showPlacementSvg.value
-    && !showThumbnail.value
-    && !showTextPreview.value,
+    !sourceMode.value &&
+    !splitMode.value &&
+    !showLivePreview.value &&
+    !showPlacementSvg.value &&
+    !showThumbnail.value &&
+    !showTextPreview.value,
 )
 
 // Which SVG should the right half of the split show? Prefer the live
 // /preview (reflects unsaved edits) over the committed placement SVG.
-const splitSvg = computed<string>(() =>
-  edit.previewSvg.value || placementSvg.value,
-)
+const splitSvg = computed<string>(() => edit.previewSvg.value || placementSvg.value)
 
 // Toolbar visibility: only meaningful when the source is a bitmap and
 // both raster + a vector representation could potentially be shown.
-const canToggleMode = computed(
-  () => edit.kind.value === 'bitmap' && hasRaster.value,
-)
+const canToggleMode = computed(() => edit.kind.value === 'bitmap' && hasRaster.value)
 const QUALITY_TIERS: Array<{ id: 'draft' | 'standard' | 'final'; key: string }> = [
   { id: 'draft', key: 'editPreview.qualityDraft' },
   { id: 'standard', key: 'editPreview.qualityStandard' },
@@ -351,12 +337,12 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
   const height = vbMatch ? Math.round(Number(vbMatch[4])) : 0
   // Count the renderer's primitive elements: <path>, <line>, <circle>,
   // <polyline>, <polygon>. Each is roughly one pen stroke.
-  const paths
-    = (svg.match(/<path /g)?.length ?? 0)
-    + (svg.match(/<line /g)?.length ?? 0)
-    + (svg.match(/<circle /g)?.length ?? 0)
-    + (svg.match(/<polyline /g)?.length ?? 0)
-    + (svg.match(/<polygon /g)?.length ?? 0)
+  const paths =
+    (svg.match(/<path /g)?.length ?? 0) +
+    (svg.match(/<line /g)?.length ?? 0) +
+    (svg.match(/<circle /g)?.length ?? 0) +
+    (svg.match(/<polyline /g)?.length ?? 0) +
+    (svg.match(/<polygon /g)?.length ?? 0)
   if (!width && !height && !paths) return null
   return { width, height, paths }
 })
@@ -364,7 +350,9 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
 
 <template>
   <section class="flex h-full min-h-0 flex-col">
-    <header class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-700 bg-slate-900/60 px-3 py-2 text-xs">
+    <header
+      class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-700 bg-slate-900/60 px-3 py-2 text-xs"
+    >
       <div class="flex flex-wrap items-center gap-x-2">
         <span class="uppercase tracking-wide text-slate-400">{{ t('editPreview.title') }}</span>
         <!-- View mode toggle: Auto (default flow), Source (raster +
@@ -382,9 +370,11 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
             :key="m.id"
             type="button"
             class="px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors"
-            :class="edit.previewMode.value === m.id
-              ? 'bg-sky-700 text-white'
-              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'"
+            :class="
+              edit.previewMode.value === m.id
+                ? 'bg-sky-700 text-white'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+            "
             :title="t(`${m.key}Hint`)"
             @click="edit.previewMode.value = m.id"
           >
@@ -405,9 +395,11 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
             :key="q.id"
             type="button"
             class="px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors"
-            :class="edit.previewQuality.value === q.id
-              ? 'bg-emerald-700 text-white'
-              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'"
+            :class="
+              edit.previewQuality.value === q.id
+                ? 'bg-emerald-700 text-white'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+            "
             :title="t(`${q.key}Hint`)"
             @click="edit.previewQuality.value = q.id"
           >
@@ -424,22 +416,26 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
           v-if="showSplitPreview"
           class="rounded-sm border border-violet-700 bg-violet-950/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-violet-300"
           :title="t('editPreview.splitHint')"
-        >{{ t('editPreview.split') }}</span>
+          >{{ t('editPreview.split') }}</span
+        >
         <span
           v-else-if="showSourcePreview"
           class="rounded-sm border border-sky-700 bg-sky-950/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-sky-300"
           :title="t('editPreview.sourceHint')"
-        >{{ t('editPreview.source') }}</span>
+          >{{ t('editPreview.source') }}</span
+        >
         <span
           v-else-if="showLivePreview"
           class="rounded border border-amber-600 bg-amber-900/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-amber-200"
           :title="t('editPreview.livePreviewHint')"
-        >{{ t('editPreview.live') }}</span>
+          >{{ t('editPreview.live') }}</span
+        >
         <span
           v-else-if="showPlacementSvg"
           class="rounded border border-emerald-600 bg-emerald-900/60 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-emerald-200"
           :title="t('editPreview.savedHint')"
-        >{{ t('editPreview.saved') }}</span>
+          >{{ t('editPreview.saved') }}</span
+        >
       </div>
       <div class="flex items-center gap-2">
         <!-- Cost estimate chip. Reads the per-(algorithm, quality) EMA
@@ -452,8 +448,13 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
           v-if="estimatedLabel && edit.kind.value === 'bitmap'"
           class="rounded-sm border px-1.5 py-px font-mono text-[10px]"
           :class="estimateChipClass"
-          :title="t('editPreview.estimateHint', { complexity: t(`editPreview.complexity_${currentComplexity}`) })"
-        >{{ estimatedLabel }}</span>
+          :title="
+            t('editPreview.estimateHint', {
+              complexity: t(`editPreview.complexity_${currentComplexity}`),
+            })
+          "
+          >{{ estimatedLabel }}</span
+        >
         <span class="text-slate-400">{{ statusLabel }}</span>
       </div>
     </header>
@@ -470,9 +471,11 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
         :key="variant.id"
         type="button"
         class="rounded border px-2 py-0.5 text-[11px] transition"
-        :class="variant.id === activeVariantId
-          ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+        :class="
+          variant.id === activeVariantId
+            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+        "
         @click="store.setActiveVariant(variant.id)"
       >
         {{ variant.name }}
@@ -494,7 +497,9 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
         ←
       </button>
       <span class="text-slate-300">
-        {{ t('upload.pageOf', { current: edit.currentPage.value + 1, total: edit.pageCount.value }) }}
+        {{
+          t('upload.pageOf', { current: edit.currentPage.value + 1, total: edit.pageCount.value })
+        }}
       </span>
       <button
         type="button"
@@ -514,9 +519,7 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
     <div
       class="relative min-h-0 flex-1 overflow-hidden bg-white"
       :style="{
-        cursor: showTextPreview || showEmptyHint
-          ? 'default'
-          : panning ? 'grabbing' : 'grab',
+        cursor: showTextPreview || showEmptyHint ? 'default' : panning ? 'grabbing' : 'grab',
         touchAction: 'none',
       }"
       @wheel="onWheel"
@@ -526,10 +529,7 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
       @pointercancel="onPanEnd"
       @dblclick="resetView"
     >
-      <div
-        class="absolute inset-0 flex items-center justify-center p-3"
-        :style="contentStyle"
-      >
+      <div class="absolute inset-0 flex items-center justify-center p-3" :style="contentStyle">
         <!-- Source-pixel preview: the raw raster with the operator's
              preprocess adjustments overlaid via CSS filters /
              transforms / clip-path. Active on the Image tab so the
@@ -551,7 +551,10 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
                unmistakable while the operator dials in the crop. -->
           <template v-if="cropOverlay">
             <div class="pointer-events-none absolute inset-0">
-              <div class="absolute inset-x-0 top-0 bg-black/55" :style="{ height: cropOverlay.y }" />
+              <div
+                class="absolute inset-x-0 top-0 bg-black/55"
+                :style="{ height: cropOverlay.y }"
+              />
               <div
                 class="absolute inset-x-0 bottom-0 bg-black/55"
                 :style="{
@@ -613,14 +616,22 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
             />
             <template v-if="cropOverlay">
               <div class="pointer-events-none absolute inset-0">
-                <div class="absolute inset-x-0 top-0 bg-black/55" :style="{ height: cropOverlay.y }" />
+                <div
+                  class="absolute inset-x-0 top-0 bg-black/55"
+                  :style="{ height: cropOverlay.y }"
+                />
                 <div
                   class="absolute inset-x-0 bottom-0 bg-black/55"
                   :style="{ top: `calc(${cropOverlay.y} + ${cropOverlay.h})` }"
                 />
                 <div
                   class="absolute bg-black/55"
-                  :style="{ top: cropOverlay.y, left: 0, width: cropOverlay.x, height: cropOverlay.h }"
+                  :style="{
+                    top: cropOverlay.y,
+                    left: 0,
+                    width: cropOverlay.x,
+                    height: cropOverlay.h,
+                  }"
                 />
                 <div
                   class="absolute bg-black/55"
@@ -655,13 +666,17 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
                drag handle in v1 — we revisit if operators ask). The
                labels float above the canvas so they survive the
                clip-paths. -->
-          <div class="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-400/70" />
+          <div
+            class="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-400/70"
+          />
           <span
             class="pointer-events-none absolute left-2 top-2 rounded-sm bg-slate-900/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-slate-200"
-          >{{ t('editPreview.source') }}</span>
+            >{{ t('editPreview.source') }}</span
+          >
           <span
             class="pointer-events-none absolute right-2 top-2 rounded-sm bg-slate-900/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-slate-200"
-          >{{ t('editPreview.vector') }}</span>
+            >{{ t('editPreview.vector') }}</span
+          >
         </div>
         <!-- Vectorised placement SVG: the post-upload state, updated by
              /rerender when layer algorithms change. -->
@@ -715,19 +730,25 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
           class="h-6 w-6 rounded bg-slate-800 hover:bg-slate-700"
           :title="t('editPreview.zoomIn')"
           @click="zoomIn"
-        >+</button>
+        >
+          +
+        </button>
         <button
           type="button"
           class="h-6 w-6 rounded bg-slate-800 hover:bg-slate-700"
           :title="t('editPreview.zoomOut')"
           @click="zoomOut"
-        >−</button>
+        >
+          −
+        </button>
         <button
           type="button"
           class="h-6 w-6 rounded bg-slate-800 text-[10px] hover:bg-slate-700"
           :title="t('editPreview.resetView')"
           @click="resetView"
-        >{{ Math.round(zoom * 100) }}</button>
+        >
+          {{ Math.round(zoom * 100) }}
+        </button>
       </div>
 
       <!-- Loading bar + cancel button overlay. The animated bar at the
@@ -775,8 +796,8 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
       class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-700 bg-slate-900/60 px-3 py-1.5 text-[10px] text-slate-500"
     >
       <span v-if="svgStats" class="font-mono text-slate-400">
-        {{ svgStats.width }} × {{ svgStats.height }}
-        · {{ svgStats.paths }} {{ t('editPreview.paths') }}
+        {{ svgStats.width }} × {{ svgStats.height }} · {{ svgStats.paths }}
+        {{ t('editPreview.paths') }}
       </span>
       <template v-if="edit && edit.previewPalette.value.length">
         <span class="uppercase tracking-wider">{{ t('editPreview.palette') }}</span>

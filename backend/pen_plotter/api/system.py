@@ -14,7 +14,6 @@ from pen_plotter import __version__
 from pen_plotter.audit import record
 from pen_plotter.auth import require_api_key
 
-
 router = APIRouter(prefix="/system", tags=["system"], dependencies=[Depends(require_api_key)])
 
 
@@ -171,7 +170,7 @@ async def check_update() -> CheckUpdateResponse:
         )
         try:
             await asyncio.wait_for(fetch.communicate(), timeout=15)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             fetch.kill()
             return CheckUpdateResponse(
                 update_available=False,
@@ -293,7 +292,7 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
         # slow but shouldn't legitimately exceed this. Past that, something is
         # wrong and we'd rather surface the timeout than hang the request.
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=600)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         process.kill()
         record("system.update_timeout")
         raise HTTPException(status_code=504, detail="update timed out after 10 minutes")

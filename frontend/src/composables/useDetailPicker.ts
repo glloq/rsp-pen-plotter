@@ -19,8 +19,8 @@ export type DetailId = 'low' | 'standard' | 'high' | 'max' | 'ultra'
 
 export interface DetailLevel {
   id: DetailId
-  value: number       // pixels — the longer side of the segmentation canvas
-  labelKey: string    // i18n key resolved by consumers
+  value: number // pixels — the longer side of the segmentation canvas
+  labelKey: string // i18n key resolved by consumers
 }
 
 export const DETAIL_LEVELS: readonly DetailLevel[] = [

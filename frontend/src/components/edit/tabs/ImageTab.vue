@@ -59,17 +59,11 @@ function resetPreprocess(): void {
     <TransformCard :preprocess="preprocess" />
   </section>
 
-  <p
-    v-else-if="!fm.hasSource.value"
-    class="text-[11px] text-slate-500"
-  >
+  <p v-else-if="!fm.hasSource.value" class="text-[11px] text-slate-500">
     {{ t('preprocess.noSource') }}
   </p>
 
-  <p
-    v-else
-    class="text-[11px] text-slate-500"
-  >
+  <p v-else class="text-[11px] text-slate-500">
     {{ t('preprocess.notApplicable') }}
   </p>
 </template>

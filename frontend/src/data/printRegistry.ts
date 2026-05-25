@@ -71,8 +71,22 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     id: 'stippling',
     defaults: { density: 0.02, dot_radius_px: 0.6, seed: 0 },
     schema: [
-      { key: 'density', label: 'convert.density', type: 'number', min: 0.001, max: 0.5, step: 0.001 },
-      { key: 'dot_radius_px', label: 'convert.dotRadius', type: 'number', min: 0.1, max: 5, step: 0.1 },
+      {
+        key: 'density',
+        label: 'convert.density',
+        type: 'number',
+        min: 0.001,
+        max: 0.5,
+        step: 0.001,
+      },
+      {
+        key: 'dot_radius_px',
+        label: 'convert.dotRadius',
+        type: 'number',
+        min: 0.1,
+        max: 5,
+        step: 0.1,
+      },
       { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
     ],
   },
@@ -97,16 +111,37 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     id: 'edges',
     defaults: { stroke_width: 0.8 },
     schema: [
-      { key: 'stroke_width', label: 'convert.strokeWidthPx', type: 'number', min: 0.1, max: 5, step: 0.1 },
+      {
+        key: 'stroke_width',
+        label: 'convert.strokeWidthPx',
+        type: 'number',
+        min: 0.1,
+        max: 5,
+        step: 0.1,
+      },
     ],
   },
   centerline: {
     id: 'centerline',
     defaults: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
     schema: [
-      { key: 'stroke_width', label: 'convert.strokeWidthPx', type: 'number', min: 0.1, max: 5, step: 0.1 },
+      {
+        key: 'stroke_width',
+        label: 'convert.strokeWidthPx',
+        type: 'number',
+        min: 0.1,
+        max: 5,
+        step: 0.1,
+      },
       { key: 'smooth', label: 'convert.smooth', type: 'boolean' },
-      { key: 'min_branch_px', label: 'convert.minBranch', type: 'number', min: 0, max: 50, step: 1 },
+      {
+        key: 'min_branch_px',
+        label: 'convert.minBranch',
+        type: 'number',
+        min: 0,
+        max: 50,
+        step: 1,
+      },
     ],
   },
   spiral: {
@@ -114,7 +149,14 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     defaults: { spacing_px: 4, samples_per_turn: 64 },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'samples_per_turn', label: 'convert.samplesPerTurn', type: 'number', min: 16, max: 256, step: 1 },
+      {
+        key: 'samples_per_turn',
+        label: 'convert.samplesPerTurn',
+        type: 'number',
+        min: 16,
+        max: 256,
+        step: 1,
+      },
     ],
   },
   scanlines: {
@@ -123,29 +165,61 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
       { key: 'wave_amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 20, step: 0.5 },
-      { key: 'wave_period_px', label: 'convert.wavePeriod', type: 'number', min: 2, max: 50, step: 0.5 },
+      {
+        key: 'wave_period_px',
+        label: 'convert.wavePeriod',
+        type: 'number',
+        min: 2,
+        max: 50,
+        step: 0.5,
+      },
     ],
   },
   tsp: {
     id: 'tsp',
     defaults: { density: 0.02, seed: 0 },
     schema: [
-      { key: 'density', label: 'convert.density', type: 'number', min: 0.001, max: 0.5, step: 0.001 },
+      {
+        key: 'density',
+        label: 'convert.density',
+        type: 'number',
+        min: 0.001,
+        max: 0.5,
+        step: 0.001,
+      },
       { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
     ],
   },
   flowfield: {
     id: 'flowfield',
     defaults: {
-      seed_spacing_px: 6, step_px: 0.8, max_steps: 800,
-      bidirectional: true, noise_scale: 32, seed: 0,
+      seed_spacing_px: 6,
+      step_px: 0.8,
+      max_steps: 800,
+      bidirectional: true,
+      noise_scale: 32,
+      seed: 0,
     },
     schema: [
-      { key: 'seed_spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 30, step: 0.5 },
+      {
+        key: 'seed_spacing_px',
+        label: 'convert.spacing',
+        type: 'number',
+        min: 2,
+        max: 30,
+        step: 0.5,
+      },
       { key: 'step_px', label: 'convert.stepPx', type: 'number', min: 0.2, max: 3, step: 0.1 },
       { key: 'max_steps', label: 'convert.maxSteps', type: 'number', min: 50, max: 4000, step: 50 },
       { key: 'bidirectional', label: 'convert.bidirectional', type: 'boolean' },
-      { key: 'noise_scale', label: 'convert.noiseScale', type: 'number', min: 4, max: 128, step: 1 },
+      {
+        key: 'noise_scale',
+        label: 'convert.noiseScale',
+        type: 'number',
+        min: 4,
+        max: 128,
+        step: 1,
+      },
       { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
     ],
   },
@@ -188,9 +262,30 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     id: 'tsp_opt',
     defaults: { density: 0.02, max_points: 4000, time_budget_s: 1.5, seed: 0, poisson_disk: true },
     schema: [
-      { key: 'density', label: 'convert.density', type: 'number', min: 0.001, max: 0.5, step: 0.001 },
-      { key: 'max_points', label: 'convert.maxPoints', type: 'number', min: 100, max: 20000, step: 100 },
-      { key: 'time_budget_s', label: 'convert.timeBudgetS', type: 'number', min: 0.1, max: 10, step: 0.1 },
+      {
+        key: 'density',
+        label: 'convert.density',
+        type: 'number',
+        min: 0.001,
+        max: 0.5,
+        step: 0.001,
+      },
+      {
+        key: 'max_points',
+        label: 'convert.maxPoints',
+        type: 'number',
+        min: 100,
+        max: 20000,
+        step: 100,
+      },
+      {
+        key: 'time_budget_s',
+        label: 'convert.timeBudgetS',
+        type: 'number',
+        min: 0.1,
+        max: 10,
+        step: 0.1,
+      },
       { key: 'poisson_disk', label: 'convert.poissonDisk', type: 'boolean' },
       { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
     ],
@@ -199,8 +294,22 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     id: 'voronoi_stipple',
     defaults: { density: 0.02, dot_radius_px: 0.6, iterations: 6, seed: 0 },
     schema: [
-      { key: 'density', label: 'convert.density', type: 'number', min: 0.001, max: 0.5, step: 0.001 },
-      { key: 'dot_radius_px', label: 'convert.dotRadius', type: 'number', min: 0.1, max: 5, step: 0.1 },
+      {
+        key: 'density',
+        label: 'convert.density',
+        type: 'number',
+        min: 0.001,
+        max: 0.5,
+        step: 0.001,
+      },
+      {
+        key: 'dot_radius_px',
+        label: 'convert.dotRadius',
+        type: 'number',
+        min: 0.1,
+        max: 5,
+        step: 0.1,
+      },
       { key: 'iterations', label: 'convert.iterations', type: 'number', min: 0, max: 30, step: 1 },
       { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
     ],
@@ -254,9 +363,9 @@ export interface BandRecipe {
 // responsibility.
 export interface StyleSegmentation {
   method: SegmentationMethod
-  default_num_bands?: number      // luminance_bands
-  default_threshold?: number      // thresholds (single split → binary)
-  default_num_colors?: number     // kmeans
+  default_num_bands?: number // luminance_bands
+  default_threshold?: number // thresholds (single split → binary)
+  default_num_colors?: number // kmeans
   drop_background: boolean
   background_luminance: number
   // When true, the UI exposes a bands slider for this style (mainly
@@ -801,13 +910,15 @@ export const PRINT_STYLES: PrintStyle[] = [
       const r = parseInt(hex.slice(1, 3), 16) / 255
       const g = parseInt(hex.slice(3, 5), 16) / 255
       const b = parseInt(hex.slice(5, 7), 16) / 255
-      const c = 1 - r, m = 1 - g, y = 1 - b
+      const c = 1 - r,
+        m = 1 - g,
+        y = 1 - b
       let angle = 45
       const max = Math.max(c, m, y)
       if (max > 0.15) {
         if (max === c) angle = 15
         else if (max === m) angle = 75
-        else angle = 0  // yellow
+        else angle = 0 // yellow
       }
       return {
         algorithm: 'halftone',
@@ -856,8 +967,13 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
     defaultAlgorithm: 'flowfield',
     defaultAlgorithmOptions: {
-      seed_spacing_px: 8, step_px: 0.8, max_steps: 600,
-      bidirectional: true, noise_scale: 48, mode: 'gradient', seed: 0,
+      seed_spacing_px: 8,
+      step_px: 0.8,
+      max_steps: 600,
+      bidirectional: true,
+      noise_scale: 48,
+      mode: 'gradient',
+      seed: 0,
     },
     colorRecipe(i, _total) {
       // Stagger the streamline density per cluster: lighter clusters
@@ -894,7 +1010,12 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
     defaultAlgorithm: 'squiggle',
     defaultAlgorithmOptions: {
-      spacing_px: 4, amp_px: 1.4, period_px: 8, jitter: 0.45, mode: 'modulated', seed: 0,
+      spacing_px: 4,
+      amp_px: 1.4,
+      period_px: 8,
+      jitter: 0.45,
+      mode: 'modulated',
+      seed: 0,
     },
     colorRecipe(i, total) {
       // Loose, hand-drawn feel: amplitude shrinks for lighter clusters
@@ -1173,7 +1294,11 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
     defaultAlgorithm: 'tsp_opt',
     defaultAlgorithmOptions: {
-      density: 0.03, max_points: 4000, time_budget_s: 1.5, seed: 0, poisson_disk: true,
+      density: 0.03,
+      max_points: 4000,
+      time_budget_s: 1.5,
+      seed: 0,
+      poisson_disk: true,
     },
     colorRecipe(i, total) {
       const density = lerp(i, total, 0.05, 0.012)
@@ -1307,8 +1432,12 @@ export const PRINT_STYLES: PrintStyle[] = [
     scope: 'layer',
     defaultAlgorithm: 'flowfield',
     defaultAlgorithmOptions: {
-      seed_spacing_px: 6, step_px: 0.8, max_steps: 800,
-      bidirectional: true, noise_scale: 32, seed: 0,
+      seed_spacing_px: 6,
+      step_px: 0.8,
+      max_steps: 800,
+      bidirectional: true,
+      noise_scale: 32,
+      seed: 0,
     },
   },
   {
@@ -1354,7 +1483,13 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'tsp_opt',
-    defaultAlgorithmOptions: { density: 0.02, max_points: 4000, time_budget_s: 1.5, seed: 0, poisson_disk: true },
+    defaultAlgorithmOptions: {
+      density: 0.02,
+      max_points: 4000,
+      time_budget_s: 1.5,
+      seed: 0,
+      poisson_disk: true,
+    },
   },
 ]
 
@@ -1401,9 +1536,7 @@ export function masterStyles(): PrintStyle[] {
 // before the colour-master family landed). Callers pass the active
 // ``printMode`` so the picker shows the right gallery.
 export function masterStylesByMode(mode: PrintStyleMode): PrintStyle[] {
-  return PRINT_STYLES.filter(
-    (s) => s.scope === 'master' && (s.mode ?? 'monochrome') === mode,
-  )
+  return PRINT_STYLES.filter((s) => s.scope === 'master' && (s.mode ?? 'monochrome') === mode)
 }
 
 export function layerStyles(kind?: PrintStyleKind): PrintStyle[] {

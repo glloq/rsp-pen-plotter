@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  getAlgorithms,
-  type AlgorithmInfo,
-  type LayerInfo,
-  type PausePolicy,
-} from '../api/client'
+import { getAlgorithms, type AlgorithmInfo, type LayerInfo, type PausePolicy } from '../api/client'
 import { formatLayerLabel } from '../lib/labels'
 import { nearestPen } from '../lib/penMatching'
 import { useJobStore, type LayerPass } from '../stores/job'
@@ -40,7 +35,11 @@ function onHeaderClick(event: MouseEvent): void {
 
 const algorithms = ref<AlgorithmInfo[]>([])
 onMounted(async () => {
-  try { algorithms.value = await getAlgorithms() } catch { /* keep [] */ }
+  try {
+    algorithms.value = await getAlgorithms()
+  } catch {
+    /* keep [] */
+  }
 })
 
 // Only bitmap-derived layers (label like ``color-XXXXXX``) can be
@@ -78,9 +77,7 @@ function onUpdatePasses(passes: LayerPass[]): void {
 function enableMultiPass(): void {
   const algo = currentAlgorithm.value || 'crosshatch'
   const opts = { ...currentAlgoOptions.value }
-  store.applyLayerPasses(props.layer.layer_id, [
-    { algorithm: algo, algorithm_options: opts },
-  ])
+  store.applyLayerPasses(props.layer.layer_id, [{ algorithm: algo, algorithm_options: opts }])
 }
 
 const currentAlgoSpec = computed(() => getAlgoSpec(currentAlgorithm.value))
@@ -209,16 +206,12 @@ const pauseChoices: Array<{ value: PausePolicy; icon: string; key: string }> = [
 // "kind" classifies the layer for the picker's thumbnail filter; we
 // don't have a schematic detector yet so colour-derived layers are
 // treated as image-content while text layers are explicit.
-const styleKind = computed<PrintStyleKind>(() =>
-  label.value.kind === 'text' ? 'text' : 'image',
-)
+const styleKind = computed<PrintStyleKind>(() => (label.value.kind === 'text' ? 'text' : 'image'))
 
 function onPickStyle(style: PrintStyle): void {
-  store.applyLayerAlgorithm(
-    props.layer.layer_id,
-    style.defaultAlgorithm,
-    { ...style.defaultAlgorithmOptions },
-  )
+  store.applyLayerAlgorithm(props.layer.layer_id, style.defaultAlgorithm, {
+    ...style.defaultAlgorithmOptions,
+  })
 }
 
 function onResetStyle(): void {
@@ -257,15 +250,19 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
 <template>
   <div
     class="rounded border bg-slate-800 px-3 py-2 space-y-2 transition"
-    :class="isSelected
-      ? 'border-emerald-500 ring-2 ring-emerald-500 ring-offset-2 ring-offset-slate-900'
-      : 'border-slate-700'"
+    :class="
+      isSelected
+        ? 'border-emerald-500 ring-2 ring-emerald-500 ring-offset-2 ring-offset-slate-900'
+        : 'border-slate-700'
+    "
   >
-    <div
-      class="flex items-center gap-3"
-      @click="onHeaderClick"
-    >
-      <span class="cursor-grab text-slate-500 select-none" :title="t('layers.dragHint')" aria-hidden="true">⠿</span>
+    <div class="flex items-center gap-3" @click="onHeaderClick">
+      <span
+        class="cursor-grab text-slate-500 select-none"
+        :title="t('layers.dragHint')"
+        aria-hidden="true"
+        >⠿</span
+      >
       <input v-model="visible" type="checkbox" class="h-4 w-4 accent-emerald-500" />
 
       <span
@@ -273,13 +270,15 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
         class="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-600 bg-slate-900 text-[10px]"
         :title="t('layers.kindImage')"
         aria-hidden="true"
-      >🖼</span>
+        >🖼</span
+      >
       <span
         v-else-if="label.kind === 'text'"
         class="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-600 bg-slate-900 font-serif text-xs text-slate-300"
         :title="t('layers.kindText')"
         aria-hidden="true"
-      >Aa</span>
+        >Aa</span
+      >
       <span
         v-else
         class="h-5 w-5 rounded border border-slate-600 shrink-0"
@@ -287,17 +286,21 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       />
 
       <div class="min-w-0 flex-1">
-        <p class="flex items-center gap-1.5 truncate text-sm text-slate-200" :class="label.kind === 'color' ? 'font-mono' : ''">
+        <p
+          class="flex items-center gap-1.5 truncate text-sm text-slate-200"
+          :class="label.kind === 'color' ? 'font-mono' : ''"
+        >
           <span class="truncate">{{ label.display }}</span>
           <span
             v-if="isMultiPass"
             class="shrink-0 rounded-sm border border-emerald-700 bg-emerald-950/60 px-1 py-px text-[9px] font-semibold tracking-wider text-emerald-300"
             :title="t('passes.badgeHint')"
-          >×{{ currentPasses.length }}</span>
+            >×{{ currentPasses.length }}</span
+          >
         </p>
         <p class="text-xs text-slate-500">
-          {{ layer.path_count }} {{ t('layers.paths') }} ·
-          {{ layer.total_length_mm.toFixed(1) }} mm · {{ duration }}
+          {{ layer.path_count }} {{ t('layers.paths') }} · {{ layer.total_length_mm.toFixed(1) }} mm
+          · {{ duration }}
         </p>
       </div>
       <button
@@ -331,16 +334,20 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
             v-if="penMatch && penMatch.severity !== 'none' && layer.target_pen_slot === null"
             type="button"
             class="inline-flex items-center gap-1 rounded border px-1 py-px text-[9px] font-mono transition"
-            :class="penMatch.severity === 'far'
-              ? 'border-amber-700 bg-amber-950/40 text-amber-200 hover:bg-amber-950'
-              : penMatch.severity === 'wrong'
-                ? 'border-red-700 bg-red-950/40 text-red-200 hover:bg-red-950'
-                : 'border-emerald-700 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-950'"
-            :title="t('layers.nearestPenHint', {
-              slot: penMatch.pen?.index ?? '?',
-              color: penMatch.pen?.color ?? '',
-              distance: Math.round(penMatch.distance),
-            })"
+            :class="
+              penMatch.severity === 'far'
+                ? 'border-amber-700 bg-amber-950/40 text-amber-200 hover:bg-amber-950'
+                : penMatch.severity === 'wrong'
+                  ? 'border-red-700 bg-red-950/40 text-red-200 hover:bg-red-950'
+                  : 'border-emerald-700 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-950'
+            "
+            :title="
+              t('layers.nearestPenHint', {
+                slot: penMatch.pen?.index ?? '?',
+                color: penMatch.pen?.color ?? '',
+                distance: Math.round(penMatch.distance),
+              })
+            "
             @click="applyNearestPen"
           >
             <span
@@ -365,11 +372,13 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
           v-if="showPenWarning && penMatch && penMatch.pen"
           class="mt-0.5 text-[10px] text-amber-300"
         >
-          {{ t('layers.penWarning', {
-            color: swatchColor,
-            slot: penMatch.pen.index,
-            penColor: penMatch.pen.color,
-          }) }}
+          {{
+            t('layers.penWarning', {
+              color: swatchColor,
+              slot: penMatch.pen.index,
+              penColor: penMatch.pen.color,
+            })
+          }}
         </p>
         <p
           v-else-if="showPenWarning && penMatch && !penMatch.pen"
@@ -435,7 +444,9 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
          so the same colour can be drawn with several visual effects in
          one ink. -->
     <div v-if="!collapsed && isBitmapLayer" class="space-y-1.5">
-      <div class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500">
+      <div
+        class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500"
+      >
         <span>{{ t('layers.printStyle') }}</span>
         <div class="flex items-center gap-1">
           <button
@@ -478,7 +489,10 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
       />
     </div>
 
-    <div v-if="!collapsed" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-500">
+    <div
+      v-if="!collapsed"
+      class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-500"
+    >
       <!-- Power-user algorithm dropdown stays available for non-bitmap
            layers (no print-style picker) and behind "Advanced" otherwise. -->
       <label v-if="isBitmapLayer && showAdvanced" class="flex items-center gap-1.5">
@@ -503,9 +517,11 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
             :key="choice.value"
             type="button"
             class="px-2 py-0.5 transition"
-            :class="layer.pause_before === choice.value
-              ? 'bg-slate-700 text-slate-100'
-              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+            :class="
+              layer.pause_before === choice.value
+                ? 'bg-slate-700 text-slate-100'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+            "
             :title="t(choice.key)"
             @click="setPause(choice.value)"
           >
@@ -521,7 +537,14 @@ const duration = computed(() => formatDuration(store.layerDurationSeconds(props.
          editable. Hidden unless the user opens "Advanced" AND the
          selected algorithm actually has options. -->
     <div
-      v-if="!collapsed && isBitmapLayer && !isMultiPass && showAdvanced && currentAlgoSpec && currentAlgoSpec.schema.length"
+      v-if="
+        !collapsed &&
+        isBitmapLayer &&
+        !isMultiPass &&
+        showAdvanced &&
+        currentAlgoSpec &&
+        currentAlgoSpec.schema.length
+      "
       class="rounded border border-slate-700 bg-slate-900/50 p-2"
     >
       <p class="mb-1.5 text-[10px] uppercase tracking-wider text-slate-500">

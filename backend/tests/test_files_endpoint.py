@@ -13,11 +13,11 @@ import shutil  # noqa: E402
 import httpx  # noqa: E402
 import pytest  # noqa: E402
 from httpx import ASGITransport  # noqa: E402
+from sqlmodel import Session, delete  # noqa: E402
 
 from pen_plotter.api.files import FILES_DIR  # noqa: E402
 from pen_plotter.main import app  # noqa: E402
 from pen_plotter.persistence import FileRecord, engine  # noqa: E402
-from sqlmodel import Session, delete  # noqa: E402
 
 NS = (
     'xmlns="http://www.w3.org/2000/svg" '

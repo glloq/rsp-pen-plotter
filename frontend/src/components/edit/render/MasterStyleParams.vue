@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  resolveMasterStyle,
-  type SegmentationMethod,
-} from '../../../data/printRegistry'
+import { resolveMasterStyle, type SegmentationMethod } from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 import DualRangeSlider from './DualRangeSlider.vue'
@@ -41,9 +38,7 @@ const { t } = useI18n()
 const draft = useBitmapDraft()
 
 const style = computed(() => resolveMasterStyle(props.styleId))
-const usesBands = computed(
-  () => style.value.segmentation?.method === 'luminance_bands',
-)
+const usesBands = computed(() => style.value.segmentation?.method === 'luminance_bands')
 
 const thresholdValue = computed({
   get: () => props.bitmap.thresholds[0] ?? 0.5,
@@ -206,11 +201,15 @@ function bandSwatchStyle(i: number): Record<string, string> {
             :key="a"
             type="button"
             class="rounded border px-2 py-1 text-[11px] font-mono"
-            :class="isAngleActive(a)
-              ? 'border-emerald-500 bg-emerald-500/20 text-emerald-200'
-              : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500'"
+            :class="
+              isAngleActive(a)
+                ? 'border-emerald-500 bg-emerald-500/20 text-emerald-200'
+                : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500'
+            "
             @click="toggleAngle(a)"
-          >{{ a }}°</button>
+          >
+            {{ a }}°
+          </button>
         </div>
         <p class="mt-1 text-[10px] text-slate-500">{{ t('mono.anglesHint') }}</p>
       </div>
@@ -218,7 +217,10 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 2.5"
         :model-value-max="knobs.spacing_max ?? 6.5"
-        :min="1" :max="10" :step="0.5" unit="px"
+        :min="1"
+        :max="10"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -247,7 +249,10 @@ function bandSwatchStyle(i: number): Record<string, string> {
       class="border-t border-slate-800 pt-3"
       :model-value-min="knobs.cell_min ?? 3"
       :model-value-max="knobs.cell_max ?? 9"
-      :min="2" :max="14" :step="1" unit="px"
+      :min="2"
+      :max="14"
+      :step="1"
+      unit="px"
       @update:model-value-min="(v) => setKnob('cell_min', v)"
       @update:model-value-max="(v) => setKnob('cell_max', v)"
     >
@@ -264,7 +269,9 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <DualRangeSlider
         :model-value-min="knobs.density_min ?? 0.012"
         :model-value-max="knobs.density_max ?? 0.06"
-        :min="0.005" :max="0.1" :step="0.001"
+        :min="0.005"
+        :max="0.1"
+        :step="0.001"
         @update:model-value-min="(v) => setKnob('density_min', v)"
         @update:model-value-max="(v) => setKnob('density_max', v)"
       >
@@ -278,10 +285,15 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.dotRadius') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.dot_radius ?? 0.5).toFixed(2) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            (knobs.dot_radius ?? 0.5).toFixed(2)
+          }}</span>
         </p>
         <input
-          type="range" min="0.3" max="1.5" step="0.05"
+          type="range"
+          min="0.3"
+          max="1.5"
+          step="0.05"
           :value="knobs.dot_radius ?? 0.5"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('dot_radius', Number((e.target as HTMLInputElement).value))"
@@ -294,7 +306,10 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 1.8"
         :model-value-max="knobs.spacing_max ?? 5"
-        :min="1" :max="8" :step="0.5" unit="px"
+        :min="1"
+        :max="8"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -305,7 +320,10 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <DualRangeSlider
         :model-value-min="knobs.wave_min ?? 0.6"
         :model-value-max="knobs.wave_max ?? 1.6"
-        :min="0" :max="3" :step="0.1" unit="px"
+        :min="0"
+        :max="3"
+        :step="0.1"
+        unit="px"
         @update:model-value-min="(v) => setKnob('wave_min', v)"
         @update:model-value-max="(v) => setKnob('wave_max', v)"
       >
@@ -316,10 +334,15 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.wavePeriod') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.wave_period ?? 14) }} px</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ Math.round(knobs.wave_period ?? 14) }} px</span
+          >
         </p>
         <input
-          type="range" min="8" max="20" step="1"
+          type="range"
+          min="8"
+          max="20"
+          step="1"
           :value="knobs.wave_period ?? 14"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('wave_period', Number((e.target as HTMLInputElement).value))"
@@ -332,7 +355,10 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 2.5"
         :model-value-max="knobs.spacing_max ?? 6"
-        :min="1" :max="8" :step="0.5" unit="px"
+        :min="1"
+        :max="8"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -343,7 +369,9 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <DualRangeSlider
         :model-value-min="knobs.rings_min ?? 10"
         :model-value-max="knobs.rings_max ?? 30"
-        :min="5" :max="40" :step="1"
+        :min="5"
+        :max="40"
+        :step="1"
         @update:model-value-min="(v) => setKnob('rings_min', v)"
         @update:model-value-max="(v) => setKnob('rings_max', v)"
       >
@@ -357,16 +385,18 @@ function bandSwatchStyle(i: number): Record<string, string> {
     </div>
 
     <!-- ===== TSP: dot density (single knob — binary mono) ===== -->
-    <div
-      v-else-if="styleId === 'tsp'"
-      class="space-y-1 border-t border-slate-800 pt-3"
-    >
+    <div v-else-if="styleId === 'tsp'" class="space-y-1 border-t border-slate-800 pt-3">
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
         {{ t('mono.dotDensity') }}
-        <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.density ?? 0.04).toFixed(3) }}</span>
+        <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+          (knobs.density ?? 0.04).toFixed(3)
+        }}</span>
       </p>
       <input
-        type="range" min="0.01" max="0.1" step="0.005"
+        type="range"
+        min="0.01"
+        max="0.1"
+        step="0.005"
         :value="knobs.density ?? 0.04"
         class="w-full accent-emerald-500"
         @input="(e) => setKnob('density', Number((e.target as HTMLInputElement).value))"
@@ -375,16 +405,18 @@ function bandSwatchStyle(i: number): Record<string, string> {
     </div>
 
     <!-- ===== Spiral: spacing (single knob — binary mono) ===== -->
-    <div
-      v-else-if="styleId === 'spiral-master'"
-      class="space-y-1 border-t border-slate-800 pt-3"
-    >
+    <div v-else-if="styleId === 'spiral-master'" class="space-y-1 border-t border-slate-800 pt-3">
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
         {{ t('mono.spiralSpacing') }}
-        <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.spacing_px ?? 3).toFixed(1) }} px</span>
+        <span class="ml-1 font-mono text-[11px] text-slate-300"
+          >{{ (knobs.spacing_px ?? 3).toFixed(1) }} px</span
+        >
       </p>
       <input
-        type="range" min="1" max="8" step="0.5"
+        type="range"
+        min="1"
+        max="8"
+        step="0.5"
         :value="knobs.spacing_px ?? 3"
         class="w-full accent-emerald-500"
         @input="(e) => setKnob('spacing_px', Number((e.target as HTMLInputElement).value))"
@@ -399,10 +431,15 @@ function bandSwatchStyle(i: number): Record<string, string> {
     >
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
         {{ t('mono.strokeWidth') }}
-        <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.stroke_width ?? 0.8).toFixed(2) }}</span>
+        <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+          (knobs.stroke_width ?? 0.8).toFixed(2)
+        }}</span>
       </p>
       <input
-        type="range" min="0.4" max="2.0" step="0.1"
+        type="range"
+        min="0.4"
+        max="2.0"
+        step="0.1"
         :value="knobs.stroke_width ?? 0.8"
         class="w-full accent-emerald-500"
         @input="(e) => setKnob('stroke_width', Number((e.target as HTMLInputElement).value))"
@@ -412,11 +449,7 @@ function bandSwatchStyle(i: number): Record<string, string> {
     <!-- ===== Advanced mode toggle + per-band drawer ===== -->
     <div v-if="usesBands" class="border-t border-slate-800 pt-3">
       <label class="flex cursor-pointer items-center gap-2 text-[11px] text-slate-300">
-        <input
-          v-model="advancedMode"
-          type="checkbox"
-          class="accent-emerald-500"
-        />
+        <input v-model="advancedMode" type="checkbox" class="accent-emerald-500" />
         <span class="uppercase tracking-wider text-slate-400">{{ t('mono.advancedMode') }}</span>
       </label>
       <p class="mt-1 text-[10px] text-slate-500">{{ t('mono.advancedModeHint') }}</p>
@@ -437,7 +470,8 @@ function bandSwatchStyle(i: number): Record<string, string> {
               <span
                 v-if="isBandPinned(i)"
                 class="rounded bg-amber-500/20 px-1 text-[9px] uppercase text-amber-300"
-              >pinned</span>
+                >pinned</span
+              >
             </div>
             <button
               v-if="isBandPinned(i)"
@@ -445,7 +479,9 @@ function bandSwatchStyle(i: number): Record<string, string> {
               :title="t('mono.resetBand')"
               class="rounded border border-slate-700 px-2 text-[11px] text-slate-300 hover:border-emerald-500 hover:text-emerald-300"
               @click="resetBand(i)"
-            >↺</button>
+            >
+              ↺
+            </button>
           </div>
           <div class="grid grid-cols-2 gap-1">
             <label
@@ -460,13 +496,16 @@ function bandSwatchStyle(i: number): Record<string, string> {
                 :value="value"
                 step="any"
                 class="w-full rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-[11px] font-mono text-slate-200"
-                @input="(e) => pinBand(i, String(key), Number((e.target as HTMLInputElement).value))"
+                @input="
+                  (e) => pinBand(i, String(key), Number((e.target as HTMLInputElement).value))
+                "
               />
               <span
                 v-else-if="Array.isArray(value)"
                 class="font-mono text-[10px] text-slate-400"
                 :title="String(value)"
-              >[{{ (value as unknown[]).join(',') }}]</span>
+                >[{{ (value as unknown[]).join(',') }}]</span
+              >
               <span v-else class="font-mono text-[10px] text-slate-400">{{ String(value) }}</span>
             </label>
           </div>

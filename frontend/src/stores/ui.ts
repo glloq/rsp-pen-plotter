@@ -199,7 +199,12 @@ export const useUiStore = defineStore('ui', () => {
 
   function finishUpdate(
     phase: Exclude<UpdatePhase, 'idle' | 'running'>,
-    payload: { message: string; error?: string | null; forced?: boolean; newCommitApplied?: boolean } = { message: '' },
+    payload: {
+      message: string
+      error?: string | null
+      forced?: boolean
+      newCommitApplied?: boolean
+    } = { message: '' },
   ): void {
     updateState.value = {
       phase,

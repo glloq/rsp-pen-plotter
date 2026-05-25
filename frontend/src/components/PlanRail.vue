@@ -21,10 +21,7 @@ const collapsed = ref(false)
     :class="collapsed ? 'w-8' : 'w-72'"
   >
     <header class="flex items-center justify-between border-b border-slate-700 px-2 py-1.5">
-      <h3
-        v-if="!collapsed"
-        class="text-[11px] uppercase tracking-wider text-slate-400"
-      >
+      <h3 v-if="!collapsed" class="text-[11px] uppercase tracking-wider text-slate-400">
         {{ t('planRail.title') }}
       </h3>
       <button

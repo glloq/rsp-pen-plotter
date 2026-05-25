@@ -30,7 +30,9 @@ const expanded = useAccordionPersistence('preprocess.basic', true)
       <label class="block text-slate-400">
         <div class="flex items-center justify-between">
           <span>{{ t('preprocess.basic.brightness') }}</span>
-          <span class="font-mono text-[10px] text-slate-500">{{ preprocess.brightness.toFixed(2) }}</span>
+          <span class="font-mono text-[10px] text-slate-500">{{
+            preprocess.brightness.toFixed(2)
+          }}</span>
         </div>
         <input
           v-model.number="preprocess.brightness"
@@ -45,7 +47,9 @@ const expanded = useAccordionPersistence('preprocess.basic', true)
       <label class="block text-slate-400">
         <div class="flex items-center justify-between">
           <span>{{ t('preprocess.basic.contrast') }}</span>
-          <span class="font-mono text-[10px] text-slate-500">{{ preprocess.contrast.toFixed(2) }}</span>
+          <span class="font-mono text-[10px] text-slate-500">{{
+            preprocess.contrast.toFixed(2)
+          }}</span>
         </div>
         <input
           v-model.number="preprocess.contrast"
@@ -60,7 +64,9 @@ const expanded = useAccordionPersistence('preprocess.basic', true)
       <label class="block text-slate-400">
         <div class="flex items-center justify-between">
           <span>{{ t('preprocess.basic.saturation') }}</span>
-          <span class="font-mono text-[10px] text-slate-500">{{ preprocess.saturation.toFixed(2) }}</span>
+          <span class="font-mono text-[10px] text-slate-500">{{
+            preprocess.saturation.toFixed(2)
+          }}</span>
         </div>
         <input
           v-model.number="preprocess.saturation"
@@ -75,7 +81,9 @@ const expanded = useAccordionPersistence('preprocess.basic', true)
       <label class="block text-slate-400">
         <div class="flex items-center justify-between">
           <span>{{ t('preprocess.basic.gamma') }}</span>
-          <span class="font-mono text-[10px] text-slate-500">{{ preprocess.gamma.toFixed(2) }}</span>
+          <span class="font-mono text-[10px] text-slate-500">{{
+            preprocess.gamma.toFixed(2)
+          }}</span>
         </div>
         <input
           v-model.number="preprocess.gamma"

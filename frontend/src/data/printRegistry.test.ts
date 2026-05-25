@@ -51,7 +51,10 @@ describe('printRegistry', () => {
 
   it('every style targets an algorithm that exists in ALGORITHMS', () => {
     for (const s of PRINT_STYLES) {
-      expect(getAlgorithm(s.defaultAlgorithm), `unknown algo ${s.defaultAlgorithm} in style ${s.id}`).not.toBeNull()
+      expect(
+        getAlgorithm(s.defaultAlgorithm),
+        `unknown algo ${s.defaultAlgorithm} in style ${s.id}`,
+      ).not.toBeNull()
     }
   })
 
@@ -106,7 +109,17 @@ describe('printRegistry', () => {
     // Spot-check the headline algorithm ids — if any of these go
     // missing from the registry, the picker / param form would
     // silently drop knobs.
-    for (const id of ['direct', 'halftone', 'stippling', 'crosshatch', 'contours', 'edges', 'spiral', 'scanlines', 'tsp']) {
+    for (const id of [
+      'direct',
+      'halftone',
+      'stippling',
+      'crosshatch',
+      'contours',
+      'edges',
+      'spiral',
+      'scanlines',
+      'tsp',
+    ]) {
       expect((ALGORITHMS as Record<string, unknown>)[id]).toBeDefined()
     }
   })

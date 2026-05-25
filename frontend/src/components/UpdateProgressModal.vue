@@ -85,32 +85,33 @@ function dismiss(): void {
           v-else-if="updateState.phase === 'success'"
           class="mt-0.5 text-2xl leading-none text-emerald-400"
           aria-hidden="true"
-        >✓</span>
+          >✓</span
+        >
         <span
           v-else-if="updateState.phase === 'noop'"
           class="mt-0.5 text-2xl leading-none text-sky-300"
           aria-hidden="true"
-        >ℹ</span>
-        <span
-          v-else
-          class="mt-0.5 text-2xl leading-none text-red-400"
-          aria-hidden="true"
-        >✕</span>
+          >ℹ</span
+        >
+        <span v-else class="mt-0.5 text-2xl leading-none text-red-400" aria-hidden="true">✕</span>
 
         <div class="min-w-0 flex-1">
           <h2 id="update-modal-title" class="text-base font-semibold text-slate-100">
-            <template v-if="updateState.phase === 'running'">{{ t('updateModal.titleRunning') }}</template>
-            <template v-else-if="updateState.phase === 'success'">{{ t('updateModal.titleSuccess') }}</template>
-            <template v-else-if="updateState.phase === 'noop'">{{ t('updateModal.titleNoop') }}</template>
+            <template v-if="updateState.phase === 'running'">{{
+              t('updateModal.titleRunning')
+            }}</template>
+            <template v-else-if="updateState.phase === 'success'">{{
+              t('updateModal.titleSuccess')
+            }}</template>
+            <template v-else-if="updateState.phase === 'noop'">{{
+              t('updateModal.titleNoop')
+            }}</template>
             <template v-else>{{ t('updateModal.titleError') }}</template>
           </h2>
           <p class="mt-1 text-sm text-slate-300">
             {{ updateState.message }}
           </p>
-          <p
-            v-if="updateState.phase === 'running'"
-            class="mt-2 font-mono text-xs text-slate-500"
-          >
+          <p v-if="updateState.phase === 'running'" class="mt-2 font-mono text-xs text-slate-500">
             {{ t('updateModal.elapsed', { seconds: elapsedSeconds }) }}
           </p>
         </div>

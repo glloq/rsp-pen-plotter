@@ -224,9 +224,11 @@ function onPaneDragLeave(event: DragEvent): void {
   // Ignore the bubbling dragleave fired when the pointer enters a
   // child element — only clear the highlight when the pointer leaves
   // the pane entirely.
-  if (event.currentTarget instanceof Node
-    && event.relatedTarget instanceof Node
-    && event.currentTarget.contains(event.relatedTarget)) {
+  if (
+    event.currentTarget instanceof Node &&
+    event.relatedTarget instanceof Node &&
+    event.currentTarget.contains(event.relatedTarget)
+  ) {
     return
   }
   paneDragOver.value = false
@@ -304,9 +306,9 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
         <button
           type="button"
           class="flex shrink-0 items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-white transition-colors disabled:cursor-not-allowed"
-          :class="isUploading
-            ? 'bg-slate-600 hover:bg-slate-500'
-            : 'bg-emerald-600 hover:bg-emerald-500'"
+          :class="
+            isUploading ? 'bg-slate-600 hover:bg-slate-500' : 'bg-emerald-600 hover:bg-emerald-500'
+          "
           :title="isUploading ? t('upload.cancel') : t('files.addFile')"
           @click="addFile"
         >
@@ -329,9 +331,11 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
         class="mt-1 truncate text-[10px] text-slate-400"
         :title="uploadProgress.name"
       >
-        {{ uploadingTotal > 1
-          ? `(${uploadingTotal - uploadingCount + 1}/${uploadingTotal}) ${uploadProgress.name}`
-          : uploadProgress.name }}
+        {{
+          uploadingTotal > 1
+            ? `(${uploadingTotal - uploadingCount + 1}/${uploadingTotal}) ${uploadProgress.name}`
+            : uploadProgress.name
+        }}
       </p>
 
       <div class="mt-2 space-y-1">
@@ -397,9 +401,11 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
           v-for="row in rows"
           :key="row.file.file_id"
           class="group flex items-center gap-2 rounded border bg-slate-800 px-2 py-1.5 text-xs cursor-grab active:cursor-grabbing"
-          :class="row.configured
-            ? 'border-emerald-600 bg-emerald-950/30 hover:border-emerald-400'
-            : 'border-slate-700 hover:border-slate-500'"
+          :class="
+            row.configured
+              ? 'border-emerald-600 bg-emerald-950/30 hover:border-emerald-400'
+              : 'border-slate-700 hover:border-slate-500'
+          "
           draggable="true"
           :title="t('files.dragHint')"
           @dragstart="(e) => onDragStart(e, row.file)"
@@ -415,10 +421,7 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
               v-html="previewSvg(row.file.file_id)"
               class="files-thumb h-full w-full"
             />
-            <span
-              v-else
-              class="font-mono text-[9px] uppercase tracking-wider text-slate-500"
-            >
+            <span v-else class="font-mono text-[9px] uppercase tracking-wider text-slate-500">
               {{ shortMime(row.file.source_mime) }}
             </span>
           </div>

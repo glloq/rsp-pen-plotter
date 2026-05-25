@@ -27,6 +27,22 @@ def _app_setup() -> None:
     init_db()
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Register the --update-goldens flag used by golden G-code tests."""
+    parser.addoption(
+        "--update-goldens",
+        action="store_true",
+        default=False,
+        help="Rewrite golden G-code files instead of comparing against them.",
+    )
+
+
+@pytest.fixture
+def update_goldens(request: pytest.FixtureRequest) -> bool:
+    """True when the runner was invoked with --update-goldens."""
+    return bool(request.config.getoption("--update-goldens"))
+
+
 @pytest.fixture
 def two_color_png() -> bytes:
     """A 40x40 PNG: red square on a white background."""

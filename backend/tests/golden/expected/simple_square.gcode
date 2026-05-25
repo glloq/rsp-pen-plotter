@@ -1,0 +1,18 @@
+; OmniPlot generated G-code
+; Profile: Golden GRBL A4 (grbl)
+G21
+G90
+M280 P0 S40
+; Change to pen slot 0 (Black 0.3)
+M0
+; LAYER label="black" color=#000000 slot=0
+M280 P0 S40
+G0 X53.500 Y10.000
+M280 P0 S90
+G1 X243.500 Y10.000 F1800.0
+G1 X243.500 Y200.000 F1800.0
+G1 X53.500 Y200.000 F1800.0
+G1 X53.500 Y10.000 F1800.0
+M280 P0 S40
+G0 X0.000 Y0.000
+M2

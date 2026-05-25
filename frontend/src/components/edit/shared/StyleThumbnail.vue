@@ -45,7 +45,12 @@ const sizeClass = computed(() =>
     :style="{ backgroundColor: meta.color + '33', color: meta.color }"
     :title="algorithm"
   >
-    <img v-if="imageUrl" :src="imageUrl" :alt="algorithm" class="h-full w-full rounded object-cover" />
+    <img
+      v-if="imageUrl"
+      :src="imageUrl"
+      :alt="algorithm"
+      class="h-full w-full rounded object-cover"
+    />
     <span v-else>{{ meta.glyph }}</span>
   </span>
 </template>

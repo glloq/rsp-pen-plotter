@@ -81,9 +81,11 @@ function onDragLeave(): void {
     <button
       type="button"
       class="flex w-full max-w-md flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition"
-      :class="dragOver
-        ? 'border-emerald-500 bg-emerald-950/40 text-emerald-100'
-        : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:border-slate-500'"
+      :class="
+        dragOver
+          ? 'border-emerald-500 bg-emerald-950/40 text-emerald-100'
+          : 'border-slate-700 bg-slate-900/40 text-slate-300 hover:border-slate-500'
+      "
       @click="openPicker"
     >
       <span class="text-2xl" aria-hidden="true">📎</span>

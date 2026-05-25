@@ -131,7 +131,8 @@ function zoomOut(): void {
 const isMultiColor = computed(() => store.isMultiColor)
 const allLayers = computed(() => store.placements.flatMap((p) => p.layers))
 const manualPenChange = computed<boolean>({
-  get: () => allLayers.value.length > 0 && allLayers.value.every((l) => l.pause_before === 'always'),
+  get: () =>
+    allLayers.value.length > 0 && allLayers.value.every((l) => l.pause_before === 'always'),
   set: (value) => {
     const target = value ? 'always' : 'auto'
     const prev = store.selectedPlacementId
@@ -164,9 +165,7 @@ const drawingSize = computed(() => {
 })
 
 const progress = computed(() =>
-  sim.value && sim.value.totalTimeSeconds > 0
-    ? simTime.value / sim.value.totalTimeSeconds
-    : 0,
+  sim.value && sim.value.totalTimeSeconds > 0 ? simTime.value / sim.value.totalTimeSeconds : 0,
 )
 
 function formatDuration(seconds: number): string {
@@ -214,12 +213,7 @@ function draw(): void {
   ctx.strokeStyle = '#94a3b8'
   ctx.lineWidth = 1
   ctx.setLineDash([])
-  ctx.strokeRect(
-    Math.min(sx0, sx1),
-    Math.min(sy0, sy1),
-    Math.abs(sx1 - sx0),
-    Math.abs(sy1 - sy0),
-  )
+  ctx.strokeRect(Math.min(sx0, sx1), Math.min(sy0, sy1), Math.abs(sx1 - sx0), Math.abs(sy1 - sy0))
 
   const t = simTime.value
   let pen: [number, number] | null = null
@@ -470,7 +464,10 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
 </script>
 
 <template>
-  <section v-if="sim" class="flex h-full min-h-0 flex-col rounded-lg border border-slate-700 bg-slate-800/60">
+  <section
+    v-if="sim"
+    class="flex h-full min-h-0 flex-col rounded-lg border border-slate-700 bg-slate-800/60"
+  >
     <!-- Single compact toolbar — playback, zoom and display toggles all
          live on the same row. The zoom group is rendered with a heavier
          border + larger glyphs so it remains the most visually obvious
@@ -491,13 +488,17 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
         class="rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-slate-100"
         :title="t('simulator.restart')"
         @click="restart"
-      >⟲</button>
+      >
+        ⟲
+      </button>
       <button
         v-for="s in speeds"
         :key="s"
         type="button"
         class="rounded px-1.5 py-1 font-mono"
-        :class="speed === s ? 'bg-sky-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'"
+        :class="
+          speed === s ? 'bg-sky-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+        "
         @click="speed = s"
       >
         {{ s }}×
@@ -507,7 +508,9 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
         class="rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-slate-100"
         :title="t('simulator.end')"
         @click="jumpToEnd"
-      >⏭</button>
+      >
+        ⏭
+      </button>
 
       <!-- Zoom cluster — boxed, bold, slightly taller than its neighbours. -->
       <div
@@ -518,20 +521,28 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
           class="rounded px-2 py-0.5 text-base font-bold text-sky-200 hover:bg-slate-800"
           :title="t('simulator.zoomOut')"
           @click="zoomOut"
-        >−</button>
-        <span class="w-11 text-center font-mono text-[11px] text-slate-300">{{ Math.round(viewZoom * 100) }}%</span>
+        >
+          −
+        </button>
+        <span class="w-11 text-center font-mono text-[11px] text-slate-300"
+          >{{ Math.round(viewZoom * 100) }}%</span
+        >
         <button
           type="button"
           class="rounded px-2 py-0.5 text-base font-bold text-sky-200 hover:bg-slate-800"
           :title="t('simulator.zoomIn')"
           @click="zoomIn"
-        >+</button>
+        >
+          +
+        </button>
         <button
           type="button"
           class="rounded px-1.5 py-0.5 text-slate-200 hover:bg-slate-800"
           :title="t('simulator.resetView')"
           @click="resetView"
-        >⤢</button>
+        >
+          ⤢
+        </button>
       </div>
 
       <!-- Display toggles as pill buttons. Each pill highlights with a
@@ -540,39 +551,55 @@ onBeforeUnmount(() => cancelAnimationFrame(raf))
       <button
         type="button"
         class="rounded border px-1.5 py-1"
-        :class="showTravel
-          ? 'border-sky-500 bg-sky-600/30 text-sky-100'
-          : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'"
+        :class="
+          showTravel
+            ? 'border-sky-500 bg-sky-600/30 text-sky-100'
+            : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'
+        "
         :title="t('simulator.optTravel')"
         @click="showTravel = !showTravel"
-      >⤳</button>
+      >
+        ⤳
+      </button>
       <button
         type="button"
         class="rounded border px-1.5 py-1"
-        :class="showPenEvents
-          ? 'border-amber-500 bg-amber-600/30 text-amber-100'
-          : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'"
+        :class="
+          showPenEvents
+            ? 'border-amber-500 bg-amber-600/30 text-amber-100'
+            : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'
+        "
         :title="t('simulator.optPenEvents')"
         @click="showPenEvents = !showPenEvents"
-      >▲▼</button>
+      >
+        ▲▼
+      </button>
       <button
         type="button"
         class="rounded border px-1.5 py-1"
-        :class="showColorChanges
-          ? 'border-emerald-500 bg-emerald-600/30 text-emerald-100'
-          : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'"
+        :class="
+          showColorChanges
+            ? 'border-emerald-500 bg-emerald-600/30 text-emerald-100'
+            : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'
+        "
         :title="t('simulator.optColorChanges')"
         @click="showColorChanges = !showColorChanges"
-      >●</button>
+      >
+        ●
+      </button>
       <button
         type="button"
         class="rounded border px-1.5 py-1"
-        :class="showPauses
-          ? 'border-amber-500 bg-amber-600/30 text-amber-100'
-          : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'"
+        :class="
+          showPauses
+            ? 'border-amber-500 bg-amber-600/30 text-amber-100'
+            : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'
+        "
         :title="t('simulator.optPauses')"
         @click="showPauses = !showPauses"
-      >❚❚</button>
+      >
+        ❚❚
+      </button>
 
       <label
         v-if="!isMultiColor"

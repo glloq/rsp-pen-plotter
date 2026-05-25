@@ -67,9 +67,11 @@ function percent(value: number): number {
             :key="deg"
             type="button"
             class="rounded border px-2 py-1.5 text-[11px] transition"
-            :class="preprocess.rotate_deg === deg
-              ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-              : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+            :class="
+              preprocess.rotate_deg === deg
+                ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+            "
             @click="preprocess.rotate_deg = deg"
           >
             {{ deg }}°
@@ -102,7 +104,9 @@ function percent(value: number): number {
               min="0"
               max="99"
               class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-              @input="setCropField(0, (($event.target as HTMLInputElement).valueAsNumber || 0) / 100)"
+              @input="
+                setCropField(0, (($event.target as HTMLInputElement).valueAsNumber || 0) / 100)
+              "
             />
           </label>
           <label class="block text-slate-400">
@@ -113,7 +117,9 @@ function percent(value: number): number {
               min="0"
               max="99"
               class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-              @input="setCropField(1, (($event.target as HTMLInputElement).valueAsNumber || 0) / 100)"
+              @input="
+                setCropField(1, (($event.target as HTMLInputElement).valueAsNumber || 0) / 100)
+              "
             />
           </label>
           <label class="block text-slate-400">
@@ -124,7 +130,9 @@ function percent(value: number): number {
               min="1"
               max="100"
               class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-              @input="setCropField(2, (($event.target as HTMLInputElement).valueAsNumber || 0) / 100)"
+              @input="
+                setCropField(2, (($event.target as HTMLInputElement).valueAsNumber || 0) / 100)
+              "
             />
           </label>
           <label class="block text-slate-400">
@@ -135,7 +143,9 @@ function percent(value: number): number {
               min="1"
               max="100"
               class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-              @input="setCropField(3, (($event.target as HTMLInputElement).valueAsNumber || 0) / 100)"
+              @input="
+                setCropField(3, (($event.target as HTMLInputElement).valueAsNumber || 0) / 100)
+              "
             />
           </label>
         </div>

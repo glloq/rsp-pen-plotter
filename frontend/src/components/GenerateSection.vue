@@ -44,9 +44,11 @@ function formatDuration(seconds: number): string {
       <div
         v-if="store.preflight"
         class="rounded border px-2 py-1.5 text-xs"
-        :class="store.preflight.ok
-          ? 'border-emerald-800 bg-emerald-950/30 text-emerald-200'
-          : 'border-amber-700 bg-amber-950/30 text-amber-200'"
+        :class="
+          store.preflight.ok
+            ? 'border-emerald-800 bg-emerald-950/30 text-emerald-200'
+            : 'border-amber-700 bg-amber-950/30 text-amber-200'
+        "
       >
         <div class="flex justify-between">
           <span>{{ t('preflight.size') }}</span>
@@ -67,7 +69,9 @@ function formatDuration(seconds: number): string {
         </ul>
       </div>
 
-      <p class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400">
+      <p
+        class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400"
+      >
         {{ t('layers.generateMovedHint') }}
       </p>
 

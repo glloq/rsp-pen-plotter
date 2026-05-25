@@ -71,9 +71,9 @@ export async function applyMasterStyleToLayers(
   for (let i = 0; i < total; i++) {
     const layer = layers[i]!
     if (
-      options.penSlot !== undefined
-      && options.penSlot !== null
-      && layer.target_pen_slot !== options.penSlot
+      options.penSlot !== undefined &&
+      options.penSlot !== null &&
+      layer.target_pen_slot !== options.penSlot
     ) {
       store.updateLayer(layer.layer_id, { target_pen_slot: options.penSlot })
     }
@@ -84,17 +84,12 @@ export async function applyMasterStyleToLayers(
     // back to the style's flat default — that way single-recipe styles
     // and dual-mode helpers keep working untouched.
     const hex = layer.source_color ?? '#000000'
-    const recipe = style.colorRecipe?.(i, total, hex)
-      ?? style.bandRecipe?.(i, total)
-      ?? {
+    const recipe = style.colorRecipe?.(i, total, hex) ??
+      style.bandRecipe?.(i, total) ?? {
         algorithm: style.defaultAlgorithm,
         algorithm_options: { ...style.defaultAlgorithmOptions },
       }
-    await store.applyLayerAlgorithm(
-      layer.layer_id,
-      recipe.algorithm,
-      recipe.algorithm_options,
-    )
+    await store.applyLayerAlgorithm(layer.layer_id, recipe.algorithm, recipe.algorithm_options)
     applied += 1
   }
   return applied

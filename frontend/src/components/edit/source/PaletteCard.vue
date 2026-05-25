@@ -83,7 +83,9 @@ function updatePaletteColour(i: number, value: string): void {
         <button
           type="button"
           class="px-2 py-0.5 text-[10px] transition"
-          :class="paletteFollowsPens ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800'"
+          :class="
+            paletteFollowsPens ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800'
+          "
           :disabled="!installedPenColors.length"
           @click="setPaletteSource(true)"
         >
@@ -92,7 +94,11 @@ function updatePaletteColour(i: number, value: string): void {
         <button
           type="button"
           class="px-2 py-0.5 text-[10px] transition"
-          :class="!paletteFollowsPens ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800'"
+          :class="
+            !paletteFollowsPens
+              ? 'bg-slate-700 text-slate-100'
+              : 'text-slate-400 hover:bg-slate-800'
+          "
           @click="setPaletteSource(false)"
         >
           {{ t('palette.manual') }}
@@ -186,7 +192,14 @@ function updatePaletteColour(i: number, value: string): void {
       v-if="manualSwapCount > 0"
       class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-[11px] text-amber-200"
     >
-      ⚠ {{ t('palette.manualSwap', { count: manualSwapCount, total: bitmap.palette.length, slots: penSlotCount }) }}
+      ⚠
+      {{
+        t('palette.manualSwap', {
+          count: manualSwapCount,
+          total: bitmap.palette.length,
+          slots: penSlotCount,
+        })
+      }}
     </p>
   </div>
 </template>

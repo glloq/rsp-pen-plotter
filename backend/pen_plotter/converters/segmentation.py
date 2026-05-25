@@ -5,7 +5,7 @@ pair, where ``labels`` assigns every pixel to a cluster and ``palette``
 lists the cluster centroids as RGB tuples. Downstream the converter
 renders one SVG layer per cluster via a pluggable raster algorithm.
 
-Methods
+Methods:
 -------
 * :func:`kmeans` — colour clustering in RGB space (the original behaviour).
 * :func:`luminance_bands` — slice the greyscale image into N equal bands.

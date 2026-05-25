@@ -73,7 +73,11 @@ function loadInitialTab(): EditTabId {
 }
 
 watch(activeTab, (tab) => {
-  try { localStorage.setItem(TAB_KEY, tab) } catch { /* ignore */ }
+  try {
+    localStorage.setItem(TAB_KEY, tab)
+  } catch {
+    /* ignore */
+  }
 })
 
 // Tell the preview pane to show the raw source raster (with the
@@ -110,10 +114,19 @@ function onKey(event: KeyboardEvent): void {
     return
   }
   if (isTypingTarget(event.target)) return
-  if (event.key === '1') { activeTab.value = 'image'; event.preventDefault() }
-  else if (event.key === '2') { activeTab.value = 'svg'; event.preventDefault() }
-  else if (event.key === '3') { activeTab.value = 'style'; event.preventDefault() }
-  else if (event.key === '4') { activeTab.value = 'layers'; event.preventDefault() }
+  if (event.key === '1') {
+    activeTab.value = 'image'
+    event.preventDefault()
+  } else if (event.key === '2') {
+    activeTab.value = 'svg'
+    event.preventDefault()
+  } else if (event.key === '3') {
+    activeTab.value = 'style'
+    event.preventDefault()
+  } else if (event.key === '4') {
+    activeTab.value = 'layers'
+    event.preventDefault()
+  }
 }
 
 // ============================== RESIZABLE SPLIT ==============================
@@ -272,9 +285,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           class="flex shrink-0 items-center gap-1.5 rounded border border-slate-600 bg-slate-800/80 px-2 py-1 text-xs"
           :title="sourceName || t('editModal.title')"
         >
-          <svg class="h-3 w-3 shrink-0 text-slate-400" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-            <path d="M4 1h5.586L13 4.414V15H3V1h1zm0-1H3a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V4.414a1 1 0 0 0-.293-.707L9.293.293A1 1 0 0 0 8.586 0H4z"/>
-            <path d="M9 4V1l3.5 3.5H9.5A.5.5 0 0 1 9 4z"/>
+          <svg
+            class="h-3 w-3 shrink-0 text-slate-400"
+            viewBox="0 0 16 16"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M4 1h5.586L13 4.414V15H3V1h1zm0-1H3a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V4.414a1 1 0 0 0-.293-.707L9.293.293A1 1 0 0 0 8.586 0H4z"
+            />
+            <path d="M9 4V1l3.5 3.5H9.5A.5.5 0 0 1 9 4z" />
           </svg>
           <span class="max-w-[200px] truncate font-mono text-slate-200">
             {{ sourceName || t('editModal.title') }}
@@ -308,7 +328,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       >
         <div
           class="min-h-0 overflow-hidden border-r border-slate-700 bg-slate-950/60"
-          :style="{ flexBasis: previewWidthPx + 'px', flexShrink: 1, flexGrow: 0, minWidth: PREVIEW_MIN_PX + 'px' }"
+          :style="{
+            flexBasis: previewWidthPx + 'px',
+            flexShrink: 1,
+            flexGrow: 0,
+            minWidth: PREVIEW_MIN_PX + 'px',
+          }"
         >
           <EditPreviewPane />
         </div>
@@ -325,10 +350,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         >
           <span class="text-[10px] leading-none text-slate-500 group-hover:text-white">⋮</span>
         </div>
-        <div
-          class="flex min-h-0 flex-1 flex-col"
-          :style="{ minWidth: SETTINGS_MIN_PX + 'px' }"
-        >
+        <div class="flex min-h-0 flex-1 flex-col" :style="{ minWidth: SETTINGS_MIN_PX + 'px' }">
           <!-- Empty-placement edge case: show the dropzone instead of
                the tabs so the operator can attach the first file
                without leaving the modal. Tabs reappear automatically
@@ -337,11 +359,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             <EmptyPlacementDropzone />
           </template>
           <template v-else>
-            <EditTabs
-              v-model="activeTab"
-              :layer-count="layerCount"
-              :variant-count="variantCount"
-            />
+            <EditTabs v-model="activeTab" :layer-count="layerCount" :variant-count="variantCount" />
             <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
               <!-- v-show keeps each tab's component mounted so internal
                    state (drafts, scroll, dropdown open/closed) isn't

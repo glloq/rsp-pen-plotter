@@ -7,11 +7,7 @@
 // upload, and by future MasterStyleParams panels that want to preview
 // what each band will look like before committing.
 
-import {
-  resolveMasterStyle,
-  type BandRecipe,
-  type PrintStyle,
-} from '../data/printRegistry'
+import { resolveMasterStyle, type BandRecipe, type PrintStyle } from '../data/printRegistry'
 
 export interface UseMonoRecipe {
   style: PrintStyle

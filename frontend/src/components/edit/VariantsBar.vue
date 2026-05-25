@@ -18,9 +18,7 @@ const store = useJobStore()
 
 const variants = computed(() => store.selectedPlacement?.variants ?? [])
 const activeId = computed(() => store.selectedPlacement?.active_variant_id ?? '')
-const activeName = computed(
-  () => variants.value.find((v) => v.id === activeId.value)?.name ?? '—',
-)
+const activeName = computed(() => variants.value.find((v) => v.id === activeId.value)?.name ?? '—')
 
 // Persisted collapsed state — the operator who hides the bar once
 // shouldn't see it pop back open every modal reopen. Keyed per
@@ -37,16 +35,28 @@ function readCollapsed(key: string): boolean {
     const v = localStorage.getItem(key)
     if (v === '1') return true
     if (v === '0') return false
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   // Fall back to the legacy global value when this placement has no
   // entry yet; pre-migration users keep their previously-set state.
-  try { return localStorage.getItem(LEGACY_COLLAPSED_KEY) === '1' } catch { return false }
+  try {
+    return localStorage.getItem(LEGACY_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
 }
 const collapsed = ref<boolean>(readCollapsed(collapsedKey.value))
-watch(collapsedKey, (key) => { collapsed.value = readCollapsed(key) })
+watch(collapsedKey, (key) => {
+  collapsed.value = readCollapsed(key)
+})
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value
-  try { localStorage.setItem(collapsedKey.value, collapsed.value ? '1' : '0') } catch { /* ignore */ }
+  try {
+    localStorage.setItem(collapsedKey.value, collapsed.value ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
 }
 
 // Inline rename, same UX as the old card.
@@ -85,7 +95,9 @@ function onRemove(id: string): void {
   <div
     v-if="store.selectedPlacement"
     class="flex items-center gap-1 px-2 py-1"
-    :class="!props.inline ? 'border-b border-slate-700 bg-slate-900/80 backdrop-blur' : 'min-w-0 flex-1'"
+    :class="
+      !props.inline ? 'border-b border-slate-700 bg-slate-900/80 backdrop-blur' : 'min-w-0 flex-1'
+    "
   >
     <button
       type="button"
@@ -108,10 +120,7 @@ function onRemove(id: string): void {
 
     <template v-else>
       <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-        <template
-          v-for="variant in variants"
-          :key="variant.id"
-        >
+        <template v-for="variant in variants" :key="variant.id">
           <span
             v-if="editingId === variant.id"
             class="inline-flex items-center gap-1 rounded border border-emerald-600 bg-emerald-950/40 px-1"
@@ -130,9 +139,11 @@ function onRemove(id: string): void {
             v-else
             type="button"
             class="inline-flex max-w-[12rem] items-center gap-1 truncate rounded border px-1.5 py-0.5 text-[11px] transition"
-            :class="variant.id === activeId
-              ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-              : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+            :class="
+              variant.id === activeId
+                ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+            "
             @click="onSwitch(variant.id)"
             @dblclick="beginRename(variant.id, variant.name)"
             :title="t('variants.switchHint')"
@@ -144,7 +155,8 @@ function onRemove(id: string): void {
               class="ml-0.5 text-[10px] text-slate-500 hover:text-rose-400"
               :title="t('variants.remove')"
               @click.stop="onRemove(variant.id)"
-            >✕</span>
+              >✕</span
+            >
           </button>
         </template>
         <button
@@ -152,13 +164,17 @@ function onRemove(id: string): void {
           class="rounded border border-dashed border-slate-700 px-1.5 py-0.5 text-[11px] text-slate-300 hover:border-emerald-600 hover:text-emerald-200"
           :title="t('variants.add')"
           @click="onAdd"
-        >+ {{ t('variants.add') }}</button>
+        >
+          + {{ t('variants.add') }}
+        </button>
         <button
           type="button"
           class="ml-auto rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-300 hover:border-slate-600"
           :title="t('variants.updateHint')"
           @click="store.updateActiveVariant"
-        >{{ t('variants.update') }}</button>
+        >
+          {{ t('variants.update') }}
+        </button>
       </div>
     </template>
   </div>
