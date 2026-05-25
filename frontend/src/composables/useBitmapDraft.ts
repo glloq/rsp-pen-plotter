@@ -36,14 +36,14 @@ import {
 // Mirrors ``PreprocessOptions`` on the backend; every field defaults to
 // a neutral value so the payload is safe to ship unconditionally.
 export type PreprocessDraft = {
-  brightness: number   // -1..+1, 0 = neutral
-  contrast: number     // -1..+1, 0 = neutral
-  saturation: number   // 0..2, 1 = neutral
-  gamma: number        // 0.1..5, 1 = neutral
-  black_point: number  // 0..255
-  white_point: number  // 0..255
-  sharpen: number      // 0..2
-  blur_px: number      // 0..10
+  brightness: number // -1..+1, 0 = neutral
+  contrast: number // -1..+1, 0 = neutral
+  saturation: number // 0..2, 1 = neutral
+  gamma: number // 0.1..5, 1 = neutral
+  black_point: number // 0..255
+  white_point: number // 0..255
+  sharpen: number // 0..2
+  blur_px: number // 0..10
   invert: boolean
   grayscale: boolean
   auto_contrast: boolean
@@ -146,22 +146,22 @@ export function defaultPreprocess(): PreprocessDraft {
 // display a "default" badge and the close-confirm dialog stay quiet.
 export function isPreprocessNeutral(p: PreprocessDraft): boolean {
   return (
-    p.brightness === 0
-    && p.contrast === 0
-    && p.saturation === 1
-    && p.gamma === 1
-    && p.black_point === 0
-    && p.white_point === 255
-    && p.sharpen === 0
-    && p.blur_px === 0
-    && !p.invert
-    && !p.grayscale
-    && !p.auto_contrast
-    && p.dither_levels === 0
-    && p.rotate_deg === 0
-    && !p.flip_h
-    && !p.flip_v
-    && p.crop === null
+    p.brightness === 0 &&
+    p.contrast === 0 &&
+    p.saturation === 1 &&
+    p.gamma === 1 &&
+    p.black_point === 0 &&
+    p.white_point === 255 &&
+    p.sharpen === 0 &&
+    p.blur_px === 0 &&
+    !p.invert &&
+    !p.grayscale &&
+    !p.auto_contrast &&
+    p.dither_levels === 0 &&
+    p.rotate_deg === 0 &&
+    !p.flip_h &&
+    !p.flip_v &&
+    p.crop === null
   )
 }
 
@@ -355,7 +355,12 @@ const _paletteFollowsPens = ref<boolean>(true)
 // overwrite a manual choice the operator made on the SvgTab or
 // MasterStyleParams. Reset on placement rehydrate and on intentional
 // "reset to preset" calls (force=true).
-type SegmentationField = 'method' | 'num_bands' | 'thresholds' | 'drop_background' | 'background_luminance'
+type SegmentationField =
+  | 'method'
+  | 'num_bands'
+  | 'thresholds'
+  | 'drop_background'
+  | 'background_luminance'
 const _segmentationTouched = ref<Set<SegmentationField>>(new Set())
 
 // "Was this draft committed yet?" — set to false when SourceSection
@@ -373,9 +378,9 @@ const _printMode = computed<'multicolor' | 'monochrome'>(() => {
   if (_bitmap.value.segmentation_method === 'luminance_bands') return 'monochrome'
   const masterStyle = resolveMasterStyle(_monoMasterStyleId.value)
   if (
-    masterStyle.segmentation?.method === 'thresholds'
-    && _bitmap.value.segmentation_method === 'thresholds'
-    && _bitmap.value.thresholds.length === 1
+    masterStyle.segmentation?.method === 'thresholds' &&
+    _bitmap.value.segmentation_method === 'thresholds' &&
+    _bitmap.value.thresholds.length === 1
   ) {
     return 'monochrome'
   }
@@ -476,9 +481,9 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
     | undefined
   if (segOpts && 'palette' in segOpts && Array.isArray(segOpts.palette)) {
     _bitmap.value.palette = [...(segOpts.palette as string[])]
-    const sameAsPens
-      = _bitmap.value.palette.length === ctx.installedPenColors.length
-      && _bitmap.value.palette.every((c, i) => c === ctx.installedPenColors[i])
+    const sameAsPens =
+      _bitmap.value.palette.length === ctx.installedPenColors.length &&
+      _bitmap.value.palette.every((c, i) => c === ctx.installedPenColors[i])
     _paletteFollowsPens.value = sameAsPens
   }
   const typoTarget = _typo.value as Record<string, unknown>
@@ -581,31 +586,25 @@ function applyStyleSegmentation(
   const b = _bitmap.value
   const wouldOverwrite: SegmentationField[] = []
   if (!opts.force) {
+    if (_segmentationTouched.value.has('method') && b.segmentation_method !== seg.method)
+      wouldOverwrite.push('method')
     if (
-      _segmentationTouched.value.has('method')
-      && b.segmentation_method !== seg.method
-    ) wouldOverwrite.push('method')
+      _segmentationTouched.value.has('drop_background') &&
+      b.drop_background !== seg.drop_background
+    )
+      wouldOverwrite.push('drop_background')
     if (
-      _segmentationTouched.value.has('drop_background')
-      && b.drop_background !== seg.drop_background
-    ) wouldOverwrite.push('drop_background')
-    if (
-      _segmentationTouched.value.has('background_luminance')
-      && b.background_luminance !== seg.background_luminance
-    ) wouldOverwrite.push('background_luminance')
-    if (
-      seg.method === 'luminance_bands'
-      && _segmentationTouched.value.has('num_bands')
-    ) {
+      _segmentationTouched.value.has('background_luminance') &&
+      b.background_luminance !== seg.background_luminance
+    )
+      wouldOverwrite.push('background_luminance')
+    if (seg.method === 'luminance_bands' && _segmentationTouched.value.has('num_bands')) {
       const target = seg.default_num_bands ?? 4
       if (b.num_bands !== target && (b.num_bands < 2 || b.num_bands > 6)) {
         wouldOverwrite.push('num_bands')
       }
     }
-    if (
-      seg.method === 'thresholds'
-      && _segmentationTouched.value.has('thresholds')
-    ) {
+    if (seg.method === 'thresholds' && _segmentationTouched.value.has('thresholds')) {
       const target = seg.default_threshold ?? 0.5
       const current = b.thresholds[0] ?? target
       if (b.thresholds.length !== 1 || Math.abs(current - target) > 1e-6) {
@@ -747,10 +746,7 @@ export function setPrintMode(
 // (callers surface a toast). Mirrors setPrintMode's signature so the
 // StyleTab can share the warning code path. Caller is still
 // responsible for the post-upload ``applyMasterStyleToLayers`` push.
-export function setMasterStyle(
-  id: string,
-  opts: { force?: boolean } = {},
-): SegmentationField[] {
+export function setMasterStyle(id: string, opts: { force?: boolean } = {}): SegmentationField[] {
   _monoMasterStyleId.value = id
   return applyStyleSegmentation(resolveMasterStyle(id), opts)
 }
@@ -785,11 +781,7 @@ export function buildAlgorithmOptions(): Record<string, unknown> {
 // operator's chosen angle list. ``angles`` must be non-empty; callers
 // guarantee this by falling back to MONO_STYLE_DEFAULTS.pencil.angles
 // when the operator clears the list.
-function pickAnglesForBand(
-  i: number,
-  _total: number,
-  angles: number[],
-): number[] {
+function pickAnglesForBand(i: number, _total: number, angles: number[]): number[] {
   if (angles.length === 0) return [45]
   // Single-angle list → every band uses that single angle (operator
   // explicitly asked for a uniform direction). Otherwise pick a
@@ -824,14 +816,11 @@ function recipeFromKnobs(
   }
   switch (style.id) {
     case 'pencil': {
-      const angles = knobs.angles && knobs.angles.length > 0
-        ? knobs.angles
-        : ((MONO_STYLE_DEFAULTS.pencil?.angles as number[] | undefined) ?? [45, 135])
-      const spacing = lerp(
-        i, total,
-        knobs.spacing_min ?? 2.5,
-        knobs.spacing_max ?? 6.5,
-      )
+      const angles =
+        knobs.angles && knobs.angles.length > 0
+          ? knobs.angles
+          : ((MONO_STYLE_DEFAULTS.pencil?.angles as number[] | undefined) ?? [45, 135])
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6.5)
       return {
         algorithm: 'crosshatch',
         algorithm_options: {
@@ -842,11 +831,7 @@ function recipeFromKnobs(
       }
     }
     case 'halftone-shade': {
-      const cell = lerp(
-        i, total,
-        knobs.cell_min ?? 3,
-        knobs.cell_max ?? 9,
-      )
+      const cell = lerp(i, total, knobs.cell_min ?? 3, knobs.cell_max ?? 9)
       return {
         algorithm: 'halftone',
         algorithm_options: { cell_size_px: cell },
@@ -856,11 +841,7 @@ function recipeFromKnobs(
       // Darker bands need MORE dots → density_max applies at i=0,
       // density_min at i=total-1. Matches the legacy lerp(0.06, 0.012)
       // contract while letting the operator tune both endpoints.
-      const density = lerp(
-        i, total,
-        knobs.density_max ?? 0.06,
-        knobs.density_min ?? 0.012,
-      )
+      const density = lerp(i, total, knobs.density_max ?? 0.06, knobs.density_min ?? 0.012)
       return {
         algorithm: 'stippling',
         algorithm_options: {
@@ -871,16 +852,8 @@ function recipeFromKnobs(
       }
     }
     case 'engraving': {
-      const spacing = lerp(
-        i, total,
-        knobs.spacing_min ?? 1.8,
-        knobs.spacing_max ?? 5,
-      )
-      const wave = lerp(
-        i, total,
-        knobs.wave_min ?? 0.6,
-        knobs.wave_max ?? 1.6,
-      )
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.8, knobs.spacing_max ?? 5)
+      const wave = lerp(i, total, knobs.wave_min ?? 0.6, knobs.wave_max ?? 1.6)
       return {
         algorithm: 'scanlines',
         algorithm_options: {
@@ -891,17 +864,9 @@ function recipeFromKnobs(
       }
     }
     case 'contours-topo': {
-      const spacing = lerp(
-        i, total,
-        knobs.spacing_min ?? 2.5,
-        knobs.spacing_max ?? 6,
-      )
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
       // Darker bands → more rings; rings_max at i=0, rings_min at i=total-1.
-      const rings = Math.round(lerp(
-        i, total,
-        knobs.rings_max ?? 30,
-        knobs.rings_min ?? 10,
-      ))
+      const rings = Math.round(lerp(i, total, knobs.rings_max ?? 30, knobs.rings_min ?? 10))
       return {
         algorithm: 'contours',
         algorithm_options: { spacing_px: spacing, max_rings: rings },
@@ -954,10 +919,7 @@ function recipeFromKnobs(
 // ``buildBandRecipes`` would emit them, *ignoring* any pinned perBand
 // override. Used by the "Advanced (per band)" drawer to pre-fill each
 // card with the current interpolated value before the operator pins it.
-export function interpolatedBandOptions(
-  i: number,
-  total: number,
-): Record<string, unknown> {
+export function interpolatedBandOptions(i: number, total: number): Record<string, unknown> {
   const style = resolveMasterStyle(_monoMasterStyleId.value)
   const knobs = _mono.value.perStyle[style.id]
   // Synthesize without consulting perBand by passing knobs minus the
@@ -965,7 +927,8 @@ export function interpolatedBandOptions(
   const interp = recipeFromKnobs(
     style,
     knobs ? { ...knobs, perBand: undefined } : undefined,
-    i, total,
+    i,
+    total,
   )
   return interp?.algorithm_options ?? { ...style.defaultAlgorithmOptions }
 }
@@ -985,9 +948,7 @@ function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
     if (!style.bandRecipe && !(style.id in MONO_STYLE_DEFAULTS)) return undefined
     // Binary mono modes render exactly one layer (drop_background drops
     // the lighter side of the threshold), so emit a single recipe.
-    const total = segMethod === 'luminance_bands'
-      ? _bitmap.value.num_bands
-      : 1
+    const total = segMethod === 'luminance_bands' ? _bitmap.value.num_bands : 1
     const knobs = _mono.value.perStyle[style.id]
     return Array.from({ length: total }, (_, i) => {
       const recipe = recipeFromKnobs(style, knobs, i, total)
@@ -1074,11 +1035,7 @@ function colorRecipeFromKnobs(
       // Darker clusters first → density_max at i=0, density_min at the
       // lightest cluster. Mirrors the mono ``stippling-shade`` recipe so
       // the slider direction is consistent between modes.
-      const density = lerp(
-        i, total,
-        knobs.density_max ?? 0.05,
-        knobs.density_min ?? 0.012,
-      )
+      const density = lerp(i, total, knobs.density_max ?? 0.05, knobs.density_min ?? 0.012)
       return {
         algorithm: 'voronoi_stipple',
         algorithm_options: {
@@ -1093,7 +1050,9 @@ function colorRecipeFromKnobs(
       const r = parseInt(hex.slice(1, 3), 16) / 255
       const g = parseInt(hex.slice(3, 5), 16) / 255
       const bch = parseInt(hex.slice(5, 7), 16) / 255
-      const c = 1 - r, m = 1 - g, y = 1 - bch
+      const c = 1 - r,
+        m = 1 - g,
+        y = 1 - bch
       let angle = 45
       const max = Math.max(c, m, y)
       if (max > 0.15) {
@@ -1112,22 +1071,14 @@ function colorRecipeFromKnobs(
     case 'color-contours-topo': {
       const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
       // Darker clusters get more rings.
-      const rings = Math.round(lerp(
-        i, total,
-        knobs.rings_max ?? 30,
-        knobs.rings_min ?? 10,
-      ))
+      const rings = Math.round(lerp(i, total, knobs.rings_max ?? 30, knobs.rings_min ?? 10))
       return {
         algorithm: 'contours',
         algorithm_options: { spacing_px: spacing, max_rings: rings },
       }
     }
     case 'color-flowfield': {
-      const seedSpacing = lerp(
-        i, total,
-        knobs.seed_spacing_min ?? 6,
-        knobs.seed_spacing_max ?? 12,
-      )
+      const seedSpacing = lerp(i, total, knobs.seed_spacing_min ?? 6, knobs.seed_spacing_max ?? 12)
       return {
         algorithm: 'flowfield',
         algorithm_options: {
@@ -1168,11 +1119,7 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-stippling-classic': {
-      const density = lerp(
-        i, total,
-        knobs.density_max ?? 0.05,
-        knobs.density_min ?? 0.012,
-      )
+      const density = lerp(i, total, knobs.density_max ?? 0.05, knobs.density_min ?? 0.012)
       return {
         algorithm: 'stippling',
         algorithm_options: {
@@ -1220,11 +1167,7 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-tsp': {
-      const density = lerp(
-        i, total,
-        knobs.density_max ?? 0.05,
-        knobs.density_min ?? 0.012,
-      )
+      const density = lerp(i, total, knobs.density_max ?? 0.05, knobs.density_min ?? 0.012)
       return {
         algorithm: 'tsp',
         algorithm_options: { density, seed: i * 11 + 5 },
@@ -1266,11 +1209,7 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-tsp-opt': {
-      const density = lerp(
-        i, total,
-        knobs.density_max ?? 0.05,
-        knobs.density_min ?? 0.012,
-      )
+      const density = lerp(i, total, knobs.density_max ?? 0.05, knobs.density_min ?? 0.012)
       return {
         algorithm: 'tsp_opt',
         algorithm_options: {
@@ -1303,8 +1242,7 @@ export function buildBitmapOptions(): Record<string, unknown> {
   // levels / palette and ignores num_colors. Skipping it keeps the
   // payload truthful and avoids future confusion when a backend
   // validation tightens unknown-field handling.
-  const shipsNumColors
-    = _printMode.value === 'multicolor' && b.segmentation_method === 'kmeans'
+  const shipsNumColors = _printMode.value === 'multicolor' && b.segmentation_method === 'kmeans'
   const payload: Record<string, unknown> = {
     algorithm: algo,
     ...(shipsNumColors ? { num_colors: b.num_colors } : {}),
@@ -1325,9 +1263,8 @@ export function buildBitmapOptions(): Record<string, unknown> {
     // operator committed with. The backend tolerates unknown extras
     // (BitmapOptions ignores unrecognised keys); only the frontend
     // rehydrate path reads it back.
-    master_style_id: _printMode.value === 'monochrome'
-      ? _monoMasterStyleId.value
-      : _multicolorMasterStyleId.value,
+    master_style_id:
+      _printMode.value === 'monochrome' ? _monoMasterStyleId.value : _multicolorMasterStyleId.value,
     // Both ids are persisted unconditionally so flipping print mode on
     // a rehydrated placement restores the operator's last choice in
     // each family (instead of resetting to the default).
@@ -1414,7 +1351,11 @@ const _baselineBitmap = ref<string>('')
 const _baselineTypo = ref<string>('')
 
 function snap(value: unknown): string {
-  try { return JSON.stringify(value) } catch { return '' }
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return ''
+  }
 }
 
 const _baselineCurves = ref<string>('')
@@ -1422,11 +1363,13 @@ const _baselineMono = ref<string>('')
 const _baselineMulticolor = ref<string>('')
 
 const _isDirty = computed<boolean>(() => {
-  return snap(_bitmap.value) !== _baselineBitmap.value
-    || snap(_typo.value) !== _baselineTypo.value
-    || snap(_curves.value) !== _baselineCurves.value
-    || snap(_mono.value) !== _baselineMono.value
-    || snap(_multicolor.value) !== _baselineMulticolor.value
+  return (
+    snap(_bitmap.value) !== _baselineBitmap.value ||
+    snap(_typo.value) !== _baselineTypo.value ||
+    snap(_curves.value) !== _baselineCurves.value ||
+    snap(_mono.value) !== _baselineMono.value ||
+    snap(_multicolor.value) !== _baselineMulticolor.value
+  )
 })
 
 function markCommitted(): void {
@@ -1448,8 +1391,7 @@ const _origRehydrate = rehydrateDraft
 function rehydrateDraftAndMark(ctx: RehydrateContext): void {
   _origRehydrate(ctx)
   const hasCommitted = Boolean(
-    ctx.placement?.last_options
-    && typeof ctx.placement.last_options === 'object',
+    ctx.placement?.last_options && typeof ctx.placement.last_options === 'object',
   )
   if (hasCommitted) markCommitted()
 }

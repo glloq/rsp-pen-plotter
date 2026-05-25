@@ -19,7 +19,13 @@ const error = ref<string | null>(null)
 const isUnsavedDraft = ref(false)
 
 function defaultEbb(): EbbConfig {
-  return { steps_per_mm: 80, servo_up: 16000, servo_down: 12000, servo_rate: 400, serial_terminator: 'cr' }
+  return {
+    steps_per_mm: 80,
+    servo_up: 16000,
+    servo_down: 12000,
+    servo_rate: 400,
+    serial_terminator: 'cr',
+  }
 }
 
 function defaultPen(index: number): PenSlot {
@@ -121,8 +127,9 @@ async function save(): Promise<void> {
     await store.saveProfile(structuredClone(toRaw(draft.value)))
     isUnsavedDraft.value = false
   } catch (err) {
-    error.value = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      ?? t('profile.saveFailed')
+    error.value =
+      (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+      t('profile.saveFailed')
   } finally {
     saving.value = false
   }
@@ -149,8 +156,9 @@ async function remove(): Promise<void> {
   try {
     await store.deleteProfile(draft.value.name)
   } catch (err) {
-    error.value = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      ?? t('profile.deleteFailed')
+    error.value =
+      (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+      t('profile.deleteFailed')
   }
 }
 
@@ -212,7 +220,9 @@ async function downloadYaml(): Promise<void> {
     <div v-if="draft" class="space-y-3">
       <!-- IDENTITY -->
       <details open class="group rounded-lg border border-slate-700 bg-slate-800/40">
-        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+        <summary
+          class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+        >
           <span>① {{ t('profile.sectionIdentity') }}</span>
           <span class="text-[10px] text-slate-500 group-open:hidden">{{ draft.name }}</span>
         </summary>
@@ -238,14 +248,18 @@ async function downloadYaml(): Promise<void> {
               <option value="ebb">EBB (EiBotBoard / AxiDraw)</option>
               <option value="custom">{{ t('profile.dialectCustom') }}</option>
             </select>
-            <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.dialectHint') }}</span>
+            <span class="mt-0.5 block text-[11px] text-slate-500">{{
+              t('profile.dialectHint')
+            }}</span>
           </label>
         </div>
       </details>
 
       <!-- WORKSPACE -->
       <details open class="group rounded-lg border border-slate-700 bg-slate-800/40">
-        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+        <summary
+          class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+        >
           <span>② {{ t('profile.sectionWorkspace') }}</span>
           <span class="text-[10px] text-slate-500 group-open:hidden">
             {{ Math.round(workspaceSize.w) }} × {{ Math.round(workspaceSize.h) }} {{ draft.units }}
@@ -256,40 +270,95 @@ async function downloadYaml(): Promise<void> {
           <div class="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px]">
             <div class="space-y-2">
               <div class="grid grid-cols-2 gap-2">
-                <label class="block text-slate-400">{{ t('profile.units') }}
-                  <select v-model="draft.units" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+                <label class="block text-slate-400"
+                  >{{ t('profile.units') }}
+                  <select
+                    v-model="draft.units"
+                    class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                  >
                     <option value="mm">mm</option>
                     <option value="inch">inch</option>
                   </select>
                 </label>
-                <label class="block text-slate-400">{{ t('profile.origin') }}
-                  <select v-model="draft.origin" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+                <label class="block text-slate-400"
+                  >{{ t('profile.origin') }}
+                  <select
+                    v-model="draft.origin"
+                    class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                  >
                     <option value="top_left">{{ t('profile.originTopLeft') }}</option>
                     <option value="bottom_left">{{ t('profile.originBottomLeft') }}</option>
                     <option value="center">{{ t('profile.originCenter') }}</option>
                   </select>
                 </label>
-                <label class="block text-slate-400">X min ({{ draft.units }})
-                  <input v-model.number="draft.workspace.x_min" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <label class="block text-slate-400"
+                  >X min ({{ draft.units }})
+                  <input
+                    v-model.number="draft.workspace.x_min"
+                    type="number"
+                    step="any"
+                    class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                  />
                 </label>
-                <label class="block text-slate-400">Y min ({{ draft.units }})
-                  <input v-model.number="draft.workspace.y_min" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <label class="block text-slate-400"
+                  >Y min ({{ draft.units }})
+                  <input
+                    v-model.number="draft.workspace.y_min"
+                    type="number"
+                    step="any"
+                    class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                  />
                 </label>
-                <label class="block text-slate-400">X max ({{ draft.units }})
-                  <input v-model.number="draft.workspace.x_max" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <label class="block text-slate-400"
+                  >X max ({{ draft.units }})
+                  <input
+                    v-model.number="draft.workspace.x_max"
+                    type="number"
+                    step="any"
+                    class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                  />
                 </label>
-                <label class="block text-slate-400">Y max ({{ draft.units }})
-                  <input v-model.number="draft.workspace.y_max" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <label class="block text-slate-400"
+                  >Y max ({{ draft.units }})
+                  <input
+                    v-model.number="draft.workspace.y_max"
+                    type="number"
+                    step="any"
+                    class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                  />
                 </label>
               </div>
               <p class="text-[11px] text-slate-500">{{ t('profile.originHint') }}</p>
             </div>
 
             <!-- Workspace preview -->
-            <div class="flex items-start justify-center rounded border border-slate-700 bg-slate-900/60 p-2">
-              <svg viewBox="0 0 100 80" class="h-32 w-full" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-                <rect x="10" y="10" width="80" height="60" fill="none" stroke="#475569" stroke-width="0.8" stroke-dasharray="2 2" />
-                <text x="50" y="42" text-anchor="middle" fill="#94a3b8" font-size="6" font-family="ui-monospace, monospace">
+            <div
+              class="flex items-start justify-center rounded border border-slate-700 bg-slate-900/60 p-2"
+            >
+              <svg
+                viewBox="0 0 100 80"
+                class="h-32 w-full"
+                preserveAspectRatio="xMidYMid meet"
+                aria-hidden="true"
+              >
+                <rect
+                  x="10"
+                  y="10"
+                  width="80"
+                  height="60"
+                  fill="none"
+                  stroke="#475569"
+                  stroke-width="0.8"
+                  stroke-dasharray="2 2"
+                />
+                <text
+                  x="50"
+                  y="42"
+                  text-anchor="middle"
+                  fill="#94a3b8"
+                  font-size="6"
+                  font-family="ui-monospace, monospace"
+                >
                   {{ Math.round(workspaceSize.w) }} × {{ Math.round(workspaceSize.h) }}
                 </text>
                 <!-- Origin marker -->
@@ -313,7 +382,9 @@ async function downloadYaml(): Promise<void> {
 
       <!-- MOTION -->
       <details open class="group rounded-lg border border-slate-700 bg-slate-800/40">
-        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+        <summary
+          class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+        >
           <span>③ {{ t('profile.motion') }}</span>
           <span class="text-[10px] text-slate-500 group-open:hidden">
             {{ draft.drawing_speed_mm_s }} / {{ draft.travel_speed_mm_s }} mm/s
@@ -321,17 +392,41 @@ async function downloadYaml(): Promise<void> {
         </summary>
         <div class="space-y-3 border-t border-slate-700 p-3">
           <div class="grid grid-cols-2 gap-2">
-            <label class="block text-slate-400">{{ t('profile.drawingSpeed') }}
-              <input v-model.number="draft.drawing_speed_mm_s" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.drawingSpeedHint') }}</span>
+            <label class="block text-slate-400"
+              >{{ t('profile.drawingSpeed') }}
+              <input
+                v-model.number="draft.drawing_speed_mm_s"
+                type="number"
+                step="any"
+                class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                t('profile.drawingSpeedHint')
+              }}</span>
             </label>
-            <label class="block text-slate-400">{{ t('profile.travelSpeed') }}
-              <input v-model.number="draft.travel_speed_mm_s" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.travelSpeedHint') }}</span>
+            <label class="block text-slate-400"
+              >{{ t('profile.travelSpeed') }}
+              <input
+                v-model.number="draft.travel_speed_mm_s"
+                type="number"
+                step="any"
+                class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                t('profile.travelSpeedHint')
+              }}</span>
             </label>
-            <label class="col-span-2 block text-slate-400">{{ t('profile.acceleration') }}
-              <input v-model.number="draft.acceleration_mm_s2" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.accelerationHint') }}</span>
+            <label class="col-span-2 block text-slate-400"
+              >{{ t('profile.acceleration') }}
+              <input
+                v-model.number="draft.acceleration_mm_s2"
+                type="number"
+                step="any"
+                class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                t('profile.accelerationHint')
+              }}</span>
             </label>
           </div>
         </div>
@@ -339,48 +434,96 @@ async function downloadYaml(): Promise<void> {
 
       <!-- PENS & TOOL -->
       <details open class="group rounded-lg border border-slate-700 bg-slate-800/40">
-        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+        <summary
+          class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+        >
           <span>④ {{ t('profile.pen') }}</span>
-          <span class="text-[10px] text-slate-500 group-open:hidden">{{ draft.pen_slot_count }} slot(s)</span>
+          <span class="text-[10px] text-slate-500 group-open:hidden"
+            >{{ draft.pen_slot_count }} slot(s)</span
+          >
         </summary>
         <div class="space-y-3 border-t border-slate-700 p-3">
           <div class="grid grid-cols-2 gap-2">
-            <label class="block text-slate-400">{{ t('profile.penUp') }}
-              <input v-model="draft.pen_up_command" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
-              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.penUpHint') }}</span>
+            <label class="block text-slate-400"
+              >{{ t('profile.penUp') }}
+              <input
+                v-model="draft.pen_up_command"
+                type="text"
+                class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+              />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                t('profile.penUpHint')
+              }}</span>
             </label>
-            <label class="block text-slate-400">{{ t('profile.penDown') }}
-              <input v-model="draft.pen_down_command" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
-              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.penDownHint') }}</span>
+            <label class="block text-slate-400"
+              >{{ t('profile.penDown') }}
+              <input
+                v-model="draft.pen_down_command"
+                type="text"
+                class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+              />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                t('profile.penDownHint')
+              }}</span>
             </label>
-            <label class="block text-slate-400">{{ t('profile.toolChangeMethod') }}
-              <select v-model="draft.tool_change_method" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100">
+            <label class="block text-slate-400"
+              >{{ t('profile.toolChangeMethod') }}
+              <select
+                v-model="draft.tool_change_method"
+                class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              >
                 <option value="manual_pause">{{ t('profile.tcManualPause') }}</option>
                 <option value="carousel">{{ t('profile.tcCarousel') }}</option>
                 <option value="rack">{{ t('profile.tcRack') }}</option>
                 <option value="none">{{ t('profile.tcNone') }}</option>
               </select>
-              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.toolChangeMethodHint') }}</span>
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                t('profile.toolChangeMethodHint')
+              }}</span>
             </label>
-            <label class="block text-slate-400">{{ t('profile.toolChangeCommand') }}
-              <input v-model="draft.tool_change_command" type="text" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+            <label class="block text-slate-400"
+              >{{ t('profile.toolChangeCommand') }}
+              <input
+                v-model="draft.tool_change_command"
+                type="text"
+                class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+              />
             </label>
-            <label class="col-span-2 block text-slate-400">{{ t('profile.penSlots') }}
-              <input v-model.number="draft.pen_slot_count" type="number" min="1" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-              <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.penSlotsHint') }}</span>
+            <label class="col-span-2 block text-slate-400"
+              >{{ t('profile.penSlots') }}
+              <input
+                v-model.number="draft.pen_slot_count"
+                type="number"
+                min="1"
+                class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                t('profile.penSlotsHint')
+              }}</span>
             </label>
           </div>
 
-          <div v-if="draft.pens && draft.pens.length" class="space-y-2 border-t border-slate-700 pt-3">
-            <h4 class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('profile.magazine') }}</h4>
+          <div
+            v-if="draft.pens && draft.pens.length"
+            class="space-y-2 border-t border-slate-700 pt-3"
+          >
+            <h4 class="text-[11px] uppercase tracking-wider text-slate-500">
+              {{ t('profile.magazine') }}
+            </h4>
             <div
               v-for="pen in draft.pens"
               :key="pen.index"
               class="rounded border border-slate-700 bg-slate-900/50 p-2"
             >
               <div class="flex items-center gap-2">
-                <span class="w-6 shrink-0 text-center font-mono text-slate-500">{{ pen.index }}</span>
-                <input v-model="pen.color" type="color" class="h-7 w-9 shrink-0 rounded border border-slate-700 bg-slate-900" />
+                <span class="w-6 shrink-0 text-center font-mono text-slate-500">{{
+                  pen.index
+                }}</span>
+                <input
+                  v-model="pen.color"
+                  type="color"
+                  class="h-7 w-9 shrink-0 rounded border border-slate-700 bg-slate-900"
+                />
                 <input
                   v-model="pen.name"
                   type="text"
@@ -388,7 +531,11 @@ async function downloadYaml(): Promise<void> {
                   class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
                 />
                 <label class="flex shrink-0 items-center gap-1 text-xs text-slate-400">
-                  <input v-model="pen.installed" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
+                  <input
+                    v-model="pen.installed"
+                    type="checkbox"
+                    class="rounded border-slate-600 bg-slate-900"
+                  />
                   {{ t('profile.installed') }}
                 </label>
               </div>
@@ -397,20 +544,49 @@ async function downloadYaml(): Promise<void> {
                   type="checkbox"
                   :checked="pen.position !== null"
                   class="rounded border-slate-600 bg-slate-900"
-                  @change="(e) => (pen.position = (e.target as HTMLInputElement).checked ? { x: 0, y: 0 } : null)"
+                  @change="
+                    (e) =>
+                      (pen.position = (e.target as HTMLInputElement).checked
+                        ? { x: 0, y: 0 }
+                        : null)
+                  "
                 />
                 {{ t('profile.pickupPosition') }}
               </label>
               <div v-if="pen.position" class="mt-1 grid grid-cols-2 gap-2">
-                <input v-model.number="pen.position.x" type="number" step="any" placeholder="X" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-                <input v-model.number="pen.position.y" type="number" step="any" placeholder="Y" class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+                <input
+                  v-model.number="pen.position.x"
+                  type="number"
+                  step="any"
+                  placeholder="X"
+                  class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                />
+                <input
+                  v-model.number="pen.position.y"
+                  type="number"
+                  step="any"
+                  placeholder="Y"
+                  class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                />
               </div>
               <div class="mt-1 grid grid-cols-2 gap-2">
-                <label class="block text-slate-500">{{ t('profile.penUpOverride') }}
-                  <input v-model="pen.pen_up_command" type="text" :placeholder="draft.pen_up_command" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+                <label class="block text-slate-500"
+                  >{{ t('profile.penUpOverride') }}
+                  <input
+                    v-model="pen.pen_up_command"
+                    type="text"
+                    :placeholder="draft.pen_up_command"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+                  />
                 </label>
-                <label class="block text-slate-500">{{ t('profile.penDownOverride') }}
-                  <input v-model="pen.pen_down_command" type="text" :placeholder="draft.pen_down_command" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100" />
+                <label class="block text-slate-500"
+                  >{{ t('profile.penDownOverride') }}
+                  <input
+                    v-model="pen.pen_down_command"
+                    type="text"
+                    :placeholder="draft.pen_down_command"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+                  />
                 </label>
               </div>
             </div>
@@ -420,41 +596,90 @@ async function downloadYaml(): Promise<void> {
 
       <!-- ADVANCED -->
       <details class="group rounded-lg border border-slate-700 bg-slate-800/40">
-        <summary class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200">
+        <summary
+          class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+        >
           <span>⑤ {{ t('profile.advanced') }}</span>
           <span class="text-[10px] text-slate-500">{{ t('profile.advancedHint') }}</span>
         </summary>
         <div class="space-y-3 border-t border-slate-700 p-3">
           <label class="flex items-center gap-2 text-slate-400">
-            <input v-model="draft.supports_arcs" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
+            <input
+              v-model="draft.supports_arcs"
+              type="checkbox"
+              class="rounded border-slate-600 bg-slate-900"
+            />
             {{ t('profile.supportsArcs') }}
           </label>
-          <label v-if="draft.supports_arcs" class="block text-slate-400">{{ t('profile.arcTolerance') }}
-            <input v-model.number="draft.arc_tolerance_mm" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-            <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.arcToleranceHint') }}</span>
+          <label v-if="draft.supports_arcs" class="block text-slate-400"
+            >{{ t('profile.arcTolerance') }}
+            <input
+              v-model.number="draft.arc_tolerance_mm"
+              type="number"
+              step="any"
+              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            />
+            <span class="mt-0.5 block text-[11px] text-slate-500">{{
+              t('profile.arcToleranceHint')
+            }}</span>
           </label>
 
-          <div v-if="isEbb && draft.ebb" class="space-y-2 rounded border border-slate-700 bg-slate-900/50 p-3">
-            <h4 class="text-[11px] uppercase tracking-wider text-slate-500">{{ t('profile.ebbSection') }}</h4>
+          <div
+            v-if="isEbb && draft.ebb"
+            class="space-y-2 rounded border border-slate-700 bg-slate-900/50 p-3"
+          >
+            <h4 class="text-[11px] uppercase tracking-wider text-slate-500">
+              {{ t('profile.ebbSection') }}
+            </h4>
             <p class="text-[11px] text-slate-500">{{ t('profile.ebbHint') }}</p>
             <div class="grid grid-cols-2 gap-2">
-              <label class="block text-slate-400">steps/mm
-                <input v-model.number="draft.ebb.steps_per_mm" type="number" step="any" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.stepsPerMmHint') }}</span>
+              <label class="block text-slate-400"
+                >steps/mm
+                <input
+                  v-model.number="draft.ebb.steps_per_mm"
+                  type="number"
+                  step="any"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                  t('profile.stepsPerMmHint')
+                }}</span>
               </label>
-              <label class="block text-slate-400">servo rate
-                <input v-model.number="draft.ebb.servo_rate" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.servoRateHint') }}</span>
+              <label class="block text-slate-400"
+                >servo rate
+                <input
+                  v-model.number="draft.ebb.servo_rate"
+                  type="number"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                  t('profile.servoRateHint')
+                }}</span>
               </label>
-              <label class="block text-slate-400">servo up
-                <input v-model.number="draft.ebb.servo_up" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.servoUpHint') }}</span>
+              <label class="block text-slate-400"
+                >servo up
+                <input
+                  v-model.number="draft.ebb.servo_up"
+                  type="number"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                  t('profile.servoUpHint')
+                }}</span>
               </label>
-              <label class="block text-slate-400">servo down
-                <input v-model.number="draft.ebb.servo_down" type="number" class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
-                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.servoDownHint') }}</span>
+              <label class="block text-slate-400"
+                >servo down
+                <input
+                  v-model.number="draft.ebb.servo_down"
+                  type="number"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                  t('profile.servoDownHint')
+                }}</span>
               </label>
-              <label class="col-span-2 block text-slate-400">{{ t('profile.serialTerminator') }}
+              <label class="col-span-2 block text-slate-400"
+                >{{ t('profile.serialTerminator') }}
                 <select
                   v-model="draft.ebb.serial_terminator"
                   class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
@@ -463,7 +688,9 @@ async function downloadYaml(): Promise<void> {
                   <option value="lf">LF (\n)</option>
                   <option value="crlf">CRLF (\r\n)</option>
                 </select>
-                <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.serialTerminatorHint') }}</span>
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                  t('profile.serialTerminatorHint')
+                }}</span>
               </label>
             </div>
           </div>
@@ -472,17 +699,36 @@ async function downloadYaml(): Promise<void> {
 
       <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
 
-      <div class="sticky bottom-0 -mx-4 -mb-4 flex flex-wrap gap-2 border-t border-slate-700 bg-slate-900/95 px-4 py-3 backdrop-blur">
-        <button type="button" class="flex-1 rounded bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50" :disabled="saving" @click="save">
+      <div
+        class="sticky bottom-0 -mx-4 -mb-4 flex flex-wrap gap-2 border-t border-slate-700 bg-slate-900/95 px-4 py-3 backdrop-blur"
+      >
+        <button
+          type="button"
+          class="flex-1 rounded bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          :disabled="saving"
+          @click="save"
+        >
           {{ saving ? t('profile.saving') : t('profile.save') }}
         </button>
-        <button type="button" class="rounded bg-slate-700 px-3 py-2 text-slate-100 hover:bg-slate-600" @click="duplicate">
+        <button
+          type="button"
+          class="rounded bg-slate-700 px-3 py-2 text-slate-100 hover:bg-slate-600"
+          @click="duplicate"
+        >
           {{ t('profile.duplicate') }}
         </button>
-        <button type="button" class="rounded bg-slate-700 px-3 py-2 text-slate-100 hover:bg-slate-600" @click="downloadYaml">
+        <button
+          type="button"
+          class="rounded bg-slate-700 px-3 py-2 text-slate-100 hover:bg-slate-600"
+          @click="downloadYaml"
+        >
           {{ t('profile.export') }}
         </button>
-        <button type="button" class="rounded bg-red-900/70 px-3 py-2 text-red-200 hover:bg-red-800" @click="remove">
+        <button
+          type="button"
+          class="rounded bg-red-900/70 px-3 py-2 text-red-200 hover:bg-red-800"
+          @click="remove"
+        >
           {{ t('profile.delete') }}
         </button>
       </div>

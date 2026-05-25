@@ -12,7 +12,7 @@
 import { ref, watch, type Ref } from 'vue'
 
 const STORAGE_KEY = 'omniplot.editModal.accordion'
-const GC_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000  // 30 days
+const GC_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
 interface PersistedEntry {
   expanded: boolean

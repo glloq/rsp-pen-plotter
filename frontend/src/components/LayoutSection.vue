@@ -42,10 +42,10 @@ const workspaceHeight = computed(() => {
 
 const sheetExceedsWorkspace = computed(
   () =>
-    widthDraft.value > workspaceWidth.value + 0.01
-    || heightDraft.value > workspaceHeight.value + 0.01
-    || offsetXDraft.value + widthDraft.value > workspaceWidth.value + 0.01
-    || offsetYDraft.value + heightDraft.value > workspaceHeight.value + 0.01,
+    widthDraft.value > workspaceWidth.value + 0.01 ||
+    heightDraft.value > workspaceHeight.value + 0.01 ||
+    offsetXDraft.value + widthDraft.value > workspaceWidth.value + 0.01 ||
+    offsetYDraft.value + heightDraft.value > workspaceHeight.value + 0.01,
 )
 
 interface SheetPreset {
@@ -118,7 +118,10 @@ function resetToFullWorkspace(): void {
       </button>
     </div>
 
-    <div v-if="showSheet && store.selectedProfile" class="space-y-2 rounded-lg border border-slate-700 bg-slate-800 p-3">
+    <div
+      v-if="showSheet && store.selectedProfile"
+      class="space-y-2 rounded-lg border border-slate-700 bg-slate-800 p-3"
+    >
       <p class="text-[10px] text-slate-500">
         {{ t('sheet.workArea') }}:
         <span class="font-mono text-slate-300">
@@ -223,7 +226,10 @@ function resetToFullWorkspace(): void {
       </p>
     </div>
 
-    <div v-if="store.layers.length" class="grid grid-cols-2 gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+    <div
+      v-if="store.layers.length"
+      class="grid grid-cols-2 gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+    >
       <label class="block text-slate-400">
         {{ t('job.scaleMode') }}
         <select

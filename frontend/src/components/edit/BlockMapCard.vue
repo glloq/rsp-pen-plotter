@@ -13,10 +13,7 @@ const edit = useEditState()
 const isPdf = computed(() => {
   const file = edit.selectedFile.value
   if (!file) return false
-  return (
-    file.type === 'application/pdf'
-    || file.name.toLowerCase().endsWith('.pdf')
-  )
+  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
 })
 
 const analysis = ref<DocumentAnalysis | null>(null)
@@ -69,12 +66,8 @@ const currentBlocks = computed(() => {
   return page?.blocks ?? []
 })
 
-const textCount = computed(
-  () => currentBlocks.value.filter((b) => b.kind === 'text').length,
-)
-const imageCount = computed(
-  () => currentBlocks.value.filter((b) => b.kind === 'image').length,
-)
+const textCount = computed(() => currentBlocks.value.filter((b) => b.kind === 'text').length)
+const imageCount = computed(() => currentBlocks.value.filter((b) => b.kind === 'image').length)
 </script>
 
 <template>
@@ -87,15 +80,15 @@ const imageCount = computed(
         {{ t('blockMap.title') }}
       </p>
       <span v-if="loading" class="text-[10px] text-slate-500">{{ t('blockMap.loading') }}</span>
-      <span
-        v-else-if="analysis"
-        class="text-[10px] text-slate-500"
-      >
+      <span v-else-if="analysis" class="text-[10px] text-slate-500">
         {{ t('blockMap.summary', { text: textCount, image: imageCount }) }}
       </span>
     </div>
 
-    <p v-if="error" class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300">
+    <p
+      v-if="error"
+      class="rounded border border-red-700 bg-red-950/40 px-2 py-1 text-[11px] text-red-300"
+    >
       {{ error }}
     </p>
 
@@ -109,7 +102,8 @@ const imageCount = computed(
           class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-slate-600 text-[10px]"
           :class="block.kind === 'text' ? 'bg-slate-800 font-serif text-slate-300' : 'bg-slate-800'"
           aria-hidden="true"
-        >{{ block.kind === 'text' ? 'Aa' : '🖼' }}</span>
+          >{{ block.kind === 'text' ? 'Aa' : '🖼' }}</span
+        >
         <div class="min-w-0 flex-1">
           <p class="truncate text-slate-200">
             <span v-if="block.text_sample">{{ block.text_sample }}</span>
@@ -118,16 +112,15 @@ const imageCount = computed(
           <p class="font-mono text-[10px] text-slate-500">
             {{ block.bbox[0].toFixed(0) }}, {{ block.bbox[1].toFixed(0) }} →
             {{ block.bbox[2].toFixed(0) }}, {{ block.bbox[3].toFixed(0) }} mm
-            <template v-if="block.char_count"> · {{ block.char_count }} {{ t('blockMap.chars') }}</template>
+            <template v-if="block.char_count">
+              · {{ block.char_count }} {{ t('blockMap.chars') }}</template
+            >
           </p>
         </div>
       </li>
     </ul>
 
-    <p
-      v-else-if="!loading && analysis && !currentBlocks.length"
-      class="text-[11px] text-slate-500"
-    >
+    <p v-else-if="!loading && analysis && !currentBlocks.length" class="text-[11px] text-slate-500">
       {{ t('blockMap.empty') }}
     </p>
 

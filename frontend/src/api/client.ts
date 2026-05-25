@@ -434,9 +434,7 @@ export async function plotterRun(gcode: string): Promise<PlotterStatus> {
   return response.data
 }
 
-export async function plotterCommand(
-  action: 'pause' | 'resume' | 'abort',
-): Promise<PlotterStatus> {
+export async function plotterCommand(action: 'pause' | 'resume' | 'abort'): Promise<PlotterStatus> {
   const response = await api.post<PlotterStatus>(`/plotter/${action}`)
   return response.data
 }
@@ -610,10 +608,7 @@ export interface DocumentAnalysis {
   pages: AnalyzedPage[]
 }
 
-export async function analyzeDocument(
-  file: File,
-  signal?: AbortSignal,
-): Promise<DocumentAnalysis> {
+export async function analyzeDocument(file: File, signal?: AbortSignal): Promise<DocumentAnalysis> {
   const form = new FormData()
   form.append('file', file)
   const response = await api.post<DocumentAnalysis>('/document/analyze', form, {
@@ -655,9 +650,9 @@ export async function uploadFile(
     signal: upload?.signal,
     onUploadProgress: upload?.onProgress
       ? (e) => {
-        if (!e.total) return
-        upload.onProgress!(Math.round((e.loaded / e.total) * 100))
-      }
+          if (!e.total) return
+          upload.onProgress!(Math.round((e.loaded / e.total) * 100))
+        }
       : undefined,
   })
   return response.data
@@ -739,9 +734,9 @@ export async function uploadToLibrary(
     signal: upload?.signal,
     onUploadProgress: upload?.onProgress
       ? (e) => {
-        if (!e.total) return
-        upload.onProgress!(Math.round((e.loaded / e.total) * 100))
-      }
+          if (!e.total) return
+          upload.onProgress!(Math.round((e.loaded / e.total) * 100))
+        }
       : undefined,
   })
   return response.data
@@ -782,10 +777,7 @@ export async function patchLibraryFile(
   fileId: string,
   patch: { source_file?: string; folder?: string },
 ): Promise<LibraryFileRecord> {
-  const response = await api.patch<LibraryFileRecord>(
-    `/files/${encodeURIComponent(fileId)}`,
-    patch,
-  )
+  const response = await api.patch<LibraryFileRecord>(`/files/${encodeURIComponent(fileId)}`, patch)
   return response.data
 }
 

@@ -163,7 +163,12 @@ export const useJobStore = defineStore('job', () => {
     gcode.value = null
   }
 
-  function defaultPlacementSize(): { x_mm: number; y_mm: number; width_mm: number; height_mm: number } {
+  function defaultPlacementSize(): {
+    x_mm: number
+    y_mm: number
+    width_mm: number
+    height_mm: number
+  } {
     const ws = selectedProfile.value?.workspace
     if (!ws) return { x_mm: 0, y_mm: 0, width_mm: 100, height_mm: 100 }
     const wsW = ws.x_max - ws.x_min
@@ -372,9 +377,7 @@ export const useJobStore = defineStore('job', () => {
     () => profiles.value.find((p) => p.name === selectedProfileName.value) ?? null,
   )
 
-  const isMultiColor = computed<boolean>(
-    () => (selectedProfile.value?.pen_slot_count ?? 1) > 1,
-  )
+  const isMultiColor = computed<boolean>(() => (selectedProfile.value?.pen_slot_count ?? 1) > 1)
 
   // ====== /rerender ======================================================
   let rerenderController: AbortController | null = null
@@ -497,27 +500,25 @@ export const useJobStore = defineStore('job', () => {
     const controller = new AbortController()
     rerenderController = controller
     try {
-      const layersPayload = Object.entries(p.layer_algorithms).map(
-        ([layer_id, spec]) => {
-          // Multi-pass stack: send ``passes`` so the backend stacks the
-          // algorithms; the legacy single-algorithm fields stay populated
-          // for back-compat but the backend prefers ``passes`` when set.
-          if (spec.passes && spec.passes.length) {
-            return {
-              layer_id,
-              passes: spec.passes.map((p) => ({
-                algorithm: p.algorithm,
-                algorithm_options: p.algorithm_options,
-              })),
-            }
-          }
+      const layersPayload = Object.entries(p.layer_algorithms).map(([layer_id, spec]) => {
+        // Multi-pass stack: send ``passes`` so the backend stacks the
+        // algorithms; the legacy single-algorithm fields stay populated
+        // for back-compat but the backend prefers ``passes`` when set.
+        if (spec.passes && spec.passes.length) {
           return {
             layer_id,
-            algorithm: spec.algorithm,
-            algorithm_options: spec.algorithm_options,
+            passes: spec.passes.map((p) => ({
+              algorithm: p.algorithm,
+              algorithm_options: p.algorithm_options,
+            })),
           }
-        },
-      )
+        }
+        return {
+          layer_id,
+          algorithm: spec.algorithm,
+          algorithm_options: spec.algorithm_options,
+        }
+      })
       const result = await rerenderJob(p.job_id, layersPayload, controller.signal)
       if (controller.signal.aborted) return
       patchPlacement(p.id, { svg: result.svg })
@@ -553,9 +554,7 @@ export const useJobStore = defineStore('job', () => {
     const profile = selectedProfile.value
     if (!profile) return []
     const hasExplicit = (profile.pens?.length ?? 0) > 0
-    const installed = new Set(
-      (profile.pens ?? []).filter((p) => p.installed).map((p) => p.index),
-    )
+    const installed = new Set((profile.pens ?? []).filter((p) => p.installed).map((p) => p.index))
     const missing = new Set<number>()
     for (const placement of placements.value) {
       for (const layer of placement.layers) {
@@ -569,7 +568,9 @@ export const useJobStore = defineStore('job', () => {
   })
 
   function effectiveSpeed(layer: LayerInfo): number {
-    return layer.drawing_speed_mm_s ?? selectedProfile.value?.drawing_speed_mm_s ?? DEFAULT_SPEED_MM_S
+    return (
+      layer.drawing_speed_mm_s ?? selectedProfile.value?.drawing_speed_mm_s ?? DEFAULT_SPEED_MM_S
+    )
   }
 
   function layerDurationSeconds(layer: LayerInfo): number {
@@ -627,11 +628,15 @@ export const useJobStore = defineStore('job', () => {
   // operator must click Generate again to refresh; that's intentional
   // (cheaper than auto-regenerating on every drag) but the stale state
   // must NOT linger silently.
-  watch(placements, () => {
-    metrics.value = null
-    gcode.value = null
-    preflight.value = null
-  }, { deep: true })
+  watch(
+    placements,
+    () => {
+      metrics.value = null
+      gcode.value = null
+      preflight.value = null
+    },
+    { deep: true },
+  )
 
   async function loadProfiles(): Promise<void> {
     profiles.value = await getProfiles()
@@ -730,9 +735,10 @@ export const useJobStore = defineStore('job', () => {
         silent: true,
         onProgress: (percent: number) => {
           if (controller.signal.aborted) return
-          const message = percent >= 100
-            ? i18n.global.t('toast.convertingOnServer', { name: file.name })
-            : i18n.global.t('toast.uploadingPercent', { name: file.name, percent })
+          const message =
+            percent >= 100
+              ? i18n.global.t('toast.convertingOnServer', { name: file.name })
+              : i18n.global.t('toast.uploadingPercent', { name: file.name, percent })
           toasts.update(toastId, 'progress', message, 0)
         },
       })
@@ -740,12 +746,7 @@ export const useJobStore = defineStore('job', () => {
         if (controller.signal.aborted) {
           // Operator cancelled — turn the progress toast into a brief
           // info note so they see the action took effect.
-          toasts.update(
-            toastId,
-            'info',
-            i18n.global.t('toast.uploadCancelled'),
-            3000,
-          )
+          toasts.update(toastId, 'info', i18n.global.t('toast.uploadCancelled'), 3000)
         } else {
           // library.upload swallowed the error silently; show the
           // generic upload-failed message on the same toast.
@@ -839,8 +840,8 @@ export const useJobStore = defineStore('job', () => {
     const variantPatch: Partial<Placement> = {}
     let activeVariantForRerender: Variant | null = null
     if (saved && saved.variants.length) {
-      const activeId = saved.variants.find((v) => v.id === saved.active_variant_id)?.id
-        ?? saved.variants[0]!.id
+      const activeId =
+        saved.variants.find((v) => v.id === saved.active_variant_id)?.id ?? saved.variants[0]!.id
       const active = saved.variants.find((v) => v.id === activeId)!
       activeVariantForRerender = active
       variantPatch.variants = saved.variants
@@ -903,21 +904,13 @@ export const useJobStore = defineStore('job', () => {
     const usableH = Math.max(wsH - 2 * marginMm.value, wsH * 0.5)
     let width: number
     let height: number
-    if (
-      intrinsicSize
-      && intrinsicSize.width_mm > 0
-      && intrinsicSize.height_mm > 0
-    ) {
+    if (intrinsicSize && intrinsicSize.width_mm > 0 && intrinsicSize.height_mm > 0) {
       // PDF / DOCX / HTML: the converter reports the source page
       // dimensions in mm so an A4 doc lands at 210×297 mm on the
       // workspace instead of being scaled to whatever fraction of the
       // workspace the drawn content happened to cover. Clamp down (but
       // never up) if the page is larger than the usable area.
-      const fit = Math.min(
-        1,
-        usableW / intrinsicSize.width_mm,
-        usableH / intrinsicSize.height_mm,
-      )
+      const fit = Math.min(1, usableW / intrinsicSize.width_mm, usableH / intrinsicSize.height_mm)
       width = intrinsicSize.width_mm * fit
       height = intrinsicSize.height_mm * fit
     } else {
@@ -1225,7 +1218,7 @@ export const useJobStore = defineStore('job', () => {
         controller.signal.aborted ||
         err instanceof PipelineAbortedError ||
         (err instanceof DOMException && err.name === 'AbortError') ||
-        ((err as { code?: string })?.code === 'ERR_CANCELED')
+        (err as { code?: string })?.code === 'ERR_CANCELED'
       if (aborted) {
         ui.finishGcodeJob('cancelled', i18n.global.t('gcodeJob.cancelled'))
       } else {

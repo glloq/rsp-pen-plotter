@@ -24,10 +24,7 @@ watch(
   // Re-derive the default serial terminator whenever the active profile
   // (or its EBB config) changes. The drawer still lets the operator
   // override it on-the-fly for debugging — we only seed the default here.
-  () => [
-    job.selectedProfile?.gcode_dialect,
-    job.selectedProfile?.ebb?.serial_terminator,
-  ] as const,
+  () => [job.selectedProfile?.gcode_dialect, job.selectedProfile?.ebb?.serial_terminator] as const,
   ([dialect, ebbTerminator]) => {
     if (dialect === 'ebb') {
       terminator.value = ebbTerminator ?? 'cr'
@@ -136,9 +133,11 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm transition"
-              :class="plotterTab === tab.id
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+              :class="
+                plotterTab === tab.id
+                  ? 'bg-slate-700 text-white'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+              "
               @click="selectTab(tab.id)"
             >
               <span class="w-4 text-center text-base leading-none">{{ tab.icon }}</span>
@@ -146,7 +145,8 @@ onBeforeUnmount(() => {
               <span
                 v-if="tab.id === 'queue' && queue.active.length"
                 class="ml-auto rounded bg-slate-700 px-1.5 text-[10px] text-slate-200"
-              >{{ queue.active.length }}</span>
+                >{{ queue.active.length }}</span
+              >
             </button>
           </li>
         </ul>
@@ -174,9 +174,14 @@ onBeforeUnmount(() => {
             <p class="text-xs text-slate-400">{{ t('plotter.connectionHint') }}</p>
 
             <section class="space-y-2">
-              <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">{{ t('execute.connection') }}</h4>
+              <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
+                {{ t('execute.connection') }}
+              </h4>
 
-              <div v-if="!status.connected" class="space-y-2 rounded-lg border border-slate-700 bg-slate-800 p-3">
+              <div
+                v-if="!status.connected"
+                class="space-y-2 rounded-lg border border-slate-700 bg-slate-800 p-3"
+              >
                 <label class="block text-xs text-slate-400">
                   {{ t('plotter.port') }}
                   <input
@@ -184,7 +189,9 @@ onBeforeUnmount(() => {
                     placeholder="/dev/ttyUSB0"
                     class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
                   />
-                  <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('plotter.portHint') }}</span>
+                  <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                    t('plotter.portHint')
+                  }}</span>
                 </label>
                 <div class="grid grid-cols-2 gap-2">
                   <label class="block text-xs text-slate-400">
@@ -217,8 +224,13 @@ onBeforeUnmount(() => {
                 </button>
               </div>
 
-              <div v-else class="flex items-center justify-between rounded-lg border border-emerald-800 bg-emerald-950/30 px-3 py-2 text-sm">
-                <span class="text-emerald-300">● {{ t('plotter.connected') }} · {{ port }} @ {{ baudrate }}</span>
+              <div
+                v-else
+                class="flex items-center justify-between rounded-lg border border-emerald-800 bg-emerald-950/30 px-3 py-2 text-sm"
+              >
+                <span class="text-emerald-300"
+                  >● {{ t('plotter.connected') }} · {{ port }} @ {{ baudrate }}</span
+                >
                 <button
                   class="text-xs text-slate-400 hover:text-slate-200"
                   @click="plotter.disconnect()"
@@ -234,7 +246,9 @@ onBeforeUnmount(() => {
               class="rounded-lg border border-amber-600 bg-amber-950/40 p-3"
             >
               <p class="text-sm font-medium text-amber-200">{{ t('plotter.toolChange') }}</p>
-              <p v-if="status.message" class="mt-0.5 text-sm text-amber-100">{{ status.message }}</p>
+              <p v-if="status.message" class="mt-0.5 text-sm text-amber-100">
+                {{ status.message }}
+              </p>
               <button
                 type="button"
                 class="mt-2 w-full rounded bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-500"
@@ -246,7 +260,9 @@ onBeforeUnmount(() => {
 
             <!-- JOG -->
             <section v-if="status.connected" class="space-y-2">
-              <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">{{ t('execute.jog') }}</h4>
+              <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
+                {{ t('execute.jog') }}
+              </h4>
               <div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
                 <JogControls />
               </div>
@@ -257,7 +273,9 @@ onBeforeUnmount(() => {
               v-if="status.connected && (status.state === 'running' || status.state === 'paused')"
               class="space-y-2"
             >
-              <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">{{ t('execute.run') }}</h4>
+              <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
+                {{ t('execute.run') }}
+              </h4>
               <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2">
                 <div class="mb-1 flex justify-between text-[10px] text-slate-500">
                   <span>{{ t(`machine.${status.state}`) }}</span>
@@ -298,7 +316,9 @@ onBeforeUnmount(() => {
               ✓ {{ t('machine.done') }} · {{ status.acked }} / {{ status.total }}
             </p>
             <p
-              v-else-if="status.connected && (status.state === 'aborted' || status.state === 'error')"
+              v-else-if="
+                status.connected && (status.state === 'aborted' || status.state === 'error')
+              "
               class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-xs text-amber-200"
             >
               {{ t(`machine.${status.state}`) }}
@@ -356,7 +376,9 @@ onBeforeUnmount(() => {
             <section v-if="queue.runs.length" class="space-y-2">
               <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
                 {{ t('queue.title') }}
-                <span class="ml-1 rounded bg-slate-700 px-1.5 text-[10px] text-slate-300">{{ queue.active.length }}</span>
+                <span class="ml-1 rounded bg-slate-700 px-1.5 text-[10px] text-slate-300">{{
+                  queue.active.length
+                }}</span>
               </h4>
 
               <div class="space-y-1.5">
@@ -367,9 +389,13 @@ onBeforeUnmount(() => {
                 >
                   <div class="flex items-center gap-2">
                     <div class="min-w-0 flex-1">
-                      <p class="truncate text-xs font-medium text-slate-200" :title="run.name">{{ run.name }}</p>
+                      <p class="truncate text-xs font-medium text-slate-200" :title="run.name">
+                        {{ run.name }}
+                      </p>
                       <p class="text-[10px]" :class="stateClass[run.state]">
-                        {{ t(`queue.state.${run.state}`) }} · {{ run.acked_lines }}/{{ run.total_lines }}
+                        {{ t(`queue.state.${run.state}`) }} · {{ run.acked_lines }}/{{
+                          run.total_lines
+                        }}
                       </p>
                     </div>
                     <button
@@ -406,7 +432,10 @@ onBeforeUnmount(() => {
                     v-if="run.state === 'running' || run.state === 'paused'"
                     class="mt-1 h-0.5 w-full overflow-hidden rounded bg-slate-700"
                   >
-                    <div class="h-full bg-emerald-500" :style="{ width: `${runProgress(run) * 100}%` }" />
+                    <div
+                      class="h-full bg-emerald-500"
+                      :style="{ width: `${runProgress(run) * 100}%` }"
+                    />
                   </div>
                   <p v-if="run.error" class="mt-1 text-[10px] text-red-400">{{ run.error }}</p>
                 </div>
@@ -415,7 +444,10 @@ onBeforeUnmount(() => {
               <p v-if="queue.error" class="text-[10px] text-red-400">{{ queue.error }}</p>
             </section>
 
-            <p v-else class="rounded-lg border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500">
+            <p
+              v-else
+              class="rounded-lg border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500"
+            >
               {{ t('queue.empty') }}
             </p>
           </div>

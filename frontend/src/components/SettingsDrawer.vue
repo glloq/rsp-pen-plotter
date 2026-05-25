@@ -58,9 +58,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           :key="tab.id"
           type="button"
           class="rounded px-3 py-1 text-xs transition"
-          :class="settingsTab === tab.id
-            ? 'bg-slate-700 text-white'
-            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+          :class="
+            settingsTab === tab.id
+              ? 'bg-slate-700 text-white'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+          "
           @click="select(tab.id)"
         >
           {{ t(tab.label) }}

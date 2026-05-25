@@ -36,7 +36,12 @@ const { t } = useI18n()
 const draft = useBitmapDraft()
 
 const expanded = useAccordionPersistence('segmentation', true)
-const SEG_METHODS: SegmentationMethod[] = ['kmeans', 'luminance_bands', 'thresholds', 'fixed_palette']
+const SEG_METHODS: SegmentationMethod[] = [
+  'kmeans',
+  'luminance_bands',
+  'thresholds',
+  'fixed_palette',
+]
 
 // User-driven mutators flag the corresponding field as "touched" so the
 // next master-style switch / print-mode flip can warn before stomping.
@@ -77,7 +82,10 @@ function updateThreshold(i: number, value: number): void {
       <span class="text-slate-500">{{ expanded ? '−' : '+' }}</span>
     </button>
     <div v-if="expanded" class="space-y-2 border-t border-slate-700 p-3 text-xs">
-      <p v-if="isDocument" class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400">
+      <p
+        v-if="isDocument"
+        class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400"
+      >
         {{ t('convert.embeddedImageHint') }}
       </p>
 
@@ -89,14 +97,18 @@ function updateThreshold(i: number, value: number): void {
             :key="method"
             type="button"
             class="rounded border px-2 py-1.5 text-left text-[11px] transition"
-            :class="bitmap.segmentation_method === method
-              ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-              : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+            :class="
+              bitmap.segmentation_method === method
+                ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+            "
             :title="t(`convert.seg_${method}_hint`)"
             @click="selectMethod(method)"
           >
             <span class="block font-medium">{{ t(`convert.seg_${method}`) }}</span>
-            <span class="block text-[9px] text-slate-500">{{ t(`convert.seg_${method}_hint`) }}</span>
+            <span class="block text-[9px] text-slate-500">{{
+              t(`convert.seg_${method}_hint`)
+            }}</span>
           </button>
         </div>
       </div>
@@ -106,10 +118,19 @@ function updateThreshold(i: number, value: number): void {
           {{ t('convert.numColors') }}
           <LayerCountBadge :count="draft.expectedLayerCount.value" />
         </span>
-        <input v-model.number="bitmap.num_colors" type="number" min="1" max="32" class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100" />
+        <input
+          v-model.number="bitmap.num_colors"
+          type="number"
+          min="1"
+          max="32"
+          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+        />
       </label>
 
-      <label v-else-if="bitmap.segmentation_method === 'luminance_bands'" class="block text-slate-400">
+      <label
+        v-else-if="bitmap.segmentation_method === 'luminance_bands'"
+        class="block text-slate-400"
+      >
         <span class="inline-flex items-center">
           {{ t('convert.numBands') }}
           <LayerCountBadge :count="draft.expectedLayerCount.value" />
@@ -159,7 +180,10 @@ function updateThreshold(i: number, value: number): void {
         <p class="text-[10px] text-slate-500">{{ t('convert.thresholdsHint') }}</p>
       </div>
 
-      <p v-else-if="bitmap.segmentation_method === 'fixed_palette'" class="text-[10px] text-slate-500">
+      <p
+        v-else-if="bitmap.segmentation_method === 'fixed_palette'"
+        class="text-[10px] text-slate-500"
+      >
         {{ t('convert.fixedPaletteRefHint') }}
       </p>
     </div>

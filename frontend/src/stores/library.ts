@@ -157,11 +157,7 @@ export const useLibraryStore = defineStore('library', () => {
   function _mergeRecord(record: LibraryFileRecord): void {
     const idx = files.value.findIndex((f) => f.file_id === record.file_id)
     if (idx >= 0) {
-      files.value = [
-        ...files.value.slice(0, idx),
-        record,
-        ...files.value.slice(idx + 1),
-      ]
+      files.value = [...files.value.slice(0, idx), record, ...files.value.slice(idx + 1)]
     } else {
       files.value = [record, ...files.value]
     }
@@ -196,12 +192,10 @@ export const useLibraryStore = defineStore('library', () => {
     loading.value = true
     error.value = null
     try {
-      const result = await uploadToLibrary(
-        file,
-        options.folder ?? '',
-        options.convertOptions,
-        { onProgress: options.onProgress, signal: options.signal },
-      )
+      const result = await uploadToLibrary(file, options.folder ?? '', options.convertOptions, {
+        onProgress: options.onProgress,
+        signal: options.signal,
+      })
       _mergeRecord(result.file)
       detailCache.value = { ...detailCache.value, [result.file.file_id]: result.file }
       const toasts = useToastStore()
@@ -221,8 +215,9 @@ export const useLibraryStore = defineStore('library', () => {
       // ``CanceledError`` is what axios throws when an AbortController
       // fires; we surface a discreet info toast (not an error) and let
       // the caller decide whether to retry.
-      const isCancelled = (err as { name?: string; code?: string }).name === 'CanceledError'
-        || (err as { code?: string }).code === 'ERR_CANCELED'
+      const isCancelled =
+        (err as { name?: string; code?: string }).name === 'CanceledError' ||
+        (err as { code?: string }).code === 'ERR_CANCELED'
       if (isCancelled) {
         error.value = null
         if (!options.silent) {

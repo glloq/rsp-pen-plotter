@@ -44,7 +44,7 @@ const numColors = computed({
   get: () => props.bitmap.num_colors,
   set: (v: number) => {
     props.bitmap.num_colors = Math.max(1, Math.min(16, Math.round(v)))
-    draft.markSegmentationTouched('num_bands')  // close enough family
+    draft.markSegmentationTouched('num_bands') // close enough family
   },
 })
 
@@ -79,12 +79,10 @@ const effectiveColorCount = computed(() =>
         step="1"
         :disabled="numColorsLocked"
         class="w-full accent-emerald-500 disabled:opacity-50"
-        @input="(e) => numColors = Number((e.target as HTMLInputElement).value)"
+        @input="(e) => (numColors = Number((e.target as HTMLInputElement).value))"
       />
       <p class="text-[10px] text-slate-500">
-        {{ numColorsLocked
-          ? t('colorStyles.numColorsLocked')
-          : t('colorStyles.numColorsHint') }}
+        {{ numColorsLocked ? t('colorStyles.numColorsLocked') : t('colorStyles.numColorsHint') }}
       </p>
     </div>
 
@@ -97,11 +95,17 @@ const effectiveColorCount = computed(() =>
     </p>
 
     <!-- ===== Colour crosshatch: spacing range + angle step + crossed ===== -->
-    <div v-else-if="styleId === 'color-crosshatch'" class="space-y-3 border-t border-slate-800 pt-3">
+    <div
+      v-else-if="styleId === 'color-crosshatch'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 2.5"
         :model-value-max="knobs.spacing_max ?? 6"
-        :min="1" :max="10" :step="0.5" unit="px"
+        :min="1"
+        :max="10"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -115,10 +119,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('colorStyles.angleStep') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.angle_step ?? 45) }}°</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ Math.round(knobs.angle_step ?? 45) }}°</span
+          >
         </p>
         <input
-          type="range" min="0" max="90" step="5"
+          type="range"
+          min="0"
+          max="90"
+          step="5"
           :value="knobs.angle_step ?? 45"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('angle_step', Number((e.target as HTMLInputElement).value))"
@@ -141,7 +150,9 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.density_min ?? 0.012"
         :model-value-max="knobs.density_max ?? 0.05"
-        :min="0.005" :max="0.1" :step="0.001"
+        :min="0.005"
+        :max="0.1"
+        :step="0.001"
         @update:model-value-min="(v) => setKnob('density_min', v)"
         @update:model-value-max="(v) => setKnob('density_max', v)"
       >
@@ -152,10 +163,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.dotRadius') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.dot_radius ?? 0.5).toFixed(2) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            (knobs.dot_radius ?? 0.5).toFixed(2)
+          }}</span>
         </p>
         <input
-          type="range" min="0.3" max="1.5" step="0.05"
+          type="range"
+          min="0.3"
+          max="1.5"
+          step="0.05"
           :value="knobs.dot_radius ?? 0.5"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('dot_radius', Number((e.target as HTMLInputElement).value))"
@@ -164,10 +180,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.iterations') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.iterations ?? 4) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            Math.round(knobs.iterations ?? 4)
+          }}</span>
         </p>
         <input
-          type="range" min="0" max="20" step="1"
+          type="range"
+          min="0"
+          max="20"
+          step="1"
           :value="knobs.iterations ?? 4"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('iterations', Number((e.target as HTMLInputElement).value))"
@@ -177,13 +198,21 @@ const effectiveColorCount = computed(() =>
     </div>
 
     <!-- ===== Halftone CMYK: single cell size — angles are derived from hue ===== -->
-    <div v-else-if="styleId === 'color-halftone-cmyk'" class="space-y-1 border-t border-slate-800 pt-3">
+    <div
+      v-else-if="styleId === 'color-halftone-cmyk'"
+      class="space-y-1 border-t border-slate-800 pt-3"
+    >
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
         {{ t('convert.cellSize') }}
-        <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.cell_size ?? 5) }} px</span>
+        <span class="ml-1 font-mono text-[11px] text-slate-300"
+          >{{ Math.round(knobs.cell_size ?? 5) }} px</span
+        >
       </p>
       <input
-        type="range" min="2" max="14" step="1"
+        type="range"
+        min="2"
+        max="14"
+        step="1"
         :value="knobs.cell_size ?? 5"
         class="w-full accent-emerald-500"
         @input="(e) => setKnob('cell_size', Number((e.target as HTMLInputElement).value))"
@@ -192,11 +221,17 @@ const effectiveColorCount = computed(() =>
     </div>
 
     <!-- ===== Topo couleur: spacing + rings range ===== -->
-    <div v-else-if="styleId === 'color-contours-topo'" class="space-y-3 border-t border-slate-800 pt-3">
+    <div
+      v-else-if="styleId === 'color-contours-topo'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 2.5"
         :model-value-max="knobs.spacing_max ?? 6"
-        :min="1" :max="8" :step="0.5" unit="px"
+        :min="1"
+        :max="8"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -207,7 +242,9 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.rings_min ?? 10"
         :model-value-max="knobs.rings_max ?? 30"
-        :min="5" :max="40" :step="1"
+        :min="5"
+        :max="40"
+        :step="1"
         @update:model-value-min="(v) => setKnob('rings_min', v)"
         @update:model-value-max="(v) => setKnob('rings_max', v)"
       >
@@ -222,7 +259,10 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.seed_spacing_min ?? 6"
         :model-value-max="knobs.seed_spacing_max ?? 12"
-        :min="2" :max="30" :step="0.5" unit="px"
+        :min="2"
+        :max="30"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('seed_spacing_min', v)"
         @update:model-value-max="(v) => setKnob('seed_spacing_max', v)"
       >
@@ -236,10 +276,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.stepPx') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.step_px ?? 0.8).toFixed(1) }} px</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ (knobs.step_px ?? 0.8).toFixed(1) }} px</span
+          >
         </p>
         <input
-          type="range" min="0.2" max="3" step="0.1"
+          type="range"
+          min="0.2"
+          max="3"
+          step="0.1"
           :value="knobs.step_px ?? 0.8"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('step_px', Number((e.target as HTMLInputElement).value))"
@@ -248,10 +293,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.maxSteps') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.max_steps ?? 600) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            Math.round(knobs.max_steps ?? 600)
+          }}</span>
         </p>
         <input
-          type="range" min="100" max="2000" step="50"
+          type="range"
+          min="100"
+          max="2000"
+          step="50"
           :value="knobs.max_steps ?? 600"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('max_steps', Number((e.target as HTMLInputElement).value))"
@@ -260,10 +310,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.noiseScale') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.noise_scale ?? 48) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            Math.round(knobs.noise_scale ?? 48)
+          }}</span>
         </p>
         <input
-          type="range" min="4" max="128" step="2"
+          type="range"
+          min="4"
+          max="128"
+          step="2"
           :value="knobs.noise_scale ?? 48"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('noise_scale', Number((e.target as HTMLInputElement).value))"
@@ -285,7 +340,10 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 3"
         :model-value-max="knobs.spacing_max ?? 6"
-        :min="1" :max="10" :step="0.5" unit="px"
+        :min="1"
+        :max="10"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -296,7 +354,10 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.amp_min ?? 0.6"
         :model-value-max="knobs.amp_max ?? 1.8"
-        :min="0.2" :max="4" :step="0.1" unit="px"
+        :min="0.2"
+        :max="4"
+        :step="0.1"
+        unit="px"
         @update:model-value-min="(v) => setKnob('amp_min', v)"
         @update:model-value-max="(v) => setKnob('amp_max', v)"
       >
@@ -307,10 +368,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.wavePeriod') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.period_px ?? 8) }} px</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ Math.round(knobs.period_px ?? 8) }} px</span
+          >
         </p>
         <input
-          type="range" min="2" max="20" step="0.5"
+          type="range"
+          min="2"
+          max="20"
+          step="0.5"
           :value="knobs.period_px ?? 8"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('period_px', Number((e.target as HTMLInputElement).value))"
@@ -319,10 +385,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.jitter') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.jitter ?? 0.45).toFixed(2) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            (knobs.jitter ?? 0.45).toFixed(2)
+          }}</span>
         </p>
         <input
-          type="range" min="0" max="1" step="0.05"
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
           :value="knobs.jitter ?? 0.45"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('jitter', Number((e.target as HTMLInputElement).value))"
@@ -335,7 +406,10 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 2"
         :model-value-max="knobs.spacing_max ?? 5"
-        :min="1" :max="8" :step="0.5" unit="px"
+        :min="1"
+        :max="8"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -346,10 +420,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.maxRings') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.max_rings ?? 40) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            Math.round(knobs.max_rings ?? 40)
+          }}</span>
         </p>
         <input
-          type="range" min="5" max="120" step="1"
+          type="range"
+          min="5"
+          max="120"
+          step="1"
           :value="knobs.max_rings ?? 40"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('max_rings', Number((e.target as HTMLInputElement).value))"
@@ -358,11 +437,16 @@ const effectiveColorCount = computed(() =>
     </div>
 
     <!-- ===== Stippling classique couleur: density range + dot radius ===== -->
-    <div v-else-if="styleId === 'color-stippling-classic'" class="space-y-3 border-t border-slate-800 pt-3">
+    <div
+      v-else-if="styleId === 'color-stippling-classic'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
       <DualRangeSlider
         :model-value-min="knobs.density_min ?? 0.012"
         :model-value-max="knobs.density_max ?? 0.05"
-        :min="0.005" :max="0.1" :step="0.001"
+        :min="0.005"
+        :max="0.1"
+        :step="0.001"
         @update:model-value-min="(v) => setKnob('density_min', v)"
         @update:model-value-max="(v) => setKnob('density_max', v)"
       >
@@ -373,10 +457,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.dotRadius') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.dot_radius ?? 0.5).toFixed(2) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            (knobs.dot_radius ?? 0.5).toFixed(2)
+          }}</span>
         </p>
         <input
-          type="range" min="0.3" max="1.5" step="0.05"
+          type="range"
+          min="0.3"
+          max="1.5"
+          step="0.05"
           :value="knobs.dot_radius ?? 0.5"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('dot_radius', Number((e.target as HTMLInputElement).value))"
@@ -388,10 +477,15 @@ const effectiveColorCount = computed(() =>
     <div v-else-if="styleId === 'color-edges'" class="space-y-1 border-t border-slate-800 pt-3">
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
         {{ t('mono.strokeWidth') }}
-        <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.stroke_width ?? 0.8).toFixed(2) }}</span>
+        <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+          (knobs.stroke_width ?? 0.8).toFixed(2)
+        }}</span>
       </p>
       <input
-        type="range" min="0.4" max="2.0" step="0.1"
+        type="range"
+        min="0.4"
+        max="2.0"
+        step="0.1"
         :value="knobs.stroke_width ?? 0.8"
         class="w-full accent-emerald-500"
         @input="(e) => setKnob('stroke_width', Number((e.target as HTMLInputElement).value))"
@@ -399,14 +493,22 @@ const effectiveColorCount = computed(() =>
     </div>
 
     <!-- ===== Centerline couleur: stroke width + min branch ===== -->
-    <div v-else-if="styleId === 'color-centerline'" class="space-y-3 border-t border-slate-800 pt-3">
+    <div
+      v-else-if="styleId === 'color-centerline'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.strokeWidth') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.stroke_width ?? 0.8).toFixed(2) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            (knobs.stroke_width ?? 0.8).toFixed(2)
+          }}</span>
         </p>
         <input
-          type="range" min="0.4" max="2.0" step="0.1"
+          type="range"
+          min="0.4"
+          max="2.0"
+          step="0.1"
           :value="knobs.stroke_width ?? 0.8"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('stroke_width', Number((e.target as HTMLInputElement).value))"
@@ -415,10 +517,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.minBranch') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.min_branch_px ?? 3) }} px</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ Math.round(knobs.min_branch_px ?? 3) }} px</span
+          >
         </p>
         <input
-          type="range" min="1" max="20" step="1"
+          type="range"
+          min="1"
+          max="20"
+          step="1"
           :value="knobs.min_branch_px ?? 3"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('min_branch_px', Number((e.target as HTMLInputElement).value))"
@@ -427,11 +534,17 @@ const effectiveColorCount = computed(() =>
     </div>
 
     <!-- ===== Spirale classique couleur: spacing range + samples/tour ===== -->
-    <div v-else-if="styleId === 'color-spiral-classic'" class="space-y-3 border-t border-slate-800 pt-3">
+    <div
+      v-else-if="styleId === 'color-spiral-classic'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 2"
         :model-value-max="knobs.spacing_max ?? 5"
-        :min="1" :max="8" :step="0.5" unit="px"
+        :min="1"
+        :max="8"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -442,10 +555,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.samplesPerTurn') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.samples_per_turn ?? 64) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            Math.round(knobs.samples_per_turn ?? 64)
+          }}</span>
         </p>
         <input
-          type="range" min="16" max="256" step="4"
+          type="range"
+          min="16"
+          max="256"
+          step="4"
           :value="knobs.samples_per_turn ?? 64"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('samples_per_turn', Number((e.target as HTMLInputElement).value))"
@@ -458,7 +576,10 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 2.5"
         :model-value-max="knobs.spacing_max ?? 6"
-        :min="1" :max="10" :step="0.5" unit="px"
+        :min="1"
+        :max="10"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -469,10 +590,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.waveAmp') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.wave_amp_px ?? 0).toFixed(1) }} px</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ (knobs.wave_amp_px ?? 0).toFixed(1) }} px</span
+          >
         </p>
         <input
-          type="range" min="0" max="6" step="0.2"
+          type="range"
+          min="0"
+          max="6"
+          step="0.2"
           :value="knobs.wave_amp_px ?? 0"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('wave_amp_px', Number((e.target as HTMLInputElement).value))"
@@ -481,10 +607,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.wavePeriod') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.wave_period_px ?? 12) }} px</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ Math.round(knobs.wave_period_px ?? 12) }} px</span
+          >
         </p>
         <input
-          type="range" min="2" max="40" step="1"
+          type="range"
+          min="2"
+          max="40"
+          step="1"
           :value="knobs.wave_period_px ?? 12"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('wave_period_px', Number((e.target as HTMLInputElement).value))"
@@ -497,7 +628,9 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.density_min ?? 0.012"
         :model-value-max="knobs.density_max ?? 0.05"
-        :min="0.005" :max="0.1" :step="0.001"
+        :min="0.005"
+        :max="0.1"
+        :step="0.001"
         @update:model-value-min="(v) => setKnob('density_min', v)"
         @update:model-value-max="(v) => setKnob('density_max', v)"
       >
@@ -515,7 +648,10 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 2.5"
         :model-value-max="knobs.spacing_max ?? 6"
-        :min="1" :max="10" :step="0.5" unit="px"
+        :min="1"
+        :max="10"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -526,10 +662,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.minRunPx') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.min_run_px ?? 3) }} px</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ Math.round(knobs.min_run_px ?? 3) }} px</span
+          >
         </p>
         <input
-          type="range" min="1" max="20" step="1"
+          type="range"
+          min="1"
+          max="20"
+          step="1"
           :value="knobs.min_run_px ?? 3"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('min_run_px', Number((e.target as HTMLInputElement).value))"
@@ -542,10 +683,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.gosperOrder') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.order ?? 4) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            Math.round(knobs.order ?? 4)
+          }}</span>
         </p>
         <input
-          type="range" min="1" max="6" step="1"
+          type="range"
+          min="1"
+          max="6"
+          step="1"
           :value="knobs.order ?? 4"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('order', Number((e.target as HTMLInputElement).value))"
@@ -555,7 +701,10 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 3"
         :model-value-max="knobs.spacing_max ?? 5"
-        :min="1" :max="8" :step="0.5" unit="px"
+        :min="1"
+        :max="8"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -570,7 +719,10 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 2.5"
         :model-value-max="knobs.spacing_max ?? 6"
-        :min="1" :max="10" :step="0.5" unit="px"
+        :min="1"
+        :max="10"
+        :step="0.5"
+        unit="px"
         @update:model-value-min="(v) => setKnob('spacing_min', v)"
         @update:model-value-max="(v) => setKnob('spacing_max', v)"
       >
@@ -581,10 +733,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('colorStyles.angleStep') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.angle_step ?? 45) }}°</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ Math.round(knobs.angle_step ?? 45) }}°</span
+          >
         </p>
         <input
-          type="range" min="0" max="90" step="5"
+          type="range"
+          min="0"
+          max="90"
+          step="5"
           :value="knobs.angle_step ?? 45"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('angle_step', Number((e.target as HTMLInputElement).value))"
@@ -606,7 +763,9 @@ const effectiveColorCount = computed(() =>
       <DualRangeSlider
         :model-value-min="knobs.density_min ?? 0.012"
         :model-value-max="knobs.density_max ?? 0.05"
-        :min="0.005" :max="0.1" :step="0.001"
+        :min="0.005"
+        :max="0.1"
+        :step="0.001"
         @update:model-value-min="(v) => setKnob('density_min', v)"
         @update:model-value-max="(v) => setKnob('density_max', v)"
       >
@@ -617,10 +776,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.maxPoints') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ Math.round(knobs.max_points ?? 4000) }}</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            Math.round(knobs.max_points ?? 4000)
+          }}</span>
         </p>
         <input
-          type="range" min="500" max="12000" step="500"
+          type="range"
+          min="500"
+          max="12000"
+          step="500"
           :value="knobs.max_points ?? 4000"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('max_points', Number((e.target as HTMLInputElement).value))"
@@ -629,10 +793,15 @@ const effectiveColorCount = computed(() =>
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('convert.timeBudgetS') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ (knobs.time_budget_s ?? 1.5).toFixed(1) }} s</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ (knobs.time_budget_s ?? 1.5).toFixed(1) }} s</span
+          >
         </p>
         <input
-          type="range" min="0.2" max="6" step="0.1"
+          type="range"
+          min="0.2"
+          max="6"
+          step="0.1"
           :value="knobs.time_budget_s ?? 1.5"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('time_budget_s', Number((e.target as HTMLInputElement).value))"

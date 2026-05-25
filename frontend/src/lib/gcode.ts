@@ -86,8 +86,7 @@ const TOOL_CHANGE_COLOR_RE = /^;\s*Change pen:\s*(.+?)\s*\((#[0-9a-fA-F]{3,8})\)
 //   ; LAYER label="Black ink" color=#101820 slot=0
 // All three keys are always present; colour / slot may be empty strings
 // when the layer has no slot assignment.
-const LAYER_INFO_RE =
-  /^;\s*LAYER\s+label="([^"]*)"\s+color=(#[0-9a-fA-F]{3,8})?\s+slot=(\d*)/
+const LAYER_INFO_RE = /^;\s*LAYER\s+label="([^"]*)"\s+color=(#[0-9a-fA-F]{3,8})?\s+slot=(\d*)/
 
 function isPauseCommand(line: string, toolChangeCommand?: string): boolean {
   // Strip a trailing comment so ``M0 ; pause`` still matches.

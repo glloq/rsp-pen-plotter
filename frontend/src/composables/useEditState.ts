@@ -50,12 +50,18 @@ function _loadQuality(): PreviewQuality {
   try {
     const v = localStorage.getItem(QUALITY_KEY)
     if (v === 'draft' || v === 'standard' || v === 'final') return v
-  } catch { /* localStorage unavailable — fall through */ }
+  } catch {
+    /* localStorage unavailable — fall through */
+  }
   return 'standard'
 }
 const _previewQuality = ref<PreviewQuality>(_loadQuality())
 watch(_previewQuality, (value) => {
-  try { localStorage.setItem(QUALITY_KEY, value) } catch { /* ignore */ }
+  try {
+    localStorage.setItem(QUALITY_KEY, value)
+  } catch {
+    /* ignore */
+  }
 })
 let _goToPage: (page: number) => Promise<void> = async () => {}
 // Callbacks installed by SourceSection so the preview pane can cancel
@@ -68,11 +74,9 @@ let _retryPreview: () => void = () => {}
 const _previewElapsedMs: ComputedRef<number | null> = computed(
   () => _previewResult.value?.elapsed_ms ?? null,
 )
-const _previewCached: ComputedRef<boolean> = computed(
-  () => Boolean(_previewResult.value?.cached),
-)
-const _previewPalette: ComputedRef<string[]> = computed(
-  () => (_previewResult.value?.palette ?? []).map((entry) => entry.color),
+const _previewCached: ComputedRef<boolean> = computed(() => Boolean(_previewResult.value?.cached))
+const _previewPalette: ComputedRef<string[]> = computed(() =>
+  (_previewResult.value?.palette ?? []).map((entry) => entry.color),
 )
 
 export interface EditState {

@@ -97,8 +97,7 @@ export const usePlotterStore = defineStore('plotter', () => {
     withErrors(() => plotterJog(dx, dy, profileName))
   const goto = (x: number, y: number, profileName: string): Promise<void> =>
     withErrors(() => plotterGoto(x, y, profileName))
-  const home = (profileName: string): Promise<void> =>
-    withErrors(() => plotterHome(profileName))
+  const home = (profileName: string): Promise<void> => withErrors(() => plotterHome(profileName))
   const run = (gcode: string): Promise<void> =>
     withErrors(
       () => plotterRun(gcode),

@@ -106,32 +106,33 @@ function close(): void {
           v-else-if="gcodeJobState.phase === 'success'"
           class="mt-0.5 text-2xl leading-none text-emerald-400"
           aria-hidden="true"
-        >✓</span>
+          >✓</span
+        >
         <span
           v-else-if="gcodeJobState.phase === 'cancelled'"
           class="mt-0.5 text-2xl leading-none text-amber-300"
           aria-hidden="true"
-        >⊘</span>
-        <span
-          v-else
-          class="mt-0.5 text-2xl leading-none text-red-400"
-          aria-hidden="true"
-        >✕</span>
+          >⊘</span
+        >
+        <span v-else class="mt-0.5 text-2xl leading-none text-red-400" aria-hidden="true">✕</span>
 
         <div class="min-w-0 flex-1">
           <h2 id="gcode-modal-title" class="text-base font-semibold text-slate-100">
-            <template v-if="gcodeJobState.phase === 'running'">{{ t('gcodeJob.titleRunning') }}</template>
-            <template v-else-if="gcodeJobState.phase === 'success'">{{ t('gcodeJob.titleSuccess') }}</template>
-            <template v-else-if="gcodeJobState.phase === 'cancelled'">{{ t('gcodeJob.titleCancelled') }}</template>
+            <template v-if="gcodeJobState.phase === 'running'">{{
+              t('gcodeJob.titleRunning')
+            }}</template>
+            <template v-else-if="gcodeJobState.phase === 'success'">{{
+              t('gcodeJob.titleSuccess')
+            }}</template>
+            <template v-else-if="gcodeJobState.phase === 'cancelled'">{{
+              t('gcodeJob.titleCancelled')
+            }}</template>
             <template v-else>{{ t('gcodeJob.titleError') }}</template>
           </h2>
           <p class="mt-1 text-sm text-slate-300">
             {{ gcodeJobState.message }}
           </p>
-          <p
-            v-if="gcodeJobState.phase === 'running'"
-            class="mt-2 font-mono text-xs text-slate-500"
-          >
+          <p v-if="gcodeJobState.phase === 'running'" class="mt-2 font-mono text-xs text-slate-500">
             {{ t('gcodeJob.elapsed', { seconds: elapsedSeconds }) }}
           </p>
         </div>
@@ -150,18 +151,12 @@ function close(): void {
           }"
         >
           <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center" aria-hidden="true">
-            <span
-              v-if="step.status === 'done'"
-              class="text-emerald-400"
-            >✓</span>
+            <span v-if="step.status === 'done'" class="text-emerald-400">✓</span>
             <span
               v-else-if="step.status === 'active'"
               class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-600 border-t-sky-300"
             />
-            <span
-              v-else-if="step.status === 'failed'"
-              class="text-red-400"
-            >✕</span>
+            <span v-else-if="step.status === 'failed'" class="text-red-400">✕</span>
             <span v-else class="text-slate-600">○</span>
           </span>
           <span>{{ step.label }}</span>

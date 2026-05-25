@@ -13,18 +13,21 @@ import { computed } from 'vue'
 // Pure native ``<input>`` keeps keyboard / a11y / focus behaviour for
 // free.
 
-const props = withDefaults(defineProps<{
-  modelValueMin: number
-  modelValueMax: number
-  min: number
-  max: number
-  step?: number
-  unit?: string
-  format?: (v: number) => string
-}>(), {
-  step: 1,
-  unit: '',
-})
+const props = withDefaults(
+  defineProps<{
+    modelValueMin: number
+    modelValueMax: number
+    min: number
+    max: number
+    step?: number
+    unit?: string
+    format?: (v: number) => string
+  }>(),
+  {
+    step: 1,
+    unit: '',
+  },
+)
 
 const emit = defineEmits<{
   'update:modelValueMin': [value: number]
@@ -45,12 +48,13 @@ function fmt(v: number): string {
   if (props.format) return props.format(v)
   // Choose decimals from the step so a step of 0.001 doesn't show
   // "0.012000000001" while step of 1 doesn't waste space on ".00".
-  const decimals = props.step >= 1 ? 0 : (props.step >= 0.1 ? 1 : (props.step >= 0.01 ? 2 : 3))
+  const decimals = props.step >= 1 ? 0 : props.step >= 0.1 ? 1 : props.step >= 0.01 ? 2 : 3
   return v.toFixed(decimals)
 }
 
-const display = computed(() =>
-  `${fmt(props.modelValueMin)} → ${fmt(props.modelValueMax)}${props.unit ? ' ' + props.unit : ''}`
+const display = computed(
+  () =>
+    `${fmt(props.modelValueMin)} → ${fmt(props.modelValueMax)}${props.unit ? ' ' + props.unit : ''}`,
 )
 
 // Pixel offsets for the highlighted segment between the two thumbs.
@@ -141,7 +145,9 @@ const fillStyle = computed(() => {
   border: 2px solid #0f172a;
   cursor: grab;
 }
-.dual-range__thumb:focus { outline: none; }
+.dual-range__thumb:focus {
+  outline: none;
+}
 .dual-range__thumb:focus::-webkit-slider-thumb {
   box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.4);
 }

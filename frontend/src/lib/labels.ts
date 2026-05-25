@@ -26,7 +26,10 @@ const GENERIC_RE = /^layer-(\d+)$/
 // thumbnail is available for a library entry.
 export function shortMime(mime: string): string {
   const subtype = mime.split('/')[1] ?? mime
-  return subtype.replace(/\+.*$/, '').replace(/^vnd\..+\./, '').toUpperCase()
+  return subtype
+    .replace(/\+.*$/, '')
+    .replace(/^vnd\..+\./, '')
+    .toUpperCase()
 }
 
 export function formatLayerLabel(id: string): FormattedLayerLabel {

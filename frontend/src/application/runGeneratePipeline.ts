@@ -96,9 +96,7 @@ export async function runGeneratePipeline(
   }
 }
 
-async function optimizeAllPlacements(
-  deps: GeneratePipelineDeps,
-): Promise<ToolpathMetrics | null> {
+async function optimizeAllPlacements(deps: GeneratePipelineDeps): Promise<ToolpathMetrics | null> {
   let beforeSum = 0
   let afterSum = 0
   let hasMetrics = false

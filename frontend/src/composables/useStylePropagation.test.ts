@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { applyMasterStyleToLayers, type StylePropagationStore } from './useStylePropagation'
 
-function makeStore(layers: { layer_id: string; source_color?: string; target_pen_slot?: number | null }[]) {
-  const calls: { layerId: string; algorithm: string; algorithm_options: Record<string, unknown> }[] = []
+function makeStore(
+  layers: { layer_id: string; source_color?: string; target_pen_slot?: number | null }[],
+) {
+  const calls: {
+    layerId: string
+    algorithm: string
+    algorithm_options: Record<string, unknown>
+  }[] = []
   const slotPatches: { layerId: string; slot: number | null | undefined }[] = []
   const store: StylePropagationStore = {
     layers,
@@ -37,10 +43,7 @@ describe('applyMasterStyleToLayers', () => {
   })
 
   it('monochrome master still uses bandRecipe (no regression)', async () => {
-    const { store, calls } = makeStore([
-      { layer_id: 'color-111111' },
-      { layer_id: 'color-cccccc' },
-    ])
+    const { store, calls } = makeStore([{ layer_id: 'color-111111' }, { layer_id: 'color-cccccc' }])
     // ``mono-crosshatch`` defines a bandRecipe; colorRecipe is undefined,
     // so the propagation falls through to bandRecipe as before.
     await applyMasterStyleToLayers(store, { styleId: 'mono-crosshatch', penSlot: 0 })

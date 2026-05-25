@@ -45,10 +45,7 @@ function setSlot(index: number): void {
 
 <template>
   <div class="space-y-1">
-    <p
-      v-if="showLabel !== false"
-      class="text-[10px] uppercase tracking-wider text-slate-400"
-    >
+    <p v-if="showLabel !== false" class="text-[10px] uppercase tracking-wider text-slate-400">
       {{ t('mono.pen') }}
     </p>
     <div class="flex flex-wrap gap-1">
@@ -57,9 +54,11 @@ function setSlot(index: number): void {
         :key="slot.index"
         type="button"
         class="flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] transition"
-        :class="modelValue === slot.index
-          ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+        :class="
+          modelValue === slot.index
+            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+        "
         :title="slot.installed ? slot.name : t('mono.penNotInstalled')"
         @click="setSlot(slot.index)"
       >

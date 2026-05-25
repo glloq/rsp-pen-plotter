@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  layerStyles,
-  type PrintStyle,
-  type PrintStyleKind,
-} from '../../data/printRegistry'
+import { layerStyles, type PrintStyle, type PrintStyleKind } from '../../data/printRegistry'
 
 const props = defineProps<{
   kind: PrintStyleKind
@@ -38,9 +34,11 @@ const defaultSelected = computed(() => !props.currentAlgorithm)
     <button
       type="button"
       class="flex flex-col gap-0.5 rounded border px-2 py-1.5 text-left text-[11px] transition"
-      :class="defaultSelected
-        ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-        : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+      :class="
+        defaultSelected
+          ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+      "
       @click="emit('reset')"
     >
       <span class="font-medium">{{ t('printStyles.default') }}</span>
@@ -51,9 +49,11 @@ const defaultSelected = computed(() => !props.currentAlgorithm)
       :key="style.id"
       type="button"
       class="flex flex-col gap-0.5 rounded border px-2 py-1.5 text-left text-[11px] transition"
-      :class="isSelected(style)
-        ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-        : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+      :class="
+        isSelected(style)
+          ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+      "
       :title="style.descriptionKey ? t(style.descriptionKey) : ''"
       @click="emit('select', style)"
     >

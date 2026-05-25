@@ -30,7 +30,9 @@ const expanded = useAccordionPersistence('preprocess.filters', false)
       <label class="block text-slate-400">
         <div class="flex items-center justify-between">
           <span>{{ t('preprocess.filters.sharpen') }}</span>
-          <span class="font-mono text-[10px] text-slate-500">{{ preprocess.sharpen.toFixed(2) }}</span>
+          <span class="font-mono text-[10px] text-slate-500">{{
+            preprocess.sharpen.toFixed(2)
+          }}</span>
         </div>
         <input
           v-model.number="preprocess.sharpen"
@@ -45,7 +47,9 @@ const expanded = useAccordionPersistence('preprocess.filters', false)
       <label class="block text-slate-400">
         <div class="flex items-center justify-between">
           <span>{{ t('preprocess.filters.blur') }}</span>
-          <span class="font-mono text-[10px] text-slate-500">{{ preprocess.blur_px.toFixed(1) }} px</span>
+          <span class="font-mono text-[10px] text-slate-500"
+            >{{ preprocess.blur_px.toFixed(1) }} px</span
+          >
         </div>
         <input
           v-model.number="preprocess.blur_px"
@@ -71,9 +75,11 @@ const expanded = useAccordionPersistence('preprocess.filters', false)
         <div class="flex items-center justify-between">
           <span>{{ t('preprocess.filters.dither') }}</span>
           <span class="font-mono text-[10px] text-slate-500">
-            {{ preprocess.dither_levels === 0
-              ? t('preprocess.filters.ditherOff')
-              : `${preprocess.dither_levels} ${t('preprocess.filters.ditherLevels')}` }}
+            {{
+              preprocess.dither_levels === 0
+                ? t('preprocess.filters.ditherOff')
+                : `${preprocess.dither_levels} ${t('preprocess.filters.ditherLevels')}`
+            }}
           </span>
         </div>
         <input

@@ -27,8 +27,8 @@ import { useUiStore } from '../stores/ui'
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'tiff', 'webp', 'heic']
 const TYPOGRAPHY_EXT = ['txt', 'md']
 const DOCUMENT_EXT = ['pdf', 'svg', 'eps', 'ps', 'ai', 'docx', 'odt', 'rtf', 'html', 'dxf']
-export const FILE_ACCEPT
-  = '.svg,.png,.jpg,.jpeg,.tiff,.webp,.heic,.pdf,.dxf,.eps,.ps,.ai,.txt,.md,.html,.docx,.odt,.rtf'
+export const FILE_ACCEPT =
+  '.svg,.png,.jpg,.jpeg,.tiff,.webp,.heic,.pdf,.dxf,.eps,.ps,.ai,.txt,.md,.html,.docx,.odt,.rtf'
 
 export type FileKind = 'bitmap' | 'typography' | 'document' | 'none'
 
@@ -66,8 +66,8 @@ export function useFileManager(t?: Translator) {
 
   const showsBitmapForm = computed(() => kind.value === 'bitmap' || kind.value === 'document')
 
-  const hasSource = computed<boolean>(
-    () => Boolean(_selectedFile.value || store.selectedPlacement?.source_file),
+  const hasSource = computed<boolean>(() =>
+    Boolean(_selectedFile.value || store.selectedPlacement?.source_file),
   )
 
   function buildOptions(): Record<string, unknown> | undefined {
@@ -104,15 +104,15 @@ export function useFileManager(t?: Translator) {
     modeGetter: () => (kind.value === 'typography' ? 'text' : 'bitmap'),
     qualityGetter: () => edit.previewQuality.value,
     failedMessage: t?.('upload.failed') ?? 'preview failed',
-    timeoutMessage: t?.('upload.previewTimeout')
-      ?? 'Preview too slow — lower the detail tier or hit Apply to render anyway.',
+    timeoutMessage:
+      t?.('upload.previewTimeout') ??
+      'Preview too slow — lower the detail tier or hit Apply to render anyway.',
     // Long-render progress toast wiring. Toast appears after 800ms
     // (so quick renders never surface one), ticks every second so the
     // operator sees the elapsed time, and exposes a cancel button
     // that aborts the in-flight /preview round-trip.
     progressMessage: (seconds: number) =>
-      t?.('upload.previewProgress', { seconds })
-        ?? `Rendering preview… (${seconds}s)`,
+      t?.('upload.previewProgress', { seconds }) ?? `Rendering preview… (${seconds}s)`,
     cancelLabel: t?.('upload.previewCancel') ?? 'Cancel',
   })
 
@@ -160,11 +160,13 @@ export function useFileManager(t?: Translator) {
   }
 
   // ---- Upload ----
-  const multiPassLayerCount = computed(() =>
-    Object.values(store.layerAlgorithms).filter(
-      (spec) => Array.isArray((spec as { passes?: unknown[] }).passes)
-        && (spec as { passes: unknown[] }).passes.length > 0,
-    ).length,
+  const multiPassLayerCount = computed(
+    () =>
+      Object.values(store.layerAlgorithms).filter(
+        (spec) =>
+          Array.isArray((spec as { passes?: unknown[] }).passes) &&
+          (spec as { passes: unknown[] }).passes.length > 0,
+      ).length,
   )
 
   async function uploadSelected(): Promise<void> {
@@ -174,7 +176,9 @@ export function useFileManager(t?: Translator) {
     if (store.job) {
       const ok = await confirmAction({
         title: t?.('editModal.overwriteTitle') ?? 'Re-convert file',
-        message: t?.('editModal.overwriteMessage') ?? 'This file already has a conversion. Overwrite the existing result?',
+        message:
+          t?.('editModal.overwriteMessage') ??
+          'This file already has a conversion. Overwrite the existing result?',
         confirmLabel: t?.('editModal.overwriteConfirm') ?? 'Re-convert',
         cancelLabel: t?.('confirm.cancel') ?? 'Cancel',
         danger: false,
@@ -185,8 +189,9 @@ export function useFileManager(t?: Translator) {
     if (multiPassLayerCount.value > 0) {
       const ok = await confirmAction({
         title: t?.('passes.reuploadTitle') ?? 'Multi-pass layers',
-        message: t?.('passes.reuploadWarning', { count: multiPassLayerCount.value })
-          ?? `${multiPassLayerCount.value} layer(s) have multi-pass overrides that will be lost. Continue?`,
+        message:
+          t?.('passes.reuploadWarning', { count: multiPassLayerCount.value }) ??
+          `${multiPassLayerCount.value} layer(s) have multi-pass overrides that will be lost. Continue?`,
         confirmLabel: t?.('confirm.ok') ?? 'Continue',
         cancelLabel: t?.('confirm.cancel') ?? 'Cancel',
         danger: true,
@@ -367,29 +372,87 @@ export function useFileManager(t?: Translator) {
 
       // Mirror the preview state into useEditState so EditPreviewPane
       // (rendered as a sibling of the tabs) reads the same values.
-      watch(_selectedFile, (v) => { edit.selectedFile.value = v }, { immediate: true }),
-      watch(_previewUrl, (v) => { edit.previewUrl.value = v }, { immediate: true }),
-      watch(_textPreview, (v) => { edit.textPreview.value = v }, { immediate: true }),
-      watch(previewer.previewSvg, (v) => { edit.previewSvg.value = v }, { immediate: true }),
-      watch(previewer.previewLoading, (v) => { edit.previewLoading.value = v }, { immediate: true }),
-      watch(previewer.previewError, (v) => { edit.previewError.value = v }, { immediate: true }),
-      watch(previewer.previewResult, (v) => {
-        edit.previewResult.value = v
-        // Feed the cost estimator. Cache hits skew downward (the cost
-        // we want to estimate is *compute*, not network), so they're
-        // excluded. ``elapsed_ms`` comes straight from the backend's
-        // perf_counter wrapper around the converter call.
-        if (v && !v.cached && typeof v.elapsed_ms === 'number') {
-          costEstimator.record(
-            draft.bitmap.value.algorithm,
-            edit.previewQuality.value,
-            v.elapsed_ms,
-          )
-        }
-      }, { immediate: true }),
-      watch(kind, (v) => { edit.kind.value = v }, { immediate: true }),
-      watch(pageCount, (v) => { edit.pageCount.value = v }, { immediate: true }),
-      watch(currentPage, (v) => { edit.currentPage.value = v }, { immediate: true }),
+      watch(
+        _selectedFile,
+        (v) => {
+          edit.selectedFile.value = v
+        },
+        { immediate: true },
+      ),
+      watch(
+        _previewUrl,
+        (v) => {
+          edit.previewUrl.value = v
+        },
+        { immediate: true },
+      ),
+      watch(
+        _textPreview,
+        (v) => {
+          edit.textPreview.value = v
+        },
+        { immediate: true },
+      ),
+      watch(
+        previewer.previewSvg,
+        (v) => {
+          edit.previewSvg.value = v
+        },
+        { immediate: true },
+      ),
+      watch(
+        previewer.previewLoading,
+        (v) => {
+          edit.previewLoading.value = v
+        },
+        { immediate: true },
+      ),
+      watch(
+        previewer.previewError,
+        (v) => {
+          edit.previewError.value = v
+        },
+        { immediate: true },
+      ),
+      watch(
+        previewer.previewResult,
+        (v) => {
+          edit.previewResult.value = v
+          // Feed the cost estimator. Cache hits skew downward (the cost
+          // we want to estimate is *compute*, not network), so they're
+          // excluded. ``elapsed_ms`` comes straight from the backend's
+          // perf_counter wrapper around the converter call.
+          if (v && !v.cached && typeof v.elapsed_ms === 'number') {
+            costEstimator.record(
+              draft.bitmap.value.algorithm,
+              edit.previewQuality.value,
+              v.elapsed_ms,
+            )
+          }
+        },
+        { immediate: true },
+      ),
+      watch(
+        kind,
+        (v) => {
+          edit.kind.value = v
+        },
+        { immediate: true },
+      ),
+      watch(
+        pageCount,
+        (v) => {
+          edit.pageCount.value = v
+        },
+        { immediate: true },
+      ),
+      watch(
+        currentPage,
+        (v) => {
+          edit.currentPage.value = v
+        },
+        { immediate: true },
+      ),
     )
     edit.setGoToPage(goToPage)
     edit.setPreviewCallbacks({ cancel: previewer.cancel, retry: previewer.retry })
@@ -463,7 +526,11 @@ export function resetFileManager(): void {
   }
   _textPreview.value = ''
   for (const stop of _disposers) {
-    try { stop() } catch { /* ignore */ }
+    try {
+      stop()
+    } catch {
+      /* ignore */
+    }
   }
   _disposers = []
   _initialised.value = false

@@ -55,7 +55,14 @@ function onChange(opt: AlgoOption, ev: Event): void {
         />
         {{ t(opt.label) }}
       </label>
-      <label v-else :class="compact ? 'flex items-center gap-1.5 text-[11px] text-slate-400' : 'block text-[11px] text-slate-400'">
+      <label
+        v-else
+        :class="
+          compact
+            ? 'flex items-center gap-1.5 text-[11px] text-slate-400'
+            : 'block text-[11px] text-slate-400'
+        "
+      >
         <span :class="compact ? 'w-24 shrink-0 truncate' : ''">{{ t(opt.label) }}</span>
         <input
           type="number"
@@ -63,9 +70,11 @@ function onChange(opt: AlgoOption, ev: Event): void {
           :max="opt.max"
           :step="opt.step"
           :value="currentValue(opt)"
-          :class="compact
-            ? 'min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-100'
-            : 'mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100'"
+          :class="
+            compact
+              ? 'min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-100'
+              : 'mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100'
+          "
           @change="(e) => onChange(opt, e)"
         />
       </label>

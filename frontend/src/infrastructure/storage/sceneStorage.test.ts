@@ -2,11 +2,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { ref } from 'vue'
 import type { Placement, Variant } from '../../stores/job'
-import {
-  hydrateScene,
-  persistScene,
-  type ScenePersistenceRefs,
-} from './sceneStorage'
+import { hydrateScene, persistScene, type ScenePersistenceRefs } from './sceneStorage'
 
 function makeVariant(): Variant {
   return {

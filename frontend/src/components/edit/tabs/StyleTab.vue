@@ -76,7 +76,11 @@ function setPaletteFollowsPens(value: boolean): void {
 // this tab rather than the singleton because no other tab needs it.
 const fonts = ref<string[]>([])
 onMounted(async () => {
-  try { fonts.value = await getFonts() } catch { /* keep [] */ }
+  try {
+    fonts.value = await getFonts()
+  } catch {
+    /* keep [] */
+  }
 })
 
 // Switching master style: rewrite the draft's segmentation + uniform
@@ -100,9 +104,7 @@ async function onMasterStyleChange(id: string): Promise<void> {
   if (store.layers.length > 0 && previous !== id) {
     const overrideCount = Object.keys(store.layerAlgorithms).length
     if (overrideCount > 0) {
-      const ok = window.confirm(
-        t('render.replaceOverridesWarning', { count: overrideCount }),
-      )
+      const ok = window.confirm(t('render.replaceOverridesWarning', { count: overrideCount }))
       if (!ok) return
     }
     await applyMasterStyleToLayers(store, {
@@ -130,9 +132,7 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
   if (store.layers.length > 0 && previous !== id) {
     const overrideCount = Object.keys(store.layerAlgorithms).length
     if (overrideCount > 0) {
-      const ok = window.confirm(
-        t('render.replaceOverridesWarning', { count: overrideCount }),
-      )
+      const ok = window.confirm(t('render.replaceOverridesWarning', { count: overrideCount }))
       if (!ok) return
     }
     // Multicolour styles don't have a target pen slot — each layer
@@ -171,7 +171,7 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
       <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
         <PenSlotPicker
           :model-value="draft.monoPenSlot.value"
-          @update:model-value="(v) => draft.monoPenSlot.value = v"
+          @update:model-value="(v) => (draft.monoPenSlot.value = v)"
         />
 
         <MasterStylePicker
@@ -179,12 +179,11 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
           @update:model-value="onMasterStyleChange"
         />
 
-        <MasterStyleParams
-          :bitmap="bitmap"
-          :style-id="draft.monoMasterStyleId.value"
-        />
+        <MasterStyleParams :bitmap="bitmap" :style-id="draft.monoMasterStyleId.value" />
 
-        <p class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-[10px] leading-snug text-slate-400">
+        <p
+          class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-[10px] leading-snug text-slate-400"
+        >
           {{ t('mono.layersHint') }}
         </p>
       </div>
@@ -212,7 +211,9 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
         :manual-swap-count="manualSwapCount"
         @update:palette-follows-pens="setPaletteFollowsPens"
       />
-      <p class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1.5 text-[11px] text-slate-400">
+      <p
+        class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1.5 text-[11px] text-slate-400"
+      >
         {{ t('render.multicolorHint') }}
       </p>
     </template>

@@ -57,13 +57,48 @@ const corners = computed(() => {
     </div>
     <div class="grid grid-cols-3 gap-1 w-36">
       <span />
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.jogUp')" :title="t('plotter.jogUp')" @click="jog(0, 1)">↑</button>
+      <button
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        :aria-label="t('plotter.jogUp')"
+        :title="t('plotter.jogUp')"
+        @click="jog(0, 1)"
+      >
+        ↑
+      </button>
       <span />
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.jogLeft')" :title="t('plotter.jogLeft')" @click="jog(-1, 0)">←</button>
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.home')" :title="t('plotter.home')" @click="home">⌂</button>
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.jogRight')" :title="t('plotter.jogRight')" @click="jog(1, 0)">→</button>
+      <button
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        :aria-label="t('plotter.jogLeft')"
+        :title="t('plotter.jogLeft')"
+        @click="jog(-1, 0)"
+      >
+        ←
+      </button>
+      <button
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        :aria-label="t('plotter.home')"
+        :title="t('plotter.home')"
+        @click="home"
+      >
+        ⌂
+      </button>
+      <button
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        :aria-label="t('plotter.jogRight')"
+        :title="t('plotter.jogRight')"
+        @click="jog(1, 0)"
+      >
+        →
+      </button>
       <span />
-      <button class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100" :aria-label="t('plotter.jogDown')" :title="t('plotter.jogDown')" @click="jog(0, -1)">↓</button>
+      <button
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        :aria-label="t('plotter.jogDown')"
+        :title="t('plotter.jogDown')"
+        @click="jog(0, -1)"
+      >
+        ↓
+      </button>
       <span />
     </div>
 

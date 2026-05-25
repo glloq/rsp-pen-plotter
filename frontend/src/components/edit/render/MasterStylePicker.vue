@@ -23,15 +23,18 @@ import StyleThumbnail from '../shared/StyleThumbnail.vue'
 // committed under the pre-merge ids (halftone / spiral / centerline)
 // so historical SVGs rehydrate to the renamed registry entries.
 
-const props = withDefaults(defineProps<{
-  // Active style id — either the registry id (``pencil``,
-  // ``halftone-shade``…) or a legacy mono-mode id (``halftone``…).
-  modelValue: string
-  // Master-style family to gallery. Defaults to ``monochrome`` so
-  // existing call sites (which never passed the prop) keep showing the
-  // mono masters.
-  mode?: PrintStyleMode
-}>(), { mode: 'monochrome' })
+const props = withDefaults(
+  defineProps<{
+    // Active style id — either the registry id (``pencil``,
+    // ``halftone-shade``…) or a legacy mono-mode id (``halftone``…).
+    modelValue: string
+    // Master-style family to gallery. Defaults to ``monochrome`` so
+    // existing call sites (which never passed the prop) keep showing the
+    // mono masters.
+    mode?: PrintStyleMode
+  }>(),
+  { mode: 'monochrome' },
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
@@ -46,9 +49,7 @@ const styles = computed<PrintStyle[]>(() => masterStylesByMode(props.mode))
 // mono-family default when called from the legacy mono call sites that
 // don't pass ``mode``.
 function resolve(id: string | null | undefined): PrintStyle {
-  return props.mode === 'multicolor'
-    ? resolveMulticolorStyle(id)
-    : resolveMasterStyle(id)
+  return props.mode === 'multicolor' ? resolveMulticolorStyle(id) : resolveMasterStyle(id)
 }
 
 // "Custom" surfaces when the operator has touched segmentation or
@@ -126,9 +127,11 @@ const activeStyle = computed(() => resolve(props.modelValue))
         :key="style.id"
         type="button"
         class="flex items-center gap-2 rounded border px-2 py-1.5 text-left transition"
-        :class="isActive(style)
-          ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
-          : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'"
+        :class="
+          isActive(style)
+            ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
+            : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+        "
         :title="style.descriptionKey ? t(style.descriptionKey) : ''"
         @click="select(style)"
       >
@@ -137,10 +140,7 @@ const activeStyle = computed(() => resolve(props.modelValue))
           <span class="block truncate text-[11px] font-medium">
             {{ t(style.labelKey) }}
           </span>
-          <span
-            v-if="style.descriptionKey"
-            class="block truncate text-[9px] text-slate-500"
-          >
+          <span v-if="style.descriptionKey" class="block truncate text-[9px] text-slate-500">
             {{ t(style.descriptionKey) }}
           </span>
         </span>

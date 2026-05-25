@@ -105,9 +105,7 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
   const toasts = useToastStore()
 
   function formatProgress(seconds: number): string {
-    return opts.progressMessage
-      ? opts.progressMessage(seconds)
-      : `Rendering preview… (${seconds}s)`
+    return opts.progressMessage ? opts.progressMessage(seconds) : `Rendering preview… (${seconds}s)`
   }
 
   function dismissToast(): void {
@@ -177,9 +175,7 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
           svg: textResult.svg,
           elapsed_ms: 0,
           palette: [],
-          warnings: textResult.truncated
-            ? ['Preview truncated to the first 256 KB of text.']
-            : [],
+          warnings: textResult.truncated ? ['Preview truncated to the first 256 KB of text.'] : [],
           cached: false,
         }
       } else {
@@ -203,8 +199,8 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
       // axios's own timeout path is no longer hit (we set timeout: 0)
       // but keep the categorisation defensive in case a downstream
       // proxy / fetch shim surfaces one anyway.
-      const isTimeout = e.code === 'ECONNABORTED'
-        || (typeof e.message === 'string' && /timeout/i.test(e.message))
+      const isTimeout =
+        e.code === 'ECONNABORTED' || (typeof e.message === 'string' && /timeout/i.test(e.message))
       if (isTimeout && opts.timeoutMessage) {
         previewError.value = opts.timeoutMessage
       } else {
