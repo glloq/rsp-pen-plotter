@@ -419,6 +419,55 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
     spacing_max: 5,
     max_rings: 40,
   },
+  'color-stippling-classic': {
+    density_min: 0.012,
+    density_max: 0.05,
+    dot_radius: 0.5,
+  },
+  'color-edges': {
+    stroke_width: 0.8,
+  },
+  'color-centerline': {
+    stroke_width: 0.8,
+    min_branch_px: 3,
+  },
+  'color-spiral-classic': {
+    spacing_min: 2,
+    spacing_max: 5,
+    samples_per_turn: 64,
+  },
+  'color-scanlines': {
+    spacing_min: 2.5,
+    spacing_max: 6,
+    wave_amp_px: 0,
+    wave_period_px: 12,
+  },
+  'color-tsp': {
+    density_min: 0.012,
+    density_max: 0.05,
+  },
+  'color-hilbert': {
+    spacing_min: 2.5,
+    spacing_max: 6,
+    min_run_px: 3,
+  },
+  'color-gosper': {
+    order: 4,
+    spacing_min: 3,
+    spacing_max: 5,
+  },
+  'color-eulerian': {
+    spacing_min: 2.5,
+    spacing_max: 6,
+    angle_step: 45,
+    crossed: false,
+  },
+  'color-tsp-opt': {
+    density_min: 0.012,
+    density_max: 0.05,
+    max_points: 4000,
+    time_budget_s: 1.5,
+  },
 }
 
 // Naming convention to resolve old collisions between mono modes and
@@ -887,6 +936,256 @@ export const PRINT_STYLES: PrintStyle[] = [
       return {
         algorithm: 'concentric_offset',
         algorithm_options: { spacing_px: spacing, max_rings: 40, bridge: true },
+      }
+    },
+  },
+  // ---- Additional colour masters to cover every backend algorithm ----
+  // The layer picker exposes 18 algorithms; the colour master family
+  // mirrors them one-for-one so the operator can pick a multi-colour
+  // preset based on any technique, not just the eight we shipped first.
+  {
+    id: 'color-stippling-classic',
+    labelKey: 'colorStyles.stipplingClassic',
+    descriptionKey: 'colorStyles.stipplingClassicDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 5,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'stippling',
+    defaultAlgorithmOptions: { density: 0.03, dot_radius_px: 0.5, seed: 0 },
+    colorRecipe(i, total) {
+      const density = lerp(i, total, 0.05, 0.012)
+      return {
+        algorithm: 'stippling',
+        algorithm_options: { density, dot_radius_px: 0.5, seed: i * 7 + 13 },
+      }
+    },
+  },
+  {
+    id: 'color-edges',
+    labelKey: 'colorStyles.edges',
+    descriptionKey: 'colorStyles.edgesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 5,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'edges',
+    defaultAlgorithmOptions: { stroke_width: 0.8 },
+    colorRecipe() {
+      return { algorithm: 'edges', algorithm_options: { stroke_width: 0.8 } }
+    },
+  },
+  {
+    id: 'color-centerline',
+    labelKey: 'colorStyles.centerline',
+    descriptionKey: 'colorStyles.centerlineDesc',
+    applicableTo: ['image', 'schematic'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'centerline',
+    defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+    colorRecipe() {
+      return {
+        algorithm: 'centerline',
+        algorithm_options: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+      }
+    },
+  },
+  {
+    id: 'color-spiral-classic',
+    labelKey: 'colorStyles.spiralClassic',
+    descriptionKey: 'colorStyles.spiralClassicDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'spiral',
+    defaultAlgorithmOptions: { spacing_px: 3, samples_per_turn: 64 },
+    colorRecipe(i, total) {
+      const spacing = lerp(i, total, 2, 5)
+      return {
+        algorithm: 'spiral',
+        algorithm_options: { spacing_px: spacing, samples_per_turn: 64 },
+      }
+    },
+  },
+  {
+    id: 'color-scanlines',
+    labelKey: 'colorStyles.scanlines',
+    descriptionKey: 'colorStyles.scanlinesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'scanlines',
+    defaultAlgorithmOptions: { spacing_px: 4, wave_amp_px: 0, wave_period_px: 12 },
+    colorRecipe(i, total) {
+      const spacing = lerp(i, total, 2.5, 6)
+      return {
+        algorithm: 'scanlines',
+        algorithm_options: { spacing_px: spacing, wave_amp_px: 0, wave_period_px: 12 },
+      }
+    },
+  },
+  {
+    id: 'color-tsp',
+    labelKey: 'colorStyles.tsp',
+    descriptionKey: 'colorStyles.tspDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'tsp',
+    defaultAlgorithmOptions: { density: 0.03, seed: 0 },
+    colorRecipe(i, total) {
+      const density = lerp(i, total, 0.05, 0.012)
+      return {
+        algorithm: 'tsp',
+        algorithm_options: { density, seed: i * 11 + 5 },
+      }
+    },
+  },
+  {
+    id: 'color-hilbert',
+    labelKey: 'colorStyles.hilbert',
+    descriptionKey: 'colorStyles.hilbertDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'hilbert',
+    defaultAlgorithmOptions: { spacing_px: 4, min_run_px: 3 },
+    colorRecipe(i, total) {
+      const spacing = lerp(i, total, 2.5, 6)
+      return {
+        algorithm: 'hilbert',
+        algorithm_options: { spacing_px: spacing, min_run_px: 3 },
+      }
+    },
+  },
+  {
+    id: 'color-gosper',
+    labelKey: 'colorStyles.gosper',
+    descriptionKey: 'colorStyles.gosperDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'gosper',
+    defaultAlgorithmOptions: { order: 4, spacing_px: 4, rotation_deg: 0 },
+    colorRecipe(i, total) {
+      const spacing = lerp(i, total, 3, 5)
+      // Rotate per cluster to avoid identical curves stacking exactly.
+      return {
+        algorithm: 'gosper',
+        algorithm_options: { order: 4, spacing_px: spacing, rotation_deg: (i * 30) % 360 },
+      }
+    },
+  },
+  {
+    id: 'color-eulerian',
+    labelKey: 'colorStyles.eulerian',
+    descriptionKey: 'colorStyles.eulerianDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'eulerian_hatch',
+    defaultAlgorithmOptions: { spacing_px: 4, angle_deg: 45, crossed: false },
+    colorRecipe(i, total) {
+      const angles = [0, 45, 90, 135, 30, 75, 120, 165]
+      const angle = angles[i % angles.length] ?? 45
+      const spacing = lerp(i, total, 2.5, 6)
+      return {
+        algorithm: 'eulerian_hatch',
+        algorithm_options: { spacing_px: spacing, angle_deg: angle, crossed: false },
+      }
+    },
+  },
+  {
+    id: 'color-tsp-opt',
+    labelKey: 'colorStyles.tspOpt',
+    descriptionKey: 'colorStyles.tspOptDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'tsp_opt',
+    defaultAlgorithmOptions: {
+      density: 0.03, max_points: 4000, time_budget_s: 1.5, seed: 0, poisson_disk: true,
+    },
+    colorRecipe(i, total) {
+      const density = lerp(i, total, 0.05, 0.012)
+      return {
+        algorithm: 'tsp_opt',
+        algorithm_options: {
+          density,
+          max_points: 4000,
+          time_budget_s: 1.5,
+          seed: i * 19 + 3,
+          poisson_disk: true,
+        },
       }
     },
   },
