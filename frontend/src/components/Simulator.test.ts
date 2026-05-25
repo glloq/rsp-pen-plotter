@@ -38,8 +38,7 @@ const i18n = createI18n({
         optColorChanges: 'Tool changes',
         optPauses: 'Pauses',
         manualPenChange: 'Manual pen change',
-        manualPenChangeHint:
-          'Single-pen machines: pause before each colour transition.',
+        manualPenChangeHint: 'Single-pen machines: pause before each colour transition.',
         colorFilterLabel: 'Filter colours',
         showAll: 'Show all',
         showOnly: 'Show only this',
@@ -57,12 +56,12 @@ function makeProfile(): MachineProfile {
   return {
     name: 'Test A3',
     units: 'mm',
-    workspace: { width_mm: 297, height_mm: 420 },
+    workspace: { x_min: 0, y_min: 0, x_max: 297, y_max: 420 },
     origin: 'bottom_left',
     gcode_dialect: 'grbl',
     pen_up_command: 'M3 S0',
     pen_down_command: 'M3 S1000',
-    tool_change_method: 'manual',
+    tool_change_method: 'manual_pause',
     tool_change_command: 'M0',
     drawing_speed_mm_s: 30,
     travel_speed_mm_s: 80,
@@ -159,9 +158,7 @@ describe('Simulator with G-code seeded', () => {
     expect(pauseBtn).toBeDefined()
     // Pause it again so the test doesn't leave a RAF handle dangling.
     await pauseBtn!.trigger('click')
-    expect(
-      wrapper.findAll('button').find((b) => b.text() === 'Play'),
-    ).toBeDefined()
+    expect(wrapper.findAll('button').find((b) => b.text() === 'Play')).toBeDefined()
   })
 
   it('renders one button per supported speed multiplier', async () => {
