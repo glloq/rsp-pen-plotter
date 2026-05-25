@@ -1,151 +1,48 @@
-"""Re-render selected bitmap layers with new per-layer algorithms.
+"""HTTP adapter for ``POST /rerender`` — re-render selected bitmap layers.
 
-The full ``/upload`` flow runs k-means + per-cluster rendering, which can
-take a few seconds on a Pi. When the operator changes the algorithm for
-a single layer in the UI, we don't want to re-segment — only re-render.
-This module caches the segmentation result (labels + palette) of each
-bitmap job by ``job_id`` so a second pass only pays for the rendering.
-
-The in-memory cache is bounded (LRU) and lost on backend restart, but
-when a cache miss happens we look the file up in the library, re-load
-the original bytes from disk, and re-segment using the BitmapOptions
-persisted in ``meta.json``. The result is then cached so subsequent
-re-renders are fast. This makes ``/rerender`` effectively persistent
-across restarts without paying the segmentation cost on every request.
-
-The capacity defaults to 64 (room for several placements being edited
-in a session) and is configurable via the ``RERENDER_CACHE_SIZE`` env
-var.
+All disk I/O, segmentation caching and rehydration live in
+:mod:`pen_plotter.application.file_library`. This module owns only the
+wire model and the HTTP error mapping.
 """
 
 from __future__ import annotations
 
-import logging
-import os
-from collections import OrderedDict
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from pen_plotter.converters.bitmap import BitmapConverter, BitmapOptions, SegmentationResult
+from pen_plotter.application import file_library as _lib
+from pen_plotter.application.file_library import (
+    forget_job,
+    get_cached,
+    remember_job,
+    try_rehydrate,
+)
+from pen_plotter.converters.bitmap import BitmapConverter
 from pen_plotter.core.sanitize import sanitize_svg
-
-_log = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def _load_cache_size() -> int:
-    """Read the LRU cap from env, clamped to a sane range."""
-    raw = os.environ.get("RERENDER_CACHE_SIZE", "64")
-    try:
-        size = int(raw)
-    except ValueError:
-        size = 64
-    return max(4, min(256, size))
+# Re-exports — keep the import surface stable for callers (notably
+# ``api/files.py`` and the tests) that historically imported these
+# from this module. New code should import them from
+# ``application.file_library`` directly.
+_CACHE = _lib._CACHE
+_clear_cache_for_tests = _lib.clear_cache_for_tests
 
-
-_CACHE_SIZE = _load_cache_size()
-
-
-class _CacheEntry:
-    """One cached bitmap job: its segmentation + the original options."""
-
-    __slots__ = ("segmentation", "options")
-
-    def __init__(self, segmentation: SegmentationResult, options: BitmapOptions) -> None:
-        self.segmentation = segmentation
-        self.options = options
-
-
-_CACHE: OrderedDict[str, _CacheEntry] = OrderedDict()
-
-
-def remember_job(job_id: str, segmentation: SegmentationResult, options: BitmapOptions) -> None:
-    """Stash a bitmap job's segmentation result for later ``/rerender`` calls."""
-    _CACHE[job_id] = _CacheEntry(segmentation, options)
-    _CACHE.move_to_end(job_id)
-    while len(_CACHE) > _CACHE_SIZE:
-        _CACHE.popitem(last=False)
-
-
-def forget_job(job_id: str) -> None:
-    """Drop a cached job (e.g. when ``/upload`` replaces it)."""
-    _CACHE.pop(job_id, None)
-
-
-def _clear_cache_for_tests() -> None:
-    """Test-only hook so the cache doesn't leak between cases."""
-    _CACHE.clear()
-
-
-# Rehydration outcomes. The endpoint exposes the failure reason as a
-# machine-readable ``detail.reason`` so the UI can pick a precise prompt
-# ("re-upload this file") instead of a generic 404 toast.
-REHYDRATE_OK = "ok"
-REHYDRATE_UNKNOWN = "unknown_job"
-REHYDRATE_VECTOR = "not_rerenderable"
-REHYDRATE_NO_OPTIONS = "missing_bitmap_options"
-REHYDRATE_NO_ORIGINAL = "missing_original_bytes"
-REHYDRATE_CORRUPT_OPTIONS = "corrupt_bitmap_options"
-REHYDRATE_SEGMENT_FAILED = "segmentation_failed"
-
-
-def _try_rehydrate(job_id: str) -> tuple[_CacheEntry | None, str]:
-    """Re-segment from disk when the in-memory cache lost the job.
-
-    Looks up ``job_id`` in the library; if a record exists, it's a bitmap
-    upload (``meta.rerenderable``), and ``meta.bitmap_options`` is set,
-    re-reads the stored original bytes and re-runs segmentation with the
-    same options the operator picked at upload time. The resulting entry
-    is stashed in ``_CACHE`` so further re-renders skip this rehydration.
-
-    Returns a ``(entry, reason)`` pair: ``entry`` is ``None`` on every
-    failure path and ``reason`` carries one of the ``REHYDRATE_*`` codes
-    above so the caller can surface a precise 404 detail.
-    """
-    # Imported lazily to avoid a top-level circular import between
-    # rerender.py and files.py (files.py imports remember_job).
-    from pen_plotter.api.files import find_original, read_meta
-    from pen_plotter.persistence import get_file_record
-
-    record = get_file_record(job_id)
-    if record is None:
-        return None, REHYDRATE_UNKNOWN
-    meta = read_meta(job_id)
-    if meta is None or not meta.rerenderable:
-        return None, REHYDRATE_VECTOR
-    if not meta.bitmap_options:
-        # Legacy file uploaded before bitmap_options was persisted, or
-        # meta.json edited / corrupted. Operator must re-upload to
-        # restore the rerender capability.
-        _log.warning(
-            "Rerender rehydration: %s has rerenderable=True but no bitmap_options", job_id
-        )
-        return None, REHYDRATE_NO_OPTIONS
-    original = find_original(job_id)
-    if original is None or not original.is_file():
-        _log.warning("Rerender rehydration: %s has no original bytes on disk", job_id)
-        return None, REHYDRATE_NO_ORIGINAL
-    try:
-        options = BitmapOptions.model_validate(meta.bitmap_options)
-    except Exception as exc:
-        _log.warning("Rerender rehydration: %s has invalid bitmap_options: %s", job_id, exc)
-        return None, REHYDRATE_CORRUPT_OPTIONS
-    try:
-        data = original.read_bytes()
-        _result, segmentation = BitmapConverter().segment_and_render(
-            data, options=meta.bitmap_options
-        )
-    except Exception as exc:
-        _log.warning("Rerender rehydration: %s segmentation failed: %s", job_id, exc)
-        return None, REHYDRATE_SEGMENT_FAILED
-    entry = _CacheEntry(segmentation, options)
-    _CACHE[job_id] = entry
-    while len(_CACHE) > _CACHE_SIZE:
-        _CACHE.popitem(last=False)
-    return entry, REHYDRATE_OK
+__all__ = [
+    "LayerAlgorithm",
+    "LayerPass",
+    "RerenderRequest",
+    "RerenderResponse",
+    "_CACHE",
+    "_clear_cache_for_tests",
+    "forget_job",
+    "remember_job",
+    "router",
+]
 
 
 class LayerPass(BaseModel):
@@ -201,17 +98,15 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
         The freshly rendered SVG (sanitized) plus rendering warnings.
 
     Raises:
-        HTTPException: 404 if no segmentation cache exists for the job
-            (e.g. after a backend restart or LRU eviction); the UI then
-            re-uploads instead.
+        HTTPException: 404 with a structured ``{reason, job_id, message}``
+            detail when no cached segmentation exists and rehydration
+            cannot reconstruct one — see
+            ``application.file_library.REHYDRATE_*`` for the reason codes.
     """
-    entry = _CACHE.get(request.job_id)
+    entry = get_cached(request.job_id)
     if entry is None:
-        entry, reason = _try_rehydrate(request.job_id)
+        entry, reason = try_rehydrate(request.job_id)
         if entry is None:
-            # Structured detail mirrors the L8 missing-pen-slots shape so
-            # the UI can branch on ``reason`` to pick a precise prompt
-            # (re-upload vs unsupported file type vs ...).
             raise HTTPException(
                 status_code=404,
                 detail={
@@ -223,8 +118,6 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
                     ),
                 },
             )
-    # Refresh LRU position so frequently-tweaked jobs stay hot.
-    _CACHE.move_to_end(request.job_id)
 
     overrides: dict[str, dict[str, Any]] = {}
     for item in request.layers:

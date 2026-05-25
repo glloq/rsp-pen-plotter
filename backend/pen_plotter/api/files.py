@@ -1,15 +1,13 @@
-"""File library endpoints — durable, dedup-by-hash storage of uploaded sources.
+"""HTTP adapter for the file library — upload, list, fetch, dedup, integrity.
 
-The library is the canonical place uploaded files live: one row per unique
-SHA-256, normalized SVG on disk, foldering / search / sort handled by the
-backend so the UI stays thin. Re-uploading the same content returns the
-existing record instead of creating a duplicate entry.
+All disk layout, persistence, segmentation cache and integrity logic
+live in :mod:`pen_plotter.application.file_library`. This module owns
+only the HTTP wire shape and the upload orchestration.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import uuid
@@ -21,14 +19,24 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from pen_plotter.api.rerender import remember_job
+from pen_plotter.application.file_library import (
+    FileMeta,
+    IntegrityReport,
+    file_dir,
+    find_original,
+    forget_job,
+    integrity_scan,
+    read_meta,
+    read_meta_or_empty,
+    read_svg,
+    remember_job,
+)
 from pen_plotter.converters.pipeline import (
     convert_file,
     parse_options,
     read_upload_safely,
     resolve_mime,
 )
-from pen_plotter.models import LayerInfo
 from pen_plotter.persistence import (
     FileRecord,
     delete_file_record,
@@ -43,46 +51,20 @@ router = APIRouter()
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
+# Test compatibility: ``FILES_DIR`` is the conventional monkey-patch
+# point used by tests to redirect the library to a temp dir. The
+# application service reads this attribute at call time (see
+# ``file_library.files_dir``) so the override flows through.
 _DEFAULT_FILES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "files"
 FILES_DIR = Path(os.environ.get("OMNIPLOT_FILES_DIR", _DEFAULT_FILES_DIR))
 
-
-def _file_dir(file_id: str) -> Path:
-    return FILES_DIR / file_id
-
-
-def _meta_path(file_id: str) -> Path:
-    return _file_dir(file_id) / "meta.json"
-
-
-def _svg_path(file_id: str) -> Path:
-    return _file_dir(file_id) / "normalized.svg"
-
-
-def _find_original(file_id: str) -> Path | None:
-    """Return the stored original file for ``file_id`` if present."""
-    directory = _file_dir(file_id)
-    if not directory.is_dir():
-        return None
-    for child in directory.iterdir():
-        if child.is_file() and child.stem == "original":
-            return child
-    return None
-
-
-def find_original(file_id: str) -> Path | None:
-    """Public accessor for the stored original file path, if present."""
-    return _find_original(file_id)
-
-
-def read_meta(file_id: str) -> FileMeta | None:
-    """Return the parsed meta.json for ``file_id``, or ``None`` if absent."""
-    path = _meta_path(file_id)
-    if not path.is_file():
-        return None
-    with path.open("r", encoding="utf-8") as fp:
-        raw = json.load(fp)
-    return FileMeta.model_validate(raw)
+# Backwards-compatible aliases. The tests and any external callers that
+# imported these private helpers from this module keep working; new
+# code should import them from ``application.file_library`` directly.
+_file_dir = file_dir
+_meta_path = lambda file_id: file_dir(file_id) / "meta.json"  # noqa: E731
+_svg_path = lambda file_id: file_dir(file_id) / "normalized.svg"  # noqa: E731
+_find_original = find_original
 
 
 class FileRecordOut(BaseModel):
@@ -98,37 +80,11 @@ class FileRecordOut(BaseModel):
     created_at: datetime
 
 
-class FileMeta(BaseModel):
-    """Full metadata persisted alongside the SVG (warnings, layers, etc.)."""
-
-    layers: list[LayerInfo]
-    warnings: list[str] = []
-    upload_metadata: dict[str, Any] = {}
-    # True when the upload pipeline produced a bitmap segmentation cache,
-    # so /rerender can re-run a different algorithm against the same colour
-    # clusters. False for vector sources (SVG, PDF) where the geometry is
-    # used as-is and the algorithm picker has no effect.
-    rerenderable: bool = False
-    # BitmapOptions (as a dict) used at the original segmentation. Kept on
-    # disk so the /rerender cache can be rehydrated after a backend restart
-    # without re-uploading — re-segmenting the stored ``original.<ext>``
-    # bytes with these exact options reproduces the same labels + palette.
-    bitmap_options: dict[str, Any] | None = None
-    # Raw converter options dict from the original /files upload. Drives
-    # the dedup change-detection path for non-bitmap converters
-    # (typography, markdown, …) whose option schemas the bitmap-shaped
-    # ``bitmap_options`` cannot represent. Without this a second upload
-    # of the same .txt file with a different font / size would silently
-    # return the stale cached SVG because BitmapOptions validation
-    # drops the typography keys.
-    source_options: dict[str, Any] | None = None
-
-
 class FileDetail(FileRecordOut):
     """Library entry plus its converted SVG and per-file metadata."""
 
     svg: str
-    layers: list[LayerInfo]
+    layers: list[Any]  # LayerInfo; widened to Any to avoid a cycle through models
     warnings: list[str] = []
     upload_metadata: dict[str, Any] = {}
     rerenderable: bool = False
@@ -161,27 +117,14 @@ def _record_to_out(record: FileRecord) -> FileRecordOut:
     )
 
 
-def _read_meta(file_id: str) -> FileMeta:
-    path = _meta_path(file_id)
-    if not path.is_file():
-        return FileMeta(layers=[])
-    with path.open("r", encoding="utf-8") as fp:
-        raw = json.load(fp)
-    return FileMeta.model_validate(raw)
-
-
-def _read_svg(file_id: str) -> str:
-    path = _svg_path(file_id)
-    if not path.is_file():
-        raise HTTPException(status_code=410, detail="Stored SVG is missing on disk")
-    return path.read_text(encoding="utf-8")
-
-
 def _record_to_detail(record: FileRecord) -> FileDetail:
-    meta = _read_meta(record.file_id)
+    meta = read_meta_or_empty(record.file_id)
+    svg = read_svg(record.file_id)
+    if svg is None:
+        raise HTTPException(status_code=410, detail="Stored SVG is missing on disk")
     return FileDetail(
         **_record_to_out(record).model_dump(),
-        svg=_read_svg(record.file_id),
+        svg=svg,
         layers=meta.layers,
         warnings=meta.warnings,
         upload_metadata=meta.upload_metadata,
@@ -197,11 +140,10 @@ def _options_changed(file_id: str, new_options: dict[str, Any]) -> bool:
     """
     if not new_options:
         return False
-    meta = _read_meta(file_id)
+    meta = read_meta_or_empty(file_id)
     # Bitmap path: stored as BitmapOptions, normalize both sides so a
     # request that omits an implicit default doesn't trigger a false
-    # re-conversion (e.g. ``{algorithm: 'direct'}`` vs a fully populated
-    # stored dict with the same algorithm).
+    # re-conversion.
     stored_bitmap = meta.bitmap_options
     if stored_bitmap is not None:
         try:
@@ -215,10 +157,7 @@ def _options_changed(file_id: str, new_options: dict[str, Any]) -> bool:
             # converters still detect their settings edits.
             pass
     # Non-bitmap converters (typography / markdown / svg / …): compare
-    # against the raw options dict that produced the file. BitmapOptions
-    # validation silently drops keys like ``font``, ``font_size_mm`` or
-    # ``bold``, so a font change on a .txt file would otherwise look
-    # like "no change" and the dedup branch would return the stale SVG.
+    # against the raw options dict that produced the file.
     stored = meta.source_options or {}
     return {**stored, **new_options} != stored
 
@@ -236,10 +175,8 @@ def _reprocess_existing(
     visible on the next /files/<id> read. Also refreshes the rerender
     cache so the next /rerender skips the rehydration step.
     """
-    from pen_plotter.api.rerender import forget_job, remember_job
-
     converted = convert_file(data, record.source_file, mime, new_options)
-    directory = _file_dir(record.file_id)
+    directory = file_dir(record.file_id)
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "normalized.svg").write_text(converted.svg, encoding="utf-8")
     # Refresh the on-disk original too — extension may differ if the
@@ -347,10 +284,8 @@ async def upload_to_library(
     file_id = str(uuid.uuid4())
     # Write all artefacts into a staging directory and only rename it to
     # its final name once every file is on disk. Guarantees an interrupted
-    # upload can never leave the library half-populated — a crash mid-write
-    # surfaces as a leftover ``.tmp-*`` dir that startup or the next upload
-    # can sweep, not as an orphan record pointing at missing SVG / meta.
-    final_dir = _file_dir(file_id)
+    # upload can never leave the library half-populated.
+    final_dir = file_dir(file_id)
     staging = final_dir.with_name(f".tmp-{file_id}")
     try:
         staging.mkdir(parents=True, exist_ok=False)
@@ -370,9 +305,6 @@ async def upload_to_library(
             source_options=dict(parsed_options) if parsed_options else None,
         )
         (staging / "meta.json").write_text(meta.model_dump_json(), encoding="utf-8")
-        # Atomic on POSIX: rename within the same directory is one syscall,
-        # so either the final path exists with every file or it doesn't
-        # exist at all.
         staging.rename(final_dir)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
@@ -396,78 +328,6 @@ async def upload_to_library(
         remember_job(file_id, converted.bitmap_segmentation, converted.bitmap_options)
 
     return FileUploadResponse(file=_record_to_detail(record), existing=False)
-
-
-class IntegrityIssue(BaseModel):
-    """One library entry that cannot be re-rendered today.
-
-    Surfaced by :func:`integrity_scan` so the UI can show a banner and
-    let the operator re-upload the affected files rather than discover
-    the problem when they click Edit.
-    """
-
-    file_id: str
-    source_file: str
-    reason: str
-
-
-class IntegrityReport(BaseModel):
-    """Summary returned by ``GET /files/integrity``."""
-
-    checked: int
-    rerenderable: int
-    issues: list[IntegrityIssue]
-
-
-def integrity_scan() -> IntegrityReport:
-    """Walk the library and flag rerenderable entries that have lost their state.
-
-    Detects the same failure modes the rerender rehydration path checks
-    (missing bitmap_options, missing original bytes, corrupt options) so
-    operators get a single place to see and resolve them.
-    """
-    issues: list[IntegrityIssue] = []
-    records = list_file_records()
-    rerenderable_count = 0
-    for record in records:
-        meta = read_meta(record.file_id)
-        if meta is None or not meta.rerenderable:
-            continue
-        rerenderable_count += 1
-        if not meta.bitmap_options:
-            issues.append(
-                IntegrityIssue(
-                    file_id=record.file_id,
-                    source_file=record.source_file,
-                    reason="missing_bitmap_options",
-                )
-            )
-            continue
-        original = _find_original(record.file_id)
-        if original is None or not original.is_file():
-            issues.append(
-                IntegrityIssue(
-                    file_id=record.file_id,
-                    source_file=record.source_file,
-                    reason="missing_original_bytes",
-                )
-            )
-            continue
-        try:
-            from pen_plotter.converters.bitmap import BitmapOptions
-
-            BitmapOptions.model_validate(meta.bitmap_options)
-        except Exception:
-            issues.append(
-                IntegrityIssue(
-                    file_id=record.file_id,
-                    source_file=record.source_file,
-                    reason="corrupt_bitmap_options",
-                )
-            )
-    return IntegrityReport(
-        checked=len(records), rerenderable=rerenderable_count, issues=issues
-    )
 
 
 @router.get("/files/integrity")
@@ -517,7 +377,7 @@ async def download_original(file_id: str) -> FileResponse:
     record = get_file_record(file_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Unknown file: {file_id!r}")
-    original = _find_original(file_id)
+    original = find_original(file_id)
     if original is None:
         raise HTTPException(status_code=410, detail="Original file is missing on disk")
     return FileResponse(
@@ -549,7 +409,22 @@ async def delete_file(file_id: str) -> dict[str, bool]:
     """Remove a library entry and its on-disk artifacts."""
     if not delete_file_record(file_id):
         raise HTTPException(status_code=404, detail=f"Unknown file: {file_id!r}")
-    directory = _file_dir(file_id)
+    directory = file_dir(file_id)
     if directory.is_dir():
         shutil.rmtree(directory, ignore_errors=True)
     return {"ok": True}
+
+
+__all__ = [
+    "FILES_DIR",
+    "FileDetail",
+    "FileMeta",
+    "FilePatch",
+    "FileRecordOut",
+    "FileUploadResponse",
+    "IntegrityReport",
+    "MAX_UPLOAD_BYTES",
+    "find_original",
+    "read_meta",
+    "router",
+]
