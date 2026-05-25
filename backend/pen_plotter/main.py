@@ -17,7 +17,6 @@ from pen_plotter import __version__
 from pen_plotter.api.algorithms import router as algorithms_router
 from pen_plotter.api.analyze import router as analyze_router
 from pen_plotter.api.audit import router as audit_router
-from pen_plotter.api.files import integrity_scan
 from pen_plotter.api.files import router as files_router
 from pen_plotter.api.fonts import router as fonts_router
 from pen_plotter.api.generate import router as generate_router
@@ -36,6 +35,7 @@ from pen_plotter.api.queue import router as queue_router
 from pen_plotter.api.rerender import router as rerender_router
 from pen_plotter.api.system import router as system_router
 from pen_plotter.api.upload import router as upload_router
+from pen_plotter.application.file_library import integrity_scan
 from pen_plotter.auth import require_api_key
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
