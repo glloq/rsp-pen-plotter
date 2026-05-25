@@ -226,7 +226,7 @@ const HANDLES: Exclude<Handle, null>[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw',
         :stroke-dasharray="selectedPlacementId === rp.placement.id ? undefined : '4 3'"
         vector-effect="non-scaling-stroke"
         style="cursor: grab"
-        @pointerdown="(e) => startMoveDrawing(e, rp.placement.id)"
+        @pointerdown.stop="(e) => startMoveDrawing(e, rp.placement.id)"
         @dblclick="(e) => onDblClick(e, rp.placement.id)"
       />
       <g
@@ -243,7 +243,7 @@ const HANDLES: Exclude<Handle, null>[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw',
           r="5"
           vector-effect="non-scaling-stroke"
           :style="{ cursor: handleCursor(h) }"
-          @pointerdown="(e) => startResize(h, e, rp.placement.id)"
+          @pointerdown.stop="(e) => startResize(h, e, rp.placement.id)"
         />
       </g>
       <foreignObject
