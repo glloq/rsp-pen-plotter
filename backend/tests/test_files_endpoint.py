@@ -188,3 +188,69 @@ async def test_upload_failure_leaves_no_partial_directory() -> None:
     if FILES_DIR.exists():
         leftover = list(FILES_DIR.glob(".tmp-*"))
         assert not leftover, f"leftover staging dirs: {leftover}"
+
+
+# Regression — pre-fix bug: ``_options_changed`` validated against
+# ``BitmapOptions`` only, so it silently dropped typography keys
+# (font, font_size_mm, bold, italic, …). Re-uploading the same .txt
+# file with a different font returned the stale cached SVG and the
+# operator's setting never reached the generated G-code.
+@pytest.mark.asyncio
+async def test_typography_reupload_with_changed_font_size_reprocesses() -> None:
+    import json
+    txt = b"Hello plotter"
+    upload_small = {
+        "files": {"file": ("hello.txt", txt, "text/plain")},
+        "data": {"folder": "", "options": json.dumps({"font_size_mm": 4.0})},
+    }
+    upload_large = {
+        "files": {"file": ("hello.txt", txt, "text/plain")},
+        "data": {"folder": "", "options": json.dumps({"font_size_mm": 20.0})},
+    }
+    async with _client() as client:
+        small = await client.post("/files", **upload_small)
+        large = await client.post("/files", **upload_large)
+    assert small.status_code == 200 and large.status_code == 200
+    # Same content → same file_id (dedup), but the SVG MUST differ because
+    # the typography options changed.
+    assert small.json()["file"]["file_id"] == large.json()["file"]["file_id"]
+    assert small.json()["file"]["svg"] != large.json()["file"]["svg"]
+
+
+@pytest.mark.asyncio
+async def test_typography_reupload_with_bold_reprocesses() -> None:
+    import json
+    txt = b"Hello plotter"
+    plain = {
+        "files": {"file": ("hello.txt", txt, "text/plain")},
+        "data": {"folder": "", "options": json.dumps({"font_size_mm": 10.0, "bold": False})},
+    }
+    bold = {
+        "files": {"file": ("hello.txt", txt, "text/plain")},
+        "data": {"folder": "", "options": json.dumps({"font_size_mm": 10.0, "bold": True})},
+    }
+    async with _client() as client:
+        a = await client.post("/files", **plain)
+        b = await client.post("/files", **bold)
+    # Bold double-passes every stroke, so the bold SVG has ~2x as many
+    # ``M`` sub-paths as the plain one.
+    plain_subpaths = a.json()["file"]["svg"].count("M")
+    bold_subpaths = b.json()["file"]["svg"].count("M")
+    assert bold_subpaths >= plain_subpaths * 1.8
+
+
+@pytest.mark.asyncio
+async def test_typography_reupload_with_identical_options_dedupes() -> None:
+    import json
+    txt = b"Hello plotter"
+    opts = {"font_size_mm": 10.0, "font": "futural", "bold": False}
+    form = {
+        "files": {"file": ("hello.txt", txt, "text/plain")},
+        "data": {"folder": "", "options": json.dumps(opts)},
+    }
+    async with _client() as client:
+        first = await client.post("/files", **form)
+        second = await client.post("/files", **form)
+    assert first.json()["file"]["file_id"] == second.json()["file"]["file_id"]
+    # Same content + same options → cache hit, identical SVG.
+    assert first.json()["file"]["svg"] == second.json()["file"]["svg"]

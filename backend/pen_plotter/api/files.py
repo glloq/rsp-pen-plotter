@@ -114,6 +114,14 @@ class FileMeta(BaseModel):
     # without re-uploading — re-segmenting the stored ``original.<ext>``
     # bytes with these exact options reproduces the same labels + palette.
     bitmap_options: dict[str, Any] | None = None
+    # Raw converter options dict from the original /files upload. Drives
+    # the dedup change-detection path for non-bitmap converters
+    # (typography, markdown, …) whose option schemas the bitmap-shaped
+    # ``bitmap_options`` cannot represent. Without this a second upload
+    # of the same .txt file with a different font / size would silently
+    # return the stale cached SVG because BitmapOptions validation
+    # drops the typography keys.
+    source_options: dict[str, Any] | None = None
 
 
 class FileDetail(FileRecordOut):
@@ -190,22 +198,29 @@ def _options_changed(file_id: str, new_options: dict[str, Any]) -> bool:
     if not new_options:
         return False
     meta = _read_meta(file_id)
-    stored = meta.bitmap_options or {}
-    # Use BitmapOptions to normalize both sides (drops keys the model
-    # doesn't know about, fills defaults). This way a request that only
-    # sets ``algorithm`` is compared against the same fully-populated
-    # object as the stored one — no false positives on missing-key vs
-    # default-value.
-    try:
-        from pen_plotter.converters.bitmap import BitmapOptions
+    # Bitmap path: stored as BitmapOptions, normalize both sides so a
+    # request that omits an implicit default doesn't trigger a false
+    # re-conversion (e.g. ``{algorithm: 'direct'}`` vs a fully populated
+    # stored dict with the same algorithm).
+    stored_bitmap = meta.bitmap_options
+    if stored_bitmap is not None:
+        try:
+            from pen_plotter.converters.bitmap import BitmapOptions
 
-        a = BitmapOptions.model_validate(stored).model_dump()
-        b = BitmapOptions.model_validate({**stored, **new_options}).model_dump()
-        return a != b
-    except Exception:
-        # Non-bitmap source (no BitmapOptions): fall back to raw dict
-        # compare. Any new key or changed value re-processes.
-        return {**stored, **new_options} != stored
+            a = BitmapOptions.model_validate(stored_bitmap).model_dump()
+            b = BitmapOptions.model_validate({**stored_bitmap, **new_options}).model_dump()
+            return a != b
+        except Exception:
+            # Fall through to the raw-dict compare so non-bitmap
+            # converters still detect their settings edits.
+            pass
+    # Non-bitmap converters (typography / markdown / svg / …): compare
+    # against the raw options dict that produced the file. BitmapOptions
+    # validation silently drops keys like ``font``, ``font_size_mm`` or
+    # ``bold``, so a font change on a .txt file would otherwise look
+    # like "no change" and the dedup branch would return the stale SVG.
+    stored = meta.source_options or {}
+    return {**stored, **new_options} != stored
 
 
 def _reprocess_existing(
@@ -244,6 +259,7 @@ def _reprocess_existing(
             if converted.bitmap_options is not None
             else None
         ),
+        source_options=dict(new_options) if new_options else None,
     )
     (directory / "meta.json").write_text(meta.model_dump_json(), encoding="utf-8")
 
@@ -351,6 +367,7 @@ async def upload_to_library(
                 if converted.bitmap_options is not None
                 else None
             ),
+            source_options=dict(parsed_options) if parsed_options else None,
         )
         (staging / "meta.json").write_text(meta.model_dump_json(), encoding="utf-8")
         # Atomic on POSIX: rename within the same directory is one syscall,
