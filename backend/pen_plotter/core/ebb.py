@@ -41,6 +41,9 @@ def generate_ebb(
         scale_mode: ``"fit"`` scales the drawing into the workspace; ``"actual"``
             maps one user unit to one millimeter.
         margin_mm: Margin used when ``scale_mode`` is ``"fit"``.
+        placement: Optional sheet rectangle inside the workspace. When
+            supplied, scaling and centring operate against this
+            sub-region instead of the full workspace.
 
     Returns:
         The EBB program as newline-separated commands.

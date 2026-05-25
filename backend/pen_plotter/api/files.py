@@ -133,10 +133,12 @@ def _record_to_detail(record: FileRecord) -> FileDetail:
 
 
 def _options_changed(file_id: str, new_options: dict[str, Any]) -> bool:
-    """True when the operator's new conversion options differ from those
-    that produced the stored file. Empty / missing ``new_options`` is
-    treated as "no change" — a plain library-pick re-upload that just
-    wants the existing entry, not a settings edit.
+    """Detect a real settings edit between two upload requests.
+
+    Returns ``True`` when ``new_options`` differs from what was used
+    to produce the stored file. Empty / missing ``new_options`` is
+    treated as "no change" — a plain library-pick re-upload that
+    just wants the existing entry, not a settings edit.
     """
     if not new_options:
         return False
