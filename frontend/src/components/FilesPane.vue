@@ -55,7 +55,15 @@ const rows = computed<Row[]>(() => {
   }
   return library.filteredSorted.map((file) => {
     const placementCount = counts.get(file.file_id) ?? 0
-    return { file, placementCount, configured: placementCount > 0 }
+    // A file is considered "configured" once the operator has saved
+    // per-layer settings for it (any variant with explicit algorithms).
+    // The library snapshot survives placement removals, so a file stays
+    // green even after it's been cleared from the plan.
+    return {
+      file,
+      placementCount,
+      configured: library.hasFileSettings(file.file_id),
+    }
   })
 })
 

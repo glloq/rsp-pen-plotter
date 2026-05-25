@@ -260,6 +260,17 @@ function startMoveDrawing(event: PointerEvent, id: string): void {
   store.selectPlacement(id)
 }
 
+function onPlacementDblClick(event: MouseEvent, id: string): void {
+  event.stopPropagation()
+  store.selectPlacement(id)
+  ui.openEditModal()
+}
+
+function onVariantChange(event: Event, placementId: string): void {
+  const select = event.target as HTMLSelectElement
+  store.setPlacementActiveVariant(placementId, select.value)
+}
+
 function startResize(h: typeof handle.value, event: PointerEvent, id: string): void {
   if (event.button !== 0) return
   mode.value = 'resize'
@@ -705,6 +716,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               vector-effect="non-scaling-stroke"
               style="cursor: grab;"
               @pointerdown="(e) => startMoveDrawing(e, rp.placement.id)"
+              @dblclick="(e) => onPlacementDblClick(e, rp.placement.id)"
             />
             <g
               v-if="store.selectedPlacementId === rp.placement.id"
@@ -725,21 +737,43 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             </g>
             <foreignObject
               v-if="store.selectedPlacementId === rp.placement.id"
-              :x="rp.footprint.x_max + 2"
-              :y="rp.footprint.y_min - 18"
-              width="22"
+              :x="rp.footprint.x_max - 160"
+              :y="rp.footprint.y_min - 26"
+              width="160"
               height="22"
             >
-              <button
+              <div
                 xmlns="http://www.w3.org/1999/xhtml"
-                type="button"
-                class="flex h-5 w-5 items-center justify-center rounded bg-red-600 text-[11px] font-bold text-white shadow hover:bg-red-500"
-                :title="t('sheet.removePlacement')"
-                @click.stop="store.removePlacement(rp.placement.id)"
-                @pointerdown.stop
+                class="flex items-center justify-end gap-1"
               >
-                ✕
-              </button>
+                <select
+                  v-if="rp.placement.variants.length > 1"
+                  class="max-w-[120px] truncate rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-[11px] text-slate-100 shadow focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  :value="rp.placement.active_variant_id"
+                  :title="t('variants.title')"
+                  @change="(e) => onVariantChange(e, rp.placement.id)"
+                  @pointerdown.stop
+                  @click.stop
+                  @dblclick.stop
+                >
+                  <option
+                    v-for="variant in rp.placement.variants"
+                    :key="variant.id"
+                    :value="variant.id"
+                  >
+                    {{ variant.name }}
+                  </option>
+                </select>
+                <button
+                  type="button"
+                  class="flex h-5 w-5 items-center justify-center rounded bg-red-600 text-[11px] font-bold text-white shadow hover:bg-red-500"
+                  :title="t('sheet.removePlacement')"
+                  @click.stop="store.removePlacement(rp.placement.id)"
+                  @pointerdown.stop
+                >
+                  ✕
+                </button>
+              </div>
             </foreignObject>
           </template>
         </svg>
