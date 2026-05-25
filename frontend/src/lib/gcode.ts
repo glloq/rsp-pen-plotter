@@ -80,6 +80,15 @@ function parseCoord(token: string): number | null {
 const TOOL_CHANGE_SLOT_RE = /^;\s*Change to pen slot\s+(\d+)\s*\(([^)]*)\)/i
 const TOOL_CHANGE_COLOR_RE = /^;\s*Change pen:\s*(.+?)\s*\((#[0-9a-fA-F]{3,8})\)/
 
+// Per-layer info marker — emitted by the backend for every layer regardless
+// of pause policy so the parser can attribute every following segment to a
+// colour / pen slot. Shape (fixed, machine-readable):
+//   ; LAYER label="Black ink" color=#101820 slot=0
+// All three keys are always present; colour / slot may be empty strings
+// when the layer has no slot assignment.
+const LAYER_INFO_RE =
+  /^;\s*LAYER\s+label="([^"]*)"\s+color=(#[0-9a-fA-F]{3,8})?\s+slot=(\d*)/
+
 function isPauseCommand(line: string, toolChangeCommand?: string): boolean {
   // Strip a trailing comment so ``M0 ; pause`` still matches.
   const code = line.split(';')[0]!.trim().toUpperCase()
@@ -141,6 +150,38 @@ export function parseGcode(gcode: string, options: ParseOptions): SimResult {
     // ``tool_change_command``. Update the current pen/colour and emit a
     // tool_change event at the pen's current location.
     if (line.startsWith(';')) {
+      const layerMatch = line.match(LAYER_INFO_RE)
+      if (layerMatch) {
+        const label = (layerMatch[1] ?? '').trim()
+        const hex = (layerMatch[2] ?? '').toLowerCase()
+        const slotStr = layerMatch[3] ?? ''
+        const slot = slotStr === '' ? null : Number(slotStr)
+        const changed =
+          (hex || null) !== currentColorHex ||
+          (slot ?? null) !== currentPenSlot ||
+          (label || null) !== currentColorLabel
+        if (slot !== null && Number.isFinite(slot)) {
+          currentPenSlot = slot
+          penSet.add(slot)
+        }
+        if (hex) currentColorHex = hex
+        if (label) currentColorLabel = label
+        // Only emit a visible tool_change event when the layer actually
+        // introduces a new pen/colour — otherwise the simulator would
+        // flood the canvas with markers on a single-colour drawing.
+        if (changed) {
+          events.push({
+            type: 'tool_change',
+            x,
+            y,
+            time: elapsed,
+            penSlot: currentPenSlot,
+            colorHex: currentColorHex,
+            colorLabel: currentColorLabel,
+          })
+        }
+        continue
+      }
       const slotMatch = line.match(TOOL_CHANGE_SLOT_RE)
       if (slotMatch) {
         const slot = Number(slotMatch[1])

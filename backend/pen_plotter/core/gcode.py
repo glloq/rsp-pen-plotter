@@ -301,6 +301,19 @@ def generate_gcode(
             if source_color is not None:
                 previous_color = source_color
 
+            # Always emit a layer-info marker so downstream consumers (the
+            # simulator UI in particular) can attribute every G-code line
+            # to a layer / colour / pen slot, even when no pause was
+            # triggered. The comment is purely informational — firmwares
+            # ignore it — and machine-readable: a fixed-shape key/value
+            # block so the frontend parser can split on whitespace.
+            layer_color = source_color or ""
+            layer_label = (color_label or layer.label or "").replace('"', "'")
+            layer_slot = "" if slot is None else str(slot)
+            out.append(
+                f'; LAYER label="{layer_label}" color={layer_color} slot={layer_slot}'
+            )
+
             speed = (setting.drawing_speed_mm_s if setting else None) or profile.drawing_speed_mm_s
             feed = speed * 60.0
 
