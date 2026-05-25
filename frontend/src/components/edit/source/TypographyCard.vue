@@ -195,6 +195,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
             type="number"
             step="0.5"
             min="1"
+            max="200"
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
           />
         </label>
@@ -204,6 +205,8 @@ function sortedFonts(fonts: string[]): FontOption[] {
             v-model.number="typo.letter_spacing_mm"
             type="number"
             step="0.1"
+            min="-10"
+            max="50"
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
           />
         </label>
@@ -240,6 +243,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
           type="number"
           step="0.1"
           min="0.05"
+          max="10"
           class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
         />
       </label>
@@ -272,6 +276,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
             type="number"
             step="0.1"
             min="0.5"
+            max="5"
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
           />
         </label>

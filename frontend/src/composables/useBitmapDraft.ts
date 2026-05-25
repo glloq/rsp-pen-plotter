@@ -1359,17 +1359,22 @@ export function buildBitmapOptions(): Record<string, unknown> {
     const bandRecipes = buildBandRecipes()
     if (bandRecipes) payload.band_recipes = bandRecipes
   }
-  // Hershey text re-render for PDF / DOCX / HTML sources. The flag
-  // travels alongside the bitmap knobs because document conversions
-  // funnel through the bitmap-form options field; the backend's PDF
-  // converter strips the source's glyph outlines and replays each
-  // span with the requested Hershey face when ``hershey_text`` is
-  // truthy. ``stroke_width_mm`` doubles as the pen's stroke width on
-  // the re-rendered text.
+  // Hershey text re-render for PDF / DOCX / HTML / SVG / DXF / EPS
+  // sources. The flag travels alongside the bitmap knobs because
+  // document conversions funnel through the bitmap-form options field;
+  // the backend's document converters strip the source's glyph outlines
+  // and replay each span with the requested Hershey face when
+  // ``hershey_text`` is truthy. ``stroke_width_mm`` doubles as the pen's
+  // stroke width on the re-rendered text.
+  //
+  // ``font`` and ``stroke_width_mm`` are shipped unconditionally so the
+  // operator's choices survive a round-trip even when ``hershey_text``
+  // is currently OFF — toggling it back on at a later edit must restore
+  // the same face/width rather than silently reset to defaults.
+  payload.font = _typo.value.font
+  payload.stroke_width_mm = _typo.value.stroke_width_mm
   if (_typo.value.hershey_text) {
     payload.hershey_text = true
-    payload.font = _typo.value.font
-    payload.stroke_width_mm = _typo.value.stroke_width_mm
   }
   return payload
 }

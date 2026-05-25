@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from pen_plotter.converters.base import ConversionResult, Converter
-from pen_plotter.converters.pdf import pdf_bytes_to_svg
+from pen_plotter.converters.pdf import build_hershey_text_group, pdf_bytes_to_svg
 from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
 
 
@@ -93,5 +93,10 @@ class EpsConverter(Converter):
         } or None
         pdf_bytes = _eps_to_pdf(data)
         raw_svg, *_ = pdf_bytes_to_svg(pdf_bytes, 0)
-        svg, warnings = postprocess_pdf_svg(raw_svg, bitmap_options=bitmap_options)
+        hershey_group = build_hershey_text_group(pdf_bytes, 0, opts)
+        svg, warnings = postprocess_pdf_svg(
+            raw_svg,
+            bitmap_options=bitmap_options,
+            hershey_text_group=hershey_group or None,
+        )
         return ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings)

@@ -567,6 +567,30 @@ export async function rerenderJob(
   return response.data
 }
 
+export interface TypographyPreviewResponse {
+  svg: string
+  truncated: boolean
+}
+
+// Live Hershey preview for `.txt` / `.md` sources. Mirrors
+// ``previewBitmap``'s contract but hits ``/preview-text`` — the Hershey
+// renderer is pure-Python and cheap, so no concurrency limit / cache
+// layer beyond what the browser itself provides.
+export async function previewText(
+  file: File,
+  options: Record<string, unknown> | undefined,
+  signal?: AbortSignal,
+): Promise<TypographyPreviewResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  if (options) form.append('options', JSON.stringify(options))
+  const response = await api.post<TypographyPreviewResponse>('/preview-text', form, {
+    signal,
+    timeout: 15_000,
+  })
+  return response.data
+}
+
 export async function previewBitmap(
   file: File,
   algorithm: string,
