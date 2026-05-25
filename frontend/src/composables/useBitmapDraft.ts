@@ -949,20 +949,34 @@ export function buildBitmapOptions(): Record<string, unknown> {
   const algoOpts = c.centerline_mode
     ? { stroke_width: 0.8, smooth: true, min_branch_px: 3 }
     : buildAlgorithmOptions()
+  // ``fixed_palette`` with an empty palette is a configuration gap: the
+  // operator picked the mode but has neither installed pens
+  // (``paletteFollowsPens`` had nothing to seed from) nor manually added
+  // any chip yet. Sending it as-is would 400 with
+  // ``segmentation_options.palette must be a non-empty list of hex
+  // colours``. Downgrade the WIRE payload to kmeans so the preview
+  // still renders; the draft keeps ``fixed_palette`` so the operator's
+  // intent isn't lost and the moment a palette appears (pens installed,
+  // manual chip added) the next /preview ships the right method.
+  const wireMethod =
+    b.segmentation_method === 'fixed_palette' && b.palette.length === 0
+      ? 'kmeans'
+      : b.segmentation_method
   // num_colors only feeds the kmeans fallback; in mono / luminance_bands
   // / thresholds / fixed_palette modes the backend reads num_bands /
   // levels / palette and ignores num_colors. Skipping it keeps the
   // payload truthful and avoids future confusion when a backend
   // validation tightens unknown-field handling.
-  const shipsNumColors = _printMode.value === 'multicolor' && b.segmentation_method === 'kmeans'
+  const shipsNumColors = _printMode.value === 'multicolor' && wireMethod === 'kmeans'
   const payload: Record<string, unknown> = {
     algorithm: algo,
     ...(shipsNumColors ? { num_colors: b.num_colors } : {}),
     max_dimension_px: b.max_dimension_px,
     drop_background: b.drop_background,
     background_luminance: b.background_luminance,
-    segmentation_method: b.segmentation_method,
-    segmentation_options: buildSegmentationOptions(),
+    segmentation_method: wireMethod,
+    segmentation_options:
+      wireMethod === b.segmentation_method ? buildSegmentationOptions() : {},
     min_region_pixels: b.min_region_pixels,
     merge_delta_e: b.merge_delta_e,
     algorithm_options: algoOpts,
