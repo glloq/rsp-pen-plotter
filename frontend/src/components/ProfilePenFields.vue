@@ -17,7 +17,6 @@
 
 import { useI18n } from 'vue-i18n'
 import type { MachineProfile } from '../api/client'
-import ColorPicker from './ColorPicker.vue'
 
 const { t } = useI18n()
 
@@ -96,9 +95,12 @@ defineProps<{
       </div>
 
       <div v-if="draft.pens && draft.pens.length" class="space-y-2 border-t border-slate-700 pt-3">
-        <h4 class="text-[11px] uppercase tracking-wider text-slate-500">
-          {{ t('profile.magazine') }}
-        </h4>
+        <div class="flex items-baseline justify-between">
+          <h4 class="text-[11px] uppercase tracking-wider text-slate-500">
+            {{ t('profile.magazine') }}
+          </h4>
+          <span class="text-[10px] text-slate-500">{{ t('profile.magazineMovedHint') }}</span>
+        </div>
         <div
           v-for="pen in draft.pens"
           :key="pen.index"
@@ -106,10 +108,11 @@ defineProps<{
         >
           <div class="flex items-center gap-2">
             <span class="w-6 shrink-0 text-center font-mono text-slate-500">{{ pen.index }}</span>
-            <ColorPicker
-              v-model="pen.color"
-              :label="t('availableColors.pickColor')"
-              swatch-class="h-7 w-9"
+            <span
+              class="h-7 w-9 shrink-0 rounded border border-slate-700"
+              :style="{ backgroundColor: pen.color }"
+              :title="pen.color"
+              :aria-label="pen.color"
             />
             <input
               v-model="pen.name"

@@ -17,6 +17,7 @@ import type { PaletteSource } from '../api/client'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { usePaletteSourceStore } from '../stores/paletteSource'
 import ColorPicker from './ColorPicker.vue'
+import MagazineEditor from './MagazineEditor.vue'
 
 function canonicaliseHex(value: string): string {
   // Match the backend's normalisation so the dedup check below treats
@@ -169,6 +170,9 @@ function displayLabel(name: string, hex: string): string {
         {{ t(sources.find((s) => s.id === sourceStore.source)?.hintKey ?? 'paletteSource.pensHint') }}
       </p>
     </section>
+
+    <!-- Magazine (pen slot ↔ colour assignment) -->
+    <MagazineEditor />
 
     <!-- Add a colour -->
     <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2">
