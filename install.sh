@@ -5,11 +5,15 @@
 # backend dependencies, frontend build, optional systemd service.
 #
 # Usage:
-#   ./install.sh                  # install everything, ready for ./start.sh
-#   ./install.sh --service        # also install + enable the systemd unit
-#                                 # (calls install-service.sh internally)
-#   ./install.sh --no-system-deps # skip apt-get installs (custom setups)
-#   ./install.sh --no-restart     # do not restart omniplot.service if installed
+#   ./install.sh                         # install everything, ready for ./start.sh
+#                                        # (auto-refreshes the systemd unit if a
+#                                        # previous --service install is detected)
+#   ./install.sh --service               # also install + enable the systemd unit
+#                                        # (calls install-service.sh internally)
+#   ./install.sh --no-system-deps        # skip apt-get installs (custom setups)
+#   ./install.sh --no-restart            # do not restart omniplot.service if installed
+#   ./install.sh --no-service-refresh    # do not auto-refresh an existing systemd unit
+#                                        # (use if you hand-edited /etc/systemd/system/omniplot.service)
 #   ./install.sh --help
 #
 # Environment:
@@ -23,11 +27,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WITH_SERVICE=0
 SKIP_SYSTEM_DEPS=0
 NO_RESTART=0
+NO_SERVICE_REFRESH=0
 for arg in "$@"; do
   case "$arg" in
-    --service)        WITH_SERVICE=1 ;;
-    --no-system-deps) SKIP_SYSTEM_DEPS=1 ;;
-    --no-restart)     NO_RESTART=1 ;;
+    --service)            WITH_SERVICE=1 ;;
+    --no-system-deps)     SKIP_SYSTEM_DEPS=1 ;;
+    --no-restart)         NO_RESTART=1 ;;
+    --no-service-refresh) NO_SERVICE_REFRESH=1 ;;
     --help|-h)
       # Print the header comment block (lines starting with '#' between the
       # shebang and the first code line), stripping the leading '# '.
@@ -207,6 +213,26 @@ install_nodejs
 install_uv
 install_backend
 install_frontend
+# Auto-promote to --service when a previous install already deployed the
+# unit file. Without this, running ``./install.sh`` (no flag) on a host
+# that was set up with ``--service`` would silently skip refreshing the
+# systemd unit, leaving operators with a stale unit pointing at a stale
+# template even after a clean reinstall — the exact failure mode behind
+# "after a reboot the server is unreachable" reports.
+if [ "$WITH_SERVICE" -eq 0 ] && [ "$NO_SERVICE_REFRESH" -eq 0 ] \
+   && has systemctl && [ -f /etc/systemd/system/omniplot.service ]; then
+  # Gate on sudo availability: the in-app Update button runs install.sh
+  # as the omniplot service user (no NOPASSWD for install-service.sh),
+  # so promoting unconditionally would make every UI-triggered update
+  # fail at this step. Interactive ``sudo ./install.sh`` invocations
+  # pass the check and refresh the unit as intended.
+  if [ "$EUID" -eq 0 ] || sudo -n true 2>/dev/null; then
+    step "Existing omniplot.service detected — refreshing unit (use --no-service-refresh to skip)"
+    WITH_SERVICE=1
+  else
+    step "Existing omniplot.service detected — skipping unit refresh (no sudo; run 'sudo ./install.sh --service' to refresh)"
+  fi
+fi
 if [ "$WITH_SERVICE" -eq 1 ]; then
   install_service
 fi
