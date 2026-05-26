@@ -16,6 +16,18 @@ import { useI18n } from 'vue-i18n'
 import type { PaletteSource } from '../api/client'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { usePaletteSourceStore } from '../stores/paletteSource'
+import ColorPicker from './ColorPicker.vue'
+
+function canonicaliseHex(value: string): string {
+  // Match the backend's normalisation so the dedup check below treats
+  // ``#ABC`` and ``#aabbcc`` as the same entry.
+  const trimmed = value.trim().replace(/^#/, '').toLowerCase()
+  if (/^[0-9a-f]{3}$/.test(trimmed)) {
+    return `#${trimmed.split('').map((c) => c + c).join('')}`
+  }
+  if (/^[0-9a-f]{6}$/.test(trimmed)) return `#${trimmed}`
+  return value
+}
 
 const { t } = useI18n()
 const store = useAvailableColorsStore()
@@ -36,6 +48,14 @@ const newName = ref('')
 const submitting = ref(false)
 
 const ordered = computed(() => store.ordered)
+
+// True when the hex the operator is about to add already lives in the
+// inventory — used to disable the Add button + show a heads-up so the
+// idempotent backend POST doesn't silently mutate the existing row.
+const duplicate = computed(() => {
+  const canon = canonicaliseHex(newHex.value)
+  return ordered.value.find((c) => c.hex === canon) ?? null
+})
 
 // Inline-edit state: ``color_id`` of the row currently being renamed,
 // or ``null`` when none. Single-row at a time keeps the UI simple
@@ -156,17 +176,17 @@ function displayLabel(name: string, hex: string): string {
         {{ t('availableColors.add') }}
       </p>
       <div class="flex items-center gap-2">
-        <input
+        <ColorPicker
           v-model="newHex"
-          type="color"
-          class="h-9 w-12 cursor-pointer rounded border border-slate-700 bg-slate-900"
-          :aria-label="t('availableColors.hex')"
+          :label="t('availableColors.pickColor')"
+          swatch-class="h-9 w-12"
         />
         <input
           v-model="newHex"
           type="text"
           class="w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-100"
           :placeholder="t('availableColors.hex')"
+          spellcheck="false"
         />
         <input
           v-model="newName"
@@ -177,12 +197,15 @@ function displayLabel(name: string, hex: string): string {
         <button
           type="button"
           class="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          :disabled="submitting || !newHex"
+          :disabled="submitting || !newHex || !!duplicate"
           @click="addColor"
         >
           {{ t('availableColors.addAction') }}
         </button>
       </div>
+      <p v-if="duplicate" class="text-[11px] text-amber-300">
+        ⚠ {{ t('availableColors.duplicate', { name: displayLabel(duplicate.name, duplicate.hex) }) }}
+      </p>
     </section>
 
     <!-- Inventory -->
@@ -214,15 +237,16 @@ function displayLabel(name: string, hex: string): string {
           class="flex items-center gap-2 rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5"
         >
           <template v-if="editingId === color.color_id">
-            <input
+            <ColorPicker
               v-model="editHex"
-              type="color"
-              class="h-7 w-10 cursor-pointer rounded border border-slate-700 bg-slate-900"
+              :label="t('availableColors.pickColor')"
+              swatch-class="h-7 w-10"
             />
             <input
               v-model="editHex"
               type="text"
               class="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+              spellcheck="false"
             />
             <input
               v-model="editName"

@@ -953,10 +953,17 @@
     "edit": "Edit",
     "delete": "Delete",
     "deleteConfirm": "Remove {name} from the inventory?",
+    "duplicate": "That colour is already in the inventory ({name}).",
+    "pickColor": "Pick colour",
     "loadFailed": "Could not load the colour inventory.",
     "createFailed": "Could not add the colour.",
     "updateFailed": "Could not update the colour.",
     "deleteFailed": "Could not remove the colour."
+  },
+  "colorPicker": {
+    "title": "Pick a colour",
+    "confirm": "OK",
+    "cancel": "Cancel"
   },
   "macros": {
     "title": "Macros",
