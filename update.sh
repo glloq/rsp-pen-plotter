@@ -177,24 +177,36 @@ if [ "$NO_RESTART" -eq 0 ]; then
 
     if [ "$EUID" -eq 0 ]; then
       restart_cmd='systemctl restart omniplot.service'
-    elif sudo -n true 2>/dev/null; then
-      restart_cmd='sudo -n systemctl restart omniplot.service'
     else
-      restart_cmd=''
-      echo "Warning: cannot restart omniplot without a password." >&2
-      echo "         Run 'sudo systemctl restart omniplot' manually, or reinstall" >&2
-      echo "         the service (./install-service.sh) to add the sudoers rule." >&2
+      # Don't gate on ``sudo -n true`` — the install-service.sh sudoers
+      # rule grants NOPASSWD *only* for ``systemctl restart
+      # omniplot.service`` (narrow by design), so ``sudo -n true`` always
+      # fails for the service user even though the actual restart we
+      # care about is permitted. Gating on it left restart_cmd empty,
+      # silently skipped the restart, and made the operator see
+      # "Updated to NEW_COMMIT" while the old Python code kept running
+      # — until they happened to run install.sh from SSH (which restarts
+      # directly without the bogus probe). Try the real command instead;
+      # failures surface through the eval / deferred subprocess.
+      restart_cmd='sudo -n systemctl restart omniplot.service'
     fi
 
-    if [ -z "$restart_cmd" ]; then
-      :
-    elif [ "$invoked_from_backend" -eq 1 ]; then
+    if [ "$invoked_from_backend" -eq 1 ]; then
       step "Scheduling omniplot.service restart (deferred ~3s — UI poll path)"
-      setsid sh -c "sleep 3 && $restart_cmd" </dev/null >/dev/null 2>&1 &
+      # Pipe through ``logger`` so a failed deferred restart leaves a
+      # trace in journalctl instead of vanishing into /dev/null. Without
+      # this, a broken sudoers rule (or a typo in $restart_cmd) silently
+      # fails and the operator only finds out by noticing stale behaviour.
+      setsid sh -c "sleep 3 && { $restart_cmd 2>&1 | logger -t omniplot-restart; }" \
+        </dev/null >/dev/null 2>&1 &
       disown 2>/dev/null || true
     else
       step "Restarting omniplot.service"
-      eval "$restart_cmd"
+      if ! eval "$restart_cmd"; then
+        echo "Error: failed to restart omniplot.service ($restart_cmd)." >&2
+        echo "       Reinstall the sudoers rule with: sudo ./install-service.sh \$USER" >&2
+        exit 5
+      fi
 
       # Poll ``/health`` until the new process answers or we run out of
       # tries. ``OMNIPLOT_HEALTH_URL`` lets a non-default port / host
