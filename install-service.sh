@@ -64,7 +64,12 @@ else
 fi
 
 systemctl daemon-reload
-systemctl enable --now omniplot.service
+systemctl enable omniplot.service
+# ``enable --now`` would only *start* the unit, which is a no-op when the
+# service is already running. To make a re-run actually pick up changes
+# to ``omniplot.service.in``, we issue a restart — it doubles as a fresh
+# start when the unit wasn't running yet.
+systemctl restart omniplot.service
 
 echo
 echo "==> OmniPlot service installed and started."

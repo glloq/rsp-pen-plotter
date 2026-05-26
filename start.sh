@@ -37,7 +37,12 @@ backend_run() {
   elif [ -x "$ROOT/backend/.venv/bin/uvicorn" ]; then
     "$ROOT/backend/.venv/bin/uvicorn" pen_plotter.main:app "$@"
   else
-    echo "Error: backend is not installed. Run ./install.sh first." >&2
+    # Surface the diagnosis to journalctl so an operator hitting "server
+    # inaccessible" after a boot can see why directly in ``journalctl -u
+    # omniplot`` instead of having to bisect the install state.
+    echo "Error: backend not installed (uv missing and no .venv at $ROOT/backend/.venv)." >&2
+    echo "       HOME=${HOME:-<unset>}  PATH=$PATH" >&2
+    echo "       Fix: run './install.sh' on this host." >&2
     exit 1
   fi
 }
@@ -50,7 +55,8 @@ lan_ip() {
 
 if [ "$MODE" = "prod" ]; then
   if [ ! -f "$ROOT/frontend/dist/index.html" ]; then
-    echo "Error: frontend is not built. Run ./install.sh first." >&2
+    echo "Error: frontend not built (missing $ROOT/frontend/dist/index.html)." >&2
+    echo "       Fix: run './install.sh' on this host to rebuild the SPA." >&2
     exit 1
   fi
   ip="$(lan_ip)"
