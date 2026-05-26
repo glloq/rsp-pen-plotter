@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, provide, ref, watch } from 'vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
 import draggable from 'vuedraggable'
 import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../api/client'
+import { nearestPoolHex } from '../lib/nearestColor'
 import { canReduceSwaps, groupByPen } from '../lib/penorder'
+import { useAvailableColorsStore } from '../stores/availableColors'
 import { useJobStore } from '../stores/job'
 import { createLayerSelection, LayerSelectionKey } from '../composables/useLayerSelection'
 import LayerCard from './LayerCard.vue'
@@ -11,6 +13,11 @@ import LayerBulkBar from './edit/LayerBulkBar.vue'
 
 const { t } = useI18n()
 const store = useJobStore()
+const availableColorsStore = useAvailableColorsStore()
+
+onMounted(() => {
+  if (!availableColorsStore.loaded) void availableColorsStore.refresh()
+})
 
 const draggableLayers = computed<LayerInfo[]>({
   get: () => store.layers,
@@ -36,6 +43,45 @@ function mergeToOnePen(): void {
       store.updateLayer(layer.layer_id, { target_pen_slot: 0 })
     }
   }
+}
+
+// Bulk auto-assign: snap every layer's colour to the perceptually
+// nearest hex in a forced pool, regardless of the active palette
+// source. Two flavours so the operator can lock matches against the
+// physically-mounted pens (magazine) or the global ink inventory
+// (available colours) on demand. Writes ``color_assignment='manual'``
+// so the backend won't re-derive the choice on next /upload.
+const magazinePool = computed<string[]>(() => {
+  const pens = store.selectedProfile?.pens ?? []
+  return pens.filter((p) => p.installed && p.color).map((p) => p.color)
+})
+
+const availablePool = computed<string[]>(() => availableColorsStore.ordered.map((c) => c.hex))
+
+function assignFromPool(pool: readonly string[]): void {
+  if (!pool.length) return
+  for (const layer of store.layers) {
+    const nearest = nearestPoolHex(layer.source_color, pool)
+    if (!nearest) continue
+    if (
+      layer.assigned_color_hex?.toLowerCase() === nearest.toLowerCase() &&
+      layer.color_assignment === 'manual'
+    ) {
+      continue
+    }
+    store.updateLayer(layer.layer_id, {
+      assigned_color_hex: nearest,
+      color_assignment: 'manual',
+    })
+  }
+}
+
+function autoPickFromMagazine(): void {
+  assignFromPool(magazinePool.value)
+}
+
+function autoPickFromAvailable(): void {
+  assignFromPool(availablePool.value)
 }
 
 // Collapse-all toggle: 8+ layer placements are unscannable when every
@@ -119,6 +165,24 @@ const totalPaths = computed(() => store.layers.reduce((s, l) => s + l.path_count
         @click="mergeToOnePen"
       >
         {{ t('layers.mergeToOnePen') }}
+      </button>
+      <button
+        type="button"
+        class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+        :title="t('layers.autoPickMagazineHint')"
+        :disabled="!magazinePool.length"
+        @click="autoPickFromMagazine"
+      >
+        ✦ {{ t('layers.autoPickMagazine') }}
+      </button>
+      <button
+        type="button"
+        class="rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+        :title="t('layers.autoPickAvailableHint')"
+        :disabled="!availablePool.length"
+        @click="autoPickFromAvailable"
+      >
+        ✦ {{ t('layers.autoPickAvailable') }}
       </button>
       <button
         v-if="store.layers.length > 1"
