@@ -127,8 +127,11 @@ async def create_color(body: AvailableColorCreate) -> AvailableColorOut:
     if existing is not None:
         # Allow callers to update the human label when re-adding — handy
         # when the operator typo'd the first name and re-submits with
-        # the corrected one. An explicit empty string also clears.
-        if body.name != existing.name:
+        # the corrected one. An empty ``name`` is treated as "no change"
+        # so an idempotent re-add (e.g. the picker defaulting to a hex
+        # already in the inventory) can't wipe an existing label; use
+        # PATCH to clear a name explicitly.
+        if body.name and body.name != existing.name:
             existing.name = body.name
             save_available_color(existing)
         return _record_to_out(existing)

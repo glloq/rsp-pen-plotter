@@ -953,10 +953,17 @@
     "edit": "Éditer",
     "delete": "Supprimer",
     "deleteConfirm": "Retirer {name} de l'inventaire ?",
+    "duplicate": "Cette couleur est déjà dans l'inventaire ({name}).",
+    "pickColor": "Choisir la couleur",
     "loadFailed": "Impossible de charger l'inventaire des couleurs.",
     "createFailed": "Impossible d'ajouter la couleur.",
     "updateFailed": "Impossible de mettre à jour la couleur.",
     "deleteFailed": "Impossible de supprimer la couleur."
+  },
+  "colorPicker": {
+    "title": "Choisir une couleur",
+    "confirm": "Valider",
+    "cancel": "Annuler"
   },
   "macros": {
     "title": "Macros",

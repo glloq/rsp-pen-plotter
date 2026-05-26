@@ -17,6 +17,7 @@
 
 import { useI18n } from 'vue-i18n'
 import type { MachineProfile } from '../api/client'
+import ColorPicker from './ColorPicker.vue'
 
 const { t } = useI18n()
 
@@ -105,10 +106,10 @@ defineProps<{
         >
           <div class="flex items-center gap-2">
             <span class="w-6 shrink-0 text-center font-mono text-slate-500">{{ pen.index }}</span>
-            <input
+            <ColorPicker
               v-model="pen.color"
-              type="color"
-              class="h-7 w-9 shrink-0 rounded border border-slate-700 bg-slate-900"
+              :label="t('availableColors.pickColor')"
+              swatch-class="h-7 w-9"
             />
             <input
               v-model="pen.name"

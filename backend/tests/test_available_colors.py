@@ -125,6 +125,29 @@ async def test_dedup_updates_name_when_supplied() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dedup_preserves_name_when_empty() -> None:
+    """Re-adding with ``name=""`` must NOT wipe the existing label.
+
+    The picker defaults to ``#000000`` with an empty name; if the
+    operator happens to ``POST`` it against an inventory that already
+    contains black, the existing row's name must stay intact — clearing
+    a name needs to go through ``PATCH`` explicitly. Regression guard
+    for the "ajouter une couleur supprime la première" bug.
+    """
+    async with _client() as client:
+        original = await client.post(
+            "/available-colors", json={"hex": "#000000", "name": "Black"}
+        )
+        original_id = original.json()["color_id"]
+
+        echo = await client.post(
+            "/available-colors", json={"hex": "#000000", "name": ""}
+        )
+        assert echo.json()["color_id"] == original_id
+        assert echo.json()["name"] == "Black"
+
+
+@pytest.mark.asyncio
 async def test_invalid_hex_returns_422() -> None:
     """Pydantic validation rejects payloads that aren't ``#rgb`` / ``#rrggbb``."""
     async with _client() as client:
