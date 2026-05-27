@@ -52,7 +52,10 @@ const aspectLock = ref(true)
 // recomputes when any of these change; the SheetCanvas + PlacementHandles
 // receive the derived data as props.
 const profileRef = computed(() => store.selectedProfile)
-const placementsRef = computed(() => store.placements)
+// Library-draft placements (created by the "Edit" button for
+// settings-only work) are intentionally invisible on the sheet —
+// audit 2026-05-27 fix.
+const placementsRef = computed(() => store.visiblePlacements)
 const previewSheetRef = computed(() => ui.previewSheet)
 
 const {
@@ -274,7 +277,9 @@ const containerCursor = computed(() => {
 })
 
 const canGenerate = computed(() => {
-  const ready = store.placements.some((p) => p.svg && p.layers.length)
+  // Drafts (Edit-from-library only) aren't on the sheet, so they
+  // don't count towards "is anything ready to generate".
+  const ready = store.visiblePlacements.some((p) => p.svg && p.layers.length)
   return ready && store.missingPenSlots.length === 0 && !store.generating
 })
 
@@ -285,7 +290,9 @@ async function generateAndShow(): Promise<void> {
   }
 }
 
-const placementCount = computed(() => store.placements.filter((p) => p.svg).length)
+const placementCount = computed(
+  () => store.visiblePlacements.filter((p) => p.svg).length,
+)
 
 // Image editing tools act on the currently-selected placement.
 // Buttons are disabled when nothing is selected so the header

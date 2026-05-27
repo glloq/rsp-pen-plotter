@@ -125,7 +125,8 @@
   "source": {
     "perLayerHint": "Pick the rendering style and pen slot for each colour in the Layers tab.",
     "applyChanges": "Re-convert with these settings",
-    "waitingForFile": "Loading source file…"
+    "waitingForFile": "Loading source file…",
+    "addToPlan": "Add to plan"
   },
   "colors": {
     "monoHint": "Single-ink mode — pick the master style on the Render tab.",

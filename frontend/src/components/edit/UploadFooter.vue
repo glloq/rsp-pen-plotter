@@ -25,6 +25,19 @@ const store = useJobStore()
 const showExpectedCount = computed(
   () => fm.showsBitmapForm.value && !store.loading && Boolean(fm.selectedFile.value),
 )
+
+// True when the active placement is an "Edit from library" draft —
+// i.e. the operator opened the modal via the Edit button on a library
+// row and hasn't yet placed the file on the sheet. The "Add to plan"
+// button below promotes the draft to a visible placement.
+const isLibraryDraft = computed(
+  () => store.selectedPlacement?.is_library_draft === true,
+)
+
+function addToPlan(): void {
+  const id = store.selectedPlacementId
+  if (id) store.materializeLibraryDraft(id)
+}
 </script>
 
 <template>
@@ -78,6 +91,16 @@ const showExpectedCount = computed(
         >→ {{ draft.expectedLayerCount.value }}
         {{ t('upload.layers', draft.expectedLayerCount.value) }}</span
       >
+    </button>
+
+    <button
+      v-if="isLibraryDraft && fm.hasSource.value && !store.loading"
+      type="button"
+      class="w-full rounded border border-sky-500/60 bg-sky-600 hover:bg-sky-500 px-3 py-2 text-sm font-medium text-white"
+      data-test="footer-add-to-plan"
+      @click="addToPlan"
+    >
+      📌 {{ t('source.addToPlan') }}
     </button>
 
     <p

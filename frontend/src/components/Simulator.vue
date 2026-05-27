@@ -190,14 +190,17 @@ function selectOnlyColor(hex: string): void {
 // (mutates every layer of every placement) and stays in the
 // orchestrator because the sub-components are presentational.
 const isMultiColor = computed(() => store.isMultiColor)
-const allLayers = computed(() => store.placements.flatMap((p) => p.layers))
+// Use visiblePlacements — Edit-from-library drafts hold layers but
+// aren't on the sheet, so they shouldn't count for simulator stats
+// or the pen-change toggle (audit 2026-05-27).
+const allLayers = computed(() => store.visiblePlacements.flatMap((p) => p.layers))
 const manualPenChange = computed<boolean>({
   get: () =>
     allLayers.value.length > 0 && allLayers.value.every((l) => l.pause_before === 'always'),
   set: (value) => {
     const target = value ? 'always' : 'auto'
     const prev = store.selectedPlacementId
-    for (const placement of store.placements) {
+    for (const placement of store.visiblePlacements) {
       const needsChange = placement.layers.some((l) => l.pause_before !== target)
       if (!needsChange) continue
       store.selectPlacement(placement.id)

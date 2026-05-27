@@ -384,6 +384,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | D.6   | this PR    | `pen_plotter.deployment` (5 process roles avec capabilities), lifespan conditionnel sur le rôle, `docs/deployment.md` (matrice + 3 topologies), 13 tests |
 | 2026-05-27 | D.7   | this PR    | `tests/test_e2e_journeys.py` (5 parcours canoniques : fast default, expert override, normalized error, correlation IDs, validation 422) avec TestClient pour exercer la lifespan complète |
 | 2026-05-27 | D.8   | this PR    | `pen_plotter.sdk` (réexport stable de RasterAlgorithm / Converter / ToolChangeStrategyImpl / MachineProfile / PluginManifest) + `docs/plugin-sdk.md` (4 exemples concrets), 6 tests qui n'importent que via sdk |
+| 2026-05-27 | bugfix | this PR    | « Éditer » un fichier ne le pose plus sur le plan : flag `is_library_draft` sur `Placement` + computed `visiblePlacements`, `editFile()` réutilise un draft existant, bouton « Ajouter au plan » dans `UploadFooter`, i18n FR/EN, 3 tests vitest |
 
 ---
 

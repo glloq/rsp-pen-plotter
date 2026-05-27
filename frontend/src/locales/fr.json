@@ -125,7 +125,8 @@
   "source": {
     "perLayerHint": "Choisis le style de rendu et le stylo pour chaque couleur dans l'onglet Calques.",
     "applyChanges": "Re-convertir avec ces réglages",
-    "waitingForFile": "Chargement du fichier source…"
+    "waitingForFile": "Chargement du fichier source…",
+    "addToPlan": "Ajouter au plan"
   },
   "colors": {
     "monoHint": "Mode monochrome — choisis le style maître dans l'onglet Rendu.",
