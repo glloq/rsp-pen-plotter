@@ -11,7 +11,9 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from pen_plotter.domain.capability import MachineCapabilities, derive_capabilities
 
 
 class WorkspaceBounds(BaseModel):
@@ -121,6 +123,28 @@ class MachineProfile(BaseModel):
     arc_tolerance_mm: float = 0.1
     ebb: EbbConfig | None = None
     pens: list[PenSlot] | None = None
+    # v0.2 Capability Model (roadmap A.5). Optional in YAML — when
+    # absent we derive a default from ``tool_change_method`` so legacy
+    # profiles load unchanged. When set, the explicit block wins and
+    # the orchestrator (roadmap B.2) routes through it.
+    capabilities: MachineCapabilities | None = None
+
+    @model_validator(mode="after")
+    def _populate_capabilities(self) -> MachineProfile:
+        """Derive capabilities from legacy fields when not set explicitly."""
+        if self.capabilities is None:
+            self.capabilities = derive_capabilities(
+                self.tool_change_method, self.pen_slot_count
+            )
+        return self
+
+    def effective_capabilities(self) -> MachineCapabilities:
+        """Return the resolved capability block (never ``None``)."""
+        if self.capabilities is None:
+            self.capabilities = derive_capabilities(
+                self.tool_change_method, self.pen_slot_count
+            )
+        return self.capabilities
 
     def effective_pens(self) -> list[PenSlot]:
         """Return the configured magazine, deriving defaults when unset.

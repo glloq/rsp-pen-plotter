@@ -1095,5 +1095,45 @@
       "preflight": "Vérification pré-tracé",
       "generate": "Génération du G-code"
     }
+  },
+  "v2": {
+    "mode": {
+      "assisted": "Assisté",
+      "expert": "Expert"
+    },
+    "modal": {
+      "title": "Préparer l'impression",
+      "stepSource": "Source",
+      "stepIntent": "Intent",
+      "stepAlgorithm": "Algorithme",
+      "stepColors": "Couleurs",
+      "stepLayers": "Couches",
+      "stepPreflight": "Préflight",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "generate": "Générer",
+      "why": "Pourquoi ce choix ?",
+      "resolving": "Calcul de la recommandation…",
+      "resolverError": "Erreur resolver : {message}. Les défauts statiques seront utilisés."
+    },
+    "intent": {
+      "fast": "Rapide",
+      "balanced": "Équilibré",
+      "quality": "Qualité"
+    },
+    "manifest": {
+      "fallbackCache": "Manifestes algorithmes servis depuis le cache local — backend indisponible.",
+      "fallbackSnapshot": "Manifestes algorithmes servis depuis le snapshot embarqué — la dernière liste à jour n'a pas pu être chargée."
+    },
+    "perf": {
+      "title": "perf",
+      "kpi": {
+        "time_to_first_preview": "TTFP",
+        "preview_refresh": "Refresh",
+        "slow_interaction": "Lent",
+        "errors": "Erreurs"
+      },
+      "clear": "Vider"
+    }
   }
 }

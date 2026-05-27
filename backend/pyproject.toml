@@ -26,6 +26,10 @@ dependencies = [
     "jinja2>=3.1.6",
     "pyserial-asyncio>=0.6",
     "sqlmodel>=0.0.38",
+    "opentelemetry-api>=1.42.1",
+    "opentelemetry-sdk>=1.42.1",
+    "opentelemetry-instrumentation-fastapi>=0.63b1",
+    "opentelemetry-exporter-otlp-proto-http>=1.42.1",
 ]
 
 [project.optional-dependencies]

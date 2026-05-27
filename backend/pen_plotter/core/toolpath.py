@@ -108,6 +108,22 @@ def optimize_svg(
     Raises:
         ValueError: If the SVG cannot be parsed.
     """
+    from pen_plotter.observability import traced_span
+
+    with traced_span(
+        "pipeline.optimize_svg",
+        svg_bytes=len(svg),
+        layer_count=len(layers or []),
+    ):
+        return _optimize_svg(svg, layers=layers, merge_tolerance_mm=merge_tolerance_mm)
+
+
+def _optimize_svg(
+    svg: str,
+    *,
+    layers: list[LayerOptimization] | None,
+    merge_tolerance_mm: float,
+) -> ToolpathResult:
     try:
         root = ET.fromstring(svg)
     except ET.ParseError as exc:

@@ -270,6 +270,29 @@ def generate_gcode(
     Raises:
         ValueError: If the SVG cannot be parsed.
     """
+    from pen_plotter.observability import traced_span
+
+    with traced_span(
+        "pipeline.generate_gcode",
+        svg_bytes=len(svg),
+        profile_name=profile.name,
+        scale_mode=scale_mode,
+    ):
+        return _generate_gcode_impl(
+            svg, profile, layers=layers, scale_mode=scale_mode,
+            margin_mm=margin_mm, placement=placement,
+        )
+
+
+def _generate_gcode_impl(
+    svg: str,
+    profile: MachineProfile,
+    *,
+    layers: list[LayerPlan] | None,
+    scale_mode: ScaleMode,
+    margin_mm: float,
+    placement: Placement | None,
+) -> str:
     layer_geometry = _read_layers(svg)
 
     overrides = {item.layer_id: item for item in (layers or [])}

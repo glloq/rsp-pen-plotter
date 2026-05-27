@@ -23,27 +23,40 @@ from pen_plotter.api.fonts import router as fonts_router
 from pen_plotter.api.generate import router as generate_router
 from pen_plotter.api.jobs import router as jobs_router
 from pen_plotter.api.macros import router as macros_router
+from pen_plotter.api.manifests import router as manifests_router
 from pen_plotter.api.optimize import router as optimize_router
 from pen_plotter.api.plans import router as plans_router
 from pen_plotter.api.plotter import router as plotter_router
+from pen_plotter.api.policy import router as policy_router
 from pen_plotter.api.preflight import router as preflight_router
 from pen_plotter.api.presets import router as presets_router
 from pen_plotter.api.preview import router as preview_router
+from pen_plotter.api.preview_stream import router as preview_stream_router
 from pen_plotter.api.preview_text import router as preview_text_router
 from pen_plotter.api.profiles import router as profiles_router
 from pen_plotter.api.queue import print_queue
 from pen_plotter.api.queue import router as queue_router
 from pen_plotter.api.rerender import router as rerender_router
 from pen_plotter.api.settings import router as settings_router
+from pen_plotter.api.slo import router as slo_router
 from pen_plotter.api.system import router as system_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.application.file_library import integrity_scan
 from pen_plotter.auth import require_api_key
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
+from pen_plotter.deployment import capabilities_for, resolve_role
+from pen_plotter.errors import install_error_handler
+from pen_plotter.manifests_seed import register_default_manifests
+from pen_plotter.observability import (
+    RequestContextMiddleware,
+    configure_logging,
+    configure_tracing,
+)
 from pen_plotter.persistence import init_db
 from pen_plotter.queue import recover_interrupted
 
+configure_logging()
 _log = logging.getLogger(__name__)
 
 
@@ -76,19 +89,37 @@ def _log_library_integrity() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Initialize converters and the database, then run the print-queue worker."""
+    """Initialize subsystems according to the resolved process role (D.6).
+
+    The default ``monolith`` role keeps the v0.1 behaviour: converters
+    + DB + queue worker + hardware transport in one process. Other
+    roles skip the subsystems they don't own (an API process leaves
+    queue/hardware to a dedicated worker; a render-only worker
+    doesn't try to serve HTTP). The role is resolved from
+    ``OMNIPLOT_ROLE`` — see :mod:`pen_plotter.deployment`.
+    """
+    role = resolve_role()
+    caps = capabilities_for(role)
+    _log.info("process_role", extra={"role": role.value})
+
     register_default_converters(registry)
     init_db()
-    _log_library_integrity()
-    recover_interrupted()
-    print_queue.start()
+    if caps.serves_http:
+        _log_library_integrity()
+    if caps.runs_queue_worker:
+        recover_interrupted()
+        print_queue.start()
     try:
         yield
     finally:
-        await print_queue.stop()
+        if caps.runs_queue_worker:
+            await print_queue.stop()
 
 
 app = FastAPI(title="OmniPlot", version=__version__, lifespan=lifespan)
+configure_tracing(app)
+install_error_handler(app)
+register_default_manifests()
 
 
 def _cors_origins() -> list[str]:
@@ -115,6 +146,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestContextMiddleware)
 
 app.include_router(upload_router)
 app.include_router(files_router)
@@ -125,6 +157,7 @@ app.include_router(optimize_router)
 app.include_router(generate_router)
 app.include_router(preflight_router)
 app.include_router(plans_router)
+app.include_router(policy_router)
 # Machine-control endpoints are guarded when OMNIPLOT_API_KEY is set.
 app.include_router(plotter_router, dependencies=[Depends(require_api_key)])
 app.include_router(queue_router)
@@ -133,12 +166,15 @@ app.include_router(jobs_router)
 app.include_router(presets_router)
 app.include_router(macros_router)
 app.include_router(preview_router)
+app.include_router(preview_stream_router)
 app.include_router(preview_text_router)
 app.include_router(rerender_router)
 app.include_router(system_router)
 app.include_router(analyze_router)
 app.include_router(available_colors_router)
 app.include_router(settings_router)
+app.include_router(manifests_router)
+app.include_router(slo_router)
 
 
 class HealthResponse(BaseModel):

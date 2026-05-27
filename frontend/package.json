@@ -13,7 +13,8 @@
     "format": "prettier --write \"src/**/*.{ts,vue,json,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,vue,json,css}\"",
     "gen:openapi": "cd ../backend && .venv/bin/python -c \"import json; from pen_plotter.main import app; open('openapi.json','w').write(json.dumps(app.openapi(), indent=2))\"",
-    "gen:types": "openapi-typescript ../backend/openapi.json -o src/domain/api-types.ts"
+    "gen:types": "openapi-typescript ../backend/openapi.json -o src/domain/api-types.ts",
+    "gen:manifests": "node scripts/gen-manifest-snapshot.mjs"
   },
   "dependencies": {
     "@types/dompurify": "^3.0.5",
@@ -23,7 +24,8 @@
     "svg-pan-zoom": "^3.6.2",
     "vue": "^3.5.12",
     "vue-i18n": "^11.1.0",
-    "vuedraggable": "^4.1.0"
+    "vuedraggable": "^4.1.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

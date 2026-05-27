@@ -48,6 +48,13 @@ jobs:
       - name: Pytest with coverage
         run: uv run pytest --cov=pen_plotter --cov-report=term-missing --cov-report=xml -q
 
+      - name: Contract drift check (D.5)
+        run: uv run python scripts/check_contracts.py
+
+      - name: Smoke perf gate (D.5)
+        # Tolerant default — catches catastrophic regressions only.
+        run: uv run python scripts/perf_gate.py --runs 5 --warmup 2 --allowed-regression-pct 50
+
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4

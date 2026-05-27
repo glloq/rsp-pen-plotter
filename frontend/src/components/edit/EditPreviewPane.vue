@@ -6,28 +6,25 @@ import { useJobStore } from '../../stores/job'
 import { useEditState } from '../../composables/useEditState'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
 import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimator'
-import { getAlgorithms, type AlgorithmComplexity, type AlgorithmInfo } from '../../api/client'
+import { useAlgorithmsStore } from '../../stores/algorithms'
+import type { AlgorithmComplexity } from '../../api/client'
 
 const { t } = useI18n()
 const store = useJobStore()
 const edit = useEditState()
 const draft = useBitmapDraft()
 const costEstimator = usePreviewCostEstimator()
+const algorithms = useAlgorithmsStore()
 
-// Algorithm metadata cache. Fetched once on mount; the result feeds
-// the cost chip's complexity seed. We tolerate the fetch failing —
-// the estimator falls back to ``medium`` when the complexity is
-// undefined, so the chip still renders.
-const algorithmsInfo = ref<AlgorithmInfo[]>([])
-onMounted(async () => {
-  try {
-    algorithmsInfo.value = await getAlgorithms()
-  } catch {
-    /* offline / 404 — fall through */
-  }
+// Algorithm metadata. Sourced from the versioned manifest store
+// (B.4 — pen_plotter.manifests.algorithms), which handles cache +
+// build-time snapshot fallback. The cost chip's complexity seed
+// stays accurate even when the backend is offline.
+onMounted(() => {
+  if (!algorithms.loaded) void algorithms.refresh()
 })
 const currentComplexity = computed<AlgorithmComplexity>(() => {
-  const algo = algorithmsInfo.value.find((a) => a.name === draft.bitmap.value.algorithm)
+  const algo = algorithms.list.find((a) => a.name === draft.bitmap.value.algorithm)
   return algo?.complexity ?? 'medium'
 })
 const estimatedMs = computed<number>(() =>

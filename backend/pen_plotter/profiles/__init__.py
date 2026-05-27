@@ -114,8 +114,14 @@ def _free_path(name: str, directory: Path) -> Path:
 
 
 def export_profile_yaml(profile: MachineProfile) -> str:
-    """Serialize a profile to YAML."""
-    return yaml.safe_dump(profile.model_dump(), sort_keys=False)
+    """Serialize a profile to YAML.
+
+    ``mode="json"`` makes pydantic emit enum values as their string
+    representation (the new Capability Model fields use enums), which
+    ``yaml.safe_dump`` knows how to serialize. The legacy fields are
+    unaffected.
+    """
+    return yaml.safe_dump(profile.model_dump(mode="json"), sort_keys=False)
 
 
 def save_profile(profile: MachineProfile, directory: Path = USER_DIR) -> Path:

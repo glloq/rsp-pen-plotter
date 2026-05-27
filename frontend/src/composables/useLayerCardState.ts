@@ -11,9 +11,10 @@
 // component passes ``computed(() => props.layer)``.
 
 import { computed, inject, onMounted, ref, watch, type ComputedRef, type Ref } from 'vue'
-import { getAlgorithms, type AlgorithmInfo, type LayerInfo, type PausePolicy } from '../api/client'
+import { type LayerInfo, type PausePolicy } from '../api/client'
 import { formatLayerLabel } from '../lib/labels'
 import { nearestPen } from '../lib/penMatching'
+import { useAlgorithmsStore } from '../stores/algorithms'
 import { useJobStore, type LayerPass } from '../stores/job'
 import { defaultsFor, getAlgoSpec } from '../data/algorithmSchemas'
 import type { PrintStyle, PrintStyleKind } from '../data/printRegistry'
@@ -41,13 +42,12 @@ export function useLayerCardState(layer: Ref<LayerInfo>) {
     selection.handleClick(layer.value.layer_id, event, allIds)
   }
 
-  const algorithms = ref<AlgorithmInfo[]>([])
-  onMounted(async () => {
-    try {
-      algorithms.value = await getAlgorithms()
-    } catch {
-      /* keep [] */
-    }
+  // Algorithm catalog comes from the manifest-backed store (B.4) so
+  // backend-side algorithm registrations propagate without UI patches.
+  const algorithmsStore = useAlgorithmsStore()
+  const algorithms = computed(() => algorithmsStore.list)
+  onMounted(() => {
+    if (!algorithmsStore.loaded) void algorithmsStore.refresh()
   })
 
   // Only bitmap-derived layers (label like ``color-XXXXXX``) can be

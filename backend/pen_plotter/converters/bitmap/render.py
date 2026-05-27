@@ -124,7 +124,7 @@ def wrap_svg(width: int, height: int, groups: list[str]) -> str:
     return header + "".join(groups) + "</svg>"
 
 
-def render_from_segmentation(
+def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     seg: SegmentationResult,
     *,
     algorithm: str,
@@ -194,8 +194,14 @@ def render_from_segmentation(
     if max_workers > 1 and len(worker_jobs) > 1:
         try:
             ctx = get_context("forkserver")
-            with ProcessPoolExecutor(max_workers=max_workers, mp_context=ctx) as pool:
-                results = list(pool.map(_render_layer_unpack, worker_jobs))
+            with _traced_span(
+                "pipeline.bitmap.render_parallel",
+                layer_count=len(worker_jobs),
+                workers=max_workers,
+                algorithm=algorithm,
+            ):
+                with ProcessPoolExecutor(max_workers=max_workers, mp_context=ctx) as pool:
+                    results = list(pool.map(_render_layer_unpack, worker_jobs))
             for svg, layer_warnings in results:
                 groups.append(svg)
                 warnings.extend(layer_warnings)
@@ -204,14 +210,32 @@ def render_from_segmentation(
             warnings.append(f"Parallel render disabled ({exc}); falling back to serial.")
             groups = []
             for job in worker_jobs:
-                svg, layer_warnings = _render_layer_unpack(job)
+                with _traced_span(
+                    "pipeline.bitmap.render_layer",
+                    algorithm=job[4],
+                    layer_label=job[3],
+                ):
+                    svg, layer_warnings = _render_layer_unpack(job)
                 groups.append(svg)
                 warnings.extend(layer_warnings)
     else:
         for job in worker_jobs:
-            svg, layer_warnings = _render_layer_unpack(job)
+            with _traced_span(
+                "pipeline.bitmap.render_layer",
+                algorithm=job[4],
+                layer_label=job[3],
+            ):
+                svg, layer_warnings = _render_layer_unpack(job)
             groups.append(svg)
             warnings.extend(layer_warnings)
     if not groups:
         warnings.append("No drawable layers detected (image may be entirely background).")
-    return wrap_svg(seg.width, seg.height, groups), warnings
+    with _traced_span("pipeline.bitmap.compose_svg", layer_count=len(groups)):
+        return wrap_svg(seg.width, seg.height, groups), warnings
+
+
+def _traced_span(name: str, **attrs: Any) -> Any:
+    """Defer OTel import until first call to keep cold start cheap."""
+    from pen_plotter.observability import traced_span
+
+    return traced_span(name, **attrs)
