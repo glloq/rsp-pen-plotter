@@ -289,9 +289,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
     - `test_validation_error_is_pydantic_422` : payload invalide → 422 avec `detail`
   - **DoD :** 5 tests e2e exercent les 3 parcours canoniques + propagation des correlation IDs + validation pydantic
   - **Note :** suite Playwright pour le modal V2 frontend = follow-up (le modal vit derrière feature flag, branchera au flow prod après stabilisation). Les KPI temps-première-impression sont collectés par `usePerfStore` (C.8) et exposés via dashboard SLO (D.4).
-- [ ] **D.8** — SDK plugin externe + docs marketplace artefacts
-  - Documentation interface plugin (algorithms, converters, machines)
-  - **DoD :** un dev tiers peut écrire un plugin sans toucher au cœur
+- [x] **D.8** — SDK plugin externe + docs marketplace artefacts
+  - Module `pen_plotter.sdk` : surface d'import stable réexportant `RasterAlgorithm`, `Converter`, `ToolChangeStrategyImpl`, `MachineProfile`, `PluginManifest` (alias de `Manifest`), `register_manifest`, etc.
+  - Doc `docs/plugin-sdk.md` : 4 exemples concrets (raster algorithm, tool-change strategy, machine profile YAML, manifest domain custom)
+  - Stratégie « write now, ne pas réécrire plus tard » : entry-point discovery est annoncée comme follow-up Phase B (mais le contrat reste le même)
+  - **DoD :** 6 tests qui n'importent **que** depuis `pen_plotter.sdk` (vérifient surface __all__, subclass RasterAlgorithm, manifest registration custom, ToolChangeStrategyImpl subclassable, MachineProfile valide + capabilities dérivées)
+  - **Note :** entry-point discovery (`[project.entry-points."omniplot.algorithms"]`) + marketplace signée arrivent en V2 (audit #1 phase 4).
 
 ---
 
@@ -380,6 +383,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | D.5   | this PR    | `scripts/check_contracts.py` + `scripts/perf_gate.py` + workflow CI étendu, 6 tests unit du contract check |
 | 2026-05-27 | D.6   | this PR    | `pen_plotter.deployment` (5 process roles avec capabilities), lifespan conditionnel sur le rôle, `docs/deployment.md` (matrice + 3 topologies), 13 tests |
 | 2026-05-27 | D.7   | this PR    | `tests/test_e2e_journeys.py` (5 parcours canoniques : fast default, expert override, normalized error, correlation IDs, validation 422) avec TestClient pour exercer la lifespan complète |
+| 2026-05-27 | D.8   | this PR    | `pen_plotter.sdk` (réexport stable de RasterAlgorithm / Converter / ToolChangeStrategyImpl / MachineProfile / PluginManifest) + `docs/plugin-sdk.md` (4 exemples concrets), 6 tests qui n'importent que via sdk |
 
 ---
 
