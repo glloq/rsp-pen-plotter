@@ -118,6 +118,20 @@ def optimize_svg(
         return _optimize_svg(svg, layers=layers, merge_tolerance_mm=merge_tolerance_mm)
 
 
+def _path_count(svg: str) -> int:
+    """Count drawable primitives (path/polyline/polygon/line) in ``svg``."""
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return 0
+    count = 0
+    for elem in root.iter():
+        tag = _local(elem.tag)
+        if tag in {"path", "polyline", "polygon", "line"}:
+            count += 1
+    return count
+
+
 def _optimize_svg(
     svg: str,
     *,
@@ -149,6 +163,23 @@ def _optimize_svg(
         ]
     else:
         targets = [("layer-1", _group_color(root), svg)]
+
+    # Quick win F.3 (docs/perf-report.md §B2): a single-layer SVG with
+    # at most one path is already monotonic — vpype's
+    # linemerge/linesimplify/linesort can't reduce pen-up travel. Skip
+    # the ~100 ms vpype pipeline entirely and return the input
+    # unchanged. The "one path" cap keeps the early-exit safe: any
+    # second polyline introduces a potential pen-up that the optimizer
+    # might still want to reorder.
+    if len(targets) == 1 and _path_count(targets[0][2]) <= 1:
+        return ToolpathResult(
+            svg=svg,
+            metrics=ToolpathMetrics(
+                pen_up_before_mm=0.0,
+                pen_up_after_mm=0.0,
+                reduction_pct=0.0,
+            ),
+        )
 
     before_total = 0.0
     after_total = 0.0
