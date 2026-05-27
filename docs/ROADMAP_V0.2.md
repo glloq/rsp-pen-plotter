@@ -262,10 +262,13 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Composant `WorkshopMode.vue` : overlay plein écran avec gros indicateurs (état avec dot animé, nom, progression, hint d'action, Pause/Reprendre géants)
   - **DoD :** 16 tests vitest (store : 11 dont built-ins, switch, saveAs, rename, remove, corruption tolérée + workshop : 5)
   - **Note :** sync serveur des workspaces = V2 (décision arrêtée 2026-05-27 local-first).
-- [ ] **D.4** — Budgets SLO + alerting
-  - Budgets : preview draft/standard/final, upload → editable, gcode gen, queue start delay, stream stall
-  - Alertes sur dépassements répétés
-  - **DoD :** dashboard "SLO" actif, alertes testées
+- [x] **D.4** — Budgets SLO + alerting
+  - `pen_plotter.domain.slo` : 7 budgets par défaut calibrés depuis `docs/perf-report.md` (preview draft 600 ms / standard 1500 / final 4000, upload editable 1500, gcode 400, queue start 2000, stream stall 10s)
+  - 3 sévérités (healthy / warning / breach) avec `warn_breach_ratio` configurable, `min_samples` pour éviter alertes sur queue fraîche
+  - Endpoints `GET /slo/budgets` (table) + `POST /slo/evaluate` (samples → BudgetReport)
+  - Alerting : breach sur `alert_on_breach=True` émet log JSON structuré `slo_breach` (consommable par tout collecteur)
+  - **DoD :** 12 tests (5 budget unit + 5 roll-up + 2 HTTP), suite full green
+  - **Note :** dashboard Grafana JSON exporté = follow-up déploiement infra (le contrat HTTP est figé, n'importe quel collecteur OTLP peut alimenter l'évaluateur).
 - [ ] **D.5** — CI contract check + smoke perf gate
   - Diff snapshots manifestes bloque merge sans bump version
   - Smoke perf gate (régression > seuil vs baseline)
@@ -365,6 +368,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | D.1   | this PR    | `scripts/profile.sh record\|top` (py-spy wrapper avec auto-PID uvicorn), `docs/profiling.md` (workflow d'investigation 4 étapes : baseline → OTel → py-spy → delta) |
 | 2026-05-27 | D.2   | this PR    | `docs/perf-report.md` : 3 bottlenecks bitmap chiffrés (B1-B3), 4 quick wins prioritisés avec gain estimé ~640→~255 ms sur preview draft, sections medium/long-term reliant à #1 audit |
 | 2026-05-27 | D.3   | this PR    | `useWorkspacesStore` (Débutant/Pro built-ins + custom saveAs/rename/remove + persistance localStorage), `WorkshopMode.vue` (overlay plein écran exécution live), 16 tests vitest |
+| 2026-05-27 | D.4   | this PR    | `domain/slo/` (7 budgets par défaut + `evaluate_budgets` avec severity healthy/warning/breach) + endpoints `/slo/budgets` et `/slo/evaluate` + structured log `slo_breach`, 12 tests |
 
 ---
 
