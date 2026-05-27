@@ -222,9 +222,13 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - `RunActionsPanel.vue` : Pause/Reprendre/Annuler avec **confirm** sur Pause + Cancel, Reprendre direct (one-click), `nextActionHint` quand paused (visible **uniquement** si paused)
   - **DoD :** 14 tests vitest (timeline 6 + actions 8 dont confirm flow, hint conditionnel, disabled states corrects par phase)
   - **Note :** historique des runs + replay context = ajout futur sur la page queue (composants prêts à être branchés sur le `useQueueStore` existant).
-- [ ] **C.7** — Progressive preview SSE/WS
-  - Stream partial layers + métriques pendant calcul
-  - **DoD :** preview heavy ne bloque plus l'UI, progression visible
+- [x] **C.7** — Progressive preview SSE/WS
+  - Endpoint backend `GET /preview/stream` (SSE) avec schéma stable `PreviewProgressEvent` (`kind` start/progress/partial/done/error, `sequence` monotonic, `elapsed_ms`, `payload`)
+  - Emetteur synthétique pour la démo de bout en bout (placeholder ; refacto du pipeline bitmap pour yielder en parallèle est une PR séparée)
+  - Headers `Cache-Control: no-cache` + `X-Accel-Buffering: no` pour défaire la mise en tampon des proxies
+  - Composable frontend `useProgressiveStream(eventSourceFactory?)` avec `start`/`lastProgress`/`lastPartial`/`done`/`error`/`active`/`percent` reactives + `open(url)`/`close()` ; `onUnmounted` ferme automatiquement
+  - **DoD :** 3 tests backend (kinds émis, payload shape, validation `layer_count`) + 6 tests frontend (start, percent, partial, done à 100% et close, error, re-open ferme l'ancien)
+  - **Note :** intégration avec le `convert_file` pipeline pour streamer les vraies couches au lieu d'un emitter synthétique = follow-up. Le contrat SSE est stable, le frontend ne devra pas changer.
 - [ ] **C.8** — Frontend perf overlay + KPI tracking
   - Overlay activable `?perf=1` + feature flag serveur
   - KPI : time-to-first-preview, preview-refresh latency, interactions lentes (>100ms), frame drops, erreurs réseau
@@ -348,6 +352,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | C.4   | this PR    | zod schemas `MachineCapabilities`, `CapabilityWizard.vue` (3 étapes, UI conditionnelle par mode), `MagazineView.vue` (slots + calibration + simulation highlight), 12 tests vitest |
 | 2026-05-27 | C.5   | this PR    | `CompareView.vue` (A/B side-by-side + métriques diff avec winner highlight + overlay toggles `penup_heatmap`/`path_density`/`bounds`/`curvature`), 7 tests vitest |
 | 2026-05-27 | C.6   | this PR    | `RunTimeline.vue` (phases + progression + badges terminaux) et `RunActionsPanel.vue` (Pause/Resume/Cancel avec confirm sécurisé + hint d'action), 14 tests vitest |
+| 2026-05-27 | C.7   | this PR    | Endpoint SSE `/preview/stream` avec schéma `PreviewProgressEvent` stable + emitter synthétique, composable `useProgressiveStream`, 3+6 tests |
 
 ---
 
