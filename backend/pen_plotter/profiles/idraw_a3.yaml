@@ -1,0 +1,34 @@
+# iDraw / EleksDraw A3 — GRBL-class controller, single-pen workflow.
+#
+# Standard GRBL G-code; the pen lift uses an M03/M05 servo command pair
+# (S values calibrated to the typical aftermarket servo bracket; tweak
+# in a copy if your servo arm geometry differs). Manual swap stays the
+# default because the stock magazine is single-slot.
+name: "iDraw A3 (GRBL)"
+units: "mm"
+workspace:
+  x_min: 0.0
+  y_min: 0.0
+  x_max: 420.0
+  y_max: 297.0
+origin: "bottom_left"
+gcode_dialect: "grbl"
+pen_up_command: "M03 S50"
+pen_down_command: "M03 S160"
+tool_change_method: "manual_pause"
+tool_change_command: "M0"
+drawing_speed_mm_s: 50.0
+travel_speed_mm_s: 100.0
+acceleration_mm_s2: 800.0
+pen_slot_count: 1
+supports_arcs: true
+arc_tolerance_mm: 0.1
+capabilities:
+  tool_change:
+    mode: manual
+    command_source: operator
+    recovery_policy: pause_and_prompt
+    manual_prompt:
+      title: "Change pen"
+      body: "Swap the iDraw pen to {color}, then press Resume."
+  max_pens_in_magazine: 1

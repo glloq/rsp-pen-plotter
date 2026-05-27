@@ -1,0 +1,41 @@
+# Bantam Tools NextDraw — desktop pen plotter driven by an EiBotBoard (EBB).
+#
+# Like the AxiDraw V3 the NextDraw emits native EBB commands (SM/SP/EM/SC),
+# not G-code. Coordinates are millimetres, top-left origin. Workspace
+# matches the A2 model; the A3/A4 variants share the same servo + EBB
+# setup, only the workspace bounds change.
+name: "NextDraw A2"
+units: "mm"
+workspace:
+  x_min: 0.0
+  y_min: 0.0
+  x_max: 595.0
+  y_max: 419.0
+origin: "top_left"
+gcode_dialect: "ebb"
+pen_up_command: "SP,1"
+pen_down_command: "SP,0"
+tool_change_method: "manual_pause"
+tool_change_command: "M0"
+drawing_speed_mm_s: 70.0
+travel_speed_mm_s: 200.0
+acceleration_mm_s2: 1500.0
+pen_slot_count: 1
+ebb:
+  steps_per_mm: 80.0
+  servo_up: 16000
+  servo_down: 11000
+  servo_rate: 400
+  serial_terminator: "cr"
+# v0.2 Capability Model: explicit manual swap prompt for the operator.
+# Roadmap A.5; falls back to defaults derived from tool_change_method
+# when this block is omitted.
+capabilities:
+  tool_change:
+    mode: manual
+    command_source: operator
+    recovery_policy: pause_and_prompt
+    manual_prompt:
+      title: "Change pen"
+      body: "Insert pen {color} into the NextDraw holder, then press Resume."
+  max_pens_in_magazine: 1

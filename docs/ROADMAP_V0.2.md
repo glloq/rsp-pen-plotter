@@ -175,10 +175,10 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Fixture `memory_exporter` mutualisée dans `tests/conftest.py` (OTel n'autorise qu'un seul TracerProvider, partagé entre `test_tracing.py` et `test_pipeline_spans.py`)
   - **DoD :** 3 tests dédiés vérifiant émission des spans + attributs (mime/size/method/num_colors), suite full green
   - **Note :** métriques cache/workers/queue + dashboard Grafana JSON arrivent avec D.4 (SLO budgets + alerting) — l'instrumentation OTel des phases est en place dès maintenant pour collecter la baseline.
-- [ ] **B.6** — Presets plotters marché (≥4) + docs capability matrix
-  - Profils : AxiDraw, NextDraw, iDraw/EleksDraw (GRBL), custom CoreXY
-  - Documentation `docs/presets/` avec capability matrix par preset
-  - **DoD :** 4 profils chargent et passent les tests d'intégration, doc disponible
+- [x] **B.6** — Presets plotters marché (≥4) + docs capability matrix
+  - 5 profils bundled : `AxiDraw V3`, `NextDraw A2` (capabilities explicit), `iDraw A3 (GRBL)` (capabilities explicit + arcs), `Custom CoreXY A3` (legacy), `Custom CoreXY A3 (rack)` (host_macro complet avec 7 lignes + waits + placeholders)
+  - Documentation `docs/presets.md` avec capability matrix + notes par preset + guide « comment ajouter un preset »
+  - **DoD :** 5 profils chargent et passent les tests d'intégration (12 tests dont substitution `{slot}` dans rack macro), endpoint `/profiles` sert les 5
 
 ---
 
@@ -334,6 +334,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | B.3   | this PR    | Recovery layer (`Directive`/`FailureKind`/`JobRecoveryOverride`/`resolve_recovery`) + table totale 3×5 + e2e pause→swap→resume préservant état, 23 tests |
 | 2026-05-27 | B.4   | this PR    | Pinia `useAlgorithmsStore` adossé au manifeste versionné (A.4/A.7), bascule des 2 call sites legacy, fallback `source`/`fromFallback` exposés, 4 tests vitest |
 | 2026-05-27 | B.5   | this PR    | Spans OTel sub-step sur pipeline bitmap (load/preprocess/fit_within/segment/render_layer/compose_svg), fixture `memory_exporter` mutualisée dans `conftest.py`, 3 tests dédiés |
+| 2026-05-27 | B.6   | this PR    | 5 presets bundled (AxiDraw V3 / NextDraw A2 / iDraw A3 GRBL / Custom CoreXY A3 / CoreXY A3 rack avec host_macro complet), doc `docs/presets.md` avec capability matrix, 12 tests d'intégration |
 
 ---
 

@@ -1,0 +1,53 @@
+# DIY CoreXY A3 + host-managed pen rack — Capability Model demo.
+#
+# Demonstrates the v0.2 host_macro tool-change mode (roadmap A.5/B.2):
+# the controller is plain GRBL but the rack swap is driven by a
+# host-emitted macro sequence. The orchestrator streams these lines
+# verbatim with the indicated waits between sends.
+#
+# Placeholders supported in `send`:
+#   {slot}, {color}, {label}, {layer}
+name: "Custom CoreXY A3 (rack)"
+units: "mm"
+workspace:
+  x_min: 0.0
+  y_min: 0.0
+  x_max: 300.0
+  y_max: 420.0
+origin: "bottom_left"
+gcode_dialect: "grbl"
+pen_up_command: "M280 P0 S40"
+pen_down_command: "M280 P0 S90"
+# tool_change_method is preserved for backwards compatibility but the
+# capabilities block below is the source of truth for the orchestrator.
+tool_change_method: "rack"
+tool_change_command: ""
+drawing_speed_mm_s: 60.0
+travel_speed_mm_s: 120.0
+acceleration_mm_s2: 1500.0
+pen_slot_count: 6
+supports_arcs: true
+arc_tolerance_mm: 0.1
+capabilities:
+  tool_change:
+    mode: host_macro
+    command_source: host
+    recovery_policy: pause_and_prompt
+    host_macro:
+      - send: "; rack swap to {label} ({color})"
+        wait_ms: 0
+      - send: "G53 G0 Z5"
+        wait_ms: 100
+      - send: "G53 G0 X-50 Y150"
+        wait_ms: 500
+      - send: "M280 P0 S20"     # release current pen
+        wait_ms: 200
+      - send: "G53 G0 X{slot}0 Y150"  # park at slot rack position
+        wait_ms: 500
+      - send: "M280 P0 S90"     # clamp on new pen
+        wait_ms: 200
+      - send: "; ready to draw {label}"
+        wait_ms: 0
+  has_pen_sensor: false
+  has_sheet_loader: false
+  max_pens_in_magazine: 6
