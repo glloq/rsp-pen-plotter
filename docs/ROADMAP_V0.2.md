@@ -235,11 +235,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Composant `PerfOverlay.vue` activé via flag `perf` (URL `?flag.perf=1` ou persisté C.1), table KPI live + clear button
   - **DoD :** 13 tests vitest (store : recordTiming/summary/errors/clear/ring/empty + tracker : sync/async/throw/error + overlay : hidden/visible/rows/clear)
   - **Note :** report serveur des samples + budgets SLO arrivent en D.4 (alerting). Pour l'instant le store reste in-memory, suffisant pour le debug terrain.
-- [ ] **C.9** — i18n FR/EN + microcopy standardisé + raccourcis clavier
-  - Standardisation textes (action / conséquence / recommandation)
-  - Toasts non intrusifs + persistants si critique
-  - Raccourcis clavier documentés
-  - **DoD :** parcours complet en FR et EN, raccourcis dans `docs/shortcuts.md`
+- [x] **C.9** — i18n FR/EN + microcopy standardisé + raccourcis clavier
+  - Clés i18n `v2.*` ajoutées dans `en.json` et `fr.json` (mode, modal 6 étapes, intent, manifest fallback, perf overlay)
+  - Composable `useKeyboardShortcuts([{id, handler}])` avec `SHORTCUTS` registry (6 bindings) ; n'intercepte **pas** les surfaces éditables (input/textarea/contenteditable)
+  - Doc `docs/shortcuts.md` (table + convention microcopy action/conséquence/recommandation + workflow i18n FR/EN)
+  - **DoD :** 6 tests vitest (registry, Ctrl+K = Cmd+K, ignore sans modifier, n'intercepte pas inputs, unregister à l'unmount)
+  - **Note :** toast "persistant si critique" reste un upgrade ciblé du `useToastStore` existant (signal documenté dans shortcuts.md, refacto en follow-up).
 
 ---
 
@@ -356,6 +357,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | C.6   | this PR    | `RunTimeline.vue` (phases + progression + badges terminaux) et `RunActionsPanel.vue` (Pause/Resume/Cancel avec confirm sécurisé + hint d'action), 14 tests vitest |
 | 2026-05-27 | C.7   | this PR    | Endpoint SSE `/preview/stream` avec schéma `PreviewProgressEvent` stable + emitter synthétique, composable `useProgressiveStream`, 3+6 tests |
 | 2026-05-27 | C.8   | this PR    | `usePerfStore` (ring buffer 200 + summary p50/p95) + `usePerfTracker` (time/timeAsync + slow-interaction auto-detect) + `PerfOverlay.vue` activé via `?flag.perf=1`, 13 tests vitest |
+| 2026-05-27 | C.9   | this PR    | i18n FR/EN clés `v2.*`, `useKeyboardShortcuts` + `SHORTCUTS` registry (6 bindings), doc `docs/shortcuts.md`, 6 tests vitest |
 
 ---
 

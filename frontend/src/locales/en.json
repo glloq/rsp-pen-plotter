@@ -1095,5 +1095,45 @@
       "preflight": "Pre-plot check",
       "generate": "Generate G-code"
     }
+  },
+  "v2": {
+    "mode": {
+      "assisted": "Assisted",
+      "expert": "Expert"
+    },
+    "modal": {
+      "title": "Prepare the print",
+      "stepSource": "Source",
+      "stepIntent": "Intent",
+      "stepAlgorithm": "Algorithm",
+      "stepColors": "Colours",
+      "stepLayers": "Layers",
+      "stepPreflight": "Preflight",
+      "previous": "Previous",
+      "next": "Next",
+      "generate": "Generate",
+      "why": "Why this choice?",
+      "resolving": "Computing recommendation…",
+      "resolverError": "Resolver error: {message}. Falling back to static defaults."
+    },
+    "intent": {
+      "fast": "Fast",
+      "balanced": "Balanced",
+      "quality": "Quality"
+    },
+    "manifest": {
+      "fallbackCache": "Algorithm manifest served from local cache — backend offline.",
+      "fallbackSnapshot": "Algorithm manifest served from the bundled snapshot — couldn't load the latest list."
+    },
+    "perf": {
+      "title": "perf",
+      "kpi": {
+        "time_to_first_preview": "TTFP",
+        "preview_refresh": "Refresh",
+        "slow_interaction": "Slow",
+        "errors": "Errors"
+      },
+      "clear": "Clear"
+    }
   }
 }
