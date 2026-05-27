@@ -4,7 +4,7 @@
       "domain": "algorithms",
       "manifest_version": 1,
       "schema_semver": "0.1.0",
-      "generated_at": "2026-05-27T20:43:59.678460Z",
+      "generated_at": "1970-01-01T00:00:00+00:00",
       "deprecations": [],
       "feature_flags": {}
     },
@@ -286,7 +286,7 @@
       "domain": "system",
       "manifest_version": 1,
       "schema_semver": "0.1.0",
-      "generated_at": "2026-05-27T20:43:59.679399Z",
+      "generated_at": "1970-01-01T00:00:00+00:00",
       "deprecations": [],
       "feature_flags": {
         "ir_pipeline": false,

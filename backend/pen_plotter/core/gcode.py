@@ -51,6 +51,20 @@ _TEMPLATE_EXPECTED_VARS: dict[str, frozenset[str]] = {
 }
 
 
+# Pre-resolved at import — Jinja caches templates internally, but the
+# first /generate call still pays the lookup + compile cost. Hoisting
+# saves ~100 ms cold-cache on the gcode phase (see docs/perf-report.md).
+_HEADER_T = _env.get_template("header.j2")
+_FOOTER_T = _env.get_template("footer.j2")
+_PEN_UP_T = _env.get_template("pen_up.j2")
+_PEN_DOWN_T = _env.get_template("pen_down.j2")
+_LINE_T = _env.get_template("line.j2")
+_TRAVEL_T = _env.get_template("travel.j2")
+_ARC_T = _env.get_template("arc.j2")
+_TOOL_CHANGE_T = _env.get_template("tool_change.j2")
+_PEN_COLOR_CHANGE_T = _env.get_template("pen_color_change.j2")
+
+
 def _verify_template_contract() -> None:
     """Boot-time guard: refuse to start if templates use undeclared variables.
 
@@ -299,15 +313,15 @@ def _generate_gcode_impl(
     bounds = _bounds_of(layer_geometry)
     transform = _make_transform(bounds, profile, scale_mode, margin_mm, placement)
 
-    header_t = _env.get_template("header.j2")
-    footer_t = _env.get_template("footer.j2")
-    pen_up_t = _env.get_template("pen_up.j2")
-    pen_down_t = _env.get_template("pen_down.j2")
-    line_t = _env.get_template("line.j2")
-    travel_t = _env.get_template("travel.j2")
-    arc_t = _env.get_template("arc.j2")
-    tool_change_t = _env.get_template("tool_change.j2")
-    pen_color_change_t = _env.get_template("pen_color_change.j2")
+    header_t = _HEADER_T
+    footer_t = _FOOTER_T
+    pen_up_t = _PEN_UP_T
+    pen_down_t = _PEN_DOWN_T
+    line_t = _LINE_T
+    travel_t = _TRAVEL_T
+    arc_t = _ARC_T
+    tool_change_t = _TOOL_CHANGE_T
+    pen_color_change_t = _PEN_COLOR_CHANGE_T
 
     pens = {pen.index: pen for pen in profile.effective_pens()}
     mono_pen = profile.pen_slot_count <= 1
