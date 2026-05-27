@@ -41,6 +41,21 @@
     "title": "Compare variants",
     "empty": "Need at least two variants on the current placement to compare. Add a second variant from the Variants bar."
   },
+  "workspaces": {
+    "label": "Workspace",
+    "menu": "Workspace menu",
+    "saveAs": "Save as…",
+    "rename": "Rename",
+    "remove": "Remove",
+    "namePrompt": "Workspace name",
+    "removeConfirm": "Delete the workspace \"{name}\"?",
+    "railAria": "Active workspace panels",
+    "empty": {
+      "layers": "No layers — select a placement to populate the inspector.",
+      "magazine": "No active profile — open the Plotter drawer to pick one.",
+      "queue": "No active run."
+    }
+  },
   "machine": {
     "disconnected": "Offline",
     "idle": "Ready",

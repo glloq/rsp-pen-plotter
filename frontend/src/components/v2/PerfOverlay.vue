@@ -9,9 +9,11 @@
 // reporting to the backend yet (the D.4 SLO work picks that up).
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFeatureFlag } from '../../composables/useFeatureFlag'
 import { usePerfStore } from '../../stores/perf'
 
+const { t } = useI18n()
 const enabled = useFeatureFlag('perf')
 const store = usePerfStore()
 
@@ -31,16 +33,7 @@ function fmtMs(v: number): string {
 }
 
 function labelFor(kpi: string): string {
-  switch (kpi) {
-    case 'time_to_first_preview':
-      return 'TTFP'
-    case 'preview_refresh':
-      return 'Refresh'
-    case 'slow_interaction':
-      return 'Slow'
-    default:
-      return kpi
-  }
+  return t(`v2.perf.kpi.${kpi}`)
 }
 </script>
 
@@ -53,8 +46,15 @@ function labelFor(kpi: string): string {
     aria-label="Performance overlay"
   >
     <header>
-      <span>perf</span>
-      <button type="button" data-test="perf-clear" @click="store.clear">×</button>
+      <span>{{ t('v2.perf.title') }}</span>
+      <button
+        type="button"
+        data-test="perf-clear"
+        :title="t('v2.perf.clear')"
+        @click="store.clear"
+      >
+        ×
+      </button>
     </header>
     <table>
       <thead>
@@ -75,7 +75,7 @@ function labelFor(kpi: string): string {
           <td>{{ fmtMs(row.last) }}</td>
         </tr>
         <tr>
-          <th>Errors</th>
+          <th>{{ t('v2.perf.kpi.errors') }}</th>
           <td colspan="4" data-test="perf-errors">{{ errorCount }}</td>
         </tr>
       </tbody>

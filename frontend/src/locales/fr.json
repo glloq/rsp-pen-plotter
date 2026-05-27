@@ -41,6 +41,21 @@
     "title": "Comparer les variantes",
     "empty": "Il faut au moins deux variantes sur le placement courant pour comparer. Crée-en une seconde depuis la barre Variantes."
   },
+  "workspaces": {
+    "label": "Espace de travail",
+    "menu": "Menu espace de travail",
+    "saveAs": "Enregistrer sous…",
+    "rename": "Renommer",
+    "remove": "Supprimer",
+    "namePrompt": "Nom de l'espace de travail",
+    "removeConfirm": "Supprimer l'espace de travail « {name} » ?",
+    "railAria": "Panneaux de l'espace de travail actif",
+    "empty": {
+      "layers": "Aucune couche — sélectionne un placement pour alimenter l'inspecteur.",
+      "magazine": "Aucun profil actif — ouvre le tiroir Plotter pour en choisir un.",
+      "queue": "Aucun run actif."
+    }
+  },
   "machine": {
     "disconnected": "Déconnecté",
     "idle": "Prêt",

@@ -2,10 +2,36 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { createI18n } from 'vue-i18n'
 import PerfOverlay from '../components/v2/PerfOverlay.vue'
 import { usePerfTracker } from '../composables/usePerfTracker'
 import { usePerfStore } from './perf'
 import { useUiModeStore } from './uiMode'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en',
+  messages: {
+    en: {
+      v2: {
+        perf: {
+          title: 'perf',
+          clear: 'Clear',
+          kpi: {
+            time_to_first_preview: 'TTFP',
+            preview_refresh: 'Refresh',
+            slow_interaction: 'Slow',
+            errors: 'Errors',
+          },
+        },
+      },
+    },
+  },
+})
+
+function mountOverlay() {
+  return mount(PerfOverlay, { global: { plugins: [i18n] } })
+}
 
 describe('usePerfStore', () => {
   beforeEach(() => {
@@ -103,21 +129,21 @@ describe('PerfOverlay', () => {
   })
 
   it('is hidden by default (feature flag off)', () => {
-    const wrapper = mount(PerfOverlay)
+    const wrapper = mountOverlay()
     expect(wrapper.find('[data-test="perf-overlay"]').exists()).toBe(false)
   })
 
   it('renders when the perf flag is on', () => {
     const ui = useUiModeStore()
     ui.setFlag('perf', true)
-    const wrapper = mount(PerfOverlay)
+    const wrapper = mountOverlay()
     expect(wrapper.find('[data-test="perf-overlay"]').exists()).toBe(true)
   })
 
   it('renders the configured KPI rows once visible', () => {
     const ui = useUiModeStore()
     ui.setFlag('perf', true)
-    const wrapper = mount(PerfOverlay)
+    const wrapper = mountOverlay()
     expect(wrapper.find('[data-test="perf-row-time_to_first_preview"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="perf-row-preview_refresh"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="perf-row-slow_interaction"]').exists()).toBe(true)
@@ -128,7 +154,7 @@ describe('PerfOverlay', () => {
     ui.setFlag('perf', true)
     const store = usePerfStore()
     store.recordTiming('preview_refresh', 100)
-    const wrapper = mount(PerfOverlay)
+    const wrapper = mountOverlay()
     await wrapper.find('[data-test="perf-clear"]').trigger('click')
     expect(store.summary('preview_refresh').count).toBe(0)
   })
