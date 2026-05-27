@@ -257,10 +257,11 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - `docs/perf-report.md` : top bottlenecks chiffrés (bitmap convert 71%, optimize 16%, gcode 12% ; vector dominé par optimize 69%), quick wins / medium refactors / long-term distingués
   - Estimation cumulée des quick wins : end-to-end `bitmap_photo` /draft ~640 → ~255 ms (-60%)
   - **DoD :** `docs/perf-report.md` chiffré, prioritisation justifiée, procédure de re-run documentée
-- [ ] **D.3** — Workspaces sauvegardables + Mode Atelier
-  - Workspaces local (localStorage) avec layouts Beginner / Pro
-  - Mode Atelier : UI simplifiée en exécution live
-  - **DoD :** layouts persistés, mode atelier accessible en 1 clic
+- [x] **D.3** — Workspaces sauvegardables + Mode Atelier
+  - Pinia store `useWorkspacesStore` : 2 built-ins (`Débutant` : Source/Style/Preview/Plot ; `Pro` : Layer Inspector / Pipeline Inspector / Queue / Machine Telemetry), workspaces custom avec `saveAs`/`rename`/`remove`, persistance localStorage
+  - Composant `WorkshopMode.vue` : overlay plein écran avec gros indicateurs (état avec dot animé, nom, progression, hint d'action, Pause/Reprendre géants)
+  - **DoD :** 16 tests vitest (store : 11 dont built-ins, switch, saveAs, rename, remove, corruption tolérée + workshop : 5)
+  - **Note :** sync serveur des workspaces = V2 (décision arrêtée 2026-05-27 local-first).
 - [ ] **D.4** — Budgets SLO + alerting
   - Budgets : preview draft/standard/final, upload → editable, gcode gen, queue start delay, stream stall
   - Alertes sur dépassements répétés
@@ -363,6 +364,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | C.9   | this PR    | i18n FR/EN clés `v2.*`, `useKeyboardShortcuts` + `SHORTCUTS` registry (6 bindings), doc `docs/shortcuts.md`, 6 tests vitest |
 | 2026-05-27 | D.1   | this PR    | `scripts/profile.sh record\|top` (py-spy wrapper avec auto-PID uvicorn), `docs/profiling.md` (workflow d'investigation 4 étapes : baseline → OTel → py-spy → delta) |
 | 2026-05-27 | D.2   | this PR    | `docs/perf-report.md` : 3 bottlenecks bitmap chiffrés (B1-B3), 4 quick wins prioritisés avec gain estimé ~640→~255 ms sur preview draft, sections medium/long-term reliant à #1 audit |
+| 2026-05-27 | D.3   | this PR    | `useWorkspacesStore` (Débutant/Pro built-ins + custom saveAs/rename/remove + persistance localStorage), `WorkshopMode.vue` (overlay plein écran exécution live), 16 tests vitest |
 
 ---
 
