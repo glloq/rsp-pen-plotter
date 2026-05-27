@@ -164,11 +164,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Test e2e pause → swap → resume sur G-code synthétique (préambule G21 + retour position + reste du programme préservé)
   - **DoD :** 23 tests (table totale, précédence overrides, e2e checkpoint, prompt manuel via orchestrator)
   - **Note :** intégration de `resolve_recovery` dans `pen_plotter.queue` se fait dans une PR dédiée (le module `queue.py` est dans `ignore_errors=true` mypy override, refacto en chantier propre).
-- [ ] **B.4** — Frontend : consommation dynamique des manifestes
-  - Suppression des defaults/options hardcodés critiques
-  - Formulaires algo générés depuis JSON Schema
-  - Conservation fallback minimal (snapshot build-time)
-  - **DoD :** un nouvel algo backend devient exploitable frontend sans patch type/schema
+- [x] **B.4** — Frontend : consommation dynamique des manifestes
+  - Pinia store `useAlgorithmsStore` adossé à `fetchAlgorithmsManifest` (live → cache → snapshot, A.7)
+  - Bascule des deux call sites (`EditPreviewPane.vue`, `useLayerCardState.ts`) du legacy `getAlgorithms()` vers le store
+  - `byId`/`fromFallback`/`source`/`lastError` exposés pour la bannière + intégrations futures
+  - **DoD :** un nouvel algo backend devient exploitable frontend sans patch type/schema (4 tests vitest)
+  - **Note :** suppression complète de `getAlgorithms()` + génération de formulaires depuis JSON Schema (`params`) lands en Phase C avec la refonte du modal V2, après que la matrice B.1 ait calibré les bornes/defaults par algo.
 - [ ] **B.5** — Instrumentation détaillée par phase pipeline
   - Spans OTel sur sous-étapes : parse/upload, preprocess, segmentation, render (par couche/pass), optimize, gcode
   - Métriques cache (hit/miss/eviction), workers (spawn, queue wait, active), queue (delay, duration, abort)
@@ -330,6 +331,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | B.1   | this PR    | `AlgorithmPolicyResolver` (`domain/policy/`): matrice complète audit #4 + hard constraints (mégapixels/mono-pen/palette≤2), 41 tests |
 | 2026-05-27 | B.2   | this PR    | `ToolChangeOrchestrator` + 4 stratégies (`FirmwareStrategy`/`HostMacroStrategy`/`ManualStrategy`/`SinglePenStrategy`) avec `SwapPlan`/`SwapContext`/`PauseKind` et substitution placeholders, 16 tests |
 | 2026-05-27 | B.3   | this PR    | Recovery layer (`Directive`/`FailureKind`/`JobRecoveryOverride`/`resolve_recovery`) + table totale 3×5 + e2e pause→swap→resume préservant état, 23 tests |
+| 2026-05-27 | B.4   | this PR    | Pinia `useAlgorithmsStore` adossé au manifeste versionné (A.4/A.7), bascule des 2 call sites legacy, fallback `source`/`fromFallback` exposés, 4 tests vitest |
 
 ---
 
