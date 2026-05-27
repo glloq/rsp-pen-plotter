@@ -211,10 +211,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - UI conditionnelle : prompt knobs visible **uniquement** en mode manual, macro editor visible **uniquement** en host_macro, single_pen affiche un placeholder explicite
   - `MagazineView.vue` : grille de slots avec couleur + install toggle + calibration `(x,y)` ou « non calibré », `simulationSlot` highlight (préparation pour replay run)
   - **DoD :** 12 tests vitest (wizard branches + magazine padding/installer/calibration/simulation)
-- [ ] **C.5** — Compare Mode A/B + overlays debug
-  - A/B visuel 2 presets/algos avec métriques (temps, travel, swaps)
-  - Overlays : pen-up heatmap, path density, bounds/margins warnings, curvature stress
-  - **DoD :** comparaison side-by-side, métriques côte à côte
+- [x] **C.5** — Compare Mode A/B + overlays debug
+  - `CompareView.vue` : 2 candidats side-by-side avec SVG preview + métriques (`est_time_s`, `draw_length_mm`, `pen_up_length_mm`, `swap_count`) + diff colonnes avec winner highlight
+  - Overlay toggles : `penup_heatmap` / `path_density` / `bounds` / `curvature` (UX seam ; rendering effectif des overlays différé à une PR dédiée, l'opérateur peut déjà activer/désactiver les flags)
+  - Émet `pick-winner(id)` et `toggle-overlay(key)`
+  - **DoD :** 7 tests vitest (rendu A/B, winner sur temps + longueur, pick-winner émis, toggle-overlay émis, overlay stub visible, undefined → em-dash)
+  - **Note :** rendu effectif des 4 overlays (heatmap GL, density filter, bounds rect, curvature shader) arrive dans une PR overlay dédiée — la surface UX est prête.
 - [ ] **C.6** — Queue UX pro avec timeline + checkpoints + actions sécurisées
   - Timeline : queued → running → pause → resume → done/fail
   - Détails run : checkpoint actuel, raison pause, prochaine action
@@ -345,6 +347,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | C.2   | this PR    | Endpoint backend `/policy/resolve` (wrap resolver B.1), zod schemas frontend, `EditModalV2.vue` 6 étapes (Source/Intent/Algo/Couleurs/Couches/Préflight) avec "Pourquoi ce choix ?" depuis `reasoning[]` et risques depuis `hard_constraints_applied[]`, 3+7 tests |
 | 2026-05-27 | C.3   | this PR    | `LayerInspector.vue` (ordre + swap count + longueur agrégée) et `PipelineInspector.vue` (Source→Segmentation→Algo→Fallbacks→Contraintes depuis `PolicyDecision`), 7 tests vitest |
 | 2026-05-27 | C.4   | this PR    | zod schemas `MachineCapabilities`, `CapabilityWizard.vue` (3 étapes, UI conditionnelle par mode), `MagazineView.vue` (slots + calibration + simulation highlight), 12 tests vitest |
+| 2026-05-27 | C.5   | this PR    | `CompareView.vue` (A/B side-by-side + métriques diff avec winner highlight + overlay toggles `penup_heatmap`/`path_density`/`bounds`/`curvature`), 7 tests vitest |
 
 ---
 
