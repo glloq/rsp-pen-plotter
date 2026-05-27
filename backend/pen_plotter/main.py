@@ -23,6 +23,7 @@ from pen_plotter.api.fonts import router as fonts_router
 from pen_plotter.api.generate import router as generate_router
 from pen_plotter.api.jobs import router as jobs_router
 from pen_plotter.api.macros import router as macros_router
+from pen_plotter.api.manifests import router as manifests_router
 from pen_plotter.api.optimize import router as optimize_router
 from pen_plotter.api.plans import router as plans_router
 from pen_plotter.api.plotter import router as plotter_router
@@ -41,6 +42,8 @@ from pen_plotter.application.file_library import integrity_scan
 from pen_plotter.auth import require_api_key
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
+from pen_plotter.errors import install_error_handler
+from pen_plotter.manifests_seed import register_default_manifests
 from pen_plotter.observability import (
     RequestContextMiddleware,
     configure_logging,
@@ -96,6 +99,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="OmniPlot", version=__version__, lifespan=lifespan)
 configure_tracing(app)
+install_error_handler(app)
+register_default_manifests()
 
 
 def _cors_origins() -> list[str]:
@@ -147,6 +152,7 @@ app.include_router(system_router)
 app.include_router(analyze_router)
 app.include_router(available_colors_router)
 app.include_router(settings_router)
+app.include_router(manifests_router)
 
 
 class HealthResponse(BaseModel):

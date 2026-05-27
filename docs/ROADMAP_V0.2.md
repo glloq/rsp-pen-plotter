@@ -111,14 +111,15 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Hash déterministe par artefact (contenu + version IR)
   - Adapter de compat depuis pipeline SVG-string actuel (pas de big-bang)
   - **DoD :** types + tests round-trip, ancien pipeline passe encore, nouveau pipeline opt-in via feature flag (`OMNIPLOT_IR_ENABLED`)
-- [ ] **A.4** — Système de manifestes versionnés + génération types frontend
-  - Modèle générique `PluginManifest` (algorithms, profiles, presets, plans…)
-  - Endpoints `/manifests/{domain}` versionnés (`manifest_version: int`)
-  - Metadata : `manifest_version`, `generated_at`, `deprecations`, `feature_flags`
-  - Erreurs normalisées RFC 7807-like (`code`, `message`, `details`, `path`)
-  - OpenAPI → `openapi-typescript` en CI
-  - Snapshot build-time pour fallback frontend
+- [x] **A.4** — Système de manifestes versionnés + génération types frontend
+  - Modèle générique `Manifest`/`ManifestEntry`/`ManifestMeta`/`Deprecation`
+  - Endpoints `/manifests` (index) + `/manifests/{domain}` versionnés (`manifest_version: int`)
+  - Metadata : `manifest_version`, `schema_semver`, `generated_at`, `deprecations`, `feature_flags`
+  - Erreurs normalisées (`ApiError` → `{code, message, details, path}`)
+  - Script `scripts/generate_openapi.py` (consommé par `openapi-typescript` en A.7)
+  - Doc `docs/contract_architecture.md`
   - **DoD :** types TS générés en CI, snapshot embarqué, tests de contrat
+  - **Note :** snapshot frontend + wiring CI de `openapi-typescript` arriveront en A.7 (consommation). Backend complet ici.
 - [ ] **A.5** — Capability Model dans profil machine + migration YAML additive
   - Enums : `ToolingMode`, `CommandSource`, `RecoveryPolicy`
   - Schéma `capabilities` + `tool_change_strategy` séparés de `tool_change_method`
@@ -319,6 +320,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | A.1   | this PR    | Logging JSON + correlation IDs + `RequestContextMiddleware`; 9 tests; doc `docs/observability.md` |
 | 2026-05-27 | A.2   | this PR    | OTel tracing opt-in (`OMNIPLOT_OTEL_ENABLED`), spans sur `convert_file`/`optimize_svg`/`generate_gcode`, baseline mesurée dans `docs/perf-baseline.md`, 5 tests |
 | 2026-05-27 | A.3   | this PR    | Geometry IR (`SourceAsset`/`SegmentationArtifact`/`GeometryIR`/`PathPlanIR`/`MachineProgram`/`ExecutionRun`) + `artifact_hash` SHA-256 déterministe + adapter SVG→IR opt-in (`OMNIPLOT_IR_ENABLED`), 11 tests |
+| 2026-05-27 | A.4   | this PR    | Système manifestes versionnés (`Manifest`/`ManifestEntry`/`Deprecation`), endpoints `/manifests` + `/manifests/{domain}`, erreurs normalisées (`ApiError`), `scripts/generate_openapi.py`, doc `docs/contract_architecture.md`, 7 tests |
 
 ---
 
