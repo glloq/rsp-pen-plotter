@@ -253,9 +253,10 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Documentation `docs/profiling.md` (table py-spy/OTel/baseline + workflow d'investigation perf en 4 étapes)
   - **DoD :** flamegraphs reproductibles depuis fixtures, doc `docs/profiling.md` complète
   - **Note :** py-spy est sampling (zero-instrumentation), donc l'activation est attache-runtime — pas de feature flag dans le code. OTel spans (B.5) couvrent l'autre angle.
-- [ ] **D.2** — Rapport d'optimisation basé sur métriques réelles
-  - Top 10 bottlenecks mesurés, quick wins, medium refactors, long-term
-  - **DoD :** `docs/perf-report.md` chiffré, prioritisation justifiée
+- [x] **D.2** — Rapport d'optimisation basé sur métriques réelles
+  - `docs/perf-report.md` : top bottlenecks chiffrés (bitmap convert 71%, optimize 16%, gcode 12% ; vector dominé par optimize 69%), quick wins / medium refactors / long-term distingués
+  - Estimation cumulée des quick wins : end-to-end `bitmap_photo` /draft ~640 → ~255 ms (-60%)
+  - **DoD :** `docs/perf-report.md` chiffré, prioritisation justifiée, procédure de re-run documentée
 - [ ] **D.3** — Workspaces sauvegardables + Mode Atelier
   - Workspaces local (localStorage) avec layouts Beginner / Pro
   - Mode Atelier : UI simplifiée en exécution live
@@ -361,6 +362,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | C.8   | this PR    | `usePerfStore` (ring buffer 200 + summary p50/p95) + `usePerfTracker` (time/timeAsync + slow-interaction auto-detect) + `PerfOverlay.vue` activé via `?flag.perf=1`, 13 tests vitest |
 | 2026-05-27 | C.9   | this PR    | i18n FR/EN clés `v2.*`, `useKeyboardShortcuts` + `SHORTCUTS` registry (6 bindings), doc `docs/shortcuts.md`, 6 tests vitest |
 | 2026-05-27 | D.1   | this PR    | `scripts/profile.sh record\|top` (py-spy wrapper avec auto-PID uvicorn), `docs/profiling.md` (workflow d'investigation 4 étapes : baseline → OTel → py-spy → delta) |
+| 2026-05-27 | D.2   | this PR    | `docs/perf-report.md` : 3 bottlenecks bitmap chiffrés (B1-B3), 4 quick wins prioritisés avec gain estimé ~640→~255 ms sur preview draft, sections medium/long-term reliant à #1 audit |
 
 ---
 
