@@ -27,6 +27,7 @@ from pen_plotter.api.manifests import router as manifests_router
 from pen_plotter.api.optimize import router as optimize_router
 from pen_plotter.api.plans import router as plans_router
 from pen_plotter.api.plotter import router as plotter_router
+from pen_plotter.api.policy import router as policy_router
 from pen_plotter.api.preflight import router as preflight_router
 from pen_plotter.api.presets import router as presets_router
 from pen_plotter.api.preview import router as preview_router
@@ -138,6 +139,7 @@ app.include_router(optimize_router)
 app.include_router(generate_router)
 app.include_router(preflight_router)
 app.include_router(plans_router)
+app.include_router(policy_router)
 # Machine-control endpoints are guarded when OMNIPLOT_API_KEY is set.
 app.include_router(plotter_router, dependencies=[Depends(require_api_key)])
 app.include_router(queue_router)
