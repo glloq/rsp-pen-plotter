@@ -1,0 +1,306 @@
+{
+  "algorithms": {
+    "meta": {
+      "domain": "algorithms",
+      "manifest_version": 1,
+      "schema_semver": "0.1.0",
+      "generated_at": "2026-05-27T20:43:59.678460Z",
+      "deprecations": [],
+      "feature_flags": {}
+    },
+    "entries": [
+      {
+        "id": "direct",
+        "version": 1,
+        "deprecated": false,
+        "name": "direct",
+        "description": "Trace region outlines into filled vector paths (potrace).",
+        "kind": "fill",
+        "complexity": "low",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "halftone",
+        "version": 1,
+        "deprecated": false,
+        "name": "halftone",
+        "description": "Fill regions with a regular grid of variable-size dots.",
+        "kind": "fill",
+        "complexity": "low",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "stippling",
+        "version": 1,
+        "deprecated": false,
+        "name": "stippling",
+        "description": "Fill regions with randomly scattered dots.",
+        "kind": "fill",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "crosshatch",
+        "version": 1,
+        "deprecated": false,
+        "name": "crosshatch",
+        "description": "Fill regions with parallel pen strokes (and optional 90\u00b0 cross-hatching).",
+        "kind": "fill",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "contours",
+        "version": 1,
+        "deprecated": false,
+        "name": "contours",
+        "description": "Fill regions with concentric inner outlines \u2014 a topographic-map feel.",
+        "kind": "lines",
+        "complexity": "low",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "edges",
+        "version": 1,
+        "deprecated": false,
+        "name": "edges",
+        "description": "Trace only the region boundary \u2014 a line-art / technical-drawing style.",
+        "kind": "lines",
+        "complexity": "low",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "centerline",
+        "version": 1,
+        "deprecated": false,
+        "name": "centerline",
+        "description": "Trace the medial skeleton as single-stroke polylines \u2014 ideal for schematics and line art. Thick filled regions collapse to a single line at the centre, which is intentional but may surprise on photos.",
+        "kind": "lines",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "spiral",
+        "version": 1,
+        "deprecated": false,
+        "name": "spiral",
+        "description": "Fill regions with a single Archimedean spiral clipped to the mask.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "scanlines",
+        "version": 1,
+        "deprecated": false,
+        "name": "scanlines",
+        "description": "Horizontal scan lines clipped to the mask \u2014 flat or sinusoidal.",
+        "kind": "mono_stroke",
+        "complexity": "low",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "tsp",
+        "version": 1,
+        "deprecated": false,
+        "name": "tsp",
+        "description": "Dots connected in one greedy nearest-neighbour tour \u2014 single-stroke TSP art.",
+        "kind": "mono_stroke",
+        "complexity": "high",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "hilbert",
+        "version": 1,
+        "deprecated": false,
+        "name": "hilbert",
+        "description": "Fill regions with a Hilbert space-filling curve \u2014 one continuous stroke per region.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "gosper",
+        "version": 1,
+        "deprecated": false,
+        "name": "gosper",
+        "description": "Fill regions with a Gosper flowsnake \u2014 organic hexagonal space-filling stroke.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "eulerian_hatch",
+        "version": 1,
+        "deprecated": false,
+        "name": "eulerian_hatch",
+        "description": "Parallel hatches stitched into one continuous zig-zag per island \u2014 drastically fewer pen-lifts than crosshatch.",
+        "kind": "fill",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "concentric_offset",
+        "version": 1,
+        "deprecated": false,
+        "name": "concentric_offset",
+        "description": "Spiral inward via morphological erosion \u2014 near-continuous stroke, very few pen-lifts per region.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "flowfield",
+        "version": 1,
+        "deprecated": false,
+        "name": "flowfield",
+        "description": "Long streamlines following the image gradient or smooth noise \u2014 few pen-lifts, organic feel.",
+        "kind": "fill",
+        "complexity": "high",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "tsp_opt",
+        "version": 1,
+        "deprecated": false,
+        "name": "tsp_opt",
+        "description": "TSP-art with 2-opt or MST optimisation \u2014 shorter total travel than the legacy greedy tour.",
+        "kind": "mono_stroke",
+        "complexity": "high",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "voronoi_stipple",
+        "version": 1,
+        "deprecated": false,
+        "name": "voronoi_stipple",
+        "description": "Centroidal Voronoi stippling \u2014 evenly-spaced dots, optionally weighted by darkness.",
+        "kind": "fill",
+        "complexity": "high",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "squiggle",
+        "version": 1,
+        "deprecated": false,
+        "name": "squiggle",
+        "description": "Wiggly horizontal lines with amplitude / frequency drift \u2014 hand-drawn squiggle look.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      }
+    ]
+  },
+  "system": {
+    "meta": {
+      "domain": "system",
+      "manifest_version": 1,
+      "schema_semver": "0.1.0",
+      "generated_at": "2026-05-27T20:43:59.679399Z",
+      "deprecations": [],
+      "feature_flags": {
+        "ir_pipeline": false,
+        "otel_tracing": false
+      }
+    },
+    "entries": [
+      {
+        "id": "version",
+        "version": 1,
+        "deprecated": false,
+        "label": "Backend version",
+        "value": "0.1.0"
+      }
+    ]
+  }
+}

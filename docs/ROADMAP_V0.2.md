@@ -133,11 +133,14 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Legacy `/algorithms` conservé (mêmes données) — pas de breaking change
   - **DoD :** `/algorithms` et `/manifests/algorithms` retournent le même set d'algos, paramètres exposés via JSON Schema
   - **Note :** bornes/defaults précis par algo + `recommended_presets` + `cost_estimate` arrivent en Phase B avec le resolver (les manifestes versionnent leur enveloppe maintenant ; les payloads s'enrichissent au fil de B).
-- [ ] **A.7** — Validation runtime frontend (zod) + erreurs normalisées + fallback
-  - Schémas zod pour payloads API critiques (algorithms, profiles, jobs, runs)
-  - Indicateur UI quand fallback manifeste actif (snapshot build-time ou cache localStorage)
-  - Mapping erreurs backend → toasts actionnables
-  - **DoD :** parsing strict des manifestes en frontend, UI affiche cause + action en cas de mismatch
+- [x] **A.7** — Validation runtime frontend (zod) + erreurs normalisées + fallback
+  - Schémas zod pour manifestes (`ManifestMeta`, `Deprecation`, `AlgorithmManifestEntry`, `AlgorithmsManifest`, `ApiErrorBody`)
+  - Client `fetchAlgorithmsManifest` avec stratégie live → cache localStorage → snapshot build-time
+  - `ManifestVersionMismatchError` + `assertSupportedVersion` quand `manifest_version` backend > version supportée frontend
+  - Composant `ManifestFallbackBanner.vue` (cause + détail erreur)
+  - Script `gen:manifests` (npm) pour rafraîchir le snapshot
+  - **DoD :** parsing strict des manifestes en frontend, UI affiche cause + action en cas de mismatch (8 tests vitest)
+  - **Note :** intégration dans les stores/modal arrive en Phase B (consommation effective des manifestes par les composants).
 
 ---
 
@@ -323,6 +326,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | A.4   | this PR    | Système manifestes versionnés (`Manifest`/`ManifestEntry`/`Deprecation`), endpoints `/manifests` + `/manifests/{domain}`, erreurs normalisées (`ApiError`), `scripts/generate_openapi.py`, doc `docs/contract_architecture.md`, 7 tests |
 | 2026-05-27 | A.5   | this PR    | Capability Model (`ToolingMode`/`CommandSource`/`RecoveryPolicy`/`MachineCapabilities`/`ToolChangeStrategy`), migration YAML additive (champ `capabilities` optionnel dérivé de `tool_change_method`), doc `profile_format.md` mise à jour, 11 tests |
 | 2026-05-27 | A.6   | this PR    | Manifeste algorithmes (`/manifests/algorithms`) versionné, enveloppe Manifest standard, legacy `/algorithms` conservé, 7 tests |
+| 2026-05-27 | A.7   | this PR    | Frontend zod schemas (`ManifestMeta`/`AlgorithmsManifest`/`ApiErrorBody`), client manifest live→cache→snapshot, `ManifestFallbackBanner.vue`, script `gen:manifests`, 8 tests vitest |
 
 ---
 
