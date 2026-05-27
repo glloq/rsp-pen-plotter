@@ -127,12 +127,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Validation Pydantic stricte (StrEnum + erreurs explicites)
   - Doc `docs/profile_format.md` mise à jour avec mapping legacy → v0.2
   - **DoD :** tous les profils existants chargent sans warning, nouveaux champs validés, tests parsing (11 tests)
-- [ ] **A.6** — Manifeste algorithmes versionné (consommateur du système A.4)
-  - Manifestes par algo : id, version, kind, complexity, params + bornes + defaults, presets recommandés
-  - Suppression progressive des `_ALGORITHMS`/`_KINDS`/`_COMPLEXITY` hardcodés
-  - Registry dynamique (chargement depuis manifestes)
-  - `cost_estimate(inputStats)` exposé
-  - **DoD :** `/algorithms` retourne des manifests, plus aucun default critique dupliqué front/back
+- [x] **A.6** — Manifeste algorithmes versionné (consommateur du système A.4)
+  - Manifestes par algo : id, version, kind, complexity, params (JSON Schema), recommended_presets
+  - `/manifests/algorithms` enveloppé avec version + meta (consommé par le frontend en A.7)
+  - Legacy `/algorithms` conservé (mêmes données) — pas de breaking change
+  - **DoD :** `/algorithms` et `/manifests/algorithms` retournent le même set d'algos, paramètres exposés via JSON Schema
+  - **Note :** bornes/defaults précis par algo + `recommended_presets` + `cost_estimate` arrivent en Phase B avec le resolver (les manifestes versionnent leur enveloppe maintenant ; les payloads s'enrichissent au fil de B).
 - [ ] **A.7** — Validation runtime frontend (zod) + erreurs normalisées + fallback
   - Schémas zod pour payloads API critiques (algorithms, profiles, jobs, runs)
   - Indicateur UI quand fallback manifeste actif (snapshot build-time ou cache localStorage)
@@ -322,6 +322,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | A.3   | this PR    | Geometry IR (`SourceAsset`/`SegmentationArtifact`/`GeometryIR`/`PathPlanIR`/`MachineProgram`/`ExecutionRun`) + `artifact_hash` SHA-256 déterministe + adapter SVG→IR opt-in (`OMNIPLOT_IR_ENABLED`), 11 tests |
 | 2026-05-27 | A.4   | this PR    | Système manifestes versionnés (`Manifest`/`ManifestEntry`/`Deprecation`), endpoints `/manifests` + `/manifests/{domain}`, erreurs normalisées (`ApiError`), `scripts/generate_openapi.py`, doc `docs/contract_architecture.md`, 7 tests |
 | 2026-05-27 | A.5   | this PR    | Capability Model (`ToolingMode`/`CommandSource`/`RecoveryPolicy`/`MachineCapabilities`/`ToolChangeStrategy`), migration YAML additive (champ `capabilities` optionnel dérivé de `tool_change_method`), doc `profile_format.md` mise à jour, 11 tests |
+| 2026-05-27 | A.6   | this PR    | Manifeste algorithmes (`/manifests/algorithms`) versionné, enveloppe Manifest standard, legacy `/algorithms` conservé, 7 tests |
 
 ---
 

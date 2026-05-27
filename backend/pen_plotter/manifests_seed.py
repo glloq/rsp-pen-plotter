@@ -12,6 +12,7 @@ from typing import Any
 
 from pen_plotter import __version__
 from pen_plotter.manifests import Manifest, ManifestEntry, ManifestMeta, register_manifest
+from pen_plotter.manifests.algorithms import register as register_algorithms_manifest
 
 
 class SystemManifestEntry(ManifestEntry):
@@ -41,3 +42,4 @@ def _system_manifest() -> Manifest[Any]:
 def register_default_manifests() -> None:
     """Register the bundled manifest providers."""
     register_manifest("system", _system_manifest)
+    register_algorithms_manifest()
