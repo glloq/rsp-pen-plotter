@@ -187,9 +187,11 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 > Objectif : livrer l'expérience opérateur cible (modes Assisté/Expert, modal V2, vues avancées, queue UX pro).
 > Découpage PR : 1 PR par vue majeure.
 
-- [ ] **C.1** — Architecture 2 modes (Assisté / Expert) + feature flags + mémorisation user
-  - Toggle par tâche dans modal, persisté en localStorage
-  - **DoD :** mode mémorisé entre sessions, switch sans perte de contexte
+- [x] **C.1** — Architecture 2 modes (Assisté / Expert) + feature flags + mémorisation user
+  - Pinia store `useUiModeStore` (mode + `expertDisclosureLevel` 1/2 + flags), persistance localStorage
+  - Composable `useFeatureFlag(name)` (computed) ; URL `?flag.X=1` override persisted
+  - Composant `AssistantModeToggle.vue` (segmented Assisté/Expert avec `aria-pressed`)
+  - **DoD :** 9 tests vitest (défauts, toggle, persistance, restauration, override URL, payload corrompu, niveaux disclosure)
 - [ ] **C.2** — Modal V2 refondu en 6 étapes
   - Étapes : Source Prep → Intent → Algo recommandé → Couleurs/Pens → Couches/Passes → Préflight
   - « Pourquoi ce choix ? » généré dynamique depuis `reasoning` du resolver
@@ -335,6 +337,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | B.4   | this PR    | Pinia `useAlgorithmsStore` adossé au manifeste versionné (A.4/A.7), bascule des 2 call sites legacy, fallback `source`/`fromFallback` exposés, 4 tests vitest |
 | 2026-05-27 | B.5   | this PR    | Spans OTel sub-step sur pipeline bitmap (load/preprocess/fit_within/segment/render_layer/compose_svg), fixture `memory_exporter` mutualisée dans `conftest.py`, 3 tests dédiés |
 | 2026-05-27 | B.6   | this PR    | 5 presets bundled (AxiDraw V3 / NextDraw A2 / iDraw A3 GRBL / Custom CoreXY A3 / CoreXY A3 rack avec host_macro complet), doc `docs/presets.md` avec capability matrix, 12 tests d'intégration |
+| 2026-05-27 | C.1   | this PR    | `useUiModeStore` (assisted/expert + flags + disclosure level) avec persistance localStorage et override URL `?flag.X=1`, composable `useFeatureFlag`, composant `AssistantModeToggle.vue`, 9 tests vitest |
 
 ---
 
