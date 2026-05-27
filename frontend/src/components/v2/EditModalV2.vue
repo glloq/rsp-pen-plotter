@@ -18,6 +18,7 @@
 
 import { computed, ref } from 'vue'
 import type { LayerInfo } from '../../api/client'
+import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
 import type {
   Goal,
@@ -25,6 +26,7 @@ import type {
   PolicyDecision,
   SourceKind,
 } from '../../domain/policy/schemas'
+import { useUiModeStore } from '../../stores/uiMode'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayerInspector from './LayerInspector.vue'
 import PipelineInspector from './PipelineInspector.vue'
@@ -109,6 +111,34 @@ const risks = computed<string[]>(() => {
 function confirm(): void {
   if (decision.value) emit('confirm', decision.value)
 }
+
+// Progressive disclosure (roadmap C.1 + C.2). In expert mode the
+// operator can flip into "advanced details" (level 2) which reveals
+// the reasoning chain, fallback list, PipelineInspector, and the raw
+// default-options JSON. Assisted mode stays at level 1 to keep the
+// step body minimal.
+const uiMode = useUiModeStore()
+const showAdvanced = computed(
+  () => uiMode.isExpert && uiMode.expertDisclosureLevel === 2,
+)
+function toggleAdvanced(): void {
+  uiMode.setExpertDisclosureLevel(uiMode.expertDisclosureLevel === 2 ? 1 : 2)
+}
+
+// Global modal shortcuts (Ctrl/Cmd+Enter = Suivant, Ctrl/Cmd+Backspace
+// = Précédent). The composable ignores keystrokes targeting inputs so
+// the select / radios on each step continue to work normally.
+useKeyboardShortcuts([
+  {
+    id: 'modal.next',
+    handler: () => {
+      if (resolving.value) return
+      if (activeIndex.value < STEPS.length - 1) void next()
+      else if (decision.value) confirm()
+    },
+  },
+  { id: 'modal.previous', handler: previous },
+])
 </script>
 
 <template>
@@ -170,18 +200,38 @@ function confirm(): void {
             Algo recommandé&nbsp;: <strong data-test="recommended-algo">{{ decision.default_algorithm }}</strong>
             (<span>{{ decision.quality_tier }}</span>)
           </p>
-          <details open>
-            <summary>Pourquoi ce choix&nbsp;?</summary>
+          <button
+            v-if="uiMode.isExpert"
+            type="button"
+            class="disclosure-toggle"
+            data-test="disclosure-toggle"
+            :aria-pressed="showAdvanced"
+            @click="toggleAdvanced"
+          >
+            {{ showAdvanced ? 'Masquer les détails avancés' : 'Afficher les détails avancés' }}
+          </button>
+          <template v-if="showAdvanced">
+            <details open>
+              <summary>Pourquoi ce choix&nbsp;?</summary>
+              <ul>
+                <li v-for="r in decision.reasoning" :key="r.rule">
+                  <code>{{ r.rule }}</code> — {{ r.description }}
+                </li>
+              </ul>
+            </details>
+            <p v-if="decision.fallback_chain.length">
+              Fallbacks&nbsp;: {{ decision.fallback_chain.join(' → ') }}
+            </p>
+            <PipelineInspector :decision="decision" :source-kind="sourceKind" />
+          </template>
+          <details v-else>
+            <summary data-test="why-summary-collapsed">Pourquoi ce choix&nbsp;?</summary>
             <ul>
-              <li v-for="r in decision.reasoning" :key="r.rule">
-                <code>{{ r.rule }}</code> — {{ r.description }}
+              <li v-for="r in decision.reasoning.slice(0, 1)" :key="r.rule">
+                {{ r.description }}
               </li>
             </ul>
           </details>
-          <p v-if="decision.fallback_chain.length">
-            Fallbacks&nbsp;: {{ decision.fallback_chain.join(' → ') }}
-          </p>
-          <PipelineInspector :decision="decision" :source-kind="sourceKind" />
         </div>
       </div>
 
@@ -325,5 +375,18 @@ function confirm(): void {
 .layers-empty .muted {
   color: #777;
   font-size: 0.85rem;
+}
+.disclosure-toggle {
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #fafafa;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.disclosure-toggle[aria-pressed='true'] {
+  background: #eef4ff;
+  border-color: #1f6feb;
 }
 </style>

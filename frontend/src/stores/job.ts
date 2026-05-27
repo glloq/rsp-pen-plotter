@@ -4,6 +4,7 @@ import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
 import { validateUploadFile } from '../api/uploadValidation'
 import { useLibraryStore } from './library'
+import { usePerfStore } from './perf'
 import { useToastStore } from './toasts'
 import { useUiStore } from './ui'
 import { useEditState } from '../composables/useEditState'
@@ -521,6 +522,11 @@ export const useJobStore = defineStore('job', () => {
     if (rerenderController) rerenderController.abort()
     const controller = new AbortController()
     rerenderController = controller
+    // Per-rerender timing fuels the ``preview_refresh`` KPI in the
+    // perf overlay (roadmap C.8). Aborted rerenders don't emit a
+    // sample — the operator's intent was to cancel, not to observe.
+    const perf = usePerfStore()
+    const tStart = performance.now()
     try {
       const layersPayload = Object.entries(p.layer_algorithms).map(([layer_id, spec]) => {
         // Multi-pass stack: send ``passes`` so the backend stacks the
@@ -568,6 +574,9 @@ export const useJobStore = defineStore('job', () => {
       }
     } finally {
       if (rerenderController === controller) rerenderController = null
+      if (!controller.signal.aborted) {
+        perf.recordTiming('preview_refresh', performance.now() - tStart, p.id)
+      }
     }
   }
 

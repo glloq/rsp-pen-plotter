@@ -19,11 +19,13 @@ import IntegrityBanner from './components/IntegrityBanner.vue'
 import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
 import PerfOverlay from './components/v2/PerfOverlay.vue'
 import WorkshopMode from './components/v2/WorkshopMode.vue'
+import { api } from './api/client'
 import { useAlgorithmsStore } from './stores/algorithms'
 import { useFeatureFlag } from './composables/useFeatureFlag'
 import { useJobStore } from './stores/job'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 import { useLibraryStore } from './stores/library'
+import { usePerfStore } from './stores/perf'
 import { useQueueStore } from './stores/queue'
 import { useToastStore } from './stores/toasts'
 import { useUiModeStore } from './stores/uiMode'
@@ -36,6 +38,7 @@ const ui = useUiStore()
 const uiMode = useUiModeStore()
 const toasts = useToastStore()
 const algorithms = useAlgorithmsStore()
+const perf = usePerfStore()
 const queue = useQueueStore()
 const dragDepth = ref(0)
 const dropping = ref(false)
@@ -189,11 +192,37 @@ async function onWindowDrop(event: DragEvent): Promise<void> {
   }
 }
 
+// Axios error interceptor — feeds the ``network_error`` KPI in the
+// perf overlay (roadmap B.2 wire). Installed once after Pinia is alive
+// so the lazy ``usePerfStore`` call is safe. Aborted requests don't
+// count as errors (the operator asked).
+let perfInterceptorId: number | null = null
+
 onMounted(async () => {
   window.addEventListener('dragenter', onWindowDragEnter)
   window.addEventListener('dragleave', onWindowDragLeave)
   window.addEventListener('dragover', onWindowDragOver)
   window.addEventListener('drop', onWindowDrop)
+
+  if (perfInterceptorId === null) {
+    perfInterceptorId = api.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        const isCancelled =
+          (error as { name?: string; code?: string })?.name === 'CanceledError' ||
+          (error as { code?: string })?.code === 'ERR_CANCELED'
+        if (!isCancelled) {
+          perf.record({
+            kpi: 'network_error',
+            value: 1,
+            recorded_at: Date.now(),
+            label: (error as { config?: { url?: string } })?.config?.url,
+          })
+        }
+        return Promise.reject(error)
+      },
+    )
+  }
   try {
     await getHealth()
     await Promise.all([store.loadProfiles(), store.loadPresets()])
@@ -219,6 +248,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('dragleave', onWindowDragLeave)
   window.removeEventListener('dragover', onWindowDragOver)
   window.removeEventListener('drop', onWindowDrop)
+  if (perfInterceptorId !== null) {
+    api.interceptors.response.eject(perfInterceptorId)
+    perfInterceptorId = null
+  }
 })
 </script>
 
