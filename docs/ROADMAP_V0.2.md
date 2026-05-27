@@ -274,10 +274,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - `backend/scripts/perf_gate.py` : run fixtures bitmap + vector, p95 vs `REFERENCE_P95`, échec si > `+allowed-regression-pct` (défaut 50%)
   - CI workflow `.github/workflows/ci.yml` étendu avec les deux gates
   - **DoD :** 6 tests unit du contract check (matching/missing/backend-ahead/entry-drift/snapshot-ahead/domain-missing), CI bloque les divergences non versionnées
-- [ ] **D.6** — Executor service boundary multi-machine (V2)
-  - Split process : API Gateway / Render Worker / Executor / Telemetry
-  - SQLite local conservé, adaptateur Postgres optionnel
-  - **DoD :** mode mono-process et multi-process testés
+- [x] **D.6** — Executor service boundary multi-machine (V2)
+  - `pen_plotter.deployment` : 5 rôles (`monolith` / `api` / `render` / `executor` / `telemetry`) avec `RoleCapabilities` (serves_http / runs_queue_worker / owns_hardware_transport / ingests_telemetry)
+  - Lifespan dans `main.py` honore le rôle : monolith garde v0.1 inchangé, autres rôles n'activent que les subsystems pertinents
+  - Doc `docs/deployment.md` : matrice de rôles + 3 topologies exemples (appliance / two-machine workshop / render farm) + limites in-process actuelles
+  - **DoD :** 13 tests (5 capabilities + résolution depuis env var, défaut, casing, fallback sur valeur inconnue), SQLite local conservé (Postgres adapter = future work documenté)
+  - **Note :** la boundary est **in-process** aujourd'hui (le rôle conditionne quels composants se chargent, pas encore IPC). Le vrai split process avec messaging entre rôles est documenté comme follow-up audit #1 phase 3.
 - [ ] **D.7** — Tests e2e parcours complets
   - Fast default flow, override expert flow, erreur + recovery flow
   - KPI mesurables : temps première impression, réduction erreurs config
@@ -371,6 +373,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | D.3   | this PR    | `useWorkspacesStore` (Débutant/Pro built-ins + custom saveAs/rename/remove + persistance localStorage), `WorkshopMode.vue` (overlay plein écran exécution live), 16 tests vitest |
 | 2026-05-27 | D.4   | this PR    | `domain/slo/` (7 budgets par défaut + `evaluate_budgets` avec severity healthy/warning/breach) + endpoints `/slo/budgets` et `/slo/evaluate` + structured log `slo_breach`, 12 tests |
 | 2026-05-27 | D.5   | this PR    | `scripts/check_contracts.py` + `scripts/perf_gate.py` + workflow CI étendu, 6 tests unit du contract check |
+| 2026-05-27 | D.6   | this PR    | `pen_plotter.deployment` (5 process roles avec capabilities), lifespan conditionnel sur le rôle, `docs/deployment.md` (matrice + 3 topologies), 13 tests |
 
 ---
 

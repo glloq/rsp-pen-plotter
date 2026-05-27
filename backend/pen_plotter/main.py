@@ -45,6 +45,7 @@ from pen_plotter.application.file_library import integrity_scan
 from pen_plotter.auth import require_api_key
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
+from pen_plotter.deployment import capabilities_for, resolve_role
 from pen_plotter.errors import install_error_handler
 from pen_plotter.manifests_seed import register_default_manifests
 from pen_plotter.observability import (
@@ -88,16 +89,31 @@ def _log_library_integrity() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """Initialize converters and the database, then run the print-queue worker."""
+    """Initialize subsystems according to the resolved process role (D.6).
+
+    The default ``monolith`` role keeps the v0.1 behaviour: converters
+    + DB + queue worker + hardware transport in one process. Other
+    roles skip the subsystems they don't own (an API process leaves
+    queue/hardware to a dedicated worker; a render-only worker
+    doesn't try to serve HTTP). The role is resolved from
+    ``OMNIPLOT_ROLE`` — see :mod:`pen_plotter.deployment`.
+    """
+    role = resolve_role()
+    caps = capabilities_for(role)
+    _log.info("process_role", extra={"role": role.value})
+
     register_default_converters(registry)
     init_db()
-    _log_library_integrity()
-    recover_interrupted()
-    print_queue.start()
+    if caps.serves_http:
+        _log_library_integrity()
+    if caps.runs_queue_worker:
+        recover_interrupted()
+        print_queue.start()
     try:
         yield
     finally:
-        await print_queue.stop()
+        if caps.runs_queue_worker:
+            await print_queue.stop()
 
 
 app = FastAPI(title="OmniPlot", version=__version__, lifespan=lifespan)
