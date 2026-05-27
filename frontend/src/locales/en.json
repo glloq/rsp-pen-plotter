@@ -33,7 +33,8 @@
   },
   "header": {
     "settings": "Settings",
-    "plotter": "Plotter"
+    "plotter": "Plotter",
+    "workshop": "Workshop"
   },
   "machine": {
     "disconnected": "Offline",

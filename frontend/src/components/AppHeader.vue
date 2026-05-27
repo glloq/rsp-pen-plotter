@@ -2,13 +2,20 @@
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { usePlotterStore } from '../stores/plotter'
+import { useUiModeStore } from '../stores/uiMode'
 import { useUiStore } from '../stores/ui'
+import AssistantModeToggle from './AssistantModeToggle.vue'
 import MachineStatusPill from './MachineStatusPill.vue'
 
 const { t } = useI18n()
 const ui = useUiStore()
+const uiMode = useUiModeStore()
 const plotter = usePlotterStore()
 const { status: plotterStatus } = storeToRefs(plotter)
+
+function toggleWorkshop(): void {
+  uiMode.setFlag('workshopMode', !uiMode.isFlagEnabled('workshopMode'))
+}
 </script>
 
 <template>
@@ -20,6 +27,32 @@ const { status: plotterStatus } = storeToRefs(plotter)
     </div>
 
     <div class="ml-auto flex items-center gap-3">
+      <AssistantModeToggle data-test="header-assistant-mode-toggle" />
+
+      <button
+        type="button"
+        class="flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700"
+        :title="t('header.workshop')"
+        :aria-label="t('header.workshop')"
+        data-test="header-workshop-toggle"
+        @click="toggleWorkshop"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="h-4 w-4"
+        >
+          <path d="M3 7h4l2-3h6l2 3h4v13H3z" />
+          <circle cx="12" cy="13" r="3" />
+        </svg>
+        <span class="hidden sm:inline">{{ t('header.workshop') }}</span>
+      </button>
+
       <button
         type="button"
         class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition"

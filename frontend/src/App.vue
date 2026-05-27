@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getHealth, systemCheckUpdate } from './api/client'
 import AppHeader from './components/AppHeader.vue'
@@ -7,6 +7,7 @@ import AppFooter from './components/AppFooter.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import EditModal from './components/EditModal.vue'
+import EditModalV2 from './components/v2/EditModalV2.vue'
 import FilesPane from './components/FilesPane.vue'
 import PlotterDrawer from './components/PlotterDrawer.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
@@ -14,18 +15,81 @@ import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
 import GenerateProgressModal from './components/GenerateProgressModal.vue'
 import IntegrityBanner from './components/IntegrityBanner.vue'
+import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
+import PerfOverlay from './components/v2/PerfOverlay.vue'
+import WorkshopMode from './components/v2/WorkshopMode.vue'
+import { useAlgorithmsStore } from './stores/algorithms'
+import { useFeatureFlag } from './composables/useFeatureFlag'
 import { useJobStore } from './stores/job'
+import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 import { useLibraryStore } from './stores/library'
+import { useQueueStore } from './stores/queue'
 import { useToastStore } from './stores/toasts'
+import { useUiModeStore } from './stores/uiMode'
 import { useUiStore } from './stores/ui'
 
 const { t, locale } = useI18n()
 const store = useJobStore()
 const library = useLibraryStore()
 const ui = useUiStore()
+const uiMode = useUiModeStore()
 const toasts = useToastStore()
+const algorithms = useAlgorithmsStore()
+const queue = useQueueStore()
 const dragDepth = ref(0)
 const dropping = ref(false)
+
+// Feature-flagged v2 surfaces. Each is opt-in: ?flag.modalV2=1 enables
+// the six-step modal alongside v1, ?flag.workshopMode=1 (or the header
+// button below) opens the full-screen run cockpit. The perf overlay
+// mounts inconditionally — it auto-hides when its own flag is off.
+const modalV2Enabled = useFeatureFlag('modalV2')
+const workshopEnabled = useFeatureFlag('workshopMode')
+const activeRun = computed(() => queue.active[0] ?? null)
+
+function onEditV2Cancel(): void {
+  ui.closeEditModal()
+}
+function onEditV2Confirm(): void {
+  // Wiring the resolver decision back into the placement draft lands
+  // with the v2 modal cut-over — until then, confirm just closes so the
+  // operator isn't trapped in the flow.
+  ui.closeEditModal()
+}
+
+function closeWorkshop(): void {
+  uiMode.setFlag('workshopMode', false)
+}
+async function workshopPause(): Promise<void> {
+  const run = activeRun.value
+  if (run) await queue.act(run.id, 'pause')
+}
+async function workshopResume(): Promise<void> {
+  const run = activeRun.value
+  if (run) await queue.act(run.id, 'resume')
+}
+
+useKeyboardShortcuts([
+  { id: 'mode.toggle', handler: () => uiMode.toggleMode() },
+  {
+    id: 'perf.toggle',
+    handler: () => uiMode.setFlag('perf', !uiMode.isFlagEnabled('perf')),
+  },
+  {
+    id: 'queue.pause',
+    handler: () => {
+      const run = activeRun.value
+      if (run && run.state === 'running') void queue.act(run.id, 'pause')
+    },
+  },
+  {
+    id: 'queue.resume',
+    handler: () => {
+      const run = activeRun.value
+      if (run && run.state === 'paused') void queue.act(run.id, 'resume')
+    },
+  },
+])
 
 async function checkForUpdatesOnStartup(): Promise<void> {
   // Honour the opt-out toggle in Settings › System.
@@ -115,6 +179,10 @@ onMounted(async () => {
   // alert. Refreshed only on boot — the backend boot scan is the
   // authoritative trigger.
   void library.refreshIntegrity()
+  // Algorithm manifest powers the v2 modal's resolver UI and the
+  // fallback banner. Failure populates `source` with 'snapshot' so the
+  // banner becomes visible — no toast needed.
+  void algorithms.refresh()
 })
 
 onBeforeUnmount(() => {
@@ -128,6 +196,11 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex h-screen flex-col bg-slate-900 text-slate-100">
     <AppHeader />
+    <ManifestFallbackBanner
+      v-if="algorithms.source"
+      :source="algorithms.source"
+      :error="algorithms.lastError ?? undefined"
+    />
     <IntegrityBanner />
 
     <main
@@ -140,11 +213,28 @@ onBeforeUnmount(() => {
     <AppFooter />
     <SettingsDrawer />
     <PlotterDrawer />
-    <EditModal />
+    <!-- Edit modal: v2 is mounted alongside v1 behind ?flag.modalV2=1
+         so it can be QA'd in production builds without affecting the
+         default operator flow. Cut-over happens once the v2 confirm
+         path is wired into the placement draft (follow-up). -->
+    <EditModal v-if="!modalV2Enabled" />
+    <EditModalV2
+      v-else-if="ui.editModalOpen"
+      @cancel="onEditV2Cancel"
+      @confirm="onEditV2Confirm"
+    />
     <ConfirmDialog />
     <UpdateProgressModal />
     <GenerateProgressModal />
     <Toasts />
+    <PerfOverlay />
+    <WorkshopMode
+      v-if="workshopEnabled"
+      :run="activeRun"
+      @exit="closeWorkshop"
+      @pause="workshopPause"
+      @resume="workshopResume"
+    />
 
     <div
       v-if="dropping"
