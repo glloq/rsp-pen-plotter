@@ -105,12 +105,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Fixtures de référence (1-2 par `source_kind`), p50/p95/p99 par phase
   - **DoD :** baseline documentée dans `docs/perf-baseline.md`, dashboard Grafana minimal exporté
   - **Note :** dashboard Grafana JSON reporté au moment où une stack OTel sera réellement déployée (D.4) ; le script `scripts/perf_baseline.py` produit le tableau mesurable en attendant.
-- [ ] **A.3** — Geometry IR + artifact hashing
+- [x] **A.3** — Geometry IR + artifact hashing
   - `backend/domain/ir/{geometry.py, pathplan.py, artifacts.py}`
   - Types : `SourceAsset`, `SegmentationArtifact`, `GeometryIR`, `PathPlanIR`, `MachineProgram`, `ExecutionRun`
   - Hash déterministe par artefact (contenu + version IR)
   - Adapter de compat depuis pipeline SVG-string actuel (pas de big-bang)
-  - **DoD :** types + tests round-trip, ancien pipeline passe encore, nouveau pipeline opt-in via feature flag
+  - **DoD :** types + tests round-trip, ancien pipeline passe encore, nouveau pipeline opt-in via feature flag (`OMNIPLOT_IR_ENABLED`)
 - [ ] **A.4** — Système de manifestes versionnés + génération types frontend
   - Modèle générique `PluginManifest` (algorithms, profiles, presets, plans…)
   - Endpoints `/manifests/{domain}` versionnés (`manifest_version: int`)
@@ -318,6 +318,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | —     | initial    | Création de la roadmap, consolidation 7 audits |
 | 2026-05-27 | A.1   | this PR    | Logging JSON + correlation IDs + `RequestContextMiddleware`; 9 tests; doc `docs/observability.md` |
 | 2026-05-27 | A.2   | this PR    | OTel tracing opt-in (`OMNIPLOT_OTEL_ENABLED`), spans sur `convert_file`/`optimize_svg`/`generate_gcode`, baseline mesurée dans `docs/perf-baseline.md`, 5 tests |
+| 2026-05-27 | A.3   | this PR    | Geometry IR (`SourceAsset`/`SegmentationArtifact`/`GeometryIR`/`PathPlanIR`/`MachineProgram`/`ExecutionRun`) + `artifact_hash` SHA-256 déterministe + adapter SVG→IR opt-in (`OMNIPLOT_IR_ENABLED`), 11 tests |
 
 ---
 
