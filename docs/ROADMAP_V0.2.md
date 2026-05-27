@@ -229,10 +229,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Composable frontend `useProgressiveStream(eventSourceFactory?)` avec `start`/`lastProgress`/`lastPartial`/`done`/`error`/`active`/`percent` reactives + `open(url)`/`close()` ; `onUnmounted` ferme automatiquement
   - **DoD :** 3 tests backend (kinds émis, payload shape, validation `layer_count`) + 6 tests frontend (start, percent, partial, done à 100% et close, error, re-open ferme l'ancien)
   - **Note :** intégration avec le `convert_file` pipeline pour streamer les vraies couches au lieu d'un emitter synthétique = follow-up. Le contrat SSE est stable, le frontend ne devra pas changer.
-- [ ] **C.8** — Frontend perf overlay + KPI tracking
-  - Overlay activable `?perf=1` + feature flag serveur
-  - KPI : time-to-first-preview, preview-refresh latency, interactions lentes (>100ms), frame drops, erreurs réseau
-  - **DoD :** overlay accessible en prod sous flag, KPI remontés en métriques
+- [x] **C.8** — Frontend perf overlay + KPI tracking
+  - Pinia store `usePerfStore` : ring buffer 200 samples, `recordTiming(kpi, ms, label?)`, `summary(kpi)` retourne `{count, p50, p95, last}`, compteur `errors`
+  - Composable `usePerfTracker` : `time(kpi, label, fn)` sync, `timeAsync(kpi, label, fn)` async, `recordError(label?)`, signal automatique de `slow_interaction` au-delà de 100 ms
+  - Composant `PerfOverlay.vue` activé via flag `perf` (URL `?flag.perf=1` ou persisté C.1), table KPI live + clear button
+  - **DoD :** 13 tests vitest (store : recordTiming/summary/errors/clear/ring/empty + tracker : sync/async/throw/error + overlay : hidden/visible/rows/clear)
+  - **Note :** report serveur des samples + budgets SLO arrivent en D.4 (alerting). Pour l'instant le store reste in-memory, suffisant pour le debug terrain.
 - [ ] **C.9** — i18n FR/EN + microcopy standardisé + raccourcis clavier
   - Standardisation textes (action / conséquence / recommandation)
   - Toasts non intrusifs + persistants si critique
@@ -353,6 +355,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | C.5   | this PR    | `CompareView.vue` (A/B side-by-side + métriques diff avec winner highlight + overlay toggles `penup_heatmap`/`path_density`/`bounds`/`curvature`), 7 tests vitest |
 | 2026-05-27 | C.6   | this PR    | `RunTimeline.vue` (phases + progression + badges terminaux) et `RunActionsPanel.vue` (Pause/Resume/Cancel avec confirm sécurisé + hint d'action), 14 tests vitest |
 | 2026-05-27 | C.7   | this PR    | Endpoint SSE `/preview/stream` avec schéma `PreviewProgressEvent` stable + emitter synthétique, composable `useProgressiveStream`, 3+6 tests |
+| 2026-05-27 | C.8   | this PR    | `usePerfStore` (ring buffer 200 + summary p50/p95) + `usePerfTracker` (time/timeAsync + slow-interaction auto-detect) + `PerfOverlay.vue` activé via `?flag.perf=1`, 13 tests vitest |
 
 ---
 
