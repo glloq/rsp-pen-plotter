@@ -248,9 +248,11 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 
 > Objectif : optimiser sur données réelles, étendre l'architecture vers multi-machine et préparer la marketplace plugins.
 
-- [ ] **D.1** — Profiling activable + flamegraphs (py-spy)
-  - Feature flag profiling, profils ciblés (tsp, voronoi, flowfield, segmentation, preview HQ)
-  - **DoD :** flamegraphs reproductibles depuis fixtures, doc `docs/profiling.md`
+- [x] **D.1** — Profiling activable + flamegraphs (py-spy)
+  - Script wrapper `backend/scripts/profile.sh record|top` (auto-PID uvicorn ou `OMNIPLOT_PID=<pid>`)
+  - Documentation `docs/profiling.md` (table py-spy/OTel/baseline + workflow d'investigation perf en 4 étapes)
+  - **DoD :** flamegraphs reproductibles depuis fixtures, doc `docs/profiling.md` complète
+  - **Note :** py-spy est sampling (zero-instrumentation), donc l'activation est attache-runtime — pas de feature flag dans le code. OTel spans (B.5) couvrent l'autre angle.
 - [ ] **D.2** — Rapport d'optimisation basé sur métriques réelles
   - Top 10 bottlenecks mesurés, quick wins, medium refactors, long-term
   - **DoD :** `docs/perf-report.md` chiffré, prioritisation justifiée
@@ -358,6 +360,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | C.7   | this PR    | Endpoint SSE `/preview/stream` avec schéma `PreviewProgressEvent` stable + emitter synthétique, composable `useProgressiveStream`, 3+6 tests |
 | 2026-05-27 | C.8   | this PR    | `usePerfStore` (ring buffer 200 + summary p50/p95) + `usePerfTracker` (time/timeAsync + slow-interaction auto-detect) + `PerfOverlay.vue` activé via `?flag.perf=1`, 13 tests vitest |
 | 2026-05-27 | C.9   | this PR    | i18n FR/EN clés `v2.*`, `useKeyboardShortcuts` + `SHORTCUTS` registry (6 bindings), doc `docs/shortcuts.md`, 6 tests vitest |
+| 2026-05-27 | D.1   | this PR    | `scripts/profile.sh record\|top` (py-spy wrapper avec auto-PID uvicorn), `docs/profiling.md` (workflow d'investigation 4 étapes : baseline → OTel → py-spy → delta) |
 
 ---
 
