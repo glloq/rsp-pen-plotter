@@ -57,6 +57,17 @@ const overlayDefs: { key: OverlayKey; label: string }[] = [
 
 const enabledOverlays = computed(() => new Set<OverlayKey>(props.overlays ?? []))
 
+// Parse the ``viewBox`` attribute of a sanitized SVG string. Returns
+// ``null`` when the attribute is missing or malformed; the overlay
+// renderer falls back to "no overlay" rather than guessing dimensions.
+function parseViewBox(svg: string): { x: number; y: number; w: number; h: number } | null {
+  const m = svg.match(/viewBox\s*=\s*["']([^"']+)["']/)
+  if (!m) return null
+  const parts = m[1]!.trim().split(/[\s,]+/).map(Number)
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null
+  return { x: parts[0]!, y: parts[1]!, w: parts[2]!, h: parts[3]! }
+}
+
 function fmtMm(v?: number): string {
   if (v === undefined) return '—'
   if (v < 100) return `${v.toFixed(1)} mm`
@@ -158,8 +169,40 @@ const diff = computed<DiffRow[]>(() => [
           <!-- eslint-disable vue/no-v-html -->
           <div class="preview" v-html="cand.svg" />
           <!-- eslint-enable vue/no-v-html -->
+
+          <!-- Bounds overlay (G.1 wire). The other three overlays
+               (penup_heatmap / path_density / curvature) need
+               geometry the resolver doesn't expose yet — they remain
+               UX-only chips. Bounds is computable from the SVG
+               viewBox alone so it ships now. -->
+          <svg
+            v-if="enabledOverlays.has('bounds') && parseViewBox(cand.svg)"
+            class="overlay overlay-bounds"
+            :viewBox="`${parseViewBox(cand.svg)!.x} ${parseViewBox(cand.svg)!.y} ${parseViewBox(cand.svg)!.w} ${parseViewBox(cand.svg)!.h}`"
+            preserveAspectRatio="xMidYMid meet"
+            :data-test="`overlay-bounds-${cand.id}`"
+          >
+            <rect
+              :x="parseViewBox(cand.svg)!.x"
+              :y="parseViewBox(cand.svg)!.y"
+              :width="parseViewBox(cand.svg)!.w"
+              :height="parseViewBox(cand.svg)!.h"
+              fill="none"
+              stroke="#1f6feb"
+              stroke-width="2"
+              stroke-dasharray="6 4"
+              vector-effect="non-scaling-stroke"
+            />
+          </svg>
+
           <ul v-if="enabledOverlays.size" class="overlay-stub">
-            <li v-for="k in overlays" :key="k">{{ k }}</li>
+            <li
+              v-for="k in overlays"
+              :key="k"
+              :class="{ wired: k === 'bounds' }"
+            >
+              {{ k }}{{ k === 'bounds' ? '' : ' (stub)' }}
+            </li>
           </ul>
         </div>
         <button
@@ -198,6 +241,19 @@ const diff = computed<DiffRow[]>(() => [
   padding: 0.75rem 1rem;
   background: white;
   font-family: system-ui, sans-serif;
+}
+.preview-frame {
+  position: relative;
+}
+.preview-frame .overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.overlay-stub li.wired {
+  color: #1f6feb;
 }
 header {
   display: flex;

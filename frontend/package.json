@@ -14,7 +14,9 @@
     "format:check": "prettier --check \"src/**/*.{ts,vue,json,css}\"",
     "gen:openapi": "cd ../backend && .venv/bin/python -c \"import json; from pen_plotter.main import app; open('openapi.json','w').write(json.dumps(app.openapi(), indent=2))\"",
     "gen:types": "openapi-typescript ../backend/openapi.json -o src/domain/api-types.ts",
-    "gen:manifests": "node scripts/gen-manifest-snapshot.mjs"
+    "gen:manifests": "node scripts/gen-manifest-snapshot.mjs",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "@types/dompurify": "^3.0.5",

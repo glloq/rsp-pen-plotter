@@ -19,6 +19,10 @@ export interface Toast {
   ttl?: number
   /** Optional inline action button (e.g. "Cancel" for in-progress renders). */
   action?: ToastAction
+  /** When true the toast stays until explicitly dismissed regardless of
+   *  ttl. Reserved for critical events (operator-blocking errors,
+   *  hardware loss) that must not vanish on a 6 s timer. */
+  persistent?: boolean
 }
 
 let nextId = 1
@@ -41,13 +45,19 @@ export const useToastStore = defineStore('toasts', () => {
     message: string,
     ttl: number = 6000,
     action?: ToastAction,
+    options: { persistent?: boolean } = {},
   ): number {
     const id = nextId++
-    toasts.value = [...toasts.value, { id, kind, message, ttl, action }]
-    if (ttl > 0) {
+    const persistent = options.persistent === true
+    const effectiveTtl = persistent ? 0 : ttl
+    toasts.value = [
+      ...toasts.value,
+      { id, kind, message, ttl: effectiveTtl, action, persistent },
+    ]
+    if (effectiveTtl > 0) {
       timers.set(
         id,
-        setTimeout(() => dismiss(id), ttl),
+        setTimeout(() => dismiss(id), effectiveTtl),
       )
     }
     return id
@@ -57,6 +67,11 @@ export const useToastStore = defineStore('toasts', () => {
   const success = (message: string, ttl?: number) => show('success', message, ttl)
   const warning = (message: string, ttl?: number) => show('warning', message, ttl)
   const error = (message: string, ttl?: number) => show('error', message, ttl)
+  /** Critical-severity error toast that never auto-dismisses — used
+   *  for operator-blocking conditions (hardware loss, irrecoverable
+   *  errors) that must not vanish on a 6 s timer. */
+  const critical = (message: string, action?: ToastAction) =>
+    show('error', message, 0, action, { persistent: true })
 
   // Persistent toast for in-progress operations. Returns an id; pass it to
   // ``update()`` or ``dismiss()`` when the operation completes. ttl=0 so it
@@ -103,6 +118,7 @@ export const useToastStore = defineStore('toasts', () => {
     success,
     warning,
     error,
+    critical,
     progress,
     update,
   }
