@@ -120,13 +120,13 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Doc `docs/contract_architecture.md`
   - **DoD :** types TS générés en CI, snapshot embarqué, tests de contrat
   - **Note :** snapshot frontend + wiring CI de `openapi-typescript` arriveront en A.7 (consommation). Backend complet ici.
-- [ ] **A.5** — Capability Model dans profil machine + migration YAML additive
+- [x] **A.5** — Capability Model dans profil machine + migration YAML additive
   - Enums : `ToolingMode`, `CommandSource`, `RecoveryPolicy`
-  - Schéma `capabilities` + `tool_change_strategy` séparés de `tool_change_method`
-  - Migration additive : anciens profils restent valides, mapping vers nouveau modèle
-  - Validation Pydantic stricte avec erreurs explicites
-  - Doc `docs/profile_format.md` mise à jour
-  - **DoD :** tous les profils existants chargent sans warning, nouveaux champs validés, tests parsing
+  - `MachineCapabilities` + `ToolChangeStrategy` (avec `ManualSwapPrompt` / `HostMacroStep`)
+  - Migration additive : `capabilities` optionnel, dérivé automatiquement depuis `tool_change_method` quand absent
+  - Validation Pydantic stricte (StrEnum + erreurs explicites)
+  - Doc `docs/profile_format.md` mise à jour avec mapping legacy → v0.2
+  - **DoD :** tous les profils existants chargent sans warning, nouveaux champs validés, tests parsing (11 tests)
 - [ ] **A.6** — Manifeste algorithmes versionné (consommateur du système A.4)
   - Manifestes par algo : id, version, kind, complexity, params + bornes + defaults, presets recommandés
   - Suppression progressive des `_ALGORITHMS`/`_KINDS`/`_COMPLEXITY` hardcodés
@@ -321,6 +321,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | A.2   | this PR    | OTel tracing opt-in (`OMNIPLOT_OTEL_ENABLED`), spans sur `convert_file`/`optimize_svg`/`generate_gcode`, baseline mesurée dans `docs/perf-baseline.md`, 5 tests |
 | 2026-05-27 | A.3   | this PR    | Geometry IR (`SourceAsset`/`SegmentationArtifact`/`GeometryIR`/`PathPlanIR`/`MachineProgram`/`ExecutionRun`) + `artifact_hash` SHA-256 déterministe + adapter SVG→IR opt-in (`OMNIPLOT_IR_ENABLED`), 11 tests |
 | 2026-05-27 | A.4   | this PR    | Système manifestes versionnés (`Manifest`/`ManifestEntry`/`Deprecation`), endpoints `/manifests` + `/manifests/{domain}`, erreurs normalisées (`ApiError`), `scripts/generate_openapi.py`, doc `docs/contract_architecture.md`, 7 tests |
+| 2026-05-27 | A.5   | this PR    | Capability Model (`ToolingMode`/`CommandSource`/`RecoveryPolicy`/`MachineCapabilities`/`ToolChangeStrategy`), migration YAML additive (champ `capabilities` optionnel dérivé de `tool_change_method`), doc `profile_format.md` mise à jour, 11 tests |
 
 ---
 
