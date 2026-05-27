@@ -205,11 +205,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Pure / props-driven : intégrables dans le modal V2 ou comme panneaux indépendants
   - **DoD :** 7 tests vitest (ordre par draw_order, swap count avec policy, totalisation longueur, decision null, chaîne, contraintes, fallbacks)
   - **Note :** consommation des spans OTel (timing par couche) arrive en C.8 (perf overlay) ; pour l'instant on consomme `LayerInfo.total_length_mm` du v0.1 store, suffisant pour la valeur opérateur immédiate.
-- [ ] **C.4** — Wizard capability + vue magazine améliorée
-  - Wizard configuration "capacité plotter"
-  - UI conditionnelle selon mode tool-change
-  - Vue magazine : slots, calibration, install state, simulation
-  - **DoD :** un opérateur novice configure un nouveau plotter sans aide
+- [x] **C.4** — Wizard capability + vue magazine améliorée
+  - zod schemas `domain/capability/` mirroring backend `MachineCapabilities`
+  - `CapabilityWizard.vue` 3 étapes (mode → knobs spécifiques au mode → recovery + magazine), validation `canAdvance` (host_macro requires ≥1 ligne non vide)
+  - UI conditionnelle : prompt knobs visible **uniquement** en mode manual, macro editor visible **uniquement** en host_macro, single_pen affiche un placeholder explicite
+  - `MagazineView.vue` : grille de slots avec couleur + install toggle + calibration `(x,y)` ou « non calibré », `simulationSlot` highlight (préparation pour replay run)
+  - **DoD :** 12 tests vitest (wizard branches + magazine padding/installer/calibration/simulation)
 - [ ] **C.5** — Compare Mode A/B + overlays debug
   - A/B visuel 2 presets/algos avec métriques (temps, travel, swaps)
   - Overlays : pen-up heatmap, path density, bounds/margins warnings, curvature stress
@@ -343,6 +344,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | C.1   | this PR    | `useUiModeStore` (assisted/expert + flags + disclosure level) avec persistance localStorage et override URL `?flag.X=1`, composable `useFeatureFlag`, composant `AssistantModeToggle.vue`, 9 tests vitest |
 | 2026-05-27 | C.2   | this PR    | Endpoint backend `/policy/resolve` (wrap resolver B.1), zod schemas frontend, `EditModalV2.vue` 6 étapes (Source/Intent/Algo/Couleurs/Couches/Préflight) avec "Pourquoi ce choix ?" depuis `reasoning[]` et risques depuis `hard_constraints_applied[]`, 3+7 tests |
 | 2026-05-27 | C.3   | this PR    | `LayerInspector.vue` (ordre + swap count + longueur agrégée) et `PipelineInspector.vue` (Source→Segmentation→Algo→Fallbacks→Contraintes depuis `PolicyDecision`), 7 tests vitest |
+| 2026-05-27 | C.4   | this PR    | zod schemas `MachineCapabilities`, `CapabilityWizard.vue` (3 étapes, UI conditionnelle par mode), `MagazineView.vue` (slots + calibration + simulation highlight), 12 tests vitest |
 
 ---
 
