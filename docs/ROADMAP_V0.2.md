@@ -153,11 +153,11 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - `pen_plotter.domain.policy` : types (`SourceKind`/`Goal`/`PaletteMode`/`QualityTier`/`SegmentationMethod`), rules (matrice A/B/C/D/E), constraints (mégapixels / mono-pen / palette ≤2), resolver pur
   - `RuleHit` + `ConstraintHit` traçables pour le « Pourquoi ce choix ? » du modal V2
   - **DoD :** 41 tests (toutes branches matrice + tous hard constraints + parametrized smoke sur l'ensemble du produit cartésien `SourceKind × Goal`)
-- [ ] **B.2** — `ToolChangeOrchestrator` + 4 stratégies
-  - Stratégies : `FirmwareStrategy`, `HostMacroStrategy` (YAML), `ManualStrategy`, `SinglePenStrategy`
-  - Capability resolver dérive le plan opératoire depuis profil + job
-  - Sélection auto via Capability Model
-  - **DoD :** tests E2E sur les 4 modes, génération prompts manuels, fallback de mode
+- [x] **B.2** — `ToolChangeOrchestrator` + 4 stratégies
+  - `pen_plotter.domain.toolchange` : `ToolChangeOrchestrator` + `SwapPlan` + `SwapContext` + `PauseKind`
+  - 4 stratégies (`FirmwareStrategy` / `HostMacroStrategy` / `ManualStrategy` / `SinglePenStrategy`) ; sélection automatique via Capability Model (A.5)
+  - Substitution `{slot}`/`{color}`/`{label}`/`{layer}` dans prompts manuels et macros host (`HostMacroStep`)
+  - **DoD :** 16 tests E2E (4 modes + dispatch + dérivation legacy + prompt manuel + macro multi-lignes + recovery policy + registry complet)
 - [ ] **B.3** — Pipeline pause/resume robuste + RecoveryPolicy
   - Politique appliquée : profil par défaut, override par job
   - Reprise après pause/changement avec checkpoint
@@ -326,6 +326,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | A.6   | this PR    | Manifeste algorithmes (`/manifests/algorithms`) versionné, enveloppe Manifest standard, legacy `/algorithms` conservé, 7 tests |
 | 2026-05-27 | A.7   | this PR    | Frontend zod schemas (`ManifestMeta`/`AlgorithmsManifest`/`ApiErrorBody`), client manifest live→cache→snapshot, `ManifestFallbackBanner.vue`, script `gen:manifests`, 8 tests vitest |
 | 2026-05-27 | B.1   | this PR    | `AlgorithmPolicyResolver` (`domain/policy/`): matrice complète audit #4 + hard constraints (mégapixels/mono-pen/palette≤2), 41 tests |
+| 2026-05-27 | B.2   | this PR    | `ToolChangeOrchestrator` + 4 stratégies (`FirmwareStrategy`/`HostMacroStrategy`/`ManualStrategy`/`SinglePenStrategy`) avec `SwapPlan`/`SwapContext`/`PauseKind` et substitution placeholders, 16 tests |
 
 ---
 
