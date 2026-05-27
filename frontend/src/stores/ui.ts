@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
 export type CanvasTab = 'sheet' | 'simulator' | 'gcode'
-export type SettingsTab = 'system' | 'history' | 'audit'
+export type SettingsTab = 'system' | 'history' | 'audit' | 'slo' | 'manifests'
 export type PlotterTab = 'connection' | 'profile' | 'colors' | 'macros' | 'queue'
 
 export interface PreviewSheet {

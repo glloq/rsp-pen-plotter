@@ -116,6 +116,7 @@ def convert_file(
     filename: str | None,
     mime: str,
     options: dict[str, Any] | None = None,
+    progress_callback: Any = None,
 ) -> ConvertedFile:
     """Run the appropriate converter and produce a sanitized SVG + layer list.
 
@@ -145,7 +146,9 @@ def convert_file(
             if isinstance(converter, BitmapConverter):
                 with traced_span("pipeline.segment_and_render"):
                     result, bitmap_segmentation = converter.segment_and_render(
-                        data, options=parsed_options
+                        data,
+                        options=parsed_options,
+                        progress_callback=progress_callback,
                     )
                 bitmap_options = BitmapOptions.model_validate(parsed_options)
             else:

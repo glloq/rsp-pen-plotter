@@ -509,7 +509,32 @@
     "close": "Close",
     "history": "History",
     "audit": "Audit",
-    "system": "System"
+    "system": "System",
+    "slo": "SLO",
+    "manifests": "Manifests"
+  },
+  "slo": {
+    "title": "SLO dashboard",
+    "intro": "Evaluates {count} in-memory perf sample(s) against the backend's budget table.",
+    "evaluateNow": "Evaluate now",
+    "loadFailed": "Failed to load SLO budgets.",
+    "evaluateFailed": "Evaluation failed.",
+    "noSamples": "No perf samples collected yet — use the app a bit, then re-evaluate.",
+    "overall": "Overall",
+    "col": {
+      "metric": "Metric",
+      "p95Budget": "p95 budget",
+      "observed": "Observed",
+      "severity": "Severity"
+    }
+  },
+  "manifests": {
+    "title": "Backend manifests",
+    "intro": "Versioned contracts the backend currently exposes. The UI parses them with zod and falls back to a bundled snapshot if the backend is unreachable.",
+    "refresh": "Refresh",
+    "loadFailed": "Failed to load manifests.",
+    "generatedAt": "Generated at",
+    "entriesCount": "{count} entries"
   },
   "upload": {
     "profile": "Machine profile",

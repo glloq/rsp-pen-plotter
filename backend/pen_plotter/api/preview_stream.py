@@ -7,12 +7,12 @@ modal will consume — chunked progress events with a stable schema,
 so the frontend can render a progress bar, partial previews, and
 metric updates without waiting for the final result.
 
-This commit ships the **endpoint scaffolding + event schema**, with
-a synthetic emitter that demonstrates the protocol end to end (the
-real `convert_file → segmentation → render` integration lands in a
-follow-up that refactors the bitmap pipeline to yield progress as it
-goes). The SSE protocol is stable; the upstream code path can be
-swapped out without touching the frontend.
+When ``file_id`` is provided, the endpoint runs the **real** pipeline
+(``convert_file → segmentation → render``) and yields one progress
+event per rendered layer, plus a final ``done`` event carrying the
+sanitized SVG. When no ``file_id`` is given, the endpoint falls back
+to a deterministic synthetic emitter — useful for the frontend test
+harness and for showcasing the protocol without a real upload.
 """
 
 from __future__ import annotations
@@ -20,9 +20,10 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from queue import Queue
 from typing import Any, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -92,19 +93,117 @@ async def _synthetic_stream(layer_count: int) -> AsyncIterator[bytes]:
     ).encode()
 
 
+async def _real_stream(file_id: str) -> AsyncIterator[bytes]:
+    """Run the real pipeline in a worker thread, bridging progress to SSE.
+
+    The bitmap pipeline is synchronous and CPU-bound, so we run it on
+    a thread and use a bounded queue as the bridge: the pipeline
+    pushes ``(index, total, label)`` tuples from its
+    ``progress_callback``, while the async generator drains them and
+    formats SSE frames. A sentinel ``None`` signals completion (or
+    error) and lets the loop drain any final state without polling.
+    """
+    from pen_plotter.application import file_library
+    from pen_plotter.persistence import get_file_record
+
+    record = get_file_record(file_id)
+    raw = file_library.read_original_bytes(file_id)
+    if record is None or raw is None:
+        raise HTTPException(status_code=404, detail=f"unknown file_id {file_id!r}")
+
+    loop = asyncio.get_event_loop()
+    start_ts = loop.time()
+    queue: Queue[tuple[str, dict[str, Any]] | None] = Queue()
+
+    def progress(i: int, total: int, label: str) -> None:
+        queue.put(
+            (
+                "progress",
+                {
+                    "layer_index": i - 1,
+                    "layer_label": label,
+                    "percent": int((i / max(total, 1)) * 100),
+                },
+            )
+        )
+
+    def run() -> None:
+        # Re-import inside the worker thread to avoid import-time cost
+        # on the event loop. ``convert_file`` raises HTTPException on
+        # converter failures; we relay them as `error` events.
+        try:
+            from pen_plotter.converters import pipeline
+
+            result = pipeline.convert_file(
+                raw,
+                record.source_file,
+                record.source_mime,
+                progress_callback=progress,
+            )
+            queue.put(
+                (
+                    "done",
+                    {
+                        "svg": result.svg,
+                        "layer_count": len(result.layers),
+                        "warnings": result.warnings,
+                    },
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 — relay to SSE client
+            queue.put(("error", {"message": str(exc)}))
+        finally:
+            queue.put(None)
+
+    seq = 0
+    yield _sse(
+        PreviewProgressEvent(
+            kind="start",
+            sequence=seq,
+            elapsed_ms=0,
+            payload={"file_id": file_id, "source_mime": record.source_mime},
+        )
+    ).encode()
+    seq += 1
+
+    task = asyncio.create_task(asyncio.to_thread(run))
+    try:
+        while True:
+            item = await loop.run_in_executor(None, queue.get)
+            if item is None:
+                break
+            kind, payload = item
+            elapsed = int((loop.time() - start_ts) * 1000)
+            yield _sse(
+                PreviewProgressEvent(
+                    kind=kind,  # type: ignore[arg-type]
+                    sequence=seq,
+                    elapsed_ms=elapsed,
+                    payload=payload,
+                )
+            ).encode()
+            seq += 1
+    finally:
+        await task
+
+
 @router.get("/preview/stream")
 async def preview_stream(
     layer_count: int = Query(default=4, ge=1, le=64),
+    file_id: str | None = Query(default=None),
 ) -> StreamingResponse:
     """Open a Server-Sent Events stream emitting progress events.
 
-    The v0.2 modal will subscribe to this endpoint when the operator
-    leaves the Intent step; the events drive a per-layer progress bar
-    and the partial preview frame. The synthetic emitter is a
-    placeholder until the bitmap pipeline yields directly.
+    When ``file_id`` is set, runs the real pipeline against the
+    matching library entry; otherwise falls back to the synthetic
+    emitter (useful for tests and frontend smoke).
     """
+    if file_id:
+        body: AsyncIterator[bytes] = _real_stream(file_id)
+    else:
+        body = _synthetic_stream(layer_count)
     return StreamingResponse(
-        _synthetic_stream(layer_count),
+        body,
         media_type="text/event-stream",
         headers={
             # Disable proxies' buffering so events land promptly.
