@@ -93,7 +93,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 > Objectif : poser les fondations contractuelles, observabilité et IR sans rien casser. Permet de **mesurer la baseline** avant tout refacto métier.
 > Découpage PR : **tronches fines** (1 PR par étape).
 
-- [ ] **A.1** — Logging JSON structuré + correlation IDs
+- [x] **A.1** — Logging JSON structuré + correlation IDs
   - Middleware FastAPI génère `request_id`, propage `job_id`/`run_id`/`placement_id`
   - Champs standards : `ts`, `level`, `msg`, `request_id`, `job_id`, `run_id`, `placement_id`, `algorithm_id`, `quality_tier`, `profile_name`, `source_kind`
   - Redaction PII/secrets
@@ -311,6 +311,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | Date       | Étape | Référence  | Notes |
 |------------|-------|------------|-------|
 | 2026-05-27 | —     | initial    | Création de la roadmap, consolidation 7 audits |
+| 2026-05-27 | A.1   | this PR    | Logging JSON + correlation IDs + `RequestContextMiddleware`; 9 tests; doc `docs/observability.md` |
 
 ---
 

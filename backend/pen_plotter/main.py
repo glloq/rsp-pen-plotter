@@ -41,9 +41,11 @@ from pen_plotter.application.file_library import integrity_scan
 from pen_plotter.auth import require_api_key
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
+from pen_plotter.observability import RequestContextMiddleware, configure_logging
 from pen_plotter.persistence import init_db
 from pen_plotter.queue import recover_interrupted
 
+configure_logging()
 _log = logging.getLogger(__name__)
 
 
@@ -115,6 +117,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestContextMiddleware)
 
 app.include_router(upload_router)
 app.include_router(files_router)
