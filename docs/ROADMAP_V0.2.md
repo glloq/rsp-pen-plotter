@@ -149,12 +149,10 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 > Objectif : consommer les fondations Phase A pour livrer les briques métier (resolver, orchestrator, recovery).
 > Découpage PR : 1 PR par module métier.
 
-- [ ] **B.1** — `AlgorithmPolicyResolver` avec matrice décisionnelle (audit #4)
-  - Entrées : `source_kind`, `goal`, `palette_mode`, `available_colors_count`, `image_megapixels`, `layer_count_estimate`, `machine_profile`
-  - Sorties : `segmentation_method`, `default_algorithm`, `default_options`, `quality_tier`, `fallback_chain`, `reasoning`, `hard_constraints_applied`
-  - Implémentation des matrices A/B/C/D/E de l'audit #4
-  - Hard constraints perf (mégapixels, mono-pen, palette ≤2)
-  - **DoD :** tests unitaires sur toutes les branches de la matrice, snapshot des reasoning
+- [x] **B.1** — `AlgorithmPolicyResolver` avec matrice décisionnelle (audit #4)
+  - `pen_plotter.domain.policy` : types (`SourceKind`/`Goal`/`PaletteMode`/`QualityTier`/`SegmentationMethod`), rules (matrice A/B/C/D/E), constraints (mégapixels / mono-pen / palette ≤2), resolver pur
+  - `RuleHit` + `ConstraintHit` traçables pour le « Pourquoi ce choix ? » du modal V2
+  - **DoD :** 41 tests (toutes branches matrice + tous hard constraints + parametrized smoke sur l'ensemble du produit cartésien `SourceKind × Goal`)
 - [ ] **B.2** — `ToolChangeOrchestrator` + 4 stratégies
   - Stratégies : `FirmwareStrategy`, `HostMacroStrategy` (YAML), `ManualStrategy`, `SinglePenStrategy`
   - Capability resolver dérive le plan opératoire depuis profil + job
@@ -327,6 +325,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | A.5   | this PR    | Capability Model (`ToolingMode`/`CommandSource`/`RecoveryPolicy`/`MachineCapabilities`/`ToolChangeStrategy`), migration YAML additive (champ `capabilities` optionnel dérivé de `tool_change_method`), doc `profile_format.md` mise à jour, 11 tests |
 | 2026-05-27 | A.6   | this PR    | Manifeste algorithmes (`/manifests/algorithms`) versionné, enveloppe Manifest standard, legacy `/algorithms` conservé, 7 tests |
 | 2026-05-27 | A.7   | this PR    | Frontend zod schemas (`ManifestMeta`/`AlgorithmsManifest`/`ApiErrorBody`), client manifest live→cache→snapshot, `ManifestFallbackBanner.vue`, script `gen:manifests`, 8 tests vitest |
+| 2026-05-27 | B.1   | this PR    | `AlgorithmPolicyResolver` (`domain/policy/`): matrice complète audit #4 + hard constraints (mégapixels/mono-pen/palette≤2), 41 tests |
 
 ---
 
