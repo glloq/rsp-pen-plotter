@@ -98,12 +98,13 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Champs standards : `ts`, `level`, `msg`, `request_id`, `job_id`, `run_id`, `placement_id`, `algorithm_id`, `quality_tier`, `profile_name`, `source_kind`
   - Redaction PII/secrets
   - **DoD :** tous les endpoints émettent du JSON parsable, correlation IDs visibles bout en bout, doc dans `docs/observability.md`
-- [ ] **A.2** — OpenTelemetry baseline + perf baseline mesurée
+- [x] **A.2** — OpenTelemetry baseline + perf baseline mesurée
   - `opentelemetry-instrumentation-fastapi` + exporter OTLP
   - Spans manuels sur phases pipeline existantes (upload, segmentation, render, optimize, gcode)
   - Sampling 100% en dev/appliance
   - Fixtures de référence (1-2 par `source_kind`), p50/p95/p99 par phase
   - **DoD :** baseline documentée dans `docs/perf-baseline.md`, dashboard Grafana minimal exporté
+  - **Note :** dashboard Grafana JSON reporté au moment où une stack OTel sera réellement déployée (D.4) ; le script `scripts/perf_baseline.py` produit le tableau mesurable en attendant.
 - [ ] **A.3** — Geometry IR + artifact hashing
   - `backend/domain/ir/{geometry.py, pathplan.py, artifacts.py}`
   - Types : `SourceAsset`, `SegmentationArtifact`, `GeometryIR`, `PathPlanIR`, `MachineProgram`, `ExecutionRun`
@@ -275,14 +276,18 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 
 > Mesurée sur fixtures de référence avant tout refacto métier.
 
-| Phase pipeline    | p50 | p95 | p99 | fixture |
-|-------------------|-----|-----|-----|---------|
-| upload/parse      | TBD | TBD | TBD | TBD     |
-| preprocess        | TBD | TBD | TBD | TBD     |
-| segmentation      | TBD | TBD | TBD | TBD     |
-| render algo       | TBD | TBD | TBD | TBD     |
-| optimize toolpath | TBD | TBD | TBD | TBD     |
-| generate gcode    | TBD | TBD | TBD | TBD     |
+> Détails complets et procédure de reproduction : `docs/perf-baseline.md`.
+
+| Fixture                          | Phase    | p50 (ms) | p95 (ms) | p99 (ms) |
+|----------------------------------|----------|----------|----------|----------|
+| bitmap_photo (synthetic 128×128) | convert  |   550.86 |   629.10 |   629.10 |
+| bitmap_photo (synthetic 128×128) | optimize |   106.28 |   262.61 |   262.61 |
+| bitmap_photo (synthetic 128×128) | gcode    |    67.37 |    73.04 |    73.04 |
+| vector_svg (synthetic 100×100)   | convert  |     0.38 |     0.44 |     0.44 |
+| vector_svg (synthetic 100×100)   | optimize |     3.61 |     3.86 |     3.86 |
+| vector_svg (synthetic 100×100)   | gcode    |     1.17 |     1.26 |     1.26 |
+
+À enrichir au fur et à mesure (sous-phases segmentation/render séparées, fixtures réelles, hardware cible).
 
 ---
 
@@ -312,6 +317,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 |------------|-------|------------|-------|
 | 2026-05-27 | —     | initial    | Création de la roadmap, consolidation 7 audits |
 | 2026-05-27 | A.1   | this PR    | Logging JSON + correlation IDs + `RequestContextMiddleware`; 9 tests; doc `docs/observability.md` |
+| 2026-05-27 | A.2   | this PR    | OTel tracing opt-in (`OMNIPLOT_OTEL_ENABLED`), spans sur `convert_file`/`optimize_svg`/`generate_gcode`, baseline mesurée dans `docs/perf-baseline.md`, 5 tests |
 
 ---
 

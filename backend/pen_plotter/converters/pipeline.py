@@ -123,38 +123,55 @@ def convert_file(
         HTTPException: 415 if no converter for the MIME; 400 for invalid options;
             422 for converter failures.
     """
-    try:
-        converter = registry.for_mime(mime)
-    except UnsupportedFormatError as exc:
-        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    from pen_plotter.observability import traced_span
 
-    parsed_options = dict(options or {})
-    parsed_options.setdefault("source_mime", mime)
+    with traced_span(
+        "pipeline.convert_file",
+        mime=mime,
+        size_bytes=len(data),
+        filename=filename or "",
+    ):
+        try:
+            converter = registry.for_mime(mime)
+        except UnsupportedFormatError as exc:
+            raise HTTPException(status_code=415, detail=str(exc)) from exc
 
-    bitmap_segmentation: SegmentationResult | None = None
-    bitmap_options: BitmapOptions | None = None
-    try:
-        if isinstance(converter, BitmapConverter):
-            result, bitmap_segmentation = converter.segment_and_render(
-                data, options=parsed_options
-            )
-            bitmap_options = BitmapOptions.model_validate(parsed_options)
-        else:
-            result = converter.convert(data, options=parsed_options)
-    except (KeyError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Could not convert file: {exc}") from exc
+        parsed_options = dict(options or {})
+        parsed_options.setdefault("source_mime", mime)
 
-    svg = sanitize_svg(result.svg)
-    source_file = PurePosixPath(filename).name if filename else "upload"
-    return ConvertedFile(
-        source_file=source_file,
-        source_mime=mime,
-        svg=svg,
-        layers=extract_layers(svg),
-        warnings=list(result.warnings),
-        metadata=dict(result.metadata),
-        bitmap_segmentation=bitmap_segmentation,
-        bitmap_options=bitmap_options,
-    )
+        bitmap_segmentation: SegmentationResult | None = None
+        bitmap_options: BitmapOptions | None = None
+        try:
+            if isinstance(converter, BitmapConverter):
+                with traced_span("pipeline.segment_and_render"):
+                    result, bitmap_segmentation = converter.segment_and_render(
+                        data, options=parsed_options
+                    )
+                bitmap_options = BitmapOptions.model_validate(parsed_options)
+            else:
+                with traced_span(
+                    "pipeline.convert", converter=type(converter).__name__
+                ):
+                    result = converter.convert(data, options=parsed_options)
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=422, detail=f"Could not convert file: {exc}"
+            ) from exc
+
+        with traced_span("pipeline.sanitize_svg"):
+            svg = sanitize_svg(result.svg)
+        with traced_span("pipeline.extract_layers"):
+            layers = extract_layers(svg)
+        source_file = PurePosixPath(filename).name if filename else "upload"
+        return ConvertedFile(
+            source_file=source_file,
+            source_mime=mime,
+            svg=svg,
+            layers=layers,
+            warnings=list(result.warnings),
+            metadata=dict(result.metadata),
+            bitmap_segmentation=bitmap_segmentation,
+            bitmap_options=bitmap_options,
+        )

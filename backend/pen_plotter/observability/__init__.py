@@ -19,6 +19,11 @@ from pen_plotter.observability.context import (
 )
 from pen_plotter.observability.logging_config import configure_logging
 from pen_plotter.observability.middleware import RequestContextMiddleware
+from pen_plotter.observability.tracing import (
+    configure_tracing,
+    is_tracing_enabled,
+    traced_span,
+)
 
 __all__ = [
     "CORRELATION_FIELDS",
@@ -26,5 +31,8 @@ __all__ = [
     "bind_context",
     "clear_context",
     "configure_logging",
+    "configure_tracing",
     "get_context",
+    "is_tracing_enabled",
+    "traced_span",
 ]

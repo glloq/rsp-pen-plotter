@@ -87,8 +87,66 @@ request with `method`, `path`, `status`, and `elapsed_ms`.
 
 ---
 
+---
+
+## Distributed tracing (OpenTelemetry)
+
+Tracing is **opt-in** and a no-op until `OMNIPLOT_OTEL_ENABLED=1`. When
+enabled, the backend installs a `TracerProvider` with 100 % sampling
+(appliance default; multi-machine deployments will switch to
+tail-sampling in roadmap step D.6) and instruments the FastAPI app so
+every route receives a server span automatically.
+
+### Configuration
+
+| Env var                   | Default                              | Effect                              |
+|---------------------------|--------------------------------------|-------------------------------------|
+| `OMNIPLOT_OTEL_ENABLED`   | unset (disabled)                     | Set to `1` to activate tracing      |
+| `OMNIPLOT_OTEL_EXPORTER`  | `otlp`                               | `otlp` or `console`                 |
+| `OMNIPLOT_OTLP_ENDPOINT`  | `http://localhost:4318/v1/traces`    | OTLP HTTP target                    |
+| `OMNIPLOT_SERVICE_NAME`   | `omniplot-backend`                   | `service.name` on the OTel resource |
+
+### Pipeline spans
+
+The conversion pipeline emits the following spans today (more to come
+in roadmap step B.5):
+
+- `pipeline.convert_file` — overall conversion, attributes:
+  `mime`, `size_bytes`, `filename` (+ correlation context)
+- `pipeline.segment_and_render` — bitmap converters only
+- `pipeline.convert` — non-bitmap converters, attribute: `converter`
+- `pipeline.sanitize_svg` / `pipeline.extract_layers`
+- `pipeline.optimize_svg` — attributes: `svg_bytes`, `layer_count`
+- `pipeline.generate_gcode` — attributes: `svg_bytes`, `profile_name`, `scale_mode`
+
+### Adding a span at a call site
+
+```python
+from pen_plotter.observability import traced_span
+
+with traced_span("phase.my_step", count=n, layer="red"):
+    do_work()
+```
+
+When tracing is disabled, `traced_span` is a true no-op — no SDK calls,
+no allocations beyond the nullcontext. Currently bound correlation
+fields are copied onto every span as attributes so traces stay
+correlated with the JSON logs from A.1.
+
+---
+
+## Performance baseline
+
+`scripts/perf_baseline.py` runs deterministic synthetic fixtures and
+emits a markdown table of p50/p95/p99 per pipeline phase. See
+`docs/perf-baseline.md` for the captured snapshot and how to reproduce
+it. Future refactors must update that document with the new numbers
+in the same PR.
+
+---
+
 ## Future work
 
-- **A.2** — OpenTelemetry spans using the same context as attributes.
-- **B.5** — Sub-step spans for parse/preprocess/segmentation/render/optimize/gcode.
-- **D.4** — SLO budgets and alerting on the metrics derived from these logs.
+- **B.5** — Sub-step spans for parse/preprocess/segmentation/render/optimize/gcode (finer than today).
+- **D.1** — py-spy profiling activable, flamegraphs reproductibles.
+- **D.4** — SLO budgets et alerting sur ces signaux.
