@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { PrintRun } from '../api/client'
 import { confirmAction } from '../composables/confirm'
+import type { MachineCapabilities } from '../domain/capability/schemas'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useQueueStore } from '../stores/queue'
+import { useToastStore } from '../stores/toasts'
 import { useUiStore, type PlotterTab } from '../stores/ui'
 import AvailableColorsPanel from './AvailableColorsPanel.vue'
 import JogControls from './JogControls.vue'
 import ProfileEditor from './ProfileEditor.vue'
 import MacroPanel from './MacroPanel.vue'
+import CapabilityWizard from './v2/CapabilityWizard.vue'
+import MagazineView from './v2/MagazineView.vue'
+import RunActionsPanel from './v2/RunActionsPanel.vue'
+import RunTimeline from './v2/RunTimeline.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
@@ -93,6 +99,36 @@ async function cancelRun(run: PrintRun): Promise<void> {
 
 function onKey(event: KeyboardEvent): void {
   if (event.key === 'Escape' && plotterDrawerOpen.value) ui.closePlotterDrawer()
+}
+
+// v0.2 wiring: surface the active run with the pro-timeline + actions
+// panel on top of the queue tab. The existing compact list below stays
+// untouched so muscle-memory still works.
+const activeRun = computed(() => queue.active[0] ?? null)
+
+async function activePause(): Promise<void> {
+  if (activeRun.value) await queue.act(activeRun.value.id, 'pause')
+}
+async function activeResume(): Promise<void> {
+  if (activeRun.value) await queue.act(activeRun.value.id, 'resume')
+}
+async function activeCancel(): Promise<void> {
+  if (activeRun.value) await queue.act(activeRun.value.id, 'cancel')
+}
+
+// Capability wizard entrypoint inside the profile tab. The result
+// surfaces as a toast for now — wiring it into a `saveProfile` payload
+// is a follow-up that lands with the v2 profile editor.
+const wizardOpen = ref(false)
+const toasts = useToastStore()
+function onWizardConfirm(capabilities: MachineCapabilities): void {
+  wizardOpen.value = false
+  toasts.show(
+    'info',
+    `Capabilities — mode=${capabilities.tool_change.mode}, recovery=${capabilities.tool_change.recovery_policy}. ` +
+      'Brouillon prêt à être appliqué à un profil (intégration save profile : follow-up).',
+    8000,
+  )
 }
 
 onMounted(() => {
@@ -331,12 +367,38 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- PROFILE TAB -->
-          <div v-show="plotterTab === 'profile'">
+          <div v-show="plotterTab === 'profile'" class="space-y-3">
+            <div class="flex items-center justify-end">
+              <button
+                v-if="!wizardOpen"
+                type="button"
+                class="rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                data-test="open-capability-wizard"
+                @click="wizardOpen = true"
+              >
+                + {{ t('plotter.newPlotterWizard') }}
+              </button>
+            </div>
+            <div
+              v-if="wizardOpen"
+              class="rounded-lg border border-slate-700 bg-slate-800/40 p-3"
+              data-test="capability-wizard-host"
+            >
+              <CapabilityWizard
+                @cancel="wizardOpen = false"
+                @confirm="onWizardConfirm"
+              />
+            </div>
             <ProfileEditor />
           </div>
 
           <!-- COLORS TAB -->
-          <div v-show="plotterTab === 'colors'">
+          <div v-show="plotterTab === 'colors'" class="space-y-4">
+            <MagazineView
+              v-if="job.selectedProfile"
+              :slots="job.selectedProfile.pens ?? []"
+              :capacity="job.selectedProfile.pen_slot_count"
+            />
             <AvailableColorsPanel />
           </div>
 
@@ -349,6 +411,23 @@ onBeforeUnmount(() => {
           <!-- QUEUE TAB -->
           <div v-show="plotterTab === 'queue'" class="space-y-3">
             <p class="text-xs text-slate-400">{{ t('plotter.queueHint') }}</p>
+
+            <!-- Active run cockpit (roadmap C.6) — pro controls for the
+                 single live run, kept in sync via queue polling. The
+                 compact list below remains the canonical history view. -->
+            <section
+              v-if="activeRun"
+              class="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3"
+              data-test="active-run-cockpit"
+            >
+              <RunTimeline :run="activeRun" />
+              <RunActionsPanel
+                :run="activeRun"
+                @pause="activePause"
+                @resume="activeResume"
+                @cancel="activeCancel"
+              />
+            </section>
 
             <section class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2">
               <p v-if="!canSend" class="text-xs text-slate-500">{{ t('execute.runHint') }}</p>

@@ -36,6 +36,11 @@
     "plotter": "Traceur",
     "workshop": "Atelier"
   },
+  "compare": {
+    "open": "Comparer",
+    "title": "Comparer les variantes",
+    "empty": "Il faut au moins deux variantes sur le placement courant pour comparer. Crée-en une seconde depuis la barre Variantes."
+  },
   "machine": {
     "disconnected": "Déconnecté",
     "idle": "Prêt",
@@ -924,7 +929,8 @@
     "connectionHint": "Ouvre la liaison série avec le traceur, puis jog ou envoi des travaux.",
     "portHint": "Ex. /dev/ttyUSB0 sous Linux, COM3 sous Windows.",
     "macrosHint": "Séquences de commandes réutilisables — homing, parking stylo, calibration. Lance-les ici quand le traceur est au repos.",
-    "queueHint": "Envoie le travail courant au traceur ou empile-le pour plus tard. Les travaux actifs affichent leur progression et peuvent être mis en pause ou annulés."
+    "queueHint": "Envoie le travail courant au traceur ou empile-le pour plus tard. Les travaux actifs affichent leur progression et peuvent être mis en pause ou annulés.",
+    "newPlotterWizard": "Assistant nouveau traceur"
   },
   "assignedColor": {
     "title": "Couleur du calque",

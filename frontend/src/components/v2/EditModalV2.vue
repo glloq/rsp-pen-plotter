@@ -17,6 +17,7 @@
 //   6. Preflight        — risk indicators + ETA + "Generate"
 
 import { computed, ref } from 'vue'
+import type { LayerInfo } from '../../api/client'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
 import type {
   Goal,
@@ -25,6 +26,8 @@ import type {
   SourceKind,
 } from '../../domain/policy/schemas'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
+import LayerInspector from './LayerInspector.vue'
+import PipelineInspector from './PipelineInspector.vue'
 import StepperHeader from './StepperHeader.vue'
 
 const props = defineProps<{
@@ -33,6 +36,10 @@ const props = defineProps<{
   availableColorsCount?: number
   imageMegapixels?: number | null
   isMonoPenMachine?: boolean
+  /** Layers from the currently-selected placement. Empty when the
+   *  operator hasn't picked one yet — the Couches step then falls
+   *  back to an explanatory placeholder. */
+  layers?: readonly LayerInfo[]
 }>()
 
 const emit = defineEmits<{
@@ -174,6 +181,7 @@ function confirm(): void {
           <p v-if="decision.fallback_chain.length">
             Fallbacks&nbsp;: {{ decision.fallback_chain.join(' → ') }}
           </p>
+          <PipelineInspector :decision="decision" :source-kind="sourceKind" />
         </div>
       </div>
 
@@ -192,11 +200,14 @@ function confirm(): void {
 
       <!-- 5. Layers -->
       <div v-else-if="activeIndex === 4" data-test="step-layers">
-        <p>Les couches seront générées par l'algorithme recommandé.</p>
-        <p>
-          La gestion fine des passes par couche est exposée dans
-          <strong>Layer Inspector</strong> (étape C.3).
-        </p>
+        <LayerInspector v-if="props.layers && props.layers.length" :layers="props.layers" />
+        <div v-else class="layers-empty">
+          <p>Les couches seront générées par l'algorithme recommandé.</p>
+          <p class="muted">
+            L'inspecteur de couches s'affichera ici dès qu'un placement actif aura été
+            sélectionné.
+          </p>
+        </div>
       </div>
 
       <!-- 6. Preflight -->
@@ -310,5 +321,9 @@ function confirm(): void {
   padding: 0.5rem 0.75rem;
   border-radius: 4px;
   margin-top: 0.5rem;
+}
+.layers-empty .muted {
+  color: #777;
+  font-size: 0.85rem;
 }
 </style>

@@ -7,6 +7,7 @@ import AppFooter from './components/AppFooter.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import EditModal from './components/EditModal.vue'
+import CompareView, { type Candidate } from './components/v2/CompareView.vue'
 import EditModalV2 from './components/v2/EditModalV2.vue'
 import FilesPane from './components/FilesPane.vue'
 import PlotterDrawer from './components/PlotterDrawer.vue'
@@ -45,7 +46,35 @@ const dropping = ref(false)
 // mounts inconditionally — it auto-hides when its own flag is off.
 const modalV2Enabled = useFeatureFlag('modalV2')
 const workshopEnabled = useFeatureFlag('workshopMode')
+const compareEnabled = useFeatureFlag('compareMode')
 const activeRun = computed(() => queue.active[0] ?? null)
+
+// Compare drawer (roadmap C.5). Entry button is gated by the
+// `compareMode` flag; opens a modal showing CompareView for two
+// variants of the current placement. Rendering each variant
+// independently requires a re-render per variant (the placement only
+// holds the active variant's SVG today) — the seam is wired so the
+// operator can drive the workflow; full per-variant rendering lands
+// with the overlay PR.
+const compareOpen = ref(false)
+const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => {
+  const placement = store.selectedPlacement
+  if (!placement || placement.variants.length < 2) return null
+  const v1 = placement.variants[0]
+  const v2 = placement.variants[1]
+  if (!v1 || !v2) return null
+  const make = (variantId: string, label: string): Candidate => ({
+    id: variantId,
+    label,
+    svg: placement.svg,
+    decision: null,
+    metrics: {},
+  })
+  return {
+    a: make(v1.id, v1.name || 'Variante A'),
+    b: make(v2.id, v2.name || 'Variante B'),
+  }
+})
 
 function onEditV2Cancel(): void {
   ui.closeEditModal()
@@ -220,6 +249,7 @@ onBeforeUnmount(() => {
     <EditModal v-if="!modalV2Enabled" />
     <EditModalV2
       v-else-if="ui.editModalOpen"
+      :layers="store.selectedPlacement?.layers ?? []"
       @cancel="onEditV2Cancel"
       @confirm="onEditV2Confirm"
     />
@@ -235,6 +265,48 @@ onBeforeUnmount(() => {
       @pause="workshopPause"
       @resume="workshopResume"
     />
+
+    <!-- Compare drawer (roadmap C.5) — gated behind ?flag.compareMode=1
+         to keep the v0.1 layout untouched. -->
+    <button
+      v-if="compareEnabled"
+      type="button"
+      class="fixed bottom-3 left-3 z-30 flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 shadow-lg hover:bg-slate-700"
+      data-test="compare-open"
+      @click="compareOpen = true"
+    >
+      ⇄ {{ t('compare.open') }}
+    </button>
+    <div
+      v-if="compareEnabled && compareOpen"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
+      data-test="compare-modal"
+      @click.self="compareOpen = false"
+    >
+      <div class="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-xl border border-slate-700 bg-white p-4 shadow-2xl">
+        <header class="mb-2 flex items-center justify-between">
+          <h2 class="text-base font-semibold text-slate-900">
+            {{ t('compare.title') }}
+          </h2>
+          <button
+            type="button"
+            class="rounded p-1 text-slate-500 hover:bg-slate-100"
+            :aria-label="t('settings.close')"
+            @click="compareOpen = false"
+          >
+            ✕
+          </button>
+        </header>
+        <CompareView
+          v-if="compareCandidates"
+          :a="compareCandidates.a"
+          :b="compareCandidates.b"
+        />
+        <p v-else class="text-sm text-slate-600">
+          {{ t('compare.empty') }}
+        </p>
+      </div>
+    </div>
 
     <div
       v-if="dropping"
