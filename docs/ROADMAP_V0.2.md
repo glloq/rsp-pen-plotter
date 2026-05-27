@@ -217,12 +217,11 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Émet `pick-winner(id)` et `toggle-overlay(key)`
   - **DoD :** 7 tests vitest (rendu A/B, winner sur temps + longueur, pick-winner émis, toggle-overlay émis, overlay stub visible, undefined → em-dash)
   - **Note :** rendu effectif des 4 overlays (heatmap GL, density filter, bounds rect, curvature shader) arrive dans une PR overlay dédiée — la surface UX est prête.
-- [ ] **C.6** — Queue UX pro avec timeline + checkpoints + actions sécurisées
-  - Timeline : queued → running → pause → resume → done/fail
-  - Détails run : checkpoint actuel, raison pause, prochaine action
-  - Actions sécurisées : confirm pause/abort, reprise guidée
-  - Historique : jobs récents, erreurs, replay context
-  - **DoD :** opérateur comprend l'état d'un run sans lire de logs
+- [x] **C.6** — Queue UX pro avec timeline + checkpoints + actions sécurisées
+  - `RunTimeline.vue` : phases queued→running→paused→completed avec `aria-current="step"`, badges terminal (failed/canceled), barre de progression `acked_lines/total_lines`, gestion `total_lines=0` sans division
+  - `RunActionsPanel.vue` : Pause/Reprendre/Annuler avec **confirm** sur Pause + Cancel, Reprendre direct (one-click), `nextActionHint` quand paused (visible **uniquement** si paused)
+  - **DoD :** 14 tests vitest (timeline 6 + actions 8 dont confirm flow, hint conditionnel, disabled states corrects par phase)
+  - **Note :** historique des runs + replay context = ajout futur sur la page queue (composants prêts à être branchés sur le `useQueueStore` existant).
 - [ ] **C.7** — Progressive preview SSE/WS
   - Stream partial layers + métriques pendant calcul
   - **DoD :** preview heavy ne bloque plus l'UI, progression visible
@@ -348,6 +347,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | C.3   | this PR    | `LayerInspector.vue` (ordre + swap count + longueur agrégée) et `PipelineInspector.vue` (Source→Segmentation→Algo→Fallbacks→Contraintes depuis `PolicyDecision`), 7 tests vitest |
 | 2026-05-27 | C.4   | this PR    | zod schemas `MachineCapabilities`, `CapabilityWizard.vue` (3 étapes, UI conditionnelle par mode), `MagazineView.vue` (slots + calibration + simulation highlight), 12 tests vitest |
 | 2026-05-27 | C.5   | this PR    | `CompareView.vue` (A/B side-by-side + métriques diff avec winner highlight + overlay toggles `penup_heatmap`/`path_density`/`bounds`/`curvature`), 7 tests vitest |
+| 2026-05-27 | C.6   | this PR    | `RunTimeline.vue` (phases + progression + badges terminaux) et `RunActionsPanel.vue` (Pause/Resume/Cancel avec confirm sécurisé + hint d'action), 14 tests vitest |
 
 ---
 
