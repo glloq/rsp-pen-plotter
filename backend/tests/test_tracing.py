@@ -1,11 +1,14 @@
-"""Tests for the OTel tracing helpers (roadmap A.2)."""
+"""Tests for the OTel tracing helpers (roadmap A.2).
+
+The ``memory_exporter`` fixture comes from ``tests/conftest.py`` —
+OTel refuses to override an already-installed TracerProvider, so the
+process-wide one is shared across all test modules that need to
+assert on emitted spans.
+"""
 
 from __future__ import annotations
 
 import pytest
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from pen_plotter.observability import bind_context, clear_context, traced_span
@@ -14,37 +17,6 @@ from pen_plotter.observability.tracing import (
     configure_tracing,
     is_tracing_enabled,
 )
-
-_SHARED_EXPORTER: InMemorySpanExporter | None = None
-
-
-def _ensure_shared_provider() -> InMemorySpanExporter:
-    """Install a process-wide TracerProvider once (OTel refuses overrides)."""
-    global _SHARED_EXPORTER
-    if _SHARED_EXPORTER is None:
-        _SHARED_EXPORTER = InMemorySpanExporter()
-        provider = TracerProvider()
-        provider.add_span_processor(SimpleSpanProcessor(_SHARED_EXPORTER))
-        try:
-            trace.set_tracer_provider(provider)
-        except Exception:
-            pass
-    return _SHARED_EXPORTER
-
-
-@pytest.fixture
-def memory_exporter() -> InMemorySpanExporter:
-    """Yield a cleared in-memory exporter; tracing flag flipped on for the test."""
-    exporter = _ensure_shared_provider()
-    exporter.clear()
-    import pen_plotter.observability.tracing as tracing_mod
-
-    tracing_mod._configured = True
-    try:
-        yield exporter
-    finally:
-        tracing_mod._configured = False
-        exporter.clear()
 
 
 def test_traced_span_is_noop_when_disabled() -> None:

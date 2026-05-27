@@ -170,10 +170,11 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - `byId`/`fromFallback`/`source`/`lastError` exposés pour la bannière + intégrations futures
   - **DoD :** un nouvel algo backend devient exploitable frontend sans patch type/schema (4 tests vitest)
   - **Note :** suppression complète de `getAlgorithms()` + génération de formulaires depuis JSON Schema (`params`) lands en Phase C avec la refonte du modal V2, après que la matrice B.1 ait calibré les bornes/defaults par algo.
-- [ ] **B.5** — Instrumentation détaillée par phase pipeline
-  - Spans OTel sur sous-étapes : parse/upload, preprocess, segmentation, render (par couche/pass), optimize, gcode
-  - Métriques cache (hit/miss/eviction), workers (spawn, queue wait, active), queue (delay, duration, abort)
-  - **DoD :** dashboard Grafana "Pipeline" complet, cardinality budget respecté
+- [x] **B.5** — Instrumentation détaillée par phase pipeline
+  - Sub-step spans : `pipeline.bitmap.load`, `pipeline.bitmap.preprocess`, `pipeline.bitmap.fit_within`, `pipeline.bitmap.segment` (method/num_colors/n_init attrs), `pipeline.bitmap.drop_small_regions`, `pipeline.bitmap.merge_similar_colours`, `pipeline.bitmap.render_layer` (one per layer, séquentiel + parallel), `pipeline.bitmap.render_parallel`, `pipeline.bitmap.compose_svg`
+  - Fixture `memory_exporter` mutualisée dans `tests/conftest.py` (OTel n'autorise qu'un seul TracerProvider, partagé entre `test_tracing.py` et `test_pipeline_spans.py`)
+  - **DoD :** 3 tests dédiés vérifiant émission des spans + attributs (mime/size/method/num_colors), suite full green
+  - **Note :** métriques cache/workers/queue + dashboard Grafana JSON arrivent avec D.4 (SLO budgets + alerting) — l'instrumentation OTel des phases est en place dès maintenant pour collecter la baseline.
 - [ ] **B.6** — Presets plotters marché (≥4) + docs capability matrix
   - Profils : AxiDraw, NextDraw, iDraw/EleksDraw (GRBL), custom CoreXY
   - Documentation `docs/presets/` avec capability matrix par preset
@@ -332,6 +333,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | B.2   | this PR    | `ToolChangeOrchestrator` + 4 stratégies (`FirmwareStrategy`/`HostMacroStrategy`/`ManualStrategy`/`SinglePenStrategy`) avec `SwapPlan`/`SwapContext`/`PauseKind` et substitution placeholders, 16 tests |
 | 2026-05-27 | B.3   | this PR    | Recovery layer (`Directive`/`FailureKind`/`JobRecoveryOverride`/`resolve_recovery`) + table totale 3×5 + e2e pause→swap→resume préservant état, 23 tests |
 | 2026-05-27 | B.4   | this PR    | Pinia `useAlgorithmsStore` adossé au manifeste versionné (A.4/A.7), bascule des 2 call sites legacy, fallback `source`/`fromFallback` exposés, 4 tests vitest |
+| 2026-05-27 | B.5   | this PR    | Spans OTel sub-step sur pipeline bitmap (load/preprocess/fit_within/segment/render_layer/compose_svg), fixture `memory_exporter` mutualisée dans `conftest.py`, 3 tests dédiés |
 
 ---
 

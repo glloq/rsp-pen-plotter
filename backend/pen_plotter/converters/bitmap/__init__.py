@@ -202,6 +202,7 @@ class BitmapConverter(Converter):
         segmentation pass again.
         """
         from pen_plotter.converters import segmentation as _seg_mod
+        from pen_plotter.observability import traced_span
 
         opts = BitmapOptions.model_validate(options or {})
         # ``fast`` keeps the cheap k-means single restart (n_init=1)
@@ -212,24 +213,45 @@ class BitmapConverter(Converter):
         # the backend would honour it at /upload — confusing.
         max_dim = opts.max_dimension_px
         n_init = 1 if fast else 10
-        image = load_rgb(data)
-        image = apply_preprocess(image, opts.preprocess)
-        image = fit_within(image, max_dim)
-        labels, palette = segment_image(
-            image,
+        with traced_span(
+            "pipeline.bitmap.load",
+            size_bytes=len(data),
+            max_dim_px=max_dim,
+        ):
+            image = load_rgb(data)
+        with traced_span("pipeline.bitmap.preprocess"):
+            image = apply_preprocess(image, opts.preprocess)
+        with traced_span("pipeline.bitmap.fit_within", max_dim_px=max_dim):
+            image = fit_within(image, max_dim)
+        with traced_span(
+            "pipeline.bitmap.segment",
             method=opts.segmentation_method,
-            options=opts.segmentation_options,
             num_colors=opts.num_colors,
-            drop_background=opts.drop_background,
-            background_luminance=opts.background_luminance,
             n_init=n_init,
-        )
-        if opts.min_region_pixels > 0:
-            labels = _seg_mod.drop_small_regions(labels, opts.min_region_pixels)
-        if opts.merge_delta_e > 0:
-            labels, palette = _seg_mod.merge_similar_colours(
-                labels, palette, opts.merge_delta_e
+        ):
+            labels, palette = segment_image(
+                image,
+                method=opts.segmentation_method,
+                options=opts.segmentation_options,
+                num_colors=opts.num_colors,
+                drop_background=opts.drop_background,
+                background_luminance=opts.background_luminance,
+                n_init=n_init,
             )
+        if opts.min_region_pixels > 0:
+            with traced_span(
+                "pipeline.bitmap.drop_small_regions",
+                min_region_pixels=opts.min_region_pixels,
+            ):
+                labels = _seg_mod.drop_small_regions(labels, opts.min_region_pixels)
+        if opts.merge_delta_e > 0:
+            with traced_span(
+                "pipeline.bitmap.merge_similar_colours",
+                merge_delta_e=opts.merge_delta_e,
+            ):
+                labels, palette = _seg_mod.merge_similar_colours(
+                    labels, palette, opts.merge_delta_e
+                )
         height, width = labels.shape
         seg = SegmentationResult(labels=labels, palette=palette, width=width, height=height)
         # Translate ``band_recipes`` (positional, darkest-first) into the
