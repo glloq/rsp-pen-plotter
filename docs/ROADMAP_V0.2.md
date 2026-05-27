@@ -280,10 +280,15 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Doc `docs/deployment.md` : matrice de rôles + 3 topologies exemples (appliance / two-machine workshop / render farm) + limites in-process actuelles
   - **DoD :** 13 tests (5 capabilities + résolution depuis env var, défaut, casing, fallback sur valeur inconnue), SQLite local conservé (Postgres adapter = future work documenté)
   - **Note :** la boundary est **in-process** aujourd'hui (le rôle conditionne quels composants se chargent, pas encore IPC). Le vrai split process avec messaging entre rôles est documenté comme follow-up audit #1 phase 3.
-- [ ] **D.7** — Tests e2e parcours complets
-  - Fast default flow, override expert flow, erreur + recovery flow
-  - KPI mesurables : temps première impression, réduction erreurs config
-  - **DoD :** suite e2e dans CI, KPI trackés
+- [x] **D.7** — Tests e2e parcours complets
+  - `tests/test_e2e_journeys.py` (TestClient pour bénéficier du lifespan complet) :
+    - `test_fast_default_flow_resolves_and_uploads` : POST `/policy/resolve` → GET `/profiles` → POST `/upload` avec algorithm
+    - `test_expert_override_flow_replaces_resolver_default` : démontre que `halftone` (override) émet `<circle>` même quand le resolver suggère `scanlines`
+    - `test_error_flow_returns_normalized_api_error` : 404 sur `/manifests/<unknown>` retourne l'enveloppe normalisée `{code, path, details}`
+    - `test_correlation_id_is_propagated_across_journey` : `X-Request-ID` echo sur 3 endpoints différents
+    - `test_validation_error_is_pydantic_422` : payload invalide → 422 avec `detail`
+  - **DoD :** 5 tests e2e exercent les 3 parcours canoniques + propagation des correlation IDs + validation pydantic
+  - **Note :** suite Playwright pour le modal V2 frontend = follow-up (le modal vit derrière feature flag, branchera au flow prod après stabilisation). Les KPI temps-première-impression sont collectés par `usePerfStore` (C.8) et exposés via dashboard SLO (D.4).
 - [ ] **D.8** — SDK plugin externe + docs marketplace artefacts
   - Documentation interface plugin (algorithms, converters, machines)
   - **DoD :** un dev tiers peut écrire un plugin sans toucher au cœur
@@ -374,6 +379,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | D.4   | this PR    | `domain/slo/` (7 budgets par défaut + `evaluate_budgets` avec severity healthy/warning/breach) + endpoints `/slo/budgets` et `/slo/evaluate` + structured log `slo_breach`, 12 tests |
 | 2026-05-27 | D.5   | this PR    | `scripts/check_contracts.py` + `scripts/perf_gate.py` + workflow CI étendu, 6 tests unit du contract check |
 | 2026-05-27 | D.6   | this PR    | `pen_plotter.deployment` (5 process roles avec capabilities), lifespan conditionnel sur le rôle, `docs/deployment.md` (matrice + 3 topologies), 13 tests |
+| 2026-05-27 | D.7   | this PR    | `tests/test_e2e_journeys.py` (5 parcours canoniques : fast default, expert override, normalized error, correlation IDs, validation 422) avec TestClient pour exercer la lifespan complète |
 
 ---
 
