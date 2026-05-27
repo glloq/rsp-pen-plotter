@@ -269,10 +269,11 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - Alerting : breach sur `alert_on_breach=True` émet log JSON structuré `slo_breach` (consommable par tout collecteur)
   - **DoD :** 12 tests (5 budget unit + 5 roll-up + 2 HTTP), suite full green
   - **Note :** dashboard Grafana JSON exporté = follow-up déploiement infra (le contrat HTTP est figé, n'importe quel collecteur OTLP peut alimenter l'évaluateur).
-- [ ] **D.5** — CI contract check + smoke perf gate
-  - Diff snapshots manifestes bloque merge sans bump version
-  - Smoke perf gate (régression > seuil vs baseline)
-  - **DoD :** CI bloque les divergences non versionnées, perf gate documenté
+- [x] **D.5** — CI contract check + smoke perf gate
+  - `backend/scripts/check_contracts.py` : compare backend vs `snapshot.json`, échec si entry drift sans bump de `manifest_version` ou si snapshot/backend désynchronisés
+  - `backend/scripts/perf_gate.py` : run fixtures bitmap + vector, p95 vs `REFERENCE_P95`, échec si > `+allowed-regression-pct` (défaut 50%)
+  - CI workflow `.github/workflows/ci.yml` étendu avec les deux gates
+  - **DoD :** 6 tests unit du contract check (matching/missing/backend-ahead/entry-drift/snapshot-ahead/domain-missing), CI bloque les divergences non versionnées
 - [ ] **D.6** — Executor service boundary multi-machine (V2)
   - Split process : API Gateway / Render Worker / Executor / Telemetry
   - SQLite local conservé, adaptateur Postgres optionnel
@@ -369,6 +370,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | D.2   | this PR    | `docs/perf-report.md` : 3 bottlenecks bitmap chiffrés (B1-B3), 4 quick wins prioritisés avec gain estimé ~640→~255 ms sur preview draft, sections medium/long-term reliant à #1 audit |
 | 2026-05-27 | D.3   | this PR    | `useWorkspacesStore` (Débutant/Pro built-ins + custom saveAs/rename/remove + persistance localStorage), `WorkshopMode.vue` (overlay plein écran exécution live), 16 tests vitest |
 | 2026-05-27 | D.4   | this PR    | `domain/slo/` (7 budgets par défaut + `evaluate_budgets` avec severity healthy/warning/breach) + endpoints `/slo/budgets` et `/slo/evaluate` + structured log `slo_breach`, 12 tests |
+| 2026-05-27 | D.5   | this PR    | `scripts/check_contracts.py` + `scripts/perf_gate.py` + workflow CI étendu, 6 tests unit du contract check |
 
 ---
 
