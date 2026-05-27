@@ -158,10 +158,12 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
   - 4 stratégies (`FirmwareStrategy` / `HostMacroStrategy` / `ManualStrategy` / `SinglePenStrategy`) ; sélection automatique via Capability Model (A.5)
   - Substitution `{slot}`/`{color}`/`{label}`/`{layer}` dans prompts manuels et macros host (`HostMacroStep`)
   - **DoD :** 16 tests E2E (4 modes + dispatch + dérivation legacy + prompt manuel + macro multi-lignes + recovery policy + registry complet)
-- [ ] **B.3** — Pipeline pause/resume robuste + RecoveryPolicy
-  - Politique appliquée : profil par défaut, override par job
-  - Reprise après pause/changement avec checkpoint
-  - **DoD :** test scenario pause → swap → resume sans perte d'état
+- [x] **B.3** — Pipeline pause/resume robuste + RecoveryPolicy
+  - `pen_plotter.domain.recovery` : `Directive` (ABORT_RUN / WAIT_FOR_OPERATOR / SKIP_AND_CONTINUE), `FailureKind` (5 valeurs), `JobRecoveryOverride` (per-failure > job-wide > profil), `resolve_recovery()` pur
+  - Table de transitions (3 politiques × 5 kinds) explicite et testée
+  - Test e2e pause → swap → resume sur G-code synthétique (préambule G21 + retour position + reste du programme préservé)
+  - **DoD :** 23 tests (table totale, précédence overrides, e2e checkpoint, prompt manuel via orchestrator)
+  - **Note :** intégration de `resolve_recovery` dans `pen_plotter.queue` se fait dans une PR dédiée (le module `queue.py` est dans `ignore_errors=true` mypy override, refacto en chantier propre).
 - [ ] **B.4** — Frontend : consommation dynamique des manifestes
   - Suppression des defaults/options hardcodés critiques
   - Formulaires algo générés depuis JSON Schema
@@ -327,6 +329,7 @@ Cette roadmap consolide **7 audits ciblés** réalisés sur `rsp-pen-plotter` (a
 | 2026-05-27 | A.7   | this PR    | Frontend zod schemas (`ManifestMeta`/`AlgorithmsManifest`/`ApiErrorBody`), client manifest live→cache→snapshot, `ManifestFallbackBanner.vue`, script `gen:manifests`, 8 tests vitest |
 | 2026-05-27 | B.1   | this PR    | `AlgorithmPolicyResolver` (`domain/policy/`): matrice complète audit #4 + hard constraints (mégapixels/mono-pen/palette≤2), 41 tests |
 | 2026-05-27 | B.2   | this PR    | `ToolChangeOrchestrator` + 4 stratégies (`FirmwareStrategy`/`HostMacroStrategy`/`ManualStrategy`/`SinglePenStrategy`) avec `SwapPlan`/`SwapContext`/`PauseKind` et substitution placeholders, 16 tests |
+| 2026-05-27 | B.3   | this PR    | Recovery layer (`Directive`/`FailureKind`/`JobRecoveryOverride`/`resolve_recovery`) + table totale 3×5 + e2e pause→swap→resume préservant état, 23 tests |
 
 ---
 
