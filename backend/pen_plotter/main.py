@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator
@@ -46,6 +47,12 @@ from pen_plotter.auth import require_api_key
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
 from pen_plotter.deployment import capabilities_for, resolve_role
+from pen_plotter.domain.slo import (
+    evaluator_enabled as slo_evaluator_enabled,
+)
+from pen_plotter.domain.slo import (
+    evaluator_loop as slo_evaluator_loop,
+)
 from pen_plotter.errors import install_error_handler
 from pen_plotter.manifests_seed import register_default_manifests
 from pen_plotter.observability import (
@@ -109,9 +116,22 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     if caps.runs_queue_worker:
         recover_interrupted()
         print_queue.start()
+    # Background SLO evaluator (E.4 wire). Opt-in via
+    # ``OMNIPLOT_SLO_EVAL_ENABLED=1`` so dev sessions stay quiet.
+    # Owned by the API role (or monolith) so a render-only worker
+    # doesn't spin up redundant evaluators.
+    slo_task: asyncio.Task[None] | None = None
+    if caps.serves_http and slo_evaluator_enabled():
+        slo_task = asyncio.create_task(slo_evaluator_loop())
     try:
         yield
     finally:
+        if slo_task is not None:
+            slo_task.cancel()
+            try:
+                await slo_task
+            except (asyncio.CancelledError, Exception):
+                pass
         if caps.runs_queue_worker:
             await print_queue.stop()
 
