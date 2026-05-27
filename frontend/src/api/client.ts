@@ -577,6 +577,82 @@ export async function rerenderJob(
   return response.data
 }
 
+// ============================== SLO ===================================
+// HTTP surface for the SLO budget evaluator (D.4) consumed by the
+// Settings → SLO dashboard.
+
+export type SloSeverity = 'healthy' | 'warning' | 'breach'
+
+export interface SloBudget {
+  metric: string
+  label: string
+  p95_ms: number
+  min_samples: number
+  warn_breach_ratio: number
+  alert_on_breach: boolean
+}
+
+export interface SloMetricSample {
+  metric: string
+  value_ms: number
+}
+
+export interface SloBudgetStatus {
+  budget: SloBudget
+  severity: SloSeverity
+  observed_p95_ms: number
+  breach_count: number
+  sample_count: number
+}
+
+export interface SloBudgetReport {
+  statuses: SloBudgetStatus[]
+  overall: SloSeverity
+}
+
+export async function getSloBudgets(): Promise<SloBudget[]> {
+  const response = await api.get<SloBudget[]>('/slo/budgets')
+  return response.data
+}
+
+export async function evaluateSloBudgets(
+  samples: SloMetricSample[],
+  budgets?: SloBudget[],
+): Promise<SloBudgetReport> {
+  const response = await api.post<SloBudgetReport>('/slo/evaluate', { samples, budgets })
+  return response.data
+}
+
+// ============================== Manifests =============================
+
+export interface ManifestMetaInfo {
+  domain: string
+  manifest_version: number
+  schema_semver: string
+  generated_at: string
+  deprecations: { feature: string; deprecated_since: string; remove_after: string }[]
+  feature_flags: Record<string, boolean>
+}
+
+export interface ManifestEnvelope<T> {
+  meta: ManifestMetaInfo
+  entries: T[]
+}
+
+export async function getManifestDomain(
+  domain: string,
+): Promise<ManifestEnvelope<Record<string, unknown>>> {
+  const response = await api.get<ManifestEnvelope<Record<string, unknown>>>(
+    `/manifests/${domain}`,
+  )
+  return response.data
+}
+
+export async function listManifestDomains(): Promise<string[]> {
+  const response = await api.get<{ domains: string[] }>('/manifests')
+  return response.data.domains
+}
+
 /** Shape of the structured ``detail`` returned by /rerender on a 404. */
 export type RerenderUnavailableReason =
   | 'unknown_job'

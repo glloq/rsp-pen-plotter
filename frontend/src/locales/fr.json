@@ -41,6 +41,21 @@
     "title": "Comparer les variantes",
     "empty": "Il faut au moins deux variantes sur le placement courant pour comparer. Crée-en une seconde depuis la barre Variantes."
   },
+  "workspaces": {
+    "label": "Espace de travail",
+    "menu": "Menu espace de travail",
+    "saveAs": "Enregistrer sous…",
+    "rename": "Renommer",
+    "remove": "Supprimer",
+    "namePrompt": "Nom de l'espace de travail",
+    "removeConfirm": "Supprimer l'espace de travail « {name} » ?",
+    "railAria": "Panneaux de l'espace de travail actif",
+    "empty": {
+      "layers": "Aucune couche — sélectionne un placement pour alimenter l'inspecteur.",
+      "magazine": "Aucun profil actif — ouvre le tiroir Plotter pour en choisir un.",
+      "queue": "Aucun run actif."
+    }
+  },
   "machine": {
     "disconnected": "Déconnecté",
     "idle": "Prêt",
@@ -494,7 +509,32 @@
     "close": "Fermer",
     "history": "Historique",
     "audit": "Audit",
-    "system": "Système"
+    "system": "Système",
+    "slo": "SLO",
+    "manifests": "Manifestes"
+  },
+  "slo": {
+    "title": "Tableau de bord SLO",
+    "intro": "Évalue {count} échantillon(s) perf en mémoire contre la table de budgets backend.",
+    "evaluateNow": "Évaluer maintenant",
+    "loadFailed": "Échec du chargement des budgets SLO.",
+    "evaluateFailed": "Échec de l'évaluation.",
+    "noSamples": "Aucun échantillon perf collecté — utilise l'app un peu, puis réévalue.",
+    "overall": "Global",
+    "col": {
+      "metric": "Métrique",
+      "p95Budget": "Budget p95",
+      "observed": "Observé",
+      "severity": "Sévérité"
+    }
+  },
+  "manifests": {
+    "title": "Manifestes backend",
+    "intro": "Contrats versionnés exposés par le backend. L'UI les parse avec zod et retombe sur un snapshot embarqué si le backend est injoignable.",
+    "refresh": "Rafraîchir",
+    "loadFailed": "Échec du chargement des manifestes.",
+    "generatedAt": "Généré le",
+    "entriesCount": "{count} entrées"
   },
   "upload": {
     "profile": "Profil machine",

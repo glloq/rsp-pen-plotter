@@ -6,6 +6,17 @@ a job runs through the print queue we replace that firmware pause with a
 software-guided pause: the streamer stops, the UI prompts the operator to swap
 the pen, and streaming resumes on confirmation. The downloaded G-code is left
 untouched (it keeps ``M0``) so it stays portable to other senders.
+
+Migration note (E.3 wire): the v0.2 ``ToolChangeOrchestrator`` is the
+forward-looking source of truth for swap prompts (it composes mode +
+manual_prompt template + placeholder substitution). The legacy regex
+format used by these prompts predates the orchestrator's template, so
+swapping it in here would break golden-text contracts. The orchestrator
+remains the path the streamer takes for **non-operator-confirm** swaps
+(firmware / host_macro / single_pen via the future inline-command
+streamer integration); the manual-pause prompt rendering migrates once
+the legacy profiles' ``manual_prompt`` templates are aligned with the
+``Insert pen slot N: Label`` format these regexes still match.
 """
 
 from __future__ import annotations

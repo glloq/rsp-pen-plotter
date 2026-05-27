@@ -194,6 +194,7 @@ class BitmapConverter(Converter):
         options: dict[str, Any] | None = None,
         fast: bool = False,
         n_workers: int = 1,
+        progress_callback: Any = None,
     ) -> tuple[ConversionResult, SegmentationResult]:
         """Same as :meth:`convert` but also returns the segmentation result.
 
@@ -286,7 +287,11 @@ class BitmapConverter(Converter):
                 label = f"color-{color_hex.lstrip('#')}"
                 overrides[label] = recipe
         svg, warnings = self.__class__.render_from_segmentation(
-            seg, opts, per_layer_overrides=overrides, n_workers=n_workers,
+            seg,
+            opts,
+            per_layer_overrides=overrides,
+            n_workers=n_workers,
+            progress_callback=progress_callback,
         )
         return (
             ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings),
@@ -301,6 +306,7 @@ class BitmapConverter(Converter):
         *,
         per_layer_overrides: dict[str, dict[str, Any]] | None = None,
         n_workers: int = 1,
+        progress_callback: Any = None,
     ) -> tuple[str, list[str]]:
         """Re-run only the rendering step against an existing segmentation.
 
@@ -317,4 +323,5 @@ class BitmapConverter(Converter):
             background_luminance=opts.background_luminance,
             per_layer_overrides=per_layer_overrides,
             n_workers=n_workers,
+            progress_callback=progress_callback,
         )

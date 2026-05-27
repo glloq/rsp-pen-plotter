@@ -21,6 +21,7 @@ what to send, how to pause, what to show the operator.
 from __future__ import annotations
 
 from pen_plotter.domain.toolchange.orchestrator import (
+    PauseKind,
     SwapContext,
     SwapPlan,
     ToolChangeOrchestrator,
@@ -39,6 +40,7 @@ __all__ = [
     "FirmwareStrategy",
     "HostMacroStrategy",
     "ManualStrategy",
+    "PauseKind",
     "SinglePenStrategy",
     "SwapContext",
     "SwapPlan",

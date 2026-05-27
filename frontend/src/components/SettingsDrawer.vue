@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useUiStore, type SettingsTab } from '../stores/ui'
 import JobHistory from './JobHistory.vue'
 import AuditPanel from './AuditPanel.vue'
+import ManifestsPanel from './ManifestsPanel.vue'
+import SloPanel from './SloPanel.vue'
 import SystemPanel from './SystemPanel.vue'
 
 const { t } = useI18n()
@@ -15,6 +17,8 @@ const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'system', label: 'settings.system' },
   { id: 'history', label: 'settings.history' },
   { id: 'audit', label: 'settings.audit' },
+  { id: 'slo', label: 'settings.slo' },
+  { id: 'manifests', label: 'settings.manifests' },
 ]
 
 function select(tab: SettingsTab): void {
@@ -73,6 +77,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <div v-show="settingsTab === 'system'"><SystemPanel /></div>
         <div v-show="settingsTab === 'history'"><JobHistory /></div>
         <div v-show="settingsTab === 'audit'"><AuditPanel /></div>
+        <div v-show="settingsTab === 'slo'"><SloPanel /></div>
+        <div v-show="settingsTab === 'manifests'"><ManifestsPanel /></div>
       </div>
     </div>
   </div>

@@ -16,6 +16,7 @@ import {
 } from '../api/client'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
+import { usePerfStore } from './perf'
 import { useToastStore } from './toasts'
 import { validateUploadFile } from '../api/uploadValidation'
 import type { Variant } from './job'
@@ -208,6 +209,12 @@ export const useLibraryStore = defineStore('library', () => {
     }
     loading.value = true
     error.value = null
+    // Time the round-trip upload + conversion: this is the
+    // ``time_to_first_preview`` KPI (perf overlay, roadmap C.8). The
+    // request emits one sample on completion regardless of success,
+    // so the overlay reflects real operator-perceived latency.
+    const perf = usePerfStore()
+    const tStart = performance.now()
     try {
       const result = await uploadToLibrary(file, options.folder ?? '', options.convertOptions, {
         onProgress: options.onProgress,
@@ -248,6 +255,7 @@ export const useLibraryStore = defineStore('library', () => {
       return null
     } finally {
       loading.value = false
+      perf.recordTiming('time_to_first_preview', performance.now() - tStart, file.name)
     }
   }
 

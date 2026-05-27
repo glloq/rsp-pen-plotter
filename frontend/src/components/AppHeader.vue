@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { usePlotterStore } from '../stores/plotter'
 import { useUiModeStore } from '../stores/uiMode'
 import { useUiStore } from '../stores/ui'
+import { useWorkspacesStore } from '../stores/workspaces'
 import AssistantModeToggle from './AssistantModeToggle.vue'
 import MachineStatusPill from './MachineStatusPill.vue'
 
@@ -11,10 +13,37 @@ const { t } = useI18n()
 const ui = useUiStore()
 const uiMode = useUiModeStore()
 const plotter = usePlotterStore()
+const workspaces = useWorkspacesStore()
 const { status: plotterStatus } = storeToRefs(plotter)
 
 function toggleWorkshop(): void {
   uiMode.setFlag('workshopMode', !uiMode.isFlagEnabled('workshopMode'))
+}
+
+const wsMenuOpen = ref(false)
+function onWorkspaceChange(event: Event): void {
+  const target = event.target as HTMLSelectElement
+  workspaces.setActive(target.value)
+}
+function saveAsCurrent(): void {
+  const name = window.prompt(t('workspaces.namePrompt'))
+  if (name) workspaces.saveAs(name, [...workspaces.active.panels])
+  wsMenuOpen.value = false
+}
+function renameCurrent(): void {
+  const current = workspaces.active
+  if (current.builtin) return
+  const name = window.prompt(t('workspaces.namePrompt'), current.name)
+  if (name) workspaces.rename(current.id, name)
+  wsMenuOpen.value = false
+}
+function removeCurrent(): void {
+  const current = workspaces.active
+  if (current.builtin) return
+  if (window.confirm(t('workspaces.removeConfirm', { name: current.name }))) {
+    workspaces.remove(current.id)
+  }
+  wsMenuOpen.value = false
 }
 </script>
 
@@ -27,6 +56,66 @@ function toggleWorkshop(): void {
     </div>
 
     <div class="ml-auto flex items-center gap-3">
+      <!-- Workspace switcher (roadmap D.3 + C wire). Built-in
+           presets ship with non-editable names; custom workspaces
+           expose Save as / Rename / Remove through the … menu. -->
+      <div class="relative flex items-center gap-1" data-test="header-workspaces">
+        <label class="sr-only" for="header-workspace-select">
+          {{ t('workspaces.label') }}
+        </label>
+        <select
+          id="header-workspace-select"
+          class="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
+          :value="workspaces.activeId"
+          data-test="header-workspace-select"
+          @change="onWorkspaceChange"
+        >
+          <option v-for="ws in workspaces.all" :key="ws.id" :value="ws.id">
+            {{ ws.name }}
+          </option>
+        </select>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-xs text-slate-200 hover:bg-slate-700"
+          :aria-label="t('workspaces.menu')"
+          data-test="header-workspace-menu"
+          @click="wsMenuOpen = !wsMenuOpen"
+        >
+          ⋯
+        </button>
+        <div
+          v-if="wsMenuOpen"
+          class="absolute right-0 top-full z-50 mt-1 w-44 rounded border border-slate-700 bg-slate-800 py-1 text-xs text-slate-200 shadow-xl"
+        >
+          <button
+            type="button"
+            class="block w-full px-3 py-1.5 text-left hover:bg-slate-700"
+            data-test="workspace-save-as"
+            @click="saveAsCurrent"
+          >
+            {{ t('workspaces.saveAs') }}
+          </button>
+          <button
+            type="button"
+            class="block w-full px-3 py-1.5 text-left hover:bg-slate-700 disabled:opacity-40"
+            :disabled="workspaces.active.builtin"
+            data-test="workspace-rename"
+            @click="renameCurrent"
+          >
+            {{ t('workspaces.rename') }}
+          </button>
+          <button
+            type="button"
+            class="block w-full px-3 py-1.5 text-left text-red-300 hover:bg-slate-700 disabled:opacity-40"
+            :disabled="workspaces.active.builtin"
+            data-test="workspace-remove"
+            @click="removeCurrent"
+          >
+            {{ t('workspaces.remove') }}
+          </button>
+        </div>
+      </div>
+
       <AssistantModeToggle data-test="header-assistant-mode-toggle" />
 
       <button

@@ -41,6 +41,21 @@
     "title": "Compare variants",
     "empty": "Need at least two variants on the current placement to compare. Add a second variant from the Variants bar."
   },
+  "workspaces": {
+    "label": "Workspace",
+    "menu": "Workspace menu",
+    "saveAs": "Save as…",
+    "rename": "Rename",
+    "remove": "Remove",
+    "namePrompt": "Workspace name",
+    "removeConfirm": "Delete the workspace \"{name}\"?",
+    "railAria": "Active workspace panels",
+    "empty": {
+      "layers": "No layers — select a placement to populate the inspector.",
+      "magazine": "No active profile — open the Plotter drawer to pick one.",
+      "queue": "No active run."
+    }
+  },
   "machine": {
     "disconnected": "Offline",
     "idle": "Ready",
@@ -494,7 +509,32 @@
     "close": "Close",
     "history": "History",
     "audit": "Audit",
-    "system": "System"
+    "system": "System",
+    "slo": "SLO",
+    "manifests": "Manifests"
+  },
+  "slo": {
+    "title": "SLO dashboard",
+    "intro": "Evaluates {count} in-memory perf sample(s) against the backend's budget table.",
+    "evaluateNow": "Evaluate now",
+    "loadFailed": "Failed to load SLO budgets.",
+    "evaluateFailed": "Evaluation failed.",
+    "noSamples": "No perf samples collected yet — use the app a bit, then re-evaluate.",
+    "overall": "Overall",
+    "col": {
+      "metric": "Metric",
+      "p95Budget": "p95 budget",
+      "observed": "Observed",
+      "severity": "Severity"
+    }
+  },
+  "manifests": {
+    "title": "Backend manifests",
+    "intro": "Versioned contracts the backend currently exposes. The UI parses them with zod and falls back to a bundled snapshot if the backend is unreachable.",
+    "refresh": "Refresh",
+    "loadFailed": "Failed to load manifests.",
+    "generatedAt": "Generated at",
+    "entriesCount": "{count} entries"
   },
   "upload": {
     "profile": "Machine profile",

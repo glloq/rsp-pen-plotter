@@ -22,6 +22,11 @@ from sqlmodel import Field, Session, SQLModel, asc, desc, select
 
 from pen_plotter.core.resume import build_resume_program
 from pen_plotter.core.toolchange import guided_pause_points
+from pen_plotter.domain.recovery import (
+    Directive,
+    FailureKind,
+    resolve_recovery,
+)
 from pen_plotter.hardware.controller import PlotterController
 from pen_plotter.hardware.streamer import StreamError, StreamState, executable_lines
 from pen_plotter.persistence import engine as default_engine
@@ -280,7 +285,37 @@ class PrintQueue:
                 "\n".join(program), on_progress=checkpoint, pause_points=pause_points
             )
         except StreamError as exc:
-            _update(run.id, self._engine, state=RunState.FAILED, error=str(exc))
+            # Recovery layer (B.3 → E.2 wire): turn the firmware
+            # rejection into a directive that respects the profile's
+            # ``recovery_policy``. ``abort`` profiles still fail the
+            # run; ``pause_and_prompt`` pauses for operator confirm so
+            # the run can be resumed via the existing checkpoint;
+            # ``skip_layer`` also pauses today (full skip-then-advance
+            # logic is the follow-up that ships with IR-driven
+            # streaming — until then, pausing keeps state intact and
+            # lets the operator make the call).
+            caps = profile.effective_capabilities()
+            decision = resolve_recovery(
+                caps.tool_change.recovery_policy,
+                None,
+                FailureKind.COMMAND_REJECTED,
+            )
+            if decision.directive is Directive.WAIT_FOR_OPERATOR:
+                _update(
+                    run.id,
+                    self._engine,
+                    state=RunState.PAUSED,
+                    error=f"{exc} — paused per recovery policy.",
+                )
+            elif decision.directive is Directive.SKIP_AND_CONTINUE:
+                _update(
+                    run.id,
+                    self._engine,
+                    state=RunState.PAUSED,
+                    error=f"{exc} — skip-layer policy pending operator confirm.",
+                )
+            else:
+                _update(run.id, self._engine, state=RunState.FAILED, error=str(exc))
             return True
         finally:
             self._current_id = None

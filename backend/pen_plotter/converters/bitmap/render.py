@@ -18,6 +18,7 @@ avoided.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
 from typing import Any
@@ -29,6 +30,12 @@ from pen_plotter.converters.algorithms import get_algorithm
 
 from .cache import SegmentationResult
 from .segment import _REC709
+
+# Signature: (index, total, layer_label). Called after each rendered
+# layer in the sequential branch. The parallel branch fires it once at
+# the end with `(total, total, "")` because the worker pool ordering
+# guarantees only batch completion, not per-layer progress.
+ProgressCallback = Callable[[int, int, str], None]
 
 
 def _render_layer_unpack(
@@ -134,6 +141,7 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     background_luminance: float,
     per_layer_overrides: dict[str, dict[str, Any]] | None = None,
     n_workers: int = 1,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[str, list[str]]:
     """Re-run only the rendering step against an existing segmentation.
 
@@ -191,12 +199,13 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     max_workers = min(max(1, n_workers), max(1, (os.cpu_count() or 1)))
     fallback = algorithm
     worker_jobs = [(*job, fallback) for job in jobs]
-    if max_workers > 1 and len(worker_jobs) > 1:
+    total = len(worker_jobs)
+    if max_workers > 1 and total > 1:
         try:
             ctx = get_context("forkserver")
             with _traced_span(
                 "pipeline.bitmap.render_parallel",
-                layer_count=len(worker_jobs),
+                layer_count=total,
                 workers=max_workers,
                 algorithm=algorithm,
             ):
@@ -205,11 +214,13 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
             for svg, layer_warnings in results:
                 groups.append(svg)
                 warnings.extend(layer_warnings)
+            if progress_callback is not None:
+                progress_callback(total, total, "")
         except (OSError, RuntimeError, ValueError) as exc:
             # Worker init / pickling failed — degrade to serial.
             warnings.append(f"Parallel render disabled ({exc}); falling back to serial.")
             groups = []
-            for job in worker_jobs:
+            for i, job in enumerate(worker_jobs):
                 with _traced_span(
                     "pipeline.bitmap.render_layer",
                     algorithm=job[4],
@@ -218,8 +229,10 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
                     svg, layer_warnings = _render_layer_unpack(job)
                 groups.append(svg)
                 warnings.extend(layer_warnings)
+                if progress_callback is not None:
+                    progress_callback(i + 1, total, job[3])
     else:
-        for job in worker_jobs:
+        for i, job in enumerate(worker_jobs):
             with _traced_span(
                 "pipeline.bitmap.render_layer",
                 algorithm=job[4],
@@ -228,6 +241,8 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
                 svg, layer_warnings = _render_layer_unpack(job)
             groups.append(svg)
             warnings.extend(layer_warnings)
+            if progress_callback is not None:
+                progress_callback(i + 1, total, job[3])
     if not groups:
         warnings.append("No drawable layers detected (image may be entirely background).")
     with _traced_span("pipeline.bitmap.compose_svg", layer_count=len(groups)):

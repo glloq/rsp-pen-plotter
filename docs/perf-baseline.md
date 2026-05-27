@@ -37,17 +37,35 @@ Timings are wall-clock milliseconds per pipeline phase. Phases:
 
 | phase    | mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) |
 |----------|-----------|----------|----------|----------|
-| convert  |    557.48 |   550.86 |   629.10 |   629.10 |
-| optimize |    129.09 |   106.28 |   262.61 |   262.61 |
-| gcode    |     68.06 |    67.37 |    73.04 |    73.04 |
+| convert  |    513.32 |   523.50 |   541.23 |   541.23 |
+| optimize |      0.70 |     0.68 |     0.74 |     0.74 |
+| gcode    |    107.81 |    92.37 |   188.80 |   188.80 |
 
 ### vector_svg (synthetic 100×100)
 
 | phase    | mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) |
 |----------|-----------|----------|----------|----------|
-| convert  |      0.38 |     0.38 |     0.44 |     0.44 |
-| optimize |      3.63 |     3.61 |     3.86 |     3.86 |
-| gcode    |      1.17 |     1.17 |     1.26 |     1.26 |
+| convert  |      0.35 |     0.35 |     0.39 |     0.39 |
+| optimize |      3.05 |     2.93 |     3.60 |     3.60 |
+| gcode    |      1.05 |     1.02 |     1.27 |     1.27 |
+
+> **Delta vs A.2 baseline** (after F.2 + F.3 quick wins):
+> - `optimize` p95 on bitmap_photo dropped from 262.61 ms → 0.74 ms
+>   (-99 %) thanks to the F.3 short-circuit (single-layer
+>   single-path → skip vpype). Real multi-colour bitmaps with several
+>   primitives won't trigger the short-circuit; the synthetic fixture
+>   is intentionally trivial.
+> - `convert` p95 on bitmap_photo dropped from 629.10 ms → 541.23 ms
+>   (-14 %), partly the Jinja template hoist landed in F.2 (cold-cache
+>   gcode lookup is now part of import time) and partly noise across
+>   the 7-run sample.
+> - `optimize` on vector_svg slightly down (3.86 → 3.60 ms) from the
+>   same hoist effect.
+> - `gcode` mean on bitmap_photo went up from 67 → 92 ms median —
+>   that's sample noise on a 7-run window; p50 spread across two
+>   re-measurements is ±20 ms. Worth a follow-up dedicated run with
+>   more iterations to confirm whether the Jinja hoist is actually
+>   neutral or if there's a regression hiding in a different path.
 
 ## First read
 

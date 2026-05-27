@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ManifestSource } from '../domain/manifests/client'
 
 /**
@@ -14,15 +15,12 @@ const props = defineProps<{
   error?: Error
 }>()
 
+const { t } = useI18n()
 const visible = computed(() => props.source !== 'live')
 
 const message = computed(() => {
-  if (props.source === 'cache') {
-    return 'Manifestes algorithmes servis depuis le cache local — connexion au backend indisponible.'
-  }
-  if (props.source === 'snapshot') {
-    return "Manifestes algorithmes servis depuis le snapshot embarqué — la dernière liste à jour n'a pas pu être chargée."
-  }
+  if (props.source === 'cache') return t('v2.manifest.fallbackCache')
+  if (props.source === 'snapshot') return t('v2.manifest.fallbackSnapshot')
   return ''
 })
 </script>

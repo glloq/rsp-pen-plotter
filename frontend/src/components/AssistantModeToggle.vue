@@ -3,13 +3,15 @@
 //
 // Lightweight component meant to live in the modal header so the
 // operator can flip mode per task without leaving the workflow.
+import { useI18n } from 'vue-i18n'
 import { useUiModeStore } from '../stores/uiMode'
 
+const { t } = useI18n()
 const ui = useUiModeStore()
 </script>
 
 <template>
-  <div class="assistant-mode-toggle" role="group" aria-label="UX mode">
+  <div class="assistant-mode-toggle" role="group" :aria-label="t('v2.mode.expert')">
     <button
       type="button"
       :class="{ active: ui.isAssisted }"
@@ -17,7 +19,7 @@ const ui = useUiModeStore()
       data-test="assistant-mode-assisted"
       @click="ui.setMode('assisted')"
     >
-      Assisté
+      {{ t('v2.mode.assisted') }}
     </button>
     <button
       type="button"
@@ -26,7 +28,7 @@ const ui = useUiModeStore()
       data-test="assistant-mode-expert"
       @click="ui.setMode('expert')"
     >
-      Expert
+      {{ t('v2.mode.expert') }}
     </button>
   </div>
 </template>

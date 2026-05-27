@@ -17,7 +17,9 @@
 //   6. Preflight        — risk indicators + ETA + "Generate"
 
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../../api/client'
+import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
 import type {
   Goal,
@@ -25,6 +27,7 @@ import type {
   PolicyDecision,
   SourceKind,
 } from '../../domain/policy/schemas'
+import { useUiModeStore } from '../../stores/uiMode'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayerInspector from './LayerInspector.vue'
 import PipelineInspector from './PipelineInspector.vue'
@@ -47,14 +50,16 @@ const emit = defineEmits<{
   (e: 'confirm', decision: PolicyDecision): void
 }>()
 
-const STEPS: { id: string; label: string }[] = [
-  { id: 'source', label: 'Source' },
-  { id: 'intent', label: 'Intent' },
-  { id: 'algorithm', label: 'Algorithme' },
-  { id: 'colors', label: 'Couleurs' },
-  { id: 'layers', label: 'Couches' },
-  { id: 'preflight', label: 'Préflight' },
-]
+const { t } = useI18n()
+
+const STEPS = computed<{ id: string; label: string }[]>(() => [
+  { id: 'source', label: t('v2.modal.stepSource') },
+  { id: 'intent', label: t('v2.modal.stepIntent') },
+  { id: 'algorithm', label: t('v2.modal.stepAlgorithm') },
+  { id: 'colors', label: t('v2.modal.stepColors') },
+  { id: 'layers', label: t('v2.modal.stepLayers') },
+  { id: 'preflight', label: t('v2.modal.stepPreflight') },
+])
 
 const activeIndex = ref(0)
 
@@ -87,7 +92,7 @@ async function next(): Promise<void> {
       resolving.value = false
     }
   }
-  if (activeIndex.value < STEPS.length - 1) activeIndex.value += 1
+  if (activeIndex.value < STEPS.value.length - 1) activeIndex.value += 1
 }
 
 function previous(): void {
@@ -109,14 +114,42 @@ const risks = computed<string[]>(() => {
 function confirm(): void {
   if (decision.value) emit('confirm', decision.value)
 }
+
+// Progressive disclosure (roadmap C.1 + C.2). In expert mode the
+// operator can flip into "advanced details" (level 2) which reveals
+// the reasoning chain, fallback list, PipelineInspector, and the raw
+// default-options JSON. Assisted mode stays at level 1 to keep the
+// step body minimal.
+const uiMode = useUiModeStore()
+const showAdvanced = computed(
+  () => uiMode.isExpert && uiMode.expertDisclosureLevel === 2,
+)
+function toggleAdvanced(): void {
+  uiMode.setExpertDisclosureLevel(uiMode.expertDisclosureLevel === 2 ? 1 : 2)
+}
+
+// Global modal shortcuts (Ctrl/Cmd+Enter = Suivant, Ctrl/Cmd+Backspace
+// = Précédent). The composable ignores keystrokes targeting inputs so
+// the select / radios on each step continue to work normally.
+useKeyboardShortcuts([
+  {
+    id: 'modal.next',
+    handler: () => {
+      if (resolving.value) return
+      if (activeIndex.value < STEPS.value.length - 1) void next()
+      else if (decision.value) confirm()
+    },
+  },
+  { id: 'modal.previous', handler: previous },
+])
 </script>
 
 <template>
-  <div class="modal-v2" role="dialog" aria-modal="true" aria-label="Préparer l'impression">
+  <div class="modal-v2" role="dialog" aria-modal="true" :aria-label="t('v2.modal.title')">
     <header class="modal-v2__header">
-      <h2>Préparer l'impression</h2>
+      <h2>{{ t('v2.modal.title') }}</h2>
       <AssistantModeToggle />
-      <button type="button" class="close" aria-label="Fermer" @click="emit('cancel')">×</button>
+      <button type="button" class="close" :aria-label="t('settings.close')" @click="emit('cancel')">×</button>
     </header>
 
     <StepperHeader :steps="STEPS" :active-index="activeIndex" @jump="jump" />
@@ -149,39 +182,54 @@ function confirm(): void {
             :data-test="`intent-${opt}`"
             @click="goal = opt"
           >
-            <strong>{{ opt === 'fast' ? 'Rapide' : opt === 'balanced' ? 'Équilibré' : 'Qualité' }}</strong>
-            <span>
-              {{ opt === 'fast' ? 'preview brouillon, algos économes' :
-                 opt === 'balanced' ? 'compromis temps / rendu' :
-                 'preview final, algos plus chers' }}
-            </span>
+            <strong>{{ t(`v2.intent.${opt}`) }}</strong>
           </button>
         </div>
       </div>
 
       <!-- 3. Algorithm recommendation -->
       <div v-else-if="activeIndex === 2" data-test="step-algorithm">
-        <div v-if="resolving">Calcul de la recommandation…</div>
+        <div v-if="resolving">{{ t('v2.modal.resolving') }}</div>
         <div v-else-if="resolveError" class="error">
-          Erreur resolver : {{ resolveError }}. Les défauts statiques seront utilisés.
+          {{ t('v2.modal.resolverError', { message: resolveError }) }}
         </div>
         <div v-else-if="decision">
           <p>
             Algo recommandé&nbsp;: <strong data-test="recommended-algo">{{ decision.default_algorithm }}</strong>
             (<span>{{ decision.quality_tier }}</span>)
           </p>
-          <details open>
-            <summary>Pourquoi ce choix&nbsp;?</summary>
+          <button
+            v-if="uiMode.isExpert"
+            type="button"
+            class="disclosure-toggle"
+            data-test="disclosure-toggle"
+            :aria-pressed="showAdvanced"
+            @click="toggleAdvanced"
+          >
+            {{ showAdvanced ? 'Masquer les détails avancés' : 'Afficher les détails avancés' }}
+          </button>
+          <template v-if="showAdvanced">
+            <details open>
+              <summary>{{ t('v2.modal.why') }}</summary>
+              <ul>
+                <li v-for="r in decision.reasoning" :key="r.rule">
+                  <code>{{ r.rule }}</code> — {{ r.description }}
+                </li>
+              </ul>
+            </details>
+            <p v-if="decision.fallback_chain.length">
+              Fallbacks&nbsp;: {{ decision.fallback_chain.join(' → ') }}
+            </p>
+            <PipelineInspector :decision="decision" :source-kind="sourceKind" />
+          </template>
+          <details v-else>
+            <summary data-test="why-summary-collapsed">{{ t('v2.modal.why') }}</summary>
             <ul>
-              <li v-for="r in decision.reasoning" :key="r.rule">
-                <code>{{ r.rule }}</code> — {{ r.description }}
+              <li v-for="r in decision.reasoning.slice(0, 1)" :key="r.rule">
+                {{ r.description }}
               </li>
             </ul>
           </details>
-          <p v-if="decision.fallback_chain.length">
-            Fallbacks&nbsp;: {{ decision.fallback_chain.join(' → ') }}
-          </p>
-          <PipelineInspector :decision="decision" :source-kind="sourceKind" />
         </div>
       </div>
 
@@ -230,14 +278,16 @@ function confirm(): void {
     </section>
 
     <footer class="modal-v2__footer">
-      <button type="button" :disabled="activeIndex === 0" @click="previous">Précédent</button>
+      <button type="button" :disabled="activeIndex === 0" @click="previous">
+        {{ t('v2.modal.previous') }}
+      </button>
       <button
         v-if="activeIndex < STEPS.length - 1"
         type="button"
         :disabled="resolving"
         @click="next"
       >
-        Suivant
+        {{ t('v2.modal.next') }}
       </button>
       <button
         v-else
@@ -246,7 +296,7 @@ function confirm(): void {
         data-test="confirm-button"
         @click="confirm"
       >
-        Générer
+        {{ t('v2.modal.generate') }}
       </button>
     </footer>
   </div>
@@ -325,5 +375,18 @@ function confirm(): void {
 .layers-empty .muted {
   color: #777;
   font-size: 0.85rem;
+}
+.disclosure-toggle {
+  margin: 0.25rem 0 0.5rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #fafafa;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.disclosure-toggle[aria-pressed='true'] {
+  background: #eef4ff;
+  border-color: #1f6feb;
 }
 </style>

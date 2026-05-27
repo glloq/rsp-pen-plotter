@@ -116,6 +116,7 @@ def convert_file(
     filename: str | None,
     mime: str,
     options: dict[str, Any] | None = None,
+    progress_callback: Any = None,
 ) -> ConvertedFile:
     """Run the appropriate converter and produce a sanitized SVG + layer list.
 
@@ -145,7 +146,9 @@ def convert_file(
             if isinstance(converter, BitmapConverter):
                 with traced_span("pipeline.segment_and_render"):
                     result, bitmap_segmentation = converter.segment_and_render(
-                        data, options=parsed_options
+                        data,
+                        options=parsed_options,
+                        progress_callback=progress_callback,
                     )
                 bitmap_options = BitmapOptions.model_validate(parsed_options)
             else:
@@ -164,6 +167,27 @@ def convert_file(
             svg = sanitize_svg(result.svg)
         with traced_span("pipeline.extract_layers"):
             layers = extract_layers(svg)
+        # IR pass-through (E.1 wire). When ``OMNIPLOT_IR_ENABLED=1`` we
+        # also build the typed :class:`GeometryIR` from the sanitized
+        # SVG and stash it in the artifact cache keyed on
+        # ``(content_sha256, options)``. The IR isn't consumed by any
+        # downstream code yet — the cache is the infrastructure for the
+        # future IR-native render/optimize path. Cheap by construction:
+        # the adapter walks the SVG once and the cache write is a
+        # single SQLite UPSERT.
+        from pen_plotter.domain.ir.adapter import is_ir_enabled
+
+        if is_ir_enabled():
+            with traced_span("pipeline.ir.build"):
+                from pen_plotter.application.ir_cache import store_geometry
+                from pen_plotter.domain.ir.adapter import (
+                    content_sha256,
+                    geometry_ir_from_svg,
+                )
+
+                source_hash = content_sha256(data)
+                geometry = geometry_ir_from_svg(svg, source_hash=source_hash)
+                store_geometry(source_hash, parsed_options, geometry)
         source_file = PurePosixPath(filename).name if filename else "upload"
         return ConvertedFile(
             source_file=source_file,

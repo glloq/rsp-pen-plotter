@@ -3,11 +3,46 @@ import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import { createI18n } from 'vue-i18n'
 
 vi.mock('../../api/client', () => ({ api: { post: vi.fn(), get: vi.fn() } }))
 
 import { api } from '../../api/client'
 import EditModalV2 from './EditModalV2.vue'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'fr',
+  fallbackLocale: 'fr',
+  messages: {
+    fr: {
+      settings: { close: 'Fermer' },
+      v2: {
+        mode: { assisted: 'Assisté', expert: 'Expert' },
+        modal: {
+          title: "Préparer l'impression",
+          stepSource: 'Source',
+          stepIntent: 'Intent',
+          stepAlgorithm: 'Algorithme',
+          stepColors: 'Couleurs',
+          stepLayers: 'Couches',
+          stepPreflight: 'Préflight',
+          previous: 'Précédent',
+          next: 'Suivant',
+          generate: 'Générer',
+          why: 'Pourquoi ce choix ?',
+          resolving: 'Calcul…',
+          resolverError: 'Erreur resolver : {message}. Les défauts statiques seront utilisés.',
+        },
+        intent: { fast: 'Rapide', balanced: 'Équilibré', quality: 'Qualité' },
+      },
+    },
+  },
+})
+
+function mountModal(props?: Record<string, unknown>) {
+  return mount(EditModalV2, { props, global: { plugins: [i18n] } })
+}
 
 const validDecision = {
   segmentation_method: 'fixed_palette',
@@ -27,14 +62,14 @@ describe('EditModalV2', () => {
   })
 
   it('renders the stepper with six steps and starts on Source', () => {
-    const wrapper = mount(EditModalV2)
+    const wrapper = mountModal()
     const steps = wrapper.findAll('[data-test^="stepper-step-"]')
     expect(steps).toHaveLength(6)
     expect(wrapper.find('[data-test="step-source"]').exists()).toBe(true)
   })
 
   it('walks forward Source -> Intent and lets the operator pick a goal', async () => {
-    const wrapper = mount(EditModalV2)
+    const wrapper = mountModal()
     await wrapper.find('button:nth-child(2)').trigger('click') // ignore; use Suivant
     // Click "Suivant" instead.
     const nextButton = wrapper
@@ -50,7 +85,7 @@ describe('EditModalV2', () => {
 
   it('calls /policy/resolve when leaving Intent and renders the recommendation', async () => {
     vi.mocked(api.post).mockResolvedValueOnce({ data: validDecision })
-    const wrapper = mount(EditModalV2)
+    const wrapper = mountModal()
     // Source -> Intent.
     let next = () =>
       wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
@@ -68,7 +103,7 @@ describe('EditModalV2', () => {
 
   it('shows reasoning entries from the decision', async () => {
     vi.mocked(api.post).mockResolvedValueOnce({ data: validDecision })
-    const wrapper = mount(EditModalV2)
+    const wrapper = mountModal()
     const next = () =>
       wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
     await next().trigger('click')
@@ -91,9 +126,7 @@ describe('EditModalV2', () => {
         ],
       },
     })
-    const wrapper = mount(EditModalV2, {
-      props: { availableColorsCount: 2 },
-    })
+    const wrapper = mountModal({ availableColorsCount: 2 })
     const next = () =>
       wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
     // Walk all the way to Preflight.
@@ -108,14 +141,14 @@ describe('EditModalV2', () => {
   })
 
   it('emits cancel on the close button', async () => {
-    const wrapper = mount(EditModalV2)
+    const wrapper = mountModal()
     await wrapper.find('button[aria-label="Fermer"]').trigger('click')
     expect(wrapper.emitted('cancel')).toBeTruthy()
   })
 
   it('falls back gracefully when the resolver errors out', async () => {
     vi.mocked(api.post).mockRejectedValueOnce(new Error('500 oops'))
-    const wrapper = mount(EditModalV2)
+    const wrapper = mountModal()
     const next = () =>
       wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
     await next().trigger('click') // Source -> Intent

@@ -32,6 +32,14 @@ from pen_plotter.domain.slo.budgets import (
     evaluate_budget,
     evaluate_budgets,
 )
+from pen_plotter.domain.slo.runtime import (
+    collect_samples,
+    evaluator_enabled,
+    evaluator_interval_seconds,
+    evaluator_loop,
+    record_sample,
+    record_samples,
+)
 
 __all__ = [
     "DEFAULT_BUDGETS",
@@ -40,6 +48,12 @@ __all__ = [
     "BudgetStatus",
     "MetricSample",
     "Severity",
+    "collect_samples",
     "evaluate_budget",
     "evaluate_budgets",
+    "evaluator_enabled",
+    "evaluator_interval_seconds",
+    "evaluator_loop",
+    "record_sample",
+    "record_samples",
 ]

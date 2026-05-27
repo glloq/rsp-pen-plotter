@@ -190,6 +190,12 @@ def init_db(target: Engine = engine) -> None:
     """
     if target.url.database and target.url.database != ":memory:":
         Path(target.url.database).parent.mkdir(parents=True, exist_ok=True)
+    # Ensure the IR cache table is registered on SQLModel.metadata
+    # before create_all runs. Importing here (rather than at module
+    # top) avoids a circular import with ``application.ir_cache``,
+    # which itself imports the engine from this module.
+    import pen_plotter.application.ir_cache  # noqa: F401
+
     SQLModel.metadata.create_all(target)
     _add_missing_columns(target)
     _install_audit_immutability_triggers(target)
