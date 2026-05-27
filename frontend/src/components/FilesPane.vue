@@ -50,7 +50,10 @@ interface Row {
 
 const rows = computed<Row[]>(() => {
   const counts = new Map<string, number>()
-  for (const p of store.placements) {
+  // Use visiblePlacements — library-draft placements aren't on the sheet
+  // and shouldn't count towards the "X placements" indicator (audit
+  // 2026-05-27 — Edit must not mark the file as placed).
+  for (const p of store.visiblePlacements) {
     if (p.library_file_id) {
       counts.set(p.library_file_id, (counts.get(p.library_file_id) ?? 0) + 1)
     }
@@ -247,16 +250,38 @@ async function onPaneDrop(event: DragEvent): Promise<void> {
 }
 
 async function editFile(fileId: string): Promise<void> {
-  // Reuse the most recent placement of this file if there is one;
-  // otherwise create a new placement and open it for editing.
-  const existing = store.placements.find((p) => p.library_file_id === fileId)
-  if (existing) {
-    store.selectPlacement(existing.id)
-  } else {
-    const newId = await store.createPlacementFromLibrary(fileId)
-    if (!newId) return
-    store.selectPlacement(newId)
+  // "Edit" is conversion-settings only — it must NOT put the file on
+  // the sheet just because the operator wanted to tweak knobs (audit
+  // 2026-05-27). Resolution order:
+  //   1. A visible (sheet-placed) placement for this file exists →
+  //      reuse it. Modal edits apply to the live placement.
+  //   2. A library-draft placement for this file already exists →
+  //      reopen it. The draft is invisible on the sheet but holds
+  //      the operator's last conversion settings.
+  //   3. Otherwise create a fresh library-draft placement. It stays
+  //      invisible until the operator explicitly clicks "Add to plan"
+  //      in the modal footer (materializeLibraryDraft).
+  const visible = store.placements.find(
+    (p) => p.library_file_id === fileId && !p.is_library_draft,
+  )
+  if (visible) {
+    store.selectPlacement(visible.id)
+    ui.openEditModal()
+    return
   }
+  const draft = store.placements.find(
+    (p) => p.library_file_id === fileId && p.is_library_draft,
+  )
+  if (draft) {
+    store.selectPlacement(draft.id)
+    ui.openEditModal()
+    return
+  }
+  const newId = await store.createPlacementFromLibrary(fileId, undefined, {
+    asDraft: true,
+  })
+  if (!newId) return
+  store.selectPlacement(newId)
   ui.openEditModal()
 }
 

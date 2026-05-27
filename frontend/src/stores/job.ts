@@ -107,6 +107,12 @@ export interface Placement {
   flip_v: boolean
   variants: Variant[]
   active_variant_id: string
+  // True when this placement was created by "Edit from library" without
+  // an explicit "Add to plan" — it's a working copy that holds the
+  // operator's conversion-settings draft but is **not** rendered on the
+  // sheet. ``visiblePlacements`` filters these out. Flipped to false when
+  // the operator explicitly puts it on the plan.
+  is_library_draft?: boolean
 }
 
 let placementCounter = 0
@@ -130,8 +136,22 @@ export const useJobStore = defineStore('job', () => {
     return placements.value.find((p) => p.id === id) ?? null
   })
 
+  // Sheet-visible placements only — excludes "Edit from library" drafts
+  // that hold conversion settings but aren't on the plan yet. Sheet
+  // preview, simulator and FilesPane counters consume this view; the raw
+  // ``placements`` list is for code that needs to see drafts too (the
+  // editor itself, or the "is there already a draft for this file?" check).
+  const visiblePlacements = computed<Placement[]>(() =>
+    placements.value.filter((p) => !p.is_library_draft),
+  )
+
   function patchPlacement(id: string, patch: Partial<Placement>): void {
     placements.value = placements.value.map((p) => (p.id === id ? { ...p, ...patch } : p))
+  }
+
+  /** Promote a library-draft placement to a visible one. */
+  function materializeLibraryDraft(id: string): void {
+    patchPlacement(id, { is_library_draft: false })
   }
   function patchSelected(patch: Partial<Placement>): void {
     const id = selectedPlacementId.value
@@ -817,14 +837,20 @@ export const useJobStore = defineStore('job', () => {
   // Create a new placement on the plan from an existing library entry.
   // ``position`` (workspace mm) centres the placement on that point; when
   // omitted, the placement is centred on the workspace.
+  // ``asDraft=true`` creates a hidden working copy for "Edit from library"
+  // — the placement holds the operator's conversion-settings draft but
+  // doesn't appear on the sheet until ``materializeLibraryDraft`` is
+  // called (typically from the "Add to plan" button in the modal footer).
   async function createPlacementFromLibrary(
     fileId: string,
     position?: { x: number; y: number },
+    options: { asDraft?: boolean } = {},
   ): Promise<string | null> {
     const library = useLibraryStore()
     const detail = await library.ensureDetail(fileId)
     if (!detail) return null
     const placement = blankPlacement()
+    if (options.asDraft) placement.is_library_draft = true
     const bboxes = detail.layers.map((l) => l.bbox)
     const sourceBbox = unionBoxes(bboxes) ?? emptyBbox()
     placements.value = [...placements.value, placement]
@@ -1404,6 +1430,8 @@ export const useJobStore = defineStore('job', () => {
   return {
     // Placements API
     placements,
+    visiblePlacements,
+    materializeLibraryDraft,
     selectedPlacementId,
     selectedPlacement,
     selectPlacement,
