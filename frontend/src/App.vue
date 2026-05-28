@@ -9,7 +9,6 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import EditModal from './components/EditModal.vue'
 import CompareView, { type Candidate } from './components/v2/CompareView.vue'
 import EditModalV2 from './components/v2/EditModalV2.vue'
-import WorkspaceRail from './components/v2/WorkspaceRail.vue'
 import FilesPane from './components/FilesPane.vue'
 import PlotterDrawer from './components/PlotterDrawer.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
@@ -308,11 +307,10 @@ onBeforeUnmount(() => {
     <IntegrityBanner />
 
     <main
-      class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[280px_minmax(0,1fr)_auto] xl:grid-cols-[320px_minmax(0,1fr)_auto]"
+      class="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]"
     >
       <FilesPane />
       <CanvasView />
-      <WorkspaceRail @open-compare="compareOpen = true" />
     </main>
 
     <AppFooter />
