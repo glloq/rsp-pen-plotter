@@ -12,19 +12,42 @@ import { i18n } from '../i18n'
 
 const ACTIVE: PrintRun['state'][] = ['queued', 'running', 'paused']
 
+// Adaptive polling cadences. When at least one run is active we
+// need fresh state to drive the cockpit; when idle we can afford
+// to slow down so we don't hammer the backend or starve the event
+// loop on a Pi. The transition is one-way per tick: a poll that
+// returns an active run upgrades the interval immediately, an idle
+// poll downgrades to the slow cadence.
+const FAST_INTERVAL_MS = 2_000
+const SLOW_INTERVAL_MS = 30_000
+
 export const useQueueStore = defineStore('queue', () => {
   const runs = ref<PrintRun[]>([])
   const error = ref<string | null>(null)
-  let timer: ReturnType<typeof setInterval> | null = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let inflight: Promise<void> | null = null
 
   const active = computed(() => runs.value.filter((r) => ACTIVE.includes(r.state)))
 
   async function load(): Promise<void> {
+    // Single-flight: avoid stacking parallel /queue requests when
+    // a tick fires while the previous one is still pending (slow
+    // backend, network blip). The next tick reuses the in-flight
+    // promise instead of opening a second connection.
+    if (inflight) return inflight
+    const promise = (async () => {
+      try {
+        runs.value = await listQueue()
+        error.value = null
+      } catch (err) {
+        error.value = errorDetail(err, i18n.global.t('queue.loadFailed'))
+      }
+    })()
+    inflight = promise
     try {
-      runs.value = await listQueue()
-      error.value = null
-    } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('queue.loadFailed'))
+      await promise
+    } finally {
+      inflight = null
     }
   }
 
@@ -55,14 +78,33 @@ export const useQueueStore = defineStore('queue', () => {
     await load()
   }
 
+  function _schedule(): void {
+    if (timer !== null) clearTimeout(timer)
+    // Fast cadence while a run is active (timeline cockpit needs
+    // smooth progress), slow cadence when the queue is empty —
+    // operators idle most of the time and don't need 2 s polling
+    // for an empty queue.
+    const interval = active.value.length > 0 ? FAST_INTERVAL_MS : SLOW_INTERVAL_MS
+    timer = setTimeout(async () => {
+      await load()
+      if (timer !== null) _schedule()
+    }, interval)
+  }
+
   function startPolling(): void {
-    if (timer === null) timer = setInterval(load, 2000)
-    void load()
+    if (timer !== null) return // idempotent
+    void load().then(() => {
+      if (timer === null) _schedule()
+    })
+    // Defensive bootstrap: schedule even before the first load
+    // resolves so we don't lose ticks when the initial request
+    // takes > the interval.
+    if (timer === null) _schedule()
   }
 
   function stopPolling(): void {
     if (timer !== null) {
-      clearInterval(timer)
+      clearTimeout(timer)
       timer = null
     }
   }
