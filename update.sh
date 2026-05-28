@@ -71,6 +71,18 @@ git fetch --quiet origin "$BRANCH"
 
 NEW_COMMIT="$(git rev-parse "origin/$BRANCH")"
 
+# Build artifacts a healthy checkout needs after install + build. Missing
+# any of these means a prior update left the working tree half-built — most
+# commonly an npm install that died on EACCES before vite ran. In that
+# state, exiting on "already up to date" leaves the operator with a stale
+# bundle and no obvious way back; we'd rather re-run install + build than
+# pretend the checkout is healthy.
+needs_rebuild() {
+  [ ! -d "$ROOT/frontend/node_modules" ] && return 0
+  [ ! -f "$ROOT/frontend/dist/index.html" ] && return 0
+  return 1
+}
+
 if [ "$PREV_COMMIT" = "$NEW_COMMIT" ]; then
   # When the previous invocation re-execed us (because update.sh itself
   # was modified by the pull), the upstream we already merged equals the
@@ -78,8 +90,15 @@ if [ "$PREV_COMMIT" = "$NEW_COMMIT" ]; then
   # need to run. Skip the "already up to date" short-circuit on the
   # re-exec leg; only exit early when we genuinely have nothing to do.
   if [ -z "${OMNIPLOT_UPDATE_REEXEC:-}" ]; then
-    echo "Already up to date ($PREV_COMMIT)."
-    exit 0
+    if needs_rebuild; then
+      step "Already at $PREV_COMMIT but build artifacts are missing — rebuilding"
+      # Fall through to the install + restart path below. NEW_COMMIT equals
+      # PREV_COMMIT so the "Updating ..." banner is suppressed, but the
+      # bytecode purge / install.sh / restart steps still run.
+    else
+      echo "Already up to date ($PREV_COMMIT)."
+      exit 0
+    fi
   fi
 fi
 
@@ -90,6 +109,11 @@ fi
 
 if [ -n "${OMNIPLOT_UPDATE_REEXEC:-}" ]; then
   step "Resuming after re-exec (HEAD is already at $NEW_COMMIT)"
+elif [ "$PREV_COMMIT" = "$NEW_COMMIT" ]; then
+  # Rebuild-only path: HEAD is up to date but needs_rebuild() flagged a
+  # missing artifact. Skip the merge (no-op) and the "Updating X → X"
+  # banner — both are misleading here — and go straight to install.
+  step "Rebuilding at $PREV_COMMIT"
 else
   step "Updating $PREV_COMMIT → $NEW_COMMIT"
   # --force already did a hard reset to local HEAD, which can lag behind the
