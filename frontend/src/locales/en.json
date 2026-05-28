@@ -971,6 +971,7 @@
     "toolChange": "Pen change required",
     "continue": "Done — continue",
     "commandFailed": "Plotter command failed (is a device connected?).",
+    "deviceLost": "Plotter disconnected during a run. The head position is unreliable — check the machine and reconnect before resuming.",
     "tabConnection": "Connection",
     "tabProfile": "Machine profile",
     "tabColors": "Colours",
@@ -1069,6 +1070,9 @@
     "loadFailed": "Could not load the print queue.",
     "enqueueFailed": "Could not add the job to the queue.",
     "actionFailed": "Queue action failed.",
+    "skipNotice": "Run \"{name}\" skipped layer(s): {layers}. Recovery policy: skip_layer.",
+    "skippedBadge": "{count} skipped",
+    "skippedListTitle": "Skipped layers",
     "state": {
       "queued": "Queued",
       "running": "Running",

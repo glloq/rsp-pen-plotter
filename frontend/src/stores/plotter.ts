@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
 import { useToastStore } from './toasts'
@@ -107,6 +107,22 @@ export const usePlotterStore = defineStore('plotter', () => {
   const pause = (): Promise<void> => withErrors(() => plotterCommand('pause'))
   const resume = (): Promise<void> => withErrors(() => plotterCommand('resume'))
   const abort = (): Promise<void> => withErrors(() => plotterCommand('abort'))
+
+  // Mid-run device disconnect is operator-blocking: the job halts,
+  // the head position becomes unreliable, and silent recovery would
+  // leave the operator confused. Detect the transition (connected →
+  // disconnected) while a run is in progress and push a persistent
+  // critical toast so the alert can't vanish behind other notifs.
+  watch(
+    () => ({ connected: status.value.connected, state: status.value.state }),
+    (next, prev) => {
+      if (!prev) return
+      const wasRunning = prev.state === 'running' || prev.state === 'paused'
+      if (prev.connected && !next.connected && wasRunning) {
+        useToastStore().critical(i18n.global.t('plotter.deviceLost'))
+      }
+    },
+  )
 
   return {
     status,

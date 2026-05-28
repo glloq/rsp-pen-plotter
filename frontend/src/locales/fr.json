@@ -971,6 +971,7 @@
     "toolChange": "Changement de stylo requis",
     "continue": "Fait — continuer",
     "commandFailed": "Échec de la commande du traceur (un appareil est-il connecté ?).",
+    "deviceLost": "Traceur déconnecté pendant un run. La position de la tête n'est plus fiable — vérifie la machine et reconnecte avant de reprendre.",
     "tabConnection": "Connexion",
     "tabProfile": "Profil machine",
     "tabColors": "Couleurs",
@@ -1069,6 +1070,9 @@
     "loadFailed": "Impossible de charger la file d'impression.",
     "enqueueFailed": "Impossible d'ajouter le travail à la file.",
     "actionFailed": "Échec de l'action sur la file.",
+    "skipNotice": "Run « {name} » : couche(s) sautée(s) — {layers}. Politique de récupération : skip_layer.",
+    "skippedBadge": "{count} sautée(s)",
+    "skippedListTitle": "Couches sautées",
     "state": {
       "queued": "En attente",
       "running": "En cours",
