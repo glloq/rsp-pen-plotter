@@ -87,17 +87,29 @@ watch(
 
 // Thumbnail cache keyed by file_id. Sanitizing through DOMPurify is the
 // most expensive part of rendering the inline preview, so we memoize per
-// file and only recompute when the cached detail isn't there yet.
+// file and only recompute when the cached detail isn't there yet. Bounded
+// LRU (Map keeps insertion order): a miss just re-sanitizes, so capping
+// keeps the sanitized-SVG strings from accumulating for the whole library.
+const THUMB_CACHE_MAX = 60
 const thumbCache = new Map<string, string>()
 function previewSvg(fileId: string): string | null {
   const cached = thumbCache.get(fileId)
-  if (cached !== undefined) return cached || null
+  if (cached !== undefined) {
+    // Refresh recency so the active set survives eviction.
+    thumbCache.delete(fileId)
+    thumbCache.set(fileId, cached)
+    return cached || null
+  }
   const detail = library.getDetail(fileId)
   if (!detail?.svg) return null
   const clean = DOMPurify.sanitize(detail.svg, {
     USE_PROFILES: { svg: true, svgFilters: true },
   })
   thumbCache.set(fileId, clean)
+  if (thumbCache.size > THUMB_CACHE_MAX) {
+    const oldest = thumbCache.keys().next().value
+    if (oldest !== undefined) thumbCache.delete(oldest)
+  }
   return clean
 }
 
