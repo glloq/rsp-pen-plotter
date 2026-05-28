@@ -50,7 +50,6 @@ const dropping = ref(false)
 // mounts inconditionally — it auto-hides when its own flag is off.
 const modalV2Enabled = useFeatureFlag('modalV2')
 const workshopEnabled = useFeatureFlag('workshopMode')
-const compareEnabled = useFeatureFlag('compareMode')
 const activeRun = computed(() => queue.active[0] ?? null)
 
 // Compare drawer (roadmap C.5). Entry button is gated by the
@@ -306,10 +305,11 @@ onBeforeUnmount(() => {
       @resume="workshopResume"
     />
 
-    <!-- Compare drawer (roadmap C.5) — gated behind ?flag.compareMode=1
-         to keep the v0.1 layout untouched. -->
+    <!-- Compare drawer (roadmap C.5). The floating launcher is
+         always visible; the drawer shows an explicit empty state
+         when the current placement has fewer than two variants, so
+         operators can discover the feature without flipping a flag. -->
     <button
-      v-if="compareEnabled"
       type="button"
       class="fixed bottom-3 left-3 z-30 flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 shadow-lg hover:bg-slate-700"
       data-test="compare-open"
@@ -318,7 +318,7 @@ onBeforeUnmount(() => {
       ⇄ {{ t('compare.open') }}
     </button>
     <div
-      v-if="compareEnabled && compareOpen"
+      v-if="compareOpen"
       class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
       data-test="compare-modal"
       @click.self="compareOpen = false"

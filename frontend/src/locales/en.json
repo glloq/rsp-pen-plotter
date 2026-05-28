@@ -34,7 +34,8 @@
   "header": {
     "settings": "Settings",
     "plotter": "Plotter",
-    "workshop": "Workshop"
+    "workshop": "Workshop",
+    "modalV2": "Modal V2 (beta)"
   },
   "compare": {
     "open": "Compare",
