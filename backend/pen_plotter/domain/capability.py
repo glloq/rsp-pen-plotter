@@ -69,10 +69,26 @@ class RecoveryPolicy(StrEnum):
 
 
 class ManualSwapPrompt(BaseModel):
-    """Operator-facing prompt template used by :class:`ToolingMode.MANUAL`."""
+    """Operator-facing prompt template used by :class:`ToolingMode.MANUAL`.
+
+    Three optional bodies cover the two real-world scenarios:
+    - ``multipen_body``: slot-based prompt for multi-pen profiles
+      (carousel / rack with explicit slot index). Substitutions:
+      ``{slot}``, ``{label}``, ``{color}``, ``{layer}``.
+    - ``monopen_body``: color-based prompt for mono-pen profiles
+      where the operator swaps the pen between layers. Same
+      substitutions; ``{slot}`` is empty for mono-pen.
+    - ``body``: legacy fallback when neither of the above is set
+      (kept for back-compat with v0.1 profile YAMLs).
+
+    The strategy picks the right body for each ``SwapContext``
+    based on ``context.slot_index`` — None → mono, non-None → multi.
+    """
 
     title: str = "Change pen"
     body: str = "Insert pen {color} into the holder, then press Resume."
+    multipen_body: str | None = None
+    monopen_body: str | None = None
     timeout_s: int | None = None
 
 
@@ -118,6 +134,38 @@ _LEGACY_MAP: dict[str, tuple[ToolingMode, CommandSource]] = {
 }
 
 
+_DEFAULT_MULTIPEN_BODY = "Insert pen slot {slot}: {label}"
+"""Slot-based prompt format inherited from the v0.1 legacy regex.
+
+The orchestrator emits this verbatim for any context that carries a
+``slot_index``; matches the operator wording the runtime tests pin.
+"""
+
+_DEFAULT_MONOPEN_BODY = "Change pen to {label}"
+"""Color-based prompt format for mono-pen profiles.
+
+``pen_label`` is pre-computed by the comment parser to either
+``"{label} ({color})"`` (when a human label exists) or ``"{color}"``
+(when label and color collapse to the same hex), so this single
+template covers both legacy outputs.
+"""
+
+
+def default_manual_prompt(pen_slot_count: int) -> ManualSwapPrompt:
+    """Manual-swap template aligned with the legacy runtime prompts.
+
+    Multi-pen profiles get the slot-based ``multipen_body``; all
+    profiles get the color-based ``monopen_body`` so a mono-pen colour
+    change still produces a usable prompt even on a multi-pen machine.
+    The legacy ``body`` field stays at its v0.1 default so explicit
+    consumers that ignore the new fields keep working.
+    """
+    return ManualSwapPrompt(
+        multipen_body=_DEFAULT_MULTIPEN_BODY if pen_slot_count > 1 else None,
+        monopen_body=_DEFAULT_MONOPEN_BODY,
+    )
+
+
 def derive_capabilities(
     tool_change_method: str,
     pen_slot_count: int,
@@ -131,11 +179,12 @@ def derive_capabilities(
     mode, source = _LEGACY_MAP.get(
         tool_change_method, (ToolingMode.MANUAL, CommandSource.OPERATOR)
     )
+    prompt = default_manual_prompt(pen_slot_count) if mode == ToolingMode.MANUAL else None
     strategy = ToolChangeStrategy(
         mode=mode,
         command_source=source,
         recovery_policy=RecoveryPolicy.PAUSE_AND_PROMPT,
-        manual_prompt=ManualSwapPrompt() if mode == ToolingMode.MANUAL else None,
+        manual_prompt=prompt,
     )
     return MachineCapabilities(
         tool_change=strategy,

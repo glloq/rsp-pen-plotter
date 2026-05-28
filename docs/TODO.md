@@ -92,52 +92,96 @@ faire round-tripper le block capability au backend.
 
 **Reste éventuel** : dialog Vue au lieu de `window.prompt` natif.
 
-### 1.5 — CompareView candidats réels — reporté v2.0
+### 1.5 — ~~CompareView candidats réels~~ — fermé pour SVG+métriques
 
-L'UX seam est en place (drawer + bouton flottant + overlay
-`bounds` rendu réellement). Les vrais candidats par-variant
-nécessitent un endpoint backend `POST /rerender?variant_id=...`
-qui retourne un SVG sans patcher le placement actif + une
-extension de `/preflight` pour calculer
-`est_time_s`/`draw_length_mm`/`pen_up_length_mm`/`swap_count`
-par candidat. Les 3 overlays manquants
-(`penup_heatmap`/`path_density`/`curvature`) ont besoin de la
+**Fix SVG** : `useJobStore.renderVariant(placement, variant)`
+appelle `/rerender` avec les overrides de la variante demandée
+et retourne le SVG sans muter le placement actif. `App.vue`
+cache les SVG par `variant_id` et appelle `refreshCompareSvgs`
+à l'ouverture du drawer.
+
+**Fix métriques** : nouveau endpoint backend `POST /preflight/svg`
+qui accepte `{svg, profile_name}` et retourne un `PreflightReport`
+léger (skip plan resolution + TypographyPlan re-render). Client
+TS `preflightSvg(svg, profileName)`. `App.refreshCompareSvgs`
+fetch les métriques par variante en parallèle après les SVG,
+mappe `drawing_length_mm / travel_length_mm / estimated_seconds /
+pen_changes` vers `CandidateMetrics.{draw_length_mm /
+pen_up_length_mm / est_time_s / swap_count}`. Échec silencieux
+(em-dash dans la table) pour ne pas bloquer le drawer.
+
+**Reste v2.0** : 3 overlays manquants (`penup_heatmap` / `path
+_density` / `curvature`) restent stubs — ils demandent la
 géométrie pas-up + densité que le resolver ne calcule pas
-encore. Travail estimé : 1-2 semaines, plus pertinent une fois
-l'IR pipeline (TODO 2.1) consommé en aval.
+encore.
 
 ---
 
 ## Catégorie 2 — Backend domain pas (encore) source de vérité
 
-### 2.1 — IR consommé en aval — reporté v2.0
+### 2.1 — ~~IR consommé en aval~~ — fermé (optimize + generate)
 
-Cache `ir_artifact_cache` actif quand `OMNIPLOT_IR_ENABLED=1`,
-zero consommateur en aval. Refactor `optimize_svg` /
-`generate_gcode` pour accepter `GeometryIR` / `PathPlanIR`
-respectivement est un chantier de plusieurs semaines, à
-exécuter une fois les fixtures de référence stabilisées sur
-matériel.
+**Fix optimize** : `optimize_geometry_ir(geometry, ...)` accepte
+un `GeometryIR` et passe par `_geometry_ir_to_svg + _optimize_svg`.
+`POST /optimize` route via IR quand `OMNIPLOT_IR_ENABLED=1` :
+hash → cache → IR rebuild si miss → `optimize_geometry_ir`.
 
-### 2.2 — ToolChangeOrchestrator source de vérité — reporté v2.0
+**Fix generate** : `generate_gcode_from_geometry(geometry, profile,
+...)` dans `core/gcode.py`, miroir de `optimize_geometry_ir`.
+`application/generate_service.run_generate` route via IR pour
+les dialectes non-EBB quand le flag est on (EBB garde son
+émetteur natif SP/SM/EM). Tests
+`test_optimize_routes_through_ir_when_flag_enabled` et
+`test_generate_routes_through_ir_when_flag_enabled`
+(`test_api.py`) + `test_generate_gcode_from_geometry_matches_svg
+_path` (`test_gcode.py`) prouvent l'équivalence et le routing.
 
-L'orchestrator est défini et testé (16 tests B.2) mais zéro
-consommateur production : le prompt manuel vient toujours du
-regex `_prompt(comment)` de `core/toolchange.py`. Migration
-demande l'alignement des templates `manual_prompt` sur les 5
-profils bundled + mise à jour des tests golden + suppression
-du chemin legacy. Pas bloquant en v0.2, requiert une PR
-dédiée.
+**Reste v2.0** : (a) consommateur vpype direct dans
+`optimize_geometry_ir` pour skip le round-trip SVG ; (b)
+émetteur G-code direct sur polylines (skip le round-trip côté
+gcode aussi) ; (c) flipper le défaut à IR-on après audit perf
+Pi pour valider la parité.
 
-### 2.3 — Streamer inline tool-change commands — reporté v2.0
+### 2.2 — ~~ToolChangeOrchestrator source de vérité~~ — fermé
 
-`SwapPlan.commands` (firmware / host_macro multi-lignes) ne
-sont exécutés nulle part — le streamer ne sait gérer que
-`pause_points: {idx: prompt}`. Étendre `ControllerStream`
-pour injecter une séquence G-code + `wait_ms` est un refactor
-hardware-layer ; le profil `Custom CoreXY A3 (rack)` reste
-descriptif et inutile en runtime tant que ce travail n'est
-pas fait.
+**Fix** : `ManualSwapPrompt` gagne deux champs optionnels
+(`multipen_body`, `monopen_body`) ; `default_manual_prompt(pen_slot
+_count)` les peuple en fonction du magasin. La strategy choisit
+le bon body selon `context.slot_index` (None → mono ; sinon →
+multi). `_context_from_comment` (anciennement `_prompt`) pré-
+calcule le label d'affichage pour le cas color (dédup label==hex).
+`guided_pause_points` route désormais via
+`ToolChangeOrchestrator.plan()`, pas via la regex legacy ; la
+fonction `_prompt(comment)` a été retirée. Profils mis à jour :
+`nextdraw.yaml` et `idraw_a3.yaml` exposent un `monopen_body`
+branded. 635 tests verts incluant les golden text contracts
+(`Insert pen slot 1: Red`, `Change pen to #ff0000`).
+
+### 2.3 — ~~Streamer inline tool-change commands~~ — fermé
+
+**Fix** : nouveau modèle Pydantic `SwapAction(kind, prompt,
+commands)` dans `hardware/streamer.py` ; `GcodeStreamer` accepte
+`swap_actions: dict[int, SwapAction]` en plus de `pause_points`
+(legacy) et dispatch par `kind` (operator_confirm / firmware /
+host_timed / none). Pour `host_timed`/`firmware`/`none`, écrit
+chaque `SwapCommandLine` au transport, attend l'ack, sleep
+`wait_ms`, recommence.
+
+**Wire prod** : `guided_swap_actions(gcode, profile)` dans
+`core/toolchange.py` produit les actions pour tous les modes
+(map `PauseKind` → action `kind`). `PrintRun` gagne une colonne
+`swap_actions: dict` (additive migration JSON) populée par
+`enqueue` aux côtés de `pause_points` legacy. `PrintQueue.run
+_next` charge et remap les actions selon `acked_lines`, les
+passe à `controller.stream(swap_actions=...)`.
+
+**Acceptance** : 3 nouveaux tests
+(`test_streamer_runs_inline_host_macro_commands`,
+`test_guided_swap_actions_for_rack_profile_emits_host_timed
+_plans`, `test_guided_pause_points_stays_legacy_for_rack_profile`).
+Le profil `Custom CoreXY A3 (rack)` est désormais **exécutable**
+runtime : ses 7 lignes host_macro sont jouées automatiquement à
+chaque tool change.
 
 ### 2.4 — ~~Recovery `skip_layer` réel~~ (Block E.2) — fermé
 
@@ -181,6 +225,19 @@ deployment.md` documente déjà la séparation logique.
 F.2 (Jinja hoist) + F.3 (skip vpype monotone) livrés et
 documentés. Nouvelle baseline sur Pi 4/5 demande l'accès au
 matériel et n'est pas reproductible dans le container CI.
+
+### 3.5 — ~~Bundle initial trop gros~~ — fermé
+
+**Fix** : `vite.config.ts` configuré avec `manualChunks`
+(vendor-vue / vendor-zod / vendor-dompurify / vendor-axios) +
+`defineAsyncComponent` sur `EditModalV2`, `WorkshopMode`,
+`PerfOverlay`, `CompareView` dans `App.vue`. `<PerfOverlay>`
+gate sur `v-if="perfEnabled"` pour vraiment bénéficier du
+lazy-load (sinon Vue le précharge dès le mount).
+
+Mesure : bundle initial 969 kB → **639 kB** (-34 %), gzip
+298 kB → **184 kB** (-38 %). 4 chunks lazy v2 + 4 chunks
+vendor cachés indépendamment des releases app.
 
 ### 3.3 — ~~Persistent toasts adoption~~ (Block G.2) — fermé
 

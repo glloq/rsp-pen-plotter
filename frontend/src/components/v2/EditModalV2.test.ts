@@ -33,6 +33,9 @@ const i18n = createI18n({
           why: 'Pourquoi ce choix ?',
           resolving: 'Calcul…',
           resolverError: 'Erreur resolver : {message}. Les défauts statiques seront utilisés.',
+          openV1: 'Ouvrir l\'éditeur complet',
+          layerCount: '{count} couche | {count} couches',
+          noPlacement: 'Aucun placement actif',
         },
         intent: { fast: 'Rapide', balanced: 'Équilibré', quality: 'Qualité' },
       },
@@ -156,5 +159,42 @@ describe('EditModalV2', () => {
     await nextTick()
     await nextTick()
     expect(wrapper.text()).toContain('Erreur resolver')
+  })
+
+  it('shows a no-placement notice + locks Generate when no source is attached', async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ data: validDecision })
+    const wrapper = mountModal() // no sourceName, no previewSvg
+    expect(wrapper.find('[data-test="modal-v2-no-placement"]').exists()).toBe(true)
+    // Walk to Preflight where Generate lives.
+    const next = () =>
+      wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
+    for (let i = 0; i < 5; i++) {
+      await next().trigger('click')
+      await nextTick()
+    }
+    const confirm = wrapper.find('[data-test="confirm-button"]')
+    expect(confirm.exists()).toBe(true)
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('hides the no-placement notice when a source is attached', () => {
+    const wrapper = mountModal({
+      sourceName: 'photo.jpg',
+      previewSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+    })
+    expect(wrapper.find('[data-test="modal-v2-no-placement"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="modal-v2-context"]').exists()).toBe(true)
+  })
+
+  it('emits open-v1 when the operator clicks the escape button', async () => {
+    const wrapper = mountModal()
+    await wrapper.find('[data-test="modal-v2-open-v1"]').trigger('click')
+    expect(wrapper.emitted('open-v1')).toBeTruthy()
+  })
+
+  it('backdrop click emits cancel', async () => {
+    const wrapper = mountModal()
+    await wrapper.find('[data-test="modal-v2-backdrop"]').trigger('click')
+    expect(wrapper.emitted('cancel')).toBeTruthy()
   })
 })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getHealth, systemCheckUpdate } from './api/client'
 import AppHeader from './components/AppHeader.vue'
@@ -7,8 +7,6 @@ import AppFooter from './components/AppFooter.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import EditModal from './components/EditModal.vue'
-import CompareView, { type Candidate } from './components/v2/CompareView.vue'
-import EditModalV2 from './components/v2/EditModalV2.vue'
 import FilesPane from './components/FilesPane.vue'
 import PlotterDrawer from './components/PlotterDrawer.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
@@ -17,9 +15,20 @@ import UpdateProgressModal from './components/UpdateProgressModal.vue'
 import GenerateProgressModal from './components/GenerateProgressModal.vue'
 import IntegrityBanner from './components/IntegrityBanner.vue'
 import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
-import PerfOverlay from './components/v2/PerfOverlay.vue'
-import WorkshopMode from './components/v2/WorkshopMode.vue'
-import { api } from './api/client'
+
+// Lazy-load v2 surfaces that aren't on the boot critical path. Each
+// gets its own chunk, fetched only the first time the operator
+// triggers it: opens the V2 modal, toggles Workshop Mode, opens the
+// Compare drawer, or activates the perf overlay flag. Saves ~150 kB
+// from the initial parse on a fresh load.
+const EditModalV2 = defineAsyncComponent(() => import('./components/v2/EditModalV2.vue'))
+const WorkshopMode = defineAsyncComponent(() => import('./components/v2/WorkshopMode.vue'))
+const PerfOverlay = defineAsyncComponent(() => import('./components/v2/PerfOverlay.vue'))
+const CompareView = defineAsyncComponent(() => import('./components/v2/CompareView.vue'))
+import type { Candidate } from './components/v2/CompareView.vue'
+
+import { api, preflightSvg } from './api/client'
+import type { CandidateMetrics } from './components/v2/CompareView.vue'
 import { useAlgorithmsStore } from './stores/algorithms'
 import { useFeatureFlag } from './composables/useFeatureFlag'
 import { useJobStore } from './stores/job'
@@ -49,16 +58,85 @@ const dropping = ref(false)
 // mounts inconditionally — it auto-hides when its own flag is off.
 const modalV2Enabled = useFeatureFlag('modalV2')
 const workshopEnabled = useFeatureFlag('workshopMode')
+const perfEnabled = useFeatureFlag('perf')
 const activeRun = computed(() => queue.active[0] ?? null)
 
 // Compare drawer (roadmap C.5). Entry button is gated by the
 // `compareMode` flag; opens a modal showing CompareView for two
-// variants of the current placement. Rendering each variant
-// independently requires a re-render per variant (the placement only
-// holds the active variant's SVG today) — the seam is wired so the
-// operator can drive the workflow; full per-variant rendering lands
-// with the overlay PR.
+// variants of the current placement. Each variant is rendered
+// independently via ``renderVariant`` (same ``/rerender`` endpoint
+// the live editor uses, no mutation of the active placement). The
+// active variant's already-rendered SVG is reused for whichever
+// candidate matches its id to skip a redundant network call.
 const compareOpen = ref(false)
+const compareError = ref<string | null>(null)
+const compareLoading = ref(false)
+const compareSvgCache = ref<Record<string, string>>({})
+const compareMetricsCache = ref<Record<string, CandidateMetrics>>({})
+
+async function refreshCompareSvgs(): Promise<void> {
+  const placement = store.selectedPlacement
+  if (!placement || placement.variants.length < 2) return
+  compareLoading.value = true
+  compareError.value = null
+  try {
+    const [v1, v2] = placement.variants
+    if (!v1 || !v2) return
+    // Step 1: render each variant's SVG (active variant reuses the
+    // already-rendered placement.svg, no extra round-trip).
+    const svgCache: Record<string, string> = {
+      [placement.active_variant_id]: placement.svg,
+    }
+    const renderJobs: Promise<unknown>[] = []
+    for (const v of [v1, v2]) {
+      if (svgCache[v.id]) continue
+      renderJobs.push(
+        store.renderVariant(placement, v).then((r) => {
+          if (r) svgCache[v.id] = r.svg
+        }),
+      )
+    }
+    await Promise.all(renderJobs)
+    compareSvgCache.value = svgCache
+
+    // Step 2: per-variant metrics via the lightweight ``/preflight/svg``
+    // endpoint. Failures are swallowed — Compare degrades to "—" in the
+    // metrics column rather than blocking the whole drawer.
+    const profile = store.selectedProfile
+    if (profile) {
+      const metricsCache: Record<string, CandidateMetrics> = {}
+      const metricJobs: Promise<unknown>[] = []
+      for (const v of [v1, v2]) {
+        const svg = svgCache[v.id]
+        if (!svg) continue
+        metricJobs.push(
+          preflightSvg(svg, profile.name)
+            .then((report) => {
+              metricsCache[v.id] = {
+                est_time_s: report.estimated_seconds,
+                draw_length_mm: report.drawing_length_mm,
+                pen_up_length_mm: report.travel_length_mm,
+                swap_count: report.pen_changes,
+              }
+            })
+            .catch(() => {
+              // Leave metrics undefined — Compare shows em-dashes.
+            }),
+        )
+      }
+      await Promise.all(metricJobs)
+      compareMetricsCache.value = metricsCache
+    }
+  } catch (err) {
+    compareError.value = (err as Error).message
+  } finally {
+    compareLoading.value = false
+  }
+}
+watch(compareOpen, (next) => {
+  if (next) void refreshCompareSvgs()
+})
+
 const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => {
   const placement = store.selectedPlacement
   if (!placement || placement.variants.length < 2) return null
@@ -68,9 +146,9 @@ const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => 
   const make = (variantId: string, label: string): Candidate => ({
     id: variantId,
     label,
-    svg: placement.svg,
+    svg: compareSvgCache.value[variantId] ?? placement.svg,
     decision: null,
-    metrics: {},
+    metrics: compareMetricsCache.value[variantId] ?? {},
   })
   return {
     a: make(v1.id, v1.name || 'Variante A'),
@@ -322,8 +400,15 @@ onBeforeUnmount(() => {
          render the v1 modal (its own ``v-if="editModalOpen"`` decides
          visibility). -->
     <EditModal v-if="!modalV2Enabled" />
+    <!-- ``:key`` re-mounts the wizard when the operator switches to
+         another file while the modal is open, so the local state
+         (sourceKind, goal, decision, …) is reset to defaults derived
+         from the new placement. Without the key the props update
+         reactively but the wizard would keep the previous file's
+         decision in memory. -->
     <EditModalV2
       v-else-if="ui.editModalOpen"
+      :key="store.selectedPlacement?.id ?? 'no-placement'"
       :initial-source-kind="v2SourceKind"
       :available-colors-count="v2AvailableColorsCount"
       :is-mono-pen-machine="v2IsMonoPenMachine"
@@ -338,7 +423,7 @@ onBeforeUnmount(() => {
     <UpdateProgressModal />
     <GenerateProgressModal />
     <Toasts />
-    <PerfOverlay />
+    <PerfOverlay v-if="perfEnabled" />
     <WorkshopMode
       v-if="workshopEnabled"
       :run="activeRun"
@@ -379,8 +464,22 @@ onBeforeUnmount(() => {
             ✕
           </button>
         </header>
+        <p
+          v-if="compareLoading"
+          class="text-sm text-slate-600"
+          data-test="compare-loading"
+        >
+          {{ t('compare.loading') }}
+        </p>
+        <p
+          v-else-if="compareError"
+          class="text-sm text-red-600"
+          data-test="compare-error"
+        >
+          {{ compareError }}
+        </p>
         <CompareView
-          v-if="compareCandidates"
+          v-else-if="compareCandidates"
           :a="compareCandidates.a"
           :b="compareCandidates.b"
         />

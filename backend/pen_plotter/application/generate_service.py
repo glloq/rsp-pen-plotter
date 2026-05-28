@@ -110,15 +110,44 @@ def run_generate(
     # + /generate keep agreeing on the same hash.
     svg = rerender_text_svg(resolved.plan) or resolved.plan.svg
 
-    generator = generate_ebb if profile.gcode_dialect == "ebb" else generate_gcode
-    program = generator(
-        svg,
-        profile,
-        layers=resolved.plan.layers,
-        scale_mode=resolved.plan.scale_mode,
-        margin_mm=resolved.plan.margin_mm,
-        placement=_placement_for_engine(resolved),
-    )
+    # IR routing: when ``OMNIPLOT_IR_ENABLED=1`` AND the dialect isn't
+    # EBB (which has its own native emitter), route through
+    # ``generate_gcode_from_geometry`` so the IR loop gets production
+    # traffic on the generate side too. EBB stays on the legacy path
+    # — its emitter knows the SP/SM/EM commands the IR doesn't.
+    from pen_plotter.domain.ir.adapter import is_ir_enabled
+
+    if profile.gcode_dialect == "ebb":
+        program = generate_ebb(
+            svg,
+            profile,
+            layers=resolved.plan.layers,
+            scale_mode=resolved.plan.scale_mode,
+            margin_mm=resolved.plan.margin_mm,
+            placement=_placement_for_engine(resolved),
+        )
+    elif is_ir_enabled():
+        from pen_plotter.core.gcode import generate_gcode_from_geometry
+        from pen_plotter.domain.ir.adapter import content_sha256, geometry_ir_from_svg
+
+        geometry = geometry_ir_from_svg(svg, source_hash=content_sha256(svg.encode("utf-8")))
+        program = generate_gcode_from_geometry(
+            geometry,
+            profile,
+            layers=resolved.plan.layers,
+            scale_mode=resolved.plan.scale_mode,
+            margin_mm=resolved.plan.margin_mm,
+            placement=_placement_for_engine(resolved),
+        )
+    else:
+        program = generate_gcode(
+            svg,
+            profile,
+            layers=resolved.plan.layers,
+            scale_mode=resolved.plan.scale_mode,
+            margin_mm=resolved.plan.margin_mm,
+            placement=_placement_for_engine(resolved),
+        )
     return GenerateOutcome(
         gcode=program,
         line_count=program.count("\n"),

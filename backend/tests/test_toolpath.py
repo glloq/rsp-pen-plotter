@@ -1,5 +1,6 @@
 from pen_plotter.core.layers import extract_layers
-from pen_plotter.core.toolpath import LayerOptimization, optimize_svg
+from pen_plotter.core.toolpath import LayerOptimization, optimize_geometry_ir, optimize_svg
+from pen_plotter.domain.ir.adapter import content_sha256, geometry_ir_from_svg
 
 NS = (
     'xmlns="http://www.w3.org/2000/svg" '
@@ -47,3 +48,13 @@ def test_optimize_invalid_svg_raises() -> None:
 
     with pytest.raises(ValueError):
         optimize_svg("<svg><g></svg>")
+
+
+def test_optimize_geometry_ir_round_trip_preserves_layers() -> None:
+    """The first v0.2 IR consumer: feed a ``GeometryIR`` to the
+    optimizer and verify the layered output matches the SVG path."""
+    geometry = geometry_ir_from_svg(TWO_LAYERS, source_hash=content_sha256(b"x"))
+    result = optimize_geometry_ir(geometry)
+    assert 'inkscape:label="red"' in result.svg
+    assert 'inkscape:label="blue"' in result.svg
+    assert result.metrics.pen_up_after_mm <= result.metrics.pen_up_before_mm

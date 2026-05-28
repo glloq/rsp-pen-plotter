@@ -19,6 +19,8 @@ const queue = useQueueStore()
 const job = useJobStore()
 const { status: plotterStatus } = storeToRefs(plotter)
 
+const workshopOn = computed(() => uiMode.isFlagEnabled('workshopMode'))
+
 // Header transport controls: prefer the queued active run when one is
 // live so the buttons drive the canonical queue lifecycle. Fall back
 // to the direct serial state for one-shot ``plotter.run`` sends made
@@ -91,7 +93,7 @@ async function onStop(): Promise<void> {
 }
 
 function toggleWorkshop(): void {
-  uiMode.setFlag('workshopMode', !uiMode.isFlagEnabled('workshopMode'))
+  uiMode.setFlag('workshopMode', !workshopOn.value)
 }
 
 const modalV2On = computed(() => uiMode.isFlagEnabled('modalV2'))
@@ -194,9 +196,15 @@ function toggleModalV2(): void {
 
       <button
         type="button"
-        class="flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700"
+        class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition"
+        :class="
+          workshopOn
+            ? 'border-amber-700 bg-amber-950/40 text-amber-200 hover:bg-amber-900/40'
+            : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
+        "
         :title="t('header.workshop')"
         :aria-label="t('header.workshop')"
+        :aria-pressed="workshopOn"
         data-test="header-workshop-toggle"
         @click="toggleWorkshop"
       >

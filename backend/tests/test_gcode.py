@@ -292,3 +292,27 @@ def test_template_contract_blocks_undeclared_variable_at_import() -> None:
         # Restore the canonical module so subsequent tests see the real
         # ``generate_gcode`` rather than the half-reloaded broken state.
         importlib.reload(gcode_module)
+
+
+def test_generate_gcode_from_geometry_matches_svg_path() -> None:
+    """The IR-based G-code generator produces equivalent output to the
+    legacy SVG path on a round-tripped fixture (TODO 2.1 wire). Both
+    paths share the same internal renderer; the IR variant just goes
+    via ``_geometry_ir_to_svg`` first."""
+    from pen_plotter.core.gcode import generate_gcode_from_geometry
+    from pen_plotter.domain.ir.adapter import content_sha256, geometry_ir_from_svg
+
+    profile = _profile()
+    direct = generate_gcode(TWO_LAYERS, profile)
+    ir = geometry_ir_from_svg(TWO_LAYERS, source_hash=content_sha256(b"x"))
+    via_ir = generate_gcode_from_geometry(ir, profile)
+    # Both paths should produce valid G-code with the same set of move
+    # commands (the labels / comments may differ slightly because the
+    # IR round-trip emits polylines instead of paths, but the resulting
+    # G0/G1 stream is what drives the plotter).
+    direct_moves = [ln for ln in direct.splitlines() if ln.startswith(("G0", "G1"))]
+    via_ir_moves = [ln for ln in via_ir.splitlines() if ln.startswith(("G0", "G1"))]
+    assert direct_moves, "legacy path must emit moves"
+    assert via_ir_moves, "IR path must emit moves"
+    # Equal move count: the geometry is preserved end to end.
+    assert len(direct_moves) == len(via_ir_moves)

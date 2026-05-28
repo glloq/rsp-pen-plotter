@@ -255,6 +255,42 @@ def sheet_exceeds_workspace(profile: MachineProfile, placement: Placement) -> bo
     )
 
 
+def generate_gcode_from_geometry(
+    geometry: object,
+    profile: MachineProfile,
+    *,
+    layers: list[LayerPlan] | None = None,
+    scale_mode: ScaleMode = "fit",
+    margin_mm: float = 10.0,
+    placement: Placement | None = None,
+) -> str:
+    """Generate G-code from a :class:`GeometryIR` artifact.
+
+    Counterpart of :func:`pen_plotter.core.toolpath.optimize_geometry_ir`:
+    closes the IR loop on the G-code side so a consumer running with
+    ``OMNIPLOT_IR_ENABLED=1`` can route both phases through typed IR
+    artifacts. Today the IR is rebuilt into the labelled SVG pivot
+    via :func:`pen_plotter.core.toolpath._geometry_ir_to_svg` and the
+    SVG path takes over; future iterations can emit G-code directly
+    from the polyline lists.
+
+    Surface is stable so downstream code can opt into the IR
+    pipeline without waiting for the inner SVG round-trip to be
+    removed.
+    """
+    from pen_plotter.core.toolpath import _geometry_ir_to_svg
+
+    svg = _geometry_ir_to_svg(geometry)
+    return generate_gcode(
+        svg,
+        profile,
+        layers=layers,
+        scale_mode=scale_mode,
+        margin_mm=margin_mm,
+        placement=placement,
+    )
+
+
 def generate_gcode(
     svg: str,
     profile: MachineProfile,
