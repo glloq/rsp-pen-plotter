@@ -158,10 +158,42 @@ install_backend() {
 install_frontend() {
   step "Building the frontend"
   cd "$ROOT/frontend"
+
+  # Use an OmniPlot-scoped npm cache under the repo so a stale ~/.npm left
+  # behind by a one-off ``sudo ./install.sh`` (root-owned _cacache entries)
+  # doesn't poison every subsequent update. Self-update runs as the
+  # service user and can't chown root-owned files, so the only escape
+  # without manual intervention is to bypass the broken cache entirely.
+  local npm_cache="$ROOT/.npm-cache"
+  mkdir -p "$npm_cache"
+  export npm_config_cache="$npm_cache"
+
+  # node_modules from a prior ``sudo`` run carries root-owned files that
+  # ``npm ci`` then fails to delete with EACCES. Try to remove it first;
+  # if that fails (root-owned), surface the actionable recovery command
+  # instead of letting npm produce its cryptic "operation rejected by your
+  # operating system" wall of text.
+  if [ -d node_modules ] && ! rm -rf node_modules 2>/dev/null; then
+    echo "Error: cannot remove $ROOT/frontend/node_modules (likely owned by root from a previous 'sudo install.sh')." >&2
+    echo "       Fix on the host: sudo chown -R \"\$USER\":\"\$USER\" \"$ROOT/frontend/node_modules\" \"\$HOME/.npm\"" >&2
+    echo "       Or: sudo rm -rf \"$ROOT/frontend/node_modules\"" >&2
+    echo "       Then re-run the update." >&2
+    exit 1
+  fi
+
+  local npm_status=0
   if [ -f package-lock.json ]; then
-    npm ci
+    npm ci || npm_status=$?
   else
-    npm install
+    npm install || npm_status=$?
+  fi
+  if [ "$npm_status" -ne 0 ]; then
+    echo "Error: npm install failed (exit $npm_status)." >&2
+    echo "       If the log above mentions EACCES / 'operation rejected':" >&2
+    echo "         sudo chown -R \"\$USER\":\"\$USER\" \"\$HOME/.npm\" \"$ROOT/frontend\"" >&2
+    echo "         sudo rm -rf \"$ROOT/frontend/node_modules\"" >&2
+    echo "         then re-run the update." >&2
+    exit "$npm_status"
   fi
   npm run build
 }

@@ -8,6 +8,7 @@ import {
   type SystemUpdateResponse,
   type SystemVersionResponse,
 } from '../api/client'
+import { errorDetail } from '../api/error'
 import { confirmAction } from '../composables/confirm'
 import { useUiStore } from '../stores/ui'
 
@@ -64,7 +65,7 @@ async function runUpdate(force = false): Promise<void> {
     }
     await loadVersion()
   } catch (err) {
-    updateError.value = (err as Error).message || t('system.updateFailed')
+    updateError.value = errorDetail(err, (err as Error).message || t('system.updateFailed'))
     ui.finishUpdate('error', {
       message: t('updateModal.errorMessage'),
       error: updateError.value,

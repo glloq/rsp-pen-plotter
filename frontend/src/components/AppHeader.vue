@@ -2,7 +2,10 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { confirmAction } from '../composables/confirm'
+import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
+import { useQueueStore } from '../stores/queue'
 import { useUiModeStore } from '../stores/uiMode'
 import { useUiStore } from '../stores/ui'
 import AssistantModeToggle from './AssistantModeToggle.vue'
@@ -12,9 +15,83 @@ const { t } = useI18n()
 const ui = useUiStore()
 const uiMode = useUiModeStore()
 const plotter = usePlotterStore()
+const queue = useQueueStore()
+const job = useJobStore()
 const { status: plotterStatus } = storeToRefs(plotter)
 
 const workshopOn = computed(() => uiMode.isFlagEnabled('workshopMode'))
+
+// Header transport controls: prefer the queued active run when one is
+// live so the buttons drive the canonical queue lifecycle. Fall back
+// to the direct serial state for one-shot ``plotter.run`` sends made
+// from the drawer.
+const activeRun = computed(() => queue.active[0] ?? null)
+const runState = computed<'running' | 'paused' | 'idle'>(() => {
+  const run = activeRun.value
+  if (run) {
+    if (run.state === 'running') return 'running'
+    if (run.state === 'paused') return 'paused'
+  }
+  if (plotterStatus.value.state === 'running') return 'running'
+  if (plotterStatus.value.state === 'paused') return 'paused'
+  return 'idle'
+})
+const canPlay = computed(
+  () =>
+    runState.value === 'paused' ||
+    (runState.value === 'idle' && plotterStatus.value.connected && Boolean(job.gcode)),
+)
+const canStop = computed(() => runState.value === 'running' || runState.value === 'paused')
+const playTitle = computed(() =>
+  runState.value === 'paused' ? t('plotter.resume') : t('plotter.sendJob'),
+)
+
+async function onPlay(): Promise<void> {
+  if (runState.value === 'paused') {
+    const run = activeRun.value
+    if (run) {
+      await queue.act(run.id, 'resume')
+    } else {
+      await plotter.resume()
+    }
+    return
+  }
+  if (!job.gcode) return
+  const confirmed = await confirmAction({
+    title: t('confirm.sendJobTitle'),
+    message: t('confirm.sendJobMsg'),
+    confirmLabel: t('plotter.sendJob'),
+    cancelLabel: t('confirm.cancel'),
+  })
+  if (confirmed) await plotter.run(job.gcode)
+}
+
+async function onPause(): Promise<void> {
+  const run = activeRun.value
+  if (run) {
+    await queue.act(run.id, 'pause')
+  } else {
+    await plotter.pause()
+  }
+}
+
+async function onStop(): Promise<void> {
+  const run = activeRun.value
+  const confirmed = await confirmAction({
+    title: t('plotter.stopTitle'),
+    message: t('plotter.stopMsg'),
+    confirmLabel: t('plotter.abort'),
+    cancelLabel: t('confirm.cancel'),
+    danger: true,
+  })
+  if (!confirmed) return
+  if (run) {
+    await queue.act(run.id, 'cancel')
+  } else {
+    await plotter.abort()
+  }
+}
+
 function toggleWorkshop(): void {
   uiMode.setFlag('workshopMode', !workshopOn.value)
 }
@@ -49,6 +126,56 @@ function toggleModalV2(): void {
            workspace store still exists for future use but no longer
            has a UI surface. -->
       <AssistantModeToggle data-test="header-assistant-mode-toggle" />
+
+      <!-- Transport controls: drive the active queued run when one is
+           live, otherwise send the currently loaded gcode directly.
+           Hidden entirely when nothing is loaded and no run is active
+           so the header stays uncluttered for layout-only sessions. -->
+      <div
+        v-if="canPlay || canStop"
+        class="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 p-0.5"
+        data-test="header-transport"
+      >
+        <button
+          v-if="runState !== 'running'"
+          type="button"
+          class="flex items-center gap-1 rounded px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-40"
+          :disabled="!canPlay"
+          :title="playTitle"
+          :aria-label="playTitle"
+          data-test="header-play"
+          @click="onPlay"
+        >
+          <span aria-hidden="true">▶</span>
+          <span class="hidden md:inline">{{
+            runState === 'paused' ? t('plotter.resume') : t('plotter.play')
+          }}</span>
+        </button>
+        <button
+          v-else
+          type="button"
+          class="flex items-center gap-1 rounded px-2 py-1 text-xs text-amber-300 hover:bg-amber-900/40"
+          :title="t('plotter.pause')"
+          :aria-label="t('plotter.pause')"
+          data-test="header-pause"
+          @click="onPause"
+        >
+          <span aria-hidden="true">‖</span>
+          <span class="hidden md:inline">{{ t('plotter.pause') }}</span>
+        </button>
+        <button
+          type="button"
+          class="flex items-center gap-1 rounded px-2 py-1 text-xs text-red-300 hover:bg-red-900/40 disabled:opacity-40"
+          :disabled="!canStop"
+          :title="t('plotter.abort')"
+          :aria-label="t('plotter.abort')"
+          data-test="header-stop"
+          @click="onStop"
+        >
+          <span aria-hidden="true">■</span>
+          <span class="hidden md:inline">{{ t('plotter.stop') }}</span>
+        </button>
+      </div>
 
       <button
         type="button"
