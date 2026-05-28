@@ -51,7 +51,21 @@ export const useLibraryStore = defineStore('library', () => {
   const folderFilter = ref<string | null>(null)
 
   // Detail cache: ``file_id`` -> full record with SVG + layers + metadata.
+  // Each entry carries a full normalized SVG, so an unbounded cache grows
+  // with every file the operator opens — tens of MB over a long browsing
+  // session. Cap it FIFO: a miss just re-fetches via ``ensureDetail``, and
+  // placements keep their own SVG copy, so eviction is always safe.
+  const DETAIL_CACHE_MAX = 40
   const detailCache = ref<Record<string, LibraryFileDetail>>({})
+
+  // Insert/replace a detail, evicting the oldest entry when over the cap.
+  // Object key order is insertion order, so the first key is the oldest.
+  function cacheDetail(detail: LibraryFileDetail): void {
+    const next = { ...detailCache.value, [detail.file_id]: detail }
+    const keys = Object.keys(next)
+    if (keys.length > DETAIL_CACHE_MAX) delete next[keys[0]!]
+    detailCache.value = next
+  }
 
   // Per-file saved variants — keyed by file_id, persisted in localStorage.
   // Hydrated lazily from storage on first access; subsequent mutations
@@ -221,7 +235,7 @@ export const useLibraryStore = defineStore('library', () => {
         signal: options.signal,
       })
       _mergeRecord(result.file)
-      detailCache.value = { ...detailCache.value, [result.file.file_id]: result.file }
+      cacheDetail(result.file)
       const toasts = useToastStore()
       for (const w of (result.file.warnings ?? []).slice(0, 3)) toasts.warning(w)
       if ((result.file.warnings ?? []).length > 3) {
@@ -264,7 +278,7 @@ export const useLibraryStore = defineStore('library', () => {
     if (cached) return cached
     try {
       const detail = await apiGet(fileId)
-      detailCache.value = { ...detailCache.value, [fileId]: detail }
+      cacheDetail(detail)
       return detail
     } catch (err) {
       error.value = errorDetail(err, i18n.global.t('library.loadFailed'))

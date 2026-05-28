@@ -17,7 +17,7 @@
 // performance bottleneck on the Pi. The 2D context lets us batch
 // segments per stroke style and walk them in a single pass.
 
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { SimBounds, SimResult } from '../lib/gcode'
 
 const props = defineProps<{
@@ -247,16 +247,38 @@ function onCanvasPointerDown(event: PointerEvent): void {
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
 }
 
+// Each pan emit updates a viewport prop → triggers a full O(segments)
+// canvas redraw. Coalesce the high-frequency pointer events to one emit
+// per animation frame so panning a large plot stays smooth.
+let panClientX = 0
+let panClientY = 0
+let panRaf = 0
+
+function flushPan(): void {
+  panRaf = 0
+  emit('update:viewPanX', panOriginX + (panClientX - panStartX))
+  emit('update:viewPanY', panOriginY + (panClientY - panStartY))
+}
+
 function onCanvasPointerMove(event: PointerEvent): void {
   if (!isPanning.value) return
-  emit('update:viewPanX', panOriginX + (event.clientX - panStartX))
-  emit('update:viewPanY', panOriginY + (event.clientY - panStartY))
+  panClientX = event.clientX
+  panClientY = event.clientY
+  if (panRaf === 0) panRaf = requestAnimationFrame(flushPan)
 }
 
 function onCanvasPointerUp(event: PointerEvent): void {
   isPanning.value = false
+  if (panRaf !== 0) {
+    cancelAnimationFrame(panRaf)
+    flushPan()
+  }
   ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
 }
+
+onBeforeUnmount(() => {
+  if (panRaf !== 0) cancelAnimationFrame(panRaf)
+})
 
 // Watch every prop the renderer reads so the canvas re-paints on
 // state changes (simTime ticks, display toggles flipping, viewport

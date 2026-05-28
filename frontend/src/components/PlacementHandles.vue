@@ -13,7 +13,7 @@
 // the bounding rects share the workspace coordinate system without
 // any extra transform math.
 
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { RenderedPlacement } from '../composables/useSheetGeometry'
 
@@ -119,12 +119,34 @@ function startResize(h: Exclude<Handle, null>, event: PointerEvent, id: string):
   emit('select', id)
 }
 
+// Pointer events can fire faster than the display refresh (120 Hz+ on
+// some trackpads / pens). Each one would otherwise push a store mutation
+// → reactive recompute (renderedPlacements) → re-render of the whole
+// sheet. Coalesce them: record the latest position and apply at most
+// once per animation frame so the work tracks the paint rate, not the
+// input rate.
+let pendingX = 0
+let pendingY = 0
+let moveRaf = 0
+
 function onPointerMove(event: PointerEvent): void {
+  if (mode.value === 'idle' || !startRegion || !activePlacementId.value) return
+  pendingX = event.clientX
+  pendingY = event.clientY
+  if (moveRaf === 0) moveRaf = requestAnimationFrame(flushMove)
+}
+
+function flushMove(): void {
+  moveRaf = 0
+  applyMove(pendingX, pendingY)
+}
+
+function applyMove(clientX: number, clientY: number): void {
   if (mode.value === 'idle' || !startRegion || !activePlacementId.value) return
   const k = props.pxToMm()
   if (k <= 0) return
-  const dxMm = (event.clientX - startPxX) / k
-  const dyMm = (event.clientY - startPxY) / k
+  const dxMm = (clientX - startPxX) / k
+  const dyMm = (clientY - startPxY) / k
   if (mode.value === 'move-drawing') {
     emit('move', {
       id: activePlacementId.value,
@@ -212,6 +234,13 @@ function onPointerMove(event: PointerEvent): void {
 
 function onPointerUp(event: PointerEvent): void {
   if (mode.value === 'idle') return
+  // Flush any frame-coalesced move so the committed position is exactly
+  // where the operator released, not the last frame boundary.
+  if (moveRaf !== 0) {
+    cancelAnimationFrame(moveRaf)
+    moveRaf = 0
+    applyMove(pendingX, pendingY)
+  }
   mode.value = 'idle'
   handle.value = null
   activePlacementId.value = null
@@ -229,6 +258,10 @@ function onDblClick(event: MouseEvent, id: string): void {
   event.stopPropagation()
   emit('doubleClick', id)
 }
+
+onBeforeUnmount(() => {
+  if (moveRaf !== 0) cancelAnimationFrame(moveRaf)
+})
 
 function placementPageCount(p: { upload_metadata: Record<string, unknown> }): number {
   return Number(p.upload_metadata?.page_count ?? 0)
