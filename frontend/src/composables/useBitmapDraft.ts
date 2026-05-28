@@ -543,6 +543,13 @@ function applyStyleSegmentation(
   b.background_luminance = seg.background_luminance
   b.algorithm = style.defaultAlgorithm
   b.algorithm_options = { ...style.defaultAlgorithmOptions }
+  // Line-art styles raise the segmentation canvas size so fine strokes
+  // survive the downscale; only lift the operator's detail tier (never
+  // lower it) so a deliberately high setting on a photo style isn't
+  // clipped by a subsequent line-art pick.
+  if (seg.default_max_dimension_px && b.max_dimension_px < seg.default_max_dimension_px) {
+    b.max_dimension_px = seg.default_max_dimension_px
+  }
   if (seg.method === 'luminance_bands') {
     if (b.num_bands < 2 || b.num_bands > 6) {
       b.num_bands = seg.default_num_bands ?? 4

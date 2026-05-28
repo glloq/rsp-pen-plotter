@@ -371,6 +371,12 @@ export interface StyleSegmentation {
   // When true, the UI exposes a bands slider for this style (mainly
   // shaded modes). Binary modes hide it.
   knob_bands: boolean
+  // Preferred segmentation canvas size (``max_dimension_px``) when this
+  // style is applied. Line-art / outline / centerline styles set a high
+  // value here: at the global 800 px default, fine strokes blur together
+  // and the outline trace collapses detail. Omitted → the operator's
+  // current detail tier is left untouched.
+  default_max_dimension_px?: number
 }
 
 export interface PrintStyle {
@@ -729,6 +735,9 @@ export const PRINT_STYLES: PrintStyle[] = [
       drop_background: true,
       background_luminance: 0.55,
       knob_bands: false,
+      // Line art needs detail: at 800 px the outline trace merges thin
+      // strokes and drops fine features. High tier keeps them.
+      default_max_dimension_px: 2400,
     },
     defaultAlgorithm: 'edges',
     defaultAlgorithmOptions: { stroke_width: 0.8 },
@@ -789,6 +798,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       drop_background: true,
       background_luminance: 0.55,
       knob_bands: false,
+      // Skeleton tracing on a downscaled canvas fuses nearby strokes
+      // into one centreline; keep the source large so each stroke stays
+      // separable.
+      default_max_dimension_px: 2400,
     },
     defaultAlgorithm: 'centerline',
     defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
@@ -1101,6 +1114,7 @@ export const PRINT_STYLES: PrintStyle[] = [
       drop_background: true,
       background_luminance: 0.92,
       knob_bands: false,
+      default_max_dimension_px: 2400,
     },
     defaultAlgorithm: 'edges',
     defaultAlgorithmOptions: { stroke_width: 0.8 },
@@ -1121,6 +1135,7 @@ export const PRINT_STYLES: PrintStyle[] = [
       drop_background: true,
       background_luminance: 0.92,
       knob_bands: false,
+      default_max_dimension_px: 2400,
     },
     defaultAlgorithm: 'centerline',
     defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },

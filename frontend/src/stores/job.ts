@@ -172,7 +172,11 @@ export const useJobStore = defineStore('job', () => {
   function syncPlacementToLibrary(p: Placement | null): void {
     if (!p?.library_file_id) return
     const library = useLibraryStore()
-    library.saveFileVariants(p.library_file_id, p.variants, p.active_variant_id)
+    // Persist the full editor config (``last_options``) alongside the
+    // per-layer variants so the next "Edit from library" rehydrates the
+    // operator's chosen segmentation / master style / preprocess instead
+    // of resetting to defaults.
+    library.saveFileVariants(p.library_file_id, p.variants, p.active_variant_id, p.last_options)
   }
   function syncSelectedToLibrary(): void {
     syncPlacementToLibrary(selectedPlacement.value)
@@ -976,6 +980,12 @@ export const useJobStore = defineStore('job', () => {
       // pens / palette-source choice immediately — not just after a later
       // source toggle.
       resnapAutoLayers()
+      // Persist the config this conversion was applied with to the
+      // library so the next "Edit from library" reopens with the same
+      // segmentation / master style / preprocess. (Layer-level mutations
+      // sync on their own; a plain re-convert with no per-layer overrides
+      // wouldn't otherwise reach the library.)
+      syncPlacementToLibrary(placements.value.find((p) => p.id === targetId) ?? null)
       toasts.update(
         toastId,
         'success',
@@ -1047,6 +1057,13 @@ export const useJobStore = defineStore('job', () => {
       variantPatch.variants = saved.variants
       variantPatch.active_variant_id = activeId
       variantPatch.layer_algorithms = { ...active.layer_algorithms }
+    }
+    // Restore the saved editor config so the modal opens showing the
+    // chosen segmentation / master style / preprocess the operator last
+    // applied to this file, instead of resetting the draft to defaults.
+    // ``rehydrateDraft`` reads ``placement.last_options`` directly.
+    if (saved?.last_options) {
+      variantPatch.last_options = { ...saved.last_options }
     }
     patchPlacement(placement.id, {
       library_file_id: detail.file_id,
