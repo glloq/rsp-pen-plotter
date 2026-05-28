@@ -54,7 +54,16 @@
     "empty": {
       "layers": "Aucune couche — sélectionne un placement pour alimenter l'inspecteur.",
       "magazine": "Aucun profil actif — ouvre le tiroir Plotter pour en choisir un.",
-      "queue": "Aucun run actif."
+      "queue": "Aucun run actif.",
+      "compareHint": "Compare deux variantes du placement courant côte à côte."
+    },
+    "panel": {
+      "machineTelemetry": "Télémétrie machine"
+    },
+    "telemetry": {
+      "state": "État",
+      "progress": "Progression",
+      "message": "Message"
     }
   },
   "machine": {
@@ -971,7 +980,12 @@
     "portHint": "Ex. /dev/ttyUSB0 sous Linux, COM3 sous Windows.",
     "macrosHint": "Séquences de commandes réutilisables — homing, parking stylo, calibration. Lance-les ici quand le traceur est au repos.",
     "queueHint": "Envoie le travail courant au traceur ou empile-le pour plus tard. Les travaux actifs affichent leur progression et peuvent être mis en pause ou annulés.",
-    "newPlotterWizard": "Assistant nouveau traceur"
+    "newPlotterWizard": "Assistant nouveau traceur",
+    "newPlotterPrompt": "Nom du nouveau profil traceur ?",
+    "newPlotterDuplicate": "Un profil nommé « {name} » existe déjà.",
+    "newPlotterNoBase": "Sélectionne d'abord un profil existant — l'assistant le clone comme base.",
+    "newPlotterSaved": "Profil « {name} » enregistré et sélectionné.",
+    "newPlotterFailed": "Impossible d'enregistrer le profil"
   },
   "assignedColor": {
     "title": "Couleur du calque",

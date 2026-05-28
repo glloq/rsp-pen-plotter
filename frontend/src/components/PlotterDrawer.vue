@@ -116,19 +116,61 @@ async function activeCancel(): Promise<void> {
   if (activeRun.value) await queue.act(activeRun.value.id, 'cancel')
 }
 
-// Capability wizard entrypoint inside the profile tab. The result
-// surfaces as a toast for now — wiring it into a `saveProfile` payload
-// is a follow-up that lands with the v2 profile editor.
+// Capability wizard entrypoint inside the profile tab. On confirm
+// we prompt for a profile name, clone the currently active profile
+// as the base (so the operator inherits sensible workspace /
+// speeds / pen list defaults), overlay the wizard's capabilities
+// + the matching legacy tool_change_* fields, and POST via the job
+// store. ``saveProfile`` reloads the list and selects the new
+// profile, so the operator immediately sees it in the dropdown.
 const wizardOpen = ref(false)
 const toasts = useToastStore()
-function onWizardConfirm(capabilities: MachineCapabilities): void {
-  wizardOpen.value = false
-  toasts.show(
-    'info',
-    `Capabilities — mode=${capabilities.tool_change.mode}, recovery=${capabilities.tool_change.recovery_policy}. ` +
-      'Brouillon prêt à être appliqué à un profil (intégration save profile : follow-up).',
-    8000,
-  )
+
+function toolChangeMethodFor(mode: MachineCapabilities['tool_change']['mode']): string {
+  switch (mode) {
+    case 'firmware':
+      return 'carousel'
+    case 'host_macro':
+      return 'rack'
+    case 'manual':
+      return 'manual_pause'
+    case 'single_pen':
+      return 'none'
+  }
+}
+
+async function onWizardConfirm(capabilities: MachineCapabilities): Promise<void> {
+  const proposed = window.prompt(t('plotter.newPlotterPrompt'), 'Custom plotter')
+  if (!proposed || !proposed.trim()) {
+    wizardOpen.value = false
+    return
+  }
+  const name = proposed.trim()
+  if (job.profiles.some((p) => p.name === name)) {
+    toasts.error(t('plotter.newPlotterDuplicate', { name }))
+    return
+  }
+  const base = job.selectedProfile
+  if (!base) {
+    toasts.error(t('plotter.newPlotterNoBase'))
+    return
+  }
+  const next = {
+    ...base,
+    name,
+    tool_change_method: toolChangeMethodFor(capabilities.tool_change.mode),
+    pen_slot_count: Math.max(1, capabilities.max_pens_in_magazine),
+    capabilities: capabilities as unknown as Record<string, unknown>,
+  }
+  try {
+    await job.saveProfile(next as typeof base)
+    wizardOpen.value = false
+    toasts.success(t('plotter.newPlotterSaved', { name }))
+  } catch (err) {
+    toasts.critical(
+      `${t('plotter.newPlotterFailed')} — ${(err as Error).message ?? 'unknown error'}`,
+    )
+  }
 }
 
 onMounted(() => {

@@ -469,6 +469,34 @@ export const useJobStore = defineStore('job', () => {
     rerenderTimer = setTimeout(trackRerender, 250)
   }
 
+  /**
+   * Apply the same ``algorithm`` + ``options`` to every layer of the
+   * currently selected placement and trigger a single rerender. Used
+   * by the v2 modal's "Generate" path: the policy resolver produces
+   * one job-level recommendation, we propagate it across layers in
+   * one shot rather than looping over ``applyLayerAlgorithm`` (each of
+   * which would schedule its own debounced rerender).
+   */
+  async function applyAlgorithmToAllLayers(
+    algorithm: string,
+    algorithmOptions: Record<string, unknown> = {},
+  ): Promise<void> {
+    const p = selectedPlacement.value
+    if (!p) return
+    const next: Record<string, LayerAlgorithm> = {}
+    for (const layer of p.layers) {
+      next[layer.layer_id] = {
+        algorithm,
+        algorithm_options: { ...algorithmOptions },
+      }
+    }
+    patchSelected({ layer_algorithms: next })
+    autoSyncActiveVariant()
+    clearLivePreviewSvg()
+    if (rerenderTimer) clearTimeout(rerenderTimer)
+    rerenderTimer = setTimeout(trackRerender, 50)
+  }
+
   async function clearLayerAlgorithm(layerId: string): Promise<void> {
     const p = selectedPlacement.value
     if (!p) return
@@ -1483,6 +1511,7 @@ export const useJobStore = defineStore('job', () => {
     setDrawing,
     resetDrawing,
     applyLayerAlgorithm,
+    applyAlgorithmToAllLayers,
     applyLayerPasses,
     clearLayerAlgorithm,
     clearJob,

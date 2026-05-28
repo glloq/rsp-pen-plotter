@@ -138,3 +138,85 @@ def test_cancel_queued_run() -> None:
 
     queue.cancel(run.id)
     assert get_run(run.id, engine).state == RunState.CANCELED
+
+
+def test_next_layer_boundary_finds_change_comment() -> None:
+    """Skip-layer recovery: ``_next_layer_boundary`` locates the
+    executable index of the line that starts the next layer."""
+    from pen_plotter.queue import _next_layer_boundary
+
+    gcode = (
+        "G21\nG90\n"
+        "; layer-red\n"
+        "G1 X1 Y1\nG1 X2 Y2\n"
+        "; Change to pen slot 1 (Blue)\nM0\n"
+        "G1 X3 Y3\n"
+        "; Change pen: Green (#00ff00)\nM0\n"
+        "G1 X4 Y4\n"
+    )
+    # Before any layer comment was seen → first boundary is at index 2
+    # ("red" layer body starts at executable line 2).
+    assert _next_layer_boundary(gcode, 0) == (2, "red")
+    # From inside the red layer (exec=2) → next is the slot-1 swap at
+    # executable line 4.
+    assert _next_layer_boundary(gcode, 2) == (4, "1")
+    # No further boundary past the last layer.
+    assert _next_layer_boundary(gcode, 10) is None
+
+
+@pytest.mark.asyncio
+async def test_run_next_skips_layer_on_recoverable_failure(monkeypatch) -> None:
+    """When the profile's ``recovery_policy=skip_layer`` and the
+    streamer raises ``StreamError``, the run is re-queued past the
+    next layer boundary and the skipped label is recorded."""
+    from pen_plotter import queue as queue_module
+    from pen_plotter.domain.capability import (
+        MachineCapabilities,
+        RecoveryPolicy,
+        ToolChangeStrategy,
+        ToolingMode,
+    )
+    from pen_plotter.hardware.streamer import StreamError
+    from pen_plotter.queue import _update
+
+    engine = _engine()
+    multi_layer = (
+        "G21\nG90\n"
+        "; layer-A\n"
+        "G1 X1 Y1\n"
+        "; layer-B\n"
+        "G1 X2 Y2\n"
+        "; layer-C\n"
+        "G1 X3 Y3\n"
+    )
+    run = enqueue("job", PROFILE, multi_layer, target=engine)
+
+    base = get_profile(PROFILE)
+    assert base is not None
+    base.capabilities = MachineCapabilities(
+        tool_change=ToolChangeStrategy(
+            mode=ToolingMode.MANUAL,
+            command_source="operator",
+            recovery_policy=RecoveryPolicy.SKIP_LAYER,
+            manual_prompt=None,
+            host_macro=[],
+        ),
+    )
+    monkeypatch.setattr(queue_module, "get_profile", lambda name: base)
+
+    queue, _transport = _queue(engine)
+
+    async def _boom(*_args: object, **_kwargs: object) -> object:
+        raise StreamError("simulated firmware reject")
+
+    queue._controller.stream = _boom  # type: ignore[assignment]
+    _update(run.id, engine, acked_lines=2)
+
+    await queue.run_next()
+
+    updated = get_run(run.id, engine)
+    assert updated is not None
+    assert updated.state == RunState.QUEUED
+    assert updated.acked_lines > 2
+    assert updated.skipped_layers
+    assert "simulated firmware reject" in (updated.error or "")
