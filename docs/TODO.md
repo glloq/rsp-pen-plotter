@@ -115,22 +115,24 @@ ne calcule pas encore.
 
 ## Catégorie 2 — Backend domain pas (encore) source de vérité
 
-### 2.1 — ~~IR consommé en aval~~ — partiellement fermé (optimize)
+### 2.1 — ~~IR consommé en aval~~ — fermé pour optimize
 
-**Fix** : nouveau `optimize_geometry_ir(geometry, *, layers,
-merge_tolerance_mm)` dans `core/toolpath.py` qui accepte un
+**Fix** : `optimize_geometry_ir(geometry, *, layers,
+merge_tolerance_mm)` dans `core/toolpath.py` accepte un
 `GeometryIR` et passe par `_geometry_ir_to_svg` + `_optimize_svg`.
-La surface IR → ToolpathResult est désormais stable ; le ré-aller
-SVG en interne sera remplacé par un consommateur vpype direct
-quand les fixtures Pi seront stabilisées. Test `test_optimize
-_geometry_ir_round_trip_preserves_layers` couvre le round-trip
-SVG → IR → optimize_geometry_ir → SVG sur la fixture TWO_LAYERS.
 
-**Reste v2.0** : (a) wire ce nouvel entry-point dans la pipeline
-quand `OMNIPLOT_IR_ENABLED=1`, en lisant depuis
-`ir_artifact_cache.fetch_geometry` ; (b) ajouter le pendant
-`generate_gcode_from_path_plan(plan)` pour fermer l'autre moitié
-de la boucle ; (c) flipper le défaut à IR-on.
+**Wire prod** : `POST /optimize` route désormais via IR quand
+`OMNIPLOT_IR_ENABLED=1` (1) tente le cache `ir_artifact_cache.
+fetch_geometry(svg_hash)` ; (2) construit l'IR depuis le SVG +
+populate le cache si miss ; (3) appelle `optimize_geometry_ir`.
+Le path SVG legacy reste actif quand le flag est off. Test
+`test_optimize_routes_through_ir_when_flag_enabled` (test_api.py)
+prouve le routing via monkeypatch.
+
+**Reste v2.0** : (a) `generate_gcode_from_path_plan(plan)` pour
+fermer l'autre moitié de la boucle ; (b) consommateur vpype direct
+(skip SVG round-trip) ; (c) flipper le défaut à IR-on après
+stabilisation Pi.
 
 ### 2.2 — ~~ToolChangeOrchestrator source de vérité~~ — fermé
 
@@ -147,15 +149,31 @@ fonction `_prompt(comment)` a été retirée. Profils mis à jour :
 branded. 635 tests verts incluant les golden text contracts
 (`Insert pen slot 1: Red`, `Change pen to #ff0000`).
 
-### 2.3 — Streamer inline tool-change commands — reporté v2.0
+### 2.3 — ~~Streamer inline tool-change commands~~ — fermé
 
-`SwapPlan.commands` (firmware / host_macro multi-lignes) ne
-sont exécutés nulle part — le streamer ne sait gérer que
-`pause_points: {idx: prompt}`. Étendre `ControllerStream`
-pour injecter une séquence G-code + `wait_ms` est un refactor
-hardware-layer ; le profil `Custom CoreXY A3 (rack)` reste
-descriptif et inutile en runtime tant que ce travail n'est
-pas fait.
+**Fix** : nouveau modèle Pydantic `SwapAction(kind, prompt,
+commands)` dans `hardware/streamer.py` ; `GcodeStreamer` accepte
+`swap_actions: dict[int, SwapAction]` en plus de `pause_points`
+(legacy) et dispatch par `kind` (operator_confirm / firmware /
+host_timed / none). Pour `host_timed`/`firmware`/`none`, écrit
+chaque `SwapCommandLine` au transport, attend l'ack, sleep
+`wait_ms`, recommence.
+
+**Wire prod** : `guided_swap_actions(gcode, profile)` dans
+`core/toolchange.py` produit les actions pour tous les modes
+(map `PauseKind` → action `kind`). `PrintRun` gagne une colonne
+`swap_actions: dict` (additive migration JSON) populée par
+`enqueue` aux côtés de `pause_points` legacy. `PrintQueue.run
+_next` charge et remap les actions selon `acked_lines`, les
+passe à `controller.stream(swap_actions=...)`.
+
+**Acceptance** : 3 nouveaux tests
+(`test_streamer_runs_inline_host_macro_commands`,
+`test_guided_swap_actions_for_rack_profile_emits_host_timed
+_plans`, `test_guided_pause_points_stays_legacy_for_rack_profile`).
+Le profil `Custom CoreXY A3 (rack)` est désormais **exécutable**
+runtime : ses 7 lignes host_macro sont jouées automatiquement à
+chaque tool change.
 
 ### 2.4 — ~~Recovery `skip_layer` réel~~ (Block E.2) — fermé
 

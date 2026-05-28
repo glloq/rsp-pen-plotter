@@ -17,6 +17,7 @@ from pen_plotter.hardware.streamer import (
     ProgressCallback,
     StreamProgress,
     StreamState,
+    SwapAction,
 )
 from pen_plotter.hardware.transport import SerialTransport, Transport
 from pen_plotter.models import MachineProfile
@@ -147,6 +148,7 @@ class PlotterController:
         gcode: str,
         on_progress: ProgressCallback | None = None,
         pause_points: dict[int, str] | None = None,
+        swap_actions: dict[int, SwapAction] | None = None,
     ) -> StreamProgress:
         """Stream a G-code program and await its completion.
 
@@ -160,7 +162,11 @@ class PlotterController:
             on_progress: Optional extra progress callback (in addition to the
                 broadcast to WebSocket subscribers).
             pause_points: Optional ``{line_index: prompt}`` for guided
-                tool-change pauses (see :class:`GcodeStreamer`).
+                tool-change pauses (see :class:`GcodeStreamer`). Legacy
+                — superseded by ``swap_actions`` for new code paths.
+            swap_actions: Optional ``{line_index: SwapAction}`` for the
+                richer v0.2 tool-change boundary plans (firmware /
+                host_macro / operator confirm in one channel).
 
         Returns:
             The final :class:`StreamProgress`.
@@ -179,7 +185,10 @@ class PlotterController:
                 await on_progress(progress)
 
         self._streamer = GcodeStreamer(
-            transport, on_progress=_combined, pause_points=pause_points
+            transport,
+            on_progress=_combined,
+            pause_points=pause_points,
+            swap_actions=swap_actions,
         )
         self._task = asyncio.create_task(self._streamer.run(gcode))
         self._task.add_done_callback(self._on_task_done)

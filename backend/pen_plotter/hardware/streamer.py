@@ -12,8 +12,47 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 from pen_plotter.hardware.transport import Transport
+
+
+class SwapCommandLine(BaseModel):
+    """One inline command emitted at a tool-change boundary.
+
+    Mirrors :class:`pen_plotter.domain.toolchange.SwapCommand` but with
+    the streamer's wire shape — plain strings + a millisecond dwell.
+    The streamer writes the line to the transport, awaits the ``ok``
+    from the controller, then sleeps ``wait_ms`` before the next.
+    """
+
+    send: str
+    wait_ms: int = Field(default=0, ge=0)
+
+
+class SwapAction(BaseModel):
+    """What the streamer should do at one tool-change boundary.
+
+    Stored on :class:`PrintRun` as JSON so a queued run survives a
+    restart with its swap plan intact. The streamer reads
+    ``swap_actions`` at runtime and dispatches per ``kind``:
+
+    - ``operator_confirm``: halt, show ``prompt``, wait for resume
+      (legacy behaviour from ``pause_points``).
+    - ``firmware``: emit each ``commands`` line and await its ack
+      just like a normal G-code line — the firmware handles the
+      physical swap.
+    - ``host_timed``: emit each line, await ack, then sleep
+      ``wait_ms`` before the next (host-driven rack macros).
+    - ``none``: emit the lines inline without halting; useful for
+      single-pen profiles that still want some inline marker.
+    """
+
+    kind: Literal["operator_confirm", "firmware", "host_timed", "none"]
+    prompt: str | None = None
+    commands: list[SwapCommandLine] = Field(default_factory=list)
 
 
 class StreamState(StrEnum):
@@ -72,6 +111,7 @@ class GcodeStreamer:
         on_progress: ProgressCallback | None = None,
         ack_timeout_s: float = 30.0,
         pause_points: dict[int, str] | None = None,
+        swap_actions: dict[int, SwapAction] | None = None,
     ) -> None:
         """Create a streamer.
 
@@ -83,12 +123,21 @@ class GcodeStreamer:
                 guarding against a stalled or disconnected controller.
             pause_points: Optional ``{executable_line_index: prompt}`` mapping.
                 When streaming reaches such a line it is skipped and the stream
-                enters ``WAITING`` until resumed (a software-guided tool change).
+                enters ``WAITING`` until resumed. **Legacy** — kept for
+                backward compatibility with queued runs that predate the
+                ``swap_actions`` plumbing. When both are supplied,
+                ``swap_actions`` wins for matching indices.
+            swap_actions: Optional ``{executable_line_index: SwapAction}``
+                mapping. Richer than ``pause_points`` — supports
+                operator-confirm prompts AND inline firmware / host_macro
+                command sequences. Produced by
+                :func:`pen_plotter.core.toolchange.guided_swap_actions`.
         """
         self._transport = transport
         self._on_progress = on_progress
         self._ack_timeout_s = ack_timeout_s
         self._pause_points = pause_points or {}
+        self._swap_actions = swap_actions or {}
         self._resume = asyncio.Event()
         self._resume.set()
         self._aborted = False
@@ -160,20 +209,24 @@ class GcodeStreamer:
                 await self._emit()
                 return self.progress
 
-            if index in self._pause_points:
-                # Guided tool change: replace the firmware pause with a software
-                # one. Skip the line and wait for the operator to resume.
-                self.progress.state = StreamState.WAITING
-                self.progress.message = self._pause_points[index]
-                self._resume.clear()
-                await self._emit()
-                await self._resume.wait()
-                if self._aborted:
+            # New-style swap action takes precedence over the legacy
+            # ``pause_points`` map for the same line index. Legacy
+            # ``pause_points`` are translated on the fly to an
+            # operator-confirm action.
+            action = self._swap_actions.get(index)
+            if action is None and index in self._pause_points:
+                action = SwapAction(
+                    kind="operator_confirm", prompt=self._pause_points[index]
+                )
+            if action is not None:
+                aborted = await self._handle_swap(action)
+                if aborted:
                     self.progress.state = StreamState.ABORTED
                     await self._emit()
                     return self.progress
-                self.progress.state = StreamState.RUNNING
-                self.progress.message = None
+                # The firmware-pause command on this line is replaced
+                # by the swap action itself: skip it, count it as
+                # delivered so the line counter stays consistent.
                 self.progress.sent += 1
                 self.progress.acked += 1
                 await self._emit()
@@ -193,3 +246,49 @@ class GcodeStreamer:
         self.progress.state = StreamState.DONE
         await self._emit()
         return self.progress
+
+    async def _handle_swap(self, action: SwapAction) -> bool:
+        """Execute a :class:`SwapAction` at a tool-change boundary.
+
+        Returns ``True`` when the action was aborted mid-execution, so
+        the caller can short-circuit to the ABORTED state and emit a
+        final progress snapshot.
+        """
+        if action.kind == "operator_confirm":
+            self.progress.state = StreamState.WAITING
+            self.progress.message = action.prompt
+            self._resume.clear()
+            await self._emit()
+            await self._resume.wait()
+            if self._aborted:
+                return True
+            self.progress.state = StreamState.RUNNING
+            self.progress.message = None
+            return False
+
+        # Inline command sequences (firmware / host_timed / none).
+        # ``firmware`` and ``host_timed`` differ only in whether we
+        # sleep ``wait_ms`` between sends; ``none`` is identical to
+        # ``firmware`` in practice (we still wait for acks). The
+        # streamer treats them uniformly by emitting commands one at
+        # a time with the per-line dwell.
+        if action.commands:
+            self.progress.state = StreamState.WAITING
+            self.progress.message = f"swap ({action.kind})"
+            await self._emit()
+            for cmd in action.commands:
+                if self._aborted:
+                    return True
+                await self._transport.write_line(cmd.send)
+                try:
+                    await self._wait_ok()
+                except StreamError:
+                    self.progress.state = StreamState.ERROR
+                    await self._emit()
+                    raise
+                if cmd.wait_ms > 0:
+                    await asyncio.sleep(cmd.wait_ms / 1000.0)
+            self.progress.state = StreamState.RUNNING
+            self.progress.message = None
+            await self._emit()
+        return False

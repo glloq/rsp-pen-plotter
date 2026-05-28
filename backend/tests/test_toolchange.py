@@ -1,8 +1,14 @@
 import pytest
 
 from pen_plotter.core.gcode import LayerGeneration, generate_gcode
-from pen_plotter.core.toolchange import guided_pause_points
-from pen_plotter.hardware.streamer import GcodeStreamer, StreamState, executable_lines
+from pen_plotter.core.toolchange import guided_pause_points, guided_swap_actions
+from pen_plotter.hardware.streamer import (
+    GcodeStreamer,
+    StreamState,
+    SwapAction,
+    SwapCommandLine,
+    executable_lines,
+)
 from pen_plotter.hardware.transport import MockTransport
 from pen_plotter.profiles import get_profile
 
@@ -73,3 +79,77 @@ async def test_streamer_waits_at_pause_point_and_skips_the_line() -> None:
     assert final.message is None
     assert transport.written == ["G0 X1", "G1 X2 Y2 F600"]  # M0 skipped
     assert final.acked == 3
+
+
+@pytest.mark.asyncio
+async def test_streamer_runs_inline_host_macro_commands() -> None:
+    """v0.2 2.3 wire: ``host_timed`` SwapAction streams its command
+    list inline at the boundary instead of waiting for the operator."""
+    import asyncio
+
+    transport = MockTransport()
+    swap_actions = {
+        1: SwapAction(
+            kind="host_timed",
+            commands=[
+                SwapCommandLine(send="G53 G0 Z5", wait_ms=0),
+                SwapCommandLine(send="M280 P0 S20", wait_ms=0),
+                SwapCommandLine(send="M280 P0 S90", wait_ms=0),
+            ],
+        )
+    }
+    streamer = GcodeStreamer(transport, swap_actions=swap_actions)
+    final = await asyncio.wait_for(
+        streamer.run("G0 X1\nM0\nG1 X2 Y2 F600\n"), timeout=2.0
+    )
+
+    assert final.state == StreamState.DONE
+    # M0 is replaced by the three macro commands; the original G0/G1
+    # lines stay on either side.
+    assert transport.written == [
+        "G0 X1",
+        "G53 G0 Z5",
+        "M280 P0 S20",
+        "M280 P0 S90",
+        "G1 X2 Y2 F600",
+    ]
+    assert final.acked == 3  # streamer line counter unchanged (boundary counts as 1)
+
+
+def test_guided_swap_actions_for_rack_profile_emits_host_timed_plans() -> None:
+    """The ``Custom CoreXY A3 (rack)`` profile's host_macro yields
+    ``host_timed`` SwapActions with the 7 lines from the YAML, not
+    operator-confirm prompts."""
+    profile = get_profile("Custom CoreXY A3 (rack)")
+    assert profile is not None
+    # Hand-rolled G-code with a single slot-change comment + M0.
+    gcode = (
+        "G21\n"
+        "G90\n"
+        "; Change to pen slot 1 (Red)\n"
+        "M0\n"
+        "G1 X10 Y10\n"
+    )
+    actions = guided_swap_actions(gcode, profile)
+    assert list(actions.keys()) == [2]  # M0 is the third executable line (idx=2)
+    action = actions[2]
+    assert action.kind == "host_timed"
+    assert len(action.commands) == 7
+    # Placeholders substituted: {slot} → 1, {label} → Red, {color} → "".
+    first = action.commands[0].send
+    assert "Red" in first  # ``; rack swap to {label} ({color})``
+
+
+def test_guided_pause_points_stays_legacy_for_rack_profile() -> None:
+    """Backward-compat: rack profiles produce ``host_timed`` actions
+    (no operator confirm), so ``guided_pause_points`` returns empty."""
+    profile = get_profile("Custom CoreXY A3 (rack)")
+    assert profile is not None
+    gcode = (
+        "G21\n"
+        "G90\n"
+        "; Change to pen slot 1 (Red)\n"
+        "M0\n"
+        "G1 X10 Y10\n"
+    )
+    assert guided_pause_points(gcode, profile) == {}

@@ -22,14 +22,19 @@ from sqlalchemy import JSON, Column, Engine
 from sqlmodel import Field, Session, SQLModel, asc, desc, select
 
 from pen_plotter.core.resume import build_resume_program
-from pen_plotter.core.toolchange import guided_pause_points
+from pen_plotter.core.toolchange import guided_pause_points, guided_swap_actions
 from pen_plotter.domain.recovery import (
     Directive,
     FailureKind,
     resolve_recovery,
 )
 from pen_plotter.hardware.controller import PlotterController
-from pen_plotter.hardware.streamer import StreamError, StreamState, executable_lines
+from pen_plotter.hardware.streamer import (
+    StreamError,
+    StreamState,
+    SwapAction,
+    executable_lines,
+)
 from pen_plotter.persistence import engine as default_engine
 from pen_plotter.profiles import get_profile
 
@@ -63,7 +68,17 @@ class PrintRun(SQLModel, table=True):
     priority: int = 0
     error: str | None = None
     # {executable_line_index: operator prompt} for guided tool-change pauses.
+    # **Legacy** — kept for backward compatibility with queued runs
+    # that predate ``swap_actions``. New runs populate both fields so
+    # an older worker version still produces the right operator-confirm
+    # behaviour even if it can't act on the richer plan.
     pause_points: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    # {executable_line_index: {kind, prompt, commands}} — richer than
+    # ``pause_points``, supports firmware / host_timed / none plans
+    # produced by the ``ToolChangeOrchestrator`` (roadmap 2.3 wire).
+    # Streamer consumes this when available and falls back to
+    # ``pause_points`` for runs queued before the column existed.
+    swap_actions: dict = Field(default_factory=dict, sa_column=Column(JSON))
     # Layers that were skipped at runtime under a ``skip_layer`` recovery
     # policy. Populated when the streamer raises ``StreamError`` and the
     # active policy says "skip and continue" — see ``_skip_to_next_layer``.
@@ -97,6 +112,13 @@ def enqueue(
 
     profile = get_profile(profile_name)
     pause_points = guided_pause_points(gcode, profile) if profile else {}
+    swap_actions_raw = guided_swap_actions(gcode, profile) if profile else {}
+    # SQLite JSON column expects string keys; pydantic-dump each
+    # SwapAction so the storage round-trip is JSON-safe.
+    swap_actions: dict[str, dict] = {
+        str(idx): action.model_dump(mode="json")
+        for idx, action in swap_actions_raw.items()
+    }
     run = PrintRun(
         id=str(uuid4()),
         name=name,
@@ -105,6 +127,7 @@ def enqueue(
         total_lines=len(executable_lines(gcode)),
         priority=priority,
         pause_points={str(k): v for k, v in pause_points.items()},
+        swap_actions=swap_actions,
         idempotency_key=idempotency_key,
     )
     with Session(target) as session:
@@ -312,12 +335,23 @@ class PrintQueue:
         preamble_len = len(program) - (run.total_lines - run.acked_lines)
         start_checkpoint = run.acked_lines
 
-        # Remap absolute guided-pause indices onto the (possibly resumed) program.
+        # Remap absolute boundary indices onto the (possibly resumed) program.
+        def _remap(idx_str: str) -> int:
+            return preamble_len + (int(idx_str) - start_checkpoint)
+
         pause_points = {
-            preamble_len + (int(idx) - start_checkpoint): prompt
+            _remap(idx): prompt
             for idx, prompt in (run.pause_points or {}).items()
             if int(idx) >= start_checkpoint
         }
+        swap_actions: dict[int, SwapAction] = {}
+        for idx, raw in (run.swap_actions or {}).items():
+            if int(idx) < start_checkpoint:
+                continue
+            try:
+                swap_actions[_remap(idx)] = SwapAction.model_validate(raw)
+            except Exception:  # noqa: BLE001 — corrupt entry, fall back to legacy
+                _log.warning("Discarding malformed swap_action at idx=%s", idx)
 
         self._current_id = run.id
         self._cancel_requested = False
@@ -330,7 +364,10 @@ class PrintQueue:
 
         try:
             final = await self._controller.stream(
-                "\n".join(program), on_progress=checkpoint, pause_points=pause_points
+                "\n".join(program),
+                on_progress=checkpoint,
+                pause_points=pause_points,
+                swap_actions=swap_actions,
             )
         except StreamError as exc:
             # Recovery layer (B.3 → E.2 → 2.4 wire): turn the firmware

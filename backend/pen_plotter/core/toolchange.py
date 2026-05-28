@@ -27,6 +27,7 @@ from pen_plotter.domain.toolchange import (
     SwapContext,
     ToolChangeOrchestrator,
 )
+from pen_plotter.hardware.streamer import SwapAction, SwapCommandLine
 from pen_plotter.models import MachineProfile
 
 _CHANGE_RE = re.compile(r"Change to pen slot (\d+) \((.*)\)\s*$")
@@ -76,10 +77,55 @@ def guided_pause_points(gcode: str, profile: MachineProfile) -> dict[int, str]:
     if profile.tool_change_method != "manual_pause" or not profile.tool_change_command.strip():
         return {}
 
-    orchestrator = ToolChangeOrchestrator(profile)
+    actions = guided_swap_actions(gcode, profile)
     points: dict[int, str] = {}
+    for index, action in actions.items():
+        if action.kind == "operator_confirm" and action.prompt:
+            points[index] = action.prompt
+    return points
+
+
+# Maps a ``PauseKind`` from the orchestrator's :class:`SwapPlan` onto
+# the streamer's :class:`SwapAction.kind` literal. Kept here so the
+# wire shape is set in one place — the streamer doesn't know about
+# domain enums, and the domain doesn't know about the wire kinds.
+_PAUSE_KIND_TO_ACTION: dict[PauseKind, str] = {
+    PauseKind.OPERATOR_CONFIRM: "operator_confirm",
+    PauseKind.FIRMWARE: "firmware",
+    PauseKind.HOST_TIMED: "host_timed",
+    PauseKind.NONE: "none",
+}
+
+
+def guided_swap_actions(
+    gcode: str, profile: MachineProfile
+) -> dict[int, SwapAction]:
+    """Map executable-line indices of tool-change boundaries to :class:`SwapAction`.
+
+    Unified counterpart to :func:`guided_pause_points` that handles
+    every tool-change mode the v0.2 capability model supports:
+
+    - ``operator_confirm`` (mono / multi manual): halts the streamer
+      with a prompt the operator confirms.
+    - ``firmware`` (carousel CNC): pushes the firmware's swap trigger
+      lines inline.
+    - ``host_timed`` (rack with host macro): pushes the macro lines
+      with the configured ``wait_ms`` dwells between them.
+    - ``none`` (single-pen): no actual swap; the action is empty
+      bookkeeping kept so the firmware-pause comment line is still
+      skipped from streaming.
+
+    The returned dict is keyed by the executable line index of the
+    firmware-pause command (the line generated G-code stages for a
+    swap). The streamer replaces that line with the action.
+    """
+    if profile.tool_change_method == "none":
+        return {}
+
+    orchestrator = ToolChangeOrchestrator(profile)
+    actions: dict[int, SwapAction] = {}
     exec_index = 0
-    pending: str | None = None
+    pending: SwapAction | None = None
     for raw in gcode.splitlines():
         comment = raw.split(";", 1)[1].strip() if ";" in raw else ""
         code = raw.split(";", 1)[0].strip()
@@ -87,16 +133,18 @@ def guided_pause_points(gcode: str, profile: MachineProfile) -> dict[int, str]:
             context = _context_from_comment(comment)
             if context is not None:
                 plan = orchestrator.plan(context)
-                # Only ``operator_confirm`` plans produce a prompt we
-                # store on the run; the streamer doesn't yet act on
-                # the other ``SwapCommand[]`` plans (see TODO 2.3 in
-                # docs/TODO.md for the streamer inline-command refactor).
-                if plan.pause_kind is PauseKind.OPERATOR_CONFIRM and plan.operator_prompt:
-                    pending = plan.operator_prompt
+                pending = SwapAction(
+                    kind=_PAUSE_KIND_TO_ACTION[plan.pause_kind],  # type: ignore[arg-type]
+                    prompt=plan.operator_prompt,
+                    commands=[
+                        SwapCommandLine(send=c.send, wait_ms=c.wait_ms)
+                        for c in plan.commands
+                    ],
+                )
         if not code:
             continue
         if pending is not None:
-            points[exec_index] = pending
+            actions[exec_index] = pending
             pending = None
         exec_index += 1
-    return points
+    return actions
