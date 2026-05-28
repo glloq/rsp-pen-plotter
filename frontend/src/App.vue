@@ -242,6 +242,11 @@ onMounted(async () => {
   // fallback banner. Failure populates `source` with 'snapshot' so the
   // banner becomes visible — no toast needed.
   void algorithms.refresh()
+  // Queue polling needs to run for the whole app session so Workshop
+  // Mode + WorkspaceRail see live runs even when the operator never
+  // opens the Plotter drawer. ``startPolling`` is idempotent — calling
+  // it again from PlotterDrawer is a no-op.
+  queue.startPolling()
 })
 
 onBeforeUnmount(() => {
