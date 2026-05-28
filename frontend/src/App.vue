@@ -82,10 +82,18 @@ const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => 
 function onEditV2Cancel(): void {
   ui.closeEditModal()
 }
-function onEditV2Confirm(): void {
-  // Wiring the resolver decision back into the placement draft lands
-  // with the v2 modal cut-over — until then, confirm just closes so the
-  // operator isn't trapped in the flow.
+async function onEditV2Confirm(decision: import('./domain/policy/schemas').PolicyDecision): Promise<void> {
+  // Propagate the resolver recommendation to every layer of the
+  // selected placement, then trigger a single rerender so the canvas
+  // catches up. ``applyAlgorithmToAllLayers`` debounces internally so
+  // a missed-click double-confirm is safe. The placement must exist
+  // — the modal only opens when one is selected. Failures are
+  // surfaced via the existing rerender error path; we don't need to
+  // duplicate them here.
+  await store.applyAlgorithmToAllLayers(
+    decision.default_algorithm,
+    (decision.default_options ?? {}) as Record<string, unknown>,
+  )
   ui.closeEditModal()
 }
 
@@ -227,7 +235,11 @@ onMounted(async () => {
     await getHealth()
     await Promise.all([store.loadProfiles(), store.loadPresets()])
   } catch {
-    toasts.error(t('app.apiUnreachable'))
+    // Backend unreachable at boot is operator-blocking: nothing in the
+    // app works without it. Use the persistent ``critical`` channel so
+    // the toast survives the standard 6 s timer and the operator can
+    // see it after wandering away from the screen.
+    toasts.critical(t('app.apiUnreachable'))
   }
   // Fire-and-forget: the toast is purely advisory, no need to block the
   // rest of the startup sequence on the (potentially slow) git fetch.
@@ -275,7 +287,7 @@ onBeforeUnmount(() => {
     >
       <FilesPane />
       <CanvasView />
-      <WorkspaceRail />
+      <WorkspaceRail @open-compare="compareOpen = true" />
     </main>
 
     <AppFooter />

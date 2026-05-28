@@ -175,6 +175,13 @@ export interface MachineProfile {
   arc_tolerance_mm: number
   ebb: EbbConfig | null
   pens: PenSlot[] | null
+  // v0.2 capability model. When set, the backend persists it
+  // verbatim; when null the backend derives one from the legacy
+  // tool_change_* fields on the fly via ``derive_capabilities``.
+  // The CapabilityWizard sends a fully-formed block here when
+  // creating a profile, so manual_prompt templates and host_macro
+  // line lists round-trip cleanly.
+  capabilities?: Record<string, unknown> | null
 }
 
 export async function getProfiles(): Promise<MachineProfile[]> {

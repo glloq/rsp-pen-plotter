@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import uuid4
@@ -63,6 +64,10 @@ class PrintRun(SQLModel, table=True):
     error: str | None = None
     # {executable_line_index: operator prompt} for guided tool-change pauses.
     pause_points: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    # Layers that were skipped at runtime under a ``skip_layer`` recovery
+    # policy. Populated when the streamer raises ``StreamError`` and the
+    # active policy says "skip and continue" — see ``_skip_to_next_layer``.
+    skipped_layers: list = Field(default_factory=list, sa_column=Column(JSON))
     # Optional client-supplied key to make enqueue idempotent across retries.
     idempotency_key: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -139,6 +144,49 @@ def _update(run_id: str, target: Engine, **fields: object) -> PrintRun | None:
         session.commit()
         session.refresh(run)
         return run
+
+
+_LAYER_BOUNDARY_RE = re.compile(
+    r"^\s*;\s*(?:Change\s+to\s+pen\s+slot\s+(\d+)\s*\((.*?)\)|Change\s+pen[:\s]+(.+)|layer[-_\s](\S+))",
+    re.IGNORECASE,
+)
+
+
+def _next_layer_boundary(
+    gcode: str, start_exec_index: int
+) -> tuple[int, str] | None:
+    """Locate the next layer/tool-change boundary after ``start_exec_index``.
+
+    Walks the executable lines of ``gcode`` (i.e. the same indexing the
+    streamer's checkpoint uses), looking for the next ``; Change to pen
+    slot N (label)`` comment or equivalent. Returns
+    ``(executable_index, label)`` of the line **after** the comment so
+    the run can be re-queued at that checkpoint and the offending
+    layer is skipped entirely.
+
+    Used by the ``skip_layer`` recovery policy in :class:`PrintQueue` —
+    keeping the regex co-located with the queue keeps the recovery
+    decision auditable.
+    """
+    exec_index = 0
+    pending_label: str | None = None
+    for raw in gcode.splitlines():
+        code = raw.split(";", 1)[0].strip()
+        comment = raw.split(";", 1)[1].strip() if ";" in raw else ""
+        if comment:
+            match = _LAYER_BOUNDARY_RE.match(f"; {comment}")
+            if match:
+                pending_label = next((g for g in match.groups() if g), "layer")
+        if not code:
+            continue
+        if pending_label is not None and exec_index > start_exec_index:
+            return exec_index, pending_label
+        if pending_label is not None and exec_index <= start_exec_index:
+            # Boundary was for the current/past layer — keep looking for
+            # the NEXT one.
+            pending_label = None
+        exec_index += 1
+    return None
 
 
 def delete_run(run_id: str, target: Engine = default_engine) -> bool:
@@ -285,15 +333,16 @@ class PrintQueue:
                 "\n".join(program), on_progress=checkpoint, pause_points=pause_points
             )
         except StreamError as exc:
-            # Recovery layer (B.3 → E.2 wire): turn the firmware
+            # Recovery layer (B.3 → E.2 → 2.4 wire): turn the firmware
             # rejection into a directive that respects the profile's
-            # ``recovery_policy``. ``abort`` profiles still fail the
-            # run; ``pause_and_prompt`` pauses for operator confirm so
-            # the run can be resumed via the existing checkpoint;
-            # ``skip_layer`` also pauses today (full skip-then-advance
-            # logic is the follow-up that ships with IR-driven
-            # streaming — until then, pausing keeps state intact and
-            # lets the operator make the call).
+            # ``recovery_policy``.
+            #   - abort            → FAILED.
+            #   - pause_and_prompt → PAUSED (operator drives resume).
+            #   - skip_layer       → advance acked_lines past the next
+            #     layer boundary, append the label to ``skipped_layers``
+            #     and re-queue. The worker loop picks the run up again
+            #     and resumes from the new checkpoint, so the offending
+            #     layer is effectively skipped.
             caps = profile.effective_capabilities()
             decision = resolve_recovery(
                 caps.tool_change.recovery_policy,
@@ -308,12 +357,29 @@ class PrintQueue:
                     error=f"{exc} — paused per recovery policy.",
                 )
             elif decision.directive is Directive.SKIP_AND_CONTINUE:
-                _update(
-                    run.id,
-                    self._engine,
-                    state=RunState.PAUSED,
-                    error=f"{exc} — skip-layer policy pending operator confirm.",
-                )
+                boundary = _next_layer_boundary(run.gcode, run.acked_lines)
+                if boundary is None:
+                    # No more layers to skip into — treat as a normal
+                    # failure so the operator is informed.
+                    _update(
+                        run.id,
+                        self._engine,
+                        state=RunState.FAILED,
+                        error=f"{exc} — skip-layer policy: no further layer boundary.",
+                    )
+                else:
+                    next_index, label = boundary
+                    skipped = list(run.skipped_layers or [])
+                    skipped.append(label)
+                    _update(
+                        run.id,
+                        self._engine,
+                        state=RunState.QUEUED,
+                        acked_lines=next_index,
+                        skipped_layers=skipped,
+                        error=f"{exc} — skipped layer {label!r} per skip_layer policy.",
+                    )
+                    self.wake()
             else:
                 _update(run.id, self._engine, state=RunState.FAILED, error=str(exc))
             return True

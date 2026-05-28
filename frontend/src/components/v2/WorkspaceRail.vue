@@ -12,25 +12,36 @@
 
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { storeToRefs } from 'pinia'
 import { useJobStore } from '../../stores/job'
+import { usePlotterStore } from '../../stores/plotter'
 import { useQueueStore } from '../../stores/queue'
 import { useWorkspacesStore, type PanelId } from '../../stores/workspaces'
+import MachineStatusPill from '../MachineStatusPill.vue'
 import LayerInspector from './LayerInspector.vue'
 import MagazineView from './MagazineView.vue'
 import PipelineInspector from './PipelineInspector.vue'
 import RunActionsPanel from './RunActionsPanel.vue'
 import RunTimeline from './RunTimeline.vue'
 
+const emit = defineEmits<{
+  (e: 'open-compare'): void
+}>()
+
 const { t } = useI18n()
 const workspaces = useWorkspacesStore()
 const job = useJobStore()
 const queue = useQueueStore()
+const plotter = usePlotterStore()
+const { status: plotterStatus } = storeToRefs(plotter)
 
 const V2_PANELS: ReadonlySet<PanelId> = new Set<PanelId>([
   'layer_inspector',
   'pipeline_inspector',
   'queue',
   'magazine',
+  'machine_telemetry',
+  'compare',
 ])
 
 const visiblePanels = computed(() =>
@@ -91,6 +102,43 @@ async function onCancel(): Promise<void> {
           </template>
           <p v-else class="empty">{{ t('workspaces.empty.queue') }}</p>
         </section>
+        <section
+          v-else-if="id === 'machine_telemetry'"
+          :data-test="`rail-${id}`"
+          class="telemetry"
+        >
+          <header class="telemetry__header">
+            <strong>{{ t('workspaces.panel.machineTelemetry') }}</strong>
+            <MachineStatusPill />
+          </header>
+          <ul class="telemetry__metrics">
+            <li>
+              <span>{{ t('workspaces.telemetry.state') }}</span>
+              <span class="value">{{ t(`machine.${plotterStatus.state}`) }}</span>
+            </li>
+            <li v-if="plotterStatus.total > 0">
+              <span>{{ t('workspaces.telemetry.progress') }}</span>
+              <span class="value">
+                {{ plotterStatus.acked }} / {{ plotterStatus.total }}
+              </span>
+            </li>
+            <li v-if="plotterStatus.message">
+              <span>{{ t('workspaces.telemetry.message') }}</span>
+              <span class="value">{{ plotterStatus.message }}</span>
+            </li>
+          </ul>
+        </section>
+        <section v-else-if="id === 'compare'" :data-test="`rail-${id}`">
+          <button
+            type="button"
+            class="compare-launcher"
+            data-test="rail-compare-open"
+            @click="emit('open-compare')"
+          >
+            ⇄ {{ t('compare.open') }}
+          </button>
+          <p class="hint">{{ t('workspaces.empty.compareHint') }}</p>
+        </section>
       </template>
     </div>
   </aside>
@@ -128,5 +176,52 @@ async function onCancel(): Promise<void> {
   color: #64748b;
   font-style: italic;
   margin: 0;
+}
+.telemetry__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #334155;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+.telemetry__metrics {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+}
+.telemetry__metrics li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.telemetry__metrics .value {
+  color: #1e293b;
+  font-family: ui-monospace, Menlo, monospace;
+}
+.compare-launcher {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.compare-launcher:hover {
+  background: #e2e8f0;
+}
+.hint {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin: 0.3rem 0 0;
 }
 </style>

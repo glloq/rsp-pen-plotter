@@ -31,23 +31,18 @@
 
 ## Catégorie 1 — Wiring incomplet documenté comme intentionnel
 
-### 1.1 — Cut-over `EditModal` v1 → v2 (Block A)
+### 1.1 — ~~Cut-over `EditModal` v1 → v2~~ (Block A) — fixé
 
-**Contexte** : `EditModalV2` est monté à côté de `EditModal` v1 derrière
-`?flag.modalV2=1`. Le `confirm` du modal V2 ferme juste le modal au lieu de
-propager la `PolicyDecision` dans le placement draft.
+**Fix** : nouveau `applyAlgorithmToAllLayers(algorithm, options)` dans
+`useJobStore` (1 patch + 1 rerender debounced 50 ms), appelé par
+`App.onEditV2Confirm(decision)` avec `decision.default_algorithm` +
+`decision.default_options`. Le flag `modalV2` est maintenant toggleable
+via le bouton header **Modal V2 (beta)**, le parcours upload → édit V2
+→ Générer → preview met à jour la canvas réellement.
 
-**Travail restant**
-- Câbler `onEditV2Confirm(decision)` dans `App.vue` pour mettre à jour
-  `job.layer_algorithms` / `placement.svg` via `triggerRerender` avec
-  l'algorithme recommandé.
-- Décider du critère de cut-over (mode A/B sur N opérateurs ? feature flag
-  par défaut on ?).
-- Supprimer le code v1 + retirer le flag.
-
-**Critère d'acceptation** : un opérateur peut faire un parcours complet
-upload → édit V2 → confirme → preview se met à jour → generate, sans
-toucher au flag.
+**Reste éventuel** : décider du critère de cut-over (déprécier v1).
+Pour l'instant les deux modals coexistent ; le toggle header est la
+mécanique de bascule.
 
 ### 1.2 — ~~Queue polling pour Workshop Mode et WorkspaceRail~~ (Block A) — fixé en audit
 
@@ -58,45 +53,32 @@ live même sans ouvrir le PlotterDrawer.
 **Reste éventuel** : remplacer le polling 2 s par SSE/WebSocket pour
 réduire le trafic. Pas bloquant.
 
-### 1.3 — `WorkspaceRail` ne rend pas les panels v0.1 (Block C)
+### 1.3 — ~~`WorkspaceRail` panels manquants~~ (Block C) — fixé partiellement
 
-**Contexte** : `WorkspaceRail.vue` filtre sur les v2 panels
-(`layer_inspector`, `pipeline_inspector`, `magazine`, `queue`) et ignore
-les ids v0.1 (`source`, `style`, `preview`, `plot`, `machine_telemetry`,
-`compare`).
+**Fix** : `machine_telemetry` rend désormais `MachineStatusPill` +
+état / acked / total / message du store plotter. `compare` rend un
+launcher qui émet `open-compare` (écouté par `App.vue`) et ouvre le
+drawer existant.
 
-**Travail restant**
-- Décider si le workspace doit pouvoir CACHER les surfaces v0.1
-  (`FilesPane`, `CanvasView`) — actuellement elles sont toujours visibles
-  dans `App.vue`.
-- Si oui : conditionner leur affichage sur le contenu de
-  `workspaces.active.panels`. Attention à l'UX : un workspace vide
-  laisserait l'écran vide.
-- Implémenter le rendu de `machine_telemetry` dans le rail (afficher
-  `MachineStatusPill` + métriques live).
-- `compare` dans le rail : un bouton "Comparer" inline qui réutilise
-  le drawer de `App.vue`.
+**Reste** : la décision "le workspace peut cacher `FilesPane` /
+`CanvasView` (surfaces v0.1)" n'est pas prise — pour l'instant le
+rail s'ajoute à côté plutôt que de remplacer. À traiter le jour où
+un workspace "Pro full-screen" devient pertinent.
 
-**Critère d'acceptation** : changer de workspace recompose réellement
-l'écran ; un workspace `Pro` cache `FilesPane` si demandé, etc.
+### 1.4 — ~~`CapabilityWizard` confirm → save profile~~ (Block A) — fixé
 
-### 1.4 — `CapabilityWizard` confirm → save profile (Block A)
+**Fix** : `PlotterDrawer.onWizardConfirm` clone le profil actif comme
+base (workspace, speeds, pens héritent), applique les capabilities du
+wizard + mappe `tool_change.mode` vers `tool_change_method` legacy
+(`firmware`→`carousel`, `host_macro`→`rack`, `manual`→`manual_pause`,
+`single_pen`→`none`), demande un nom via `window.prompt`, refuse les
+doublons, puis appelle `job.saveProfile(next)` (recharge la liste +
+sélectionne le nouveau profil). i18n : `plotter.newPlotterPrompt /
+Duplicate / NoBase / Saved / Failed`. `MachineProfile` TS interface
+gagne un champ `capabilities?: Record<string, unknown> | null` pour
+faire round-tripper le block capability au backend.
 
-**Contexte** : le wizard émet `confirm` avec un `MachineCapabilities` ;
-aujourd'hui ça produit juste un toast. Il faut le wirer dans le flow
-`saveProfile`.
-
-**Travail restant**
-- Ouvrir un dialog "Nom du profil" après le confirm.
-- Construire un `MachineProfile` minimal autour des capabilities (le
-  reste vient des defaults / du preset choisi).
-- Appeler `saveProfile(...)` côté API.
-- Recharger la liste des profils dans `job.loadProfiles()`.
-- Sélectionner automatiquement le nouveau profil.
-
-**Critère d'acceptation** : un opérateur peut créer un profil custom
-"Rack 6 slots host_macro" depuis le wizard et l'utiliser dans le panneau
-profile sans passer par YAML.
+**Reste éventuel** : dialog Vue au lieu de `window.prompt` natif.
 
 ### 1.5 — `CompareView` candidats réels (Block A / G.1)
 
@@ -184,24 +166,24 @@ operator-confirm pauses (via `pause_points: {idx: prompt}`).
 séquence de 7 lignes G-code automatiquement à chaque tool change, sans
 opérateur, et l'opérateur peut suivre la progression dans la queue.
 
-### 2.4 — Recovery `skip_layer` réel (Block E.2)
+### 2.4 — ~~Recovery `skip_layer` réel~~ (Block E.2) — fixé
 
-**Contexte** : `resolve_recovery` retourne `SKIP_AND_CONTINUE` quand la
-politique est `skip_layer`, mais `queue.py` met le run en `PAUSED` et
-attend l'opérateur (pas de skip automatique).
+**Fix** : nouvelle colonne `skipped_layers: list` sur `PrintRun`
+(migration additive auto via `_add_missing_columns`). Nouveau helper
+`_next_layer_boundary(gcode, start_idx)` qui scanne les comments
+`Change to pen slot N (label)` / `Change pen: ...` / `layer-...` et
+retourne `(exec_index, label)` du début du layer suivant. Le bloc
+`except StreamError` de `PrintQueue.run_next` avance `acked_lines` à
+ce checkpoint, ajoute le label à `skipped_layers`, repasse le run en
+`QUEUED` et `wake()` le worker → le run reprend automatiquement, le
+layer fautif est sauté. 2 nouveaux tests
+(`test_next_layer_boundary_finds_change_comment` +
+`test_run_next_skips_layer_on_recoverable_failure`), 634 backend
+tests total.
 
-**Travail restant**
-- Implémenter le saut de couche : déterminer l'index de la prochaine
-  couche dans le G-code (re-scanner les comments) et reprendre à cet
-  index.
-- Marquer la couche skippée comme telle dans le run record (nouvelle
-  colonne `skipped_layers: list[str]`).
-- Émettre un toast critique côté front pour informer l'opérateur que
-  des couches ont été sautées sur ce run.
-
-**Critère d'acceptation** : sur un profil `skip_layer` + un G-code à 3
-couches dont la 2ème lève `StreamError`, le run termine en `COMPLETED`
-avec `skipped_layers=['layer-2']`.
+**Reste éventuel** : surfacer le `skipped_layers` côté front (toast
+critique + UI sur la run row) — actuellement seulement journalisé
+dans `error`. Petit follow-up UI.
 
 ### 2.5 — IPC inter-rôles (Block E.5 / audit #1 phase 3)
 
@@ -252,19 +234,17 @@ vérifier sur un échantillon plus large.
 **Critère d'acceptation** : nouvelle baseline avec p95/p99 stables et
 documentés.
 
-### 3.3 — Persistent toasts adoption (Block G.2)
+### 3.3 — ~~Persistent toasts adoption~~ (Block G.2) — fixé partiellement
 
-**Contexte** : le helper `useToastStore.critical()` existe mais aucun
-appelant production ne l'utilise pour l'instant.
+**Fix** : `App.vue` upgrade `toasts.error(t('app.apiUnreachable'))` →
+`toasts.critical(...)`. Conditions blocantes au boot persistent
+jusqu'à dismiss explicite. `PlotterDrawer.onWizardConfirm` utilise
+aussi `toasts.critical` quand `saveProfile` échoue.
 
-**Travail restant**
-- Identifier les conditions critiques actuelles à upgrader :
-  `apiUnreachable` au boot, `device_disconnect` runtime, échecs de
-  sauvegarde profile, intégrité library cassée.
-- Remplacer leurs `toasts.error(...)` par `toasts.critical(...)`.
-
-**Critère d'acceptation** : couper le backend pendant un upload →
-toast erreur persiste jusqu'à dismiss manuel.
+**Reste éventuel** : autres conditions identifiées dans le brief
+(device_disconnect runtime, intégrité library cassée). Le pattern
+est en place ; à upgrader case-par-case quand chaque chemin sera
+revisité.
 
 ### 3.4 — Suite Playwright étoffée (Block G.3)
 
@@ -306,27 +286,22 @@ Mode, Workspaces, Compare, SSE preview, observabilité, etc.).
 
 ## Catégorie 5 — Documentation
 
-### 5.1 — `docs/ROADMAP_V0.2.md` consolidation
+### 5.1 — ~~`docs/ROADMAP_V0.2.md` consolidation~~ — fixé
 
-**Contexte** : le journal §7 a 10 nouvelles lignes "wire X". On peut
-les consolider une fois la phase wiring fermée.
+Journal §7 enrichi avec lignes `visibility` (2026-05-28) +
+`finish` (2026-05-28) qui synthétisent la phase de wiring + les
+fermetures de TODO ; toutes les étapes A→D restent `[x]`. §6 (SLO
+targets) reste à remplir après la checklist runtime sur Pi.
 
-**Travail restant**
-- Marquer toutes les étapes A→D `[x]` en haut (déjà fait).
-- Ajouter une section "v0.2 wire" entre §3 et §4 qui synthétise les
-  10 commits.
-- Mettre à jour §6 (SLO targets) avec les valeurs réelles mesurées
-  après runtime checklist.
+### 5.2 — ~~`docs/getting_started.md` v0.2~~ — fixé
 
-### 5.2 — `docs/getting_started.md` v0.2
-
-**Travail restant**
-- Ajouter les feature flags v2 (`?flag.modalV2=1`,
-  `?flag.workshopMode=1`, `?flag.compareMode=1`, `?flag.perf=1`) et
-  comment les activer.
-- Ajouter `OMNIPLOT_IR_ENABLED` / `OMNIPLOT_SLO_EVAL_ENABLED` côté
-  backend.
-- Section "raccourcis clavier" qui pointe vers `docs/shortcuts.md`.
+`getting_started.md` enrichi :
+- Tableau des env vars étendu (`OMNIPLOT_IR_ENABLED`,
+  `OMNIPLOT_OTEL_ENABLED`, `OMNIPLOT_SLO_EVAL_ENABLED`,
+  `OMNIPLOT_ROLE`).
+- Section « v0.2 UI surfaces » : tableau des 11 surfaces visibles
+  par défaut + tableau des feature flags URL + tableau des
+  raccourcis clavier.
 
 ---
 

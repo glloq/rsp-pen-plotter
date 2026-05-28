@@ -38,11 +38,20 @@ const STORAGE_KEY = 'omniplot.workspaces.v1'
 const BUILTIN_BEGINNER: Workspace = {
   id: 'builtin.beginner',
   name: 'Débutant',
-  // Beginner now ships with the v2 ``queue`` cockpit + magazine
-  // panels next to the v0.1 source/style/preview/plot surfaces, so
-  // the operator sees a live run timeline and the pen magazine
-  // without changing workspace. The Pro preset adds the inspectors.
-  panels: ['source', 'style', 'preview', 'plot', 'queue', 'magazine'],
+  // Beginner ships with the v2 ``queue`` cockpit + magazine +
+  // machine telemetry panels next to the v0.1 source/style/preview/
+  // plot surfaces, so the casual operator sees a live run timeline,
+  // the pen magazine and the plotter state without changing
+  // workspace. The Pro preset adds the inspectors.
+  panels: [
+    'source',
+    'style',
+    'preview',
+    'plot',
+    'queue',
+    'magazine',
+    'machine_telemetry',
+  ],
   builtin: true,
 }
 
