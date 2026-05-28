@@ -477,6 +477,48 @@ export const useJobStore = defineStore('job', () => {
    * one shot rather than looping over ``applyLayerAlgorithm`` (each of
    * which would schedule its own debounced rerender).
    */
+  /**
+   * Render an arbitrary variant of a placement *without* mutating the
+   * live placement state. Returns the freshly rendered SVG so callers
+   * (e.g. the Compare drawer) can show two variants side by side.
+   *
+   * Uses the same ``/rerender`` endpoint as the live debounced path,
+   * but never patches ``placement.svg`` — the cache stays consistent
+   * with whichever variant is currently active.
+   */
+  async function renderVariant(
+    placement: Placement,
+    variant: Variant,
+    signal?: AbortSignal,
+  ): Promise<{ svg: string; warnings: string[] } | null> {
+    if (!placement.job_id || !placement.rerenderable) return null
+    const layersPayload = Object.entries(variant.layer_algorithms).map(
+      ([layer_id, spec]) => {
+        if (spec.passes && spec.passes.length) {
+          return {
+            layer_id,
+            passes: spec.passes.map((p) => ({
+              algorithm: p.algorithm,
+              algorithm_options: p.algorithm_options,
+            })),
+          }
+        }
+        return {
+          layer_id,
+          algorithm: spec.algorithm,
+          algorithm_options: spec.algorithm_options,
+        }
+      },
+    )
+    try {
+      const result = await rerenderJob(placement.job_id, layersPayload, signal)
+      return { svg: result.svg, warnings: result.warnings ?? [] }
+    } catch (err) {
+      if ((err as { name?: string }).name === 'CanceledError') return null
+      throw err
+    }
+  }
+
   async function applyAlgorithmToAllLayers(
     algorithm: string,
     algorithmOptions: Record<string, unknown> = {},
@@ -1513,6 +1555,7 @@ export const useJobStore = defineStore('job', () => {
     applyLayerAlgorithm,
     applyAlgorithmToAllLayers,
     applyLayerPasses,
+    renderVariant,
     clearLayerAlgorithm,
     clearJob,
     totalLengthMm,

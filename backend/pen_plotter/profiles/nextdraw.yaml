@@ -37,5 +37,8 @@ capabilities:
     recovery_policy: pause_and_prompt
     manual_prompt:
       title: "Change pen"
-      body: "Insert pen {color} into the NextDraw holder, then press Resume."
+      # Mono-pen NextDraw: swap by colour. ``{label}`` carries either
+      # "<name> (#hex)" or just "#hex" — pre-computed by the comment
+      # parser in core/toolchange.py.
+      monopen_body: "Swap pen to {label} on the NextDraw, then press Resume."
   max_pens_in_magazine: 1

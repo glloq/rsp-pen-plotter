@@ -92,42 +92,60 @@ faire round-tripper le block capability au backend.
 
 **Reste éventuel** : dialog Vue au lieu de `window.prompt` natif.
 
-### 1.5 — CompareView candidats réels — reporté v2.0
+### 1.5 — ~~CompareView candidats réels~~ — partiellement fermé
 
-L'UX seam est en place (drawer + bouton flottant + overlay
-`bounds` rendu réellement). Les vrais candidats par-variant
-nécessitent un endpoint backend `POST /rerender?variant_id=...`
-qui retourne un SVG sans patcher le placement actif + une
-extension de `/preflight` pour calculer
-`est_time_s`/`draw_length_mm`/`pen_up_length_mm`/`swap_count`
-par candidat. Les 3 overlays manquants
-(`penup_heatmap`/`path_density`/`curvature`) ont besoin de la
-géométrie pas-up + densité que le resolver ne calcule pas
-encore. Travail estimé : 1-2 semaines, plus pertinent une fois
-l'IR pipeline (TODO 2.1) consommé en aval.
+**Fix** : nouveau helper `useJobStore.renderVariant(placement,
+variant)` qui appelle `/rerender` avec les overrides de la
+variante demandée et retourne le SVG sans muter le placement
+actif. `App.vue` cache les SVG par `variant_id` (avec l'actif
+réutilisé sans re-render) et appelle `refreshCompareSvgs` à
+l'ouverture du drawer Compare. CompareView reçoit désormais
+deux SVG **réellement différents** quand l'opérateur a deux
+variantes.
+
+**Reste v2.0** : les métriques par candidat
+(`est_time_s`/`draw_length_mm`/`pen_up_length_mm`/`swap_count`)
+viennent du backend ; il faudrait étendre `/preflight` pour
+les calculer par variante. Les 3 overlays manquants
+(`penup_heatmap`/`path_density`/`curvature`) restent stubs car
+ils demandent la géométrie pas-up + densité que le resolver
+ne calcule pas encore.
 
 ---
 
 ## Catégorie 2 — Backend domain pas (encore) source de vérité
 
-### 2.1 — IR consommé en aval — reporté v2.0
+### 2.1 — ~~IR consommé en aval~~ — partiellement fermé (optimize)
 
-Cache `ir_artifact_cache` actif quand `OMNIPLOT_IR_ENABLED=1`,
-zero consommateur en aval. Refactor `optimize_svg` /
-`generate_gcode` pour accepter `GeometryIR` / `PathPlanIR`
-respectivement est un chantier de plusieurs semaines, à
-exécuter une fois les fixtures de référence stabilisées sur
-matériel.
+**Fix** : nouveau `optimize_geometry_ir(geometry, *, layers,
+merge_tolerance_mm)` dans `core/toolpath.py` qui accepte un
+`GeometryIR` et passe par `_geometry_ir_to_svg` + `_optimize_svg`.
+La surface IR → ToolpathResult est désormais stable ; le ré-aller
+SVG en interne sera remplacé par un consommateur vpype direct
+quand les fixtures Pi seront stabilisées. Test `test_optimize
+_geometry_ir_round_trip_preserves_layers` couvre le round-trip
+SVG → IR → optimize_geometry_ir → SVG sur la fixture TWO_LAYERS.
 
-### 2.2 — ToolChangeOrchestrator source de vérité — reporté v2.0
+**Reste v2.0** : (a) wire ce nouvel entry-point dans la pipeline
+quand `OMNIPLOT_IR_ENABLED=1`, en lisant depuis
+`ir_artifact_cache.fetch_geometry` ; (b) ajouter le pendant
+`generate_gcode_from_path_plan(plan)` pour fermer l'autre moitié
+de la boucle ; (c) flipper le défaut à IR-on.
 
-L'orchestrator est défini et testé (16 tests B.2) mais zéro
-consommateur production : le prompt manuel vient toujours du
-regex `_prompt(comment)` de `core/toolchange.py`. Migration
-demande l'alignement des templates `manual_prompt` sur les 5
-profils bundled + mise à jour des tests golden + suppression
-du chemin legacy. Pas bloquant en v0.2, requiert une PR
-dédiée.
+### 2.2 — ~~ToolChangeOrchestrator source de vérité~~ — fermé
+
+**Fix** : `ManualSwapPrompt` gagne deux champs optionnels
+(`multipen_body`, `monopen_body`) ; `default_manual_prompt(pen_slot
+_count)` les peuple en fonction du magasin. La strategy choisit
+le bon body selon `context.slot_index` (None → mono ; sinon →
+multi). `_context_from_comment` (anciennement `_prompt`) pré-
+calcule le label d'affichage pour le cas color (dédup label==hex).
+`guided_pause_points` route désormais via
+`ToolChangeOrchestrator.plan()`, pas via la regex legacy ; la
+fonction `_prompt(comment)` a été retirée. Profils mis à jour :
+`nextdraw.yaml` et `idraw_a3.yaml` exposent un `monopen_body`
+branded. 635 tests verts incluant les golden text contracts
+(`Insert pen slot 1: Red`, `Change pen to #ff0000`).
 
 ### 2.3 — Streamer inline tool-change commands — reporté v2.0
 

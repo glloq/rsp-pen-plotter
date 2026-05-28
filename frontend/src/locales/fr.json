@@ -40,7 +40,8 @@
   "compare": {
     "open": "Comparer",
     "title": "Comparer les variantes",
-    "empty": "Il faut au moins deux variantes sur le placement courant pour comparer. Crée-en une seconde depuis la barre Variantes."
+    "empty": "Il faut au moins deux variantes sur le placement courant pour comparer. Crée-en une seconde depuis la barre Variantes.",
+    "loading": "Rendu des deux variantes…"
   },
   "workspaces": {
     "label": "Espace de travail",

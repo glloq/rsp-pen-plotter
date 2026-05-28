@@ -161,7 +161,19 @@ def _render(send_template: str, context: SwapContext, wait_ms: int) -> SwapComma
 
 
 def _format_prompt(template: ManualSwapPrompt, context: SwapContext) -> str:
-    body = _substitute(template.body, context)
+    # Pick the right body for the context: ``slot_index`` set → the
+    # operator is performing a slot-based swap on a multi-pen
+    # machine; not set → a colour-only swap on a mono-pen machine.
+    # The template's ``multipen_body``/``monopen_body`` fields cover
+    # the two cases; we fall through to the legacy ``body`` when
+    # neither is configured so v0.1 profiles still work.
+    if context.slot_index is not None and template.multipen_body:
+        chosen = template.multipen_body
+    elif context.slot_index is None and template.monopen_body:
+        chosen = template.monopen_body
+    else:
+        chosen = template.body
+    body = _substitute(chosen, context)
     title = _substitute(template.title, context)
     if title and title != "Change pen":
         return f"{title} — {body}"

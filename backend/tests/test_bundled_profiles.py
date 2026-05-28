@@ -59,7 +59,10 @@ def test_nextdraw_uses_explicit_capability_block(
     caps = profile.effective_capabilities()
     assert caps.tool_change.mode is ToolingMode.MANUAL
     assert caps.tool_change.manual_prompt is not None
-    assert "NextDraw" in caps.tool_change.manual_prompt.body
+    # The NextDraw profile carries a branded ``monopen_body`` (mono-pen
+    # machine) that the orchestrator routes through when a colour
+    # change SwapContext lands without a slot index.
+    assert "NextDraw" in (caps.tool_change.manual_prompt.monopen_body or "")
 
 
 def test_idraw_grbl_uses_arc_support(bundled: dict[str, MachineProfile]) -> None:

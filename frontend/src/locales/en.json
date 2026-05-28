@@ -40,7 +40,8 @@
   "compare": {
     "open": "Compare",
     "title": "Compare variants",
-    "empty": "Need at least two variants on the current placement to compare. Add a second variant from the Variants bar."
+    "empty": "Need at least two variants on the current placement to compare. Add a second variant from the Variants bar.",
+    "loading": "Rendering both variants…"
   },
   "workspaces": {
     "label": "Workspace",

@@ -53,12 +53,48 @@ const activeRun = computed(() => queue.active[0] ?? null)
 
 // Compare drawer (roadmap C.5). Entry button is gated by the
 // `compareMode` flag; opens a modal showing CompareView for two
-// variants of the current placement. Rendering each variant
-// independently requires a re-render per variant (the placement only
-// holds the active variant's SVG today) — the seam is wired so the
-// operator can drive the workflow; full per-variant rendering lands
-// with the overlay PR.
+// variants of the current placement. Each variant is rendered
+// independently via ``renderVariant`` (same ``/rerender`` endpoint
+// the live editor uses, no mutation of the active placement). The
+// active variant's already-rendered SVG is reused for whichever
+// candidate matches its id to skip a redundant network call.
 const compareOpen = ref(false)
+const compareError = ref<string | null>(null)
+const compareLoading = ref(false)
+const compareSvgCache = ref<Record<string, string>>({})
+
+async function refreshCompareSvgs(): Promise<void> {
+  const placement = store.selectedPlacement
+  if (!placement || placement.variants.length < 2) return
+  compareLoading.value = true
+  compareError.value = null
+  try {
+    const [v1, v2] = placement.variants
+    if (!v1 || !v2) return
+    const cache: Record<string, string> = {
+      [placement.active_variant_id]: placement.svg,
+    }
+    const todo: Promise<unknown>[] = []
+    for (const v of [v1, v2]) {
+      if (cache[v.id]) continue
+      todo.push(
+        store.renderVariant(placement, v).then((r) => {
+          if (r) cache[v.id] = r.svg
+        }),
+      )
+    }
+    await Promise.all(todo)
+    compareSvgCache.value = cache
+  } catch (err) {
+    compareError.value = (err as Error).message
+  } finally {
+    compareLoading.value = false
+  }
+}
+watch(compareOpen, (next) => {
+  if (next) void refreshCompareSvgs()
+})
+
 const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => {
   const placement = store.selectedPlacement
   if (!placement || placement.variants.length < 2) return null
@@ -68,7 +104,7 @@ const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => 
   const make = (variantId: string, label: string): Candidate => ({
     id: variantId,
     label,
-    svg: placement.svg,
+    svg: compareSvgCache.value[variantId] ?? placement.svg,
     decision: null,
     metrics: {},
   })
@@ -386,8 +422,22 @@ onBeforeUnmount(() => {
             ✕
           </button>
         </header>
+        <p
+          v-if="compareLoading"
+          class="text-sm text-slate-600"
+          data-test="compare-loading"
+        >
+          {{ t('compare.loading') }}
+        </p>
+        <p
+          v-else-if="compareError"
+          class="text-sm text-red-600"
+          data-test="compare-error"
+        >
+          {{ compareError }}
+        </p>
         <CompareView
-          v-if="compareCandidates"
+          v-else-if="compareCandidates"
           :a="compareCandidates.a"
           :b="compareCandidates.b"
         />

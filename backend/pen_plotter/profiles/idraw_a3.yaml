@@ -30,5 +30,8 @@ capabilities:
     recovery_policy: pause_and_prompt
     manual_prompt:
       title: "Change pen"
-      body: "Swap the iDraw pen to {color}, then press Resume."
+      # Mono-pen iDraw: ``{label}`` is the colour-aware display label
+      # pre-computed by the comment parser ("Red (#ff0000)" or just
+      # "#ff0000" when no human label is set).
+      monopen_body: "Change pen to {label}"
   max_pens_in_magazine: 1
