@@ -1177,7 +1177,9 @@
       "generate": "Générer",
       "why": "Pourquoi ce choix ?",
       "resolving": "Calcul de la recommandation…",
-      "resolverError": "Erreur resolver : {message}. Les défauts statiques seront utilisés."
+      "resolverError": "Erreur resolver : {message}. Les défauts statiques seront utilisés.",
+      "openV1": "Ouvrir l'éditeur complet",
+      "layerCount": "{count} couche | {count} couches"
     },
     "intent": {
       "fast": "Rapide",

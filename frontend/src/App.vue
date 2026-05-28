@@ -96,6 +96,31 @@ async function onEditV2Confirm(decision: import('./domain/policy/schemas').Polic
   )
   ui.closeEditModal()
 }
+function onEditV2OpenV1(): void {
+  // Escape hatch: the wizard is a quick algorithm picker, not a full
+  // editor. The v1 modal has the rich per-layer controls + preview +
+  // variants. Flipping ``modalV2`` off keeps the same ``editModalOpen``
+  // state so the v1 modal pops in for the current placement without
+  // an extra click.
+  uiMode.setFlag('modalV2', false)
+}
+
+// Map the placement's MIME to a ``SourceKind`` so the V2 wizard pre-
+// selects the right value. Falls back to ``bitmap_photo`` (the most
+// common upload) when the placement isn't selected yet.
+const v2SourceKind = computed<import('./domain/policy/schemas').SourceKind>(() => {
+  const mime = store.selectedPlacement?.source_mime ?? ''
+  if (mime === 'image/svg+xml') return 'vector_svg'
+  if (mime === 'application/pdf') return 'pdf_doc'
+  if (mime.startsWith('image/')) return 'bitmap_photo'
+  return 'bitmap_photo'
+})
+const v2AvailableColorsCount = computed(
+  () => store.selectedProfile?.pen_slot_count ?? 1,
+)
+const v2IsMonoPenMachine = computed(
+  () => (store.selectedProfile?.pen_slot_count ?? 1) <= 1,
+)
 
 function closeWorkshop(): void {
   uiMode.setFlag('workshopMode', false)
@@ -293,16 +318,23 @@ onBeforeUnmount(() => {
     <AppFooter />
     <SettingsDrawer />
     <PlotterDrawer />
-    <!-- Edit modal: v2 is mounted alongside v1 behind ?flag.modalV2=1
-         so it can be QA'd in production builds without affecting the
-         default operator flow. Cut-over happens once the v2 confirm
-         path is wired into the placement draft (follow-up). -->
+    <!-- Edit modal: v1 stays the rich editor; v2 is a quick algorithm
+         wizard reached via the header toggle. When the v2 flag is on
+         and the modal is open, render only the v2 wizard; otherwise
+         render the v1 modal (its own ``v-if="editModalOpen"`` decides
+         visibility). -->
     <EditModal v-if="!modalV2Enabled" />
     <EditModalV2
       v-else-if="ui.editModalOpen"
+      :initial-source-kind="v2SourceKind"
+      :available-colors-count="v2AvailableColorsCount"
+      :is-mono-pen-machine="v2IsMonoPenMachine"
       :layers="store.selectedPlacement?.layers ?? []"
+      :source-name="store.selectedPlacement?.source_file"
+      :preview-svg="store.selectedPlacement?.svg"
       @cancel="onEditV2Cancel"
       @confirm="onEditV2Confirm"
+      @open-v1="onEditV2OpenV1"
     />
     <ConfirmDialog />
     <UpdateProgressModal />
