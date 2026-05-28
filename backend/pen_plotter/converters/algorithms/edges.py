@@ -1,10 +1,20 @@
 """Edge tracing algorithm.
 
-Draws only the outer boundary of the region as a single thin outline.
-Useful for line-art / technical-drawing styles where infill is not
-desired. Conceptually similar to :class:`ContoursAlgorithm` with a
-single ring, but optimised for that case and emitting open polylines
-instead of closed polygons so connected pen-up segments remain shortest.
+Draws the boundary of the region as thin outlines. Useful for line-art /
+technical-drawing styles where infill is not desired. Conceptually
+similar to :class:`ContoursAlgorithm` with a single ring, but optimised
+for that case and emitting open polylines instead of closed polygons so
+connected pen-up segments remain shortest.
+
+Boundary extraction follows the *actual* outline using marching-squares
+contour tracing (``skimage.measure.find_contours``), which walks each
+connected edge — outer rings **and** interior holes — in order. This
+preserves the fine detail of line art and complex silhouettes. The
+legacy centroid polar-angle sort (kept as a fallback for deployments
+without scikit-image) only produced a plausible walk for convex blobs:
+on anything with concavities or holes it scrambled the boundary into a
+single star-shaped loop, which is what made line drawings look heavily
+"simplified".
 """
 
 from __future__ import annotations
@@ -18,13 +28,47 @@ from numpy.typing import NDArray
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 
-def _boundary_chains(mask: NDArray[np.bool_]) -> list[list[tuple[int, int]]]:
-    """Return the boundary pixels as ordered chains, one per connected ring."""
+def _boundary_chains(mask: NDArray[np.bool_]) -> list[list[tuple[float, float]]]:
+    """Return ordered boundary chains, one per traced contour.
+
+    Each chain is a list of ``(x, y)`` points following the region
+    outline. Uses marching-squares contour tracing when scikit-image is
+    available (the common case — it's a hard dependency used by the
+    centerline algorithm too); falls back to the centroid polar-angle
+    sort otherwise so a deployment without the optional wheel still
+    produces *some* outline rather than nothing.
+    """
+    if not mask.any():
+        return []
+    try:
+        from skimage import measure
+    except ImportError:
+        return _boundary_chains_polar(mask)
+
+    # Pad by one pixel so contours that touch the array edge still close
+    # cleanly; ``find_contours`` traces the iso-0.5 level between the
+    # False (0) background and True (1) region. Coordinates come back as
+    # (row, col) float pairs in the padded frame.
+    padded = np.pad(mask.astype(np.float32), 1, mode="constant", constant_values=0.0)
+    chains: list[list[tuple[float, float]]] = []
+    for contour in measure.find_contours(padded, 0.5):
+        if len(contour) < 2:
+            continue
+        # Undo the 1-px pad and swap (row, col) → (x, y).
+        chains.append([(float(col - 1), float(row - 1)) for row, col in contour])
+    return chains
+
+
+def _boundary_chains_polar(mask: NDArray[np.bool_]) -> list[list[tuple[float, float]]]:
+    """Fallback boundary extraction: border pixels sorted by polar angle.
+
+    Only used when scikit-image is unavailable. Produces a rough closed
+    walk per connected border component — acceptable for simple convex
+    shapes, lossy on anything with concavities.
+    """
     try:
         from scipy.ndimage import label as nd_label
     except ImportError:
-        return []
-    if not mask.any():
         return []
     pad = np.pad(mask, 1, mode="constant", constant_values=False)
     border = mask & ~(
@@ -33,18 +77,15 @@ def _boundary_chains(mask: NDArray[np.bool_]) -> list[list[tuple[int, int]]]:
     if not border.any():
         return []
     components, count = nd_label(border)
-    chains: list[list[tuple[int, int]]] = []
+    chains: list[list[tuple[float, float]]] = []
     for comp_idx in range(1, count + 1):
         ys, xs = np.where(components == comp_idx)
         if len(xs) < 2:
             continue
         cx, cy = float(xs.mean()), float(ys.mean())
-        # Sort points by polar angle around the centroid — produces a
-        # plausible closed walk for any blob; non-simply-connected shapes get
-        # multiple chains because they land in different components.
         angles = np.arctan2(ys - cy, xs - cx)
         order = np.argsort(angles)
-        chains.append([(int(xs[i]), int(ys[i])) for i in order])
+        chains.append([(float(xs[i]), float(ys[i])) for i in order])
     return chains
 
 
@@ -53,7 +94,7 @@ class EdgesAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "edges"
     description: ClassVar[str] = (
-        "Trace only the region boundary — a line-art / technical-drawing style."
+        "Trace the region boundary — a line-art / technical-drawing style."
     )
 
     def render_layer(
@@ -69,7 +110,9 @@ class EdgesAlgorithm(RasterAlgorithm):
         bool_mask = mask.astype(bool)
         chains = _boundary_chains(bool_mask)
         paths = "".join(
-            '<polyline points="' + " ".join(f"{x},{y}" for x, y in chain) + '"/>'
+            '<polyline points="'
+            + " ".join(f"{x:.2f},{y:.2f}" for x, y in chain)
+            + '"/>'
             for chain in chains
         )
         return (

@@ -28,6 +28,15 @@ import type { Variant } from './job'
 export interface SavedFileVariants {
   variants: Variant[]
   active_variant_id: string
+  // The full editor configuration bag (``buildBitmapOptions`` output:
+  // segmentation method, master style id, preprocess adjustments, per-
+  // style knobs, curves…) the file was last applied with. Persisted
+  // alongside the per-layer variants so reopening the editor on a
+  // configured file restores the *chosen config* — not just the layer
+  // algorithms — instead of falling back to fresh defaults. Optional so
+  // older snapshots (and files whose only state is layer overrides)
+  // still load.
+  last_options?: Record<string, unknown>
 }
 
 const FILE_VARIANTS_KEY = 'omniplot.fileVariants.v1'
@@ -115,11 +124,29 @@ export const useLibraryStore = defineStore('library', () => {
     }))
   }
 
-  function saveFileVariants(fileId: string, variants: Variant[], activeId: string): void {
+  function saveFileVariants(
+    fileId: string,
+    variants: Variant[],
+    activeId: string,
+    lastOptions?: Record<string, unknown>,
+  ): void {
     if (!fileId) return
+    // Preserve a previously-saved ``last_options`` when this call doesn't
+    // carry one (e.g. a pure visibility toggle on a placement whose
+    // options haven't been recomputed) so we never blank out a remembered
+    // config.
+    const prior = fileVariants.value[fileId]
     fileVariants.value = {
       ...fileVariants.value,
-      [fileId]: { variants: cloneVariants(variants), active_variant_id: activeId },
+      [fileId]: {
+        variants: cloneVariants(variants),
+        active_variant_id: activeId,
+        last_options: lastOptions
+          ? { ...lastOptions }
+          : prior?.last_options
+            ? { ...prior.last_options }
+            : undefined,
+      },
     }
     persistFileVariants()
   }
@@ -127,7 +154,11 @@ export const useLibraryStore = defineStore('library', () => {
   function getFileVariants(fileId: string): SavedFileVariants | null {
     const saved = fileVariants.value[fileId]
     if (!saved) return null
-    return { variants: cloneVariants(saved.variants), active_variant_id: saved.active_variant_id }
+    return {
+      variants: cloneVariants(saved.variants),
+      active_variant_id: saved.active_variant_id,
+      last_options: saved.last_options ? { ...saved.last_options } : undefined,
+    }
   }
 
   // A file is considered "configured" when at least one of its saved
@@ -136,6 +167,11 @@ export const useLibraryStore = defineStore('library', () => {
   function hasFileSettings(fileId: string): boolean {
     const saved = fileVariants.value[fileId]
     if (!saved) return false
+    // A non-empty per-layer override OR a remembered editor config
+    // (master style / segmentation / preprocess) both count as "the
+    // operator configured this file" — so the green accent matches what
+    // "Edit from library" will actually restore.
+    if (saved.last_options && Object.keys(saved.last_options).length > 0) return true
     return saved.variants.some((v) => Object.keys(v.layer_algorithms ?? {}).length > 0)
   }
 

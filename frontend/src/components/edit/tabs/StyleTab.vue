@@ -9,7 +9,6 @@ import { resolveEffectivePalette } from '../../../lib/effectivePalette'
 import { useAvailableColorsStore } from '../../../stores/availableColors'
 import { useJobStore } from '../../../stores/job'
 import { usePaletteSourceStore } from '../../../stores/paletteSource'
-import { useToastStore } from '../../../stores/toasts'
 import BlockMapCard from '../BlockMapCard.vue'
 import ColorModeCard from '../colors/ColorModeCard.vue'
 import MasterStylePicker from '../render/MasterStylePicker.vue'
@@ -38,7 +37,6 @@ const { t } = useI18n()
 const draft = useBitmapDraft()
 const fm = useFileManager(t)
 const store = useJobStore()
-const toasts = useToastStore()
 
 const bitmap = draft.bitmap
 const printMode = draft.printMode
@@ -109,29 +107,19 @@ onMounted(async () => {
 })
 
 // Switching master style: rewrite the draft's segmentation + uniform
-// algorithm via the centralised helper, then surface a toast if the
-// operator had manually tweaked the segmentation knobs (so the silent
-// stomp class of bug is gone). When layers already exist (post-upload),
-// also re-propagate the per-band recipe across them so the live preview
-// reflects the new style without needing a re-upload. If the operator
-// has overridden some layers manually, confirm before stomping.
+// algorithm via the centralised helper. Changing the config in the
+// editor is a routine, fully-reversible action, so it no longer
+// interrupts the operator with a warning toast or an override-replace
+// confirmation — the only confirmation left is when *saving* (Apply)
+// over an existing conversion. ``force: true`` therefore applies the
+// preset unconditionally. When layers already exist (post-upload), the
+// per-band recipe is re-propagated across them so the live preview
+// reflects the new style without needing a re-upload.
 async function onMasterStyleChange(id: string): Promise<void> {
   const previous = draft.monoMasterStyleId.value
-  const overwritten = draft.setMasterStyle(id)
-  if (overwritten.length > 0) {
-    toasts.warning(
-      t('render.styleOverwroteFields', {
-        fields: overwritten.map((f) => t(`render.field_${f}`)).join(', '),
-      }),
-    )
-  }
+  draft.setMasterStyle(id, { force: true })
 
   if (store.layers.length > 0 && previous !== id) {
-    const overrideCount = Object.keys(store.layerAlgorithms).length
-    if (overrideCount > 0) {
-      const ok = window.confirm(t('render.replaceOverridesWarning', { count: overrideCount }))
-      if (!ok) return
-    }
     await applyMasterStyleToLayers(store, {
       styleId: id,
       penSlot: draft.monoPenSlot.value,
@@ -139,27 +127,14 @@ async function onMasterStyleChange(id: string): Promise<void> {
   }
 }
 
-// Multicolour twin of ``onMasterStyleChange`` — same warn-on-touched +
-// post-upload propagation logic, just driving the multicolour master.
-// Per-layer overrides survive across master switches identically to
-// the mono case (operator gets the same window.confirm).
+// Multicolour twin of ``onMasterStyleChange`` — same silent preset
+// application + post-upload propagation, just driving the multicolour
+// master.
 async function onMulticolorMasterStyleChange(id: string): Promise<void> {
   const previous = draft.multicolorMasterStyleId.value
-  const overwritten = draft.setMulticolorMasterStyle(id)
-  if (overwritten.length > 0) {
-    toasts.warning(
-      t('render.styleOverwroteFields', {
-        fields: overwritten.map((f) => t(`render.field_${f}`)).join(', '),
-      }),
-    )
-  }
+  draft.setMulticolorMasterStyle(id, { force: true })
 
   if (store.layers.length > 0 && previous !== id) {
-    const overrideCount = Object.keys(store.layerAlgorithms).length
-    if (overrideCount > 0) {
-      const ok = window.confirm(t('render.replaceOverridesWarning', { count: overrideCount }))
-      if (!ok) return
-    }
     // Multicolour styles don't have a target pen slot — each layer
     // already carries its own ``target_pen_slot`` from segmentation /
     // pen matching, so just push the default algorithm + options.
