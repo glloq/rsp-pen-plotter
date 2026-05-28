@@ -100,14 +100,39 @@ export function hydrateScene(refs: ScenePersistenceRefs): boolean {
   }
 }
 
+// Debounce window before a scene change is flushed to localStorage.
+// Serialising the placements (SVGs included) + the synchronous
+// ``setItem`` is the heaviest thing on the edit hot-path, so we both
+// wait out bursts of edits (drag, slider scrub) and defer the actual
+// write to an idle slot so it never blocks a frame.
+const PERSIST_DEBOUNCE_MS = 600
+
+type IdleCancel = () => void
+
+// Run ``fn`` when the browser is idle, falling back to a macrotask where
+// requestIdleCallback isn't available (Safari < 16, jsdom/happy-dom test
+// envs). Returns a canceller so teardown can drop a pending write.
+function runWhenIdle(fn: () => void): IdleCancel {
+  const ric = (globalThis as { requestIdleCallback?: (cb: () => void) => number })
+    .requestIdleCallback
+  if (typeof ric === 'function') {
+    const handle = ric(fn)
+    const cancel = (globalThis as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback
+    return () => cancel?.(handle)
+  }
+  const handle = setTimeout(fn, 0)
+  return () => clearTimeout(handle)
+}
+
 /**
- * Hydrate immediately, then auto-persist on changes (300 ms debounce).
+ * Hydrate immediately, then auto-persist on changes (debounced + idle).
  *
  * Returns a teardown function for tests that need to detach the watch.
  */
 export function attachScenePersistence(refs: ScenePersistenceRefs): () => void {
   hydrateScene(refs)
   let timer: ReturnType<typeof setTimeout> | null = null
+  let cancelIdle: IdleCancel | null = null
   const stop = watch(
     [
       refs.placements,
@@ -119,13 +144,17 @@ export function attachScenePersistence(refs: ScenePersistenceRefs): () => void {
     ],
     () => {
       if (timer) clearTimeout(timer)
-      timer = setTimeout(() => persistScene(refs), 300)
+      timer = setTimeout(() => {
+        cancelIdle?.()
+        cancelIdle = runWhenIdle(() => persistScene(refs))
+      }, PERSIST_DEBOUNCE_MS)
     },
     { deep: true },
   )
   return () => {
     stop()
     if (timer) clearTimeout(timer)
+    cancelIdle?.()
   }
 }
 
