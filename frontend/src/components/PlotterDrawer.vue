@@ -173,12 +173,16 @@ async function onWizardConfirm(capabilities: MachineCapabilities): Promise<void>
   }
 }
 
+// Queue polling is owned by ``App.vue`` (single source of truth for
+// the whole app lifetime) so closing the drawer no longer kills the
+// timer the WorkspaceRail + Workshop Mode depend on. ``startPolling``
+// is idempotent so a stale browser tab from before the v0.2 wiring
+// still triggers a fresh fetch when reopening the drawer.
 onMounted(() => {
   queue.startPolling()
   window.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => {
-  queue.stopPolling()
   window.removeEventListener('keydown', onKey)
 })
 </script>

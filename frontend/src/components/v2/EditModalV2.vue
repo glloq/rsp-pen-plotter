@@ -43,11 +43,18 @@ const props = defineProps<{
    *  operator hasn't picked one yet — the Couches step then falls
    *  back to an explanatory placeholder. */
   layers?: readonly LayerInfo[]
+  /** Source file name from the active placement — surfaced in the
+   *  context bar so the operator can see what they're editing. */
+  sourceName?: string
+  /** Sanitized SVG preview from the active placement; rendered as a
+   *  small thumbnail in the context bar. */
+  previewSvg?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'confirm', decision: PolicyDecision): void
+  (e: 'open-v1'): void
 }>()
 
 const { t } = useI18n()
@@ -145,16 +152,74 @@ useKeyboardShortcuts([
 </script>
 
 <template>
-  <div class="modal-v2" role="dialog" aria-modal="true" :aria-label="t('v2.modal.title')">
-    <header class="modal-v2__header">
-      <h2>{{ t('v2.modal.title') }}</h2>
-      <AssistantModeToggle />
-      <button type="button" class="close" :aria-label="t('settings.close')" @click="emit('cancel')">×</button>
-    </header>
+  <!-- Backdrop: fixed full-screen, semi-transparent, clicking outside
+       the card emits cancel just like the v1 modal does. -->
+  <div
+    class="modal-v2__backdrop"
+    role="presentation"
+    data-test="modal-v2-backdrop"
+    @click.self="emit('cancel')"
+  >
+    <div
+      class="modal-v2"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('v2.modal.title')"
+    >
+      <header class="modal-v2__header">
+        <h2>{{ t('v2.modal.title') }}</h2>
+        <AssistantModeToggle />
+        <button
+          type="button"
+          class="open-v1"
+          :title="t('v2.modal.openV1')"
+          data-test="modal-v2-open-v1"
+          @click="emit('open-v1')"
+        >
+          {{ t('v2.modal.openV1') }}
+        </button>
+        <button
+          type="button"
+          class="close"
+          :aria-label="t('settings.close')"
+          data-test="modal-v2-close"
+          @click="emit('cancel')"
+        >
+          ×
+        </button>
+      </header>
 
-    <StepperHeader :steps="STEPS" :active-index="activeIndex" @jump="jump" />
+      <!-- Context bar — file name + tiny preview so the wizard isn't
+           floating in the void. Hidden when no placement is selected
+           (operator opened the modal pre-upload). -->
+      <div
+        v-if="props.sourceName || props.previewSvg"
+        class="modal-v2__context"
+        data-test="modal-v2-context"
+      >
+        <div
+          v-if="props.previewSvg"
+          class="modal-v2__thumb"
+          aria-hidden="true"
+        >
+          <!-- v-html: caller (App.vue) passes ``placement.svg`` which
+               was already sanitized by the upload pipeline. -->
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div v-html="props.previewSvg" />
+        </div>
+        <div class="modal-v2__context-meta">
+          <p v-if="props.sourceName" class="modal-v2__filename">
+            {{ props.sourceName }}
+          </p>
+          <p v-if="props.layers && props.layers.length" class="modal-v2__counts">
+            {{ t('v2.modal.layerCount', { count: props.layers.length }) }}
+          </p>
+        </div>
+      </div>
 
-    <section class="modal-v2__body">
+      <StepperHeader :steps="STEPS" :active-index="activeIndex" @jump="jump" />
+
+      <section class="modal-v2__body">
       <!-- 1. Source Prep -->
       <div v-if="activeIndex === 0" data-test="step-source">
         <p>Détection du type de source. L'algorithme par défaut s'adaptera.</p>
@@ -299,22 +364,42 @@ useKeyboardShortcuts([
         {{ t('v2.modal.generate') }}
       </button>
     </footer>
+    </div>
   </div>
 </template>
 
 <style scoped>
+/* Modal V2 chrome — matches the v1 EditModal pattern: full-screen
+ * fixed backdrop with a centered card. Without this the component
+ * would render inline in App.vue's flex flow and end up at the
+ * bottom of the page (operator-reported bug).
+ */
+.modal-v2__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 1rem;
+  overflow-y: auto;
+}
 .modal-v2 {
   background: white;
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   padding: 1rem 1.5rem;
-  max-width: 720px;
+  width: min(96vw, 760px);
+  max-height: 92vh;
+  overflow-y: auto;
   font-family: system-ui, sans-serif;
+  color: #1e293b;
 }
 .modal-v2__header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   margin-bottom: 1rem;
 }
 .modal-v2__header h2 {
@@ -328,6 +413,62 @@ useKeyboardShortcuts([
   font-size: 1.5rem;
   cursor: pointer;
   color: #777;
+  line-height: 1;
+}
+.open-v1 {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #1e293b;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.open-v1:hover {
+  background: #e2e8f0;
+}
+.modal-v2__context {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+.modal-v2__thumb {
+  width: 80px;
+  height: 60px;
+  overflow: hidden;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-v2__thumb :deep(svg) {
+  max-width: 100%;
+  max-height: 100%;
+}
+.modal-v2__context-meta {
+  flex: 1;
+  min-width: 0;
+}
+.modal-v2__filename {
+  margin: 0;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.85rem;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal-v2__counts {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
 }
 .modal-v2__body {
   min-height: 12rem;

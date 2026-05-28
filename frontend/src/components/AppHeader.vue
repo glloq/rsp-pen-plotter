@@ -58,6 +58,13 @@ function removeCurrent(): void {
   >
     <div class="mr-2 flex items-baseline gap-2">
       <h1 class="text-lg font-bold tracking-tight">OmniPlot</h1>
+      <span
+        class="rounded bg-sky-900/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-300"
+        data-test="header-version-badge"
+        title="v0.2 wired"
+      >
+        v0.2
+      </span>
     </div>
 
     <div class="ml-auto flex items-center gap-3">

@@ -1177,7 +1177,9 @@
       "generate": "Generate",
       "why": "Why this choice?",
       "resolving": "Computing recommendation…",
-      "resolverError": "Resolver error: {message}. Falling back to static defaults."
+      "resolverError": "Resolver error: {message}. Falling back to static defaults.",
+      "openV1": "Open full editor",
+      "layerCount": "{count} layer | {count} layers"
     },
     "intent": {
       "fast": "Fast",
