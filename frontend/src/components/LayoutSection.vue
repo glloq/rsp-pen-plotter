@@ -87,10 +87,14 @@ watch(
       if (dw <= w && dh <= h) {
         widthDraft.value = dw
         heightDraft.value = dh
-        centreZoneInWorkspace()
       } else {
-        useFullWorkspace()
+        widthDraft.value = Number(w.toFixed(2))
+        heightDraft.value = Number(h.toFixed(2))
       }
+      // Offsets default to 0 (top-left of the bed).
+      offsetXDraft.value = 0
+      offsetYDraft.value = 0
+      applySheet()
     }
     seeded = true
   },
@@ -119,18 +123,10 @@ const sheetExceedsWorkspace = computed(
 
 function applyPreset(p: SheetPreset): void {
   // Presets are defined portrait (w < h); swap for landscape so the chosen
-  // orientation is honoured. Applying a preset re-centres the zone on the
-  // bed so it lands somewhere sensible.
+  // orientation is honoured. The offset is left as-is (0 by default).
   const landscape = orientation.value === 'landscape'
   widthDraft.value = landscape ? p.h : p.w
   heightDraft.value = landscape ? p.w : p.h
-  centreZoneInWorkspace()
-}
-
-// Position the zone (draft offsets) so it sits centred on the work area.
-function centreZoneInWorkspace(): void {
-  offsetXDraft.value = Math.max(0, (workspaceWidth.value - widthDraft.value) / 2)
-  offsetYDraft.value = Math.max(0, (workspaceHeight.value - heightDraft.value) / 2)
   applySheet()
 }
 
