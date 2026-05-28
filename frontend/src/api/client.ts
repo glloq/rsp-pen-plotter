@@ -494,8 +494,11 @@ export async function systemUpdate(force = false): Promise<SystemUpdateResponse>
     '/system/update',
     { force },
     {
-      // The update script can take a while (apt, npm install, build).
-      timeout: 5 * 60 * 1000,
+      // No axios timeout: the backend enforces its own 10-minute ceiling
+      // (see api/system.trigger_update). A shorter client-side timeout
+      // raced npm install + vite build on Pi-class hardware and made the
+      // UI show an error while the update was actually still succeeding.
+      timeout: 0,
     },
   )
   return response.data
