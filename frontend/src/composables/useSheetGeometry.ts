@@ -27,6 +27,8 @@ import type { Placement } from '../stores/job'
 export interface PreviewSheet {
   width_mm: number
   height_mm: number
+  x_mm?: number
+  y_mm?: number
 }
 
 export interface RenderedPlacement {
@@ -198,10 +200,14 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
     const w = workspace.value
     const sheet = inputs.previewSheet.value
     if (!w || !sheet) return null
-    const width = Math.max(0, Math.min(sheet.width_mm, w.wsW))
-    const height = Math.max(0, Math.min(sheet.height_mm, w.wsH))
+    const offX = Math.max(0, Math.min(sheet.x_mm ?? 0, w.wsW))
+    const offY = Math.max(0, Math.min(sheet.y_mm ?? 0, w.wsH))
+    // Clip the overlay to the remaining workspace so an offset sheet that
+    // would overflow stays inside the drawn bed.
+    const width = Math.max(0, Math.min(sheet.width_mm, w.wsW - offX))
+    const height = Math.max(0, Math.min(sheet.height_mm, w.wsH - offY))
     if (width <= 0 || height <= 0) return null
-    return { x: w.ws.x_min, y: w.ws.y_min, width, height }
+    return { x: w.ws.x_min + offX, y: w.ws.y_min + offY, width, height }
   })
 
   // Grid: minor lines every 10 mm (1 cm), major every 50 mm (5 cm).
