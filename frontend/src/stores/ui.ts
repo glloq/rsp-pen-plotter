@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 
 export type CanvasTab = 'sheet' | 'simulator' | 'gcode'
 export type SettingsTab = 'system' | 'history' | 'audit' | 'slo' | 'manifests'
-export type PlotterTab = 'connection' | 'profile' | 'colors' | 'macros' | 'queue'
+export type PlotterTab = 'connection' | 'manual' | 'profile' | 'colors' | 'macros' | 'queue'
 
 export interface PreviewSheet {
   width_mm: number
