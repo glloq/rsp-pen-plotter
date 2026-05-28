@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getHealth, systemCheckUpdate } from './api/client'
 import AppHeader from './components/AppHeader.vue'
@@ -7,8 +7,6 @@ import AppFooter from './components/AppFooter.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import EditModal from './components/EditModal.vue'
-import CompareView, { type Candidate } from './components/v2/CompareView.vue'
-import EditModalV2 from './components/v2/EditModalV2.vue'
 import FilesPane from './components/FilesPane.vue'
 import PlotterDrawer from './components/PlotterDrawer.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
@@ -17,9 +15,20 @@ import UpdateProgressModal from './components/UpdateProgressModal.vue'
 import GenerateProgressModal from './components/GenerateProgressModal.vue'
 import IntegrityBanner from './components/IntegrityBanner.vue'
 import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
-import PerfOverlay from './components/v2/PerfOverlay.vue'
-import WorkshopMode from './components/v2/WorkshopMode.vue'
-import { api } from './api/client'
+
+// Lazy-load v2 surfaces that aren't on the boot critical path. Each
+// gets its own chunk, fetched only the first time the operator
+// triggers it: opens the V2 modal, toggles Workshop Mode, opens the
+// Compare drawer, or activates the perf overlay flag. Saves ~150 kB
+// from the initial parse on a fresh load.
+const EditModalV2 = defineAsyncComponent(() => import('./components/v2/EditModalV2.vue'))
+const WorkshopMode = defineAsyncComponent(() => import('./components/v2/WorkshopMode.vue'))
+const PerfOverlay = defineAsyncComponent(() => import('./components/v2/PerfOverlay.vue'))
+const CompareView = defineAsyncComponent(() => import('./components/v2/CompareView.vue'))
+import type { Candidate } from './components/v2/CompareView.vue'
+
+import { api, preflightSvg } from './api/client'
+import type { CandidateMetrics } from './components/v2/CompareView.vue'
 import { useAlgorithmsStore } from './stores/algorithms'
 import { useFeatureFlag } from './composables/useFeatureFlag'
 import { useJobStore } from './stores/job'
@@ -49,6 +58,7 @@ const dropping = ref(false)
 // mounts inconditionally — it auto-hides when its own flag is off.
 const modalV2Enabled = useFeatureFlag('modalV2')
 const workshopEnabled = useFeatureFlag('workshopMode')
+const perfEnabled = useFeatureFlag('perf')
 const activeRun = computed(() => queue.active[0] ?? null)
 
 // Compare drawer (roadmap C.5). Entry button is gated by the
@@ -62,6 +72,7 @@ const compareOpen = ref(false)
 const compareError = ref<string | null>(null)
 const compareLoading = ref(false)
 const compareSvgCache = ref<Record<string, string>>({})
+const compareMetricsCache = ref<Record<string, CandidateMetrics>>({})
 
 async function refreshCompareSvgs(): Promise<void> {
   const placement = store.selectedPlacement
@@ -71,20 +82,51 @@ async function refreshCompareSvgs(): Promise<void> {
   try {
     const [v1, v2] = placement.variants
     if (!v1 || !v2) return
-    const cache: Record<string, string> = {
+    // Step 1: render each variant's SVG (active variant reuses the
+    // already-rendered placement.svg, no extra round-trip).
+    const svgCache: Record<string, string> = {
       [placement.active_variant_id]: placement.svg,
     }
-    const todo: Promise<unknown>[] = []
+    const renderJobs: Promise<unknown>[] = []
     for (const v of [v1, v2]) {
-      if (cache[v.id]) continue
-      todo.push(
+      if (svgCache[v.id]) continue
+      renderJobs.push(
         store.renderVariant(placement, v).then((r) => {
-          if (r) cache[v.id] = r.svg
+          if (r) svgCache[v.id] = r.svg
         }),
       )
     }
-    await Promise.all(todo)
-    compareSvgCache.value = cache
+    await Promise.all(renderJobs)
+    compareSvgCache.value = svgCache
+
+    // Step 2: per-variant metrics via the lightweight ``/preflight/svg``
+    // endpoint. Failures are swallowed — Compare degrades to "—" in the
+    // metrics column rather than blocking the whole drawer.
+    const profile = store.selectedProfile
+    if (profile) {
+      const metricsCache: Record<string, CandidateMetrics> = {}
+      const metricJobs: Promise<unknown>[] = []
+      for (const v of [v1, v2]) {
+        const svg = svgCache[v.id]
+        if (!svg) continue
+        metricJobs.push(
+          preflightSvg(svg, profile.name)
+            .then((report) => {
+              metricsCache[v.id] = {
+                est_time_s: report.estimated_seconds,
+                draw_length_mm: report.drawing_length_mm,
+                pen_up_length_mm: report.travel_length_mm,
+                swap_count: report.pen_changes,
+              }
+            })
+            .catch(() => {
+              // Leave metrics undefined — Compare shows em-dashes.
+            }),
+        )
+      }
+      await Promise.all(metricJobs)
+      compareMetricsCache.value = metricsCache
+    }
   } catch (err) {
     compareError.value = (err as Error).message
   } finally {
@@ -106,7 +148,7 @@ const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => 
     label,
     svg: compareSvgCache.value[variantId] ?? placement.svg,
     decision: null,
-    metrics: {},
+    metrics: compareMetricsCache.value[variantId] ?? {},
   })
   return {
     a: make(v1.id, v1.name || 'Variante A'),
@@ -381,7 +423,7 @@ onBeforeUnmount(() => {
     <UpdateProgressModal />
     <GenerateProgressModal />
     <Toasts />
-    <PerfOverlay />
+    <PerfOverlay v-if="perfEnabled" />
     <WorkshopMode
       v-if="workshopEnabled"
       :run="activeRun"

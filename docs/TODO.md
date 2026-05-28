@@ -92,47 +92,55 @@ faire round-tripper le block capability au backend.
 
 **Reste éventuel** : dialog Vue au lieu de `window.prompt` natif.
 
-### 1.5 — ~~CompareView candidats réels~~ — partiellement fermé
+### 1.5 — ~~CompareView candidats réels~~ — fermé pour SVG+métriques
 
-**Fix** : nouveau helper `useJobStore.renderVariant(placement,
-variant)` qui appelle `/rerender` avec les overrides de la
-variante demandée et retourne le SVG sans muter le placement
-actif. `App.vue` cache les SVG par `variant_id` (avec l'actif
-réutilisé sans re-render) et appelle `refreshCompareSvgs` à
-l'ouverture du drawer Compare. CompareView reçoit désormais
-deux SVG **réellement différents** quand l'opérateur a deux
-variantes.
+**Fix SVG** : `useJobStore.renderVariant(placement, variant)`
+appelle `/rerender` avec les overrides de la variante demandée
+et retourne le SVG sans muter le placement actif. `App.vue`
+cache les SVG par `variant_id` et appelle `refreshCompareSvgs`
+à l'ouverture du drawer.
 
-**Reste v2.0** : les métriques par candidat
-(`est_time_s`/`draw_length_mm`/`pen_up_length_mm`/`swap_count`)
-viennent du backend ; il faudrait étendre `/preflight` pour
-les calculer par variante. Les 3 overlays manquants
-(`penup_heatmap`/`path_density`/`curvature`) restent stubs car
-ils demandent la géométrie pas-up + densité que le resolver
-ne calcule pas encore.
+**Fix métriques** : nouveau endpoint backend `POST /preflight/svg`
+qui accepte `{svg, profile_name}` et retourne un `PreflightReport`
+léger (skip plan resolution + TypographyPlan re-render). Client
+TS `preflightSvg(svg, profileName)`. `App.refreshCompareSvgs`
+fetch les métriques par variante en parallèle après les SVG,
+mappe `drawing_length_mm / travel_length_mm / estimated_seconds /
+pen_changes` vers `CandidateMetrics.{draw_length_mm /
+pen_up_length_mm / est_time_s / swap_count}`. Échec silencieux
+(em-dash dans la table) pour ne pas bloquer le drawer.
+
+**Reste v2.0** : 3 overlays manquants (`penup_heatmap` / `path
+_density` / `curvature`) restent stubs — ils demandent la
+géométrie pas-up + densité que le resolver ne calcule pas
+encore.
 
 ---
 
 ## Catégorie 2 — Backend domain pas (encore) source de vérité
 
-### 2.1 — ~~IR consommé en aval~~ — fermé pour optimize
+### 2.1 — ~~IR consommé en aval~~ — fermé (optimize + generate)
 
-**Fix** : `optimize_geometry_ir(geometry, *, layers,
-merge_tolerance_mm)` dans `core/toolpath.py` accepte un
-`GeometryIR` et passe par `_geometry_ir_to_svg` + `_optimize_svg`.
+**Fix optimize** : `optimize_geometry_ir(geometry, ...)` accepte
+un `GeometryIR` et passe par `_geometry_ir_to_svg + _optimize_svg`.
+`POST /optimize` route via IR quand `OMNIPLOT_IR_ENABLED=1` :
+hash → cache → IR rebuild si miss → `optimize_geometry_ir`.
 
-**Wire prod** : `POST /optimize` route désormais via IR quand
-`OMNIPLOT_IR_ENABLED=1` (1) tente le cache `ir_artifact_cache.
-fetch_geometry(svg_hash)` ; (2) construit l'IR depuis le SVG +
-populate le cache si miss ; (3) appelle `optimize_geometry_ir`.
-Le path SVG legacy reste actif quand le flag est off. Test
-`test_optimize_routes_through_ir_when_flag_enabled` (test_api.py)
-prouve le routing via monkeypatch.
+**Fix generate** : `generate_gcode_from_geometry(geometry, profile,
+...)` dans `core/gcode.py`, miroir de `optimize_geometry_ir`.
+`application/generate_service.run_generate` route via IR pour
+les dialectes non-EBB quand le flag est on (EBB garde son
+émetteur natif SP/SM/EM). Tests
+`test_optimize_routes_through_ir_when_flag_enabled` et
+`test_generate_routes_through_ir_when_flag_enabled`
+(`test_api.py`) + `test_generate_gcode_from_geometry_matches_svg
+_path` (`test_gcode.py`) prouvent l'équivalence et le routing.
 
-**Reste v2.0** : (a) `generate_gcode_from_path_plan(plan)` pour
-fermer l'autre moitié de la boucle ; (b) consommateur vpype direct
-(skip SVG round-trip) ; (c) flipper le défaut à IR-on après
-stabilisation Pi.
+**Reste v2.0** : (a) consommateur vpype direct dans
+`optimize_geometry_ir` pour skip le round-trip SVG ; (b)
+émetteur G-code direct sur polylines (skip le round-trip côté
+gcode aussi) ; (c) flipper le défaut à IR-on après audit perf
+Pi pour valider la parité.
 
 ### 2.2 — ~~ToolChangeOrchestrator source de vérité~~ — fermé
 
@@ -217,6 +225,19 @@ deployment.md` documente déjà la séparation logique.
 F.2 (Jinja hoist) + F.3 (skip vpype monotone) livrés et
 documentés. Nouvelle baseline sur Pi 4/5 demande l'accès au
 matériel et n'est pas reproductible dans le container CI.
+
+### 3.5 — ~~Bundle initial trop gros~~ — fermé
+
+**Fix** : `vite.config.ts` configuré avec `manualChunks`
+(vendor-vue / vendor-zod / vendor-dompurify / vendor-axios) +
+`defineAsyncComponent` sur `EditModalV2`, `WorkshopMode`,
+`PerfOverlay`, `CompareView` dans `App.vue`. `<PerfOverlay>`
+gate sur `v-if="perfEnabled"` pour vraiment bénéficier du
+lazy-load (sinon Vue le précharge dès le mount).
+
+Mesure : bundle initial 969 kB → **639 kB** (-34 %), gzip
+298 kB → **184 kB** (-38 %). 4 chunks lazy v2 + 4 chunks
+vendor cachés indépendamment des releases app.
 
 ### 3.3 — ~~Persistent toasts adoption~~ (Block G.2) — fermé
 
