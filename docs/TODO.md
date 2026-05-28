@@ -15,9 +15,17 @@
 - **Seul gap structurel restant** : `ToolChangeOrchestrator` n'est
   consommé par aucun chemin de production hors tests (cf. §2.2 et §2.3
   ci-dessous).
-- **Fix appliqué en audit** : queue polling démarré au boot dans
-  `App.vue` pour que Workshop Mode + WorkspaceRail aient des données
-  live sans dépendre de l'ouverture du PlotterDrawer.
+- **Fixes appliqués en audit** :
+  1. Queue polling démarré au boot dans `App.vue` pour que Workshop
+     Mode + WorkspaceRail aient des données live sans dépendre de
+     l'ouverture du PlotterDrawer.
+  2. **Visibilité v2 par défaut** : le workspace Beginner contient
+     désormais `queue` + `magazine` en plus des 4 panels v0.1, donc
+     `WorkspaceRail` apparaît immédiatement avec un cockpit live et
+     le magasin de stylos. Le bouton "Comparer" (flottant bas-gauche)
+     n'a plus de flag — il s'ouvre en empty state s'il n'y a pas de
+     variantes à comparer. Un toggle "Modal V2 (beta)" est ajouté au
+     header pour ne plus dépendre de `?flag.modalV2=1`.
 
 ---
 

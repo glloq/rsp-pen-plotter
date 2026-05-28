@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { usePlotterStore } from '../stores/plotter'
@@ -18,6 +18,11 @@ const { status: plotterStatus } = storeToRefs(plotter)
 
 function toggleWorkshop(): void {
   uiMode.setFlag('workshopMode', !uiMode.isFlagEnabled('workshopMode'))
+}
+
+const modalV2On = computed(() => uiMode.isFlagEnabled('modalV2'))
+function toggleModalV2(): void {
+  uiMode.setFlag('modalV2', !modalV2On.value)
 }
 
 const wsMenuOpen = ref(false)
@@ -117,6 +122,23 @@ function removeCurrent(): void {
       </div>
 
       <AssistantModeToggle data-test="header-assistant-mode-toggle" />
+
+      <button
+        type="button"
+        class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition"
+        :class="
+          modalV2On
+            ? 'border-sky-700 bg-sky-950/40 text-sky-200 hover:bg-sky-900/40'
+            : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
+        "
+        :title="t('header.modalV2')"
+        :aria-pressed="modalV2On"
+        data-test="header-modal-v2-toggle"
+        @click="toggleModalV2"
+      >
+        <span class="hidden sm:inline">{{ t('header.modalV2') }}</span>
+        <span class="sm:hidden">V2</span>
+      </button>
 
       <button
         type="button"

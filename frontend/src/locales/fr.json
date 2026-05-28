@@ -34,7 +34,8 @@
   "header": {
     "settings": "Réglages",
     "plotter": "Traceur",
-    "workshop": "Atelier"
+    "workshop": "Atelier",
+    "modalV2": "Modal V2 (beta)"
   },
   "compare": {
     "open": "Comparer",
