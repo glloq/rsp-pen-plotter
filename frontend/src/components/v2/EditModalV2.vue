@@ -118,8 +118,16 @@ const risks = computed<string[]>(() => {
   return out
 })
 
+// True when there's an active placement to apply the decision to.
+// We use ``previewSvg`` rather than ``layers`` because vector
+// sources may have zero LayerInfo entries (the algorithm wizard
+// still makes sense for them). The Generate button is locked when
+// this is false so the operator doesn't get a silent no-op.
+const hasPlacement = computed(() => Boolean(props.previewSvg || props.sourceName))
+
 function confirm(): void {
-  if (decision.value) emit('confirm', decision.value)
+  if (!hasPlacement.value || !decision.value) return
+  emit('confirm', decision.value)
 }
 
 // Progressive disclosure (roadmap C.1 + C.2). In expert mode the
@@ -215,6 +223,13 @@ useKeyboardShortcuts([
             {{ t('v2.modal.layerCount', { count: props.layers.length }) }}
           </p>
         </div>
+      </div>
+      <div
+        v-else
+        class="modal-v2__noplacement"
+        data-test="modal-v2-no-placement"
+      >
+        {{ t('v2.modal.noPlacement') }}
       </div>
 
       <StepperHeader :steps="STEPS" :active-index="activeIndex" @jump="jump" />
@@ -357,7 +372,8 @@ useKeyboardShortcuts([
       <button
         v-else
         type="button"
-        :disabled="!decision"
+        :disabled="!decision || !hasPlacement"
+        :title="!hasPlacement ? t('v2.modal.noPlacement') : undefined"
         data-test="confirm-button"
         @click="confirm"
       >
@@ -469,6 +485,15 @@ useKeyboardShortcuts([
   margin: 0.15rem 0 0;
   font-size: 0.75rem;
   color: #64748b;
+}
+.modal-v2__noplacement {
+  background: #fff4cc;
+  border: 1px solid #d9b800;
+  color: #5b4a00;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
 }
 .modal-v2__body {
   min-height: 12rem;

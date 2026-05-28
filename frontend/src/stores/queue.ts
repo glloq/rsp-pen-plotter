@@ -33,7 +33,10 @@ export const useQueueStore = defineStore('queue', () => {
   // Last-seen skip count per run id. Used to detect *new* skips
   // between polls so we only fire one critical toast per skip event,
   // not on every subsequent poll that still reports the same list.
+  // Primed silently on the first load so historical skips from a
+  // previous session don't pop a stale toast at boot.
   const lastSeenSkips = new Map<string, number>()
+  let primedSkips = false
 
   async function load(): Promise<void> {
     // Single-flight: avoid stacking parallel /queue requests when
@@ -52,7 +55,7 @@ export const useQueueStore = defineStore('queue', () => {
         for (const run of next) {
           const prev = lastSeenSkips.get(run.id) ?? 0
           const current = (run.skipped_layers ?? []).length
-          if (current > prev) {
+          if (primedSkips && current > prev) {
             const newOnes = (run.skipped_layers ?? []).slice(prev)
             toasts.critical(
               i18n.global.t('queue.skipNotice', {
@@ -63,6 +66,7 @@ export const useQueueStore = defineStore('queue', () => {
           }
           lastSeenSkips.set(run.id, current)
         }
+        primedSkips = true
         runs.value = next
         error.value = null
       } catch (err) {

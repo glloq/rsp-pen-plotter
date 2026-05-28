@@ -1183,7 +1183,8 @@
       "resolving": "Computing recommendation…",
       "resolverError": "Resolver error: {message}. Falling back to static defaults.",
       "openV1": "Open full editor",
-      "layerCount": "{count} layer | {count} layers"
+      "layerCount": "{count} layer | {count} layers",
+      "noPlacement": "No active placement — open a file from the Files panel first, then click Edit. Without a placement Generate has nothing to apply to."
     },
     "intent": {
       "fast": "Fast",

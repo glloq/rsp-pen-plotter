@@ -322,8 +322,15 @@ onBeforeUnmount(() => {
          render the v1 modal (its own ``v-if="editModalOpen"`` decides
          visibility). -->
     <EditModal v-if="!modalV2Enabled" />
+    <!-- ``:key`` re-mounts the wizard when the operator switches to
+         another file while the modal is open, so the local state
+         (sourceKind, goal, decision, …) is reset to defaults derived
+         from the new placement. Without the key the props update
+         reactively but the wizard would keep the previous file's
+         decision in memory. -->
     <EditModalV2
       v-else-if="ui.editModalOpen"
+      :key="store.selectedPlacement?.id ?? 'no-placement'"
       :initial-source-kind="v2SourceKind"
       :available-colors-count="v2AvailableColorsCount"
       :is-mono-pen-machine="v2IsMonoPenMachine"

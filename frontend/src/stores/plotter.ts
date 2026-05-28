@@ -113,12 +113,17 @@ export const usePlotterStore = defineStore('plotter', () => {
   // leave the operator confused. Detect the transition (connected →
   // disconnected) while a run is in progress and push a persistent
   // critical toast so the alert can't vanish behind other notifs.
+  // Array-form ``watch`` so Vue compares each scalar source by
+  // reference; an object-literal getter would re-trigger on every
+  // WebSocket frame even when the relevant fields didn't move.
   watch(
-    () => ({ connected: status.value.connected, state: status.value.state }),
-    (next, prev) => {
-      if (!prev) return
-      const wasRunning = prev.state === 'running' || prev.state === 'paused'
-      if (prev.connected && !next.connected && wasRunning) {
+    [
+      () => status.value.connected,
+      () => status.value.state,
+    ],
+    ([nextConnected, _nextState], [prevConnected, prevState]) => {
+      const wasRunning = prevState === 'running' || prevState === 'paused'
+      if (prevConnected && !nextConnected && wasRunning) {
         useToastStore().critical(i18n.global.t('plotter.deviceLost'))
       }
     },
