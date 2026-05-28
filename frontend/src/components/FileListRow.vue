@@ -52,7 +52,7 @@ function formatSize(bytes: number): string {
       :class="configured ? 'border-emerald-500/50' : 'border-slate-600'"
       :title="file.source_mime"
     >
-      <div v-if="previewSvg" v-html="previewSvg" class="files-thumb h-full w-full" />
+      <div v-if="previewSvg" class="files-thumb h-full w-full" v-html="previewSvg" />
       <span v-else class="font-mono text-[9px] uppercase tracking-wider text-slate-500">
         {{ shortMime(file.source_mime) }}
       </span>

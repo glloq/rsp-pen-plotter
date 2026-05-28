@@ -98,10 +98,22 @@ export const useUiModeStore = defineStore('uiMode', () => {
     flags.value = { ...flags.value, [name]: value }
   }
 
+  // Default values for flags that ship enabled in v0.2. The
+  // operator can still flip them off via the header toggle or
+  // ``?flag.X=0`` — the persisted ``false`` wins next time.
+  // ``modalV2`` defaults to ON so the new editor is the v0.2
+  // experience by default; v1 remains reachable via the wizard's
+  // "Open full editor" escape hatch.
+  const FLAG_DEFAULTS: Record<string, boolean> = {
+    modalV2: true,
+  }
+
   function isFlagEnabled(name: string): boolean {
-    // URL override wins, then explicit persisted flag, then default false.
+    // URL override wins, then explicit persisted flag, then
+    // FLAG_DEFAULTS, then false.
     if (name in urlFlags) return urlFlags[name] === true
-    return Boolean(flags.value[name])
+    if (name in flags.value) return Boolean(flags.value[name])
+    return FLAG_DEFAULTS[name] ?? false
   }
 
   // Persist any mutation; throws are silent (private-mode / quota).

@@ -70,11 +70,11 @@ const visible = computed(() => {
           <div class="meta">
             <span class="idx">#{{ entry.slot.index }}</span>
             <span class="name">{{ entry.slot.name || entry.slot.color }}</span>
-            <span class="calib" v-if="entry.slot.position !== null">
+            <span v-if="entry.slot.position !== null" class="calib">
               calibré ({{ entry.slot.position.x.toFixed(1) }},
               {{ entry.slot.position.y.toFixed(1) }})
             </span>
-            <span class="calib uncalib" v-else>non calibré</span>
+            <span v-else class="calib uncalib">non calibré</span>
           </div>
           <button
             type="button"

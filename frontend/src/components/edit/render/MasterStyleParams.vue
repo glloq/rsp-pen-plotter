@@ -71,7 +71,7 @@ function setKnob<K extends string>(key: K, value: unknown): void {
   // The composable's setMonoKnob is generic over keyof MonoStyleKnobs;
   // widening here keeps the template terse while every call site
   // already knows the field name + type from its <input> binding.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   ;(draft.setMonoKnob as any)(props.styleId, key, value)
 }
 
