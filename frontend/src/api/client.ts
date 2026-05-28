@@ -380,6 +380,11 @@ export interface PrintRun {
   state: RunState
   priority: number
   error: string | null
+  /** Layers skipped at runtime under a ``skip_layer`` recovery
+   *  policy. Populated by the backend when ``StreamError`` triggers
+   *  the skip-and-continue path; empty otherwise. The UI surfaces it
+   *  on the run row + a critical toast. */
+  skipped_layers?: string[]
   created_at: string
   updated_at: string
 }

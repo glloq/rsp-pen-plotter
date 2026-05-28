@@ -33,7 +33,7 @@ const style = computed(() => resolveMulticolorStyle(props.styleId))
 const knobs = computed(() => draft.getMulticolorStyleKnobs(props.styleId))
 
 function setKnob<K extends string>(key: K, value: unknown): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   ;(draft.setMulticolorKnob as any)(props.styleId, key, value)
 }
 

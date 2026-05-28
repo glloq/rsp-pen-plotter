@@ -144,9 +144,9 @@ function onRemove(id: string): void {
                 ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
                 : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
             "
+            :title="t('variants.switchHint')"
             @click="onSwitch(variant.id)"
             @dblclick="beginRename(variant.id, variant.name)"
-            :title="t('variants.switchHint')"
           >
             <span aria-hidden="true">{{ variant.id === activeId ? '●' : '○' }}</span>
             <span class="truncate">{{ variant.name }}</span>

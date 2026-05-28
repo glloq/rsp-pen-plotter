@@ -638,6 +638,18 @@ onBeforeUnmount(() => {
                     />
                   </div>
                   <p v-if="run.error" class="mt-1 text-[10px] text-red-400">{{ run.error }}</p>
+                  <div
+                    v-if="run.skipped_layers && run.skipped_layers.length"
+                    class="mt-1"
+                    :data-test="`run-skipped-${run.id}`"
+                  >
+                    <span
+                      class="rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] font-medium text-amber-200"
+                      :title="(run.skipped_layers ?? []).join(', ')"
+                    >
+                      ⚠ {{ t('queue.skippedBadge', { count: run.skipped_layers.length }) }}
+                    </span>
+                  </div>
                 </div>
               </div>
 

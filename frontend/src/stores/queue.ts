@@ -9,6 +9,7 @@ import {
 } from '../api/client'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
+import { useToastStore } from './toasts'
 
 const ACTIVE: PrintRun['state'][] = ['queued', 'running', 'paused']
 
@@ -29,6 +30,11 @@ export const useQueueStore = defineStore('queue', () => {
 
   const active = computed(() => runs.value.filter((r) => ACTIVE.includes(r.state)))
 
+  // Last-seen skip count per run id. Used to detect *new* skips
+  // between polls so we only fire one critical toast per skip event,
+  // not on every subsequent poll that still reports the same list.
+  const lastSeenSkips = new Map<string, number>()
+
   async function load(): Promise<void> {
     // Single-flight: avoid stacking parallel /queue requests when
     // a tick fires while the previous one is still pending (slow
@@ -37,7 +43,27 @@ export const useQueueStore = defineStore('queue', () => {
     if (inflight) return inflight
     const promise = (async () => {
       try {
-        runs.value = await listQueue()
+        const next = await listQueue()
+        // Detect newly-skipped layers between polls and surface them
+        // as a critical (persistent) toast so the operator can't
+        // miss that the recovery policy fired. ``skipped_layers`` is
+        // append-only on the backend, so size delta == new skips.
+        const toasts = useToastStore()
+        for (const run of next) {
+          const prev = lastSeenSkips.get(run.id) ?? 0
+          const current = (run.skipped_layers ?? []).length
+          if (current > prev) {
+            const newOnes = (run.skipped_layers ?? []).slice(prev)
+            toasts.critical(
+              i18n.global.t('queue.skipNotice', {
+                name: run.name,
+                layers: newOnes.join(', '),
+              }),
+            )
+          }
+          lastSeenSkips.set(run.id, current)
+        }
+        runs.value = next
         error.value = null
       } catch (err) {
         error.value = errorDetail(err, i18n.global.t('queue.loadFailed'))
