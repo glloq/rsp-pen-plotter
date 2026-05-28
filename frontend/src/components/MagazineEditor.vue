@@ -15,7 +15,7 @@
 // won't be clobbered by a pen-colour save (the watcher in
 // ``useProfileDraft`` short-circuits while ``isUnsavedDraft`` is true).
 
-import { computed, ref } from 'vue'
+import { computed, ref, toRaw } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { MachineProfile, PenSlot } from '../api/client'
@@ -63,7 +63,13 @@ async function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
   saving.value = true
   error.value = null
   try {
-    const next: MachineProfile = structuredClone({ ...profile.value, pens: pens.value })
+    // ``toRaw`` first: ``profile.value`` is a reactive proxy and
+    // ``structuredClone`` throws ``DataCloneError`` on proxies, so a
+    // shallow spread (which keeps the reactive ``pens`` elements) would
+    // fail before the save ever ran — leaving the slot stuck on its
+    // default black. Cloning the raw object yields plain data that
+    // ``normalizePens`` can pad against ``pen_slot_count``.
+    const next: MachineProfile = structuredClone(toRaw(profile.value))
     normalizePens(next)
     const target = next.pens?.find((p) => p.index === index)
     if (target) Object.assign(target, patch)
@@ -84,7 +90,8 @@ async function setSlotCount(value: number): Promise<void> {
   saving.value = true
   error.value = null
   try {
-    const next: MachineProfile = structuredClone({ ...profile.value, pen_slot_count: count })
+    const next: MachineProfile = structuredClone(toRaw(profile.value))
+    next.pen_slot_count = count
     normalizePens(next)
     await job.saveProfile(next)
   } catch (err) {
