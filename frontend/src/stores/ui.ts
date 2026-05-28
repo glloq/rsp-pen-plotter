@@ -8,6 +8,11 @@ export type PlotterTab = 'connection' | 'manual' | 'profile' | 'colors' | 'macro
 export interface PreviewSheet {
   width_mm: number
   height_mm: number
+  // Top-left offset of the sheet zone on the workspace (mm). Optional so
+  // callers that only care about the format can omit it (defaults to 0,0,
+  // i.e. the workspace top-left).
+  x_mm?: number
+  y_mm?: number
 }
 
 export type UpdatePhase = 'idle' | 'running' | 'success' | 'noop' | 'error'
