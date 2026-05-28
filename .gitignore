@@ -17,6 +17,8 @@ backend/data/
 node_modules/
 frontend/dist/
 *.local
+# Repo-scoped npm cache used by install.sh to bypass a poisoned ~/.npm
+.npm-cache/
 
 # Editors / OS
 .DS_Store
