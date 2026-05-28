@@ -28,6 +28,10 @@ import {
   type ToolpathMetrics,
 } from '../api/client'
 import { buildComposite } from '../lib/composite'
+import { nearestPoolHex } from '../lib/nearestColor'
+import { resolveEffectivePalette } from '../lib/effectivePalette'
+import { usePaletteSourceStore } from './paletteSource'
+import { useAvailableColorsStore } from './availableColors'
 import { buildPrintPlan } from '../domain/plan-builder'
 import { buildTypographyPlan } from '../composables/useBitmapDraft'
 import type { PrintPlan } from '../domain/print-plan'
@@ -148,6 +152,7 @@ export const useJobStore = defineStore('job', () => {
 
   function patchPlacement(id: string, patch: Partial<Placement>): void {
     placements.value = placements.value.map((p) => (p.id === id ? { ...p, ...patch } : p))
+    invalidateOutputs()
   }
 
   /** Promote a library-draft placement to a visible one. */
@@ -182,8 +187,23 @@ export const useJobStore = defineStore('job', () => {
     if (selectedPlacementId.value === id) {
       selectedPlacementId.value = placements.value[0]?.id ?? null
     }
-    preflight.value = null
-    gcode.value = null
+    invalidateOutputs()
+  }
+
+  // Drop every placement (visible or "Edit from library" draft) backed by a
+  // given library file. Called when the operator deletes the file from the
+  // library so no orphaned placement lingers in the scene and silently
+  // leaks back into the generated G-code (see buildPlanPayload). Without
+  // this, deleting a file from the library left its placement on the plan,
+  // so a later "add a different image + Generate" produced both drawings.
+  function removePlacementsForFile(fileId: string): void {
+    const before = placements.value.length
+    placements.value = placements.value.filter((p) => p.library_file_id !== fileId)
+    if (placements.value.length === before) return
+    if (!placements.value.some((p) => p.id === selectedPlacementId.value)) {
+      selectedPlacementId.value = placements.value.find((p) => !p.is_library_draft)?.id ?? null
+    }
+    invalidateOutputs()
   }
 
   function defaultPlacementSize(): {
@@ -246,6 +266,7 @@ export const useJobStore = defineStore('job', () => {
     const placement = blankPlacement()
     placements.value = [...placements.value, placement]
     selectedPlacementId.value = placement.id
+    invalidateOutputs()
     return placement.id
   }
 
@@ -308,6 +329,7 @@ export const useJobStore = defineStore('job', () => {
       active_variant_id: src.active_variant_id,
     }
     placements.value = [...placements.value, clone]
+    invalidateOutputs()
     return clone.id
   }
 
@@ -391,6 +413,20 @@ export const useJobStore = defineStore('job', () => {
 
   const preflighting = ref(false)
   const preflight = ref<PreflightReport | null>(null)
+
+  // Single place that drops the cached pipeline outputs. Any edit that
+  // changes what the backend would draw — geometry, layers, pen
+  // assignments, visibility, the scene's placement set — invalidates the
+  // toolpath metrics, the generated gcode and the preflight report so the
+  // Simulator / G-code tabs never show a result that no longer matches the
+  // operator's scene. Replaces the old ``deep: true`` watcher on
+  // ``placements`` (which walked every SVG on every drag); explicit calls
+  // from the mutators below are O(1) and don't traverse the placement tree.
+  function invalidateOutputs(): void {
+    metrics.value = null
+    gcode.value = null
+    preflight.value = null
+  }
 
   const scaleMode = ref<'fit' | 'actual'>('fit')
   const marginMm = ref(10)
@@ -619,11 +655,8 @@ export const useJobStore = defineStore('job', () => {
       })
       const result = await rerenderJob(p.job_id, layersPayload, controller.signal)
       if (controller.signal.aborted) return
+      // patchPlacement already invalidates the cached outputs for the new SVG.
       patchPlacement(p.id, { svg: result.svg })
-      // Generation needs to be redone for the new SVG.
-      metrics.value = null
-      gcode.value = null
-      preflight.value = null
     } catch (err) {
       if (controller.signal.aborted) return
       const status = (err as { response?: { status?: number } })?.response?.status
@@ -657,7 +690,10 @@ export const useJobStore = defineStore('job', () => {
     const hasExplicit = (profile.pens?.length ?? 0) > 0
     const installed = new Set((profile.pens ?? []).filter((p) => p.installed).map((p) => p.index))
     const missing = new Set<number>()
-    for (const placement of placements.value) {
+    // Only the placements actually on the plan gate generation — drafts
+    // would raise spurious "install a pen" warnings for a file the
+    // operator hasn't added yet.
+    for (const placement of visiblePlacements.value) {
       for (const layer of placement.layers) {
         const slot = layer.target_pen_slot
         if (slot === null) continue
@@ -680,14 +716,14 @@ export const useJobStore = defineStore('job', () => {
   }
 
   const totalLengthMm = computed(() =>
-    placements.value.reduce(
+    visiblePlacements.value.reduce(
       (sum, p) => sum + p.layers.reduce((s, l) => s + l.total_length_mm, 0),
       0,
     ),
   )
 
   const totalDurationSeconds = computed(() =>
-    placements.value.reduce(
+    visiblePlacements.value.reduce(
       (sum, p) => sum + p.layers.reduce((s, l) => s + layerDurationSeconds(l), 0),
       0,
     ),
@@ -717,28 +753,58 @@ export const useJobStore = defineStore('job', () => {
     patchSelected({ layers: ordered.map((layer, index) => ({ ...layer, draw_order: index })) })
   }
 
-  watch([scaleMode, marginMm, selectedProfileName], () => {
-    metrics.value = null
-    gcode.value = null
-    preflight.value = null
-  })
-  // Any edit to a placement — geometry, layer settings, pen assignments,
-  // visibility, algorithm overrides — invalidates the cached gcode and
-  // metrics so the Simulator / G-code tabs don't keep showing a stale
-  // toolpath that doesn't reflect the operator's latest choices. The
-  // operator must click Generate again to refresh; that's intentional
-  // (cheaper than auto-regenerating on every drag) but the stale state
-  // must NOT linger silently.
-  watch(
-    placements,
-    () => {
-      metrics.value = null
-      gcode.value = null
-      preflight.value = null
-    },
-    { deep: true },
-  )
+  // Resolve the palette pool the editor is currently pointed at: the
+  // operator's palette-source choice (pens / available / union) applied to
+  // the selected profile's installed pens and the available-colours
+  // inventory. Mirrors ``resolveEffectivePalette`` so the re-snap below
+  // lands on exactly the swatches the per-layer picker offers.
+  function currentEffectivePalette(): string[] {
+    const source = usePaletteSourceStore().source
+    const pens = (selectedProfile.value?.pens ?? [])
+      .filter((p) => p.installed && p.color)
+      .map((p) => p.color)
+    const available = useAvailableColorsStore().ordered.map((c) => c.hex)
+    return resolveEffectivePalette(source, pens, available)
+  }
 
+  // Re-snap every ``auto`` layer (across ALL placements) to the nearest hex
+  // in the active pool, preserving ``manual`` overrides. Called when the
+  // operator changes the palette source or swaps the installed pens so the
+  // assigned colours follow the pool they just selected — without this the
+  // colours stayed pinned to whatever the profile-agnostic upload picked.
+  // An empty pool clears the auto value (assigned_color_hex = null), which
+  // matches the backend's fallback to the raw centroid.
+  function resnapAutoLayers(poolOverride?: readonly string[]): void {
+    const pool = poolOverride ?? currentEffectivePalette()
+    let changed = false
+    placements.value = placements.value.map((p) => {
+      let touched = false
+      const layers = p.layers.map((layer) => {
+        if (layer.color_assignment === 'manual') return layer
+        const next = pool.length ? nearestPoolHex(layer.source_color, pool) : null
+        if ((layer.assigned_color_hex ?? null) === (next ?? null)) return layer
+        touched = true
+        return { ...layer, assigned_color_hex: next, color_assignment: 'auto' as const }
+      })
+      if (!touched) return p
+      changed = true
+      return { ...p, layers }
+    })
+    if (changed) invalidateOutputs()
+  }
+
+  watch([scaleMode, marginMm, selectedProfileName], invalidateOutputs)
+
+  // Re-snap auto layers whenever the active pool changes — the operator
+  // toggled the palette source (pens / available / union), edited the
+  // available-colours inventory, or swapped the installed pens. Keying the
+  // watcher on the serialised palette means a no-op change (same swatches)
+  // doesn't churn; ``resnapAutoLayers`` itself only patches layers that
+  // actually move, so manual overrides and unchanged autos stay put.
+  watch(
+    () => currentEffectivePalette().join('|'),
+    () => resnapAutoLayers(),
+  )
   async function loadProfiles(): Promise<void> {
     profiles.value = await getProfiles()
     if (!selectedProfile.value && profiles.value.length) {
@@ -810,9 +876,7 @@ export const useJobStore = defineStore('job', () => {
       last_file: file,
       last_options: options,
     })
-    metrics.value = null
-    gcode.value = null
-    preflight.value = null
+    // patchPlacement above already invalidated the cached outputs.
     const toasts = useToastStore()
     const library = useLibraryStore()
     uploadController = new AbortController()
@@ -883,6 +947,12 @@ export const useJobStore = defineStore('job', () => {
         visibility: Object.fromEntries(detail.layers.map((l) => [l.layer_id, true])),
         ...layoutPatch,
       })
+      // The library upload snaps colours profile-agnostically (see
+      // api/files.py). Re-snap the fresh auto layers against the active
+      // pool now so the assigned colours reflect the operator's installed
+      // pens / palette-source choice immediately — not just after a later
+      // source toggle.
+      resnapAutoLayers()
       toasts.update(
         toastId,
         'success',
@@ -987,6 +1057,10 @@ export const useJobStore = defineStore('job', () => {
         })
       }
     }
+    // Snap the freshly-hydrated auto layers against the active pool so a
+    // library placement reflects the operator's installed pens / palette
+    // source, not just the profile-agnostic snap baked in at upload.
+    resnapAutoLayers()
     // Kick a /rerender so the canvas shows the file with the hydrated
     // settings rather than the default conversion that came back from
     // the library detail endpoint.
@@ -1062,9 +1136,7 @@ export const useJobStore = defineStore('job', () => {
   function clearJob(): void {
     placements.value = []
     selectedPlacementId.value = null
-    metrics.value = null
-    gcode.value = null
-    preflight.value = null
+    invalidateOutputs()
     error.value = null
     errorScope.value = null
   }
@@ -1200,7 +1272,12 @@ export const useJobStore = defineStore('job', () => {
   function buildPlanPayload(): PrintPlan | null {
     const profile = selectedProfile.value
     if (!profile) return null
-    const ready = placements.value.filter((p) => p.svg && p.layers.length)
+    // Exclude "Edit from library" drafts: they hold conversion settings but
+    // aren't on the plan (see visiblePlacements), so they must never reach
+    // the composite / generated G-code.
+    const ready = placements.value.filter(
+      (p) => !p.is_library_draft && p.svg && p.layers.length,
+    )
     if (!ready.length) return null
     const result = buildComposite(ready, profile)
     // The backend ``_make_transform`` centres the drawing on the
@@ -1295,11 +1372,15 @@ export const useJobStore = defineStore('job', () => {
     let phase: 'optimize' | 'preflight' | 'generate' = 'optimize'
     try {
       const outcome = await runGeneratePipeline({
-        placements: placements.value.map((p) => ({
-          id: p.id,
-          svg: p.svg,
-          layers: p.layers,
-        })),
+        // Drafts are excluded from the plan (buildPlanPayload), so there's
+        // no point optimising them either — keep the two paths in lock-step.
+        placements: placements.value
+          .filter((p) => !p.is_library_draft)
+          .map((p) => ({
+            id: p.id,
+            svg: p.svg,
+            layers: p.layers,
+          })),
         applyOptimized: (id, result) => {
           patchPlacement(id, {
             svg: result.svg,
@@ -1517,6 +1598,7 @@ export const useJobStore = defineStore('job', () => {
     addEmptyPlacement,
     duplicatePlacement,
     removePlacement,
+    removePlacementsForFile,
     rotatePlacement,
     flipPlacement,
     // Backward-compat views
@@ -1566,6 +1648,7 @@ export const useJobStore = defineStore('job', () => {
     isVisible,
     updateLayer,
     reorderLayers,
+    resnapAutoLayers,
     loadProfiles,
     loadPresets,
     saveProfile,

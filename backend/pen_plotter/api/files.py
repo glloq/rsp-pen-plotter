@@ -32,7 +32,7 @@ from pen_plotter.application.file_library import (
     read_svg,
     remember_job,
 )
-from pen_plotter.application.palette_pool import available_color_hexes
+from pen_plotter.application.palette_pool import active_pool
 from pen_plotter.converters.pipeline import (
     convert_file,
     parse_options,
@@ -231,12 +231,14 @@ def _reprocess_existing(
         if stale.is_file() and stale.stem == "original" and stale != original_target:
             stale.unlink(missing_ok=True)
     original_target.write_bytes(data)
-    # Auto-attribute every cluster centroid to its nearest available
-    # ink before the meta is sealed. The library upload is profile-
-    # agnostic so the pool comes from the global available-colours
-    # inventory only; the active profile's pens get re-evaluated at
-    # /generate time so the G-code prompt matches the actual rack.
-    assigned_layers = auto_assign_layer_colors(converted.layers, available_color_hexes())
+    # Auto-attribute every cluster centroid to its nearest pool ink before
+    # the meta is sealed. The library upload is profile-agnostic (no pen
+    # rack in scope here), so ``active_pool(None)`` honours the operator's
+    # ``palette_source`` choice for the pools that don't need a profile —
+    # ``available`` / ``union`` snap to the inventory; ``pens`` resolves to
+    # an empty pool, which clears the auto value so the editor's re-snap
+    # (driven by the selected profile's installed pens) fills it in.
+    assigned_layers = auto_assign_layer_colors(converted.layers, active_pool(None))
     meta = FileMeta(
         layers=assigned_layers,
         warnings=converted.warnings,
@@ -337,8 +339,8 @@ async def upload_to_library(
     # Same auto-attribution as ``_reprocess_existing`` — keep the two
     # paths bit-identical so a re-upload-with-changed-options doesn't
     # accidentally regress to raw centroid colours when the inventory
-    # is populated.
-    assigned_layers = auto_assign_layer_colors(converted.layers, available_color_hexes())
+    # is populated. ``active_pool(None)`` honours ``palette_source``.
+    assigned_layers = auto_assign_layer_colors(converted.layers, active_pool(None))
     # Write all artefacts into a staging directory and only rename it to
     # its final name once every file is on disk. Guarantees an interrupted
     # upload can never leave the library half-populated.

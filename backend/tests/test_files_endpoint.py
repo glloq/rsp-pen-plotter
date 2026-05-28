@@ -126,6 +126,70 @@ async def test_patch_and_delete() -> None:
 
 
 @pytest.mark.asyncio
+async def test_upload_honors_palette_source_available() -> None:
+    """With ``palette_source='available'`` the upload snaps centroids to the
+    inventory pool, not the raw source colour."""
+    from datetime import UTC, datetime
+
+    from pen_plotter.api.available_colors import _normalise_hex
+    from pen_plotter.persistence import (
+        AvailableColorRecord,
+        delete_available_color,
+        list_available_colors,
+        save_available_color,
+        set_setting,
+    )
+
+    for record in list_available_colors():
+        delete_available_color(record.color_id)
+    set_setting("palette_source", "available")
+    # A near-red ink the red layer should snap to.
+    save_available_color(
+        AvailableColorRecord(
+            color_id="inv-red",
+            hex=_normalise_hex("#ee1111"),
+            name="",
+            position=0,
+            created_at=datetime.now(UTC),
+        )
+    )
+    try:
+        async with _client() as client:
+            response = await client.post("/files", **_upload_form(SVG_A, "pal-a.svg"))
+        layers = response.json()["file"]["layers"]
+        assert layers
+        assert layers[0]["assigned_color_hex"] == "#ee1111"
+    finally:
+        for record in list_available_colors():
+            delete_available_color(record.color_id)
+        set_setting("palette_source", "pens")
+
+
+@pytest.mark.asyncio
+async def test_upload_honors_palette_source_pens_clears_assignment() -> None:
+    """With ``palette_source='pens'`` the profile-agnostic upload has an empty
+    pool, so the auto assignment is cleared (the editor re-snaps against the
+    selected profile's installed pens)."""
+    from pen_plotter.persistence import (
+        delete_available_color,
+        list_available_colors,
+        set_setting,
+    )
+
+    for record in list_available_colors():
+        delete_available_color(record.color_id)
+    set_setting("palette_source", "pens")
+    try:
+        async with _client() as client:
+            response = await client.post("/files", **_upload_form(SVG_B, "pal-b.svg"))
+        layers = response.json()["file"]["layers"]
+        assert layers
+        assert layers[0]["assigned_color_hex"] is None
+    finally:
+        set_setting("palette_source", "pens")
+
+
+@pytest.mark.asyncio
 async def test_list_rejects_bad_sort() -> None:
     async with _client() as client:
         response = await client.get("/files", params={"sort": "bogus"})

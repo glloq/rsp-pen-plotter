@@ -298,6 +298,10 @@ async function moveFile(file: LibraryFileRecord): Promise<void> {
 async function removeFile(file: LibraryFileRecord): Promise<void> {
   if (!window.confirm(t('files.deleteConfirm', { name: file.source_file }))) return
   await library.remove(file.file_id)
+  // Drop any placement (visible or "Edit from library" draft) backed by the
+  // deleted file so it can't linger on the plan and leak into a later
+  // generated G-code.
+  store.removePlacementsForFile(file.file_id)
 }
 
 function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
