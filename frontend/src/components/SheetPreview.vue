@@ -118,14 +118,34 @@ function onContainerPointerDown(event: PointerEvent): void {
   containerMode.value = 'pan-view'
 }
 
+// Pan deltas are accumulated and flushed once per animation frame so a
+// burst of high-frequency pointer events triggers a single transform
+// re-render per paint instead of one per event.
+let pendingPanDx = 0
+let pendingPanDy = 0
+let panRaf = 0
+
+function flushPan(): void {
+  panRaf = 0
+  panX.value += pendingPanDx
+  panY.value += pendingPanDy
+  pendingPanDx = 0
+  pendingPanDy = 0
+}
+
 function onContainerPointerMove(event: PointerEvent): void {
   if (containerMode.value !== 'pan-view') return
-  panX.value += event.movementX
-  panY.value += event.movementY
+  pendingPanDx += event.movementX
+  pendingPanDy += event.movementY
+  if (panRaf === 0) panRaf = requestAnimationFrame(flushPan)
 }
 
 function onContainerPointerUp(event: PointerEvent): void {
   containerMode.value = 'idle'
+  if (panRaf !== 0) {
+    cancelAnimationFrame(panRaf)
+    flushPan()
+  }
   try {
     ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
   } catch {
@@ -336,6 +356,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
+  if (panRaf !== 0) cancelAnimationFrame(panRaf)
 })
 
 // Composite multiplier turning client-pixel deltas into mm, used by
