@@ -46,6 +46,11 @@ async function closeWithConfirm(): Promise<void> {
 
 const sourceName = computed(() => fm.sourceName.value)
 
+// Compare is only meaningful with at least two variants to put side by
+// side. The drawer itself shows an empty state, but we disable the entry
+// point so the affordance reads as "not yet available" rather than broken.
+const canCompare = computed(() => (store.selectedPlacement?.variants.length ?? 0) >= 2)
+
 // ============================== TABS ==============================
 // Right pane is split into Source / Layers / Variants tabs so the long
 // scroll is broken into focused contexts. Tab choice persists across
@@ -304,6 +309,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <div class="min-w-0 flex-1">
           <VariantsBar v-if="fm.hasSource.value" :inline="true" />
         </div>
+        <!-- Compare variants -->
+        <button
+          type="button"
+          class="flex shrink-0 items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!canCompare"
+          :title="t('compare.open')"
+          data-test="edit-compare-open"
+          @click="ui.openCompare()"
+        >
+          ⇄ {{ t('compare.open') }}
+        </button>
         <!-- Close button (red × ) -->
         <button
           type="button"

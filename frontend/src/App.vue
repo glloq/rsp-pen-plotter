@@ -3,7 +3,6 @@ import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch 
 import { useI18n } from 'vue-i18n'
 import { getHealth, systemCheckUpdate } from './api/client'
 import AppHeader from './components/AppHeader.vue'
-import AppFooter from './components/AppFooter.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import EditModal from './components/EditModal.vue'
@@ -75,7 +74,6 @@ const activeRun = computed(() => queue.active[0] ?? null)
 // the live editor uses, no mutation of the active placement). The
 // active variant's already-rendered SVG is reused for whichever
 // candidate matches its id to skip a redundant network call.
-const compareOpen = ref(false)
 const compareError = ref<string | null>(null)
 const compareLoading = ref(false)
 const compareSvgCache = ref<Record<string, string>>({})
@@ -140,9 +138,12 @@ async function refreshCompareSvgs(): Promise<void> {
     compareLoading.value = false
   }
 }
-watch(compareOpen, (next) => {
-  if (next) void refreshCompareSvgs()
-})
+watch(
+  () => ui.compareOpen,
+  (next) => {
+    if (next) void refreshCompareSvgs()
+  },
+)
 
 const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => {
   const placement = store.selectedPlacement
@@ -166,7 +167,9 @@ const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => 
 function onEditV2Cancel(): void {
   ui.closeEditModal()
 }
-async function onEditV2Confirm(decision: import('./domain/policy/schemas').PolicyDecision): Promise<void> {
+async function onEditV2Confirm(
+  decision: import('./domain/policy/schemas').PolicyDecision,
+): Promise<void> {
   // Propagate the resolver recommendation to every layer of the
   // selected placement, then trigger a single rerender so the canvas
   // catches up. ``applyAlgorithmToAllLayers`` debounces internally so
@@ -198,12 +201,8 @@ const v2SourceKind = computed<import('./domain/policy/schemas').SourceKind>(() =
   if (mime.startsWith('image/')) return 'bitmap_photo'
   return 'bitmap_photo'
 })
-const v2AvailableColorsCount = computed(
-  () => store.selectedProfile?.pen_slot_count ?? 1,
-)
-const v2IsMonoPenMachine = computed(
-  () => (store.selectedProfile?.pen_slot_count ?? 1) <= 1,
-)
+const v2AvailableColorsCount = computed(() => store.selectedProfile?.pen_slot_count ?? 1)
+const v2IsMonoPenMachine = computed(() => (store.selectedProfile?.pen_slot_count ?? 1) <= 1)
 
 function closeWorkshop(): void {
   uiMode.setFlag('workshopMode', false)
@@ -397,7 +396,6 @@ onBeforeUnmount(() => {
       <CanvasView />
     </main>
 
-    <AppFooter />
     <SettingsDrawer />
     <PlotterDrawer />
     <!-- Edit modal: the UX mode picks the surface.
@@ -439,25 +437,19 @@ onBeforeUnmount(() => {
       @resume="workshopResume"
     />
 
-    <!-- Compare drawer (roadmap C.5). The floating launcher is
-         always visible; the drawer shows an explicit empty state
-         when the current placement has fewer than two variants, so
-         operators can discover the feature without flipping a flag. -->
-    <button
-      type="button"
-      class="fixed bottom-3 left-3 z-30 flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 shadow-lg hover:bg-slate-700"
-      data-test="compare-open"
-      @click="compareOpen = true"
-    >
-      ⇄ {{ t('compare.open') }}
-    </button>
+    <!-- Compare drawer (roadmap C.5). Launched from the edit modals
+         (Expert + wizard) via ``ui.openCompare()``; shows an explicit
+         empty state when the current placement has fewer than two
+         variants. -->
     <div
-      v-if="compareOpen"
+      v-if="ui.compareOpen"
       class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
       data-test="compare-modal"
-      @click.self="compareOpen = false"
+      @click.self="ui.closeCompare()"
     >
-      <div class="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-xl border border-slate-700 bg-white p-4 shadow-2xl">
+      <div
+        class="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-xl border border-slate-700 bg-white p-4 shadow-2xl"
+      >
         <header class="mb-2 flex items-center justify-between">
           <h2 class="text-base font-semibold text-slate-900">
             {{ t('compare.title') }}
@@ -466,23 +458,15 @@ onBeforeUnmount(() => {
             type="button"
             class="rounded p-1 text-slate-500 hover:bg-slate-100"
             :aria-label="t('settings.close')"
-            @click="compareOpen = false"
+            @click="ui.closeCompare()"
           >
             ✕
           </button>
         </header>
-        <p
-          v-if="compareLoading"
-          class="text-sm text-slate-600"
-          data-test="compare-loading"
-        >
+        <p v-if="compareLoading" class="text-sm text-slate-600" data-test="compare-loading">
           {{ t('compare.loading') }}
         </p>
-        <p
-          v-else-if="compareError"
-          class="text-sm text-red-600"
-          data-test="compare-error"
-        >
+        <p v-else-if="compareError" class="text-sm text-red-600" data-test="compare-error">
           {{ compareError }}
         </p>
         <CompareView

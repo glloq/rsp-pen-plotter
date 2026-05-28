@@ -39,14 +39,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   select: [id: string]
-  /** Live move during drag — orchestrator forwards to setDrawing. */
+  /** Live move during drag — position only, so a reposition never
+   *  touches the placement's width/height (proportions stay fixed).
+   *  Orchestrator forwards to setDrawing. */
   move: [
     {
       id: string
       x_mm: number
       y_mm: number
-      width_mm: number
-      height_mm: number
     },
   ]
   /** Live resize during drag — same shape as ``move``. */
@@ -152,8 +152,6 @@ function applyMove(clientX: number, clientY: number): void {
       id: activePlacementId.value,
       x_mm: props.snap(startRegion.x_mm + dxMm),
       y_mm: props.snap(startRegion.y_mm + dyMm),
-      width_mm: startRegion.width_mm,
-      height_mm: startRegion.height_mm,
     })
     return
   }
@@ -164,8 +162,7 @@ function applyMove(clientX: number, clientY: number): void {
     let w = startRegion.width_mm
     let h = startRegion.height_mm
     const isCornerHandle = handle.value.length === 2
-    const aspect =
-      startRegion.height_mm > 0 ? startRegion.width_mm / startRegion.height_mm : 1
+    const aspect = startRegion.height_mm > 0 ? startRegion.width_mm / startRegion.height_mm : 1
     if (props.aspectLock && isCornerHandle) {
       // Corner drag with the ratio locked: pick whichever axis the
       // operator moved more (in proportional terms) and drive both

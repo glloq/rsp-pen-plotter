@@ -9,6 +9,7 @@ import Simulator from './Simulator.vue'
 import GcodePreview from './GcodePreview.vue'
 import PlanRail from './PlanRail.vue'
 import SimRail from './SimRail.vue'
+import AppFooter from './AppFooter.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
@@ -83,5 +84,10 @@ function select(tab: CanvasTab): void {
         <p v-else class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
       </div>
     </div>
+
+    <!-- Metrics footer (size / scale / estimate / pen changes) is scoped
+         to the canvas column so it spans the plan/simulation/gcode area
+         only, not the file library. Self-hides when no job is loaded. -->
+    <AppFooter />
   </section>
 </template>

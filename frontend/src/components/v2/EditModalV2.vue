@@ -21,13 +21,10 @@ import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
-import type {
-  Goal,
-  PaletteMode,
-  PolicyDecision,
-  SourceKind,
-} from '../../domain/policy/schemas'
+import type { Goal, PaletteMode, PolicyDecision, SourceKind } from '../../domain/policy/schemas'
 import { useUiModeStore } from '../../stores/uiMode'
+import { useUiStore } from '../../stores/ui'
+import { useJobStore } from '../../stores/job'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayerInspector from './LayerInspector.vue'
 import PipelineInspector from './PipelineInspector.vue'
@@ -136,9 +133,11 @@ function confirm(): void {
 // default-options JSON. Assisted mode stays at level 1 to keep the
 // step body minimal.
 const uiMode = useUiModeStore()
-const showAdvanced = computed(
-  () => uiMode.isExpert && uiMode.expertDisclosureLevel === 2,
-)
+const ui = useUiStore()
+const job = useJobStore()
+// Compare needs two variants on the active placement to be useful.
+const canCompare = computed(() => (job.selectedPlacement?.variants.length ?? 0) >= 2)
+const showAdvanced = computed(() => uiMode.isExpert && uiMode.expertDisclosureLevel === 2)
 function toggleAdvanced(): void {
   uiMode.setExpertDisclosureLevel(uiMode.expertDisclosureLevel === 2 ? 1 : 2)
 }
@@ -228,6 +227,16 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="open-v1"
+          :disabled="!canCompare"
+          :title="t('compare.open')"
+          data-test="modal-v2-compare-open"
+          @click="ui.openCompare()"
+        >
+          ⇄ {{ t('compare.open') }}
+        </button>
+        <button
+          type="button"
+          class="open-v1"
           :title="t('v2.modal.openV1')"
           data-test="modal-v2-open-v1"
           @click="emit('open-v1')"
@@ -253,11 +262,7 @@ onBeforeUnmount(() => {
         class="modal-v2__context"
         data-test="modal-v2-context"
       >
-        <div
-          v-if="props.previewSvg"
-          class="modal-v2__thumb"
-          aria-hidden="true"
-        >
+        <div v-if="props.previewSvg" class="modal-v2__thumb" aria-hidden="true">
           <!-- v-html: caller (App.vue) passes ``placement.svg`` which
                was already sanitized by the upload pipeline. -->
           <!-- eslint-disable-next-line vue/no-v-html -->
@@ -289,151 +294,155 @@ onBeforeUnmount(() => {
       <StepperHeader :steps="STEPS" :active-index="activeIndex" @jump="jump" />
 
       <section class="modal-v2__body">
-      <!-- 1. Source Prep -->
-      <div v-if="activeIndex === 0" data-test="step-source">
-        <p>Détection du type de source. L'algorithme par défaut s'adaptera.</p>
-        <label>
-          Type
-          <select v-model="sourceKind" data-test="source-kind-select">
-            <option value="bitmap_photo">Bitmap — photo</option>
-            <option value="bitmap_illustration">Bitmap — illustration</option>
-            <option value="vector_svg">Vecteur — SVG</option>
-            <option value="pdf_doc">Document PDF</option>
-            <option value="text_typography">Texte / typographie</option>
-          </select>
-        </label>
-      </div>
-
-      <!-- 2. Intent -->
-      <div v-else-if="activeIndex === 1" data-test="step-intent">
-        <p>Quel est ton objectif&nbsp;?</p>
-        <div class="intent-grid">
-          <button
-            v-for="opt in (['fast', 'balanced', 'quality'] as const)"
-            :key="opt"
-            type="button"
-            :class="{ active: goal === opt }"
-            :data-test="`intent-${opt}`"
-            @click="goal = opt"
-          >
-            <strong>{{ t(`v2.intent.${opt}`) }}</strong>
-          </button>
+        <!-- 1. Source Prep -->
+        <div v-if="activeIndex === 0" data-test="step-source">
+          <p>Détection du type de source. L'algorithme par défaut s'adaptera.</p>
+          <label>
+            Type
+            <select v-model="sourceKind" data-test="source-kind-select">
+              <option value="bitmap_photo">Bitmap — photo</option>
+              <option value="bitmap_illustration">Bitmap — illustration</option>
+              <option value="vector_svg">Vecteur — SVG</option>
+              <option value="pdf_doc">Document PDF</option>
+              <option value="text_typography">Texte / typographie</option>
+            </select>
+          </label>
         </div>
-      </div>
 
-      <!-- 3. Algorithm recommendation -->
-      <div v-else-if="activeIndex === 2" data-test="step-algorithm">
-        <div v-if="resolving">{{ t('v2.modal.resolving') }}</div>
-        <div v-else-if="resolveError" class="error">
-          {{ t('v2.modal.resolverError', { message: resolveError }) }}
+        <!-- 2. Intent -->
+        <div v-else-if="activeIndex === 1" data-test="step-intent">
+          <p>Quel est ton objectif&nbsp;?</p>
+          <div class="intent-grid">
+            <button
+              v-for="opt in ['fast', 'balanced', 'quality'] as const"
+              :key="opt"
+              type="button"
+              :class="{ active: goal === opt }"
+              :data-test="`intent-${opt}`"
+              @click="goal = opt"
+            >
+              <strong>{{ t(`v2.intent.${opt}`) }}</strong>
+            </button>
+          </div>
         </div>
-        <div v-else-if="decision">
-          <p>
-            Algo recommandé&nbsp;: <strong data-test="recommended-algo">{{ decision.default_algorithm }}</strong>
-            (<span>{{ decision.quality_tier }}</span>)
-          </p>
-          <button
-            v-if="uiMode.isExpert"
-            type="button"
-            class="disclosure-toggle"
-            data-test="disclosure-toggle"
-            :aria-pressed="showAdvanced"
-            @click="toggleAdvanced"
-          >
-            {{ showAdvanced ? 'Masquer les détails avancés' : 'Afficher les détails avancés' }}
-          </button>
-          <template v-if="showAdvanced">
-            <details open>
-              <summary>{{ t('v2.modal.why') }}</summary>
+
+        <!-- 3. Algorithm recommendation -->
+        <div v-else-if="activeIndex === 2" data-test="step-algorithm">
+          <div v-if="resolving">{{ t('v2.modal.resolving') }}</div>
+          <div v-else-if="resolveError" class="error">
+            {{ t('v2.modal.resolverError', { message: resolveError }) }}
+          </div>
+          <div v-else-if="decision">
+            <p>
+              Algo recommandé&nbsp;:
+              <strong data-test="recommended-algo">{{ decision.default_algorithm }}</strong>
+              (<span>{{ decision.quality_tier }}</span
+              >)
+            </p>
+            <button
+              v-if="uiMode.isExpert"
+              type="button"
+              class="disclosure-toggle"
+              data-test="disclosure-toggle"
+              :aria-pressed="showAdvanced"
+              @click="toggleAdvanced"
+            >
+              {{ showAdvanced ? 'Masquer les détails avancés' : 'Afficher les détails avancés' }}
+            </button>
+            <template v-if="showAdvanced">
+              <details open>
+                <summary>{{ t('v2.modal.why') }}</summary>
+                <ul>
+                  <li v-for="r in decision.reasoning" :key="r.rule">
+                    <code>{{ r.rule }}</code> — {{ r.description }}
+                  </li>
+                </ul>
+              </details>
+              <p v-if="decision.fallback_chain.length">
+                Fallbacks&nbsp;: {{ decision.fallback_chain.join(' → ') }}
+              </p>
+              <PipelineInspector :decision="decision" :source-kind="sourceKind" />
+            </template>
+            <details v-else>
+              <summary data-test="why-summary-collapsed">{{ t('v2.modal.why') }}</summary>
               <ul>
-                <li v-for="r in decision.reasoning" :key="r.rule">
-                  <code>{{ r.rule }}</code> — {{ r.description }}
+                <li v-for="r in decision.reasoning.slice(0, 1)" :key="r.rule">
+                  {{ r.description }}
                 </li>
               </ul>
             </details>
-            <p v-if="decision.fallback_chain.length">
-              Fallbacks&nbsp;: {{ decision.fallback_chain.join(' → ') }}
+          </div>
+        </div>
+
+        <!-- 4. Colours -->
+        <div v-else-if="activeIndex === 3" data-test="step-colors">
+          <p>Source de palette&nbsp;:</p>
+          <label>
+            <input v-model="paletteMode" type="radio" value="machine_only" />
+            Magazine machine uniquement (recommandé)
+          </label>
+          <label>
+            <input v-model="paletteMode" type="radio" value="free" />
+            Palette libre (mode expert)
+          </label>
+        </div>
+
+        <!-- 5. Layers -->
+        <div v-else-if="activeIndex === 4" data-test="step-layers">
+          <LayerInspector v-if="props.layers && props.layers.length" :layers="props.layers" />
+          <div v-else class="layers-empty">
+            <p>Les couches seront générées par l'algorithme recommandé.</p>
+            <p class="muted">
+              L'inspecteur de couches s'affichera ici dès qu'un placement actif aura été
+              sélectionné.
             </p>
-            <PipelineInspector :decision="decision" :source-kind="sourceKind" />
-          </template>
-          <details v-else>
-            <summary data-test="why-summary-collapsed">{{ t('v2.modal.why') }}</summary>
-            <ul>
-              <li v-for="r in decision.reasoning.slice(0, 1)" :key="r.rule">
-                {{ r.description }}
-              </li>
-            </ul>
-          </details>
+          </div>
         </div>
-      </div>
 
-      <!-- 4. Colours -->
-      <div v-else-if="activeIndex === 3" data-test="step-colors">
-        <p>Source de palette&nbsp;:</p>
-        <label>
-          <input v-model="paletteMode" type="radio" value="machine_only" />
-          Magazine machine uniquement (recommandé)
-        </label>
-        <label>
-          <input v-model="paletteMode" type="radio" value="free" />
-          Palette libre (mode expert)
-        </label>
-      </div>
-
-      <!-- 5. Layers -->
-      <div v-else-if="activeIndex === 4" data-test="step-layers">
-        <LayerInspector v-if="props.layers && props.layers.length" :layers="props.layers" />
-        <div v-else class="layers-empty">
-          <p>Les couches seront générées par l'algorithme recommandé.</p>
-          <p class="muted">
-            L'inspecteur de couches s'affichera ici dès qu'un placement actif aura été
-            sélectionné.
-          </p>
-        </div>
-      </div>
-
-      <!-- 6. Preflight -->
-      <div v-else-if="activeIndex === 5" data-test="step-preflight">
-        <h3>Récapitulatif</h3>
-        <ul>
-          <li>Source&nbsp;: {{ sourceKind }}</li>
-          <li>Intent&nbsp;: {{ goal }}</li>
-          <li>Algo&nbsp;: <strong>{{ decision?.default_algorithm }}</strong></li>
-          <li>Quality tier&nbsp;: {{ decision?.quality_tier }}</li>
-          <li>Palette&nbsp;: {{ paletteMode }}</li>
-        </ul>
-        <div v-if="risks.length" class="risk-list" data-test="risk-list">
-          <strong>Points d'attention&nbsp;:</strong>
+        <!-- 6. Preflight -->
+        <div v-else-if="activeIndex === 5" data-test="step-preflight">
+          <h3>Récapitulatif</h3>
           <ul>
-            <li v-for="r in risks" :key="r">{{ r }}</li>
+            <li>Source&nbsp;: {{ sourceKind }}</li>
+            <li>Intent&nbsp;: {{ goal }}</li>
+            <li>
+              Algo&nbsp;: <strong>{{ decision?.default_algorithm }}</strong>
+            </li>
+            <li>Quality tier&nbsp;: {{ decision?.quality_tier }}</li>
+            <li>Palette&nbsp;: {{ paletteMode }}</li>
           </ul>
+          <div v-if="risks.length" class="risk-list" data-test="risk-list">
+            <strong>Points d'attention&nbsp;:</strong>
+            <ul>
+              <li v-for="r in risks" :key="r">{{ r }}</li>
+            </ul>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <footer class="modal-v2__footer">
-      <button type="button" :disabled="activeIndex === 0" @click="previous">
-        {{ t('v2.modal.previous') }}
-      </button>
-      <button
-        v-if="activeIndex < STEPS.length - 1"
-        type="button"
-        :disabled="resolving"
-        @click="next"
-      >
-        {{ t('v2.modal.next') }}
-      </button>
-      <button
-        v-else
-        type="button"
-        :disabled="!decision || !hasPlacement"
-        :title="!hasPlacement ? t('v2.modal.noPlacement') : undefined"
-        data-test="confirm-button"
-        @click="confirm"
-      >
-        {{ t('v2.modal.generate') }}
-      </button>
-    </footer>
+      <footer class="modal-v2__footer">
+        <button type="button" :disabled="activeIndex === 0" @click="previous">
+          {{ t('v2.modal.previous') }}
+        </button>
+        <button
+          v-if="activeIndex < STEPS.length - 1"
+          type="button"
+          :disabled="resolving"
+          @click="next"
+        >
+          {{ t('v2.modal.next') }}
+        </button>
+        <button
+          v-else
+          type="button"
+          :disabled="!decision || !hasPlacement"
+          :title="!hasPlacement ? t('v2.modal.noPlacement') : undefined"
+          data-test="confirm-button"
+          @click="confirm"
+        >
+          {{ t('v2.modal.generate') }}
+        </button>
+      </footer>
     </div>
   </div>
 </template>
@@ -494,8 +503,12 @@ onBeforeUnmount(() => {
   font-size: 0.8rem;
   cursor: pointer;
 }
-.open-v1:hover {
+.open-v1:hover:not(:disabled) {
   background: #e2e8f0;
+}
+.open-v1:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 .modal-v2__context {
   display: flex;
@@ -582,7 +595,9 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: background 0.12s ease, transform 0.08s ease;
+  transition:
+    background 0.12s ease,
+    transform 0.08s ease;
 }
 .modal-v2__footer button:hover:not(:disabled) {
   background: #e2e8f0;
@@ -619,7 +634,10 @@ onBeforeUnmount(() => {
   border: 1px solid #d0d0d0;
   border-radius: 4px;
   background: white;
-  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.08s ease;
   cursor: pointer;
   text-align: left;
 }

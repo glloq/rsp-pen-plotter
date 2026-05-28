@@ -394,6 +394,31 @@ export const useJobStore = defineStore('job', () => {
     patchSelected(defaultPlacementSize())
   }
 
+  // Restore a placement's natural proportions: derive the height from the
+  // current width using the source bbox aspect ratio, so an operator who
+  // free-stretched a drawing can snap it back to its true shape without
+  // resetting position or overall size. A quarter-turn rotation
+  // (``rotation % 180 !== 0``) swaps the bbox aspect so the on-plan
+  // footprint stays consistent with the rotated content.
+  function restorePlacementAspect(id: string): void {
+    const target = placements.value.find((p) => p.id === id)
+    if (!target) return
+    const bw = target.source_bbox.x_max - target.source_bbox.x_min
+    const bh = target.source_bbox.y_max - target.source_bbox.y_min
+    if (bw <= 0 || bh <= 0) return
+    const rotated = target.rotation % 180 !== 0
+    const aspect = rotated ? bh / bw : bw / bh
+    const cx = target.x_mm + target.width_mm / 2
+    const cy = target.y_mm + target.height_mm / 2
+    const newH = target.width_mm / aspect
+    patchPlacement(id, {
+      width_mm: target.width_mm,
+      height_mm: newH,
+      x_mm: cx - target.width_mm / 2,
+      y_mm: cy - newH / 2,
+    })
+  }
+
   // ====== Misc state ====================================================
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -528,24 +553,22 @@ export const useJobStore = defineStore('job', () => {
     signal?: AbortSignal,
   ): Promise<{ svg: string; warnings: string[] } | null> {
     if (!placement.job_id || !placement.rerenderable) return null
-    const layersPayload = Object.entries(variant.layer_algorithms).map(
-      ([layer_id, spec]) => {
-        if (spec.passes && spec.passes.length) {
-          return {
-            layer_id,
-            passes: spec.passes.map((p) => ({
-              algorithm: p.algorithm,
-              algorithm_options: p.algorithm_options,
-            })),
-          }
-        }
+    const layersPayload = Object.entries(variant.layer_algorithms).map(([layer_id, spec]) => {
+      if (spec.passes && spec.passes.length) {
         return {
           layer_id,
-          algorithm: spec.algorithm,
-          algorithm_options: spec.algorithm_options,
+          passes: spec.passes.map((p) => ({
+            algorithm: p.algorithm,
+            algorithm_options: p.algorithm_options,
+          })),
         }
-      },
-    )
+      }
+      return {
+        layer_id,
+        algorithm: spec.algorithm,
+        algorithm_options: spec.algorithm_options,
+      }
+    })
     try {
       const result = await rerenderJob(placement.job_id, layersPayload, signal)
       return { svg: result.svg, warnings: result.warnings ?? [] }
@@ -1275,9 +1298,7 @@ export const useJobStore = defineStore('job', () => {
     // Exclude "Edit from library" drafts: they hold conversion settings but
     // aren't on the plan (see visiblePlacements), so they must never reach
     // the composite / generated G-code.
-    const ready = placements.value.filter(
-      (p) => !p.is_library_draft && p.svg && p.layers.length,
-    )
+    const ready = placements.value.filter((p) => !p.is_library_draft && p.svg && p.layers.length)
     if (!ready.length) return null
     const result = buildComposite(ready, profile)
     // The backend ``_make_transform`` centres the drawing on the
@@ -1634,6 +1655,7 @@ export const useJobStore = defineStore('job', () => {
     autoOptimize,
     setDrawing,
     resetDrawing,
+    restorePlacementAspect,
     applyLayerAlgorithm,
     applyAlgorithmToAllLayers,
     applyLayerPasses,

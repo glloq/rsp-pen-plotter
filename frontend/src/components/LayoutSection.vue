@@ -10,9 +10,14 @@ const store = useJobStore()
 const toasts = useToastStore()
 const ui = useUiStore()
 
-// Open by default: the sheet format is the primary control of the Plan tab
-// and operators expect to see it on entry, not have to expand it first.
-const showSheet = ref(true)
+// Sheet orientation. Defaults to match the machine work area shape (a wide
+// bed → landscape, a tall bed → portrait) once the profile is known, but
+// the operator can override it; presets then apply in the chosen
+// orientation. ``orientationInit`` guards the one-shot default so a later
+// profile reload doesn't clobber a manual choice.
+type Orientation = 'portrait' | 'landscape'
+const orientation = ref<Orientation>('portrait')
+let orientationInit = false
 
 // Drafts mirror the saved sheet so the user can tweak without overwriting on
 // each keystroke. We commit on Apply / preset click / explicit centre.
@@ -42,6 +47,29 @@ const workspaceHeight = computed(() => {
   return ws ? ws.y_max - ws.y_min : 0
 })
 
+// Seed the default orientation from the work area shape, once, as soon as
+// the profile dimensions are available.
+watch(
+  [workspaceWidth, workspaceHeight],
+  ([w, h]) => {
+    if (orientationInit || w <= 0 || h <= 0) return
+    orientation.value = w > h ? 'landscape' : 'portrait'
+    orientationInit = true
+  },
+  { immediate: true },
+)
+
+function setOrientation(o: Orientation): void {
+  orientation.value = o
+  orientationInit = true
+  // Re-shape the current sheet so its long side matches the orientation.
+  const big = Math.max(widthDraft.value, heightDraft.value)
+  const small = Math.min(widthDraft.value, heightDraft.value)
+  widthDraft.value = o === 'landscape' ? big : small
+  heightDraft.value = o === 'landscape' ? small : big
+  applySheet()
+}
+
 const sheetExceedsWorkspace = computed(
   () =>
     widthDraft.value > workspaceWidth.value + 0.01 ||
@@ -64,7 +92,10 @@ const presets: SheetPreset[] = [
   { name: 'Letter', w: 216, h: 279 },
 ]
 
-function applyPreset(p: SheetPreset, landscape: boolean): void {
+function applyPreset(p: SheetPreset): void {
+  // Presets are defined portrait (w < h); swap for landscape so the chosen
+  // orientation is honoured.
+  const landscape = orientation.value === 'landscape'
   const width = landscape ? p.h : p.w
   const height = landscape ? p.w : p.h
   widthDraft.value = width
@@ -73,12 +104,6 @@ function applyPreset(p: SheetPreset, landscape: boolean): void {
   ui.setPreviewSheet({ width_mm: width, height_mm: height })
   // Centre on apply so the sheet ends up nicely positioned by default.
   centreSheet(width, height)
-}
-
-function swap(): void {
-  const w = widthDraft.value
-  widthDraft.value = heightDraft.value
-  heightDraft.value = w
 }
 
 function centreSheet(width = widthDraft.value, height = heightDraft.value): void {
@@ -111,17 +136,10 @@ function resetToFullWorkspace(): void {
   <section v-if="store.layers.length || store.selectedProfile" class="space-y-2">
     <div class="flex items-baseline justify-between px-1">
       <h2 class="text-xs uppercase tracking-wider text-slate-500">{{ t('prepare.layout') }}</h2>
-      <button
-        type="button"
-        class="text-[10px] uppercase tracking-wider text-slate-500 hover:text-slate-300"
-        @click="showSheet = !showSheet"
-      >
-        {{ showSheet ? '−' : '+' }} {{ t('sheet.sheet') }}
-      </button>
     </div>
 
     <div
-      v-if="showSheet && store.selectedProfile"
+      v-if="store.selectedProfile"
       class="space-y-2 rounded-lg border border-slate-700 bg-slate-800 p-3"
     >
       <p class="text-[10px] text-slate-500">
@@ -132,20 +150,58 @@ function resetToFullWorkspace(): void {
         <span class="text-slate-600"> · {{ t('sheet.workAreaHint') }}</span>
       </p>
 
+      <div>
+        <span class="mb-1 block text-[10px] uppercase tracking-wider text-slate-500">
+          {{ t('sheet.orientation') }}
+        </span>
+        <div class="grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            class="rounded border px-2 py-1 text-[11px] transition"
+            :class="
+              orientation === 'portrait'
+                ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200'
+                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+            "
+            :aria-pressed="orientation === 'portrait'"
+            @click="setOrientation('portrait')"
+          >
+            ▯ {{ t('sheet.portrait') }}
+          </button>
+          <button
+            type="button"
+            class="rounded border px-2 py-1 text-[11px] transition"
+            :class="
+              orientation === 'landscape'
+                ? 'border-emerald-500 bg-emerald-950/40 text-emerald-200'
+                : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
+            "
+            :aria-pressed="orientation === 'landscape'"
+            @click="setOrientation('landscape')"
+          >
+            ▭ {{ t('sheet.landscape') }}
+          </button>
+        </div>
+      </div>
+
       <div class="grid grid-cols-3 gap-1">
         <button
           v-for="p in presets"
           :key="p.name"
           type="button"
           class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-300 hover:border-slate-600"
-          @click="applyPreset(p, false)"
+          @click="applyPreset(p)"
         >
           {{ p.name }}
-          <span class="block text-[9px] text-slate-500">{{ p.w }}×{{ p.h }}</span>
+          <span class="block text-[9px] text-slate-500">
+            {{ orientation === 'landscape' ? p.h : p.w }}×{{
+              orientation === 'landscape' ? p.w : p.h
+            }}
+          </span>
         </button>
       </div>
 
-      <div class="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
+      <div class="grid grid-cols-2 gap-2">
         <label class="block text-xs text-slate-400">
           {{ t('sheet.width') }}
           <input
@@ -156,14 +212,6 @@ function resetToFullWorkspace(): void {
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
           />
         </label>
-        <button
-          type="button"
-          class="self-end rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-300 hover:border-slate-600"
-          :title="t('sheet.swap')"
-          @click="swap"
-        >
-          ⇄
-        </button>
         <label class="block text-xs text-slate-400">
           {{ t('sheet.height') }}
           <input
