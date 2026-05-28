@@ -34,8 +34,7 @@
   "header": {
     "settings": "Settings",
     "plotter": "Plotter",
-    "workshop": "Workshop",
-    "modalV2": "Modal V2 (beta)"
+    "workshop": "Workshop"
   },
   "compare": {
     "open": "Compare",
@@ -1178,7 +1177,10 @@
   "v2": {
     "mode": {
       "assisted": "Assisted",
-      "expert": "Expert"
+      "expert": "Expert",
+      "groupLabel": "Editor mode",
+      "assistedHint": "Guided wizard: pick intent, the resolver chooses an algorithm. Ctrl/Cmd+M to switch.",
+      "expertHint": "Rich editor: per-layer algorithm + passes + variants. Ctrl/Cmd+M to switch."
     },
     "modal": {
       "title": "Prepare the print",
@@ -1196,7 +1198,8 @@
       "resolverError": "Resolver error: {message}. Falling back to static defaults.",
       "openV1": "Open full editor",
       "layerCount": "{count} layer | {count} layers",
-      "noPlacement": "No active placement — open a file from the Files panel first, then click Edit. Without a placement Generate has nothing to apply to."
+      "noPlacement": "Open a file from the Files panel and click Edit on it. Without a placement, Generate has nothing to apply to.",
+      "noPlacementTitle": "No active placement"
     },
     "intent": {
       "fast": "Fast",

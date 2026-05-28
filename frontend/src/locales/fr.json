@@ -34,8 +34,7 @@
   "header": {
     "settings": "Réglages",
     "plotter": "Traceur",
-    "workshop": "Atelier",
-    "modalV2": "Modal V2 (beta)"
+    "workshop": "Atelier"
   },
   "compare": {
     "open": "Comparer",
@@ -1178,7 +1177,10 @@
   "v2": {
     "mode": {
       "assisted": "Assisté",
-      "expert": "Expert"
+      "expert": "Expert",
+      "groupLabel": "Mode éditeur",
+      "assistedHint": "Assistant guidé : choisis l'intention, le resolver propose l'algorithme. Ctrl/Cmd+M pour basculer.",
+      "expertHint": "Éditeur complet : algorithme + passes + variantes par couche. Ctrl/Cmd+M pour basculer."
     },
     "modal": {
       "title": "Préparer l'impression",
@@ -1196,7 +1198,8 @@
       "resolverError": "Erreur resolver : {message}. Les défauts statiques seront utilisés.",
       "openV1": "Ouvrir l'éditeur complet",
       "layerCount": "{count} couche | {count} couches",
-      "noPlacement": "Aucun placement actif — ouvre un fichier depuis le panneau Fichiers puis clique Éditer. Sans placement, Générer n'a rien sur quoi s'appliquer."
+      "noPlacement": "Ouvre un fichier depuis le panneau Fichiers puis clique Éditer. Sans placement, Générer n'a rien sur quoi s'appliquer.",
+      "noPlacementTitle": "Aucun placement actif"
     },
     "intent": {
       "fast": "Rapide",

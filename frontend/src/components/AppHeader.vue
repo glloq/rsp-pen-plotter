@@ -96,10 +96,10 @@ function toggleWorkshop(): void {
   uiMode.setFlag('workshopMode', !workshopOn.value)
 }
 
-const modalV2On = computed(() => uiMode.isFlagEnabled('modalV2'))
-function toggleModalV2(): void {
-  uiMode.setFlag('modalV2', !modalV2On.value)
-}
+// The legacy ``Modal V2 (beta)`` header toggle is gone: the
+// ``AssistantModeToggle`` (Assisté / Expert) is now the single
+// editor selector. Assisted opens the wizard, Expert opens the
+// rich editor. See App.vue ``editorIsWizard`` for the wiring.
 </script>
 
 <template>
@@ -176,23 +176,6 @@ function toggleModalV2(): void {
           <span class="hidden md:inline">{{ t('plotter.stop') }}</span>
         </button>
       </div>
-
-      <button
-        type="button"
-        class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition"
-        :class="
-          modalV2On
-            ? 'border-sky-700 bg-sky-950/40 text-sky-200 hover:bg-sky-900/40'
-            : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
-        "
-        :title="t('header.modalV2')"
-        :aria-pressed="modalV2On"
-        data-test="header-modal-v2-toggle"
-        @click="toggleModalV2"
-      >
-        <span class="hidden sm:inline">{{ t('header.modalV2') }}</span>
-        <span class="sm:hidden">V2</span>
-      </button>
 
       <button
         type="button"

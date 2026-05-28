@@ -56,7 +56,14 @@ const dropping = ref(false)
 // the six-step modal alongside v1, ?flag.workshopMode=1 (or the header
 // button below) opens the full-screen run cockpit. The perf overlay
 // mounts inconditionally — it auto-hides when its own flag is off.
-const modalV2Enabled = useFeatureFlag('modalV2')
+// The Edit modal is selected by the operator's UX mode:
+//   Assisted → Modal V2 (six-step wizard, simple defaults)
+//   Expert   → Modal V1 (rich per-layer controls, full editor)
+// No separate ``modalV2`` flag in the header anymore — the two
+// concepts (skill level vs which editor) collapsed into one to
+// avoid the duplicate selector confusion operators reported in
+// the wiring audit.
+const editorIsWizard = computed(() => uiMode.isAssisted)
 const workshopEnabled = useFeatureFlag('workshopMode')
 const perfEnabled = useFeatureFlag('perf')
 const activeRun = computed(() => queue.active[0] ?? null)
@@ -174,12 +181,11 @@ async function onEditV2Confirm(decision: import('./domain/policy/schemas').Polic
   ui.closeEditModal()
 }
 function onEditV2OpenV1(): void {
-  // Escape hatch: the wizard is a quick algorithm picker, not a full
-  // editor. The v1 modal has the rich per-layer controls + preview +
-  // variants. Flipping ``modalV2`` off keeps the same ``editModalOpen``
-  // state so the v1 modal pops in for the current placement without
-  // an extra click.
-  uiMode.setFlag('modalV2', false)
+  // Escape hatch from the wizard into the rich editor. Switching to
+  // Expert mode swaps the open modal in place (the v1 modal opens
+  // immediately for the current placement) since ``editorIsWizard``
+  // is driven by the UX mode.
+  uiMode.setMode('expert')
 }
 
 // Map the placement's MIME to a ``SourceKind`` so the V2 wizard pre-
@@ -394,12 +400,13 @@ onBeforeUnmount(() => {
     <AppFooter />
     <SettingsDrawer />
     <PlotterDrawer />
-    <!-- Edit modal: v1 stays the rich editor; v2 is a quick algorithm
-         wizard reached via the header toggle. When the v2 flag is on
-         and the modal is open, render only the v2 wizard; otherwise
-         render the v1 modal (its own ``v-if="editModalOpen"`` decides
-         visibility). -->
-    <EditModal v-if="!modalV2Enabled" />
+    <!-- Edit modal: the UX mode picks the surface.
+         Assisted → wizard (Modal V2), Expert → rich editor (Modal V1).
+         Both modals share the same ``ui.editModalOpen`` state so an
+         operator clicks Edit, gets the right surface for their current
+         mode, and the header toggle swaps the experience mid-session
+         without losing the open state. -->
+    <EditModal v-if="!editorIsWizard" />
     <!-- ``:key`` re-mounts the wizard when the operator switches to
          another file while the modal is open, so the local state
          (sourceKind, goal, decision, …) is reset to defaults derived
