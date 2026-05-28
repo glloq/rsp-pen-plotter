@@ -23,6 +23,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import { useSheetGeometry } from '../composables/useSheetGeometry'
@@ -161,18 +162,13 @@ function onContainerPointerUp(event: PointerEvent): void {
 function onPlacementSelect(id: string): void {
   store.selectPlacement(id)
 }
-function onPlacementMove(patch: {
-  id: string
-  x_mm: number
-  y_mm: number
-  width_mm: number
-  height_mm: number
-}): void {
+function onPlacementMove(patch: { id: string; x_mm: number; y_mm: number }): void {
+  // Position-only: width/height are intentionally omitted so a drag can
+  // never alter the placement's proportions. ``setDrawing`` keeps the
+  // existing dimensions when they aren't supplied.
   store.setDrawing({
     x_mm: patch.x_mm,
     y_mm: patch.y_mm,
-    width_mm: patch.width_mm,
-    height_mm: patch.height_mm,
   })
 }
 function onPlacementResize(patch: {
@@ -310,9 +306,26 @@ async function generateAndShow(): Promise<void> {
   }
 }
 
-const placementCount = computed(
-  () => store.visiblePlacements.filter((p) => p.svg).length,
-)
+// True when at least one file is on the plan, so the "clear all" action
+// can be disabled when there's nothing to remove.
+const hasPlacements = computed(() => store.visiblePlacements.length > 0)
+
+function restoreAspect(): void {
+  const id = store.selectedPlacementId
+  if (id) store.restorePlacementAspect(id)
+}
+
+async function clearAllPlacements(): Promise<void> {
+  if (!hasPlacements.value) return
+  const ok = await confirmAction({
+    title: t('sheet.clearAllTitle'),
+    message: t('sheet.clearAllMsg'),
+    confirmLabel: t('sheet.clearAll'),
+    cancelLabel: t('confirm.cancel'),
+    danger: true,
+  })
+  if (ok) store.clearJob()
+}
 
 // Image editing tools act on the currently-selected placement.
 // Buttons are disabled when nothing is selected so the header
@@ -538,6 +551,29 @@ function pxToMm(): number {
         </svg>
       </button>
 
+      <button
+        type="button"
+        class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+        :disabled="!hasSelection"
+        :title="t('sheet.resetAspect')"
+        :aria-label="t('sheet.resetAspect')"
+        @click="restoreAspect"
+      >
+        <svg
+          viewBox="0 0 16 16"
+          class="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="3" y="3" width="10" height="10" rx="1" />
+          <path d="M6 6l4 4M10 6l-4 4" />
+        </svg>
+      </button>
+
       <div class="h-5 w-px bg-slate-700 mx-1" />
 
       <label class="flex items-center gap-1" :title="t('sheet.snap')">
@@ -565,9 +601,27 @@ function pxToMm(): number {
       </label>
 
       <div class="ml-auto flex items-center gap-2">
-        <span v-if="placementCount" class="font-mono text-slate-400">
-          {{ t('sheet.placements', { count: placementCount }) }}
-        </span>
+        <button
+          type="button"
+          class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:bg-slate-800 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!hasPlacements"
+          :title="t('sheet.clearAll')"
+          :aria-label="t('sheet.clearAll')"
+          @click="clearAllPlacements"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            class="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M2.5 4h11M6 4V2.5h4V4M5 4l.5 9h5l.5-9M6.5 6.5v4M9.5 6.5v4" />
+          </svg>
+        </button>
         <button
           type="button"
           class="rounded bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"

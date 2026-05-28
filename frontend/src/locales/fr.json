@@ -34,7 +34,7 @@
   "header": {
     "settings": "Réglages",
     "plotter": "Traceur",
-    "workshop": "Atelier"
+    "workshop": "Mode impression"
   },
   "compare": {
     "open": "Comparer",
@@ -730,7 +730,14 @@
     "flipH": "Miroir horizontal",
     "flipV": "Miroir vertical",
     "aspectLockOn": "Proportions verrouillées — cliquer pour redimensionner librement",
-    "aspectLockOff": "Redimensionnement libre — cliquer pour verrouiller les proportions"
+    "aspectLockOff": "Redimensionnement libre — cliquer pour verrouiller les proportions",
+    "orientation": "Orientation",
+    "portrait": "Portrait",
+    "landscape": "Paysage",
+    "clearAll": "Vider tout",
+    "clearAllTitle": "Vider le plan",
+    "clearAllMsg": "Retirer tous les fichiers du plan de travail ? Cette action est irréversible.",
+    "resetAspect": "Proportions d'origine"
   },
   "typography": {
     "fontSection": "Police",

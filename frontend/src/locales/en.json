@@ -34,7 +34,7 @@
   "header": {
     "settings": "Settings",
     "plotter": "Plotter",
-    "workshop": "Workshop"
+    "workshop": "Print mode"
   },
   "compare": {
     "open": "Compare",
@@ -730,7 +730,14 @@
     "flipH": "Mirror horizontally",
     "flipV": "Mirror vertically",
     "aspectLockOn": "Aspect ratio locked — click to allow free resize",
-    "aspectLockOff": "Free resize — click to lock aspect ratio"
+    "aspectLockOff": "Free resize — click to lock aspect ratio",
+    "orientation": "Orientation",
+    "portrait": "Portrait",
+    "landscape": "Landscape",
+    "clearAll": "Clear all",
+    "clearAllTitle": "Clear plan",
+    "clearAllMsg": "Remove all files from the work plane? This cannot be undone.",
+    "resetAspect": "Reset proportions"
   },
   "typography": {
     "fontSection": "Font",
