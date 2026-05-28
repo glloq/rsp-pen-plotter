@@ -16,7 +16,7 @@
 //   5. Layers / Passes  — passes and per-layer overrides placeholder
 //   6. Preflight        — risk indicators + ETA + "Generate"
 
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
@@ -157,6 +157,53 @@ useKeyboardShortcuts([
   },
   { id: 'modal.previous', handler: previous },
 ])
+
+// Accessibility:
+// 1. Escape closes the modal (matches v1 modal + native dialogs).
+// 2. Focus is moved into the dialog on mount so screen readers
+//    announce the heading + the first interactive control.
+// 3. Focus trap keeps Tab cycling inside the dialog while it's open
+//    so the operator can't accidentally tab back into the page
+//    underneath.
+const dialogRoot = ref<HTMLElement | null>(null)
+
+function onWindowKey(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    emit('cancel')
+    return
+  }
+  if (event.key !== 'Tab' || !dialogRoot.value) return
+  const focusables = dialogRoot.value.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )
+  if (focusables.length === 0) return
+  const first = focusables[0]!
+  const last = focusables[focusables.length - 1]!
+  const active = document.activeElement as HTMLElement | null
+  if (event.shiftKey && active === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+onMounted(async () => {
+  window.addEventListener('keydown', onWindowKey)
+  // Defer focus until after the v-html preview thumbnail renders.
+  await nextTick()
+  if (!dialogRoot.value) return
+  const first = dialogRoot.value.querySelector<HTMLElement>(
+    'button:not([disabled]), select:not([disabled])',
+  )
+  first?.focus()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWindowKey)
+})
 </script>
 
 <template>
@@ -169,6 +216,7 @@ useKeyboardShortcuts([
     @click.self="emit('cancel')"
   >
     <div
+      ref="dialogRoot"
       class="modal-v2"
       role="dialog"
       aria-modal="true"
@@ -227,9 +275,15 @@ useKeyboardShortcuts([
       <div
         v-else
         class="modal-v2__noplacement"
+        role="status"
+        aria-live="polite"
         data-test="modal-v2-no-placement"
       >
-        {{ t('v2.modal.noPlacement') }}
+        <span aria-hidden="true" class="modal-v2__noplacement-icon">⚠</span>
+        <div class="modal-v2__noplacement-body">
+          <strong>{{ t('v2.modal.noPlacementTitle') }}</strong>
+          <p>{{ t('v2.modal.noPlacement') }}</p>
+        </div>
       </div>
 
       <StepperHeader :steps="STEPS" :active-index="activeIndex" @jump="jump" />
@@ -490,10 +544,26 @@ useKeyboardShortcuts([
   background: #fff4cc;
   border: 1px solid #d9b800;
   color: #5b4a00;
-  padding: 0.5rem 0.75rem;
+  padding: 0.65rem 0.85rem;
   border-radius: 6px;
   margin-bottom: 0.75rem;
   font-size: 0.85rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+.modal-v2__noplacement-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+.modal-v2__noplacement-body strong {
+  display: block;
+  margin-bottom: 0.15rem;
+}
+.modal-v2__noplacement-body p {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.85;
 }
 .modal-v2__body {
   min-height: 12rem;
@@ -503,6 +573,38 @@ useKeyboardShortcuts([
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+.modal-v2__footer button {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #1e293b;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.08s ease;
+}
+.modal-v2__footer button:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+.modal-v2__footer button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.modal-v2__footer button:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
+}
+.modal-v2__footer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.modal-v2__footer button[data-test='confirm-button'] {
+  background: #1f6feb;
+  color: white;
+  border-color: #1f6feb;
+}
+.modal-v2__footer button[data-test='confirm-button']:hover:not(:disabled) {
+  background: #1959c7;
 }
 .intent-grid {
   display: grid;
@@ -517,12 +619,24 @@ useKeyboardShortcuts([
   border: 1px solid #d0d0d0;
   border-radius: 4px;
   background: white;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
   cursor: pointer;
   text-align: left;
 }
 .intent-grid button.active {
   border-color: #1f6feb;
   background: #eef4ff;
+}
+.intent-grid button:hover:not(.active) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+.intent-grid button:active {
+  transform: scale(0.98);
+}
+.intent-grid button:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
 }
 .error {
   color: #b71c1c;

@@ -197,4 +197,13 @@ describe('EditModalV2', () => {
     await wrapper.find('[data-test="modal-v2-backdrop"]').trigger('click')
     expect(wrapper.emitted('cancel')).toBeTruthy()
   })
+
+  it('Escape key emits cancel (accessibility)', async () => {
+    const wrapper = mountModal({ attachTo: document.body })
+    const event = new KeyboardEvent('keydown', { key: 'Escape' })
+    window.dispatchEvent(event)
+    await nextTick()
+    expect(wrapper.emitted('cancel')).toBeTruthy()
+    wrapper.unmount()
+  })
 })
