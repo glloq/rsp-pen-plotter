@@ -55,11 +55,28 @@ const canSend = computed(() => Boolean(job.gcode))
 
 const tabs: Array<{ id: PlotterTab; label: string; icon: string }> = [
   { id: 'connection', label: 'plotter.tabConnection', icon: '⚡' },
+  { id: 'manual', label: 'plotter.tabManual', icon: '✣' },
   { id: 'profile', label: 'plotter.tabProfile', icon: '⚙' },
   { id: 'colors', label: 'plotter.tabColors', icon: '◐' },
   { id: 'macros', label: 'plotter.tabMacros', icon: '⌘' },
   { id: 'queue', label: 'plotter.tabQueue', icon: '☰' },
 ]
+
+async function penUp(): Promise<void> {
+  const cmd = job.selectedProfile?.pen_up_command
+  if (!cmd) return
+  await plotter.run(cmd)
+}
+
+async function penDown(): Promise<void> {
+  const cmd = job.selectedProfile?.pen_down_command
+  if (!cmd) return
+  await plotter.run(cmd)
+}
+
+const manualBusy = computed(
+  () => status.value.state === 'running' || status.value.state === 'paused',
+)
 
 function selectTab(tab: PlotterTab): void {
   plotterTab.value = tab
@@ -342,16 +359,6 @@ onBeforeUnmount(() => {
               </button>
             </section>
 
-            <!-- JOG -->
-            <section v-if="status.connected" class="space-y-2">
-              <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
-                {{ t('execute.jog') }}
-              </h4>
-              <div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
-                <JogControls />
-              </div>
-            </section>
-
             <!-- RUNNING -->
             <section
               v-if="status.connected && (status.state === 'running' || status.state === 'paused')"
@@ -410,6 +417,67 @@ onBeforeUnmount(() => {
             </p>
 
             <p v-if="error" class="text-xs text-red-400">{{ error }}</p>
+          </div>
+
+          <!-- MANUAL TAB -->
+          <div v-show="plotterTab === 'manual'" class="space-y-4">
+            <p class="text-xs text-slate-400">{{ t('plotter.manualHint') }}</p>
+
+            <div
+              v-if="!status.connected"
+              class="rounded-lg border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500"
+            >
+              {{ t('plotter.manualDisconnected') }}
+            </div>
+
+            <template v-else>
+              <section class="space-y-2">
+                <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
+                  {{ t('execute.jog') }}
+                </h4>
+                <div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
+                  <JogControls />
+                </div>
+              </section>
+
+              <section class="space-y-2">
+                <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
+                  {{ t('plotter.penControl') }}
+                </h4>
+                <div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
+                  <div class="flex gap-2">
+                    <button
+                      type="button"
+                      class="flex-1 rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600 disabled:opacity-40"
+                      :disabled="manualBusy || !job.selectedProfile?.pen_up_command"
+                      :title="job.selectedProfile?.pen_up_command ?? ''"
+                      data-test="manual-pen-up"
+                      @click="penUp"
+                    >
+                      ↑ {{ t('plotter.penUp') }}
+                    </button>
+                    <button
+                      type="button"
+                      class="flex-1 rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600 disabled:opacity-40"
+                      :disabled="manualBusy || !job.selectedProfile?.pen_down_command"
+                      :title="job.selectedProfile?.pen_down_command ?? ''"
+                      data-test="manual-pen-down"
+                      @click="penDown"
+                    >
+                      ↓ {{ t('plotter.penDown') }}
+                    </button>
+                  </div>
+                  <p
+                    v-if="!job.selectedProfile?.pen_up_command || !job.selectedProfile?.pen_down_command"
+                    class="mt-2 text-[11px] text-slate-500"
+                  >
+                    {{ t('plotter.penCommandsMissing') }}
+                  </p>
+                </div>
+              </section>
+
+              <p v-if="error" class="text-xs text-red-400">{{ error }}</p>
+            </template>
           </div>
 
           <!-- PROFILE TAB -->
