@@ -222,7 +222,7 @@ function recipeFromKnobs(
       // Darker bands need MORE dots → density_max applies at i=0,
       // density_min at i=total-1. Matches the legacy lerp(0.06, 0.012)
       // contract while letting the operator tune both endpoints.
-      const density = lerp(i, total, knobs.density_max ?? 0.06, knobs.density_min ?? 0.012)
+      const density = lerp(i, total, knobs.density_max ?? 0.15, knobs.density_min ?? 0.012)
       return {
         algorithm: 'stippling',
         algorithm_options: {

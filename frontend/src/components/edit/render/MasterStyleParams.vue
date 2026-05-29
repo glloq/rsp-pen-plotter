@@ -270,10 +270,10 @@ function bandSwatchStyle(i: number): Record<string, string> {
     <div v-else-if="styleId === 'stippling-shade'" class="space-y-3 border-t border-slate-800 pt-3">
       <DualRangeSlider
         :model-value-min="knobs.density_min ?? 0.012"
-        :model-value-max="knobs.density_max ?? 0.06"
+        :model-value-max="knobs.density_max ?? 0.15"
         :min="0.005"
-        :max="0.1"
-        :step="0.001"
+        :max="0.5"
+        :step="0.002"
         @update:model-value-min="(v) => setKnob('density_min', v)"
         @update:model-value-max="(v) => setKnob('density_max', v)"
       >
