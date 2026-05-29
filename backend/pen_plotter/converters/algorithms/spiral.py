@@ -73,7 +73,7 @@ class SpiralAlgorithm(RasterAlgorithm):
         # (``spacing_px`` then always means the same thing). We compute in
         # the downscaled space and scale the emitted coordinates back to
         # the original canvas with ``inv``.
-        work_cap = 1000
+        work_cap = max(200, int(opts.get("_work_cap", 1400)))
         oh, ow = bool_mask.shape
         inv = 1.0
         if max(oh, ow) > work_cap:
@@ -102,7 +102,7 @@ class SpiralAlgorithm(RasterAlgorithm):
         #     starve the outer turns, aliasing the wobble there);
         #   * coarsen the wobble wavelength to the actual sample step so the
         #     sine never aliases into spikes.
-        point_budget = 14000
+        point_budget = max(2000, int(opts.get("_point_budget", 48000)))
         min_samples_per_turn = 24
         max_turns = max(1, point_budget // min_samples_per_turn)
         if turns > max_turns:

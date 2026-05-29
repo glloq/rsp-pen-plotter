@@ -423,7 +423,7 @@ function bandSwatchStyle(i: number): Record<string, string> {
         </p>
         <input
           type="range"
-          min="6"
+          min="3"
           max="30"
           step="1"
           :value="knobs.spacing_px ?? 14"
@@ -442,7 +442,7 @@ function bandSwatchStyle(i: number): Record<string, string> {
         </p>
         <input
           type="range"
-          min="4"
+          min="2"
           max="24"
           step="1"
           :value="knobs.wavelength_px ?? 10"
