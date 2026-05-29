@@ -449,7 +449,10 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
   },
   'stippling-shade': {
     density_min: 0.012,
-    density_max: 0.06,
+    // Darkest band: ~15% of region pixels become dots. The old 0.06
+    // (6%) read too faint to register as a dark tone; the slider now
+    // reaches 0.5 so very dense stippling is reachable for true blacks.
+    density_max: 0.15,
     dot_radius: 0.5,
   },
   engraving: {
@@ -674,9 +677,9 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'stippling',
-    defaultAlgorithmOptions: { density: 0.03, dot_radius_px: 0.5, seed: 0 },
+    defaultAlgorithmOptions: { density: 0.08, dot_radius_px: 0.5, seed: 0 },
     bandRecipe(i, total) {
-      const density = lerp(i, total, 0.06, 0.012)
+      const density = lerp(i, total, 0.15, 0.012)
       return {
         algorithm: 'stippling',
         algorithm_options: { density, dot_radius_px: 0.5, seed: i * 7 + 13 },
