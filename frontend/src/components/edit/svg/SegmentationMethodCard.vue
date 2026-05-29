@@ -38,9 +38,11 @@ const draft = useBitmapDraft()
 const expanded = useAccordionPersistence('segmentation', true)
 const SEG_METHODS: SegmentationMethod[] = [
   'kmeans',
+  'kmeans_lab',
   'luminance_bands',
   'thresholds',
   'fixed_palette',
+  'palette_dither',
 ]
 
 // User-driven mutators flag the corresponding field as "touched" so the
@@ -113,7 +115,12 @@ function updateThreshold(i: number, value: number): void {
         </div>
       </div>
 
-      <label v-if="bitmap.segmentation_method === 'kmeans'" class="block text-slate-400">
+      <label
+        v-if="
+          bitmap.segmentation_method === 'kmeans' || bitmap.segmentation_method === 'kmeans_lab'
+        "
+        class="block text-slate-400"
+      >
         <span class="inline-flex items-center">
           {{ t('convert.numColors') }}
           <LayerCountBadge :count="draft.expectedLayerCount.value" />
@@ -181,10 +188,16 @@ function updateThreshold(i: number, value: number): void {
       </div>
 
       <p
-        v-else-if="bitmap.segmentation_method === 'fixed_palette'"
+        v-else-if="
+          bitmap.segmentation_method === 'fixed_palette' ||
+          bitmap.segmentation_method === 'palette_dither'
+        "
         class="text-[10px] text-slate-500"
       >
         {{ t('convert.fixedPaletteRefHint') }}
+      </p>
+      <p v-if="bitmap.segmentation_method === 'palette_dither'" class="text-[10px] text-slate-500">
+        {{ t('convert.paletteDitherNote') }}
       </p>
     </div>
   </div>

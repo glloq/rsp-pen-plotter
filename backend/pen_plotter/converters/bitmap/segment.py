@@ -28,7 +28,14 @@ from PIL import Image
 
 from pen_plotter.converters import segmentation
 
-SegmentationMethod = Literal["kmeans", "luminance_bands", "thresholds", "fixed_palette"]
+SegmentationMethod = Literal[
+    "kmeans",
+    "kmeans_lab",
+    "luminance_bands",
+    "thresholds",
+    "fixed_palette",
+    "palette_dither",
+]
 
 # Rec.709 luminance weighting used by every "is this layer / palette
 # entry bright enough to count as background" decision in the pipeline.
@@ -95,7 +102,7 @@ def segment_image(
         if not isinstance(levels, list):
             raise ValueError("segmentation_options.levels must be a list of floats")
         return segmentation.thresholds(image, levels=levels)
-    if method == "fixed_palette":
+    if method in ("fixed_palette", "palette_dither"):
         palette_hex = options.get("palette", [])
         if not isinstance(palette_hex, list) or not palette_hex:
             raise ValueError(
@@ -112,5 +119,10 @@ def segment_image(
         # filter at the render step drops that layer cleanly.
         if drop_background and not _palette_has_near_white(palette_hex, background_luminance):
             palette_hex = ["#ffffff", *palette_hex]
+        if method == "palette_dither":
+            amount = float(options.get("dither_amount", 0.6))
+            return segmentation.palette_dither(image, palette_hex=palette_hex, amount=amount)
         return segmentation.fixed_palette(image, palette_hex=palette_hex)
+    if method == "kmeans_lab":
+        return segmentation.kmeans_lab(image, num_colors=num_colors, n_init=n_init)
     return segmentation.kmeans(image, num_colors=num_colors, n_init=n_init)

@@ -39,6 +39,13 @@ const STYLE_GLYPHS: Record<string, { color: string; glyph: string }> = {
   tsp_opt: { color: '#ec4899', glyph: '⟿' },
   lowpoly: { color: '#f43f5e', glyph: '◭' },
   scribble: { color: '#facc15', glyph: '⌇' },
+  grid: { color: '#64748b', glyph: '▦' },
+  brick: { color: '#c2613f', glyph: '⊞' },
+  dashes: { color: '#f59e0b', glyph: '┊' },
+  truchet: { color: '#8b5cf6', glyph: '◫' },
+  rings: { color: '#10b981', glyph: '◎' },
+  sunburst: { color: '#f97316', glyph: '✸' },
+  circle_pack: { color: '#06b6d4', glyph: '⊙' },
 }
 
 const meta = computed(() => STYLE_GLYPHS[props.algorithm] ?? { color: '#475569', glyph: '?' })

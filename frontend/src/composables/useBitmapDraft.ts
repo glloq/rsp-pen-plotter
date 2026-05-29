@@ -606,11 +606,12 @@ function applyStyleSegmentation(
     b.background_luminance = autoBackgroundLuminance(b.num_bands)
   } else if (seg.method === 'thresholds') {
     b.thresholds = [seg.default_threshold ?? 0.5]
-  } else if (seg.method === 'kmeans') {
+  } else if (seg.method === 'kmeans' || seg.method === 'kmeans_lab') {
     // Multicolour master styles carry a default cluster count that the
     // operator can still override via the colour-mode num_colors slider.
     // Only stomp num_colors when the operator hasn't touched it recently
-    // (out-of-range or first-time application).
+    // (out-of-range or first-time application). kmeans_lab clusters in
+    // perceptual Lab space but takes the same cluster-count knob.
     const target = seg.default_num_colors ?? 4
     if (b.num_colors < 1 || b.num_colors > 16) {
       b.num_colors = target
@@ -715,6 +716,9 @@ export function buildSegmentationOptions(): Record<string, unknown> {
   if (b.segmentation_method === 'luminance_bands') return { num_bands: b.num_bands }
   if (b.segmentation_method === 'thresholds') return { levels: b.thresholds }
   if (b.segmentation_method === 'fixed_palette') return { palette: b.palette }
+  // palette_dither rides on the same operator palette as fixed_palette;
+  // dither_amount falls back to the backend default when omitted.
+  if (b.segmentation_method === 'palette_dither') return { palette: b.palette }
   return {}
 }
 
@@ -747,8 +751,10 @@ function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
   // hand-picked a method that doesn't match the master — fall through
   // to a sensible default in that case.
   let total = 4
-  if (b.segmentation_method === 'kmeans') total = b.num_colors
-  else if (b.segmentation_method === 'fixed_palette') total = b.palette.length
+  if (b.segmentation_method === 'kmeans' || b.segmentation_method === 'kmeans_lab')
+    total = b.num_colors
+  else if (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither')
+    total = b.palette.length
   if (total < 1) return undefined
   const knobs = _multicolor.value.perStyle[style.id]
   return Array.from({ length: total }, (_, i) => {
@@ -1023,16 +1029,19 @@ export function buildBitmapOptions(): Record<string, unknown> {
   // still renders; the draft keeps ``fixed_palette`` so the operator's
   // intent isn't lost and the moment a palette appears (pens installed,
   // manual chip added) the next /preview ships the right method.
-  const wireMethod =
-    b.segmentation_method === 'fixed_palette' && b.palette.length === 0
-      ? 'kmeans'
-      : b.segmentation_method
-  // num_colors only feeds the kmeans fallback; in mono / luminance_bands
-  // / thresholds / fixed_palette modes the backend reads num_bands /
-  // levels / palette and ignores num_colors. Skipping it keeps the
-  // payload truthful and avoids future confusion when a backend
-  // validation tightens unknown-field handling.
-  const shipsNumColors = _printMode.value === 'multicolor' && wireMethod === 'kmeans'
+  // Both palette-based methods 400 on an empty palette, so downgrade
+  // either to kmeans for the wire payload until a palette appears.
+  const paletteMethodEmpty =
+    (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither') &&
+    b.palette.length === 0
+  const wireMethod = paletteMethodEmpty ? 'kmeans' : b.segmentation_method
+  // num_colors only feeds the kmeans family (RGB + Lab); in mono /
+  // luminance_bands / thresholds / palette modes the backend reads
+  // num_bands / levels / palette and ignores num_colors. Skipping it
+  // keeps the payload truthful and avoids future confusion when a
+  // backend validation tightens unknown-field handling.
+  const shipsNumColors =
+    _printMode.value === 'multicolor' && (wireMethod === 'kmeans' || wireMethod === 'kmeans_lab')
   const payload: Record<string, unknown> = {
     algorithm: algo,
     ...(shipsNumColors ? { num_colors: b.num_colors } : {}),
@@ -1040,8 +1049,7 @@ export function buildBitmapOptions(): Record<string, unknown> {
     drop_background: b.drop_background,
     background_luminance: b.background_luminance,
     segmentation_method: wireMethod,
-    segmentation_options:
-      wireMethod === b.segmentation_method ? buildSegmentationOptions() : {},
+    segmentation_options: wireMethod === b.segmentation_method ? buildSegmentationOptions() : {},
     min_region_pixels: b.min_region_pixels,
     merge_delta_e: b.merge_delta_e,
     algorithm_options: algoOpts,
@@ -1129,7 +1137,8 @@ const _expectedLayerCount = computed<number>(() => {
     }
     return 1
   }
-  if (b.segmentation_method === 'fixed_palette') return b.palette.length
+  if (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither')
+    return b.palette.length
   return b.num_colors
 })
 

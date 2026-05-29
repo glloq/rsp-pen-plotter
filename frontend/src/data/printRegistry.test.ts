@@ -37,7 +37,14 @@ describe('printRegistry', () => {
     for (const s of masterStyles()) {
       expect(s.segmentation, `style ${s.id} missing segmentation`).toBeDefined()
       const seg = s.segmentation!
-      expect(['luminance_bands', 'thresholds', 'kmeans', 'fixed_palette']).toContain(seg.method)
+      expect([
+        'luminance_bands',
+        'thresholds',
+        'kmeans',
+        'kmeans_lab',
+        'fixed_palette',
+        'palette_dither',
+      ]).toContain(seg.method)
       // Band-based monochrome styles default to a single layer (1 band);
       // the shading slider lets the operator add bands. Must still be a
       // valid 1..6 band count.
