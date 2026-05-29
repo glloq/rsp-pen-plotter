@@ -7,7 +7,7 @@ import { useEditState } from '../../composables/useEditState'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
 import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimator'
 import { useAlgorithmsStore } from '../../stores/algorithms'
-import type { AlgorithmComplexity } from '../../api/client'
+import { libraryFileOriginalUrl, type AlgorithmComplexity } from '../../api/client'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -91,8 +91,10 @@ function clampZoom(value: number): number {
 
 function isTransformable(): boolean {
   // Text-only previews keep their own scroll behaviour and the empty
-  // hint has nothing to zoom; both opt out of pan/zoom.
-  return !showTextPreview.value && !showEmptyHint.value
+  // hint has nothing to zoom; both opt out of pan/zoom. The comparison
+  // view also opts out so dragging the canvas moves the reveal slider
+  // (and the clip-paths) rather than panning the two halves apart.
+  return !showTextPreview.value && !showEmptyHint.value && !splitMode.value
 }
 
 function onWheel(event: WheelEvent): void {
@@ -145,6 +147,49 @@ function zoomOut(): void {
 // lands fit-to-view.
 watch([() => edit.selectedFile.value, () => edit.currentPage.value], resetView)
 
+// ============================ COMPARE SLIDER ============================
+// Comparison view: a draggable vertical reveal handle. ``compareSplit``
+// is the fraction (0..1) of width given to the original raster on the
+// left; the rest shows the computed vectorisation on the right. Dragging
+// the handle left exposes more of the result, dragging right exposes
+// more of the original — a wipe-style A/B compare instead of a fixed
+// 50/50 split.
+const compareSplit = ref(0.5)
+const compareRef = ref<HTMLElement | null>(null)
+const sliding = ref(false)
+
+const comparePct = computed(() => `${(compareSplit.value * 100).toFixed(2)}%`)
+
+function setCompareFromClientX(clientX: number): void {
+  const el = compareRef.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  if (rect.width <= 0) return
+  const ratio = (clientX - rect.left) / rect.width
+  compareSplit.value = Math.max(0, Math.min(1, ratio))
+}
+
+function onSlideStart(event: PointerEvent): void {
+  if (event.button !== 0) return
+  event.preventDefault()
+  event.stopPropagation()
+  sliding.value = true
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  setCompareFromClientX(event.clientX)
+}
+
+function onSlideMove(event: PointerEvent): void {
+  if (!sliding.value) return
+  event.stopPropagation()
+  setCompareFromClientX(event.clientX)
+}
+
+function onSlideEnd(event: PointerEvent): void {
+  if (!sliding.value) return
+  sliding.value = false
+  ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
+}
+
 // Variant chips in the toolbar mirror the right-pane VariantsCard for
 // quick switching while keeping eyes on the preview.
 const variants = computed(() => store.selectedPlacement?.variants ?? [])
@@ -174,17 +219,28 @@ const placementSvg = computed(() => {
 // (left) against the full vectorisation (right) — critical for
 // gamma / levels / sharpen which CSS can't express. ``auto`` falls
 // back to the regular SVG flow on every other tab.
+// Original-raster source. Prefer the in-memory object URL (instant, set
+// by useFileManager from the live File). Fall back to the backend's
+// ``/files/{id}/original`` route so the original image still shows after
+// a page reload or for library placements where the File bytes were
+// never re-downloaded — previously both cases left the Image tab and the
+// comparison view blank because they keyed solely off the object URL.
+const sourceImgSrc = computed<string | null>(() => {
+  if (edit.previewUrl.value) return edit.previewUrl.value
+  const fid = store.selectedPlacement?.library_file_id
+  return fid ? libraryFileOriginalUrl(fid) : null
+})
 const sourceMode = computed(
   () =>
     edit.previewMode.value === 'source' &&
     edit.kind.value === 'bitmap' &&
-    Boolean(edit.previewUrl.value),
+    Boolean(sourceImgSrc.value),
 )
 // Split mode requires both halves to have content; if either is
 // missing we degrade to whichever single layer is available rather
 // than showing an awkward half-empty pane.
 const hasLiveSvg = computed(() => Boolean(edit?.previewSvg.value))
-const hasRaster = computed(() => edit.kind.value === 'bitmap' && Boolean(edit.previewUrl.value))
+const hasRaster = computed(() => edit.kind.value === 'bitmap' && Boolean(sourceImgSrc.value))
 const splitMode = computed(
   () =>
     edit.previewMode.value === 'split' &&
@@ -198,6 +254,12 @@ const showPlacementSvg = computed(
 )
 const showSourcePreview = computed(() => sourceMode.value)
 const showSplitPreview = computed(() => splitMode.value)
+// Entering comparison resets zoom/pan so the transform is identity:
+// the reveal slider maps cursor X directly onto the clip-path with no
+// pan offset to account for.
+watch(splitMode, (on) => {
+  if (on) resetView()
+})
 const showThumbnail = computed(
   () =>
     !sourceMode.value &&
@@ -205,7 +267,7 @@ const showThumbnail = computed(
     !showLivePreview.value &&
     !showPlacementSvg.value &&
     edit?.kind.value === 'bitmap' &&
-    Boolean(edit?.previewUrl.value),
+    Boolean(sourceImgSrc.value),
 )
 const showTextPreview = computed(
   () =>
@@ -237,9 +299,11 @@ const splitSvg = computed<string>(() => edit.previewSvg.value || placementSvg.va
 // Toolbar visibility: only meaningful when the source is a bitmap and
 // both raster + a vector representation could potentially be shown.
 const canToggleMode = computed(() => edit.kind.value === 'bitmap' && hasRaster.value)
-const QUALITY_TIERS: Array<{ id: 'draft' | 'standard' | 'final'; key: string }> = [
+// Only two tiers are surfaced now: Draft (fast, responsive while
+// dragging) and Final (full fidelity). The historical middle tier
+// ``standard`` is migrated to ``draft`` in useEditState's loader.
+const QUALITY_TIERS: Array<{ id: 'draft' | 'final'; key: string }> = [
   { id: 'draft', key: 'editPreview.qualityDraft' },
-  { id: 'standard', key: 'editPreview.qualityStandard' },
   { id: 'final', key: 'editPreview.qualityFinal' },
 ]
 const MODE_TOGGLES: Array<{ id: 'auto' | 'source' | 'split'; key: string }> = [
@@ -538,7 +602,7 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
           class="relative flex h-full w-full items-center justify-center"
         >
           <img
-            :src="edit!.previewUrl.value!"
+            :src="sourceImgSrc!"
             :alt="edit!.selectedFile.value?.name ?? ''"
             class="block"
             :style="sourceImageStyle"
@@ -588,24 +652,26 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
             </div>
           </template>
         </div>
-        <!-- Split-screen compare: raster (left, with CSS preprocess
-             overlay) vs vectorisation (right). The divider sits at
-             50% with a thin labelled separator so the operator can
-             eyeball gamma / levels / sharpen — adjustments that CSS
-             can't express but that the backend pipeline applies in
-             full. Each half clip-paths the same content the single-
-             mode renderers use, so there's no duplicated style logic. -->
+        <!-- Comparison view: a draggable reveal slider. The left band
+             shows the source raster (with CSS preprocess overlay), the
+             right band the full vectorisation. The handle wipes between
+             them — drag left to see more of the result, right to see
+             more of the original. Both halves clip-path the same
+             content the single-mode renderers use, so there's no
+             duplicated style logic; only the clip ratio is dynamic. -->
         <div
           v-else-if="showSplitPreview"
-          class="relative flex h-full w-full items-center justify-center"
+          ref="compareRef"
+          class="relative flex h-full w-full items-center justify-center select-none"
+          :style="{ touchAction: 'none' }"
         >
-          <!-- Left half: source raster + CSS preprocess overlay. -->
+          <!-- Left band: source raster + CSS preprocess overlay. -->
           <div
             class="absolute inset-0 flex items-center justify-center overflow-hidden"
-            :style="{ clipPath: 'inset(0 50% 0 0)' }"
+            :style="{ clipPath: `inset(0 ${100 - compareSplit * 100}% 0 0)` }"
           >
             <img
-              :src="edit!.previewUrl.value!"
+              :src="sourceImgSrc!"
               :alt="edit!.selectedFile.value?.name ?? ''"
               class="block"
               :style="sourceImageStyle"
@@ -651,27 +717,44 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
               </div>
             </template>
           </div>
-          <!-- Right half: full vectorisation. v-html is sanitised
+          <!-- Right band: full vectorisation. v-html is sanitised
                upstream (placementSvg + previewSvg both run through
                DOMPurify). -->
           <div
             class="absolute inset-0 flex items-center justify-center overflow-hidden [&_svg]:max-h-full [&_svg]:max-w-full"
-            :style="{ clipPath: 'inset(0 0 0 50%)' }"
+            :style="{ clipPath: `inset(0 0 0 ${compareSplit * 100}%)` }"
             v-html="splitSvg"
           />
-          <!-- Divider + labels. The divider is non-interactive (no
-               drag handle in v1 — we revisit if operators ask). The
-               labels float above the canvas so they survive the
-               clip-paths. -->
+          <!-- Divider line at the reveal position. -->
           <div
-            class="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-slate-400/70"
+            class="pointer-events-none absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 bg-emerald-400/80"
+            :style="{ left: comparePct }"
           />
+          <!-- Drag handle: a wide invisible hit area centred on the
+               divider plus a visible grip knob, so the slider is easy
+               to grab. Pointer events are captured here and never reach
+               the pan/zoom layer below. -->
+          <div
+            class="absolute inset-y-0 z-20 w-6 -translate-x-1/2 cursor-ew-resize"
+            :style="{ left: comparePct }"
+            :title="t('editPreview.splitHint')"
+            @pointerdown="onSlideStart"
+            @pointermove="onSlideMove"
+            @pointerup="onSlideEnd"
+            @pointercancel="onSlideEnd"
+          >
+            <div
+              class="absolute left-1/2 top-1/2 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-emerald-400 bg-slate-900/90 text-[11px] text-emerald-200 shadow-lg"
+            >
+              ⇄
+            </div>
+          </div>
           <span
-            class="pointer-events-none absolute left-2 top-2 rounded-sm bg-slate-900/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-slate-200"
+            class="pointer-events-none absolute left-2 top-2 z-10 rounded-sm bg-slate-900/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-slate-200"
             >{{ t('editPreview.source') }}</span
           >
           <span
-            class="pointer-events-none absolute right-2 top-2 rounded-sm bg-slate-900/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-slate-200"
+            class="pointer-events-none absolute right-2 top-2 z-10 rounded-sm bg-slate-900/80 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-slate-200"
             >{{ t('editPreview.vector') }}</span
           >
         </div>
@@ -693,7 +776,7 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
              that haven't been uploaded or previewed yet. -->
         <img
           v-else-if="showThumbnail"
-          :src="edit!.previewUrl.value!"
+          :src="sourceImgSrc!"
           :alt="edit!.selectedFile.value?.name ?? ''"
           class="max-h-full max-w-full object-contain"
           draggable="false"

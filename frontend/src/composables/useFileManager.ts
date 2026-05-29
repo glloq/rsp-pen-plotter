@@ -151,7 +151,11 @@ export function useFileManager(t?: Translator) {
     } catch {
       // Bytes evicted / network error — UI stays usable in read-only
       // mode (settings visible, /preview disabled until re-attach via
-      // the header menu).
+      // the header menu). Surface it on the preview pane so a blank
+      // canvas reads as "couldn't reload the source" instead of a
+      // mystery: without the File the live /preview can't run, so the
+      // SVG would otherwise silently never update on a settings change.
+      edit.previewError.value = t?.('upload.sourceReloadFailed') ?? 'Could not reload the source file'
     }
   }
 
