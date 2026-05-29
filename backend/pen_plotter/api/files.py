@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -93,6 +94,7 @@ def _sanitize_folder(folder: str) -> str:
             detail="Folder name cannot be '.' or '..' or start with '..'.",
         )
     return folder
+
 
 # Test compatibility: ``FILES_DIR`` is the conventional monkey-patch
 # point used by tests to redirect the library to a temp dir. The
@@ -245,9 +247,7 @@ def _reprocess_existing(
         upload_metadata=converted.metadata,
         rerenderable=converted.bitmap_segmentation is not None,
         bitmap_options=(
-            converted.bitmap_options.model_dump()
-            if converted.bitmap_options is not None
-            else None
+            converted.bitmap_options.model_dump() if converted.bitmap_options is not None else None
         ),
         source_options=dict(new_options) if new_options else None,
     )
@@ -329,11 +329,21 @@ async def upload_to_library(
     existing = get_file_record_by_hash(digest)
     if existing is not None:
         if _options_changed(existing.file_id, parsed_options):
-            updated = _reprocess_existing(existing, data, mime, parsed_options)
+            # ``_reprocess_existing`` calls the CPU-bound converter and writes
+            # to disk — both block the event loop. Run it in the threadpool so
+            # the server keeps serving other requests (listings, previews,
+            # concurrent uploads) while the conversion churns.
+            updated = await run_in_threadpool(
+                _reprocess_existing, existing, data, mime, parsed_options
+            )
             return FileUploadResponse(file=_record_to_detail(updated), existing=True)
         return FileUploadResponse(file=_record_to_detail(existing), existing=True)
 
-    converted = convert_file(data, file.filename, mime, parsed_options)
+    # Conversion is the dominant, fully synchronous cost of an upload
+    # (segmentation, potrace, vpype, …). Off-load it to the threadpool so a
+    # heavy file on a Pi-class device doesn't freeze the whole API for every
+    # other client while it runs.
+    converted = await run_in_threadpool(convert_file, data, file.filename, mime, parsed_options)
 
     file_id = str(uuid.uuid4())
     # Same auto-attribution as ``_reprocess_existing`` — keep the two
@@ -419,6 +429,24 @@ async def list_files(
 async def list_folders() -> list[str]:
     """Return the distinct folder names currently used by library entries."""
     return list_file_folders()
+
+
+@router.get("/files/by-hash/{sha256}")
+async def get_file_by_hash(sha256: str) -> FileDetail:
+    """Look up a library entry by its content SHA-256.
+
+    Lets the uploader skip the upload + convert round-trip entirely when the
+    bytes are already in the library: the client hashes the file locally and
+    calls this first. Returns the same :class:`FileDetail` the upload endpoint
+    would, so the frontend can merge it as a dedup hit. 404 when unknown.
+
+    Declared before ``/files/{file_id}`` so the literal ``by-hash`` segment is
+    never swallowed by the file-id route.
+    """
+    record = get_file_record_by_hash(sha256.strip().lower())
+    if record is None:
+        raise HTTPException(status_code=404, detail="No library file with that hash")
+    return _record_to_detail(record)
 
 
 @router.get("/files/{file_id}")

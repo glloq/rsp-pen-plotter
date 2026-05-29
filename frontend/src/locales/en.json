@@ -580,6 +580,22 @@
     "retryPreview": "Retry preview",
     "applyAnywayHint": "Preview failed, but you can still apply to run the full render."
   },
+  "uploadModal": {
+    "title": "Importing files",
+    "titleDone": "Import complete",
+    "summary": "{done} of {total} done",
+    "queued": "Queued",
+    "uploading": "Uploading…",
+    "converting": "Converting…",
+    "done": "Added",
+    "existing": "Already in library",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "warnings": "{count} warning | {count} warnings",
+    "cancelAll": "Cancel all",
+    "cancelFile": "Cancel",
+    "close": "Close"
+  },
   "layers": {
     "title": "Layers",
     "dragHint": "drag to reorder",

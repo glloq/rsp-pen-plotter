@@ -672,9 +672,7 @@ export interface ManifestEnvelope<T> {
 export async function getManifestDomain(
   domain: string,
 ): Promise<ManifestEnvelope<Record<string, unknown>>> {
-  const response = await api.get<ManifestEnvelope<Record<string, unknown>>>(
-    `/manifests/${domain}`,
-  )
+  const response = await api.get<ManifestEnvelope<Record<string, unknown>>>(`/manifests/${domain}`)
   return response.data
 }
 
@@ -911,6 +909,47 @@ export interface LibraryUploadResponse {
 
 export type LibrarySortKey = 'name' | 'date' | 'type'
 export type LibrarySortOrder = 'asc' | 'desc'
+
+// Compute the lowercase-hex SHA-256 of a file's bytes using the browser's
+// native WebCrypto. The uploader calls this to pre-check the library for an
+// identical file before paying the full upload + convert round-trip.
+//
+// ``crypto.subtle`` is only available in a secure context (HTTPS or
+// localhost); on a plain-HTTP LAN origin (a common Pi deployment) it's
+// undefined, so we return ``null`` and the caller falls back to a normal
+// upload. The hash is best-effort optimisation, never a correctness gate —
+// the backend still deduplicates server-side on every upload.
+export async function sha256Hex(file: File): Promise<string | null> {
+  try {
+    const subtle = globalThis.crypto?.subtle
+    if (!subtle) return null
+    const digest = await subtle.digest('SHA-256', await file.arrayBuffer())
+    const bytes = new Uint8Array(digest)
+    let hex = ''
+    for (const b of bytes) hex += b.toString(16).padStart(2, '0')
+    return hex
+  } catch {
+    return null
+  }
+}
+
+// Look up a library entry by content hash. Resolves to the full detail when a
+// file with that SHA-256 already exists, or ``null`` on a 404. Any other
+// failure (network, 5xx) is rethrown so the caller can fall back to a normal
+// upload instead of silently dropping the file.
+export async function lookupLibraryFileByHash(sha256: string): Promise<LibraryFileDetail | null> {
+  try {
+    const response = await api.get<LibraryFileDetail>(
+      `/files/by-hash/${encodeURIComponent(sha256)}`,
+    )
+    return response.data
+  } catch (err) {
+    if ((err as { response?: { status?: number } }).response?.status === 404) {
+      return null
+    }
+    throw err
+  }
+}
 
 export async function uploadToLibrary(
   file: File,
