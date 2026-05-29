@@ -300,6 +300,104 @@ function recipeFromKnobs(
         },
       }
     }
+    case 'flowfield-master': {
+      // Streamline seed spacing: tight (dense) on dark bands, wide on
+      // light bands. The field follows the image gradient.
+      const seedSpacing = lerp(i, total, knobs.spacing_min ?? 4, knobs.spacing_max ?? 12)
+      return {
+        algorithm: 'flowfield',
+        algorithm_options: {
+          seed_spacing_px: seedSpacing,
+          step_px: 0.8,
+          max_steps: 800,
+          bidirectional: true,
+          mode: 'gradient',
+          seed: i * 7 + 13,
+        },
+      }
+    }
+    case 'voronoi-shade': {
+      // Mirror stippling-shade: density_max on the darkest band, density_min
+      // on the lightest, but the dots are Lloyd-relaxed for even spacing.
+      const density = lerp(i, total, knobs.density_max ?? 0.06, knobs.density_min ?? 0.008)
+      return {
+        algorithm: 'voronoi_stipple',
+        algorithm_options: {
+          density,
+          dot_radius_px: knobs.dot_radius ?? 0.5,
+          iterations: 6,
+          seed: i * 7 + 13,
+        },
+      }
+    }
+    case 'hatch-fill': {
+      // Same rotating-angle scheme as pencil, emitted as one Eulerian path
+      // per band. eulerian_hatch reads ``angles`` (max 4) directly; a
+      // perpendicular angle is appended on the darkest band when crossing
+      // is requested.
+      const angles =
+        knobs.angles && knobs.angles.length > 0
+          ? knobs.angles
+          : ((MONO_STYLE_DEFAULTS['hatch-fill']?.angles as number[] | undefined) ?? [45, 135])
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6.5)
+      const picked = pickAnglesForBand(i, total, angles)
+      const crossed = i === 0 && (knobs.crossed_on_darkest ?? true) && total > 1
+      const finalAngles = crossed ? [picked[0]!, (picked[0]! + 90) % 180] : picked
+      return {
+        algorithm: 'eulerian_hatch',
+        algorithm_options: { angles: finalAngles, spacing_px: spacing },
+      }
+    }
+    case 'squiggle-shade': {
+      const spacing = Math.round(lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 7))
+      // Wider wiggle on dark bands (wave_max at i=0) → thin line on light.
+      const amp = lerp(i, total, knobs.wave_max ?? 2.2, knobs.wave_min ?? 0.8)
+      return {
+        algorithm: 'squiggle',
+        algorithm_options: {
+          spacing_px: spacing,
+          amp_px: amp,
+          period_px: knobs.wave_period ?? 8,
+          jitter: 0.4,
+          seed: i * 7 + 13,
+        },
+      }
+    }
+    case 'hilbert-fill': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 8)
+      return {
+        algorithm: 'hilbert',
+        algorithm_options: { spacing_px: spacing, min_run_px: 3 },
+      }
+    }
+    case 'gosper-fill': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 8)
+      return {
+        algorithm: 'gosper',
+        algorithm_options: { order: 4, spacing_px: spacing, rotation_deg: 0 },
+      }
+    }
+    case 'concentric-rings': {
+      const spacing = Math.round(lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 6))
+      const rings = Math.round(lerp(i, total, knobs.rings_max ?? 50, knobs.rings_min ?? 12))
+      return {
+        algorithm: 'concentric_offset',
+        algorithm_options: { spacing_px: spacing, max_rings: rings, bridge: true },
+      }
+    }
+    case 'tsp-optimized': {
+      return {
+        algorithm: 'tsp_opt',
+        algorithm_options: {
+          density: knobs.density ?? 0.04,
+          max_points: 4000,
+          time_budget_s: 1.5,
+          method: 'nn_2opt',
+          poisson_disk: true,
+          seed: 0,
+        },
+      }
+    }
     default:
       return style.bandRecipe ? style.bandRecipe(i, total) : null
   }

@@ -175,6 +175,53 @@ describe('buildMonoBandRecipes', () => {
     expect((recipes![0]!.algorithm_options as Record<string, unknown>).density).toBeCloseTo(0.08)
   })
 
+  it('drives the knob-tuned recipe for the newly added shaded styles', () => {
+    // flow-field, voronoi-shade, hilbert/gosper-fill, squiggle-shade and
+    // concentric-rings all expose knob-driven recipes; spot-check that the
+    // operator's knob reaches the emitted band options (not just the
+    // hardcoded bandRecipe fallback).
+    setMonoMasterStyleId('flowfield-master')
+    setMonoKnob('flowfield-master', 'spacing_min', 5)
+    setMonoKnob('flowfield-master', 'spacing_max', 5)
+    const flow = buildMonoBandRecipes('luminance_bands', 3)
+    expect(flow!.length).toBe(3)
+    for (const r of flow!) {
+      expect(r.algorithm).toBe('flowfield')
+      // Both endpoints pinned to 5 → every band lands on 5 regardless of lerp.
+      expect((r.algorithm_options as Record<string, unknown>).seed_spacing_px).toBeCloseTo(5)
+    }
+
+    setMonoMasterStyleId('voronoi-shade')
+    const vor = buildMonoBandRecipes('luminance_bands', 2)
+    expect(vor!.every((r) => r.algorithm === 'voronoi_stipple')).toBe(true)
+
+    setMonoMasterStyleId('concentric-rings')
+    const rings = buildMonoBandRecipes('luminance_bands', 2)
+    expect(rings![0]!.algorithm).toBe('concentric_offset')
+    // Darkest band carries the most rings (rings_max end of the lerp).
+    const r0 = rings![0]!.algorithm_options as Record<string, unknown>
+    const r1 = rings![1]!.algorithm_options as Record<string, unknown>
+    expect(r0.max_rings as number).toBeGreaterThanOrEqual(r1.max_rings as number)
+  })
+
+  it('emits one direct recipe for the silhouette binary style', () => {
+    setMonoMasterStyleId('silhouette')
+    const recipes = buildMonoBandRecipes('thresholds', 4)
+    expect(recipes!.length).toBe(1)
+    expect(recipes![0]!.algorithm).toBe('direct')
+  })
+
+  it('emits a 2-opt tour for the tsp-optimized binary style', () => {
+    setMonoMasterStyleId('tsp-optimized')
+    setMonoKnob('tsp-optimized', 'density', 0.06)
+    const recipes = buildMonoBandRecipes('thresholds', 3)
+    expect(recipes!.length).toBe(1)
+    expect(recipes![0]!.algorithm).toBe('tsp_opt')
+    const opts = recipes![0]!.algorithm_options as Record<string, unknown>
+    expect(opts.density).toBeCloseTo(0.06)
+    expect(opts.method).toBe('nn_2opt')
+  })
+
   it('returns undefined for segmentation methods that do not produce mono recipes', () => {
     // kmeans / fixed_palette are multicolour segmentations; the mono
     // recipe builder must opt out so the caller can fall through to

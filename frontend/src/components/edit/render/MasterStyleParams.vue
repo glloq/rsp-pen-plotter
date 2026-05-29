@@ -78,7 +78,7 @@ function setKnob<K extends string>(key: K, value: unknown): void {
   // The composable's setMonoKnob is generic over keyof MonoStyleKnobs;
   // widening here keeps the template terse while every call site
   // already knows the field name + type from its <input> binding.
-   
+
   ;(draft.setMonoKnob as any)(props.styleId, key, value)
 }
 
@@ -196,8 +196,11 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <p class="text-[10px] text-slate-500">{{ t('mono.thresholdHint') }}</p>
     </div>
 
-    <!-- ===== Pencil: angle chips + density range + crossed toggle ===== -->
-    <div v-if="styleId === 'pencil'" class="space-y-3 border-t border-slate-800 pt-3">
+    <!-- ===== Pencil / Hatch-fill: angle chips + spacing range + crossed ===== -->
+    <div
+      v-if="styleId === 'pencil' || styleId === 'hatch-fill'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
       <div>
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.angles') }}
@@ -271,8 +274,11 @@ function bandSwatchStyle(i: number): Record<string, string> {
       </template>
     </DualRangeSlider>
 
-    <!-- ===== Stippling shade: density range + dot radius ===== -->
-    <div v-else-if="styleId === 'stippling-shade'" class="space-y-3 border-t border-slate-800 pt-3">
+    <!-- ===== Stippling / Voronoi shade: density range + dot radius ===== -->
+    <div
+      v-else-if="styleId === 'stippling-shade' || styleId === 'voronoi-shade'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
       <DualRangeSlider
         :model-value-min="knobs.density_min ?? 0.012"
         :model-value-max="knobs.density_max ?? 0.15"
@@ -308,8 +314,11 @@ function bandSwatchStyle(i: number): Record<string, string> {
       </div>
     </div>
 
-    <!-- ===== Engraving: spacing range + wave amp range + wave period ===== -->
-    <div v-else-if="styleId === 'engraving'" class="space-y-3 border-t border-slate-800 pt-3">
+    <!-- ===== Engraving / Squiggle: spacing range + wave amp range + period ===== -->
+    <div
+      v-else-if="styleId === 'engraving' || styleId === 'squiggle-shade'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
       <DualRangeSlider
         :model-value-min="knobs.spacing_min ?? 1.8"
         :model-value-max="knobs.spacing_max ?? 5"
@@ -391,8 +400,71 @@ function bandSwatchStyle(i: number): Record<string, string> {
       </DualRangeSlider>
     </div>
 
-    <!-- ===== TSP: dot density (single knob — binary mono) ===== -->
-    <div v-else-if="styleId === 'tsp'" class="space-y-1 border-t border-slate-800 pt-3">
+    <!-- ===== Concentric rings: spacing range + rings range ===== -->
+    <div
+      v-else-if="styleId === 'concentric-rings'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 3"
+        :model-value-max="knobs.spacing_max ?? 6"
+        :min="1"
+        :max="10"
+        :step="1"
+        unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <DualRangeSlider
+        :model-value-min="knobs.rings_min ?? 12"
+        :model-value-max="knobs.rings_max ?? 50"
+        :min="2"
+        :max="80"
+        :step="1"
+        @update:model-value-min="(v) => setKnob('rings_min', v)"
+        @update:model-value-max="(v) => setKnob('rings_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.ringsRange') }}</span>
+        </template>
+        <template #hint>
+          <p class="text-[10px] text-slate-500">{{ t('mono.ringsRangeHint') }}</p>
+        </template>
+      </DualRangeSlider>
+    </div>
+
+    <!-- ===== Flow-field / Hilbert / Gosper: spacing range only ===== -->
+    <DualRangeSlider
+      v-else-if="
+        styleId === 'flowfield-master' || styleId === 'hilbert-fill' || styleId === 'gosper-fill'
+      "
+      class="border-t border-slate-800 pt-3"
+      :model-value-min="knobs.spacing_min ?? 4"
+      :model-value-max="knobs.spacing_max ?? 12"
+      :min="1"
+      :max="20"
+      :step="0.5"
+      unit="px"
+      @update:model-value-min="(v) => setKnob('spacing_min', v)"
+      @update:model-value-max="(v) => setKnob('spacing_max', v)"
+    >
+      <template #label>
+        <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+      </template>
+      <template #hint>
+        <p class="text-[10px] text-slate-500">{{ t('mono.spacingRangeHint') }}</p>
+      </template>
+    </DualRangeSlider>
+
+    <!-- ===== TSP / TSP-optimised: dot density (single knob — binary mono) ===== -->
+    <div
+      v-else-if="styleId === 'tsp' || styleId === 'tsp-optimized'"
+      class="space-y-1 border-t border-slate-800 pt-3"
+    >
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
         {{ t('mono.dotDensity') }}
         <span class="ml-1 font-mono text-[11px] text-slate-300">{{
