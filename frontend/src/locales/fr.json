@@ -1310,7 +1310,13 @@
       "noPlacementTitle": "Aucun placement actif",
       "chooseIntent": "Qu'est-ce qui compte le plus ?",
       "previewLoading": "Mise à jour de l'aperçu…",
-      "previewError": "Aperçu indisponible — Générer fonctionne quand même."
+      "previewError": "Aperçu indisponible — Générer fonctionne quand même.",
+      "zoomIn": "Zoom +",
+      "zoomOut": "Zoom −",
+      "resetView": "Recentrer (double-clic) · molette pour zoomer · glisser pour déplacer",
+      "paletteLabel": "Couleurs",
+      "paletteMachine": "Magazine machine",
+      "paletteFree": "Palette libre"
     },
     "intent": {
       "fast": "Rapide",

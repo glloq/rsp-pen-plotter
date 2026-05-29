@@ -141,6 +141,82 @@ function selectGoal(g: Goal): void {
   void resolveAndPreview()
 }
 
+function selectPalette(mode: PaletteMode): void {
+  if (paletteMode.value === mode && decision.value) return
+  paletteMode.value = mode
+  void resolveAndPreview()
+}
+
+// ============================== ZOOM & PAN ==============================
+// Wheel zooms, drag pans, double-click / button resets. Same model as
+// the expert EditPreviewPane so the gesture vocabulary is consistent.
+// The view is intentionally *not* reset between intent changes so the
+// operator can zoom into a detail and flip Rapide↔Qualité to compare it
+// at the same magnification; switching files remounts the modal (App's
+// ``:key``) which resets it naturally.
+const zoom = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+const panning = ref(false)
+let panStartX = 0
+let panStartY = 0
+let panInitX = 0
+let panInitY = 0
+const MIN_ZOOM = 0.2
+const MAX_ZOOM = 16
+
+const contentStyle = computed(() => ({
+  transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`,
+  transformOrigin: 'center center',
+  transition: panning.value ? 'none' : 'transform 0.08s ease-out',
+}))
+
+function clampZoom(value: number): number {
+  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value))
+}
+
+function onWheel(event: WheelEvent): void {
+  event.preventDefault()
+  const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15
+  zoom.value = clampZoom(zoom.value * factor)
+}
+
+function onPanStart(event: PointerEvent): void {
+  if (event.button !== 0 && event.button !== 1) return
+  panning.value = true
+  panStartX = event.clientX
+  panStartY = event.clientY
+  panInitX = panX.value
+  panInitY = panY.value
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+
+function onPanMove(event: PointerEvent): void {
+  if (!panning.value) return
+  panX.value = panInitX + (event.clientX - panStartX)
+  panY.value = panInitY + (event.clientY - panStartY)
+}
+
+function onPanEnd(event: PointerEvent): void {
+  if (!panning.value) return
+  panning.value = false
+  ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
+}
+
+function zoomIn(): void {
+  zoom.value = clampZoom(zoom.value * 1.25)
+}
+
+function zoomOut(): void {
+  zoom.value = clampZoom(zoom.value / 1.25)
+}
+
+function resetView(): void {
+  zoom.value = 1
+  panX.value = 0
+  panY.value = 0
+}
+
 function confirm(): void {
   if (!hasPlacement.value || !decision.value) return
   emit('confirm', decision.value)
@@ -281,19 +357,72 @@ watch(
       </div>
 
       <template v-else>
-        <!-- Large live preview of the real adapted result. -->
-        <div class="modal-v2__preview" data-test="modal-v2-preview">
-          <!-- v-html: caller (App.vue) passes already-sanitized SVG,
-               and ``previewAlgorithmOnAllLayers`` returns backend-
-               rendered SVG from the same trusted pipeline. -->
-          <!-- eslint-disable-next-line vue/no-v-html -->
+        <!-- Large live preview of the real adapted result. The whole
+             surface captures pointer events for pan; the inner viewport
+             carries the zoom/pan transform. -->
+        <div
+          class="modal-v2__preview"
+          data-test="modal-v2-preview"
+          :style="{ cursor: panning ? 'grabbing' : 'grab', touchAction: 'none' }"
+          @wheel="onWheel"
+          @pointerdown="onPanStart"
+          @pointermove="onPanMove"
+          @pointerup="onPanEnd"
+          @pointercancel="onPanEnd"
+          @dblclick="resetView"
+        >
+          <div class="modal-v2__preview-viewport" :style="contentStyle">
+            <!-- v-html: caller (App.vue) passes already-sanitized SVG,
+                 and ``previewAlgorithmOnAllLayers`` returns backend-
+                 rendered SVG from the same trusted pipeline. -->
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div
+              v-if="shownSvg"
+              class="modal-v2__preview-svg"
+              :class="{ 'is-stale': previewLoading }"
+              data-test="modal-v2-preview-svg"
+              v-html="shownSvg"
+            />
+          </div>
+
+          <!-- Floating zoom controls; opt out of the pan capture. -->
           <div
-            v-if="shownSvg"
-            class="modal-v2__preview-svg"
-            :class="{ 'is-stale': previewLoading }"
-            data-test="modal-v2-preview-svg"
-            v-html="shownSvg"
-          />
+            class="modal-v2__zoom"
+            data-test="modal-v2-zoom"
+            @pointerdown.stop
+            @wheel.stop
+            @dblclick.stop
+          >
+            <button
+              type="button"
+              :title="t('v2.modal.zoomIn')"
+              :aria-label="t('v2.modal.zoomIn')"
+              data-test="modal-v2-zoom-in"
+              @click="zoomIn"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              :title="t('v2.modal.zoomOut')"
+              :aria-label="t('v2.modal.zoomOut')"
+              data-test="modal-v2-zoom-out"
+              @click="zoomOut"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              class="modal-v2__zoom-reset"
+              :title="t('v2.modal.resetView')"
+              :aria-label="t('v2.modal.resetView')"
+              data-test="modal-v2-zoom-reset"
+              @click="resetView"
+            >
+              {{ Math.round(zoom * 100) }}%
+            </button>
+          </div>
+
           <div
             v-if="previewLoading"
             class="modal-v2__preview-overlay"
@@ -336,6 +465,34 @@ watch(
             >
               <strong>{{ t(`v2.intent.${opt}`) }}</strong>
               <span class="intent-desc">{{ t(`v2.intent.${opt}Desc`) }}</span>
+            </button>
+          </div>
+        </fieldset>
+
+        <!-- Secondary control: where the colours come from. Machine
+             magazine is the safe default (only pens actually loaded);
+             "free" lets the resolver pick from the full palette for
+             operators who'll swap pens by hand. -->
+        <fieldset class="modal-v2__palette">
+          <legend>{{ t('v2.modal.paletteLabel') }}</legend>
+          <div class="palette-toggle">
+            <button
+              type="button"
+              :class="{ active: paletteMode === 'machine_only' }"
+              :aria-pressed="paletteMode === 'machine_only'"
+              data-test="palette-machine_only"
+              @click="selectPalette('machine_only')"
+            >
+              {{ t('v2.modal.paletteMachine') }}
+            </button>
+            <button
+              type="button"
+              :class="{ active: paletteMode === 'free' }"
+              :aria-pressed="paletteMode === 'free'"
+              data-test="palette-free"
+              @click="selectPalette('free')"
+            >
+              {{ t('v2.modal.paletteFree') }}
             </button>
           </div>
         </fieldset>
@@ -433,6 +590,14 @@ watch(
   justify-content: center;
   overflow: hidden;
 }
+.modal-v2__preview-viewport {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform;
+}
 .modal-v2__preview-svg {
   width: 100%;
   height: 100%;
@@ -473,6 +638,39 @@ watch(
   background: #fdecea;
   padding: 0.35rem;
   border-radius: 4px;
+}
+.modal-v2__zoom {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.modal-v2__zoom button {
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid #cbd5e1;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1e293b;
+  border-radius: 4px;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-v2__zoom button:hover {
+  background: #e2e8f0;
+}
+.modal-v2__zoom button:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 1px;
+}
+.modal-v2__zoom-reset {
+  font-size: 0.6rem !important;
+  font-variant-numeric: tabular-nums;
 }
 .spinner {
   width: 14px;
@@ -559,6 +757,49 @@ watch(
   font-size: 0.72rem;
   color: #64748b;
   font-weight: 400;
+}
+
+.modal-v2__palette {
+  border: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+}
+.modal-v2__palette legend {
+  padding: 0;
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+}
+.palette-toggle {
+  display: inline-flex;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.palette-toggle button {
+  padding: 0.35rem 0.8rem;
+  border: none;
+  background: white;
+  color: #475569;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.palette-toggle button + button {
+  border-left: 1px solid #cbd5e1;
+}
+.palette-toggle button.active {
+  background: #eef4ff;
+  color: #1f6feb;
+  font-weight: 600;
+}
+.palette-toggle button:hover:not(.active) {
+  background: #f8fafc;
+}
+.palette-toggle button:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: -2px;
 }
 
 .error {
