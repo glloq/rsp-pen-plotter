@@ -789,12 +789,17 @@ function colorRecipeFromKnobs(
     case 'color-crosshatch': {
       const baseAngles = [0, 45, 90, 135, 30, 75, 120, 165]
       const step = knobs.angle_step ?? 45
-      const angle = (i * step + (baseAngles[i % baseAngles.length] ?? 0)) % 180
+      // Rotate each cluster off the base angle by (step - 45) so the
+      // default step (45) reduces to the registry's ``colorRecipe``
+      // fallback (0/45/90/135…) — keeping this knob-driven path visually
+      // identical to the propagation path. A raw ``i * step`` collapsed
+      // distinct clusters onto the same angle at the default (0/90/0/90).
+      const angle = ((baseAngles[i % baseAngles.length] ?? 0) + i * (step - 45)) % 180
       const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
       return {
         algorithm: 'crosshatch',
         algorithm_options: {
-          angle_deg: angle,
+          angle_deg: ((angle % 180) + 180) % 180,
           spacing_px: spacing,
           crossed: knobs.crossed ?? false,
         },
@@ -966,13 +971,16 @@ function colorRecipeFromKnobs(
     case 'color-eulerian': {
       const baseAngles = [0, 45, 90, 135, 30, 75, 120, 165]
       const step = knobs.angle_step ?? 45
-      const angle = (i * step + (baseAngles[i % baseAngles.length] ?? 0)) % 180
+      // Same rotation scheme as color-crosshatch: offset by (step - 45)
+      // so the default lands on the registry fallback's 0/45/90/135 set
+      // instead of collapsing clusters onto a 0/90 pair.
+      const angle = ((baseAngles[i % baseAngles.length] ?? 0) + i * (step - 45)) % 180
       const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
       return {
         algorithm: 'eulerian_hatch',
         algorithm_options: {
           spacing_px: spacing,
-          angle_deg: angle,
+          angle_deg: ((angle % 180) + 180) % 180,
           crossed: knobs.crossed ?? false,
         },
       }
