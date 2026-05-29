@@ -548,7 +548,9 @@
     "sunburst": "Sunburst",
     "sunburstDesc": "Radial rays fanning out from the region centroid.",
     "circlePack": "Circle packing",
-    "circlePackDesc": "Packed non-overlapping circle outlines — bubble fill."
+    "circlePackDesc": "Packed non-overlapping circle outlines — bubble fill.",
+    "showAll": "All styles ({count} more)",
+    "showFewer": "Common styles only"
   },
   "execute": {
     "connection": "Connection",
@@ -662,6 +664,7 @@
   "layers": {
     "title": "Layers",
     "dragHint": "drag to reorder",
+    "convertSyncHint": "The global style and colour settings from the Style tab are applied to every layer when you click “Import & convert”. The per-layer tweaks below override the global style and are kept across re-converts.",
     "groupByPen": "Group by pen (fewer tool changes)",
     "empty": "No layers yet.",
     "penSlot": "Pen slot",

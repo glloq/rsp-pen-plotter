@@ -138,6 +138,18 @@ const totalPaths = computed(() => store.layers.reduce((s, l) => s + l.path_count
       }}</span>
     </div>
 
+    <!-- Convert-sync hint: makes explicit that the Style tab's global
+         settings are (re)applied to every layer on Apply/convert, and
+         that the per-layer overrides below win over the global style.
+         Shown only once layers exist so it doesn't compete with the
+         empty-state hint below. -->
+    <p
+      v-if="store.layers.length"
+      class="rounded border border-slate-700 bg-slate-900/50 px-2.5 py-1.5 text-[10px] leading-snug text-slate-400"
+    >
+      <span aria-hidden="true">↻ </span>{{ t('layers.convertSyncHint') }}
+    </p>
+
     <!-- Empty state: the section stays visible before conversion so the
          user knows where per-colour layer styles will land once the
          file is converted. -->
