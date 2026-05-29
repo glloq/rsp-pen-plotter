@@ -33,7 +33,6 @@ const style = computed(() => resolveMulticolorStyle(props.styleId))
 const knobs = computed(() => draft.getMulticolorStyleKnobs(props.styleId))
 
 function setKnob<K extends string>(key: K, value: unknown): void {
-   
   ;(draft.setMulticolorKnob as any)(props.styleId, key, value)
 }
 
@@ -88,7 +87,7 @@ const effectiveColorCount = computed(() =>
 
     <!-- ===== Flat: no tunable knobs, just a placeholder line ===== -->
     <p
-      v-if="styleId === 'color-flat'"
+      v-if="styleId === 'color-flat' || styleId === 'color-flat-lab'"
       class="rounded border border-slate-800 bg-slate-900/40 px-2 py-1.5 text-[10px] text-slate-500"
     >
       {{ t('colorStyles.flatNoKnobs') }}
@@ -805,6 +804,208 @@ const effectiveColorCount = computed(() =>
           :value="knobs.time_budget_s ?? 1.5"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('time_budget_s', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+    </div>
+
+    <!-- ===== Grille couleur: spacing range ===== -->
+    <div v-else-if="styleId === 'color-grid'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 3"
+        :model-value-max="knobs.spacing_max ?? 7"
+        :min="1"
+        :max="20"
+        :step="0.5"
+        unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+    </div>
+
+    <!-- ===== Briques couleur: brick size range ===== -->
+    <div v-else-if="styleId === 'color-brick'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.cell_min ?? 6"
+        :model-value-max="knobs.cell_max ?? 12"
+        :min="2"
+        :max="30"
+        :step="1"
+        unit="px"
+        @update:model-value-min="(v) => setKnob('cell_min', v)"
+        @update:model-value-max="(v) => setKnob('cell_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.cellRange') }}</span>
+        </template>
+      </DualRangeSlider>
+    </div>
+
+    <!-- ===== Pointillés couleur: spacing range + angle step + dash/gap ===== -->
+    <div v-else-if="styleId === 'color-dashes'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 3"
+        :model-value-max="knobs.spacing_max ?? 6"
+        :min="1"
+        :max="10"
+        :step="0.5"
+        unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('colorStyles.angleStep') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ Math.round(knobs.angle_step ?? 45) }}°</span
+          >
+        </p>
+        <input
+          type="range"
+          min="0"
+          max="90"
+          step="5"
+          :value="knobs.angle_step ?? 45"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('angle_step', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.dashPx') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ (knobs.dash_px ?? 3).toFixed(1) }} px</span
+          >
+        </p>
+        <input
+          type="range"
+          min="0.5"
+          max="12"
+          step="0.5"
+          :value="knobs.dash_px ?? 3"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('dash_px', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.gapPx') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ (knobs.gap_px ?? 3).toFixed(1) }} px</span
+          >
+        </p>
+        <input
+          type="range"
+          min="0.5"
+          max="12"
+          step="0.5"
+          :value="knobs.gap_px ?? 3"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('gap_px', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
+    </div>
+
+    <!-- ===== Truchet couleur: cell range ===== -->
+    <div v-else-if="styleId === 'color-truchet'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.cell_min ?? 7"
+        :model-value-max="knobs.cell_max ?? 14"
+        :min="2"
+        :max="30"
+        :step="1"
+        unit="px"
+        @update:model-value-min="(v) => setKnob('cell_min', v)"
+        @update:model-value-max="(v) => setKnob('cell_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.cellRange') }}</span>
+        </template>
+      </DualRangeSlider>
+    </div>
+
+    <!-- ===== Anneaux couleur: spacing range ===== -->
+    <div v-else-if="styleId === 'color-rings'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.spacing_min ?? 4"
+        :model-value-max="knobs.spacing_max ?? 8"
+        :min="1"
+        :max="20"
+        :step="0.5"
+        unit="px"
+        @update:model-value-min="(v) => setKnob('spacing_min', v)"
+        @update:model-value-max="(v) => setKnob('spacing_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.spacingRange') }}</span>
+        </template>
+      </DualRangeSlider>
+    </div>
+
+    <!-- ===== Soleil couleur: rays range ===== -->
+    <div v-else-if="styleId === 'color-sunburst'" class="space-y-3 border-t border-slate-800 pt-3">
+      <DualRangeSlider
+        :model-value-min="knobs.rays_min ?? 60"
+        :model-value-max="knobs.rays_max ?? 160"
+        :min="8"
+        :max="360"
+        :step="4"
+        @update:model-value-min="(v) => setKnob('rays_min', v)"
+        @update:model-value-max="(v) => setKnob('rays_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('colorStyles.raysRange') }}</span>
+        </template>
+        <template #hint>
+          <p class="text-[10px] text-slate-500">{{ t('colorStyles.raysRangeHint') }}</p>
+        </template>
+      </DualRangeSlider>
+    </div>
+
+    <!-- ===== Bulles couleur: bubble radius range + gap ===== -->
+    <div
+      v-else-if="styleId === 'color-circle-pack'"
+      class="space-y-3 border-t border-slate-800 pt-3"
+    >
+      <DualRangeSlider
+        :model-value-min="knobs.radius_min ?? 6"
+        :model-value-max="knobs.radius_max ?? 11"
+        :min="2"
+        :max="20"
+        :step="0.5"
+        unit="px"
+        @update:model-value-min="(v) => setKnob('radius_min', v)"
+        @update:model-value-max="(v) => setKnob('radius_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('colorStyles.radiusRange') }}</span>
+        </template>
+        <template #hint>
+          <p class="text-[10px] text-slate-500">{{ t('colorStyles.radiusRangeHint') }}</p>
+        </template>
+      </DualRangeSlider>
+      <div>
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('convert.gapPx') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ (knobs.gap_px ?? 0.6).toFixed(1) }} px</span
+          >
+        </p>
+        <input
+          type="range"
+          min="0"
+          max="6"
+          step="0.1"
+          :value="knobs.gap_px ?? 0.6"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('gap_px', Number((e.target as HTMLInputElement).value))"
         />
       </div>
     </div>
