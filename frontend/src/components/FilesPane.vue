@@ -4,34 +4,23 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
 import { FILE_ACCEPT } from '../composables/useFileManager'
-import { validateUploadFile } from '../api/uploadValidation'
 import { useJobStore } from '../stores/job'
 import { useLibraryStore } from '../stores/library'
-import { useToastStore } from '../stores/toasts'
 import { useUiStore } from '../stores/ui'
+import { useUploadsStore } from '../stores/uploads'
 import FileLibraryFilters from './FileLibraryFilters.vue'
 import FileListRow from './FileListRow.vue'
 
 const { t } = useI18n()
 const store = useJobStore()
 const library = useLibraryStore()
-const toasts = useToastStore()
 const ui = useUiStore()
+// All upload orchestration (validation, the concurrency pool, per-file
+// progress and the progress modal) lives in the uploads store so the
+// pane button, pane drop and window-level drop share one path.
+const uploads = useUploadsStore()
 
-// Per-pane upload state. The library store has its own ``loading`` flag
-// but it's also used by the initial ``/files`` listing fetch, so we keep
-// a dedicated counter for the upload flow — drives the button label,
-// disables re-entry while a batch is in progress.
-const uploadingCount = ref(0)
-const uploadingTotal = ref(0)
-const uploadProgress = ref<{ name: string; percent: number } | null>(null)
-// AbortController for the in-flight upload (one at a time — uploads are
-// sequential so we only ever need a single handle). ``Cancel`` on the
-// button aborts the current file; the loop catches the rejection and
-// stops on its own.
-let activeController: AbortController | null = null
-
-const isUploading = computed(() => uploadingCount.value > 0)
+const isUploading = computed(() => uploads.active)
 
 onMounted(() => {
   void library.refresh()
@@ -158,67 +147,20 @@ const fileInput = ref<HTMLInputElement | null>(null)
 function addFile(): void {
   if (isUploading.value) {
     // Operator clicked while a batch is in progress — interpret that as
-    // a cancel request for the current file rather than queueing a new
-    // file picker dialog.
-    activeController?.abort()
+    // a cancel request rather than queueing a new file picker dialog.
+    uploads.cancelAll()
     return
   }
   fileInput.value?.click()
 }
 
-// Sequentially upload a list of files through the library store with
-// client-side validation, per-file progress, and cancel support. Errors
-// on one file don't abort the batch — the failed file gets a toast and
-// the next one starts.
-async function uploadFiles(files: File[]): Promise<void> {
-  if (files.length === 0) return
-  // Up-front validation — surface every issue at once so the operator
-  // sees the rejected files before any network work starts.
-  const accepted: File[] = []
-  for (const file of files) {
-    const issue = validateUploadFile(file)
-    if (issue) {
-      toasts.error(`${file.name}: ${issue.message}`)
-    } else {
-      accepted.push(file)
-    }
-  }
-  if (accepted.length === 0) return
-  uploadingTotal.value = accepted.length
-  uploadingCount.value = accepted.length
-  try {
-    for (const file of accepted) {
-      const controller = new AbortController()
-      activeController = controller
-      uploadProgress.value = { name: file.name, percent: 0 }
-      try {
-        await library.upload(file, {
-          signal: controller.signal,
-          onProgress: (percent: number) => {
-            if (controller.signal.aborted) return
-            uploadProgress.value = { name: file.name, percent }
-          },
-        })
-      } finally {
-        if (activeController === controller) activeController = null
-        uploadingCount.value -= 1
-      }
-    }
-  } finally {
-    uploadingCount.value = 0
-    uploadingTotal.value = 0
-    uploadProgress.value = null
-    activeController = null
-  }
-}
-
-async function onFileInputChange(event: Event): Promise<void> {
+function onFileInputChange(event: Event): void {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files ?? [])
-  // Reset the value first — if the upload throws we still want
-  // ``change`` to fire next time the same file is picked.
+  // Reset the value first — if the picker is reopened with the same file
+  // we still want ``change`` to fire next time.
   input.value = ''
-  await uploadFiles(files)
+  uploads.start(files)
 }
 
 // Pane-level drag-and-drop. Lets the operator drop files straight into
@@ -250,15 +192,13 @@ function onPaneDragLeave(event: DragEvent): void {
   paneDragOver.value = false
 }
 
-async function onPaneDrop(event: DragEvent): Promise<void> {
+function onPaneDrop(event: DragEvent): void {
   paneDragOver.value = false
   if (!event.dataTransfer?.files?.length) return
   event.preventDefault()
-  if (isUploading.value) {
-    toasts.info(t('files.uploadInProgress'))
-    return
-  }
-  await uploadFiles(Array.from(event.dataTransfer.files))
+  // The uploads store appends to the running batch, so a drop during an
+  // in-flight import just queues more files — no re-entry guard needed.
+  uploads.start(event.dataTransfer.files)
 }
 
 async function editFile(fileId: string): Promise<void> {
@@ -273,17 +213,13 @@ async function editFile(fileId: string): Promise<void> {
   //   3. Otherwise create a fresh library-draft placement. It stays
   //      invisible until the operator explicitly clicks "Add to plan"
   //      in the modal footer (materializeLibraryDraft).
-  const visible = store.placements.find(
-    (p) => p.library_file_id === fileId && !p.is_library_draft,
-  )
+  const visible = store.placements.find((p) => p.library_file_id === fileId && !p.is_library_draft)
   if (visible) {
     store.selectPlacement(visible.id)
     ui.openEditModal()
     return
   }
-  const draft = store.placements.find(
-    (p) => p.library_file_id === fileId && p.is_library_draft,
-  )
+  const draft = store.placements.find((p) => p.library_file_id === fileId && p.is_library_draft)
   if (draft) {
     store.selectPlacement(draft.id)
     ui.openEditModal()
@@ -355,24 +291,10 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
           />
           <span class="truncate">
             <template v-if="!isUploading">+ {{ t('files.addFile') }}</template>
-            <template v-else-if="uploadProgress && uploadProgress.percent < 100">
-              {{ uploadProgress.percent }}%
-            </template>
-            <template v-else>{{ t('upload.converting') }}</template>
+            <template v-else>{{ t('upload.cancel') }}</template>
           </span>
         </button>
       </div>
-      <p
-        v-if="isUploading && uploadProgress"
-        class="mt-1 truncate text-[10px] text-slate-400"
-        :title="uploadProgress.name"
-      >
-        {{
-          uploadingTotal > 1
-            ? `(${uploadingTotal - uploadingCount + 1}/${uploadingTotal}) ${uploadProgress.name}`
-            : uploadProgress.name
-        }}
-      </p>
 
       <FileLibraryFilters
         :search-input="searchInput"

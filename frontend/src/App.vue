@@ -12,6 +12,7 @@ import SettingsDrawer from './components/SettingsDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
 import GenerateProgressModal from './components/GenerateProgressModal.vue'
+import UploadProgressModal from './components/UploadProgressModal.vue'
 import IntegrityBanner from './components/IntegrityBanner.vue'
 import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
 
@@ -38,6 +39,7 @@ import { useQueueStore } from './stores/queue'
 import { useToastStore } from './stores/toasts'
 import { useUiModeStore } from './stores/uiMode'
 import { useUiStore } from './stores/ui'
+import { useUploadsStore } from './stores/uploads'
 
 const { t, locale } = useI18n()
 const store = useJobStore()
@@ -48,6 +50,7 @@ const toasts = useToastStore()
 const algorithms = useAlgorithmsStore()
 const perf = usePerfStore()
 const queue = useQueueStore()
+const uploads = useUploadsStore()
 const dragDepth = ref(0)
 const dropping = ref(false)
 
@@ -301,10 +304,9 @@ async function onWindowDrop(event: DragEvent): Promise<void> {
   event.preventDefault()
   // Drops add the files to the library only — no placement is created
   // and the editor stays closed. The operator picks what to do next from
-  // the Files pane (drag onto the plan, edit, etc.).
-  for (const file of files) {
-    await library.upload(file)
-  }
+  // the Files pane (drag onto the plan, edit, etc.). The uploads store
+  // owns validation, the concurrency pool and the progress modal.
+  uploads.start(files)
 }
 
 // Axios error interceptor — feeds the ``network_error`` KPI in the
@@ -427,6 +429,7 @@ onBeforeUnmount(() => {
     <ConfirmDialog />
     <UpdateProgressModal />
     <GenerateProgressModal />
+    <UploadProgressModal />
     <Toasts />
     <PerfOverlay v-if="perfEnabled" />
     <WorkshopMode

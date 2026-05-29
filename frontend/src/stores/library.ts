@@ -7,6 +7,8 @@ import {
   listLibraryFolders as apiListFolders,
   patchLibraryFile as apiPatch,
   getFilesIntegrity,
+  lookupLibraryFileByHash,
+  sha256Hex,
   uploadToLibrary,
   type IntegrityIssue,
   type LibraryFileDetail,
@@ -230,6 +232,33 @@ export const useLibraryStore = defineStore('library', () => {
     const perf = usePerfStore()
     const tStart = performance.now()
     try {
+      // Dedup pre-check. When the operator isn't changing conversion options
+      // (a plain library add — not an editor re-apply, which must re-convert),
+      // hash the bytes locally and ask the backend whether this exact file
+      // already exists. A hit lets us skip the entire upload + convert
+      // round-trip, the dominant cost when re-adding a file already in the
+      // library. Best-effort: a missing WebCrypto (insecure origin) or a
+      // failed lookup just falls through to a normal upload below.
+      if (!options.convertOptions && !options.signal?.aborted) {
+        try {
+          const hash = await sha256Hex(file)
+          if (hash && !options.signal?.aborted) {
+            const hit = await lookupLibraryFileByHash(hash)
+            if (hit) {
+              _mergeRecord(hit)
+              cacheDetail(hit)
+              if (!options.silent) {
+                useToastStore().info(
+                  i18n.global.t('library.dedupedToast', { name: hit.source_file }),
+                )
+              }
+              return { file: hit, existing: true }
+            }
+          }
+        } catch {
+          // Non-fatal — fall through to a full upload.
+        }
+      }
       const result = await uploadToLibrary(file, options.folder ?? '', options.convertOptions, {
         onProgress: options.onProgress,
         signal: options.signal,

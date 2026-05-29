@@ -90,6 +90,40 @@ async def test_upload_same_content_dedups() -> None:
 
 
 @pytest.mark.asyncio
+async def test_lookup_by_hash_hit_returns_detail() -> None:
+    """The dedup pre-check route returns the full detail for a known hash."""
+    async with _client() as client:
+        uploaded = await client.post("/files", **_upload_form(SVG_A, "a.svg"))
+        sha = uploaded.json()["file"]["sha256"]
+        found = await client.get(f"/files/by-hash/{sha}")
+    assert found.status_code == 200
+    body = found.json()
+    assert body["file_id"] == uploaded.json()["file"]["file_id"]
+    # Same shape as the upload response's ``file`` — the frontend merges it
+    # as a dedup hit without a second round-trip.
+    assert body["svg"]
+    assert body["layer_count"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_lookup_by_hash_miss_is_404() -> None:
+    async with _client() as client:
+        missing = await client.get("/files/by-hash/" + "0" * 64)
+    assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_lookup_by_hash_does_not_shadow_file_id_route() -> None:
+    """``by-hash`` is a literal segment, not a file id — the id route still wins."""
+    async with _client() as client:
+        uploaded = await client.post("/files", **_upload_form(SVG_A, "a.svg"))
+        file_id = uploaded.json()["file"]["file_id"]
+        by_id = await client.get(f"/files/{file_id}")
+    assert by_id.status_code == 200
+    assert by_id.json()["file_id"] == file_id
+
+
+@pytest.mark.asyncio
 async def test_list_filters_and_sorts() -> None:
     async with _client() as client:
         await client.post("/files", **_upload_form(SVG_A, "alpha.svg", folder="tests"))
@@ -262,6 +296,7 @@ async def test_upload_failure_leaves_no_partial_directory() -> None:
 @pytest.mark.asyncio
 async def test_typography_reupload_with_changed_font_size_reprocesses() -> None:
     import json
+
     txt = b"Hello plotter"
     upload_small = {
         "files": {"file": ("hello.txt", txt, "text/plain")},
@@ -284,6 +319,7 @@ async def test_typography_reupload_with_changed_font_size_reprocesses() -> None:
 @pytest.mark.asyncio
 async def test_typography_reupload_with_bold_reprocesses() -> None:
     import json
+
     txt = b"Hello plotter"
     plain = {
         "files": {"file": ("hello.txt", txt, "text/plain")},
@@ -306,6 +342,7 @@ async def test_typography_reupload_with_bold_reprocesses() -> None:
 @pytest.mark.asyncio
 async def test_typography_reupload_with_identical_options_dedupes() -> None:
     import json
+
     txt = b"Hello plotter"
     opts = {"font_size_mm": 10.0, "font": "futural", "bold": False}
     form = {

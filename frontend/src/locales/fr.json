@@ -578,6 +578,22 @@
     "retryPreview": "Réessayer l'aperçu",
     "applyAnywayHint": "L'aperçu a échoué mais tu peux quand même appliquer pour lancer le rendu complet."
   },
+  "uploadModal": {
+    "title": "Import des fichiers",
+    "titleDone": "Import terminé",
+    "summary": "{done} sur {total} terminés",
+    "queued": "En attente",
+    "uploading": "Envoi…",
+    "converting": "Conversion…",
+    "done": "Ajouté",
+    "existing": "Déjà dans la bibliothèque",
+    "failed": "Échec",
+    "cancelled": "Annulé",
+    "warnings": "{count} avertissement | {count} avertissements",
+    "cancelAll": "Tout annuler",
+    "cancelFile": "Annuler",
+    "close": "Fermer"
+  },
   "layers": {
     "title": "Calques",
     "dragHint": "glisser pour réordonner",
