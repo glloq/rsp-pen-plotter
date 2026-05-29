@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { PrintRun } from '../api/client'
@@ -27,6 +27,21 @@ const queue = useQueueStore()
 const ui = useUiStore()
 const { plotterTab } = storeToRefs(ui)
 const { status, port, baudrate, terminator, error, progress } = storeToRefs(plotter)
+
+watch(
+  // Re-derive the default serial terminator whenever the active profile
+  // (or its EBB config) changes. The operator can still override it
+  // on-the-fly for debugging — we only seed the default here.
+  () => [job.selectedProfile?.gcode_dialect, job.selectedProfile?.ebb?.serial_terminator] as const,
+  ([dialect, ebbTerminator]) => {
+    if (dialect === 'ebb') {
+      terminator.value = ebbTerminator ?? 'cr'
+    } else {
+      terminator.value = 'lf'
+    }
+  },
+  { immediate: true },
+)
 
 const stateClass: Record<PrintRun['state'], string> = {
   queued: 'text-slate-300',
