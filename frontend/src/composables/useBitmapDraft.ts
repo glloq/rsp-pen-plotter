@@ -203,7 +203,13 @@ export function defaultBitmap(): BitmapDraft {
     preprocess: defaultPreprocess(),
     segmentation_method: 'kmeans',
     num_colors: 4,
-    num_bands: 4,
+    // Monochrome luminance banding defaults to a SINGLE band → a single
+    // layer drawn with a single pen, matching the print-mode toggle's
+    // promise ("draw everything on one layer with one pen"). The shading
+    // slider lets the operator add bands (and therefore layers) when they
+    // want tonal shading. (Multicolour ignores this — it reads
+    // ``num_colors``.)
+    num_bands: 1,
     thresholds: [0.33, 0.66],
     palette: [],
     min_region_pixels: 0,
@@ -505,6 +511,10 @@ export function markSegmentationTouched(...fields: SegmentationField[]): void {
 // 4+ bands) and adding bands keeps the paper dropped.
 export function autoBackgroundLuminance(numBands: number): number {
   const n = Math.max(1, numBands)
+  // Single band: there is no separate paper band to drop — keep it and
+  // only treat pure white as background, otherwise (1-1)/1 = 0 would
+  // drop the only layer and render nothing.
+  if (n <= 1) return 1.0
   return (n - 1) / n
 }
 
@@ -554,8 +564,8 @@ function applyStyleSegmentation(
     )
       wouldOverwrite.push('background_luminance')
     if (seg.method === 'luminance_bands' && _segmentationTouched.value.has('num_bands')) {
-      const target = seg.default_num_bands ?? 4
-      if (b.num_bands !== target && (b.num_bands < 2 || b.num_bands > 8)) {
+      const target = seg.default_num_bands ?? 1
+      if (b.num_bands !== target && (b.num_bands < 1 || b.num_bands > 20)) {
         wouldOverwrite.push('num_bands')
       }
     }
@@ -581,8 +591,13 @@ function applyStyleSegmentation(
     b.max_dimension_px = seg.default_max_dimension_px
   }
   if (seg.method === 'luminance_bands') {
-    if (b.num_bands < 2 || b.num_bands > 8) {
-      b.num_bands = seg.default_num_bands ?? 4
+    // A single band (1 layer) is a valid, intentional choice — only
+    // reset to the style default when the count is truly out of range,
+    // so entering monochrome lands on one layer and the operator's
+    // shading-slider value is preserved across style switches. Up to 20
+    // shading bands are allowed for fine tonal ramps.
+    if (b.num_bands < 1 || b.num_bands > 20) {
+      b.num_bands = seg.default_num_bands ?? 1
     }
     // Override the registry's fixed background_luminance with one tuned to
     // the resulting band count so the paper band is dropped at any N

@@ -244,7 +244,7 @@
     "penNotInstalled": "Slot non marqué comme installé",
     "modeLabel": "Mode de rendu",
     "shades": "Nombre de nuances",
-    "shadesHint": "Découpe l'image en N bandes de gris ; chaque bande utilise un algorithme adapté au mode choisi.",
+    "shadesHint": "1 = un seul calque, un seul stylo (sans ombrage). Augmente pour découper l'image en bandes de gris — chaque bande ajoute un calque et utilise un algorithme adapté au mode choisi.",
     "threshold": "Seuil de binarisation",
     "thresholdHint": "Les pixels plus sombres que ce seuil sont tracés ; les plus clairs sont ignorés.",
     "detail": "Détail du SVG",
@@ -389,8 +389,10 @@
   "palette": {
     "title": "Palette",
     "followPens": "Suivre les pens installés",
+    "auto": "Auto",
     "manual": "Manuel",
     "followHint": "Les couleurs sont verrouillées aux pens installés dans le profil machine.",
+    "autoHint": "Extraction automatique (K-means) du nombre de couleurs choisi — chaque couleur devient un calque.",
     "noPensInstalled": "Aucun pen n'est marqué comme installé dans le profil actif.",
     "slotTooltip": "Slot {index} — {color}",
     "manualSwap": "{count} couleur(s) sur {total} n'ont pas de slot — {count} échange(s) manuel(s) seront demandés pendant le tracé ({slots} slots disponibles)."

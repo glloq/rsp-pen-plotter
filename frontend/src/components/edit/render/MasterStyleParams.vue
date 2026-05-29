@@ -7,7 +7,7 @@ import LayerCountBadge from '../shared/LayerCountBadge.vue'
 import DualRangeSlider from './DualRangeSlider.vue'
 
 // Per-style knobs exposed by the active master style. Two paths:
-//   - shaded styles (luminance_bands)   → bands slider (2..6) + ink
+//   - shaded styles (luminance_bands)   → bands slider (1..20) + ink
 //                                          colour + ONE compact range
 //                                          slider per dimension
 //                                          (spacing, density, cell,
@@ -162,8 +162,8 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <input
         :value="bitmap.num_bands"
         type="range"
-        min="2"
-        max="8"
+        min="1"
+        max="20"
         step="1"
         class="w-full accent-emerald-500"
         @input="(e) => setNumBands(Number((e.target as HTMLInputElement).value))"

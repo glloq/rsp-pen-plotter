@@ -67,7 +67,7 @@ const isCustomised = computed<boolean>(() => {
   if (b.segmentation_method !== seg.method) return true
   if (b.algorithm !== style.defaultAlgorithm) return true
   if (seg.method === 'luminance_bands') {
-    const baseline = seg.default_num_bands ?? 4
+    const baseline = seg.default_num_bands ?? 1
     if (b.num_bands !== baseline) return true
   } else if (seg.method === 'thresholds') {
     const baseline = seg.default_threshold ?? 0.5

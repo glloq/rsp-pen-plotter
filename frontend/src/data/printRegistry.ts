@@ -608,7 +608,11 @@ export const PRINT_STYLES: PrintStyle[] = [
     mode: 'monochrome',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 4,
+      // Default to a single luminance band → one layer, one pen. The
+      // shading slider (knob_bands) lets the operator add bands when they
+      // want tonal shading; each extra band is an extra layer they opt
+      // into explicitly.
+      default_num_bands: 1,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,
@@ -635,7 +639,11 @@ export const PRINT_STYLES: PrintStyle[] = [
     mode: 'monochrome',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 4,
+      // Default to a single luminance band → one layer, one pen. The
+      // shading slider (knob_bands) lets the operator add bands when they
+      // want tonal shading; each extra band is an extra layer they opt
+      // into explicitly.
+      default_num_bands: 1,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,
@@ -656,7 +664,11 @@ export const PRINT_STYLES: PrintStyle[] = [
     mode: 'monochrome',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 4,
+      // Default to a single luminance band → one layer, one pen. The
+      // shading slider (knob_bands) lets the operator add bands when they
+      // want tonal shading; each extra band is an extra layer they opt
+      // into explicitly.
+      default_num_bands: 1,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,
@@ -680,7 +692,9 @@ export const PRINT_STYLES: PrintStyle[] = [
     mode: 'monochrome',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 3,
+      // Single band by default (one layer, one pen); shading slider adds
+      // bands when the operator wants tonal depth.
+      default_num_bands: 1,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,
@@ -705,7 +719,11 @@ export const PRINT_STYLES: PrintStyle[] = [
     mode: 'monochrome',
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 4,
+      // Default to a single luminance band → one layer, one pen. The
+      // shading slider (knob_bands) lets the operator add bands when they
+      // want tonal shading; each extra band is an extra layer they opt
+      // into explicitly.
+      default_num_bands: 1,
       drop_background: true,
       background_luminance: 0.85,
       knob_bands: true,
