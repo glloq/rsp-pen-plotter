@@ -1099,7 +1099,8 @@
     "newPlotterFailed": "Impossible d'enregistrer le profil",
     "startPrint": "Lancer l'impression",
     "gcodeSection": "G-code généré",
-    "controlHint": "Connecte le traceur, pilote-le manuellement et lance les impressions depuis cet onglet."
+    "controlHint": "Connecte le traceur, pilote-le manuellement et lance les impressions depuis cet onglet.",
+    "settingsTitle": "Réglages du traceur"
   },
   "assignedColor": {
     "title": "Couleur du calque",

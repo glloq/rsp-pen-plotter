@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 
 export type CanvasTab = 'sheet' | 'simulator' | 'plotter'
 export type SettingsTab = 'system' | 'history' | 'audit' | 'slo' | 'manifests'
-export type PlotterTab = 'connection' | 'manual' | 'profile' | 'colors' | 'macros' | 'queue'
+export type PlotterTab = 'connection' | 'profile' | 'colors' | 'macros' | 'queue'
 
 export interface PreviewSheet {
   width_mm: number
@@ -68,9 +68,10 @@ export const useUiStore = defineStore('ui', () => {
   const canvasTab = ref<CanvasTab>('sheet')
   const settingsOpen = ref(false)
   const settingsTab = ref<SettingsTab>('system')
-  // Sub-navigation for the inline Plotter control tab (connection,
-  // manual, profile, colors, macros, queue). The legacy modal drawer
-  // was retired in favour of the main-page ``plotter`` canvas tab.
+  // Independent plotter-settings modal (connection, profile, colors,
+  // macros, queue). The main-page ``plotter`` canvas tab now hosts only
+  // the manual control; everything else lives in this modal.
+  const plotterSettingsOpen = ref(false)
   const plotterTab = ref<PlotterTab>('connection')
   const editModalOpen = ref(false)
   // Compare drawer (roadmap C.5): side-by-side rendering of two variants
@@ -174,11 +175,15 @@ export const useUiStore = defineStore('ui', () => {
     settingsOpen.value = false
   }
 
-  // Jump to the inline Plotter control tab, optionally pre-selecting a
-  // sub-tab. Replaces the old ``openPlotterDrawer`` modal entrypoint.
-  function openPlotter(tab?: PlotterTab): void {
+  // Open the independent plotter-settings modal, optionally pre-selecting
+  // a sub-tab (connection / profile / colors / macros / queue).
+  function openPlotterSettings(tab?: PlotterTab): void {
     if (tab) plotterTab.value = tab
-    canvasTab.value = 'plotter'
+    plotterSettingsOpen.value = true
+  }
+
+  function closePlotterSettings(): void {
+    plotterSettingsOpen.value = false
   }
 
   function openEditModal(): void {
@@ -248,6 +253,7 @@ export const useUiStore = defineStore('ui', () => {
     canvasTab,
     settingsOpen,
     settingsTab,
+    plotterSettingsOpen,
     plotterTab,
     editModalOpen,
     compareOpen,
@@ -257,7 +263,8 @@ export const useUiStore = defineStore('ui', () => {
     setPreviewSheet,
     openSettings,
     closeSettings,
-    openPlotter,
+    openPlotterSettings,
+    closePlotterSettings,
     openEditModal,
     closeEditModal,
     openCompare,

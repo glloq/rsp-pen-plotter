@@ -359,7 +359,7 @@ function onKey(event: KeyboardEvent): void {
   ) {
     return
   }
-  if (ui.editModalOpen || ui.settingsOpen) return
+  if (ui.editModalOpen || ui.settingsOpen || ui.plotterSettingsOpen) return
   // Only act on the sheet tab — the simulator and plotter tabs own
   // their own surface (the plotter tab even has text inputs), so a
   // stray Delete there must not remove a placement.
