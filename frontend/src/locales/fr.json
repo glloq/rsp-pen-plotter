@@ -1307,12 +1307,18 @@
       "openV1": "Ouvrir l'éditeur complet",
       "layerCount": "{count} couche | {count} couches",
       "noPlacement": "Ouvre un fichier depuis le panneau Fichiers puis clique Éditer. Sans placement, Générer n'a rien sur quoi s'appliquer.",
-      "noPlacementTitle": "Aucun placement actif"
+      "noPlacementTitle": "Aucun placement actif",
+      "chooseIntent": "Qu'est-ce qui compte le plus ?",
+      "previewLoading": "Mise à jour de l'aperçu…",
+      "previewError": "Aperçu indisponible — Générer fonctionne quand même."
     },
     "intent": {
       "fast": "Rapide",
       "balanced": "Équilibré",
-      "quality": "Qualité"
+      "quality": "Qualité",
+      "fastDesc": "Tracé le plus rapide",
+      "balancedDesc": "Bon défaut",
+      "qualityDesc": "Détail maximal"
     },
     "manifest": {
       "fallbackCache": "Manifestes algorithmes servis depuis le cache local — backend indisponible.",

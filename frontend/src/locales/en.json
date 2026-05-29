@@ -1307,12 +1307,18 @@
       "openV1": "Open full editor",
       "layerCount": "{count} layer | {count} layers",
       "noPlacement": "Open a file from the Files panel and click Edit on it. Without a placement, Generate has nothing to apply to.",
-      "noPlacementTitle": "No active placement"
+      "noPlacementTitle": "No active placement",
+      "chooseIntent": "What matters most?",
+      "previewLoading": "Updating preview…",
+      "previewError": "Preview unavailable — Generate still works."
     },
     "intent": {
       "fast": "Fast",
       "balanced": "Balanced",
-      "quality": "Quality"
+      "quality": "Quality",
+      "fastDesc": "Quickest plot",
+      "balancedDesc": "Good default",
+      "qualityDesc": "Finest detail"
     },
     "manifest": {
       "fallbackCache": "Algorithm manifest served from local cache — backend offline.",

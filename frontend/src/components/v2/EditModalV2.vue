@@ -1,34 +1,28 @@
 <script setup lang="ts">
-// Modal V2 — six-step decision flow (roadmap C.2 / audit #7 §3).
+// Modal V2 — beginner editor (assisted mode).
 //
-// Lives **in parallel** with the existing EditModal.vue and is gated
-// by the `modalV2` feature flag (toggle in expert mode or via
-// ``?flag.modalV2=1`` for QA). When the flag is off, callers route
-// through the v0.1 modal as before. The two modals share no state
-// today — the v0.2 modal stores its draft in local refs and only
-// calls into the backend via /policy/resolve.
+// Single-screen, zero-mandatory-step flow (roadmap C.2 / audit #7 §3,
+// simplified per operator feedback "encore plus simple, preview rapide
+// adaptée, un minimum d'interactions"). Lives **in parallel** with the
+// expert EditModal.vue and is gated by the assisted UX mode.
 //
-// Steps:
-//   1. Source Prep      — confirm/override the detected source_kind
-//   2. Intent           — fast / balanced / quality picker
-//   3. Algorithm        — recommendation from /policy/resolve + reasoning
-//   4. Colours / Pens   — palette source toggle (machine_only / free)
-//   5. Layers / Passes  — passes and per-layer overrides placeholder
-//   6. Preflight        — risk indicators + ETA + "Generate"
+// The whole decision (source kind, palette, algorithm, layers) is
+// resolved automatically from the placement + a single "intent" choice
+// (Rapide / Équilibré / Qualité, défaut Équilibré). The operator sees a
+// large LIVE preview of the real plotted result — re-rendered through
+// the same ``/rerender`` endpoint "Generate" uses — and commits in one
+// click. Power-user details (algorithme, couches, raisonnement) move to
+// the full editor, reachable via "Ouvrir l'éditeur complet".
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
 import type { Goal, PaletteMode, PolicyDecision, SourceKind } from '../../domain/policy/schemas'
-import { useUiModeStore } from '../../stores/uiMode'
 import { useUiStore } from '../../stores/ui'
 import { useJobStore } from '../../stores/job'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
-import LayerInspector from './LayerInspector.vue'
-import PipelineInspector from './PipelineInspector.vue'
-import StepperHeader from './StepperHeader.vue'
 
 const props = defineProps<{
   initialSourceKind?: SourceKind
@@ -37,14 +31,13 @@ const props = defineProps<{
   imageMegapixels?: number | null
   isMonoPenMachine?: boolean
   /** Layers from the currently-selected placement. Empty when the
-   *  operator hasn't picked one yet — the Couches step then falls
-   *  back to an explanatory placeholder. */
+   *  operator hasn't picked one yet. */
   layers?: readonly LayerInfo[]
-  /** Source file name from the active placement — surfaced in the
-   *  context bar so the operator can see what they're editing. */
+  /** Source file name from the active placement — surfaced as a caption
+   *  under the preview. */
   sourceName?: string
-  /** Sanitized SVG preview from the active placement; rendered as a
-   *  small thumbnail in the context bar. */
+  /** Sanitized SVG preview from the active placement; shown immediately
+   *  as the placeholder while the adapted render is computed. */
   previewSvg?: string
 }>()
 
@@ -55,115 +48,119 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-const STEPS = computed<{ id: string; label: string }[]>(() => [
-  { id: 'source', label: t('v2.modal.stepSource') },
-  { id: 'intent', label: t('v2.modal.stepIntent') },
-  { id: 'algorithm', label: t('v2.modal.stepAlgorithm') },
-  { id: 'colors', label: t('v2.modal.stepColors') },
-  { id: 'layers', label: t('v2.modal.stepLayers') },
-  { id: 'preflight', label: t('v2.modal.stepPreflight') },
-])
-
-const activeIndex = ref(0)
+const ui = useUiStore()
+const job = useJobStore()
 
 const sourceKind = ref<SourceKind>(props.initialSourceKind ?? 'bitmap_photo')
-const goal = ref<Goal>('fast')
 const paletteMode = ref<PaletteMode>(props.initialPaletteMode ?? 'machine_only')
+
+// Équilibré is the sensible default for a beginner: one good-enough
+// result with no questions asked. They can nudge faster/finer with a
+// single click if they want.
+const goal = ref<Goal>('balanced')
 
 const decision = ref<PolicyDecision | null>(null)
 const resolving = ref(false)
 const resolveError = ref<string | null>(null)
 
-async function next(): Promise<void> {
-  if (activeIndex.value === 1) {
-    // Leaving Intent → ask the resolver for a recommendation.
-    resolving.value = true
-    resolveError.value = null
-    try {
-      decision.value = await resolveAlgorithmPolicy({
-        source_kind: sourceKind.value,
-        goal: goal.value,
-        palette_mode: paletteMode.value,
-        available_colors_count: props.availableColorsCount ?? 1,
-        image_megapixels: props.imageMegapixels ?? null,
-        layer_count_estimate: 1,
-        is_mono_pen_machine: Boolean(props.isMonoPenMachine),
-      })
-    } catch (err) {
-      resolveError.value = (err as Error).message
-    } finally {
-      resolving.value = false
-    }
-  }
-  if (activeIndex.value < STEPS.value.length - 1) activeIndex.value += 1
-}
+// Live preview state. ``renderedSvg`` holds the adapted result; until
+// it lands we fall back to the original placement SVG so the pane is
+// never blank.
+const renderedSvg = ref<string | null>(null)
+const previewLoading = ref(false)
+const previewError = ref(false)
+let previewController: AbortController | null = null
 
-function previous(): void {
-  if (activeIndex.value > 0) activeIndex.value -= 1
-}
-
-function jump(i: number): void {
-  if (i <= activeIndex.value) activeIndex.value = i
-}
-
-const risks = computed<string[]>(() => {
-  const out: string[] = []
-  if (decision.value?.hard_constraints_applied.length) {
-    for (const c of decision.value.hard_constraints_applied) out.push(c.description)
-  }
-  return out
-})
+const INTENTS: readonly Goal[] = ['fast', 'balanced', 'quality'] as const
 
 // True when there's an active placement to apply the decision to.
-// We use ``previewSvg`` rather than ``layers`` because vector
-// sources may have zero LayerInfo entries (the algorithm wizard
-// still makes sense for them). The Generate button is locked when
-// this is false so the operator doesn't get a silent no-op.
 const hasPlacement = computed(() => Boolean(props.previewSvg || props.sourceName))
+
+// What the preview pane shows: the adapted render once available, else
+// the original placement SVG as an immediate placeholder.
+const shownSvg = computed(() => renderedSvg.value ?? props.previewSvg ?? null)
+
+/**
+ * Resolve the algorithm for the current intent, then render the real
+ * result across every layer. Aborts any in-flight preview so rapid
+ * intent toggles don't pile up stale renders. Errors degrade
+ * gracefully — the original SVG keeps showing and Generate stays
+ * usable as long as we have a decision.
+ */
+async function resolveAndPreview(): Promise<void> {
+  if (!hasPlacement.value) return
+  previewController?.abort()
+  const controller = new AbortController()
+  previewController = controller
+
+  resolving.value = true
+  resolveError.value = null
+  previewError.value = false
+  try {
+    const d = await resolveAlgorithmPolicy({
+      source_kind: sourceKind.value,
+      goal: goal.value,
+      palette_mode: paletteMode.value,
+      available_colors_count: props.availableColorsCount ?? 1,
+      image_megapixels: props.imageMegapixels ?? null,
+      layer_count_estimate: props.layers?.length || 1,
+      is_mono_pen_machine: Boolean(props.isMonoPenMachine),
+    })
+    if (controller.signal.aborted) return
+    decision.value = d
+  } catch (err) {
+    resolveError.value = (err as Error).message
+    resolving.value = false
+    return
+  }
+  resolving.value = false
+
+  // Now render the adapted result. Keep the previous render visible
+  // until the new one lands to avoid a flash back to the original.
+  previewLoading.value = true
+  try {
+    const result = await job.previewAlgorithmOnAllLayers(
+      decision.value.default_algorithm,
+      (decision.value.default_options ?? {}) as Record<string, unknown>,
+      controller.signal,
+    )
+    if (controller.signal.aborted) return
+    // ``null`` means nothing renderable (e.g. vector source with no
+    // layers) — fall back to the original SVG, not an error.
+    if (result) renderedSvg.value = result.svg
+  } catch {
+    if (!controller.signal.aborted) previewError.value = true
+  } finally {
+    if (!controller.signal.aborted) previewLoading.value = false
+  }
+}
+
+function selectGoal(g: Goal): void {
+  if (goal.value === g && decision.value) return
+  goal.value = g
+  void resolveAndPreview()
+}
 
 function confirm(): void {
   if (!hasPlacement.value || !decision.value) return
   emit('confirm', decision.value)
 }
 
-// Progressive disclosure (roadmap C.1 + C.2). In expert mode the
-// operator can flip into "advanced details" (level 2) which reveals
-// the reasoning chain, fallback list, PipelineInspector, and the raw
-// default-options JSON. Assisted mode stays at level 1 to keep the
-// step body minimal.
-const uiMode = useUiModeStore()
-const ui = useUiStore()
-const job = useJobStore()
 // Compare needs two variants on the active placement to be useful.
 const canCompare = computed(() => (job.selectedPlacement?.variants.length ?? 0) >= 2)
-const showAdvanced = computed(() => uiMode.isExpert && uiMode.expertDisclosureLevel === 2)
-function toggleAdvanced(): void {
-  uiMode.setExpertDisclosureLevel(uiMode.expertDisclosureLevel === 2 ? 1 : 2)
-}
 
-// Global modal shortcuts (Ctrl/Cmd+Enter = Suivant, Ctrl/Cmd+Backspace
-// = Précédent). The composable ignores keystrokes targeting inputs so
-// the select / radios on each step continue to work normally.
+// Ctrl/Cmd+Enter = Générer. No prev/next anymore — there's one screen.
 useKeyboardShortcuts([
   {
     id: 'modal.next',
     handler: () => {
-      if (resolving.value) return
-      if (activeIndex.value < STEPS.value.length - 1) void next()
-      else if (decision.value) confirm()
+      if (!resolving.value && decision.value) confirm()
     },
   },
-  { id: 'modal.previous', handler: previous },
 ])
 
-// Accessibility:
-// 1. Escape closes the modal (matches v1 modal + native dialogs).
-// 2. Focus is moved into the dialog on mount so screen readers
-//    announce the heading + the first interactive control.
-// 3. Focus trap keeps Tab cycling inside the dialog while it's open
-//    so the operator can't accidentally tab back into the page
-//    underneath.
+// Accessibility: Escape closes, focus moves into the dialog on mount,
+// and Tab is trapped inside while open (matches v1 + native dialogs).
 const dialogRoot = ref<HTMLElement | null>(null)
 
 function onWindowKey(event: KeyboardEvent): void {
@@ -191,7 +188,8 @@ function onWindowKey(event: KeyboardEvent): void {
 
 onMounted(async () => {
   window.addEventListener('keydown', onWindowKey)
-  // Defer focus until after the v-html preview thumbnail renders.
+  // Kick off the first preview immediately — zero clicks to a result.
+  void resolveAndPreview()
   await nextTick()
   if (!dialogRoot.value) return
   const first = dialogRoot.value.querySelector<HTMLElement>(
@@ -202,12 +200,25 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onWindowKey)
+  previewController?.abort()
 })
+
+// If the source kind changes (parent swaps file without remount), redo
+// the preview. The ``:key`` in App.vue normally remounts on placement
+// change, but this keeps us correct if that ever stops being true.
+watch(
+  () => props.initialSourceKind,
+  (next) => {
+    if (next && next !== sourceKind.value) {
+      sourceKind.value = next
+      void resolveAndPreview()
+    }
+  },
+)
 </script>
 
 <template>
-  <!-- Backdrop: fixed full-screen, semi-transparent, clicking outside
-       the card emits cancel just like the v1 modal does. -->
+  <!-- Backdrop: fixed full-screen, clicking outside the card cancels. -->
   <div
     class="modal-v2__backdrop"
     role="presentation"
@@ -226,7 +237,7 @@ onBeforeUnmount(() => {
         <AssistantModeToggle />
         <button
           type="button"
-          class="open-v1"
+          class="ghost-btn"
           :disabled="!canCompare"
           :title="t('compare.open')"
           data-test="modal-v2-compare-open"
@@ -236,7 +247,7 @@ onBeforeUnmount(() => {
         </button>
         <button
           type="button"
-          class="open-v1"
+          class="ghost-btn"
           :title="t('v2.modal.openV1')"
           data-test="modal-v2-open-v1"
           @click="emit('open-v1')"
@@ -254,31 +265,9 @@ onBeforeUnmount(() => {
         </button>
       </header>
 
-      <!-- Context bar — file name + tiny preview so the wizard isn't
-           floating in the void. Hidden when no placement is selected
-           (operator opened the modal pre-upload). -->
+      <!-- No placement: explain how to get one, lock Generate. -->
       <div
-        v-if="props.sourceName || props.previewSvg"
-        class="modal-v2__context"
-        data-test="modal-v2-context"
-      >
-        <div v-if="props.previewSvg" class="modal-v2__thumb" aria-hidden="true">
-          <!-- v-html: caller (App.vue) passes ``placement.svg`` which
-               was already sanitized by the upload pipeline. -->
-          <!-- eslint-disable-next-line vue/no-v-html -->
-          <div v-html="props.previewSvg" />
-        </div>
-        <div class="modal-v2__context-meta">
-          <p v-if="props.sourceName" class="modal-v2__filename">
-            {{ props.sourceName }}
-          </p>
-          <p v-if="props.layers && props.layers.length" class="modal-v2__counts">
-            {{ t('v2.modal.layerCount', { count: props.layers.length }) }}
-          </p>
-        </div>
-      </div>
-      <div
-        v-else
+        v-if="!hasPlacement"
         class="modal-v2__noplacement"
         role="status"
         aria-live="polite"
@@ -291,151 +280,76 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <StepperHeader :steps="STEPS" :active-index="activeIndex" @jump="jump" />
-
-      <section class="modal-v2__body">
-        <!-- 1. Source Prep -->
-        <div v-if="activeIndex === 0" data-test="step-source">
-          <p>Détection du type de source. L'algorithme par défaut s'adaptera.</p>
-          <label>
-            Type
-            <select v-model="sourceKind" data-test="source-kind-select">
-              <option value="bitmap_photo">Bitmap — photo</option>
-              <option value="bitmap_illustration">Bitmap — illustration</option>
-              <option value="vector_svg">Vecteur — SVG</option>
-              <option value="pdf_doc">Document PDF</option>
-              <option value="text_typography">Texte / typographie</option>
-            </select>
-          </label>
+      <template v-else>
+        <!-- Large live preview of the real adapted result. -->
+        <div class="modal-v2__preview" data-test="modal-v2-preview">
+          <!-- v-html: caller (App.vue) passes already-sanitized SVG,
+               and ``previewAlgorithmOnAllLayers`` returns backend-
+               rendered SVG from the same trusted pipeline. -->
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div
+            v-if="shownSvg"
+            class="modal-v2__preview-svg"
+            :class="{ 'is-stale': previewLoading }"
+            data-test="modal-v2-preview-svg"
+            v-html="shownSvg"
+          />
+          <div
+            v-if="previewLoading"
+            class="modal-v2__preview-overlay"
+            role="status"
+            aria-live="polite"
+            data-test="modal-v2-preview-loading"
+          >
+            <span class="spinner" aria-hidden="true" />
+            {{ t('v2.modal.previewLoading') }}
+          </div>
+          <p
+            v-if="previewError"
+            class="modal-v2__preview-error"
+            data-test="modal-v2-preview-error"
+          >
+            {{ t('v2.modal.previewError') }}
+          </p>
         </div>
 
-        <!-- 2. Intent -->
-        <div v-else-if="activeIndex === 1" data-test="step-intent">
-          <p>Quel est ton objectif&nbsp;?</p>
+        <!-- File caption. -->
+        <p v-if="props.sourceName" class="modal-v2__caption" data-test="modal-v2-context">
+          <span class="modal-v2__filename">{{ props.sourceName }}</span>
+          <span v-if="props.layers && props.layers.length" class="modal-v2__counts">
+            · {{ t('v2.modal.layerCount', { count: props.layers.length }) }}
+          </span>
+        </p>
+
+        <!-- The single decision: intent. Équilibré pre-selected. -->
+        <fieldset class="modal-v2__intent">
+          <legend>{{ t('v2.modal.chooseIntent') }}</legend>
           <div class="intent-grid">
             <button
-              v-for="opt in ['fast', 'balanced', 'quality'] as const"
+              v-for="opt in INTENTS"
               :key="opt"
               type="button"
               :class="{ active: goal === opt }"
+              :aria-pressed="goal === opt"
               :data-test="`intent-${opt}`"
-              @click="goal = opt"
+              @click="selectGoal(opt)"
             >
               <strong>{{ t(`v2.intent.${opt}`) }}</strong>
+              <span class="intent-desc">{{ t(`v2.intent.${opt}Desc`) }}</span>
             </button>
           </div>
-        </div>
+        </fieldset>
 
-        <!-- 3. Algorithm recommendation -->
-        <div v-else-if="activeIndex === 2" data-test="step-algorithm">
-          <div v-if="resolving">{{ t('v2.modal.resolving') }}</div>
-          <div v-else-if="resolveError" class="error">
-            {{ t('v2.modal.resolverError', { message: resolveError }) }}
-          </div>
-          <div v-else-if="decision">
-            <p>
-              Algo recommandé&nbsp;:
-              <strong data-test="recommended-algo">{{ decision.default_algorithm }}</strong>
-              (<span>{{ decision.quality_tier }}</span
-              >)
-            </p>
-            <button
-              v-if="uiMode.isExpert"
-              type="button"
-              class="disclosure-toggle"
-              data-test="disclosure-toggle"
-              :aria-pressed="showAdvanced"
-              @click="toggleAdvanced"
-            >
-              {{ showAdvanced ? 'Masquer les détails avancés' : 'Afficher les détails avancés' }}
-            </button>
-            <template v-if="showAdvanced">
-              <details open>
-                <summary>{{ t('v2.modal.why') }}</summary>
-                <ul>
-                  <li v-for="r in decision.reasoning" :key="r.rule">
-                    <code>{{ r.rule }}</code> — {{ r.description }}
-                  </li>
-                </ul>
-              </details>
-              <p v-if="decision.fallback_chain.length">
-                Fallbacks&nbsp;: {{ decision.fallback_chain.join(' → ') }}
-              </p>
-              <PipelineInspector :decision="decision" :source-kind="sourceKind" />
-            </template>
-            <details v-else>
-              <summary data-test="why-summary-collapsed">{{ t('v2.modal.why') }}</summary>
-              <ul>
-                <li v-for="r in decision.reasoning.slice(0, 1)" :key="r.rule">
-                  {{ r.description }}
-                </li>
-              </ul>
-            </details>
-          </div>
-        </div>
-
-        <!-- 4. Colours -->
-        <div v-else-if="activeIndex === 3" data-test="step-colors">
-          <p>Source de palette&nbsp;:</p>
-          <label>
-            <input v-model="paletteMode" type="radio" value="machine_only" />
-            Magazine machine uniquement (recommandé)
-          </label>
-          <label>
-            <input v-model="paletteMode" type="radio" value="free" />
-            Palette libre (mode expert)
-          </label>
-        </div>
-
-        <!-- 5. Layers -->
-        <div v-else-if="activeIndex === 4" data-test="step-layers">
-          <LayerInspector v-if="props.layers && props.layers.length" :layers="props.layers" />
-          <div v-else class="layers-empty">
-            <p>Les couches seront générées par l'algorithme recommandé.</p>
-            <p class="muted">
-              L'inspecteur de couches s'affichera ici dès qu'un placement actif aura été
-              sélectionné.
-            </p>
-          </div>
-        </div>
-
-        <!-- 6. Preflight -->
-        <div v-else-if="activeIndex === 5" data-test="step-preflight">
-          <h3>Récapitulatif</h3>
-          <ul>
-            <li>Source&nbsp;: {{ sourceKind }}</li>
-            <li>Intent&nbsp;: {{ goal }}</li>
-            <li>
-              Algo&nbsp;: <strong>{{ decision?.default_algorithm }}</strong>
-            </li>
-            <li>Quality tier&nbsp;: {{ decision?.quality_tier }}</li>
-            <li>Palette&nbsp;: {{ paletteMode }}</li>
-          </ul>
-          <div v-if="risks.length" class="risk-list" data-test="risk-list">
-            <strong>Points d'attention&nbsp;:</strong>
-            <ul>
-              <li v-for="r in risks" :key="r">{{ r }}</li>
-            </ul>
-          </div>
-        </div>
-      </section>
+        <p v-if="resolveError" class="error" data-test="modal-v2-resolve-error">
+          {{ t('v2.modal.resolverError', { message: resolveError }) }}
+        </p>
+      </template>
 
       <footer class="modal-v2__footer">
-        <button type="button" :disabled="activeIndex === 0" @click="previous">
-          {{ t('v2.modal.previous') }}
-        </button>
         <button
-          v-if="activeIndex < STEPS.length - 1"
           type="button"
-          :disabled="resolving"
-          @click="next"
-        >
-          {{ t('v2.modal.next') }}
-        </button>
-        <button
-          v-else
-          type="button"
-          :disabled="!decision || !hasPlacement"
+          class="generate-btn"
+          :disabled="!decision || !hasPlacement || resolving"
           :title="!hasPlacement ? t('v2.modal.noPlacement') : undefined"
           data-test="confirm-button"
           @click="confirm"
@@ -448,11 +362,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* Modal V2 chrome — matches the v1 EditModal pattern: full-screen
- * fixed backdrop with a centered card. Without this the component
- * would render inline in App.vue's flex flow and end up at the
- * bottom of the page (operator-reported bug).
- */
 .modal-v2__backdrop {
   position: fixed;
   inset: 0;
@@ -468,8 +377,8 @@ onBeforeUnmount(() => {
   background: white;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  padding: 1rem 1.5rem;
-  width: min(96vw, 760px);
+  padding: 1rem 1.5rem 1.25rem;
+  width: min(96vw, 640px);
   max-height: 92vh;
   overflow-y: auto;
   font-family: system-ui, sans-serif;
@@ -494,7 +403,7 @@ onBeforeUnmount(() => {
   color: #777;
   line-height: 1;
 }
-.open-v1 {
+.ghost-btn {
   border: 1px solid #cbd5e1;
   background: #f8fafc;
   color: #1e293b;
@@ -503,55 +412,162 @@ onBeforeUnmount(() => {
   font-size: 0.8rem;
   cursor: pointer;
 }
-.open-v1:hover:not(:disabled) {
+.ghost-btn:hover:not(:disabled) {
   background: #e2e8f0;
 }
-.open-v1:disabled {
+.ghost-btn:disabled {
   cursor: not-allowed;
   opacity: 0.4;
 }
-.modal-v2__context {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  background: #f1f5f9;
+
+/* Live preview — the star of the screen. */
+.modal-v2__preview {
+  position: relative;
+  height: clamp(220px, 42vh, 360px);
+  background:
+    repeating-conic-gradient(#f1f5f9 0% 25%, white 0% 50%) 0 / 20px 20px;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  margin-bottom: 0.75rem;
-}
-.modal-v2__thumb {
-  width: 80px;
-  height: 60px;
-  overflow: hidden;
-  background: white;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
-.modal-v2__thumb :deep(svg) {
+.modal-v2__preview-svg {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  transition: opacity 0.15s ease;
+}
+.modal-v2__preview-svg.is-stale {
+  opacity: 0.45;
+}
+.modal-v2__preview-svg :deep(svg) {
   max-width: 100%;
   max-height: 100%;
+  height: auto;
+  width: auto;
 }
-.modal-v2__context-meta {
-  flex: 1;
-  min-width: 0;
+.modal-v2__preview-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.4rem;
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+  color: #475569;
 }
-.modal-v2__filename {
+.modal-v2__preview-error {
+  position: absolute;
+  inset: auto 0.5rem 0.5rem;
   margin: 0;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.85rem;
-  color: #1e293b;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #b71c1c;
+  background: #fdecea;
+  padding: 0.35rem;
+  border-radius: 4px;
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #1f6feb;
+  border-radius: 50%;
+  animation: modal-v2-spin 0.7s linear infinite;
+}
+@keyframes modal-v2-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
+.modal-v2__caption {
+  margin: 0.4rem 0 0.85rem;
+  font-size: 0.8rem;
+  color: #64748b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.modal-v2__counts {
-  margin: 0.15rem 0 0;
-  font-size: 0.75rem;
+.modal-v2__filename {
+  font-family: ui-monospace, Menlo, monospace;
+  color: #334155;
+}
+
+.modal-v2__intent {
+  border: none;
+  padding: 0;
+  margin: 0 0 0.5rem;
+}
+.modal-v2__intent legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #334155;
+}
+.intent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+.intent-grid button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: white;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.08s ease;
+  cursor: pointer;
+  text-align: left;
+}
+.intent-grid button.active {
+  border-color: #1f6feb;
+  background: #eef4ff;
+  box-shadow: inset 0 0 0 1px #1f6feb;
+}
+.intent-grid button:hover:not(.active) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+.intent-grid button:active {
+  transform: scale(0.98);
+}
+.intent-grid button:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
+}
+.intent-desc {
+  font-size: 0.72rem;
   color: #64748b;
+  font-weight: 400;
+}
+
+.error {
+  color: #b71c1c;
+  background: #fdecea;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  margin: 0.5rem 0 0;
 }
 .modal-v2__noplacement {
   background: #fff4cc;
@@ -578,113 +594,37 @@ onBeforeUnmount(() => {
   font-size: 0.8rem;
   opacity: 0.85;
 }
-.modal-v2__body {
-  min-height: 12rem;
-  margin-bottom: 1rem;
-}
+
 .modal-v2__footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
-.modal-v2__footer button {
-  padding: 0.4rem 0.9rem;
-  border: 1px solid #cbd5e1;
-  background: #f8fafc;
-  color: #1e293b;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    transform 0.08s ease;
-}
-.modal-v2__footer button:hover:not(:disabled) {
-  background: #e2e8f0;
-}
-.modal-v2__footer button:active:not(:disabled) {
-  transform: scale(0.97);
-}
-.modal-v2__footer button:focus-visible {
-  outline: 2px solid #1f6feb;
-  outline-offset: 2px;
-}
-.modal-v2__footer button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.modal-v2__footer button[data-test='confirm-button'] {
+.generate-btn {
+  padding: 0.55rem 1.4rem;
+  border: 1px solid #1f6feb;
   background: #1f6feb;
   color: white;
-  border-color: #1f6feb;
-}
-.modal-v2__footer button[data-test='confirm-button']:hover:not(:disabled) {
-  background: #1959c7;
-}
-.intent-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-}
-.intent-grid button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 0.75rem;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  background: white;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
   transition:
     background 0.12s ease,
-    border-color 0.12s ease,
     transform 0.08s ease;
-  cursor: pointer;
-  text-align: left;
 }
-.intent-grid button.active {
-  border-color: #1f6feb;
-  background: #eef4ff;
+.generate-btn:hover:not(:disabled) {
+  background: #1959c7;
 }
-.intent-grid button:hover:not(.active) {
-  background: #f8fafc;
-  border-color: #94a3b8;
+.generate-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
-.intent-grid button:active {
-  transform: scale(0.98);
-}
-.intent-grid button:focus-visible {
+.generate-btn:focus-visible {
   outline: 2px solid #1f6feb;
   outline-offset: 2px;
 }
-.error {
-  color: #b71c1c;
-  background: #fdecea;
-  padding: 0.5rem;
-  border-radius: 4px;
-}
-.risk-list {
-  background: #fff4cc;
-  border: 1px solid #d9b800;
-  color: #5b4a00;
-  padding: 0.5rem 0.75rem;
-  border-radius: 4px;
-  margin-top: 0.5rem;
-}
-.layers-empty .muted {
-  color: #777;
-  font-size: 0.85rem;
-}
-.disclosure-toggle {
-  margin: 0.25rem 0 0.5rem;
-  padding: 0.2rem 0.6rem;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  background: #fafafa;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-.disclosure-toggle[aria-pressed='true'] {
-  background: #eef4ff;
-  border-color: #1f6feb;
+.generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>
