@@ -418,15 +418,15 @@ function bandSwatchStyle(i: number): Record<string, string> {
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.spiralSpacing') }}
           <span class="ml-1 font-mono text-[11px] text-slate-300"
-            >{{ (knobs.spacing_px ?? 4).toFixed(1) }} px</span
+            >{{ (knobs.spacing_px ?? 14).toFixed(0) }} px</span
           >
         </p>
         <input
           type="range"
-          min="1.5"
-          max="10"
-          step="0.5"
-          :value="knobs.spacing_px ?? 4"
+          min="6"
+          max="30"
+          step="1"
+          :value="knobs.spacing_px ?? 14"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('spacing_px', Number((e.target as HTMLInputElement).value))"
         />
@@ -437,15 +437,15 @@ function bandSwatchStyle(i: number): Record<string, string> {
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.spiralWavelength') }}
           <span class="ml-1 font-mono text-[11px] text-slate-300"
-            >{{ (knobs.wavelength_px ?? 8).toFixed(1) }} px</span
+            >{{ (knobs.wavelength_px ?? 10).toFixed(0) }} px</span
           >
         </p>
         <input
           type="range"
-          min="3"
-          max="20"
-          step="0.5"
-          :value="knobs.wavelength_px ?? 8"
+          min="4"
+          max="24"
+          step="1"
+          :value="knobs.wavelength_px ?? 10"
           class="w-full accent-emerald-500"
           @input="(e) => setKnob('wavelength_px', Number((e.target as HTMLInputElement).value))"
         />

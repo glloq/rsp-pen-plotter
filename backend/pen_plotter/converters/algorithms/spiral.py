@@ -68,22 +68,54 @@ class SpiralAlgorithm(RasterAlgorithm):
         if not bool_mask.any():
             return f"<g inkscape:label={quoteattr(label)}></g>"
 
+        # Cap the working resolution so the spiral's turn count, tone and
+        # cost stay consistent regardless of the source size / detail tier
+        # (``spacing_px`` then always means the same thing). We compute in
+        # the downscaled space and scale the emitted coordinates back to
+        # the original canvas with ``inv``.
+        work_cap = 1000
+        oh, ow = bool_mask.shape
+        inv = 1.0
+        if max(oh, ow) > work_cap:
+            ws = work_cap / float(max(oh, ow))
+            inv = 1.0 / ws
+            nh, nw = max(1, round(oh * ws)), max(1, round(ow * ws))
+            yi = np.clip((np.arange(nh) / ws).astype(np.intp), 0, oh - 1)
+            xi = np.clip((np.arange(nw) / ws).astype(np.intp), 0, ow - 1)
+            bool_mask = bool_mask[yi][:, xi]
+            if tone is not None:
+                tone = np.asarray(tone)[yi][:, xi]
+
         ys, xs = np.where(bool_mask)
         cx, cy = float(xs.mean()), float(ys.mean())
         max_r = float(np.hypot(xs - cx, ys - cy).max()) + spacing + max_amp
         turns = max(1, int(max_r / spacing))
-        # Base sampling: ``samples_per_turn`` per revolution. When
-        # modulating, lift it so the outermost (longest) turn still gets
-        # ~8 samples per wavelength — otherwise the wave aliases into
-        # spikes. Total spiral arc length ≈ π·spacing·turns² (sum of the
-        # per-turn circumferences); cap the sample count so a tight spiral
-        # on a big canvas can't blow up the SVG.
+        # --- Bounded sampling ---------------------------------------------
+        # A spiral covering a big canvas with tight spacing has an enormous
+        # arc length (≈ π·spacing·turns²); emitting a point per pixel would
+        # produce a multi-megabyte path that locks up the live preview. So:
+        #   * cap the turn count (widening the spacing to still fill the
+        #     region) — keeps a deep zoom / high-detail tier from exploding;
+        #   * cap the total sample budget;
+        #   * sample with a √-spaced angle so the points are roughly EQUAL
+        #     arc length apart (uniform-angle would crowd the centre and
+        #     starve the outer turns, aliasing the wobble there);
+        #   * coarsen the wobble wavelength to the actual sample step so the
+        #     sine never aliases into spikes.
+        point_budget = 14000
+        min_samples_per_turn = 24
+        max_turns = max(1, point_budget // min_samples_per_turn)
+        if turns > max_turns:
+            turns = max_turns
+            spacing = max_r / turns
+        arc_len = math.pi * spacing * turns * turns
         total_samples = turns * samples_per_turn
         if modulating:
-            arc_len = math.pi * spacing * turns * turns
-            needed = int(8.0 * arc_len / wavelength)
-            total_samples = max(total_samples, min(needed, 40000))
-        t = np.linspace(0, turns * 2 * math.pi, total_samples)
+            total_samples = max(total_samples, int(8.0 * arc_len / wavelength))
+        total_samples = max(min(total_samples, point_budget), turns * min_samples_per_turn, 2)
+        theta_max = turns * 2 * math.pi
+        # √-spaced angle → near-constant arc step (arc ∝ θ²).
+        t = theta_max * np.sqrt(np.linspace(0.0, 1.0, total_samples))
         # Archimedean spiral: r = (spacing / 2π) * θ.
         r = (spacing / (2 * math.pi)) * t
         if modulating:
@@ -92,6 +124,9 @@ class SpiralAlgorithm(RasterAlgorithm):
             x0 = r * np.cos(t)
             y0 = r * np.sin(t)
             cum = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(x0), np.diff(y0)))))
+            # Keep ≥4 samples per wobble given the real (max) step.
+            step = float(np.max(np.diff(cum))) if cum.size > 1 else wavelength
+            eff_wavelength = max(wavelength, 4.0 * step)
             if tone is not None:
                 # Per-point amplitude from local darkness. Sample the tone
                 # map at each base point; off-canvas points read as white
@@ -104,7 +139,7 @@ class SpiralAlgorithm(RasterAlgorithm):
                 amp = strength * max_amp * np.clip(darkness, 0.0, 1.0)
             else:
                 amp = scalar_amp
-            r = r + amp * np.sin(2 * math.pi * cum / wavelength)
+            r = r + amp * np.sin(2 * math.pi * cum / eff_wavelength)
             np.clip(r, 0.0, None, out=r)
         sx = cx + r * np.cos(t)
         sy = cy + r * np.sin(t)
@@ -119,7 +154,8 @@ class SpiralAlgorithm(RasterAlgorithm):
         current: list[tuple[float, float]] = []
         for i, v in enumerate(valid):
             if v:
-                current.append((float(sx[i]), float(sy[i])))
+                # Scale back to the original canvas (no-op when not capped).
+                current.append((float(sx[i]) * inv, float(sy[i]) * inv))
             elif current:
                 if len(current) >= 2:
                     polylines.append(current)
