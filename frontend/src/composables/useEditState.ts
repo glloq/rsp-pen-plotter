@@ -47,13 +47,18 @@ const _previewMode = ref<PreviewMode>('auto')
 // field and the estimator both share the source of truth.)
 const QUALITY_KEY = 'previewQuality'
 function _loadQuality(): PreviewQuality {
+  // The preview toolbar now exposes only two tiers — ``draft`` (fast,
+  // responsive while dragging sliders) and ``final`` (full fidelity).
+  // The legacy middle tier ``standard`` is migrated to ``draft`` so a
+  // stored preference always maps onto a visible button instead of
+  // leaving the toggle group with nothing highlighted.
   try {
     const v = localStorage.getItem(QUALITY_KEY)
-    if (v === 'draft' || v === 'standard' || v === 'final') return v
+    if (v === 'draft' || v === 'final') return v
   } catch {
     /* localStorage unavailable — fall through */
   }
-  return 'standard'
+  return 'draft'
 }
 const _previewQuality = ref<PreviewQuality>(_loadQuality())
 watch(_previewQuality, (value) => {
