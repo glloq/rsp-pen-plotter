@@ -49,8 +49,10 @@ const thresholdValue = computed({
 })
 
 function setNumBands(value: number): void {
-  props.bitmap.num_bands = value
-  draft.markSegmentationTouched('num_bands')
+  // Delegate to the draft so the background-drop threshold is auto-tuned
+  // to the new band count (keeps the near-white paper band dropped at any
+  // N instead of hatching the background at low counts).
+  draft.setNumBands(value)
 }
 
 // ---- Mono ink colour ----
@@ -76,7 +78,7 @@ function setKnob<K extends string>(key: K, value: unknown): void {
 }
 
 // ---- Pencil angle chips ----
-const PENCIL_ANGLE_OPTIONS = [0, 45, 90, 135] as const
+const PENCIL_ANGLE_OPTIONS = [0, 30, 45, 90, 135, 150] as const
 function toggleAngle(angle: number): void {
   const current = [...(knobs.value.angles ?? [])]
   const idx = current.indexOf(angle)
@@ -181,8 +183,8 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <input
         v-model.number="thresholdValue"
         type="range"
-        min="0.1"
-        max="0.9"
+        min="0.05"
+        max="0.95"
         step="0.05"
         class="w-full accent-emerald-500"
       />

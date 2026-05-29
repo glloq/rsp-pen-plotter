@@ -502,6 +502,40 @@ export function markSegmentationTouched(...fields: SegmentationField[]): void {
   _segmentationTouched.value = next
 }
 
+// Background-drop threshold that drops exactly the lightest luminance
+// band (the near-white paper) for an N-band split. Bands are equally
+// spaced over [0,1], so the lightest spans [(N-1)/N, 1]; a threshold at
+// its lower edge (N-1)/N drops it while keeping the next-lightest band.
+// This scales with the band count, so a 2-band plot no longer hatches
+// the white background (the old fixed 0.85 only caught the paper band at
+// 4+ bands) and adding bands keeps the paper dropped.
+export function autoBackgroundLuminance(numBands: number): number {
+  const n = Math.max(1, numBands)
+  // Single band: there is no separate paper band to drop — keep it and
+  // only treat pure white as background, otherwise (1-1)/1 = 0 would
+  // drop the only layer and render nothing.
+  if (n <= 1) return 1.0
+  return (n - 1) / n
+}
+
+// Set the luminance-band count and auto-tune the background-drop
+// threshold to the new count so the paper band stays dropped at any N —
+// unless the operator pinned the threshold by hand (PostProcessCard marks
+// it touched). Marks num_bands touched so a later style switch warns
+// before clobbering it.
+export function setNumBands(value: number): void {
+  const b = _bitmap.value
+  b.num_bands = value
+  if (
+    b.segmentation_method === 'luminance_bands' &&
+    b.drop_background &&
+    !_segmentationTouched.value.has('background_luminance')
+  ) {
+    b.background_luminance = autoBackgroundLuminance(value)
+  }
+  markSegmentationTouched('num_bands')
+}
+
 // Per-style segmentation rewrite, centralised so ``setPrintMode`` and
 // ``setMasterStyle`` (the StyleTab picker) share one path. Returns the
 // list of touched fields that were about to be overwritten — empty when
@@ -565,6 +599,11 @@ function applyStyleSegmentation(
     if (b.num_bands < 1 || b.num_bands > 20) {
       b.num_bands = seg.default_num_bands ?? 1
     }
+    // Override the registry's fixed background_luminance with one tuned to
+    // the resulting band count so the paper band is dropped at any N
+    // (see autoBackgroundLuminance). Binary/thresholds styles keep their
+    // own fixed value set above.
+    b.background_luminance = autoBackgroundLuminance(b.num_bands)
   } else if (seg.method === 'thresholds') {
     b.thresholds = [seg.default_threshold ?? 0.5]
   } else if (seg.method === 'kmeans') {
@@ -1172,6 +1211,7 @@ export function useBitmapDraft() {
     resetMulticolorStyleKnobs,
     interpolatedBandOptions,
     markSegmentationTouched,
+    setNumBands,
     rehydrateDraft: rehydrateDraftAndMark,
     applyPresetOptions,
     buildSegmentationOptions,
