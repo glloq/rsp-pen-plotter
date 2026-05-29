@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 
 // Post-processing filters applied after segmentation, regardless of
 // method: drop near-background pixels, prune small artifact regions
@@ -16,11 +17,20 @@ interface BitmapDraft {
   [key: string]: unknown
 }
 
-defineProps<{
+const props = defineProps<{
   bitmap: BitmapDraft
 }>()
 
 const { t } = useI18n()
+const draft = useBitmapDraft()
+
+// Manual edit of the background-drop threshold pins it: mark it touched so
+// the band-count auto-tune (setNumBands) stops overriding the operator's
+// chosen value.
+function onBgLuminanceInput(e: Event): void {
+  props.bitmap.background_luminance = Number((e.target as HTMLInputElement).value)
+  draft.markSegmentationTouched('background_luminance')
+}
 </script>
 
 <template>
@@ -35,7 +45,7 @@ const { t } = useI18n()
           v-model.number="bitmap.min_region_pixels"
           type="number"
           min="0"
-          max="1000"
+          max="5000"
           class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
         />
       </label>
@@ -63,12 +73,13 @@ const { t } = useI18n()
       <label class="block text-slate-400"
         >{{ t('convert.bgLuminance') }}
         <input
-          v-model.number="bitmap.background_luminance"
+          :value="bitmap.background_luminance"
           type="number"
           min="0"
           max="1"
           step="0.01"
           class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          @input="onBgLuminanceInput"
         />
       </label>
     </div>
