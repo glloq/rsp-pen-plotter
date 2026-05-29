@@ -531,7 +531,7 @@ function applyStyleSegmentation(
       wouldOverwrite.push('background_luminance')
     if (seg.method === 'luminance_bands' && _segmentationTouched.value.has('num_bands')) {
       const target = seg.default_num_bands ?? 1
-      if (b.num_bands !== target && (b.num_bands < 1 || b.num_bands > 6)) {
+      if (b.num_bands !== target && (b.num_bands < 1 || b.num_bands > 20)) {
         wouldOverwrite.push('num_bands')
       }
     }
@@ -560,8 +560,9 @@ function applyStyleSegmentation(
     // A single band (1 layer) is a valid, intentional choice — only
     // reset to the style default when the count is truly out of range,
     // so entering monochrome lands on one layer and the operator's
-    // shading-slider value is preserved across style switches.
-    if (b.num_bands < 1 || b.num_bands > 6) {
+    // shading-slider value is preserved across style switches. Up to 20
+    // shading bands are allowed for fine tonal ramps.
+    if (b.num_bands < 1 || b.num_bands > 20) {
       b.num_bands = seg.default_num_bands ?? 1
     }
   } else if (seg.method === 'thresholds') {

@@ -389,8 +389,10 @@
   "palette": {
     "title": "Palette",
     "followPens": "Follow installed pens",
+    "auto": "Auto",
     "manual": "Manual",
     "followHint": "Colours are locked to the pens installed in the machine profile.",
+    "autoHint": "Automatic (k-means) extraction of the chosen number of colours — each colour becomes a layer.",
     "noPensInstalled": "No pens are marked as installed in the active profile.",
     "slotTooltip": "Slot {index} — {color}",
     "manualSwap": "{count} of {total} colours have no pen slot — {count} manual swap(s) will be requested during the plot (only {slots} slots available)."

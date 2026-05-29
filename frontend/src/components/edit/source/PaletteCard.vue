@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
@@ -36,14 +37,41 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const draft = useBitmapDraft()
 
-function setPaletteSource(follows: boolean): void {
-  emit('update:paletteFollowsPens', follows)
-  if (!follows && !props.bitmap.palette.length) {
-    // First switch to manual with an empty palette: seed it with the
-    // installed pens so the user has something to edit instead of a
-    // blank list.
+// Three palette sources, derived from the existing draft state (no new
+// field): follow installed pens, automatic k-means on ``num_colors``,
+// or a hand-picked fixed palette. ``auto`` is the mode that frees the
+// "number of colours" slider — without it the default pen-follow lock
+// pins the cluster count to the installed-pen count and the slider
+// reads as broken.
+type PaletteSource = 'pens' | 'auto' | 'manual'
+const source = computed<PaletteSource>(() => {
+  if (props.paletteFollowsPens) return 'pens'
+  return props.bitmap.palette.length > 0 ? 'manual' : 'auto'
+})
+
+function selectPens(): void {
+  // The StyleTab watcher rewrites segmentation → fixed_palette + the
+  // installed-pen colours when paletteFollowsPens flips back on.
+  emit('update:paletteFollowsPens', true)
+}
+
+function selectAuto(): void {
+  emit('update:paletteFollowsPens', false)
+  // Automatic mode = k-means on ``num_colors``: clear any pinned palette
+  // so the segmentation method is kmeans and the count slider drives the
+  // result.
+  props.bitmap.palette = []
+  props.bitmap.segmentation_method = 'kmeans'
+}
+
+function selectManual(): void {
+  emit('update:paletteFollowsPens', false)
+  if (!props.bitmap.palette.length) {
+    // Seed manual mode with the installed pens so the user has something
+    // to edit instead of a blank list.
     props.bitmap.palette = [...props.installedPenColors]
   }
+  props.bitmap.segmentation_method = 'fixed_palette'
 }
 
 function addPaletteColour(): void {
@@ -84,22 +112,32 @@ function updatePaletteColour(i: number, value: string): void {
           type="button"
           class="px-2 py-0.5 text-[10px] transition"
           :class="
-            paletteFollowsPens ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800'
+            source === 'pens' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800'
           "
           :disabled="!installedPenColors.length"
-          @click="setPaletteSource(true)"
+          @click="selectPens"
         >
           {{ t('palette.followPens') }}
         </button>
         <button
           type="button"
-          class="px-2 py-0.5 text-[10px] transition"
+          class="border-l border-slate-700 px-2 py-0.5 text-[10px] transition"
           :class="
-            !paletteFollowsPens
+            source === 'auto' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800'
+          "
+          @click="selectAuto"
+        >
+          {{ t('palette.auto') }}
+        </button>
+        <button
+          type="button"
+          class="border-l border-slate-700 px-2 py-0.5 text-[10px] transition"
+          :class="
+            source === 'manual'
               ? 'bg-slate-700 text-slate-100'
               : 'text-slate-400 hover:bg-slate-800'
           "
-          @click="setPaletteSource(false)"
+          @click="selectManual"
         >
           {{ t('palette.manual') }}
         </button>
@@ -108,7 +146,7 @@ function updatePaletteColour(i: number, value: string): void {
 
     <!-- Pen-following: chips locked to the installed pens, with slot
          numbers so the user knows which pen will plot what. -->
-    <div v-if="paletteFollowsPens" class="space-y-1.5">
+    <div v-if="source === 'pens'" class="space-y-1.5">
       <p v-if="!installedPenColors.length" class="text-[10px] text-amber-300">
         {{ t('palette.noPensInstalled') }}
       </p>
@@ -128,6 +166,22 @@ function updatePaletteColour(i: number, value: string): void {
         </span>
       </div>
       <p class="text-[10px] text-slate-500">{{ t('palette.followHint') }}</p>
+    </div>
+
+    <!-- Auto: k-means on a freely-chosen number of colours. -->
+    <div v-else-if="source === 'auto'" class="space-y-2">
+      <label class="block text-slate-400">
+        {{ t('convert.numColors') }}
+        <LayerCountBadge :count="draft.expectedLayerCount.value" />
+        <input
+          v-model.number="bitmap.num_colors"
+          type="number"
+          min="1"
+          max="16"
+          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+        />
+      </label>
+      <p class="text-[10px] text-slate-500">{{ t('palette.autoHint') }}</p>
     </div>
 
     <!-- Manual: editable palette + add. -->
