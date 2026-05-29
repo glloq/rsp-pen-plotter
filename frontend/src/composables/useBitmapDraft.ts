@@ -826,7 +826,7 @@ function colorRecipeFromKnobs(
       // Darker clusters first → density_max at i=0, density_min at the
       // lightest cluster. Mirrors the mono ``stippling-shade`` recipe so
       // the slider direction is consistent between modes.
-      const density = lerp(i, total, knobs.density_max ?? 0.05, knobs.density_min ?? 0.012)
+      const density = lerp(i, total, knobs.density_max ?? 0.18, knobs.density_min ?? 0.02)
       return {
         algorithm: 'voronoi_stipple',
         algorithm_options: {
@@ -910,7 +910,7 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-stippling-classic': {
-      const density = lerp(i, total, knobs.density_max ?? 0.05, knobs.density_min ?? 0.012)
+      const density = lerp(i, total, knobs.density_max ?? 0.18, knobs.density_min ?? 0.02)
       return {
         algorithm: 'stippling',
         algorithm_options: {
@@ -958,7 +958,7 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-tsp': {
-      const density = lerp(i, total, knobs.density_max ?? 0.05, knobs.density_min ?? 0.012)
+      const density = lerp(i, total, knobs.density_max ?? 0.12, knobs.density_min ?? 0.02)
       return {
         algorithm: 'tsp',
         algorithm_options: { density, seed: i * 11 + 5 },
@@ -1003,13 +1003,13 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-tsp-opt': {
-      const density = lerp(i, total, knobs.density_max ?? 0.05, knobs.density_min ?? 0.012)
+      const density = lerp(i, total, knobs.density_max ?? 0.12, knobs.density_min ?? 0.02)
       return {
         algorithm: 'tsp_opt',
         algorithm_options: {
           density,
-          max_points: knobs.max_points ?? 4000,
-          time_budget_s: knobs.time_budget_s ?? 1.5,
+          max_points: knobs.max_points ?? 8000,
+          time_budget_s: knobs.time_budget_s ?? 2.0,
           poisson_disk: true,
           seed: i * 19 + 3,
         },
@@ -1059,11 +1059,11 @@ function colorRecipeFromKnobs(
     }
     case 'color-circle-pack': {
       // Darker clusters → smaller bubbles (radius_min) so coverage reads denser.
-      const maxR = lerp(i, total, knobs.radius_min ?? 6, knobs.radius_max ?? 11)
+      const maxR = lerp(i, total, knobs.radius_min ?? 3, knobs.radius_max ?? 7)
       return {
         algorithm: 'circle_pack',
         algorithm_options: {
-          min_radius_px: 1.5,
+          min_radius_px: 1.0,
           max_radius_px: maxR,
           gap_px: knobs.gap_px ?? 0.6,
           seed: i * 17 + 5,
