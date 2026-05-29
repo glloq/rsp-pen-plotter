@@ -38,9 +38,12 @@ describe('printRegistry', () => {
       expect(s.segmentation, `style ${s.id} missing segmentation`).toBeDefined()
       const seg = s.segmentation!
       expect(['luminance_bands', 'thresholds', 'kmeans', 'fixed_palette']).toContain(seg.method)
-      // Knob slider is only sensible for band-based segmentations.
+      // Band-based monochrome styles default to a single layer (1 band);
+      // the shading slider lets the operator add bands. Must still be a
+      // valid 1..6 band count.
       if (seg.method === 'luminance_bands') {
-        expect(seg.default_num_bands).toBeGreaterThanOrEqual(2)
+        expect(seg.default_num_bands).toBeGreaterThanOrEqual(1)
+        expect(seg.default_num_bands).toBeLessThanOrEqual(6)
       }
       if (seg.method === 'thresholds') {
         expect(seg.default_threshold).toBeGreaterThan(0)
