@@ -432,6 +432,23 @@ function recipeFromKnobs(
   }
 }
 
+// Synthesize the full recipe (algorithm + options) for band ``i`` of
+// ``total`` from the *live* operator knobs of the active mono master
+// style — including any pinned per-band override. This is the same
+// recipe ``buildMonoBandRecipes`` ships to /preview & /upload, exposed
+// so the post-upload per-layer propagation (``applyMasterStyleToLayers``)
+// can apply exactly what the Style tab sliders specify instead of the
+// registry's hardcoded ``bandRecipe`` defaults. Returns null only when
+// the active style has neither knobs nor a registry recipe.
+export function monoRecipeForBand(
+  i: number,
+  total: number,
+): { algorithm: string; algorithm_options: Record<string, unknown> } | null {
+  const style = resolveMasterStyle(_monoMasterStyleId.value)
+  const knobs = _mono.value.perStyle[style.id]
+  return recipeFromKnobs(style, knobs, i, total)
+}
+
 // Compute the synthesized algorithm_options for band ``i`` exactly as
 // ``buildMonoBandRecipes`` would emit them, *ignoring* any pinned
 // perBand override. Used by the "Advanced (per band)" drawer to

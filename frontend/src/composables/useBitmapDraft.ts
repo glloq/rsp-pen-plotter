@@ -69,6 +69,7 @@ import {
   markMonoCommitted,
   monoMasterStyleIdRef,
   monoPenSlotRef,
+  monoRecipeForBand,
   monoRef,
   rehydrateMonoFromOptions,
   resetMonoRecipe,
@@ -1075,6 +1076,23 @@ function colorRecipeFromKnobs(
   }
 }
 
+// Synthesize the full recipe for colour cluster ``i`` (of ``total``)
+// from the *live* operator knobs of the active multicolour master
+// style. Twin of ``monoRecipeForBand`` — exposed so the post-upload
+// per-layer propagation applies exactly what the Style tab sliders
+// specify rather than the registry's hardcoded ``colorRecipe``
+// defaults. ``hex`` is the cluster's source colour so hue-branching
+// recipes (CMYK halftone angles, etc.) stay accurate.
+export function multicolorRecipeForCluster(
+  i: number,
+  total: number,
+  hex: string,
+): { algorithm: string; algorithm_options: Record<string, unknown> } | null {
+  const style = resolveMulticolorStyle(_multicolorMasterStyleId.value)
+  const knobs = _multicolor.value.perStyle[style.id]
+  return colorRecipeFromKnobs(style, knobs, i, total, hex)
+}
+
 export function buildBitmapOptions(): Record<string, unknown> {
   const b = _bitmap.value
   const c = _curves.value
@@ -1293,6 +1311,8 @@ export function useBitmapDraft() {
     setMulticolorKnob,
     resetMulticolorStyleKnobs,
     interpolatedBandOptions,
+    monoRecipeForBand,
+    multicolorRecipeForCluster,
     markSegmentationTouched,
     setNumBands,
     rehydrateDraft: rehydrateDraftAndMark,

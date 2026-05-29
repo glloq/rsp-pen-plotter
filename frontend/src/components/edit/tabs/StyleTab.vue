@@ -62,9 +62,7 @@ onMounted(() => {
   if (!availableColorsStore.loaded) void availableColorsStore.refresh()
 })
 
-const availableHexes = computed<string[]>(() =>
-  availableColorsStore.ordered.map((c) => c.hex),
-)
+const availableHexes = computed<string[]>(() => availableColorsStore.ordered.map((c) => c.hex))
 
 const effectivePalette = computed<string[]>(() =>
   resolveEffectivePalette(paletteSource.source, installedPenColors.value, availableHexes.value),
@@ -123,6 +121,9 @@ async function onMasterStyleChange(id: string): Promise<void> {
     await applyMasterStyleToLayers(store, {
       styleId: id,
       penSlot: draft.monoPenSlot.value,
+      // Honour the operator's live mono sliders so the per-layer
+      // recipes match the preview instead of the registry defaults.
+      recipeResolver: (index, total) => draft.monoRecipeForBand(index, total),
     })
   }
 }
@@ -138,7 +139,14 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
     // Multicolour styles don't have a target pen slot — each layer
     // already carries its own ``target_pen_slot`` from segmentation /
     // pen matching, so just push the default algorithm + options.
-    await applyMasterStyleToLayers(store, { styleId: id, penSlot: null })
+    // The resolver feeds the operator's live multicolour sliders
+    // (spacing / density / angle-step ranges) so the per-cluster
+    // recipes match the preview.
+    await applyMasterStyleToLayers(store, {
+      styleId: id,
+      penSlot: null,
+      recipeResolver: (index, total, hex) => draft.multicolorRecipeForCluster(index, total, hex),
+    })
   }
 }
 </script>

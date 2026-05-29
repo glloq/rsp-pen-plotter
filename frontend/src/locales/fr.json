@@ -548,7 +548,9 @@
     "sunburst": "Soleil",
     "sunburstDesc": "Rayons émanant du centroïde de la région.",
     "circlePack": "Empilement de cercles",
-    "circlePackDesc": "Cercles empilés sans chevauchement — remplissage bulles."
+    "circlePackDesc": "Cercles empilés sans chevauchement — remplissage bulles.",
+    "showAll": "Tous les styles ({count} de plus)",
+    "showFewer": "Styles courants seulement"
   },
   "execute": {
     "connection": "Connexion",
@@ -662,6 +664,7 @@
   "layers": {
     "title": "Calques",
     "dragHint": "glisser pour réordonner",
+    "convertSyncHint": "Les réglages globaux de style et de couleur de l'onglet Style sont appliqués à chaque calque au moment du clic sur « Importer & convertir ». Les ajustements par calque ci-dessous priment sur le style global et sont conservés d'une conversion à l'autre.",
     "groupByPen": "Grouper par stylo (moins de changements d'outil)",
     "empty": "Aucun calque pour l'instant.",
     "penSlot": "Emplacement stylo",

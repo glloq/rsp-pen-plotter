@@ -48,6 +48,20 @@ export interface PropagationOptions {
   // operator doesn't see the manual-swap warning for an N-band image
   // they want to print with one pen.
   penSlot?: number | null
+  // Operator-tuned recipe resolver. When provided, it takes precedence
+  // over the registry's hardcoded ``colorRecipe`` / ``bandRecipe`` so
+  // the per-layer propagation reflects the *live* Style-tab sliders
+  // (spacing / density / angle ranges, per-band pins, …) rather than
+  // the style's factory defaults. Returns null to fall back to the
+  // registry recipe for that layer — that's how a freshly-added style
+  // without operator knobs still propagates via the legacy contract.
+  // ``index``/``total``/``hex`` mirror the registry recipe signature so
+  // the same darkest-first ordering and hue branching apply.
+  recipeResolver?: (
+    index: number,
+    total: number,
+    hex: string,
+  ) => { algorithm: string; algorithm_options: Record<string, unknown> } | null
 }
 
 // Apply a master style's per-band recipe to every layer currently in
@@ -77,14 +91,20 @@ export async function applyMasterStyleToLayers(
     ) {
       store.updateLayer(layer.layer_id, { target_pen_slot: options.penSlot })
     }
-    // Multicolour masters branch on the cluster hex via ``colorRecipe``
-    // (e.g. CMYK halftone picks an angle per ink, watercolour shifts
-    // density by source hue). Mono shaded masters use ``bandRecipe``
-    // keyed only by the band index. Try each in turn before falling
-    // back to the style's flat default — that way single-recipe styles
-    // and dual-mode helpers keep working untouched.
+    // Resolution order, most → least specific:
+    //   1. operator-tuned ``recipeResolver`` (live Style-tab sliders) —
+    //      so what the picker would render and what the layers get stay
+    //      in lockstep for every style.
+    //   2. multicolour ``colorRecipe`` — branches on the cluster hex
+    //      (e.g. CMYK halftone picks an angle per ink).
+    //   3. mono ``bandRecipe`` — keyed only by the band index.
+    //   4. the style's flat default.
+    // Steps 2-4 are the registry fallback the resolver returns null to
+    // defer to, so single-recipe styles and dual-mode helpers keep
+    // working untouched.
     const hex = layer.source_color ?? '#000000'
-    const recipe = style.colorRecipe?.(i, total, hex) ??
+    const recipe = options.recipeResolver?.(i, total, hex) ??
+      style.colorRecipe?.(i, total, hex) ??
       style.bandRecipe?.(i, total) ?? {
         algorithm: style.defaultAlgorithm,
         algorithm_options: { ...style.defaultAlgorithmOptions },
