@@ -527,8 +527,11 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     spacing_max: 12,
   },
   'voronoi-shade': {
-    density_min: 0.008,
-    density_max: 0.06,
+    // Aligned with ``stippling-shade`` — both expose the same density
+    // slider (0.005..0.5), so their defaults must match for a consistent
+    // dark→light tonal ramp between the two pointillist masters.
+    density_min: 0.012,
+    density_max: 0.15,
     dot_radius: 0.5,
   },
   'hatch-fill': {
@@ -892,11 +895,13 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'voronoi_stipple',
-    defaultAlgorithmOptions: { density: 0.03, dot_radius_px: 0.5, iterations: 6, seed: 0 },
+    defaultAlgorithmOptions: { density: 0.08, dot_radius_px: 0.5, iterations: 6, seed: 0 },
     bandRecipe(i, total) {
       // Like stippling-shade but the dots are Lloyd-relaxed → far more
-      // even spacing, the "weighted Voronoi stipple" look.
-      const density = lerp(i, total, 0.06, 0.008)
+      // even spacing, the "weighted Voronoi stipple" look. Density range
+      // mirrors stippling-shade so the two pointillist masters share a
+      // tonal ramp.
+      const density = lerp(i, total, 0.15, 0.012)
       return {
         algorithm: 'voronoi_stipple',
         algorithm_options: { density, dot_radius_px: 0.5, iterations: 6, seed: i * 7 + 13 },

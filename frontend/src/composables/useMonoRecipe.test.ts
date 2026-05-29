@@ -194,6 +194,13 @@ describe('buildMonoBandRecipes', () => {
     setMonoMasterStyleId('voronoi-shade')
     const vor = buildMonoBandRecipes('luminance_bands', 2)
     expect(vor!.every((r) => r.algorithm === 'voronoi_stipple')).toBe(true)
+    // voronoi-shade and stippling-shade share the same density slider, so
+    // their darkest/lightest density defaults must match for a consistent
+    // tonal ramp between the two pointillist masters.
+    const vorKnobs = defaultMonoStyleKnobs('voronoi-shade')
+    const stipKnobs = defaultMonoStyleKnobs('stippling-shade')
+    expect(vorKnobs.density_min).toBe(stipKnobs.density_min)
+    expect(vorKnobs.density_max).toBe(stipKnobs.density_max)
 
     setMonoMasterStyleId('concentric-rings')
     const rings = buildMonoBandRecipes('luminance_bands', 2)

@@ -319,7 +319,9 @@ function recipeFromKnobs(
     case 'voronoi-shade': {
       // Mirror stippling-shade: density_max on the darkest band, density_min
       // on the lightest, but the dots are Lloyd-relaxed for even spacing.
-      const density = lerp(i, total, knobs.density_max ?? 0.06, knobs.density_min ?? 0.008)
+      // Fallback range matches stippling-shade so the two pointillist
+      // masters share a tonal ramp.
+      const density = lerp(i, total, knobs.density_max ?? 0.15, knobs.density_min ?? 0.012)
       return {
         algorithm: 'voronoi_stipple',
         algorithm_options: {
