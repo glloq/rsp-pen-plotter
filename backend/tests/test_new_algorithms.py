@@ -300,6 +300,33 @@ def test_gosper_handles_filled_square() -> None:
     assert svg.count("<polyline") >= 1
 
 
+def test_gosper_order_drives_density() -> None:
+    """Gosper tone comes from the L-system ``order``, not ``spacing_px``.
+
+    The mono ``gosper-fill`` master lerps the order across luminance bands;
+    this guards that a deeper order lays down strictly more ink (more
+    points) so the dark→light gradient reads correctly — and that spacing
+    alone does NOT (the regression the audit caught)."""
+    mask = _square_mask(size=60, inset=4)
+
+    def _points(svg: str) -> int:
+        return svg.count(",")
+
+    deep = GosperFillAlgorithm().render_layer(mask, "#000", "g", options={"order": 4})
+    shallow = GosperFillAlgorithm().render_layer(mask, "#000", "g", options={"order": 2})
+    assert _points(deep) > _points(shallow)
+
+    # Spacing is only a scale factor: at a fixed order it must not change
+    # the point count, so it can't drive tone on its own.
+    tight = GosperFillAlgorithm().render_layer(
+        mask, "#000", "g", options={"order": 3, "spacing_px": 2}
+    )
+    loose = GosperFillAlgorithm().render_layer(
+        mask, "#000", "g", options={"order": 3, "spacing_px": 8}
+    )
+    assert _points(tight) == _points(loose)
+
+
 def test_flowfield_emits_streamlines() -> None:
     mask = np.ones((40, 40), dtype=bool)
     svg = FlowFieldAlgorithm().render_layer(

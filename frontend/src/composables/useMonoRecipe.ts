@@ -370,13 +370,10 @@ function recipeFromKnobs(
         algorithm_options: { spacing_px: spacing, min_run_px: 3 },
       }
     }
-    case 'gosper-fill': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 8)
-      return {
-        algorithm: 'gosper',
-        algorithm_options: { order: 4, spacing_px: spacing, rotation_deg: 0 },
-      }
-    }
+    // gosper-fill has no knob case: tone is driven by the L-system order,
+    // which the registry's bandRecipe lerps. With no MONO_STYLE_DEFAULTS
+    // entry, recipeFromKnobs receives undefined knobs and falls through to
+    // style.bandRecipe — so it never reaches this switch.
     case 'concentric-rings': {
       const spacing = Math.round(lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 6))
       const rings = Math.round(lerp(i, total, knobs.rings_max ?? 50, knobs.rings_min ?? 12))

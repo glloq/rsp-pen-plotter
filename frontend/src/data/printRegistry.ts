@@ -549,10 +549,9 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     spacing_min: 3,
     spacing_max: 8,
   },
-  'gosper-fill': {
-    spacing_min: 3,
-    spacing_max: 8,
-  },
+  // gosper-fill intentionally has no operator knobs: its tone is driven by
+  // the L-system order, which the registry's bandRecipe lerps across bands.
+  // (spacing only scales the curve, so a spacing knob would be a no-op.)
   'concentric-rings': {
     spacing_min: 3,
     spacing_max: 6,
@@ -1009,11 +1008,14 @@ export const PRINT_STYLES: PrintStyle[] = [
     defaultAlgorithmOptions: { order: 4, spacing_px: 4, rotation_deg: 0 },
     bandRecipe(i, total) {
       // Gosper (flowsnake) space-filling curve — a softer, hexagonal
-      // cousin of Hilbert. Spacing tightens on dark bands.
-      const spacing = lerp(i, total, 3, 8)
+      // cousin of Hilbert. Its density is set by the L-system ``order``
+      // (NOT spacing, which only scales the curve to the bbox), so tone
+      // comes from lerping the order: deeper on dark bands, shallower on
+      // light ones.
+      const order = Math.round(lerp(i, total, 4, 2))
       return {
         algorithm: 'gosper',
-        algorithm_options: { order: 4, spacing_px: spacing, rotation_deg: 0 },
+        algorithm_options: { order, spacing_px: 4, rotation_deg: 0 },
       }
     },
   },

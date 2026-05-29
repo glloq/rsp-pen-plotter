@@ -127,6 +127,17 @@ describe('printRegistry', () => {
     }
   })
 
+  it('gosper-fill drives tone via the L-system order (dark deeper than light)', () => {
+    // Regression: gosper density is set by ``order``, not ``spacing_px``
+    // (which only scales the curve). The bandRecipe must lerp the order
+    // so the darkest band is deeper than the lightest — otherwise the
+    // tonal gradient reads flat.
+    const gosper = resolveMasterStyle('gosper-fill')
+    const dark = gosper.bandRecipe!(0, 4)!.algorithm_options as Record<string, number>
+    const light = gosper.bandRecipe!(3, 4)!.algorithm_options as Record<string, number>
+    expect(dark.order!).toBeGreaterThan(light.order!)
+  })
+
   it('layerStyles filters by applicableTo', () => {
     const imageOnly = layerStyles('image')
     for (const s of imageOnly) expect(s.applicableTo).toContain('image')

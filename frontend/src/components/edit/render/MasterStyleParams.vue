@@ -457,11 +457,11 @@ function bandSwatchStyle(i: number): Record<string, string> {
       </template>
     </DualRangeSlider>
 
-    <!-- ===== Flow-field / Hilbert / Gosper: spacing range only ===== -->
+    <!-- ===== Flow-field / Hilbert: spacing range only ===== -->
+    <!-- (gosper-fill has no spacing knob — its tone is the L-system order,
+         lerped by the registry bandRecipe; a spacing slider would be a no-op) -->
     <DualRangeSlider
-      v-else-if="
-        styleId === 'flowfield-master' || styleId === 'hilbert-fill' || styleId === 'gosper-fill'
-      "
+      v-else-if="styleId === 'flowfield-master' || styleId === 'hilbert-fill'"
       class="border-t border-slate-800 pt-3"
       :model-value-min="knobs.spacing_min ?? 4"
       :model-value-max="knobs.spacing_max ?? 12"
