@@ -490,7 +490,11 @@
     "sunburst": "Colour sunburst",
     "sunburstDesc": "Radial rays fanning from each region's centroid — denser on dark clusters.",
     "circlePack": "Colour bubbles",
-    "circlePackDesc": "Packed circle outlines per colour — smaller bubbles on darker clusters."
+    "circlePackDesc": "Packed circle outlines per colour — smaller bubbles on darker clusters.",
+    "raysRange": "Rays (dark → light)",
+    "raysRangeHint": "Denser ray fan on darker clusters, sparser on light ones.",
+    "radiusRange": "Bubble radius (dark → light)",
+    "radiusRangeHint": "Smaller bubbles on darker clusters for denser coverage."
   },
   "printStyles": {
     "default": "Default",

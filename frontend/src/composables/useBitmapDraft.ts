@@ -272,6 +272,17 @@ export type MulticolorStyleKnobs = {
   order?: number
   max_points?: number
   time_budget_s?: number
+  // Knobs for the geometric / generative colour masters (grid, brick,
+  // dashes, truchet, rings, sunburst, circle-pack). Cell / radius / rays
+  // ranges lerp dark→light like spacing does on the hatch families.
+  cell_min?: number
+  cell_max?: number
+  dash_px?: number
+  gap_px?: number
+  rays_min?: number
+  rays_max?: number
+  radius_min?: number
+  radius_max?: number
 }
 
 export type MulticolorKnobsDraft = {
@@ -1001,6 +1012,61 @@ function colorRecipeFromKnobs(
           time_budget_s: knobs.time_budget_s ?? 1.5,
           poisson_disk: true,
           seed: i * 19 + 3,
+        },
+      }
+    }
+    case 'color-grid': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 7)
+      return { algorithm: 'grid', algorithm_options: { spacing_px: spacing } }
+    }
+    case 'color-brick': {
+      const h = Math.round(lerp(i, total, knobs.cell_min ?? 6, knobs.cell_max ?? 12))
+      return {
+        algorithm: 'brick',
+        algorithm_options: { brick_w_px: h * 2, brick_h_px: h },
+      }
+    }
+    case 'color-dashes': {
+      const baseAngles = [0, 45, 90, 135, 30, 75, 120, 165]
+      const step = knobs.angle_step ?? 45
+      const angle = (i * step + (baseAngles[i % baseAngles.length] ?? 0)) % 180
+      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 6)
+      return {
+        algorithm: 'dashes',
+        algorithm_options: {
+          spacing_px: spacing,
+          angle_deg: angle,
+          dash_px: knobs.dash_px ?? 3,
+          gap_px: knobs.gap_px ?? 3,
+        },
+      }
+    }
+    case 'color-truchet': {
+      const cell = Math.round(lerp(i, total, knobs.cell_min ?? 7, knobs.cell_max ?? 14))
+      return {
+        algorithm: 'truchet',
+        algorithm_options: { cell_px: cell, seed: i * 13 + 7 },
+      }
+    }
+    case 'color-rings': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 4, knobs.spacing_max ?? 8)
+      return { algorithm: 'rings', algorithm_options: { spacing_px: spacing } }
+    }
+    case 'color-sunburst': {
+      // Darker clusters get a denser ray fan (rays_max), lighter ones sparser.
+      const rays = Math.round(lerp(i, total, knobs.rays_max ?? 160, knobs.rays_min ?? 60))
+      return { algorithm: 'sunburst', algorithm_options: { rays } }
+    }
+    case 'color-circle-pack': {
+      // Darker clusters → smaller bubbles (radius_min) so coverage reads denser.
+      const maxR = lerp(i, total, knobs.radius_min ?? 6, knobs.radius_max ?? 11)
+      return {
+        algorithm: 'circle_pack',
+        algorithm_options: {
+          min_radius_px: 1.5,
+          max_radius_px: maxR,
+          gap_px: knobs.gap_px ?? 0.6,
+          seed: i * 17 + 5,
         },
       }
     }

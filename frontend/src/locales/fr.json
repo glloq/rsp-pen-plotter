@@ -490,7 +490,11 @@
     "sunburst": "Soleil couleur",
     "sunburstDesc": "Rayons émanant du centroïde de chaque région — plus denses sur les clusters foncés.",
     "circlePack": "Bulles couleur",
-    "circlePackDesc": "Cercles empilés sans chevauchement par couleur — bulles plus petites sur les clusters foncés."
+    "circlePackDesc": "Cercles empilés sans chevauchement par couleur — bulles plus petites sur les clusters foncés.",
+    "raysRange": "Rayons (foncé → clair)",
+    "raysRangeHint": "Éventail de rayons plus dense sur les clusters foncés, plus clairsemé sur les clairs.",
+    "radiusRange": "Rayon des bulles (foncé → clair)",
+    "radiusRangeHint": "Bulles plus petites sur les clusters foncés pour une couverture plus dense."
   },
   "printStyles": {
     "default": "Défaut",

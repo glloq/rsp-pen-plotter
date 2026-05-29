@@ -776,6 +776,40 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
     max_points: 4000,
     time_budget_s: 1.5,
   },
+  // Geometric / generative colour masters — global knobs so the operator
+  // can tune them across clusters like the hatch / stipple families.
+  'color-grid': {
+    spacing_min: 3,
+    spacing_max: 7,
+  },
+  'color-brick': {
+    cell_min: 6,
+    cell_max: 12,
+  },
+  'color-dashes': {
+    spacing_min: 3,
+    spacing_max: 6,
+    angle_step: 45,
+    dash_px: 3,
+    gap_px: 3,
+  },
+  'color-truchet': {
+    cell_min: 7,
+    cell_max: 14,
+  },
+  'color-rings': {
+    spacing_min: 4,
+    spacing_max: 8,
+  },
+  'color-sunburst': {
+    rays_min: 60,
+    rays_max: 160,
+  },
+  'color-circle-pack': {
+    radius_min: 6,
+    radius_max: 11,
+    gap_px: 0.6,
+  },
 }
 
 // Naming convention to resolve old collisions between mono modes and
