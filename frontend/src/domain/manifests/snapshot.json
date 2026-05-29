@@ -89,7 +89,7 @@
         "version": 1,
         "deprecated": false,
         "name": "edges",
-        "description": "Trace only the region boundary \u2014 a line-art / technical-drawing style.",
+        "description": "Trace the region boundary \u2014 a line-art / technical-drawing style.",
         "kind": "lines",
         "complexity": "low",
         "params": {
@@ -272,6 +272,141 @@
         "description": "Wiggly horizontal lines with amplitude / frequency drift \u2014 hand-drawn squiggle look.",
         "kind": "mono_stroke",
         "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "lowpoly",
+        "version": 1,
+        "deprecated": false,
+        "name": "lowpoly",
+        "description": "Low-poly facets \u2014 a Delaunay triangulation of scattered points, drawn as edges. Denser points read darker.",
+        "kind": "lines",
+        "complexity": "high",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "scribble",
+        "version": 1,
+        "deprecated": false,
+        "name": "scribble",
+        "description": "Sketchy hand-drawn hatching \u2014 wobbly, overshooting strokes for a loose pencil feel.",
+        "kind": "fill",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "grid",
+        "version": 1,
+        "deprecated": false,
+        "name": "grid",
+        "description": "Square mesh of horizontal and vertical strokes clipped to the mask.",
+        "kind": "lines",
+        "complexity": "low",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "brick",
+        "version": 1,
+        "deprecated": false,
+        "name": "brick",
+        "description": "Running-bond brick pattern: horizontal courses with staggered vertical mortar joints, clipped to the mask.",
+        "kind": "lines",
+        "complexity": "low",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "dashes",
+        "version": 1,
+        "deprecated": false,
+        "name": "dashes",
+        "description": "Dashed hatching \u2014 parallel strokes chopped into short dashes for a stitched / engraving texture.",
+        "kind": "fill",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "truchet",
+        "version": 1,
+        "deprecated": false,
+        "name": "truchet",
+        "description": "Truchet tiles \u2014 a grid of randomly oriented diagonals making a maze-like graphic fill.",
+        "kind": "lines",
+        "complexity": "low",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "rings",
+        "version": 1,
+        "deprecated": false,
+        "name": "rings",
+        "description": "Concentric circles about the region centroid, clipped to the mask.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "sunburst",
+        "version": 1,
+        "deprecated": false,
+        "name": "sunburst",
+        "description": "Radial rays fanning out from the region centroid, clipped to the mask.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "circle_pack",
+        "version": 1,
+        "deprecated": false,
+        "name": "circle_pack",
+        "description": "Packs non-overlapping circle outlines into the region \u2014 the bubble / foam generative fill.",
+        "kind": "fill",
+        "complexity": "high",
         "params": {
           "type": "object",
           "properties": {},

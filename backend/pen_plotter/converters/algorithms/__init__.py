@@ -12,23 +12,30 @@ from __future__ import annotations
 from typing import Literal
 
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.brick import BrickAlgorithm
 from pen_plotter.converters.algorithms.centerline import CenterlineAlgorithm
+from pen_plotter.converters.algorithms.circle_pack import CirclePackAlgorithm
 from pen_plotter.converters.algorithms.concentric_offset import ConcentricOffsetAlgorithm
 from pen_plotter.converters.algorithms.contours import ContoursAlgorithm
 from pen_plotter.converters.algorithms.crosshatch import CrosshatchAlgorithm
+from pen_plotter.converters.algorithms.dashes import DashesAlgorithm
 from pen_plotter.converters.algorithms.direct import DirectVectorizationAlgorithm
 from pen_plotter.converters.algorithms.edges import EdgesAlgorithm
 from pen_plotter.converters.algorithms.eulerian_hatch import EulerianHatchAlgorithm
 from pen_plotter.converters.algorithms.flowfield import FlowFieldAlgorithm
 from pen_plotter.converters.algorithms.gosper import GosperFillAlgorithm
+from pen_plotter.converters.algorithms.grid import GridAlgorithm
 from pen_plotter.converters.algorithms.halftone import HalftoneAlgorithm
 from pen_plotter.converters.algorithms.hilbert import HilbertFillAlgorithm
 from pen_plotter.converters.algorithms.lowpoly import LowPolyAlgorithm
+from pen_plotter.converters.algorithms.rings import RingsAlgorithm
 from pen_plotter.converters.algorithms.scanlines import ScanlinesAlgorithm
 from pen_plotter.converters.algorithms.scribble import ScribbleAlgorithm
 from pen_plotter.converters.algorithms.spiral import SpiralAlgorithm
 from pen_plotter.converters.algorithms.squiggle import SquiggleAlgorithm
 from pen_plotter.converters.algorithms.stippling import StipplingAlgorithm
+from pen_plotter.converters.algorithms.sunburst import SunburstAlgorithm
+from pen_plotter.converters.algorithms.truchet import TruchetAlgorithm
 from pen_plotter.converters.algorithms.tsp import TspAlgorithm
 from pen_plotter.converters.algorithms.tsp_opt import TspOptimizedAlgorithm
 from pen_plotter.converters.algorithms.voronoi_stipple import VoronoiStippleAlgorithm
@@ -68,6 +75,13 @@ _ALGORITHMS: dict[str, RasterAlgorithm] = {
         SquiggleAlgorithm(),
         LowPolyAlgorithm(),
         ScribbleAlgorithm(),
+        GridAlgorithm(),
+        BrickAlgorithm(),
+        DashesAlgorithm(),
+        TruchetAlgorithm(),
+        RingsAlgorithm(),
+        SunburstAlgorithm(),
+        CirclePackAlgorithm(),
     )
 }
 
@@ -94,6 +108,13 @@ _KINDS: dict[str, AlgorithmKind] = {
     "squiggle": "mono_stroke",
     "lowpoly": "lines",
     "scribble": "fill",
+    "grid": "lines",
+    "brick": "lines",
+    "dashes": "fill",
+    "truchet": "lines",
+    "rings": "mono_stroke",
+    "sunburst": "mono_stroke",
+    "circle_pack": "fill",
 }
 
 # Rough cost class per algorithm — see ``AlgorithmComplexity`` above for
@@ -121,6 +142,13 @@ _COMPLEXITY: dict[str, AlgorithmComplexity] = {
     "squiggle": "medium",       # sub-pixel sampling per scan row
     "lowpoly": "high",          # Delaunay triangulation over sampled points
     "scribble": "medium",       # wobble polyline per scan run
+    "grid": "low",              # two clipped line sweeps
+    "brick": "low",             # course lines + staggered joints
+    "dashes": "medium",         # hatch sweep chopped into dashes
+    "truchet": "low",           # one diagonal per grid cell
+    "rings": "medium",          # circle sampling per radius
+    "sunburst": "medium",       # ray sampling per angle
+    "circle_pack": "high",      # dart-throwing with overlap checks
 }
 
 
@@ -164,24 +192,31 @@ def available_algorithms() -> list[RasterAlgorithm]:
 __all__ = [
     "AlgorithmComplexity",
     "AlgorithmKind",
+    "BrickAlgorithm",
     "CenterlineAlgorithm",
+    "CirclePackAlgorithm",
     "ConcentricOffsetAlgorithm",
     "ContoursAlgorithm",
     "CrosshatchAlgorithm",
+    "DashesAlgorithm",
     "DirectVectorizationAlgorithm",
     "EdgesAlgorithm",
     "EulerianHatchAlgorithm",
     "FlowFieldAlgorithm",
     "GosperFillAlgorithm",
+    "GridAlgorithm",
     "HalftoneAlgorithm",
     "HilbertFillAlgorithm",
     "LowPolyAlgorithm",
     "RasterAlgorithm",
+    "RingsAlgorithm",
     "ScanlinesAlgorithm",
     "ScribbleAlgorithm",
     "SpiralAlgorithm",
     "SquiggleAlgorithm",
     "StipplingAlgorithm",
+    "SunburstAlgorithm",
+    "TruchetAlgorithm",
     "TspAlgorithm",
     "TspOptimizedAlgorithm",
     "VoronoiStippleAlgorithm",

@@ -474,7 +474,21 @@
     "eulerian": "Hachures eulériennes",
     "eulerianDesc": "Hachures réordonnées en chemin eulérien par couleur — peu de levées de stylo.",
     "tspOpt": "TSP optimisé couleur",
-    "tspOptDesc": "Tournée 2-opt sur points Poisson-disk par couleur — qualité supérieure à TSP simple."
+    "tspOptDesc": "Tournée 2-opt sur points Poisson-disk par couleur — qualité supérieure à TSP simple.",
+    "grid": "Grille couleur",
+    "gridDesc": "Maillage type papier millimétré par couleur — plus serré sur les clusters foncés.",
+    "brick": "Briques couleur",
+    "brickDesc": "Motif de briques en panneresse par couleur — briques plus petites sur les clusters foncés.",
+    "dashes": "Pointillés couleur",
+    "dashesDesc": "Hachures en tirets par couleur — l'angle tourne par cluster pour éviter le moiré.",
+    "truchet": "Truchet couleur",
+    "truchetDesc": "Tuiles de Truchet labyrinthiques par couleur — tuiles plus fines sur les clusters foncés.",
+    "rings": "Anneaux couleur",
+    "ringsDesc": "Cercles concentriques autour du centroïde de chaque région — effet cernes d'arbre.",
+    "sunburst": "Soleil couleur",
+    "sunburstDesc": "Rayons émanant du centroïde de chaque région — plus denses sur les clusters foncés.",
+    "circlePack": "Bulles couleur",
+    "circlePackDesc": "Cercles empilés sans chevauchement par couleur — bulles plus petites sur les clusters foncés."
   },
   "printStyles": {
     "default": "Défaut",
@@ -514,7 +528,21 @@
     "concentricOffset": "Offset concentrique",
     "concentricOffsetDesc": "Anneaux offset successifs depuis le bord, reliés en spirale.",
     "tspOpt": "TSP optimisé",
-    "tspOptDesc": "Tournée optimisée 2-opt sur les points (Poisson-disk + budget temps)."
+    "tspOptDesc": "Tournée optimisée 2-opt sur les points (Poisson-disk + budget temps).",
+    "grid": "Grille",
+    "gridDesc": "Maillage de traits horizontaux + verticaux.",
+    "brick": "Briques",
+    "brickDesc": "Motif de briques en panneresse à joints décalés.",
+    "dashes": "Hachures pointillées",
+    "dashesDesc": "Traits parallèles découpés en tirets — texture cousue.",
+    "truchet": "Tuiles de Truchet",
+    "truchetDesc": "Diagonales aléatoires sur une grille — remplissage labyrinthique.",
+    "rings": "Anneaux concentriques",
+    "ringsDesc": "Cercles concentriques autour du centroïde de la région.",
+    "sunburst": "Soleil",
+    "sunburstDesc": "Rayons émanant du centroïde de la région.",
+    "circlePack": "Empilement de cercles",
+    "circlePackDesc": "Cercles empilés sans chevauchement — remplissage bulles."
   },
   "execute": {
     "connection": "Connexion",
@@ -891,7 +919,16 @@
     "timeBudgetS": "Budget temps (s)",
     "poissonDisk": "Disque de Poisson",
     "iterations": "Itérations",
-    "jitter": "Tremblement"
+    "jitter": "Tremblement",
+    "brickW": "Largeur brique (px)",
+    "brickH": "Hauteur brique (px)",
+    "dashPx": "Tiret (px)",
+    "gapPx": "Espace (px)",
+    "cellPx": "Cellule (px)",
+    "rays": "Rayons",
+    "minRadius": "Rayon min (px)",
+    "maxRadius": "Rayon max (px)",
+    "attempts": "Essais"
   },
   "profile": {
     "title": "Profil machine",

@@ -474,7 +474,21 @@
     "eulerian": "Eulerian hatch",
     "eulerianDesc": "Hatching reordered as an Eulerian path per colour — few pen lifts.",
     "tspOpt": "Optimised colour TSP",
-    "tspOptDesc": "2-opt tour on Poisson-disk points per colour — higher quality than basic TSP."
+    "tspOptDesc": "2-opt tour on Poisson-disk points per colour — higher quality than basic TSP.",
+    "grid": "Colour grid",
+    "gridDesc": "Square graph-paper mesh per colour — spacing tightens on darker clusters.",
+    "brick": "Colour brickwork",
+    "brickDesc": "Running-bond brick pattern per colour — smaller bricks on darker clusters.",
+    "dashes": "Colour stitches",
+    "dashesDesc": "Dashed hatching per colour — angle rotates per cluster to avoid moiré.",
+    "truchet": "Colour Truchet",
+    "truchetDesc": "Maze-like Truchet tiles per colour — finer tiles on darker clusters.",
+    "rings": "Colour rings",
+    "ringsDesc": "Concentric circles about each region's centroid — the tree-ring look.",
+    "sunburst": "Colour sunburst",
+    "sunburstDesc": "Radial rays fanning from each region's centroid — denser on dark clusters.",
+    "circlePack": "Colour bubbles",
+    "circlePackDesc": "Packed circle outlines per colour — smaller bubbles on darker clusters."
   },
   "printStyles": {
     "default": "Default",
@@ -514,7 +528,21 @@
     "concentricOffset": "Concentric offset",
     "concentricOffsetDesc": "Successive offset rings from the boundary, connected in a spiral.",
     "tspOpt": "TSP optimised",
-    "tspOptDesc": "2-opt optimised tour on the points (Poisson-disk + time budget)."
+    "tspOptDesc": "2-opt optimised tour on the points (Poisson-disk + time budget).",
+    "grid": "Grid",
+    "gridDesc": "Square mesh of horizontal + vertical strokes.",
+    "brick": "Brickwork",
+    "brickDesc": "Running-bond brick pattern with staggered joints.",
+    "dashes": "Dashed hatch",
+    "dashesDesc": "Parallel strokes chopped into dashes — stitched texture.",
+    "truchet": "Truchet tiles",
+    "truchetDesc": "Random diagonals on a grid — maze-like graphic fill.",
+    "rings": "Concentric rings",
+    "ringsDesc": "Concentric circles about the region centroid.",
+    "sunburst": "Sunburst",
+    "sunburstDesc": "Radial rays fanning out from the region centroid.",
+    "circlePack": "Circle packing",
+    "circlePackDesc": "Packed non-overlapping circle outlines — bubble fill."
   },
   "execute": {
     "connection": "Connection",
@@ -891,7 +919,16 @@
     "timeBudgetS": "Time budget (s)",
     "poissonDisk": "Poisson disk",
     "iterations": "Iterations",
-    "jitter": "Jitter"
+    "jitter": "Jitter",
+    "brickW": "Brick width (px)",
+    "brickH": "Brick height (px)",
+    "dashPx": "Dash (px)",
+    "gapPx": "Gap (px)",
+    "cellPx": "Cell (px)",
+    "rays": "Rays",
+    "minRadius": "Min radius (px)",
+    "maxRadius": "Max radius (px)",
+    "attempts": "Attempts"
   },
   "profile": {
     "title": "Machine profile",

@@ -42,6 +42,16 @@ export type AlgorithmId =
   | 'squiggle'
   | 'lowpoly'
   | 'scribble'
+  // Geometric / generative texture fills added to broaden the colour
+  // and layer palettes — see ``backend/.../algorithms/{grid,brick,
+  // dashes,truchet,rings,sunburst,circle_pack}.py``.
+  | 'grid'
+  | 'brick'
+  | 'dashes'
+  | 'truchet'
+  | 'rings'
+  | 'sunburst'
+  | 'circle_pack'
 
 export interface AlgoOption {
   key: string
@@ -357,6 +367,84 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 8, step: 0.1 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
+      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+    ],
+  },
+  grid: {
+    id: 'grid',
+    defaults: { spacing_px: 6 },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+    ],
+  },
+  brick: {
+    id: 'brick',
+    defaults: { brick_w_px: 16, brick_h_px: 8 },
+    schema: [
+      { key: 'brick_w_px', label: 'convert.brickW', type: 'number', min: 2, max: 60, step: 1 },
+      { key: 'brick_h_px', label: 'convert.brickH', type: 'number', min: 2, max: 40, step: 1 },
+    ],
+  },
+  dashes: {
+    id: 'dashes',
+    defaults: { spacing_px: 5, angle_deg: 45, dash_px: 3, gap_px: 3, crossed: false },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
+      { key: 'dash_px', label: 'convert.dashPx', type: 'number', min: 0.5, max: 20, step: 0.5 },
+      { key: 'gap_px', label: 'convert.gapPx', type: 'number', min: 0.5, max: 20, step: 0.5 },
+      { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
+    ],
+  },
+  truchet: {
+    id: 'truchet',
+    defaults: { cell_px: 10, seed: 0 },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'number', min: 2, max: 40, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+    ],
+  },
+  rings: {
+    id: 'rings',
+    defaults: { spacing_px: 6 },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+    ],
+  },
+  sunburst: {
+    id: 'sunburst',
+    defaults: { rays: 120 },
+    schema: [{ key: 'rays', label: 'convert.rays', type: 'number', min: 8, max: 720, step: 4 }],
+  },
+  circle_pack: {
+    id: 'circle_pack',
+    defaults: { min_radius_px: 1.5, max_radius_px: 8, gap_px: 0.6, attempts: 3000, seed: 0 },
+    schema: [
+      {
+        key: 'min_radius_px',
+        label: 'convert.minRadius',
+        type: 'number',
+        min: 0.5,
+        max: 10,
+        step: 0.5,
+      },
+      {
+        key: 'max_radius_px',
+        label: 'convert.maxRadius',
+        type: 'number',
+        min: 1,
+        max: 40,
+        step: 0.5,
+      },
+      { key: 'gap_px', label: 'convert.gapPx', type: 'number', min: 0, max: 10, step: 0.1 },
+      {
+        key: 'attempts',
+        label: 'convert.attempts',
+        type: 'number',
+        min: 100,
+        max: 20000,
+        step: 100,
+      },
       { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
     ],
   },
@@ -1794,6 +1882,187 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
   },
 
+  // ---- Geometric / generative colour masters ----
+  // Texture fills with a strong graphic identity. Each defines a
+  // ``colorRecipe`` so the multicolour pipeline can expand it per
+  // cluster without a MULTICOLOR_STYLE_DEFAULTS entry (the composable
+  // falls back to the recipe when no knob set is registered).
+  {
+    id: 'color-grid',
+    labelKey: 'colorStyles.grid',
+    descriptionKey: 'colorStyles.gridDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'grid',
+    defaultAlgorithmOptions: { spacing_px: 5 },
+    colorRecipe(i, total) {
+      // Darker clusters get a tighter mesh so visual weight tracks the
+      // source luminance.
+      const spacing = lerp(i, total, 3, 7)
+      return { algorithm: 'grid', algorithm_options: { spacing_px: spacing } }
+    },
+  },
+  {
+    id: 'color-brick',
+    labelKey: 'colorStyles.brick',
+    descriptionKey: 'colorStyles.brickDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'brick',
+    defaultAlgorithmOptions: { brick_w_px: 16, brick_h_px: 8 },
+    colorRecipe(i, total) {
+      // Smaller bricks (denser mortar) on darker clusters.
+      const h = Math.round(lerp(i, total, 6, 12))
+      return {
+        algorithm: 'brick',
+        algorithm_options: { brick_w_px: h * 2, brick_h_px: h },
+      }
+    },
+  },
+  {
+    id: 'color-dashes',
+    labelKey: 'colorStyles.dashes',
+    descriptionKey: 'colorStyles.dashesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 5,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'dashes',
+    defaultAlgorithmOptions: { spacing_px: 5, angle_deg: 45, dash_px: 3, gap_px: 3 },
+    colorRecipe(i, total) {
+      // Rotate the dash angle per cluster (like the crosshatch master) so
+      // overlapping inks read as distinct stitch directions.
+      const angles = [0, 45, 90, 135, 30, 75, 120, 165]
+      const angle = angles[i % angles.length] ?? 45
+      const spacing = lerp(i, total, 3, 6)
+      return {
+        algorithm: 'dashes',
+        algorithm_options: { spacing_px: spacing, angle_deg: angle, dash_px: 3, gap_px: 3 },
+      }
+    },
+  },
+  {
+    id: 'color-truchet',
+    labelKey: 'colorStyles.truchet',
+    descriptionKey: 'colorStyles.truchetDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'truchet',
+    defaultAlgorithmOptions: { cell_px: 10, seed: 0 },
+    colorRecipe(i, total) {
+      // Finer tiles on darker clusters; per-cluster seed so the random
+      // diagonals don't line up identically across inks.
+      const cell = Math.round(lerp(i, total, 7, 14))
+      return {
+        algorithm: 'truchet',
+        algorithm_options: { cell_px: cell, seed: i * 13 + 7 },
+      }
+    },
+  },
+  {
+    id: 'color-rings',
+    labelKey: 'colorStyles.rings',
+    descriptionKey: 'colorStyles.ringsDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'rings',
+    defaultAlgorithmOptions: { spacing_px: 6 },
+    colorRecipe(i, total) {
+      const spacing = lerp(i, total, 4, 8)
+      return { algorithm: 'rings', algorithm_options: { spacing_px: spacing } }
+    },
+  },
+  {
+    id: 'color-sunburst',
+    labelKey: 'colorStyles.sunburst',
+    descriptionKey: 'colorStyles.sunburstDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'sunburst',
+    defaultAlgorithmOptions: { rays: 120 },
+    colorRecipe(i, total) {
+      // Denser ray fan on darker clusters.
+      const rays = Math.round(lerp(i, total, 160, 60))
+      return { algorithm: 'sunburst', algorithm_options: { rays } }
+    },
+  },
+  {
+    id: 'color-circle-pack',
+    labelKey: 'colorStyles.circlePack',
+    descriptionKey: 'colorStyles.circlePackDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'circle_pack',
+    defaultAlgorithmOptions: { min_radius_px: 1.5, max_radius_px: 8, gap_px: 0.6, seed: 0 },
+    colorRecipe(i, total) {
+      // Smaller bubbles on darker clusters → denser ink coverage.
+      const maxR = lerp(i, total, 6, 11)
+      return {
+        algorithm: 'circle_pack',
+        algorithm_options: {
+          min_radius_px: 1.5,
+          max_radius_px: maxR,
+          gap_px: 0.6,
+          seed: i * 17 + 5,
+        },
+      }
+    },
+  },
+
   // ============== LAYER STYLES — per-layer presets ==============
   {
     id: 'direct',
@@ -1969,6 +2238,69 @@ export const PRINT_STYLES: PrintStyle[] = [
       seed: 0,
       poisson_disk: true,
     },
+  },
+  {
+    id: 'grid',
+    labelKey: 'printStyles.grid',
+    descriptionKey: 'printStyles.gridDesc',
+    applicableTo: ['image', 'schematic'],
+    scope: 'layer',
+    defaultAlgorithm: 'grid',
+    defaultAlgorithmOptions: { spacing_px: 6 },
+  },
+  {
+    id: 'brick',
+    labelKey: 'printStyles.brick',
+    descriptionKey: 'printStyles.brickDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'brick',
+    defaultAlgorithmOptions: { brick_w_px: 16, brick_h_px: 8 },
+  },
+  {
+    id: 'dashes',
+    labelKey: 'printStyles.dashes',
+    descriptionKey: 'printStyles.dashesDesc',
+    applicableTo: ['image', 'schematic'],
+    scope: 'layer',
+    defaultAlgorithm: 'dashes',
+    defaultAlgorithmOptions: { spacing_px: 5, angle_deg: 45, dash_px: 3, gap_px: 3 },
+  },
+  {
+    id: 'truchet',
+    labelKey: 'printStyles.truchet',
+    descriptionKey: 'printStyles.truchetDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'truchet',
+    defaultAlgorithmOptions: { cell_px: 10, seed: 0 },
+  },
+  {
+    id: 'rings',
+    labelKey: 'printStyles.rings',
+    descriptionKey: 'printStyles.ringsDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'rings',
+    defaultAlgorithmOptions: { spacing_px: 6 },
+  },
+  {
+    id: 'sunburst',
+    labelKey: 'printStyles.sunburst',
+    descriptionKey: 'printStyles.sunburstDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'sunburst',
+    defaultAlgorithmOptions: { rays: 120 },
+  },
+  {
+    id: 'circle-pack',
+    labelKey: 'printStyles.circlePack',
+    descriptionKey: 'printStyles.circlePackDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'circle_pack',
+    defaultAlgorithmOptions: { min_radius_px: 1.5, max_radius_px: 8, gap_px: 0.6, seed: 0 },
   },
 ]
 

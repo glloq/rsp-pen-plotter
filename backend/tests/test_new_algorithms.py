@@ -62,6 +62,13 @@ def test_registry_lists_all_algorithms() -> None:
         "squiggle",
         "lowpoly",
         "scribble",
+        "grid",
+        "brick",
+        "dashes",
+        "truchet",
+        "rings",
+        "sunburst",
+        "circle_pack",
     }
 
 
@@ -82,6 +89,13 @@ def test_algorithm_kind_groups_by_family() -> None:
     assert algorithm_kind("tsp_opt") == "mono_stroke"
     assert algorithm_kind("lowpoly") == "lines"
     assert algorithm_kind("scribble") == "fill"
+    assert algorithm_kind("grid") == "lines"
+    assert algorithm_kind("brick") == "lines"
+    assert algorithm_kind("dashes") == "fill"
+    assert algorithm_kind("truchet") == "lines"
+    assert algorithm_kind("rings") == "mono_stroke"
+    assert algorithm_kind("sunburst") == "mono_stroke"
+    assert algorithm_kind("circle_pack") == "fill"
 
 
 def test_centerline_traces_horizontal_bar() -> None:
@@ -126,6 +140,13 @@ def test_centerline_skimage_missing_falls_back_to_edges(monkeypatch) -> None:
         ("tsp_opt", "<polyline"),
         ("lowpoly", "<line"),
         ("scribble", "<polyline"),
+        ("grid", "<line"),
+        ("brick", "<line"),
+        ("dashes", "<line"),
+        ("truchet", "<line"),
+        ("rings", "<polyline"),
+        ("sunburst", "<polyline"),
+        ("circle_pack", "<circle"),
     ],
 )
 def test_algorithm_emits_geometry_for_filled_square(
@@ -375,3 +396,92 @@ def test_scribble_empty_mask_yields_empty_group() -> None:
     svg = ScribbleAlgorithm().render_layer(mask, "#000", "s")
     assert "<g " in svg and "</g>" in svg
     assert "<polyline" not in svg
+
+
+def test_grid_emits_both_orientations() -> None:
+    """A filled square yields more grid lines at tighter spacing."""
+    mask = _square_mask(size=40, inset=4)
+    coarse = get_algorithm("grid").render_layer(
+        mask, "#000", "g", options={"spacing_px": 10}
+    )
+    fine = get_algorithm("grid").render_layer(
+        mask, "#000", "g", options={"spacing_px": 4}
+    )
+    assert fine.count("<line") > coarse.count("<line") >= 4
+
+
+def test_truchet_is_deterministic_with_seed() -> None:
+    """Same seed → identical tiling; different seed → different tiling."""
+    mask = _square_mask(size=60, inset=4)
+    a = get_algorithm("truchet").render_layer(mask, "#000", "t", options={"seed": 1})
+    b = get_algorithm("truchet").render_layer(mask, "#000", "t", options={"seed": 1})
+    c = get_algorithm("truchet").render_layer(mask, "#000", "t", options={"seed": 2})
+    assert a == b
+    assert a != c
+
+
+def test_dashes_break_strokes_into_more_segments_than_crosshatch() -> None:
+    """Chopping each hatch line into dashes multiplies the segment count."""
+    mask = _square_mask(size=48, inset=4)
+    cross = CrosshatchAlgorithm().render_layer(
+        mask, "#000", "c", options={"angle_deg": 0.0, "spacing_px": 4}
+    )
+    dashed = get_algorithm("dashes").render_layer(
+        mask,
+        "#000",
+        "d",
+        options={"angle_deg": 0.0, "spacing_px": 4, "dash_px": 2, "gap_px": 2},
+    )
+    assert dashed.count("<line") > cross.count("<line")
+
+
+def test_rings_centre_on_centroid() -> None:
+    """Concentric rings emit arcs for a filled disc-like square."""
+    mask = _square_mask(size=60, inset=4)
+    svg = get_algorithm("rings").render_layer(
+        mask, "#000", "r", options={"spacing_px": 5}
+    )
+    assert svg.count("<polyline") >= 2
+
+
+def test_circle_pack_circles_do_not_overlap() -> None:
+    """Packed circles keep at least the requested gap between each other."""
+    import re
+
+    mask = np.ones((80, 80), dtype=bool)
+    svg = get_algorithm("circle_pack").render_layer(
+        mask,
+        "#000",
+        "cp",
+        options={"min_radius_px": 2, "max_radius_px": 8, "gap_px": 0.5, "seed": 3},
+    )
+    circles = [
+        (float(m[0]), float(m[1]), float(m[2]))
+        for m in re.findall(
+            r'<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([-\d.]+)"/>', svg
+        )
+    ]
+    assert len(circles) >= 5
+    for i in range(len(circles)):
+        for j in range(i + 1, len(circles)):
+            cx1, cy1, r1 = circles[i]
+            cx2, cy2, r2 = circles[j]
+            dist = ((cx1 - cx2) ** 2 + (cy1 - cy2) ** 2) ** 0.5
+            assert dist + 1e-6 >= r1 + r2
+
+
+def test_new_algorithms_empty_mask_safe() -> None:
+    """No pixels → an empty <g>, never an exception, for every new algo."""
+    mask = np.zeros((12, 12), dtype=bool)
+    for name in (
+        "grid",
+        "brick",
+        "dashes",
+        "truchet",
+        "rings",
+        "sunburst",
+        "circle_pack",
+    ):
+        svg = get_algorithm(name).render_layer(mask, "#000", "empty")
+        assert svg.startswith("<g ") and svg.endswith("</g>")
+        assert "<line" not in svg and "<polyline" not in svg and "<circle" not in svg
