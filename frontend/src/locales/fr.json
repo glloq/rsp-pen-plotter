@@ -272,7 +272,7 @@
       "tsp": "Mono-trait (TSP)",
       "tspDesc": "Un seul trait continu traversant les pixels sombres au plus proche voisin.",
       "spiral": "Spirale",
-      "spiralDesc": "Spirale d'Archimède clippée à la zone sombre de l'image.",
+      "spiralDesc": "Spirale unique modulée en amplitude : ondulation ample dans les ombres, trait fin dans les clairs.",
       "centerline": "Tracé centerline",
       "centerlineDesc": "Squelettise puis trace chaque trait comme une polyligne unique — idéal pour les schémas et dessins au trait."
     },
@@ -302,6 +302,8 @@
     "dotDensityHint": "Plus dense → image plus sombre. Le tracé est une polyligne unique parcourue par voisinage.",
     "spiralSpacing": "Espacement spires",
     "spiralSpacingHint": "Espacement entre deux tours de la spirale. Plus serré → image plus sombre.",
+    "spiralAmpHint": "Ondulation : faible dans les clairs (trait fin) → ample dans les ombres (zone plus remplie).",
+    "wavesPerTurn": "Ondulations par tour",
     "bandLabel": "Bande {n}",
     "resetBand": "Réinitialiser cette bande",
     "minLabel": "Min",

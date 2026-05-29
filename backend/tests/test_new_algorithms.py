@@ -134,6 +134,38 @@ def test_algorithm_emits_geometry_for_filled_square(
     )
 
 
+def test_spiral_amplitude_modulation_adds_detail() -> None:
+    """A non-zero wave amplitude perturbs the spiral and lifts sampling.
+
+    The tonal spiral relies on ``wave_amp_px`` wobbling the radius so dark
+    bands read denser; the modulated output must differ from — and carry
+    more points than — the plain Archimedean spiral.
+    """
+    mask = _square_mask(size=60, inset=4)
+    plain = SpiralAlgorithm().render_layer(
+        mask, "#000000", "x", options={"spacing_px": 4, "wave_amp_px": 0.0}
+    )
+    wavy = SpiralAlgorithm().render_layer(
+        mask,
+        "#000000",
+        "x",
+        options={"spacing_px": 4, "wave_amp_px": 5.0, "waves_per_turn": 12},
+    )
+    assert "<polyline" in plain and "<polyline" in wavy
+    assert wavy != plain
+    assert wavy.count(",") > plain.count(",")
+
+
+def test_spiral_zero_amplitude_matches_default() -> None:
+    """Default options (no amplitude) reproduce the legacy plain spiral."""
+    mask = _square_mask(size=40)
+    default = SpiralAlgorithm().render_layer(mask, "#000000", "x")
+    explicit_zero = SpiralAlgorithm().render_layer(
+        mask, "#000000", "x", options={"wave_amp_px": 0.0}
+    )
+    assert default == explicit_zero
+
+
 def test_empty_mask_yields_empty_group() -> None:
     """No pixels in the mask → an empty <g> with the right label, no error."""
     mask = np.zeros((10, 10), dtype=bool)

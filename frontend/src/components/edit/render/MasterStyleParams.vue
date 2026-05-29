@@ -406,24 +406,62 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <p class="text-[10px] text-slate-500">{{ t('mono.dotDensityHint') }}</p>
     </div>
 
-    <!-- ===== Spiral: spacing (single knob — binary mono) ===== -->
-    <div v-else-if="styleId === 'spiral-master'" class="space-y-1 border-t border-slate-800 pt-3">
-      <p class="text-[10px] uppercase tracking-wider text-slate-400">
-        {{ t('mono.spiralSpacing') }}
-        <span class="ml-1 font-mono text-[11px] text-slate-300"
-          >{{ (knobs.spacing_px ?? 3).toFixed(1) }} px</span
-        >
-      </p>
-      <input
-        type="range"
-        min="1"
-        max="8"
-        step="0.5"
-        :value="knobs.spacing_px ?? 3"
-        class="w-full accent-emerald-500"
-        @input="(e) => setKnob('spacing_px', Number((e.target as HTMLInputElement).value))"
-      />
-      <p class="text-[10px] text-slate-500">{{ t('mono.spiralSpacingHint') }}</p>
+    <!-- ===== Spiral (tonal): spacing + amplitude range + waves/turn ===== -->
+    <div v-else-if="styleId === 'spiral-master'" class="space-y-3 border-t border-slate-800 pt-3">
+      <div class="space-y-1">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('mono.spiralSpacing') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ (knobs.spacing_px ?? 4).toFixed(1) }} px</span
+          >
+        </p>
+        <input
+          type="range"
+          min="1"
+          max="8"
+          step="0.5"
+          :value="knobs.spacing_px ?? 4"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('spacing_px', Number((e.target as HTMLInputElement).value))"
+        />
+        <p class="text-[10px] text-slate-500">{{ t('mono.spiralSpacingHint') }}</p>
+      </div>
+
+      <DualRangeSlider
+        :model-value-min="knobs.wave_amp_min ?? 0.2"
+        :model-value-max="knobs.wave_amp_max ?? 6"
+        :min="0"
+        :max="10"
+        :step="0.2"
+        unit="px"
+        @update:model-value-min="(v) => setKnob('wave_amp_min', v)"
+        @update:model-value-max="(v) => setKnob('wave_amp_max', v)"
+      >
+        <template #label>
+          <span class="uppercase tracking-wider">{{ t('mono.waveRange') }}</span>
+        </template>
+        <template #hint>
+          <p class="text-[10px] text-slate-500">{{ t('mono.spiralAmpHint') }}</p>
+        </template>
+      </DualRangeSlider>
+
+      <div class="space-y-1">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('mono.wavesPerTurn') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            Math.round(knobs.waves_per_turn ?? 12)
+          }}</span>
+        </p>
+        <input
+          type="range"
+          min="4"
+          max="40"
+          step="1"
+          :value="knobs.waves_per_turn ?? 12"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('waves_per_turn', Number((e.target as HTMLInputElement).value))"
+        />
+      </div>
     </div>
 
     <!-- ===== Outline / Centerline: stroke width (binary mono) ===== -->

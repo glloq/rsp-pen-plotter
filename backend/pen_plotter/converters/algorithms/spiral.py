@@ -37,6 +37,15 @@ class SpiralAlgorithm(RasterAlgorithm):
         spacing = max(1.0, float(opts.get("spacing_px", 4.0)))
         # Samples per turn — denser = smoother curve, slower to compute.
         samples_per_turn = max(16, int(opts.get("samples_per_turn", 64)))
+        # Tonal (amplitude-modulated) spiral: the radius wobbles by a sine
+        # of ``wave_amp_px`` running ``waves_per_turn`` times per turn. The
+        # band recipe feeds a *large* amplitude to dark bands and a near-
+        # zero one to light bands, so the single spiral reads as continuous
+        # grey: tight thin line in highlights, fat wobble in shadows. A
+        # zero amplitude (the default) reproduces the plain Archimedean
+        # spiral, keeping the binary/line-art use of this algorithm intact.
+        wave_amp = max(0.0, float(opts.get("wave_amp_px", 0.0)))
+        waves_per_turn = max(1, int(opts.get("waves_per_turn", 12)))
         bool_mask = mask.astype(bool)
 
         if not bool_mask.any():
@@ -44,12 +53,22 @@ class SpiralAlgorithm(RasterAlgorithm):
 
         ys, xs = np.where(bool_mask)
         cx, cy = float(xs.mean()), float(ys.mean())
-        max_r = float(np.hypot(xs - cx, ys - cy).max()) + spacing
+        max_r = float(np.hypot(xs - cx, ys - cy).max()) + spacing + wave_amp
         turns = max(1, int(max_r / spacing))
-        total_samples = turns * samples_per_turn
+        # When modulating, the wave needs enough samples per oscillation or
+        # it aliases into jagged spikes — lift the sampling so each wave
+        # gets ~8 points, but never below the operator's smoothness knob.
+        effective_spt = samples_per_turn
+        if wave_amp > 0.0:
+            effective_spt = max(samples_per_turn, waves_per_turn * 8)
+        total_samples = turns * effective_spt
         t = np.linspace(0, turns * 2 * math.pi, total_samples)
-        # Archimedean spiral: r = (spacing / 2π) * θ
+        # Archimedean spiral: r = (spacing / 2π) * θ, plus the tonal wobble.
         r = (spacing / (2 * math.pi)) * t
+        if wave_amp > 0.0:
+            r = r + wave_amp * np.sin(waves_per_turn * t)
+            # Keep the wobble from crossing the centre into negative radius.
+            np.clip(r, 0.0, None, out=r)
         sx = cx + r * np.cos(t)
         sy = cy + r * np.sin(t)
         height, width = bool_mask.shape
