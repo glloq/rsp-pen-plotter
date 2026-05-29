@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
@@ -17,27 +17,29 @@ const i18n = createI18n({
   messages: {
     fr: {
       settings: { close: 'Fermer' },
+      compare: { open: 'Comparer' },
       v2: {
         mode: { assisted: 'Assisté', expert: 'Expert' },
         modal: {
           title: "Préparer l'impression",
-          stepSource: 'Source',
-          stepIntent: 'Intent',
-          stepAlgorithm: 'Algorithme',
-          stepColors: 'Couleurs',
-          stepLayers: 'Couches',
-          stepPreflight: 'Préflight',
-          previous: 'Précédent',
-          next: 'Suivant',
           generate: 'Générer',
-          why: 'Pourquoi ce choix ?',
-          resolving: 'Calcul…',
           resolverError: 'Erreur resolver : {message}. Les défauts statiques seront utilisés.',
-          openV1: 'Ouvrir l\'éditeur complet',
+          openV1: "Ouvrir l'éditeur complet",
           layerCount: '{count} couche | {count} couches',
           noPlacement: 'Aucun placement actif',
+          noPlacementTitle: 'Aucun placement actif',
+          chooseIntent: 'Qu’est-ce qui compte le plus ?',
+          previewLoading: 'Mise à jour de l’aperçu…',
+          previewError: 'Aperçu indisponible.',
         },
-        intent: { fast: 'Rapide', balanced: 'Équilibré', quality: 'Qualité' },
+        intent: {
+          fast: 'Rapide',
+          balanced: 'Équilibré',
+          quality: 'Qualité',
+          fastDesc: 'Tracé le plus rapide',
+          balancedDesc: 'Bon défaut',
+          qualityDesc: 'Détail maximal',
+        },
       },
     },
   },
@@ -45,6 +47,11 @@ const i18n = createI18n({
 
 function mountModal(props?: Record<string, unknown>) {
   return mount(EditModalV2, { props, global: { plugins: [i18n] } })
+}
+
+const PLACEMENT_PROPS = {
+  sourceName: 'photo.jpg',
+  previewSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
 }
 
 const validDecision = {
@@ -57,151 +64,100 @@ const validDecision = {
   hard_constraints_applied: [],
 }
 
-describe('EditModalV2', () => {
+describe('EditModalV2 (beginner single-screen)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     window.localStorage.clear()
     vi.mocked(api.post).mockReset()
+    vi.mocked(api.post).mockResolvedValue({ data: validDecision })
   })
 
-  it('renders the stepper with six steps and starts on Source', () => {
-    const wrapper = mountModal()
-    const steps = wrapper.findAll('[data-test^="stepper-step-"]')
-    expect(steps).toHaveLength(6)
-    expect(wrapper.find('[data-test="step-source"]').exists()).toBe(true)
+  it('shows the live preview and the three intent cards when a placement is attached', () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    expect(wrapper.find('[data-test="modal-v2-preview"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="intent-fast"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="intent-balanced"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="intent-quality"]').exists()).toBe(true)
   })
 
-  it('walks forward Source -> Intent and lets the operator pick a goal', async () => {
-    const wrapper = mountModal()
-    await wrapper.find('button:nth-child(2)').trigger('click') // ignore; use Suivant
-    // Click "Suivant" instead.
-    const nextButton = wrapper
-      .findAll('button')
-      .find((b) => b.text() === 'Suivant')
-    await nextButton!.trigger('click')
-    expect(wrapper.find('[data-test="step-intent"]').exists()).toBe(true)
-    await wrapper.find('[data-test="intent-quality"]').trigger('click')
-    expect(
-      wrapper.find('[data-test="intent-quality"]').classes(),
-    ).toContain('active')
+  it('pre-selects the Balanced intent', () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    expect(wrapper.find('[data-test="intent-balanced"]').classes()).toContain('active')
   })
 
-  it('calls /policy/resolve when leaving Intent and renders the recommendation', async () => {
-    vi.mocked(api.post).mockResolvedValueOnce({ data: validDecision })
-    const wrapper = mountModal()
-    // Source -> Intent.
-    let next = () =>
-      wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
-    await next().trigger('click')
-    // Intent -> Algorithm; triggers the resolver call.
-    await next().trigger('click')
-    await nextTick()
-    await nextTick()
+  it('auto-resolves the policy on mount with the balanced goal (zero clicks)', async () => {
+    mountModal(PLACEMENT_PROPS)
+    await flushPromises()
     expect(api.post).toHaveBeenCalledWith(
       '/policy/resolve',
-      expect.objectContaining({ source_kind: 'bitmap_photo', goal: 'fast' }),
+      expect.objectContaining({ source_kind: 'bitmap_photo', goal: 'balanced' }),
     )
-    expect(wrapper.find('[data-test="recommended-algo"]').text()).toBe('scanlines')
   })
 
-  it('shows reasoning entries from the decision', async () => {
-    vi.mocked(api.post).mockResolvedValueOnce({ data: validDecision })
-    const wrapper = mountModal()
-    const next = () =>
-      wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
-    await next().trigger('click')
-    await next().trigger('click')
-    await nextTick()
-    await nextTick()
-    expect(wrapper.text()).toContain('photo + fast')
+  it('re-resolves when the operator picks a different intent', async () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    vi.mocked(api.post).mockClear()
+    await wrapper.find('[data-test="intent-quality"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="intent-quality"]').classes()).toContain('active')
+    expect(api.post).toHaveBeenCalledWith(
+      '/policy/resolve',
+      expect.objectContaining({ goal: 'quality' }),
+    )
   })
 
-  it('surfaces hard constraints as risk indicators on Preflight', async () => {
-    vi.mocked(api.post).mockResolvedValueOnce({
-      data: {
-        ...validDecision,
-        hard_constraints_applied: [
-          {
-            constraint: 'sparse_palette',
-            description: 'Palette ≤ 2 — algo remplacé',
-            forbidden_algorithms: [],
-          },
-        ],
-      },
+  it('enables Generate once the decision resolves and emits confirm with it', async () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    const confirm = wrapper.find('[data-test="confirm-button"]')
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(false)
+    await confirm.trigger('click')
+    expect(wrapper.emitted('confirm')?.[0]?.[0]).toMatchObject({
+      default_algorithm: 'scanlines',
     })
-    const wrapper = mountModal({ availableColorsCount: 2 })
-    const next = () =>
-      wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
-    // Walk all the way to Preflight.
-    for (let i = 0; i < 5; i++) {
-      await next().trigger('click')
-      await nextTick()
-    }
-    expect(wrapper.find('[data-test="risk-list"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="risk-list"]').text()).toContain(
-      'algo remplacé',
+  })
+
+  it('shows a no-placement notice + locks Generate when no source is attached', () => {
+    const wrapper = mountModal()
+    expect(wrapper.find('[data-test="modal-v2-no-placement"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="modal-v2-preview"]').exists()).toBe(false)
+    const confirm = wrapper.find('[data-test="confirm-button"]')
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('surfaces resolver errors but keeps the original preview visible', async () => {
+    vi.mocked(api.post).mockReset()
+    vi.mocked(api.post).mockRejectedValue(new Error('500 oops'))
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    expect(wrapper.find('[data-test="modal-v2-resolve-error"]').text()).toContain(
+      'Erreur resolver',
     )
+    expect(wrapper.find('[data-test="modal-v2-preview-svg"]').exists()).toBe(true)
   })
 
   it('emits cancel on the close button', async () => {
-    const wrapper = mountModal()
+    const wrapper = mountModal(PLACEMENT_PROPS)
     await wrapper.find('button[aria-label="Fermer"]').trigger('click')
     expect(wrapper.emitted('cancel')).toBeTruthy()
   })
 
-  it('falls back gracefully when the resolver errors out', async () => {
-    vi.mocked(api.post).mockRejectedValueOnce(new Error('500 oops'))
-    const wrapper = mountModal()
-    const next = () =>
-      wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
-    await next().trigger('click') // Source -> Intent
-    await next().trigger('click') // Intent -> Algorithm
-    await nextTick()
-    await nextTick()
-    expect(wrapper.text()).toContain('Erreur resolver')
-  })
-
-  it('shows a no-placement notice + locks Generate when no source is attached', async () => {
-    vi.mocked(api.post).mockResolvedValueOnce({ data: validDecision })
-    const wrapper = mountModal() // no sourceName, no previewSvg
-    expect(wrapper.find('[data-test="modal-v2-no-placement"]').exists()).toBe(true)
-    // Walk to Preflight where Generate lives.
-    const next = () =>
-      wrapper.findAll('button').find((b) => b.text() === 'Suivant')!
-    for (let i = 0; i < 5; i++) {
-      await next().trigger('click')
-      await nextTick()
-    }
-    const confirm = wrapper.find('[data-test="confirm-button"]')
-    expect(confirm.exists()).toBe(true)
-    expect((confirm.element as HTMLButtonElement).disabled).toBe(true)
-  })
-
-  it('hides the no-placement notice when a source is attached', () => {
-    const wrapper = mountModal({
-      sourceName: 'photo.jpg',
-      previewSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
-    })
-    expect(wrapper.find('[data-test="modal-v2-no-placement"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="modal-v2-context"]').exists()).toBe(true)
-  })
-
-  it('emits open-v1 when the operator clicks the escape button', async () => {
-    const wrapper = mountModal()
+  it('emits open-v1 when the operator opens the full editor', async () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
     await wrapper.find('[data-test="modal-v2-open-v1"]').trigger('click')
     expect(wrapper.emitted('open-v1')).toBeTruthy()
   })
 
   it('backdrop click emits cancel', async () => {
-    const wrapper = mountModal()
+    const wrapper = mountModal(PLACEMENT_PROPS)
     await wrapper.find('[data-test="modal-v2-backdrop"]').trigger('click')
     expect(wrapper.emitted('cancel')).toBeTruthy()
   })
 
   it('Escape key emits cancel (accessibility)', async () => {
-    const wrapper = mountModal({ attachTo: document.body })
-    const event = new KeyboardEvent('keydown', { key: 'Escape' })
-    window.dispatchEvent(event)
+    const wrapper = mountModal({ ...PLACEMENT_PROPS, attachTo: document.body })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
     expect(wrapper.emitted('cancel')).toBeTruthy()
     wrapper.unmount()

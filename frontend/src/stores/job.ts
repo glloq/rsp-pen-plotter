@@ -582,6 +582,36 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
+  /**
+   * Render the selected placement with a single algorithm applied to
+   * every layer, *without* mutating the live placement state. Powers
+   * the beginner modal's live preview: the policy resolver hands us one
+   * job-level recommendation and we render exactly what "Generate"
+   * would produce, so the operator sees the real result before
+   * committing. Returns ``null`` when there's nothing renderable (no
+   * placement / job / not rerenderable) or the request was aborted.
+   */
+  async function previewAlgorithmOnAllLayers(
+    algorithm: string,
+    algorithmOptions: Record<string, unknown> = {},
+    signal?: AbortSignal,
+  ): Promise<{ svg: string; warnings: string[] } | null> {
+    const p = selectedPlacement.value
+    if (!p || !p.job_id || !p.rerenderable || !p.layers.length) return null
+    const layersPayload = p.layers.map((layer) => ({
+      layer_id: layer.layer_id,
+      algorithm,
+      algorithm_options: { ...algorithmOptions },
+    }))
+    try {
+      const result = await rerenderJob(p.job_id, layersPayload, signal)
+      return { svg: result.svg, warnings: result.warnings ?? [] }
+    } catch (err) {
+      if ((err as { name?: string }).name === 'CanceledError') return null
+      throw err
+    }
+  }
+
   async function applyAlgorithmToAllLayers(
     algorithm: string,
     algorithmOptions: Record<string, unknown> = {},
@@ -1675,6 +1705,7 @@ export const useJobStore = defineStore('job', () => {
     restorePlacementAspect,
     applyLayerAlgorithm,
     applyAlgorithmToAllLayers,
+    previewAlgorithmOnAllLayers,
     applyLayerPasses,
     renderVariant,
     clearLayerAlgorithm,
