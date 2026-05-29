@@ -272,7 +272,7 @@
       "tsp": "Single-line (TSP)",
       "tspDesc": "One continuous nearest-neighbour tour through dark pixels.",
       "spiral": "Spiral",
-      "spiralDesc": "Single Archimedean spiral clipped to the dark region.",
+      "spiralDesc": "Single amplitude-modulated spiral: wide wobble in shadows, thin line in highlights.",
       "centerline": "Centerline trace",
       "centerlineDesc": "Skeletonise then trace each stroke as a single polyline — ideal for schematics and line art."
     },
@@ -302,6 +302,8 @@
     "dotDensityHint": "Higher density → darker image. The path is a single nearest-neighbour tour.",
     "spiralSpacing": "Spiral spacing",
     "spiralSpacingHint": "Distance between two spiral turns. Tighter → darker image.",
+    "spiralAmpHint": "Wobble: small in highlights (thin line) → wide in shadows (denser fill).",
+    "wavesPerTurn": "Waves per turn",
     "bandLabel": "Band {n}",
     "resetBand": "Reset this band",
     "minLabel": "Min",

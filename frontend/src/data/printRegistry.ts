@@ -475,7 +475,11 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     density: 0.04,
   },
   'spiral-master': {
-    spacing_px: 3,
+    spacing_px: 4,
+    // Radial wobble amplitude lerped dark→light across the bands.
+    wave_amp_min: 0.2,
+    wave_amp_max: 6,
+    waves_per_turn: 12,
   },
   'centerline-trace': {
     stroke_width: 0.8,
@@ -591,8 +595,9 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
 // Naming convention to resolve old collisions between mono modes and
 // per-layer presets:
 //   - master shaded photo modes keep simple ids: pencil, halftone-shade,
-//     stippling-shade, engraving, contours-topo
-//   - master binary modes: outline, tsp, spiral-master
+//     stippling-shade, engraving, contours-topo, spiral-master (tonal
+//     amplitude-modulated spiral)
+//   - master binary modes: outline, tsp
 //   - layer presets keep their original ids (direct, halftone-fine,
 //     halftone-coarse, stippling-portrait, crosshatch-tech, contours,
 //     edges, spiral, scanlines)
@@ -793,17 +798,37 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'master',
     mode: 'monochrome',
+    // Tonal spiral: one Archimedean spiral over the whole image, its
+    // radial wobble amplitude lerped across luminance bands (dark = big
+    // wobble, light = nearly straight). drop_background stays OFF so the
+    // spiral is continuous edge-to-edge — the iconic "spiral portrait"
+    // look — instead of leaving holes in the highlights.
     segmentation: {
-      method: 'thresholds',
-      default_threshold: 0.5,
-      drop_background: true,
-      background_luminance: 0.55,
-      knob_bands: false,
+      method: 'luminance_bands',
+      default_num_bands: 6,
+      drop_background: false,
+      background_luminance: 0.85,
+      knob_bands: true,
     },
     defaultAlgorithm: 'spiral',
-    defaultAlgorithmOptions: { spacing_px: 3, samples_per_turn: 64 },
-    bandRecipe() {
-      return { algorithm: 'spiral', algorithm_options: { spacing_px: 3, samples_per_turn: 64 } }
+    defaultAlgorithmOptions: {
+      spacing_px: 4,
+      samples_per_turn: 64,
+      wave_amp_px: 2,
+      waves_per_turn: 12,
+    },
+    bandRecipe(i, total) {
+      // Darkest band (i=0) → max amplitude, lightest → a thin wobble.
+      const amp = lerp(i, total, 6, 0.2)
+      return {
+        algorithm: 'spiral',
+        algorithm_options: {
+          spacing_px: 4,
+          samples_per_turn: 64,
+          wave_amp_px: amp,
+          waves_per_turn: 12,
+        },
+      }
     },
   },
   {

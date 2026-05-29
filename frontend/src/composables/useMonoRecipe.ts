@@ -47,6 +47,11 @@ export type MonoStyleKnobs = {
   density?: number
   spacing_px?: number
   wave_period?: number
+  // Tonal spiral: radial wobble amplitude lerped dark→light + oscillation
+  // count per turn.
+  wave_amp_min?: number
+  wave_amp_max?: number
+  waves_per_turn?: number
   dot_radius?: number
   stroke_width?: number
   angles?: number[]
@@ -264,14 +269,20 @@ function recipeFromKnobs(
       }
     }
     case 'spiral-master': {
-      // Same single-band shape as TSP: spacing_px is the only darkness
-      // lever, fed through the recipe so the slider edit re-fires
-      // /preview with the new value.
+      // Tonal spiral: one global spiral (constant spacing) whose radial
+      // wobble amplitude is lerped across the luminance bands — darkest
+      // band (i=0) gets wave_amp_max, lightest gets wave_amp_min. The
+      // union of the per-band clips reads as a single continuous grey
+      // spiral. spacing_px stays constant so every band shares the same
+      // spiral path.
+      const amp = lerp(i, total, knobs.wave_amp_max ?? 6, knobs.wave_amp_min ?? 0.2)
       return {
         algorithm: 'spiral',
         algorithm_options: {
-          spacing_px: knobs.spacing_px ?? 3,
+          spacing_px: knobs.spacing_px ?? 4,
           samples_per_turn: 64,
+          wave_amp_px: amp,
+          waves_per_turn: knobs.waves_per_turn ?? 12,
         },
       }
     }
