@@ -1055,7 +1055,8 @@
     "newPlotterFailed": "Could not save the new profile",
     "startPrint": "Start print",
     "gcodeSection": "Generated G-code",
-    "controlHint": "Connect the plotter, drive it manually and start prints from this tab."
+    "controlHint": "Connect the plotter, drive it manually and start prints from this tab.",
+    "settingsTitle": "Plotter settings"
   },
   "assignedColor": {
     "title": "Layer colour",

@@ -104,34 +104,13 @@ function toggleWorkshop(): void {
 
 <template>
   <header
-    class="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900/95 px-4 py-2 backdrop-blur"
+    class="grid grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-slate-800 bg-slate-900/95 px-4 py-2 backdrop-blur"
   >
-    <div class="mr-2 flex items-baseline gap-2">
-      <h1 class="text-lg font-bold tracking-tight">OmniPlot</h1>
-      <span
-        class="rounded bg-sky-900/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-300"
-        data-test="header-version-badge"
-        title="v0.2 wired"
-      >
-        v0.2
-      </span>
-    </div>
-
-    <div class="ml-auto flex items-center gap-3">
-      <!-- AssistantModeToggle is the single mode selector (Assisté /
-           Expert). The legacy ``Débutant / Pro`` workspace switcher
-           was removed in 2026-05-28 — it shared a header slot with
-           this toggle and the two distinct concepts (skill level vs
-           layout preset) were indistinguishable in the field. The
-           workspace store still exists for future use but no longer
-           has a UI surface. -->
-      <AssistantModeToggle data-test="header-assistant-mode-toggle" />
-
-      <!-- Transport controls: drive the active queued run when one is
-           live, otherwise send the currently loaded gcode directly.
-           Always visible — the play button is greyed out until a plotter
-           is connected and a job is loaded, so operators always know
-           where the controls live. -->
+    <!-- LEFT zone: transport controls (play / pause / stop). Drive the
+         active queued run when one is live, otherwise send the currently
+         loaded gcode directly. Always visible — the play button is greyed
+         out until a plotter is connected and a job is loaded. -->
+    <div class="flex items-center justify-self-start">
       <div
         class="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 p-0.5"
         data-test="header-transport"
@@ -176,6 +155,31 @@ function toggleWorkshop(): void {
           <span class="hidden md:inline">{{ t('plotter.stop') }}</span>
         </button>
       </div>
+    </div>
+
+    <!-- CENTER zone: brand title, centred between the transport (left)
+         and the control cluster (right). -->
+    <div class="flex items-baseline justify-self-center gap-2">
+      <h1 class="text-lg font-bold tracking-tight">OmniPlot</h1>
+      <span
+        class="rounded bg-sky-900/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-300"
+        data-test="header-version-badge"
+        title="v0.2 wired"
+      >
+        v0.2
+      </span>
+    </div>
+
+    <!-- RIGHT zone: mode toggle + machine + workshop + settings. -->
+    <div class="flex items-center justify-self-end gap-3">
+      <!-- AssistantModeToggle is the single mode selector (Assisté /
+           Expert). The legacy ``Débutant / Pro`` workspace switcher
+           was removed in 2026-05-28 — it shared a header slot with
+           this toggle and the two distinct concepts (skill level vs
+           layout preset) were indistinguishable in the field. The
+           workspace store still exists for future use but no longer
+           has a UI surface. -->
+      <AssistantModeToggle data-test="header-assistant-mode-toggle" />
 
       <button
         type="button"
@@ -209,16 +213,16 @@ function toggleWorkshop(): void {
         <span class="hidden sm:inline">{{ t('header.workshop') }}</span>
       </button>
 
-      <!-- Plotter access: the modal drawer was retired in favour of the
-           main-page ``plotter`` canvas tab. The status pill doubles as
-           the shortcut into that tab. -->
+      <!-- Plotter access: the status pill opens the independent plotter
+           settings modal (connection, profile, colours, macros, queue).
+           Manual control lives in its own main-page canvas tab. -->
       <button
         type="button"
         class="rounded transition hover:opacity-80"
-        :title="t('header.plotter')"
-        :aria-label="t('header.plotter')"
+        :title="t('plotter.settingsTitle')"
+        :aria-label="t('plotter.settingsTitle')"
         data-test="header-plotter"
-        @click="ui.openPlotter()"
+        @click="ui.openPlotterSettings()"
       >
         <MachineStatusPill />
       </button>

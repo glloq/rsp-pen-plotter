@@ -7,6 +7,7 @@ import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import EditModal from './components/EditModal.vue'
 import FilesPane from './components/FilesPane.vue'
+import PlotterSettingsModal from './components/PlotterSettingsModal.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
@@ -398,6 +399,7 @@ onBeforeUnmount(() => {
     </main>
 
     <SettingsDrawer />
+    <PlotterSettingsModal />
     <!-- Edit modal: the UX mode picks the surface.
          Assisted → wizard (Modal V2), Expert → rich editor (Modal V1).
          Both modals share the same ``ui.editModalOpen`` state so an
