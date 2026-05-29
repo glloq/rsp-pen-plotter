@@ -292,7 +292,11 @@
       "tspOptimized": "Single-line (optimised)",
       "tspOptimizedDesc": "Like TSP but with a 2-opt pass — a shorter, cleaner continuous tour.",
       "silhouette": "Silhouette",
-      "silhouetteDesc": "Solid vector shapes traced from the binarised image — logos and bold cut-outs."
+      "silhouetteDesc": "Solid vector shapes traced from the binarised image — logos and bold cut-outs.",
+      "lowpoly": "Low-poly",
+      "lowpolyDesc": "Faceted Delaunay triangulation; denser facets in shadows for a geometric look.",
+      "scribble": "Scribble",
+      "scribbleDesc": "Loose, wobbly hand-drawn hatching with overshooting strokes — a sketched feel."
     },
     "inkColor": "Ink color",
     "inkColorHint": "Single colour every band is traced with — grey levels come from the algorithm's density variation.",

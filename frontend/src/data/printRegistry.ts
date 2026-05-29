@@ -40,6 +40,8 @@ export type AlgorithmId =
   | 'tsp_opt'
   | 'voronoi_stipple'
   | 'squiggle'
+  | 'lowpoly'
+  | 'scribble'
 
 export interface AlgoOption {
   key: string
@@ -325,6 +327,39 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
     ],
   },
+  lowpoly: {
+    id: 'lowpoly',
+    defaults: { density: 0.01, seed: 0, stroke_width: 0.8 },
+    schema: [
+      {
+        key: 'density',
+        label: 'convert.density',
+        type: 'number',
+        min: 0.001,
+        max: 0.1,
+        step: 0.001,
+      },
+      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+    ],
+  },
+  scribble: {
+    id: 'scribble',
+    defaults: {
+      spacing_px: 4,
+      amp_px: 1.6,
+      overshoot_px: 3,
+      angle_deg: 45,
+      crossed: false,
+      seed: 0,
+    },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 8, step: 0.1 },
+      { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
+      { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
+      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+    ],
+  },
 }
 
 export function getAlgorithm(id: string | null | undefined): AlgorithmSpec | null {
@@ -526,6 +561,17 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
   },
   'tsp-optimized': {
     density: 0.04,
+  },
+  lowpoly: {
+    // Point density lerped dark→light (smaller facets in shadows).
+    density_min: 0.006,
+    density_max: 0.04,
+  },
+  scribble: {
+    spacing_min: 2.5,
+    spacing_max: 6.5,
+    angles: [45, 135, 0, 90],
+    crossed_on_darkest: true,
   },
 }
 
@@ -995,6 +1041,67 @@ export const PRINT_STYLES: PrintStyle[] = [
       return {
         algorithm: 'concentric_offset',
         algorithm_options: { spacing_px: spacing, max_rings: rings, bridge: true },
+      }
+    },
+  },
+  {
+    id: 'lowpoly',
+    labelKey: 'mono.modes.lowpoly',
+    descriptionKey: 'mono.modes.lowpolyDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'lowpoly',
+    defaultAlgorithmOptions: { density: 0.01, seed: 0 },
+    bandRecipe(i, total) {
+      // Faceted triangulation: dark bands scatter more points → smaller
+      // facets → denser edges; light bands stay coarse.
+      const density = lerp(i, total, 0.04, 0.006)
+      return {
+        algorithm: 'lowpoly',
+        algorithm_options: { density, seed: i * 7 + 13 },
+      }
+    },
+  },
+  {
+    id: 'scribble',
+    labelKey: 'mono.modes.scribble',
+    descriptionKey: 'mono.modes.scribbleDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'scribble',
+    defaultAlgorithmOptions: { spacing_px: 4, amp_px: 1.6, overshoot_px: 3, angle_deg: 45 },
+    bandRecipe(i, total) {
+      // Loose hand-drawn hatching: tighter spacing on dark bands, plus a
+      // crossing pass on the darkest band — like a sketch shading a shadow.
+      const angles = [45, 135, 0, 90, 30, 150]
+      const angle = angles[i % angles.length] ?? 45
+      const spacing = lerp(i, total, 2.5, 6.5)
+      const finalAngles = i === 0 && total > 1 ? [angle, (angle + 90) % 180] : [angle]
+      return {
+        algorithm: 'scribble',
+        algorithm_options: {
+          angles: finalAngles,
+          spacing_px: spacing,
+          amp_px: 1.6,
+          overshoot_px: 3,
+          seed: i * 7 + 13,
+        },
       }
     },
   },
@@ -1903,6 +2010,8 @@ export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   'concentric-rings': 'concentric-rings',
   'tsp-optimized': 'tsp-optimized',
   silhouette: 'silhouette',
+  lowpoly: 'lowpoly',
+  scribble: 'scribble',
 }
 
 // ---- Query helpers ----

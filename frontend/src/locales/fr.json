@@ -292,7 +292,11 @@
       "tspOptimized": "Trait unique (optimisé)",
       "tspOptimizedDesc": "Comme TSP mais avec une passe 2-opt — un parcours continu plus court et plus net.",
       "silhouette": "Silhouette",
-      "silhouetteDesc": "Formes vectorielles pleines tracées depuis l'image binarisée — logos et aplats marqués."
+      "silhouetteDesc": "Formes vectorielles pleines tracées depuis l'image binarisée — logos et aplats marqués.",
+      "lowpoly": "Low-poly",
+      "lowpolyDesc": "Triangulation de Delaunay facettée ; facettes plus denses dans les ombres pour un rendu géométrique.",
+      "scribble": "Gribouillage",
+      "scribbleDesc": "Hachures lâches dessinées à la main, traits ondulés qui débordent — un rendu croquis."
     },
     "inkColor": "Couleur d'encre",
     "inkColorHint": "Couleur unique utilisée pour tracer toutes les bandes — les niveaux de gris sont simulés par la densité de l'algorithme.",

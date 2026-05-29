@@ -204,6 +204,26 @@ describe('buildMonoBandRecipes', () => {
     expect(r0.max_rings as number).toBeGreaterThanOrEqual(r1.max_rings as number)
   })
 
+  it('drives the low-poly and scribble shaded styles from their knobs', () => {
+    setMonoMasterStyleId('lowpoly')
+    setMonoKnob('lowpoly', 'density_min', 0.01)
+    setMonoKnob('lowpoly', 'density_max', 0.01)
+    const lp = buildMonoBandRecipes('luminance_bands', 3)
+    expect(lp!.every((r) => r.algorithm === 'lowpoly')).toBe(true)
+    for (const r of lp!) {
+      expect((r.algorithm_options as Record<string, unknown>).density).toBeCloseTo(0.01)
+    }
+
+    setMonoMasterStyleId('scribble')
+    const sc = buildMonoBandRecipes('luminance_bands', 2)
+    expect(sc![0]!.algorithm).toBe('scribble')
+    // Darkest band crosses → two angles; lighter band keeps one.
+    const sc0 = sc![0]!.algorithm_options as Record<string, unknown>
+    const sc1 = sc![1]!.algorithm_options as Record<string, unknown>
+    expect((sc0.angles as number[]).length).toBe(2)
+    expect((sc1.angles as number[]).length).toBe(1)
+  })
+
   it('emits one direct recipe for the silhouette binary style', () => {
     setMonoMasterStyleId('silhouette')
     const recipes = buildMonoBandRecipes('thresholds', 4)

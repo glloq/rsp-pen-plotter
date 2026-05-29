@@ -37,6 +37,8 @@ const STYLE_GLYPHS: Record<string, { color: string; glyph: string }> = {
   gosper: { color: '#0ea5e9', glyph: '✿' },
   concentric_offset: { color: '#10b981', glyph: '◉' },
   tsp_opt: { color: '#ec4899', glyph: '⟿' },
+  lowpoly: { color: '#f43f5e', glyph: '◭' },
+  scribble: { color: '#facc15', glyph: '⌇' },
 }
 
 const meta = computed(() => STYLE_GLYPHS[props.algorithm] ?? { color: '#475569', glyph: '?' })

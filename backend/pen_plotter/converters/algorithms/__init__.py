@@ -23,7 +23,9 @@ from pen_plotter.converters.algorithms.flowfield import FlowFieldAlgorithm
 from pen_plotter.converters.algorithms.gosper import GosperFillAlgorithm
 from pen_plotter.converters.algorithms.halftone import HalftoneAlgorithm
 from pen_plotter.converters.algorithms.hilbert import HilbertFillAlgorithm
+from pen_plotter.converters.algorithms.lowpoly import LowPolyAlgorithm
 from pen_plotter.converters.algorithms.scanlines import ScanlinesAlgorithm
+from pen_plotter.converters.algorithms.scribble import ScribbleAlgorithm
 from pen_plotter.converters.algorithms.spiral import SpiralAlgorithm
 from pen_plotter.converters.algorithms.squiggle import SquiggleAlgorithm
 from pen_plotter.converters.algorithms.stippling import StipplingAlgorithm
@@ -64,6 +66,8 @@ _ALGORITHMS: dict[str, RasterAlgorithm] = {
         TspOptimizedAlgorithm(),
         VoronoiStippleAlgorithm(),
         SquiggleAlgorithm(),
+        LowPolyAlgorithm(),
+        ScribbleAlgorithm(),
     )
 }
 
@@ -88,6 +92,8 @@ _KINDS: dict[str, AlgorithmKind] = {
     "tsp_opt": "mono_stroke",
     "voronoi_stipple": "fill",
     "squiggle": "mono_stroke",
+    "lowpoly": "lines",
+    "scribble": "fill",
 }
 
 # Rough cost class per algorithm — see ``AlgorithmComplexity`` above for
@@ -113,6 +119,8 @@ _COMPLEXITY: dict[str, AlgorithmComplexity] = {
     "tsp_opt": "high",        # 2-opt sweep with kd-tree neighbours
     "voronoi_stipple": "high",  # Lloyd relaxation iterations
     "squiggle": "medium",       # sub-pixel sampling per scan row
+    "lowpoly": "high",          # Delaunay triangulation over sampled points
+    "scribble": "medium",       # wobble polyline per scan run
 }
 
 
@@ -167,8 +175,10 @@ __all__ = [
     "GosperFillAlgorithm",
     "HalftoneAlgorithm",
     "HilbertFillAlgorithm",
+    "LowPolyAlgorithm",
     "RasterAlgorithm",
     "ScanlinesAlgorithm",
+    "ScribbleAlgorithm",
     "SpiralAlgorithm",
     "SquiggleAlgorithm",
     "StipplingAlgorithm",
