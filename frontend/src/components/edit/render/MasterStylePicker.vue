@@ -64,6 +64,20 @@ const isCustomised = computed<boolean>(() => {
   const seg = style.segmentation
   const b = draft.bitmap.value
   if (!seg) return false
+  // Multicolour masters segment with kmeans; the palette-follows-pens
+  // toggle legitimately swaps the method to ``fixed_palette`` without
+  // that being an operator "customisation". Treat the two as equivalent
+  // and skip the band/threshold comparisons (those knobs are mono-only).
+  // Without this guard the pill latched on permanently in colour mode the
+  // moment palette-follows-pens forced ``fixed_palette``.
+  if (props.mode === 'multicolor') {
+    const methodMatches =
+      b.segmentation_method === seg.method ||
+      (seg.method === 'kmeans' && b.segmentation_method === 'fixed_palette')
+    if (!methodMatches) return true
+    if (b.algorithm !== style.defaultAlgorithm) return true
+    return false
+  }
   if (b.segmentation_method !== seg.method) return true
   if (b.algorithm !== style.defaultAlgorithm) return true
   if (seg.method === 'luminance_bands') {
@@ -119,7 +133,7 @@ const activeStyle = computed(() => resolve(props.modelValue))
       </span>
     </div>
     <p v-if="isCustomised" class="text-[10px] text-amber-400/80">
-      {{ t('render.customisedExplain', { style: t(resolveMasterStyle(activeStyleId).labelKey) }) }}
+      {{ t('render.customisedExplain', { style: t(resolve(activeStyleId).labelKey) }) }}
     </p>
     <div class="grid grid-cols-2 gap-1">
       <button

@@ -105,3 +105,33 @@ test('advanced_mode default off and toggles via setter', () => {
   d.setMonoAdvancedMode(true)
   expect(d.mono.value.advanced_mode).toBe(true)
 })
+
+test('color-crosshatch band recipes give distinct angles per cluster at default step', () => {
+  const d = useBitmapDraft()
+  d.rehydrateDraft({ placement: null, installedPenColors: [] })
+  // Multicolour kmeans path with 4 clusters.
+  d.bitmap.value.segmentation_method = 'kmeans'
+  d.bitmap.value.num_colors = 4
+  d.setMulticolorMasterStyle('color-crosshatch', { force: true })
+  expect(d.printMode.value).toBe('multicolor')
+  const recipes = d.buildBitmapOptions().band_recipes as Array<Record<string, unknown>>
+  expect(recipes.length).toBe(4)
+  const angles = recipes.map((r) => (r.algorithm_options as Record<string, unknown>).angle_deg)
+  // Default angle_step (45) must reduce to the registry colorRecipe
+  // fallback (0/45/90/135) so the knob-driven and propagation paths
+  // agree — and crucially the 4 clusters get 4 distinct angles (the old
+  // i*step formula collapsed them onto 0/90/0/90).
+  expect(angles).toEqual([0, 45, 90, 135])
+  expect(new Set(angles).size).toBe(4)
+})
+
+test('color-eulerian band recipes give distinct angles per cluster at default step', () => {
+  const d = useBitmapDraft()
+  d.rehydrateDraft({ placement: null, installedPenColors: [] })
+  d.bitmap.value.segmentation_method = 'kmeans'
+  d.bitmap.value.num_colors = 4
+  d.setMulticolorMasterStyle('color-eulerian', { force: true })
+  const recipes = d.buildBitmapOptions().band_recipes as Array<Record<string, unknown>>
+  const angles = recipes.map((r) => (r.algorithm_options as Record<string, unknown>).angle_deg)
+  expect(angles).toEqual([0, 45, 90, 135])
+})
