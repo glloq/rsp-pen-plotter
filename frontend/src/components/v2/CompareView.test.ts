@@ -8,6 +8,7 @@ const decisionA: PolicyDecision = {
   segmentation_method: 'fixed_palette',
   default_algorithm: 'scanlines',
   default_options: {},
+  default_passes: [],
   quality_tier: 'draft',
   fallback_chain: [],
   reasoning: [],

@@ -55,11 +55,18 @@ def test_bitmap_photo_balanced_picks_crosshatch() -> None:
     assert d.default_options["crossed"] is True
 
 
-def test_bitmap_photo_quality_picks_stippling() -> None:
+def test_bitmap_photo_quality_picks_double_crosshatch() -> None:
     d = resolve(_input(goal=Goal.QUALITY))
-    assert d.default_algorithm == "stippling"
+    # Quality is now a two-pass fine crosshatch (45° + 15°, pitch 3 px)
+    # — strictly denser than the BALANCED single crosshatch at pitch 4.
+    # The old single stippling pass read as sparser/worse than balanced.
+    assert d.default_algorithm == "crosshatch"
     assert d.quality_tier is QualityTier.FINAL
-    assert d.default_options["density"] == 0.018
+    assert d.default_options["spacing_px"] == 3
+    assert [p["algorithm"] for p in d.default_passes] == ["crosshatch", "crosshatch"]
+    assert d.default_passes[0]["algorithm_options"]["angle_deg"] == 45
+    assert d.default_passes[1]["algorithm_options"]["angle_deg"] == 15
+    assert all(p["algorithm_options"]["spacing_px"] == 3 for p in d.default_passes)
 
 
 # ── Matrix branches — Section B: bitmap_illustration ─────────────────
@@ -191,14 +198,24 @@ def test_large_image_overrides_heavy_algorithm() -> None:
 
 def test_large_image_in_quality_does_not_force_override() -> None:
     d = resolve(_input(goal=Goal.QUALITY, image_megapixels=20.0))
-    # QUALITY exempts the constraint; stippling stays.
-    assert d.default_algorithm == "stippling"
+    # QUALITY exempts the heavy-input constraint; the double-crosshatch
+    # quality recommendation (and its multi-pass stack) stays.
+    assert d.default_algorithm == "crosshatch"
+    assert len(d.default_passes) == 2
 
 
 def test_sparse_palette_constraint_overrides_to_scanlines() -> None:
-    # Quality bitmap_photo → stippling, but with available_colors=2
-    # the resolver forces scanlines.
-    d = resolve(_input(goal=Goal.QUALITY, available_colors_count=2))
+    # bitmap_illustration / quality → centerline, which isn't a
+    # palette-friendly algorithm; with available_colors=2 the resolver
+    # forces scanlines. (bitmap_photo/quality is now crosshatch, which
+    # *is* palette-friendly, so it would no longer trip this rule.)
+    d = resolve(
+        _input(
+            source_kind=SourceKind.BITMAP_ILLUSTRATION,
+            goal=Goal.QUALITY,
+            available_colors_count=2,
+        )
+    )
     assert d.default_algorithm == "scanlines"
     assert any(
         c.constraint == "sparse_palette" for c in d.hard_constraints_applied

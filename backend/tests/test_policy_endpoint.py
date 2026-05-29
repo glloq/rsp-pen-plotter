@@ -51,7 +51,7 @@ async def test_policy_resolve_applies_hard_constraint_for_large_image() -> None:
         response = await client.post(
             "/policy/resolve",
             json={
-                "source_kind": "bitmap_photo",
+                "source_kind": "bitmap_illustration",
                 "goal": "quality",
                 "palette_mode": "machine_only",
                 "available_colors_count": 2,
@@ -61,7 +61,9 @@ async def test_policy_resolve_applies_hard_constraint_for_large_image() -> None:
             },
         )
     body = response.json()
-    # available_colors_count=2 forces the sparse-palette override.
+    # illustration/quality → centerline; available_colors_count=2 forces
+    # the sparse-palette override down to scanlines. (bitmap_photo/quality
+    # is now palette-friendly crosshatch and would not trip this.)
     assert body["default_algorithm"] == "scanlines"
     assert any(
         c["constraint"] == "sparse_palette" for c in body["hard_constraints_applied"]

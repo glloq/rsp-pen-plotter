@@ -57,10 +57,20 @@ export const PolicyInputSchema = z.object({
 })
 export type PolicyInput = z.infer<typeof PolicyInputSchema>
 
+export const PolicyPassSchema = z.object({
+  algorithm: z.string(),
+  algorithm_options: z.record(z.string(), z.unknown()).default({}),
+})
+export type PolicyPass = z.infer<typeof PolicyPassSchema>
+
 export const PolicyDecisionSchema = z.object({
   segmentation_method: SegmentationMethodSchema,
   default_algorithm: z.string(),
   default_options: z.record(z.string(), z.unknown()).default({}),
+  // Optional ordered multi-pass stack (QUALITY tiers). When non-empty,
+  // callers render/apply these passes per layer instead of the single
+  // ``default_algorithm``; the first pass mirrors that field.
+  default_passes: z.array(PolicyPassSchema).default([]),
   quality_tier: QualityTierSchema,
   fallback_chain: z.array(z.string()).default([]),
   reasoning: z.array(RuleHitSchema).default([]),

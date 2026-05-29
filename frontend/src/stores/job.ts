@@ -612,6 +612,63 @@ export const useJobStore = defineStore('job', () => {
     }
   }
 
+  /**
+   * Render the selected placement with a multi-pass stack applied to
+   * every layer, *without* mutating live state. Mirror of
+   * ``previewAlgorithmOnAllLayers`` for QUALITY-tier recommendations
+   * that layer several passes per colour mask.
+   */
+  async function previewPassesOnAllLayers(
+    passes: readonly LayerPass[],
+    signal?: AbortSignal,
+  ): Promise<{ svg: string; warnings: string[] } | null> {
+    const p = selectedPlacement.value
+    if (!p || !p.job_id || !p.rerenderable || !p.layers.length || !passes.length) return null
+    const layersPayload = p.layers.map((layer) => ({
+      layer_id: layer.layer_id,
+      passes: passes.map((pass) => ({
+        algorithm: pass.algorithm,
+        algorithm_options: { ...pass.algorithm_options },
+      })),
+    }))
+    try {
+      const result = await rerenderJob(p.job_id, layersPayload, signal)
+      return { svg: result.svg, warnings: result.warnings ?? [] }
+    } catch (err) {
+      if ((err as { name?: string }).name === 'CanceledError') return null
+      throw err
+    }
+  }
+
+  /**
+   * Commit a multi-pass stack to every layer of the selected placement
+   * and trigger a single rerender. The beginner modal's "Generate"
+   * path for QUALITY recommendations; mirrors
+   * ``applyAlgorithmToAllLayers`` but writes the ``passes`` stack.
+   */
+  async function applyPassesToAllLayers(passes: readonly LayerPass[]): Promise<void> {
+    const p = selectedPlacement.value
+    if (!p || !passes.length) return
+    const first = passes[0]!
+    const stack = passes.map((pass) => ({
+      algorithm: pass.algorithm,
+      algorithm_options: { ...pass.algorithm_options },
+    }))
+    const next: Record<string, LayerAlgorithm> = {}
+    for (const layer of p.layers) {
+      next[layer.layer_id] = {
+        algorithm: first.algorithm,
+        algorithm_options: { ...first.algorithm_options },
+        passes: stack.map((pass) => ({ ...pass, algorithm_options: { ...pass.algorithm_options } })),
+      }
+    }
+    patchSelected({ layer_algorithms: next })
+    autoSyncActiveVariant()
+    clearLivePreviewSvg()
+    if (rerenderTimer) clearTimeout(rerenderTimer)
+    rerenderTimer = setTimeout(trackRerender, 50)
+  }
+
   async function applyAlgorithmToAllLayers(
     algorithm: string,
     algorithmOptions: Record<string, unknown> = {},
@@ -1706,6 +1763,8 @@ export const useJobStore = defineStore('job', () => {
     applyLayerAlgorithm,
     applyAlgorithmToAllLayers,
     previewAlgorithmOnAllLayers,
+    applyPassesToAllLayers,
+    previewPassesOnAllLayers,
     applyLayerPasses,
     renderVariant,
     clearLayerAlgorithm,

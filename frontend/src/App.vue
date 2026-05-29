@@ -180,10 +180,18 @@ async function onEditV2Confirm(
   // — the modal only opens when one is selected. Failures are
   // surfaced via the existing rerender error path; we don't need to
   // duplicate them here.
-  await store.applyAlgorithmToAllLayers(
-    decision.default_algorithm,
-    (decision.default_options ?? {}) as Record<string, unknown>,
-  )
+  // QUALITY recommendations ship a multi-pass stack (e.g. double-pass
+  // crosshatch); apply it as passes so Generate matches the preview.
+  // Everything else stays a single algorithm across all layers.
+  const passes = decision.default_passes ?? []
+  if (passes.length) {
+    await store.applyPassesToAllLayers(passes)
+  } else {
+    await store.applyAlgorithmToAllLayers(
+      decision.default_algorithm,
+      (decision.default_options ?? {}) as Record<string, unknown>,
+    )
+  }
   ui.closeEditModal()
 }
 function onEditV2OpenV1(): void {

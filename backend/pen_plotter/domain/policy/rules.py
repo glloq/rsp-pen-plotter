@@ -33,6 +33,13 @@ class _BaseRule:
     # (``FIXED_PALETTE`` for bitmaps, ``NONE`` for vector / text).
     segmentation: SegmentationMethod | None = None
     options: Mapping[str, Any] = field(default_factory=dict)
+    # Optional multi-pass stack. When non-empty the renderer draws this
+    # ordered sequence of (algorithm, options) passes against each colour
+    # mask instead of the single ``algorithm`` above — used by the
+    # QUALITY tier to layer several treatments for maximum detail. The
+    # ``algorithm`` / ``options`` fields stay populated with the first
+    # pass so single-algorithm consumers (and fallbacks) still work.
+    passes: tuple[Mapping[str, Any], ...] = ()
     rationale: str = ""
 
 
@@ -61,11 +68,29 @@ _MATRIX: dict[tuple[SourceKind, Goal], _BaseRule] = {
         rationale="Photo + objectif équilibré : crosshatch à 45°.",
     ),
     (SourceKind.BITMAP_PHOTO, Goal.QUALITY): _BaseRule(
-        algorithm="stippling",
+        # Two-pass fine crosshatch: a 45° base layer plus a 15° layer so
+        # the result reads as four hatch directions at a tighter pitch
+        # than BALANCED (spacing 3 vs 4, two passes vs one). The old
+        # single stippling pass at density 0.018 was sparser than
+        # BALANCED and read as worse, not better (operator report).
+        algorithm="crosshatch",
         quality=QualityTier.FINAL,
-        fallback_chain=("crosshatch",),
-        options={"density": 0.018, "dot_radius_px": 0.5, "seed": 0},
-        rationale="Photo + objectif qualité : stippling densité 0.018.",
+        fallback_chain=("scanlines",),
+        options={"spacing_px": 3, "angle_deg": 45, "crossed": True},
+        passes=(
+            {
+                "algorithm": "crosshatch",
+                "algorithm_options": {"spacing_px": 3, "angle_deg": 45, "crossed": True},
+            },
+            {
+                "algorithm": "crosshatch",
+                "algorithm_options": {"spacing_px": 3, "angle_deg": 15, "crossed": True},
+            },
+        ),
+        rationale=(
+            "Photo + objectif qualité : double passe crosshatch fine "
+            "(45° + 15°, pitch 3 px) pour un maximum de détail."
+        ),
     ),
     # ── B) bitmap_illustration ────────────────────────────────────────
     (SourceKind.BITMAP_ILLUSTRATION, Goal.FAST): _BaseRule(
