@@ -29,7 +29,7 @@
         "version": 1,
         "deprecated": false,
         "name": "halftone",
-        "description": "Fill regions with a regular grid of variable-size dots.",
+        "description": "Fill regions with a regular grid of variable-size dots, optionally rotated to a per-ink screen angle.",
         "kind": "fill",
         "complexity": "low",
         "params": {

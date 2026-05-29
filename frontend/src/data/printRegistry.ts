@@ -74,9 +74,10 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   direct: { id: 'direct', defaults: {}, schema: [] },
   halftone: {
     id: 'halftone',
-    defaults: { cell_size_px: 6 },
+    defaults: { cell_size_px: 6, angle_deg: 0 },
     schema: [
       { key: 'cell_size_px', label: 'convert.cellSize', type: 'number', min: 1, max: 64, step: 1 },
+      { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
     ],
   },
   stippling: {

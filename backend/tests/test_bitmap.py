@@ -39,6 +39,33 @@ def test_halftone_emits_dots_inside_region() -> None:
     assert group.count("<circle") > 0
 
 
+def test_halftone_angle_zero_matches_unrotated_default() -> None:
+    """An explicit ``angle_deg=0`` reproduces the legacy axis-aligned grid."""
+    algo = get_algorithm("halftone")
+    mask = _square_mask()
+    default = algo.render_layer(mask, "#ff0000", "red")
+    explicit_zero = algo.render_layer(mask, "#ff0000", "red", options={"angle_deg": 0})
+    # 180° is the same screen as 0° (dot grid symmetry).
+    flipped = algo.render_layer(mask, "#ff0000", "red", options={"angle_deg": 180})
+    assert default == explicit_zero == flipped
+
+
+def test_halftone_rotated_screen_differs_but_still_fills() -> None:
+    """A rotated screen turns the dot lattice yet still covers the region."""
+    algo = get_algorithm("halftone")
+    mask = _square_mask()
+    flat = algo.render_layer(mask, "#ff0000", "r", options={"cell_size_px": 5})
+    rot = algo.render_layer(mask, "#ff0000", "r", options={"cell_size_px": 5, "angle_deg": 45})
+    assert flat != rot
+    assert rot.count("<circle") > 0
+
+
+def test_halftone_rotated_empty_mask_is_empty() -> None:
+    empty = np.zeros((24, 24), dtype=bool)
+    group = get_algorithm("halftone").render_layer(empty, "#000000", "k", options={"angle_deg": 30})
+    assert "<circle" not in group
+
+
 def test_stippling_is_deterministic() -> None:
     algo = get_algorithm("stippling")
     a = algo.render_layer(_square_mask(), "#ff0000", "red", options={"density": 0.1, "seed": 7})
