@@ -2,19 +2,23 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
+import { usePlotterStore } from '../stores/plotter'
 import { useUiStore, type CanvasTab } from '../stores/ui'
 import SheetPreview from './SheetPreview.vue'
 import Simulator from './Simulator.vue'
-import GcodePreview from './GcodePreview.vue'
+import PlotterControl from './PlotterControl.vue'
 import PlanRail from './PlanRail.vue'
 import SimRail from './SimRail.vue'
 import AppFooter from './AppFooter.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
+const plotter = usePlotterStore()
 const ui = useUiStore()
 const { canvasTab } = storeToRefs(ui)
+const { status: plotterStatus } = storeToRefs(plotter)
 
 const canSimulate = computed(() => job.selectedProfile?.gcode_dialect !== 'ebb')
 
@@ -26,12 +30,29 @@ const tabs = computed<Array<{ id: CanvasTab; label: string; available: boolean; 
       label: t('canvas.simulator'),
       available: Boolean(job.gcode) && canSimulate.value,
     },
-    { id: 'gcode', label: t('canvas.gcode'), available: Boolean(job.gcode) },
+    { id: 'plotter', label: t('canvas.plotter'), available: true },
   ],
 )
 
 function select(tab: CanvasTab): void {
   canvasTab.value = tab
+}
+
+// "Start print" lives in the simulator header so the operator can fire
+// the job straight from the preview they just reviewed. It mirrors the
+// header transport's direct-send path: requires a live connection + a
+// generated G-code, then sends after a confirmation.
+const canStartPrint = computed(() => Boolean(job.gcode) && plotterStatus.value.connected)
+
+async function startPrint(): Promise<void> {
+  if (!job.gcode || !plotterStatus.value.connected) return
+  const confirmed = await confirmAction({
+    title: t('confirm.sendJobTitle'),
+    message: t('confirm.sendJobMsg'),
+    confirmLabel: t('plotter.sendJob'),
+    cancelLabel: t('confirm.cancel'),
+  })
+  if (confirmed) await plotter.run(job.gcode)
 }
 </script>
 
@@ -53,9 +74,26 @@ function select(tab: CanvasTab): void {
               ? 'text-slate-300 hover:bg-slate-800'
               : 'text-slate-600 cursor-not-allowed'
         "
+        :data-test="`canvas-tab-${tab.id}`"
         @click="select(tab.id)"
       >
         {{ tab.label }}
+      </button>
+
+      <!-- Simulator-tab header action: send the reviewed job to the
+           plotter. Disabled (greyed) until both a G-code and a live
+           connection are available. -->
+      <button
+        v-if="canvasTab === 'simulator'"
+        type="button"
+        class="ml-auto flex items-center gap-1 rounded bg-emerald-600 px-3 py-1 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+        :disabled="!canStartPrint"
+        :title="plotterStatus.connected ? t('plotter.startPrint') : t('plotter.manualDisconnected')"
+        data-test="simulator-start-print"
+        @click="startPrint"
+      >
+        <span aria-hidden="true">▶</span>
+        {{ t('plotter.startPrint') }}
       </button>
     </nav>
 
@@ -79,14 +117,13 @@ function select(tab: CanvasTab): void {
         </div>
         <SimRail v-if="canSimulate && job.gcode" />
       </div>
-      <div v-show="canvasTab === 'gcode'" class="flex h-full min-h-0 flex-col">
-        <GcodePreview v-if="job.gcode" />
-        <p v-else class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
+      <div v-show="canvasTab === 'plotter'" class="flex h-full min-h-0 flex-col">
+        <PlotterControl />
       </div>
     </div>
 
     <!-- Metrics footer (size / scale / estimate / pen changes) is scoped
-         to the canvas column so it spans the plan/simulation/gcode area
+         to the canvas column so it spans the plan/simulation/plotter area
          only, not the file library. Self-hides when no job is loaded. -->
     <AppFooter />
   </section>

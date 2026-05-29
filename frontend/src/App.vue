@@ -7,7 +7,6 @@ import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import EditModal from './components/EditModal.vue'
 import FilesPane from './components/FilesPane.vue'
-import PlotterDrawer from './components/PlotterDrawer.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
 import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
@@ -364,8 +363,8 @@ onMounted(async () => {
   void algorithms.refresh()
   // Queue polling needs to run for the whole app session so Workshop
   // Mode + WorkspaceRail see live runs even when the operator never
-  // opens the Plotter drawer. ``startPolling`` is idempotent — calling
-  // it again from PlotterDrawer is a no-op.
+  // opens the Plotter tab. ``startPolling`` is idempotent — calling
+  // it again from PlotterControl is a no-op.
   queue.startPolling()
 })
 
@@ -399,7 +398,6 @@ onBeforeUnmount(() => {
     </main>
 
     <SettingsDrawer />
-    <PlotterDrawer />
     <!-- Edit modal: the UX mode picks the surface.
          Assisted → wizard (Modal V2), Expert → rich editor (Modal V1).
          Both modals share the same ``ui.editModalOpen`` state so an

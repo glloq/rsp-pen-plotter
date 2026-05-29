@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
-export type CanvasTab = 'sheet' | 'simulator' | 'gcode'
+export type CanvasTab = 'sheet' | 'simulator' | 'plotter'
 export type SettingsTab = 'system' | 'history' | 'audit' | 'slo' | 'manifests'
 export type PlotterTab = 'connection' | 'manual' | 'profile' | 'colors' | 'macros' | 'queue'
 
@@ -68,7 +68,9 @@ export const useUiStore = defineStore('ui', () => {
   const canvasTab = ref<CanvasTab>('sheet')
   const settingsOpen = ref(false)
   const settingsTab = ref<SettingsTab>('system')
-  const plotterDrawerOpen = ref(false)
+  // Sub-navigation for the inline Plotter control tab (connection,
+  // manual, profile, colors, macros, queue). The legacy modal drawer
+  // was retired in favour of the main-page ``plotter`` canvas tab.
   const plotterTab = ref<PlotterTab>('connection')
   const editModalOpen = ref(false)
   // Compare drawer (roadmap C.5): side-by-side rendering of two variants
@@ -172,13 +174,11 @@ export const useUiStore = defineStore('ui', () => {
     settingsOpen.value = false
   }
 
-  function openPlotterDrawer(tab?: PlotterTab): void {
+  // Jump to the inline Plotter control tab, optionally pre-selecting a
+  // sub-tab. Replaces the old ``openPlotterDrawer`` modal entrypoint.
+  function openPlotter(tab?: PlotterTab): void {
     if (tab) plotterTab.value = tab
-    plotterDrawerOpen.value = true
-  }
-
-  function closePlotterDrawer(): void {
-    plotterDrawerOpen.value = false
+    canvasTab.value = 'plotter'
   }
 
   function openEditModal(): void {
@@ -248,7 +248,6 @@ export const useUiStore = defineStore('ui', () => {
     canvasTab,
     settingsOpen,
     settingsTab,
-    plotterDrawerOpen,
     plotterTab,
     editModalOpen,
     compareOpen,
@@ -258,8 +257,7 @@ export const useUiStore = defineStore('ui', () => {
     setPreviewSheet,
     openSettings,
     closeSettings,
-    openPlotterDrawer,
-    closePlotterDrawer,
+    openPlotter,
     openEditModal,
     closeEditModal,
     openCompare,
