@@ -529,7 +529,8 @@
     "simulator": "Simulation",
     "gcode": "G-code",
     "simulatorUnavailable": "Le simulateur n'est pas disponible pour ce dialecte.",
-    "gcodeEmpty": "Aucun G-code généré pour le moment."
+    "gcodeEmpty": "Aucun G-code généré pour le moment.",
+    "plotter": "Traceur"
   },
   "pens": {
     "magazine": "Magasin",
@@ -1051,7 +1052,10 @@
     "newPlotterDuplicate": "Un profil nommé « {name} » existe déjà.",
     "newPlotterNoBase": "Sélectionne d'abord un profil existant — l'assistant le clone comme base.",
     "newPlotterSaved": "Profil « {name} » enregistré et sélectionné.",
-    "newPlotterFailed": "Impossible d'enregistrer le profil"
+    "newPlotterFailed": "Impossible d'enregistrer le profil",
+    "startPrint": "Lancer l'impression",
+    "gcodeSection": "G-code généré",
+    "controlHint": "Connecte le traceur, pilote-le manuellement et lance les impressions depuis cet onglet."
   },
   "assignedColor": {
     "title": "Couleur du calque",

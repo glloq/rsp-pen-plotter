@@ -302,7 +302,9 @@ const canGenerate = computed(() => {
 async function generateAndShow(): Promise<void> {
   await store.generate()
   if (store.gcode) {
-    ui.canvasTab = store.selectedProfile?.gcode_dialect === 'ebb' ? 'gcode' : 'simulator'
+    // EBB dialects have no simulator; route the operator to the Plotter
+    // tab (its collapsible G-code panel is the closest review surface).
+    ui.canvasTab = store.selectedProfile?.gcode_dialect === 'ebb' ? 'plotter' : 'simulator'
   }
 }
 
@@ -357,7 +359,11 @@ function onKey(event: KeyboardEvent): void {
   ) {
     return
   }
-  if (ui.editModalOpen || ui.settingsOpen || ui.plotterDrawerOpen) return
+  if (ui.editModalOpen || ui.settingsOpen) return
+  // Only act on the sheet tab — the simulator and plotter tabs own
+  // their own surface (the plotter tab even has text inputs), so a
+  // stray Delete there must not remove a placement.
+  if (ui.canvasTab !== 'sheet') return
   const id = store.selectedPlacementId
   if (!id) return
   event.preventDefault()

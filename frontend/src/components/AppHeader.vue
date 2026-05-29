@@ -129,10 +129,10 @@ function toggleWorkshop(): void {
 
       <!-- Transport controls: drive the active queued run when one is
            live, otherwise send the currently loaded gcode directly.
-           Hidden entirely when nothing is loaded and no run is active
-           so the header stays uncluttered for layout-only sessions. -->
+           Always visible — the play button is greyed out until a plotter
+           is connected and a job is loaded, so operators always know
+           where the controls live. -->
       <div
-        v-if="canPlay || canStop"
         class="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 p-0.5"
         data-test="header-transport"
       >
@@ -209,34 +209,17 @@ function toggleWorkshop(): void {
         <span class="hidden sm:inline">{{ t('header.workshop') }}</span>
       </button>
 
+      <!-- Plotter access: the modal drawer was retired in favour of the
+           main-page ``plotter`` canvas tab. The status pill doubles as
+           the shortcut into that tab. -->
       <button
         type="button"
-        class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition"
-        :class="
-          plotterStatus.connected
-            ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-900/40'
-            : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
-        "
+        class="rounded transition hover:opacity-80"
         :title="t('header.plotter')"
         :aria-label="t('header.plotter')"
-        @click="ui.openPlotterDrawer()"
+        data-test="header-plotter"
+        @click="ui.openPlotter()"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="h-4 w-4"
-        >
-          <rect x="3" y="6" width="18" height="12" rx="1" />
-          <path d="M7 10h10" />
-          <path d="M12 14v4" />
-          <circle cx="7" cy="14" r="0.5" />
-        </svg>
-        <span class="hidden sm:inline">{{ t('header.plotter') }}</span>
         <MachineStatusPill />
       </button>
 

@@ -529,7 +529,8 @@
     "simulator": "Simulator",
     "gcode": "G-code",
     "simulatorUnavailable": "Simulator unavailable for this dialect.",
-    "gcodeEmpty": "No G-code generated yet."
+    "gcodeEmpty": "No G-code generated yet.",
+    "plotter": "Plotter"
   },
   "pens": {
     "magazine": "Magazine",
@@ -1051,7 +1052,10 @@
     "newPlotterDuplicate": "A profile named \"{name}\" already exists.",
     "newPlotterNoBase": "Pick an existing profile first — the wizard clones it as the base.",
     "newPlotterSaved": "Profile \"{name}\" saved and selected.",
-    "newPlotterFailed": "Could not save the new profile"
+    "newPlotterFailed": "Could not save the new profile",
+    "startPrint": "Start print",
+    "gcodeSection": "Generated G-code",
+    "controlHint": "Connect the plotter, drive it manually and start prints from this tab."
   },
   "assignedColor": {
     "title": "Layer colour",
