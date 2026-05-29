@@ -70,6 +70,70 @@ def test_fixed_palette_rejects_empty() -> None:
         segmentation.fixed_palette(_gradient_image(), palette_hex=[])
 
 
+def _two_colour_image(width: int = 8, height: int = 4) -> Image.Image:
+    """Left half pure red, right half pure blue — a crisp 2-colour split."""
+    arr = np.zeros((height, width, 3), dtype=np.uint8)
+    arr[:, : width // 2] = (255, 0, 0)
+    arr[:, width // 2 :] = (0, 0, 255)
+    return Image.fromarray(arr, mode="RGB")
+
+
+def test_kmeans_lab_clusters_two_colours() -> None:
+    image = _two_colour_image()
+    labels, palette = segmentation.kmeans_lab(image, num_colors=2, n_init=1)
+    assert sorted(np.unique(labels).tolist()) == [0, 1]
+    # Palette entries are the mean source RGB of each cluster, so they land
+    # on (near) pure red and pure blue.
+    rows = {tuple(int(c) for c in row) for row in palette}
+    assert (255, 0, 0) in rows
+    assert (0, 0, 255) in rows
+
+
+def test_kmeans_lab_palette_is_displayable_rgb() -> None:
+    """Centroids come back as real image colours (uint8 RGB), not Lab."""
+    image = _gradient_image(width=16, height=16)
+    _, palette = segmentation.kmeans_lab(image, num_colors=3, n_init=1)
+    assert palette.dtype == np.uint8
+    assert palette.shape[1] == 3
+    assert (palette >= 0).all() and (palette <= 255).all()
+
+
+def test_kmeans_lab_caps_k_to_unique_colours() -> None:
+    """Asking for more clusters than distinct colours yields fewer layers."""
+    image = _two_colour_image()
+    labels, palette = segmentation.kmeans_lab(image, num_colors=8, n_init=1)
+    assert len(palette) == 2
+    assert len(np.unique(labels)) == 2
+
+
+def test_palette_dither_zero_amount_matches_fixed_palette() -> None:
+    """``amount=0`` reduces exactly to the plain nearest-colour snap."""
+    image = _gradient_image(width=32, height=8)
+    pal = ["#000000", "#ffffff"]
+    dithered, _ = segmentation.palette_dither(image, palette_hex=pal, amount=0.0)
+    snapped, _ = segmentation.fixed_palette(image, palette_hex=pal)
+    assert np.array_equal(dithered, snapped)
+
+
+def test_palette_dither_breaks_up_flat_midtone() -> None:
+    """A flat 50% grey snaps to a single pen, but dithering mixes both."""
+    grey = np.full((16, 16, 3), 128, dtype=np.uint8)
+    image = Image.fromarray(grey, mode="RGB")
+    pal = ["#000000", "#ffffff"]
+    snapped, _ = segmentation.fixed_palette(image, palette_hex=pal)
+    dithered, _ = segmentation.palette_dither(image, palette_hex=pal, amount=1.0)
+    # Plain snap → one label across the whole tile; dither → both pens used.
+    assert len(np.unique(snapped)) == 1
+    assert len(np.unique(dithered)) == 2
+
+
+def test_palette_dither_rejects_empty() -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        segmentation.palette_dither(_gradient_image(), palette_hex=[])
+
+
 def test_drop_small_regions_repaints_isolated_specks() -> None:
     # A 4×4 sea of zeros with a single isolated speck of "1" — that's a
     # 1-pixel region that should be repainted to its neighbours (all 0s).
@@ -205,6 +269,38 @@ def test_bitmap_converter_fixed_palette_via_options() -> None:
             "algorithm": "direct",
             "segmentation_method": "fixed_palette",
             "segmentation_options": {"palette": ["#ff0000", "#0000ff"]},
+            "drop_background": False,
+        },
+        fast=True,
+    )
+    assert 'color-ff0000' in result.svg or 'color-0000ff' in result.svg
+
+
+def test_bitmap_converter_routes_through_kmeans_lab() -> None:
+    """End-to-end: the ``kmeans_lab`` method reaches the renderer."""
+    image = _two_colour_image(width=16, height=16)
+    result = BitmapConverter().convert(
+        _png_bytes(image),
+        options={
+            "algorithm": "direct",
+            "segmentation_method": "kmeans_lab",
+            "num_colors": 2,
+            "drop_background": False,
+        },
+        fast=True,
+    )
+    assert 'color-ff0000' in result.svg or 'color-0000ff' in result.svg
+
+
+def test_bitmap_converter_routes_through_palette_dither() -> None:
+    """End-to-end: ``palette_dither`` snaps to the supplied palette."""
+    image = _gradient_image(width=16, height=16)
+    result = BitmapConverter().convert(
+        _png_bytes(image),
+        options={
+            "algorithm": "direct",
+            "segmentation_method": "palette_dither",
+            "segmentation_options": {"palette": ["#ff0000", "#0000ff"], "dither_amount": 0.6},
             "drop_background": False,
         },
         fast=True,

@@ -466,7 +466,13 @@ export function defaultsFor(id: string): Record<string, unknown> {
 
 export type StyleScope = 'master' | 'layer'
 export type PrintStyleKind = 'image' | 'schematic' | 'text'
-export type SegmentationMethod = 'kmeans' | 'luminance_bands' | 'thresholds' | 'fixed_palette'
+export type SegmentationMethod =
+  | 'kmeans'
+  | 'kmeans_lab'
+  | 'luminance_bands'
+  | 'thresholds'
+  | 'fixed_palette'
+  | 'palette_dither'
 // Master styles split by print mode: ``monochrome`` styles drive the
 // mono master pipeline (luminance_bands / thresholds + bandRecipe).
 // ``multicolor`` styles drive the multicolour pipeline (kmeans /
@@ -1380,6 +1386,29 @@ export const PRINT_STYLES: PrintStyle[] = [
     mode: 'multicolor',
     segmentation: {
       method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'direct',
+    defaultAlgorithmOptions: {},
+    colorRecipe() {
+      return { algorithm: 'direct', algorithm_options: {} }
+    },
+  },
+  {
+    id: 'color-flat-lab',
+    labelKey: 'colorStyles.flatLab',
+    descriptionKey: 'colorStyles.flatLabDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      // Perceptual k-means: clusters colours in CIE Lab so the few pens
+      // available are spent the way the eye would group the image, not
+      // the way RGB distance happens to fall.
+      method: 'kmeans_lab',
       default_num_colors: 4,
       drop_background: true,
       background_luminance: 0.92,

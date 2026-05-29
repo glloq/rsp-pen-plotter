@@ -49,7 +49,13 @@ export interface AlgorithmInfo {
   complexity?: AlgorithmComplexity
 }
 
-export type SegmentationMethod = 'kmeans' | 'luminance_bands' | 'thresholds' | 'fixed_palette'
+export type SegmentationMethod =
+  | 'kmeans'
+  | 'kmeans_lab'
+  | 'luminance_bands'
+  | 'thresholds'
+  | 'fixed_palette'
+  | 'palette_dither'
 
 export async function getAlgorithms(): Promise<AlgorithmInfo[]> {
   const response = await api.get<AlgorithmInfo[]>('/algorithms')
