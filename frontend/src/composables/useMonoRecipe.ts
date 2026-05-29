@@ -400,6 +400,36 @@ function recipeFromKnobs(
         },
       }
     }
+    case 'lowpoly': {
+      // More sample points on dark bands → smaller facets → denser edges.
+      const density = lerp(i, total, knobs.density_max ?? 0.04, knobs.density_min ?? 0.006)
+      return {
+        algorithm: 'lowpoly',
+        algorithm_options: { density, seed: i * 7 + 13 },
+      }
+    }
+    case 'scribble': {
+      // Sketchy hatching: rotating angle per band + tighter spacing on dark
+      // bands, crossing the darkest band like a hand shading a shadow.
+      const angles =
+        knobs.angles && knobs.angles.length > 0
+          ? knobs.angles
+          : ((MONO_STYLE_DEFAULTS.scribble?.angles as number[] | undefined) ?? [45, 135])
+      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6.5)
+      const picked = pickAnglesForBand(i, total, angles)
+      const crossed = i === 0 && (knobs.crossed_on_darkest ?? true) && total > 1
+      const finalAngles = crossed ? [picked[0]!, (picked[0]! + 90) % 180] : picked
+      return {
+        algorithm: 'scribble',
+        algorithm_options: {
+          angles: finalAngles,
+          spacing_px: spacing,
+          amp_px: 1.6,
+          overshoot_px: 3,
+          seed: i * 7 + 13,
+        },
+      }
+    }
     default:
       return style.bandRecipe ? style.bandRecipe(i, total) : null
   }

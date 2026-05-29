@@ -191,9 +191,9 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <p class="text-[10px] text-slate-500">{{ t('mono.thresholdHint') }}</p>
     </div>
 
-    <!-- ===== Pencil / Hatch-fill: angle chips + spacing range + crossed ===== -->
+    <!-- ===== Pencil / Hatch-fill / Scribble: angle chips + spacing + crossed ===== -->
     <div
-      v-if="styleId === 'pencil' || styleId === 'hatch-fill'"
+      v-if="styleId === 'pencil' || styleId === 'hatch-fill' || styleId === 'scribble'"
       class="space-y-3 border-t border-slate-800 pt-3"
     >
       <div>
@@ -431,6 +431,26 @@ function bandSwatchStyle(i: number): Record<string, string> {
         </template>
       </DualRangeSlider>
     </div>
+
+    <!-- ===== Low-poly: point density range ===== -->
+    <DualRangeSlider
+      v-else-if="styleId === 'lowpoly'"
+      class="border-t border-slate-800 pt-3"
+      :model-value-min="knobs.density_min ?? 0.006"
+      :model-value-max="knobs.density_max ?? 0.04"
+      :min="0.002"
+      :max="0.1"
+      :step="0.002"
+      @update:model-value-min="(v) => setKnob('density_min', v)"
+      @update:model-value-max="(v) => setKnob('density_max', v)"
+    >
+      <template #label>
+        <span class="uppercase tracking-wider">{{ t('mono.densityRange') }}</span>
+      </template>
+      <template #hint>
+        <p class="text-[10px] text-slate-500">{{ t('mono.densityRangeHint') }}</p>
+      </template>
+    </DualRangeSlider>
 
     <!-- ===== Flow-field / Hilbert / Gosper: spacing range only ===== -->
     <DualRangeSlider

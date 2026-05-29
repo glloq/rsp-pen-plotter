@@ -21,6 +21,8 @@ from pen_plotter.converters.algorithms import (
     FlowFieldAlgorithm,
     GosperFillAlgorithm,
     HilbertFillAlgorithm,
+    LowPolyAlgorithm,
+    ScribbleAlgorithm,
     SpiralAlgorithm,
     TspAlgorithm,
     TspOptimizedAlgorithm,
@@ -58,6 +60,8 @@ def test_registry_lists_all_algorithms() -> None:
         "tsp_opt",
         "voronoi_stipple",
         "squiggle",
+        "lowpoly",
+        "scribble",
     }
 
 
@@ -76,6 +80,8 @@ def test_algorithm_kind_groups_by_family() -> None:
     assert algorithm_kind("concentric_offset") == "mono_stroke"
     assert algorithm_kind("flowfield") == "fill"
     assert algorithm_kind("tsp_opt") == "mono_stroke"
+    assert algorithm_kind("lowpoly") == "lines"
+    assert algorithm_kind("scribble") == "fill"
 
 
 def test_centerline_traces_horizontal_bar() -> None:
@@ -118,6 +124,8 @@ def test_centerline_skimage_missing_falls_back_to_edges(monkeypatch) -> None:
         ("concentric_offset", "<polyline"),
         ("flowfield", "<polyline"),
         ("tsp_opt", "<polyline"),
+        ("lowpoly", "<line"),
+        ("scribble", "<polyline"),
     ],
 )
 def test_algorithm_emits_geometry_for_filled_square(
@@ -306,3 +314,49 @@ def test_tsp_opt_2opt_not_longer_than_nn() -> None:
         options={"method": "nn_2opt", "seed": 1, "time_budget_s": 0.5},
     )
     assert _length(opt) <= _length(nn) + 1e-6
+
+
+def test_lowpoly_higher_density_adds_edges() -> None:
+    """More sample points → a finer triangulation → strictly more edges."""
+    mask = _square_mask(size=60, inset=4)
+    sparse = LowPolyAlgorithm().render_layer(
+        mask, "#000", "lp", options={"density": 0.01, "seed": 1}
+    )
+    dense = LowPolyAlgorithm().render_layer(
+        mask, "#000", "lp", options={"density": 0.06, "seed": 1}
+    )
+    assert sparse.count("<line") >= 3
+    assert dense.count("<line") > sparse.count("<line")
+
+
+def test_lowpoly_scipy_missing_degrades_gracefully(monkeypatch) -> None:
+    """Without scipy the algorithm returns an empty group, never raises."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "scipy.spatial", None)
+    svg = LowPolyAlgorithm().render_layer(_square_mask(), "#000", "lp")
+    assert svg.startswith("<g ") and svg.endswith("</g>")
+    assert "<line" not in svg
+
+
+def test_scribble_crossing_doubles_strokes() -> None:
+    """A crossing angle on the darkest band roughly doubles the strokes."""
+    mask = _square_mask(size=40, inset=4)
+    single = ScribbleAlgorithm().render_layer(
+        mask, "#000", "s", options={"angle_deg": 0.0, "spacing_px": 4, "seed": 1}
+    )
+    crossed = ScribbleAlgorithm().render_layer(
+        mask,
+        "#000",
+        "s",
+        options={"angle_deg": 0.0, "spacing_px": 4, "crossed": True, "seed": 1},
+    )
+    assert single.count("<polyline") >= 2
+    assert crossed.count("<polyline") > single.count("<polyline")
+
+
+def test_scribble_empty_mask_yields_empty_group() -> None:
+    mask = np.zeros((10, 10), dtype=bool)
+    svg = ScribbleAlgorithm().render_layer(mask, "#000", "s")
+    assert "<g " in svg and "</g>" in svg
+    assert "<polyline" not in svg
