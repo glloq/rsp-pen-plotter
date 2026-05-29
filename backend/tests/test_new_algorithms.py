@@ -470,6 +470,20 @@ def test_circle_pack_circles_do_not_overlap() -> None:
             assert dist + 1e-6 >= r1 + r2
 
 
+def test_circle_pack_auto_attempts_fills_densely() -> None:
+    """The area-scaled default budget packs far more bubbles than a tiny
+    explicit attempt count — guards the "not enough bubbles" fix."""
+    mask = np.ones((120, 120), dtype=bool)
+    sparse = get_algorithm("circle_pack").render_layer(
+        mask, "#000", "cp", options={"attempts": 500, "max_radius_px": 5, "seed": 1}
+    )
+    auto = get_algorithm("circle_pack").render_layer(
+        mask, "#000", "cp", options={"max_radius_px": 5, "seed": 1}
+    )
+    assert auto.count("<circle") > sparse.count("<circle")
+    assert auto.count("<circle") > 200
+
+
 def test_new_algorithms_empty_mask_safe() -> None:
     """No pixels → an empty <g>, never an exception, for every new algo."""
     mask = np.zeros((12, 12), dtype=bool)

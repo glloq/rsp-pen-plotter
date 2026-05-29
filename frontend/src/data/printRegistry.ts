@@ -419,7 +419,10 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   circle_pack: {
     id: 'circle_pack',
-    defaults: { min_radius_px: 1.5, max_radius_px: 8, gap_px: 0.6, attempts: 3000, seed: 0 },
+    // ``attempts`` is intentionally omitted: the backend auto-scales the
+    // dart budget with the region area so the packing fills densely
+    // without the operator tuning it. Smaller radii ⇒ more bubbles.
+    defaults: { min_radius_px: 1.0, max_radius_px: 7, gap_px: 0.6, seed: 0 },
     schema: [
       {
         key: 'min_radius_px',
@@ -438,14 +441,6 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         step: 0.5,
       },
       { key: 'gap_px', label: 'convert.gapPx', type: 'number', min: 0, max: 10, step: 0.1 },
-      {
-        key: 'attempts',
-        label: 'convert.attempts',
-        type: 'number',
-        min: 100,
-        max: 20000,
-        step: 100,
-      },
       { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
     ],
   },
@@ -690,8 +685,8 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
     crossed: false,
   },
   'color-stipple': {
-    density_min: 0.012,
-    density_max: 0.05,
+    density_min: 0.02,
+    density_max: 0.18,
     dot_radius: 0.5,
     iterations: 4,
   },
@@ -726,8 +721,8 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
     max_rings: 40,
   },
   'color-stippling-classic': {
-    density_min: 0.012,
-    density_max: 0.05,
+    density_min: 0.02,
+    density_max: 0.18,
     dot_radius: 0.5,
   },
   'color-edges': {
@@ -749,8 +744,8 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
     wave_period_px: 12,
   },
   'color-tsp': {
-    density_min: 0.012,
-    density_max: 0.05,
+    density_min: 0.02,
+    density_max: 0.12,
   },
   'color-hilbert': {
     spacing_min: 2.5,
@@ -769,10 +764,10 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
     crossed: false,
   },
   'color-tsp-opt': {
-    density_min: 0.012,
-    density_max: 0.05,
-    max_points: 4000,
-    time_budget_s: 1.5,
+    density_min: 0.02,
+    density_max: 0.12,
+    max_points: 8000,
+    time_budget_s: 2.0,
   },
   // Geometric / generative colour masters — global knobs so the operator
   // can tune them across clusters like the hatch / stipple families.
@@ -804,8 +799,8 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
     rays_max: 160,
   },
   'color-circle-pack': {
-    radius_min: 6,
-    radius_max: 11,
+    radius_min: 3,
+    radius_max: 7,
     gap_px: 0.6,
   },
 }
@@ -1503,7 +1498,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     colorRecipe(i, total) {
       // Darker clusters get denser dot fields. Voronoi relaxation keeps
       // spacing even within each cluster so overlapping inks don't clump.
-      const density = lerp(i, total, 0.05, 0.012)
+      const density = lerp(i, total, 0.18, 0.02)
       return {
         algorithm: 'voronoi_stipple',
         algorithm_options: {
@@ -1710,7 +1705,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     defaultAlgorithm: 'stippling',
     defaultAlgorithmOptions: { density: 0.03, dot_radius_px: 0.5, seed: 0 },
     colorRecipe(i, total) {
-      const density = lerp(i, total, 0.05, 0.012)
+      const density = lerp(i, total, 0.18, 0.02)
       return {
         algorithm: 'stippling',
         algorithm_options: { density, dot_radius_px: 0.5, seed: i * 7 + 13 },
@@ -1827,7 +1822,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     defaultAlgorithm: 'tsp',
     defaultAlgorithmOptions: { density: 0.03, seed: 0 },
     colorRecipe(i, total) {
-      const density = lerp(i, total, 0.05, 0.012)
+      const density = lerp(i, total, 0.12, 0.02)
       return {
         algorithm: 'tsp',
         algorithm_options: { density, seed: i * 11 + 5 },
@@ -1925,20 +1920,20 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
     defaultAlgorithm: 'tsp_opt',
     defaultAlgorithmOptions: {
-      density: 0.03,
-      max_points: 4000,
-      time_budget_s: 1.5,
+      density: 0.06,
+      max_points: 8000,
+      time_budget_s: 2.0,
       seed: 0,
       poisson_disk: true,
     },
     colorRecipe(i, total) {
-      const density = lerp(i, total, 0.05, 0.012)
+      const density = lerp(i, total, 0.12, 0.02)
       return {
         algorithm: 'tsp_opt',
         algorithm_options: {
           density,
-          max_points: 4000,
-          time_budget_s: 1.5,
+          max_points: 8000,
+          time_budget_s: 2.0,
           seed: i * 19 + 3,
           poisson_disk: true,
         },
@@ -2111,14 +2106,15 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'circle_pack',
-    defaultAlgorithmOptions: { min_radius_px: 1.5, max_radius_px: 8, gap_px: 0.6, seed: 0 },
+    defaultAlgorithmOptions: { min_radius_px: 1.0, max_radius_px: 7, gap_px: 0.6, seed: 0 },
     colorRecipe(i, total) {
-      // Smaller bubbles on darker clusters → denser ink coverage.
-      const maxR = lerp(i, total, 6, 11)
+      // Smaller bubbles on darker clusters → denser ink coverage. Attempts
+      // auto-scale with region area on the backend, so the packing fills.
+      const maxR = lerp(i, total, 3, 7)
       return {
         algorithm: 'circle_pack',
         algorithm_options: {
-          min_radius_px: 1.5,
+          min_radius_px: 1.0,
           max_radius_px: maxR,
           gap_px: 0.6,
           seed: i * 17 + 5,
@@ -2296,9 +2292,9 @@ export const PRINT_STYLES: PrintStyle[] = [
     scope: 'layer',
     defaultAlgorithm: 'tsp_opt',
     defaultAlgorithmOptions: {
-      density: 0.02,
-      max_points: 4000,
-      time_budget_s: 1.5,
+      density: 0.06,
+      max_points: 8000,
+      time_budget_s: 2.0,
       seed: 0,
       poisson_disk: true,
     },
@@ -2364,7 +2360,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'circle_pack',
-    defaultAlgorithmOptions: { min_radius_px: 1.5, max_radius_px: 8, gap_px: 0.6, seed: 0 },
+    defaultAlgorithmOptions: { min_radius_px: 1.0, max_radius_px: 7, gap_px: 0.6, seed: 0 },
   },
 ]
 

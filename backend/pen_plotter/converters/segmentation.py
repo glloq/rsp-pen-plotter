@@ -205,9 +205,20 @@ def kmeans_lab(
     Lab→RGB round-trip drift, and it lines up with how ``kmeans`` reports
     its palette).
     """
-    rgb01 = np.asarray(image, dtype=np.float64).reshape(-1, 3) / 255.0
+    rgb_u8 = np.asarray(image, dtype=np.uint8).reshape(-1, 3)
+    rgb01 = rgb_u8.astype(np.float64) / 255.0
     lab = _rgb_to_lab(rgb01)
-    k = min(num_colors, max(1, np.unique(lab, axis=0).shape[0]))
+    # Cap k at the number of distinct source colours so KMeans never asks
+    # for more clusters than there are points. Counting distinct colours on
+    # packed uint8 RGB (a 1-D int sort) is far cheaper than ``np.unique`` on
+    # the float Lab rows, which on a photo would sort ~every pixel.
+    packed = (
+        (rgb_u8[:, 0].astype(np.int32) << 16)
+        | (rgb_u8[:, 1].astype(np.int32) << 8)
+        | rgb_u8[:, 2].astype(np.int32)
+    )
+    distinct = int(np.unique(packed).size)
+    k = min(num_colors, max(1, distinct))
     model = KMeans(n_clusters=k, n_init=n_init, random_state=0)
     flat_labels = model.fit_predict(lab)
     counts = np.bincount(flat_labels, minlength=k).astype(np.float64)
