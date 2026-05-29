@@ -475,11 +475,12 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     density: 0.04,
   },
   'spiral-master': {
+    // Turn spacing (tighter → finer tone) and the wobble's spatial
+    // wavelength; amplitude is derived per pixel from the tone map and
+    // scaled by tone_strength.
     spacing_px: 4,
-    // Radial wobble amplitude lerped dark→light across the bands.
-    wave_amp_min: 0.2,
-    wave_amp_max: 6,
-    waves_per_turn: 12,
+    wavelength_px: 8,
+    tone_strength: 1,
   },
   'centerline-trace': {
     stroke_width: 0.8,
@@ -798,35 +799,35 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'master',
     mode: 'monochrome',
-    // Tonal spiral: one Archimedean spiral over the whole image, its
-    // radial wobble amplitude lerped across luminance bands (dark = big
-    // wobble, light = nearly straight). drop_background stays OFF so the
-    // spiral is continuous edge-to-edge — the iconic "spiral portrait"
-    // look — instead of leaving holes in the highlights.
+    // Tonal spiral: a single continuous Archimedean spiral over the whole
+    // image whose radial wobble amplitude is modulated *per pixel* from the
+    // source luminance (dark = wide space-filling wobble, light = thin
+    // line). The backend injects the tone map; we therefore segment as a
+    // SINGLE band (one mask = the whole image) so the spiral is one
+    // unbroken stroke. drop_background stays OFF and knob_bands is false —
+    // tone comes from the pixel map, not from band count.
     segmentation: {
       method: 'luminance_bands',
-      default_num_bands: 6,
+      default_num_bands: 1,
       drop_background: false,
       background_luminance: 0.85,
-      knob_bands: true,
+      knob_bands: false,
     },
     defaultAlgorithm: 'spiral',
     defaultAlgorithmOptions: {
       spacing_px: 4,
       samples_per_turn: 64,
-      wave_amp_px: 2,
-      waves_per_turn: 12,
+      wavelength_px: 8,
+      tone_strength: 1,
     },
-    bandRecipe(i, total) {
-      // Darkest band (i=0) → max amplitude, lightest → a thin wobble.
-      const amp = lerp(i, total, 6, 0.2)
+    bandRecipe() {
       return {
         algorithm: 'spiral',
         algorithm_options: {
           spacing_px: 4,
           samples_per_turn: 64,
-          wave_amp_px: amp,
-          waves_per_turn: 12,
+          wavelength_px: 8,
+          tone_strength: 1,
         },
       }
     },

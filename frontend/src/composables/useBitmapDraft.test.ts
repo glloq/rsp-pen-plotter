@@ -18,27 +18,24 @@ test('TSP knob slider feeds bandRecipe density on /preview payload', () => {
   expect(opts.density).toBeCloseTo(0.077)
 })
 
-test('Spiral (tonal) feeds bandRecipe spacing + amplitude per band', () => {
+test('Spiral (tonal) feeds spacing + wavelength + strength', () => {
   const d = useBitmapDraft()
-  // Tonal spiral is a shaded (luminance_bands) style now.
+  // Tonal spiral is a single-band luminance_bands style; the per-pixel
+  // wobble amplitude is computed backend-side from the tone map, so the
+  // recipe only carries the spiral geometry knobs.
   d.bitmap.value.segmentation_method = 'luminance_bands'
-  d.bitmap.value.num_bands = 3
+  d.bitmap.value.num_bands = 1
   d.monoMasterStyleId.value = 'spiral-master'
   d.setMonoKnob('spiral-master', 'spacing_px', 5.5)
-  d.setMonoKnob('spiral-master', 'wave_amp_min', 0.2)
-  d.setMonoKnob('spiral-master', 'wave_amp_max', 6)
+  d.setMonoKnob('spiral-master', 'wavelength_px', 10)
+  d.setMonoKnob('spiral-master', 'tone_strength', 0.6)
   const payload = d.buildBitmapOptions()
   const recipes = payload.band_recipes as Array<Record<string, unknown>>
-  expect(recipes.length).toBe(3)
   expect(recipes[0]!.algorithm).toBe('spiral')
-  const dark = recipes[0]!.algorithm_options as Record<string, unknown>
-  const light = recipes[2]!.algorithm_options as Record<string, unknown>
-  // spacing_px is constant across bands (shared spiral path)...
-  expect(dark.spacing_px).toBe(5.5)
-  expect(light.spacing_px).toBe(5.5)
-  // ...while the radial wobble amplitude lerps darkest → lightest.
-  expect(dark.wave_amp_px).toBeCloseTo(6)
-  expect(light.wave_amp_px).toBeCloseTo(0.2)
+  const o = recipes[0]!.algorithm_options as Record<string, unknown>
+  expect(o.spacing_px).toBe(5.5)
+  expect(o.wavelength_px).toBe(10)
+  expect(o.tone_strength).toBe(0.6)
 })
 
 test('Engraving wave_period overrides scanlines wave_period_px', () => {

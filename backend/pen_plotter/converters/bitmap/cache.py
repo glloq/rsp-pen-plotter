@@ -33,3 +33,8 @@ class SegmentationResult:
     palette: NDArray[np.uint8]
     width: int
     height: int
+    # Per-pixel Rec.709 luminance of the segmented image (0=black..1=white),
+    # shape (height, width). Optional: only the tonal-spiral render path
+    # consumes it (to modulate the wobble per pixel); other algorithms and
+    # older cache entries leave it ``None``.
+    luminance: NDArray[np.float64] | None = None

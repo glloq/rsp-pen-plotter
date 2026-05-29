@@ -37,15 +37,32 @@ class SpiralAlgorithm(RasterAlgorithm):
         spacing = max(1.0, float(opts.get("spacing_px", 4.0)))
         # Samples per turn — denser = smoother curve, slower to compute.
         samples_per_turn = max(16, int(opts.get("samples_per_turn", 64)))
-        # Tonal (amplitude-modulated) spiral: the radius wobbles by a sine
-        # of ``wave_amp_px`` running ``waves_per_turn`` times per turn. The
-        # band recipe feeds a *large* amplitude to dark bands and a near-
-        # zero one to light bands, so the single spiral reads as continuous
-        # grey: tight thin line in highlights, fat wobble in shadows. A
-        # zero amplitude (the default) reproduces the plain Archimedean
-        # spiral, keeping the binary/line-art use of this algorithm intact.
-        wave_amp = max(0.0, float(opts.get("wave_amp_px", 0.0)))
-        waves_per_turn = max(1, int(opts.get("waves_per_turn", 12)))
+        # Tonal (amplitude-modulated) spiral. The radius wobbles by a sine
+        # whose *spatial* wavelength (``wavelength_px``) is constant along
+        # the arc; its amplitude tracks local darkness so the single line
+        # reads as continuous grey — tight thin line in highlights, a wide
+        # space-filling wobble in shadows. Two invariants keep it readable
+        # as a spiral rather than noise:
+        #   * amplitude is capped to just under half the turn spacing, so
+        #     neighbouring turns never collide however dark the tone;
+        #   * the phase advances with arc length (not angle), so the waves
+        #     keep a constant size from the centre outward instead of
+        #     collapsing into a scribble near the middle.
+        #
+        # Darkness comes from one of two sources:
+        #   * ``_tone`` — a per-pixel luminance map (0=black..1=white) the
+        #     render pipeline injects for the tonal spiral. Amplitude is
+        #     sampled *per point* → one continuous, smoothly-modulated
+        #     spiral over the whole image (the iconic "spiral portrait").
+        #   * ``wave_amp_px`` — a scalar fallback (per-band recipes / API
+        #     callers without a tone map). ``0`` (the default) yields the
+        #     plain Archimedean spiral, preserving the line-art use.
+        wavelength = max(2.0, float(opts.get("wavelength_px", 8.0)))
+        tone = opts.get("_tone")
+        max_amp = 0.49 * spacing
+        strength = max(0.0, min(1.0, float(opts.get("tone_strength", 1.0))))
+        scalar_amp = min(max(0.0, float(opts.get("wave_amp_px", 0.0))), max_amp)
+        modulating = tone is not None or scalar_amp > 0.0
         bool_mask = mask.astype(bool)
 
         if not bool_mask.any():
@@ -53,21 +70,41 @@ class SpiralAlgorithm(RasterAlgorithm):
 
         ys, xs = np.where(bool_mask)
         cx, cy = float(xs.mean()), float(ys.mean())
-        max_r = float(np.hypot(xs - cx, ys - cy).max()) + spacing + wave_amp
+        max_r = float(np.hypot(xs - cx, ys - cy).max()) + spacing + max_amp
         turns = max(1, int(max_r / spacing))
-        # When modulating, the wave needs enough samples per oscillation or
-        # it aliases into jagged spikes — lift the sampling so each wave
-        # gets ~8 points, but never below the operator's smoothness knob.
-        effective_spt = samples_per_turn
-        if wave_amp > 0.0:
-            effective_spt = max(samples_per_turn, waves_per_turn * 8)
-        total_samples = turns * effective_spt
+        # Base sampling: ``samples_per_turn`` per revolution. When
+        # modulating, lift it so the outermost (longest) turn still gets
+        # ~8 samples per wavelength — otherwise the wave aliases into
+        # spikes. Total spiral arc length ≈ π·spacing·turns² (sum of the
+        # per-turn circumferences); cap the sample count so a tight spiral
+        # on a big canvas can't blow up the SVG.
+        total_samples = turns * samples_per_turn
+        if modulating:
+            arc_len = math.pi * spacing * turns * turns
+            needed = int(8.0 * arc_len / wavelength)
+            total_samples = max(total_samples, min(needed, 40000))
         t = np.linspace(0, turns * 2 * math.pi, total_samples)
-        # Archimedean spiral: r = (spacing / 2π) * θ, plus the tonal wobble.
+        # Archimedean spiral: r = (spacing / 2π) * θ.
         r = (spacing / (2 * math.pi)) * t
-        if wave_amp > 0.0:
-            r = r + wave_amp * np.sin(waves_per_turn * t)
-            # Keep the wobble from crossing the centre into negative radius.
+        if modulating:
+            # Cumulative arc length of the un-modulated path → constant
+            # spatial-frequency wobble.
+            x0 = r * np.cos(t)
+            y0 = r * np.sin(t)
+            cum = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(x0), np.diff(y0)))))
+            if tone is not None:
+                # Per-point amplitude from local darkness. Sample the tone
+                # map at each base point; off-canvas points read as white
+                # (no wobble).
+                tone_arr = np.asarray(tone, dtype=np.float64)
+                th, tw = tone_arr.shape
+                bx = np.clip(np.round(cx + x0).astype(np.intp), 0, tw - 1)
+                by = np.clip(np.round(cy + y0).astype(np.intp), 0, th - 1)
+                darkness = 1.0 - tone_arr[by, bx]
+                amp = strength * max_amp * np.clip(darkness, 0.0, 1.0)
+            else:
+                amp = scalar_amp
+            r = r + amp * np.sin(2 * math.pi * cum / wavelength)
             np.clip(r, 0.0, None, out=r)
         sx = cx + r * np.cos(t)
         sy = cy + r * np.sin(t)

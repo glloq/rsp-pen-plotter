@@ -156,6 +156,21 @@ def test_spiral_amplitude_modulation_adds_detail() -> None:
     assert wavy.count(",") > plain.count(",")
 
 
+def test_spiral_tone_map_modulates_by_darkness() -> None:
+    """A per-pixel tone map drives the wobble: white = plain, black = wavy."""
+    mask = np.ones((80, 80), dtype=bool)
+    white = np.ones((80, 80), dtype=float)  # darkness 0 → no wobble
+    black = np.zeros((80, 80), dtype=float)  # darkness 1 → max wobble
+    on_white = SpiralAlgorithm().render_layer(
+        mask, "#000000", "x", options={"spacing_px": 4, "wavelength_px": 8, "_tone": white}
+    )
+    on_black = SpiralAlgorithm().render_layer(
+        mask, "#000000", "x", options={"spacing_px": 4, "wavelength_px": 8, "_tone": black}
+    )
+    assert "<polyline" in on_white and "<polyline" in on_black
+    assert on_white != on_black
+
+
 def test_spiral_zero_amplitude_matches_default() -> None:
     """Default options (no amplitude) reproduce the legacy plain spiral."""
     mask = _square_mask(size=40)

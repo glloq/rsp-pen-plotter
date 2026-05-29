@@ -254,7 +254,20 @@ class BitmapConverter(Converter):
                     labels, palette, opts.merge_delta_e
                 )
         height, width = labels.shape
-        seg = SegmentationResult(labels=labels, palette=palette, width=width, height=height)
+        # Per-pixel luminance of the (preprocessed, downscaled) image — the
+        # tonal-spiral renderer samples it to modulate the wobble per pixel.
+        # Computed from the same ``image`` segmentation saw so coordinates
+        # line up with ``labels``.
+        import numpy as _np
+
+        lum_map = (_np.asarray(image, dtype=_np.float64)[..., :3] / 255.0) @ _REC709
+        seg = SegmentationResult(
+            labels=labels,
+            palette=palette,
+            width=width,
+            height=height,
+            luminance=lum_map,
+        )
         # Translate ``band_recipes`` (positional, darkest-first) into the
         # label-keyed ``per_layer_overrides`` ``render_from_segmentation``
         # already understands. The frontend builds the recipe list from
