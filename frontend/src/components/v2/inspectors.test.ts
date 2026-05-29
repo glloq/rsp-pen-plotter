@@ -31,6 +31,7 @@ const decision: PolicyDecision = {
   segmentation_method: 'fixed_palette',
   default_algorithm: 'scanlines',
   default_options: { spacing_px: 5, num_colors: 4 },
+  default_passes: [],
   quality_tier: 'draft',
   fallback_chain: ['halftone'],
   reasoning: [{ rule: 'bitmap_photo.fast', description: 'photo + fast' }],

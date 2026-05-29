@@ -117,13 +117,18 @@ async function resolveAndPreview(): Promise<void> {
 
   // Now render the adapted result. Keep the previous render visible
   // until the new one lands to avoid a flash back to the original.
+  // QUALITY recommendations carry a multi-pass stack — render that
+  // exactly as "Generate" would; otherwise render the single algorithm.
   previewLoading.value = true
   try {
-    const result = await job.previewAlgorithmOnAllLayers(
-      decision.value.default_algorithm,
-      (decision.value.default_options ?? {}) as Record<string, unknown>,
-      controller.signal,
-    )
+    const passes = decision.value.default_passes ?? []
+    const result = passes.length
+      ? await job.previewPassesOnAllLayers(passes, controller.signal)
+      : await job.previewAlgorithmOnAllLayers(
+          decision.value.default_algorithm,
+          (decision.value.default_options ?? {}) as Record<string, unknown>,
+          controller.signal,
+        )
     if (controller.signal.aborted) return
     // ``null`` means nothing renderable (e.g. vector source with no
     // layers) — fall back to the original SVG, not an error.

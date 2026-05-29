@@ -91,15 +91,19 @@ def resolve(inp: PolicyInput) -> PolicyDecision:
         inp, algorithm, fallback_chain
     )
 
+    passes: list[dict[str, object]] = [deepcopy(dict(p)) for p in base.passes]
+
     # If a hard constraint forced the algorithm, the matrix-supplied
     # options are no longer relevant — fall back to whatever the
-    # constraint-imposed algorithm uses out of the box.
+    # constraint-imposed algorithm uses out of the box. The multi-pass
+    # stack is dropped too: it was tuned for the original algorithm.
     forced = any(
         c.constraint in {"heavy_algo_on_large_input", "sparse_palette"}
         for c in constraint_hits
     )
     if forced and algorithm != base.algorithm:
         options = {}
+        passes = []
 
     # Mono-pen machines always run on one colour (audit #4 §4 third
     # bullet). We don't change the algorithm — the resolver still
@@ -121,6 +125,7 @@ def resolve(inp: PolicyInput) -> PolicyDecision:
         segmentation_method=segmentation,
         default_algorithm=algorithm,
         default_options=options,
+        default_passes=passes,
         quality_tier=base.quality,
         fallback_chain=fallback_chain,
         reasoning=reasoning,

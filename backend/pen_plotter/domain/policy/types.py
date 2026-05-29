@@ -93,6 +93,13 @@ class PolicyDecision(BaseModel):
     segmentation_method: SegmentationMethod
     default_algorithm: str
     default_options: dict[str, Any] = Field(default_factory=dict)
+    default_passes: list[dict[str, Any]] = Field(default_factory=list)
+    """Optional ordered multi-pass stack. Each item is
+    ``{"algorithm": str, "algorithm_options": dict}``. Empty for
+    single-algorithm recommendations; populated for QUALITY tiers that
+    layer several passes per colour mask. ``default_algorithm`` /
+    ``default_options`` always mirror the first pass for back-compat."""
+
     quality_tier: QualityTier
     fallback_chain: list[str] = Field(default_factory=list)
     reasoning: list[RuleHit] = Field(default_factory=list)
