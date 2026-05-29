@@ -31,6 +31,12 @@ const i18n = createI18n({
           chooseIntent: 'Qu’est-ce qui compte le plus ?',
           previewLoading: 'Mise à jour de l’aperçu…',
           previewError: 'Aperçu indisponible.',
+          zoomIn: 'Zoom +',
+          zoomOut: 'Zoom −',
+          resetView: 'Recentrer',
+          paletteLabel: 'Couleurs',
+          paletteMachine: 'Magazine machine',
+          paletteFree: 'Palette libre',
         },
         intent: {
           fast: 'Rapide',
@@ -116,6 +122,37 @@ describe('EditModalV2 (beginner single-screen)', () => {
     expect(wrapper.emitted('confirm')?.[0]?.[0]).toMatchObject({
       default_algorithm: 'scanlines',
     })
+  })
+
+  it('re-resolves when the operator switches the palette source', async () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    vi.mocked(api.post).mockClear()
+    await wrapper.find('[data-test="palette-free"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="palette-free"]').classes()).toContain('active')
+    expect(api.post).toHaveBeenCalledWith(
+      '/policy/resolve',
+      expect.objectContaining({ palette_mode: 'free' }),
+    )
+  })
+
+  it('exposes zoom controls and updates the zoom level on click', async () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    const reset = wrapper.find('[data-test="modal-v2-zoom-reset"]')
+    expect(reset.text()).toBe('100%')
+    await wrapper.find('[data-test="modal-v2-zoom-in"]').trigger('click')
+    expect(reset.text()).toBe('125%')
+    await reset.trigger('click') // reset back to 100%
+    expect(reset.text()).toBe('100%')
+  })
+
+  it('zooms on wheel within the preview surface', async () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    await wrapper.find('[data-test="modal-v2-preview"]').trigger('wheel', { deltaY: -100 })
+    expect(wrapper.find('[data-test="modal-v2-zoom-reset"]').text()).not.toBe('100%')
   })
 
   it('shows a no-placement notice + locks Generate when no source is attached', () => {

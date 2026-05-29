@@ -1310,7 +1310,13 @@
       "noPlacementTitle": "No active placement",
       "chooseIntent": "What matters most?",
       "previewLoading": "Updating preview…",
-      "previewError": "Preview unavailable — Generate still works."
+      "previewError": "Preview unavailable — Generate still works.",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "resetView": "Reset view (double-click) · wheel to zoom · drag to pan",
+      "paletteLabel": "Colours",
+      "paletteMachine": "Machine magazine",
+      "paletteFree": "Free palette"
     },
     "intent": {
       "fast": "Fast",
