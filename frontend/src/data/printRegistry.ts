@@ -475,11 +475,11 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     density: 0.04,
   },
   'spiral-master': {
-    // Turn spacing (tighter → finer tone) and the wobble's spatial
-    // wavelength; amplitude is derived per pixel from the tone map and
-    // scaled by tone_strength.
-    spacing_px: 4,
-    wavelength_px: 8,
+    // Open turn spacing so the per-pixel wobble is clearly visible (a
+    // tight spiral merges into near-solid and hides the tone). Wobble's
+    // spatial wavelength + a 0..1 strength on the per-pixel amplitude.
+    spacing_px: 14,
+    wavelength_px: 10,
     tone_strength: 1,
   },
   'centerline-trace': {
@@ -815,18 +815,18 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
     defaultAlgorithm: 'spiral',
     defaultAlgorithmOptions: {
-      spacing_px: 4,
+      spacing_px: 14,
       samples_per_turn: 64,
-      wavelength_px: 8,
+      wavelength_px: 10,
       tone_strength: 1,
     },
     bandRecipe() {
       return {
         algorithm: 'spiral',
         algorithm_options: {
-          spacing_px: 4,
+          spacing_px: 14,
           samples_per_turn: 64,
-          wavelength_px: 8,
+          wavelength_px: 10,
           tone_strength: 1,
         },
       }

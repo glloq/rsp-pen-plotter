@@ -277,9 +277,9 @@ function recipeFromKnobs(
       return {
         algorithm: 'spiral',
         algorithm_options: {
-          spacing_px: knobs.spacing_px ?? 4,
+          spacing_px: knobs.spacing_px ?? 14,
           samples_per_turn: 64,
-          wavelength_px: knobs.wavelength_px ?? 8,
+          wavelength_px: knobs.wavelength_px ?? 10,
           tone_strength: knobs.tone_strength ?? 1,
         },
       }
