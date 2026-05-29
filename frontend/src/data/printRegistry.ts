@@ -484,6 +484,48 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
   'centerline-trace': {
     stroke_width: 0.8,
   },
+  'flowfield-master': {
+    // Streamline seed spacing lerped dark→light (dense shadows, sparse
+    // highlights).
+    spacing_min: 4,
+    spacing_max: 12,
+  },
+  'voronoi-shade': {
+    density_min: 0.008,
+    density_max: 0.06,
+    dot_radius: 0.5,
+  },
+  'hatch-fill': {
+    spacing_min: 2.5,
+    spacing_max: 6.5,
+    angles: [45, 135, 0, 90],
+    crossed_on_darkest: true,
+  },
+  'squiggle-shade': {
+    spacing_min: 3,
+    spacing_max: 7,
+    // Wiggle amplitude lerped dark→light (wider in shadows).
+    wave_min: 0.8,
+    wave_max: 2.2,
+    wave_period: 8,
+  },
+  'hilbert-fill': {
+    spacing_min: 3,
+    spacing_max: 8,
+  },
+  'gosper-fill': {
+    spacing_min: 3,
+    spacing_max: 8,
+  },
+  'concentric-rings': {
+    spacing_min: 3,
+    spacing_max: 6,
+    rings_min: 12,
+    rings_max: 50,
+  },
+  'tsp-optimized': {
+    density: 0.04,
+  },
 }
 
 // Defaults for the multicolour master family. Mirrors MONO_STYLE_DEFAULTS:
@@ -747,6 +789,214 @@ export const PRINT_STYLES: PrintStyle[] = [
       }
     },
   },
+  {
+    id: 'flowfield-master',
+    labelKey: 'mono.modes.flowField',
+    descriptionKey: 'mono.modes.flowFieldDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'flowfield',
+    defaultAlgorithmOptions: {
+      seed_spacing_px: 6,
+      step_px: 0.8,
+      max_steps: 800,
+      bidirectional: true,
+      mode: 'gradient',
+      seed: 0,
+    },
+    bandRecipe(i, total) {
+      // Dark bands seed streamlines densely (small spacing), light bands
+      // sparsely — the field follows the image gradient so strokes curve
+      // along edges like a wind map.
+      const seedSpacing = lerp(i, total, 4, 12)
+      return {
+        algorithm: 'flowfield',
+        algorithm_options: {
+          seed_spacing_px: seedSpacing,
+          step_px: 0.8,
+          max_steps: 800,
+          bidirectional: true,
+          mode: 'gradient',
+          seed: i * 7 + 13,
+        },
+      }
+    },
+  },
+  {
+    id: 'voronoi-shade',
+    labelKey: 'mono.modes.voronoiShade',
+    descriptionKey: 'mono.modes.voronoiShadeDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'voronoi_stipple',
+    defaultAlgorithmOptions: { density: 0.03, dot_radius_px: 0.5, iterations: 6, seed: 0 },
+    bandRecipe(i, total) {
+      // Like stippling-shade but the dots are Lloyd-relaxed → far more
+      // even spacing, the "weighted Voronoi stipple" look.
+      const density = lerp(i, total, 0.06, 0.008)
+      return {
+        algorithm: 'voronoi_stipple',
+        algorithm_options: { density, dot_radius_px: 0.5, iterations: 6, seed: i * 7 + 13 },
+      }
+    },
+  },
+  {
+    id: 'hatch-fill',
+    labelKey: 'mono.modes.hatchFill',
+    descriptionKey: 'mono.modes.hatchFillDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'eulerian_hatch',
+    defaultAlgorithmOptions: { spacing_px: 4, angle_deg: 45, crossed: false },
+    bandRecipe(i, total) {
+      // Same rotating-angle idea as pencil, but the hatch lines are
+      // stitched into one Eulerian path per layer → far fewer pen lifts.
+      const angles = [45, 135, 0, 90, 30, 150]
+      const angle = angles[i % angles.length] ?? 45
+      const spacing = lerp(i, total, 2.5, 6.5)
+      const finalAngles = i === 0 && total > 1 ? [angle, (angle + 90) % 180] : [angle]
+      return {
+        algorithm: 'eulerian_hatch',
+        algorithm_options: { angles: finalAngles, spacing_px: spacing },
+      }
+    },
+  },
+  {
+    id: 'squiggle-shade',
+    labelKey: 'mono.modes.squiggleShade',
+    descriptionKey: 'mono.modes.squiggleShadeDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'squiggle',
+    defaultAlgorithmOptions: { spacing_px: 4, amp_px: 1.4, period_px: 8, jitter: 0.4, seed: 0 },
+    bandRecipe(i, total) {
+      // Wavy hand-drawn rows: dark bands pack tighter rows with a wider
+      // wiggle, light bands relax to a thin near-straight line.
+      const spacing = Math.round(lerp(i, total, 3, 7))
+      const amp = lerp(i, total, 2.2, 0.8)
+      return {
+        algorithm: 'squiggle',
+        algorithm_options: {
+          spacing_px: spacing,
+          amp_px: amp,
+          period_px: 8,
+          jitter: 0.4,
+          seed: i * 7 + 13,
+        },
+      }
+    },
+  },
+  {
+    id: 'hilbert-fill',
+    labelKey: 'mono.modes.hilbertFill',
+    descriptionKey: 'mono.modes.hilbertFillDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'hilbert',
+    defaultAlgorithmOptions: { spacing_px: 4, min_run_px: 3 },
+    bandRecipe(i, total) {
+      // Single continuous Hilbert curve fills each band; tighter spacing
+      // on dark bands packs more ink.
+      const spacing = lerp(i, total, 3, 8)
+      return {
+        algorithm: 'hilbert',
+        algorithm_options: { spacing_px: spacing, min_run_px: 3 },
+      }
+    },
+  },
+  {
+    id: 'gosper-fill',
+    labelKey: 'mono.modes.gosperFill',
+    descriptionKey: 'mono.modes.gosperFillDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'gosper',
+    defaultAlgorithmOptions: { order: 4, spacing_px: 4, rotation_deg: 0 },
+    bandRecipe(i, total) {
+      // Gosper (flowsnake) space-filling curve — a softer, hexagonal
+      // cousin of Hilbert. Spacing tightens on dark bands.
+      const spacing = lerp(i, total, 3, 8)
+      return {
+        algorithm: 'gosper',
+        algorithm_options: { order: 4, spacing_px: spacing, rotation_deg: 0 },
+      }
+    },
+  },
+  {
+    id: 'concentric-rings',
+    labelKey: 'mono.modes.concentricRings',
+    descriptionKey: 'mono.modes.concentricRingsDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'concentric_offset',
+    defaultAlgorithmOptions: { spacing_px: 3, max_rings: 50, bridge: true },
+    bandRecipe(i, total) {
+      // Erodes the region into nested offset rings stitched into a single
+      // spiral path. Dark bands get tighter spacing and more rings.
+      const spacing = Math.round(lerp(i, total, 3, 6))
+      const rings = Math.round(lerp(i, total, 50, 12))
+      return {
+        algorithm: 'concentric_offset',
+        algorithm_options: { spacing_px: spacing, max_rings: rings, bridge: true },
+      }
+    },
+  },
   // ============== MASTER STYLES — binary (thresholds) ==============
   {
     id: 'outline',
@@ -856,6 +1106,66 @@ export const PRINT_STYLES: PrintStyle[] = [
         algorithm: 'centerline',
         algorithm_options: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
       }
+    },
+  },
+  {
+    id: 'tsp-optimized',
+    labelKey: 'mono.modes.tspOptimized',
+    descriptionKey: 'mono.modes.tspOptimizedDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'thresholds',
+      default_threshold: 0.5,
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'tsp_opt',
+    defaultAlgorithmOptions: {
+      density: 0.04,
+      max_points: 4000,
+      time_budget_s: 1.5,
+      method: 'nn_2opt',
+      poisson_disk: true,
+      seed: 0,
+    },
+    bandRecipe() {
+      return {
+        algorithm: 'tsp_opt',
+        algorithm_options: {
+          density: 0.04,
+          max_points: 4000,
+          time_budget_s: 1.5,
+          method: 'nn_2opt',
+          poisson_disk: true,
+          seed: 0,
+        },
+      }
+    },
+  },
+  {
+    id: 'silhouette',
+    labelKey: 'mono.modes.silhouette',
+    descriptionKey: 'mono.modes.silhouetteDesc',
+    applicableTo: ['image', 'schematic'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'thresholds',
+      default_threshold: 0.5,
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+      // Solid filled shapes need clean edges; keep the source large so
+      // potrace traces crisp outlines instead of staircased ones.
+      default_max_dimension_px: 2400,
+    },
+    defaultAlgorithm: 'direct',
+    defaultAlgorithmOptions: {},
+    bandRecipe() {
+      return { algorithm: 'direct', algorithm_options: {} }
     },
   },
   // ============== MASTER STYLES — multicolor ==============
@@ -1579,6 +1889,19 @@ export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   tsp: 'tsp',
   spiral: 'spiral-master',
   centerline: 'centerline-trace',
+  // Styles added after the registry split have no pre-merge alias, so
+  // they map to themselves — this keeps the "every mono master is
+  // reachable from a legacy id" invariant (printRegistry.test.ts) intact
+  // while still resolving cleanly on rehydration.
+  'flowfield-master': 'flowfield-master',
+  'voronoi-shade': 'voronoi-shade',
+  'hatch-fill': 'hatch-fill',
+  'squiggle-shade': 'squiggle-shade',
+  'hilbert-fill': 'hilbert-fill',
+  'gosper-fill': 'gosper-fill',
+  'concentric-rings': 'concentric-rings',
+  'tsp-optimized': 'tsp-optimized',
+  silhouette: 'silhouette',
 }
 
 // ---- Query helpers ----
