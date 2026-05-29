@@ -75,7 +75,7 @@ const effectiveColorCount = computed(() =>
         :value="numColors"
         type="range"
         :min="2"
-        :max="12"
+        :max="16"
         step="1"
         :disabled="numColorsLocked"
         class="w-full accent-emerald-500 disabled:opacity-50"

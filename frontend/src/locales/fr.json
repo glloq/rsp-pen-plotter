@@ -389,8 +389,10 @@
   "palette": {
     "title": "Palette",
     "followPens": "Suivre les pens installés",
+    "auto": "Auto",
     "manual": "Manuel",
     "followHint": "Les couleurs sont verrouillées aux pens installés dans le profil machine.",
+    "autoHint": "Extraction automatique (K-means) du nombre de couleurs choisi — chaque couleur devient un calque.",
     "noPensInstalled": "Aucun pen n'est marqué comme installé dans le profil actif.",
     "slotTooltip": "Slot {index} — {color}",
     "manualSwap": "{count} couleur(s) sur {total} n'ont pas de slot — {count} échange(s) manuel(s) seront demandés pendant le tracé ({slots} slots disponibles)."
