@@ -244,7 +244,7 @@
     "penNotInstalled": "Slot not marked as installed",
     "modeLabel": "Render mode",
     "shades": "Number of shades",
-    "shadesHint": "Splits the image into N grey bands; each band carries its own algorithm tuned by the chosen mode.",
+    "shadesHint": "1 = a single layer, a single pen (no shading). Increase to split the image into grey bands — each band adds a layer and carries its own algorithm tuned by the chosen mode.",
     "threshold": "Binarisation threshold",
     "thresholdHint": "Pixels darker than this become the rendered region; lighter pixels are dropped.",
     "detail": "SVG detail",
