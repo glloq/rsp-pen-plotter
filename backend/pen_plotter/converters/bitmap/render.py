@@ -193,6 +193,27 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
         passes: list[dict[str, Any]] | None = list(passes_raw) if passes_raw else None
         algo_name = override.get("algorithm") or algorithm
         algo_options = override.get("algorithm_options") or algorithm_options
+        # The tonal spiral modulates its wobble from the per-pixel
+        # luminance map, so it renders as one continuous, smoothly-shaded
+        # spiral over the whole image rather than a uniform binary fill.
+        # Inject the map (when available) into the spiral's options; other
+        # algorithms never read ``_tone`` so the extra key is harmless.
+        if seg.luminance is not None:
+            if algo_name == "spiral":
+                algo_options = {**algo_options, "_tone": seg.luminance}
+            if passes:
+                passes = [
+                    {
+                        **p,
+                        "algorithm_options": {
+                            **(p.get("algorithm_options") or {}),
+                            "_tone": seg.luminance,
+                        },
+                    }
+                    if isinstance(p, dict) and p.get("algorithm") == "spiral"
+                    else p
+                    for p in passes
+                ]
         jobs.append((mask, color_hex, ink_hex, label, algo_name, algo_options, passes))
 
     groups: list[str] = []

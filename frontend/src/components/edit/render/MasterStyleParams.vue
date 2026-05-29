@@ -39,6 +39,11 @@ const draft = useBitmapDraft()
 
 const style = computed(() => resolveMasterStyle(props.styleId))
 const usesBands = computed(() => style.value.segmentation?.method === 'luminance_bands')
+// Some luminance_bands styles don't expose a band-count knob (the tonal
+// spiral is a single continuous stroke shaded from the pixel tone map, so
+// its band count is fixed at 1). Hide the bands slider + per-band drawer
+// for those.
+const knobBands = computed(() => style.value.segmentation?.knob_bands !== false)
 
 const thresholdValue = computed({
   get: () => props.bitmap.thresholds[0] ?? 0.5,
@@ -150,8 +155,8 @@ function bandSwatchStyle(i: number): Record<string, string> {
       />
     </div>
 
-    <!-- Bands slider (shaded styles) -->
-    <div v-if="usesBands" class="space-y-1">
+    <!-- Bands slider (shaded styles with a band-count knob) -->
+    <div v-if="usesBands && knobBands" class="space-y-1">
       <div class="flex items-center justify-between">
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.shades') }}
@@ -172,7 +177,7 @@ function bandSwatchStyle(i: number): Record<string, string> {
     </div>
 
     <!-- Threshold slider (binary styles) -->
-    <div v-else class="space-y-1">
+    <div v-else-if="!usesBands" class="space-y-1">
       <div class="flex items-center justify-between">
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.threshold') }}
@@ -406,8 +411,9 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <p class="text-[10px] text-slate-500">{{ t('mono.dotDensityHint') }}</p>
     </div>
 
-    <!-- ===== Spiral (tonal): spacing + amplitude range + waves/turn ===== -->
+    <!-- ===== Spiral (tonal): spacing + wobble wavelength + strength ===== -->
     <div v-else-if="styleId === 'spiral-master'" class="space-y-3 border-t border-slate-800 pt-3">
+      <p class="text-[10px] leading-snug text-slate-500">{{ t('mono.spiralTonalHint') }}</p>
       <div class="space-y-1">
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.spiralSpacing') }}
@@ -417,8 +423,8 @@ function bandSwatchStyle(i: number): Record<string, string> {
         </p>
         <input
           type="range"
-          min="1"
-          max="8"
+          min="1.5"
+          max="10"
           step="0.5"
           :value="knobs.spacing_px ?? 4"
           class="w-full accent-emerald-500"
@@ -427,40 +433,42 @@ function bandSwatchStyle(i: number): Record<string, string> {
         <p class="text-[10px] text-slate-500">{{ t('mono.spiralSpacingHint') }}</p>
       </div>
 
-      <DualRangeSlider
-        :model-value-min="knobs.wave_amp_min ?? 0.2"
-        :model-value-max="knobs.wave_amp_max ?? 6"
-        :min="0"
-        :max="10"
-        :step="0.2"
-        unit="px"
-        @update:model-value-min="(v) => setKnob('wave_amp_min', v)"
-        @update:model-value-max="(v) => setKnob('wave_amp_max', v)"
-      >
-        <template #label>
-          <span class="uppercase tracking-wider">{{ t('mono.waveRange') }}</span>
-        </template>
-        <template #hint>
-          <p class="text-[10px] text-slate-500">{{ t('mono.spiralAmpHint') }}</p>
-        </template>
-      </DualRangeSlider>
-
       <div class="space-y-1">
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
-          {{ t('mono.wavesPerTurn') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
-            Math.round(knobs.waves_per_turn ?? 12)
-          }}</span>
+          {{ t('mono.spiralWavelength') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ (knobs.wavelength_px ?? 8).toFixed(1) }} px</span
+          >
         </p>
         <input
           type="range"
-          min="4"
-          max="40"
-          step="1"
-          :value="knobs.waves_per_turn ?? 12"
+          min="3"
+          max="20"
+          step="0.5"
+          :value="knobs.wavelength_px ?? 8"
           class="w-full accent-emerald-500"
-          @input="(e) => setKnob('waves_per_turn', Number((e.target as HTMLInputElement).value))"
+          @input="(e) => setKnob('wavelength_px', Number((e.target as HTMLInputElement).value))"
         />
+        <p class="text-[10px] text-slate-500">{{ t('mono.spiralWavelengthHint') }}</p>
+      </div>
+
+      <div class="space-y-1">
+        <p class="text-[10px] uppercase tracking-wider text-slate-400">
+          {{ t('mono.spiralStrength') }}
+          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
+            Math.round((knobs.tone_strength ?? 1) * 100)
+          }}%</span>
+        </p>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          :value="knobs.tone_strength ?? 1"
+          class="w-full accent-emerald-500"
+          @input="(e) => setKnob('tone_strength', Number((e.target as HTMLInputElement).value))"
+        />
+        <p class="text-[10px] text-slate-500">{{ t('mono.spiralStrengthHint') }}</p>
       </div>
     </div>
 
@@ -487,7 +495,7 @@ function bandSwatchStyle(i: number): Record<string, string> {
     </div>
 
     <!-- ===== Advanced mode toggle + per-band drawer ===== -->
-    <div v-if="usesBands" class="border-t border-slate-800 pt-3">
+    <div v-if="usesBands && knobBands" class="border-t border-slate-800 pt-3">
       <label class="flex cursor-pointer items-center gap-2 text-[11px] text-slate-300">
         <input v-model="advancedMode" type="checkbox" class="accent-emerald-500" />
         <span class="uppercase tracking-wider text-slate-400">{{ t('mono.advancedMode') }}</span>

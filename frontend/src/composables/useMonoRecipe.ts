@@ -47,11 +47,11 @@ export type MonoStyleKnobs = {
   density?: number
   spacing_px?: number
   wave_period?: number
-  // Tonal spiral: radial wobble amplitude lerped dark→light + oscillation
-  // count per turn.
-  wave_amp_min?: number
-  wave_amp_max?: number
-  waves_per_turn?: number
+  // Tonal spiral: wobble spatial wavelength (px) + a 0..1 strength that
+  // scales the per-pixel amplitude. Amplitude itself is computed in the
+  // backend from the luminance map, not here.
+  wavelength_px?: number
+  tone_strength?: number
   dot_radius?: number
   stroke_width?: number
   angles?: number[]
@@ -269,20 +269,18 @@ function recipeFromKnobs(
       }
     }
     case 'spiral-master': {
-      // Tonal spiral: one global spiral (constant spacing) whose radial
-      // wobble amplitude is lerped across the luminance bands — darkest
-      // band (i=0) gets wave_amp_max, lightest gets wave_amp_min. The
-      // union of the per-band clips reads as a single continuous grey
-      // spiral. spacing_px stays constant so every band shares the same
-      // spiral path.
-      const amp = lerp(i, total, knobs.wave_amp_max ?? 6, knobs.wave_amp_min ?? 0.2)
+      // Tonal spiral: a single continuous spiral over the whole image
+      // (one band). The wobble amplitude is modulated per pixel by the
+      // backend from the luminance map; here we only ship the spiral
+      // geometry knobs (turn spacing, wobble wavelength) and a 0..1
+      // strength multiplier.
       return {
         algorithm: 'spiral',
         algorithm_options: {
           spacing_px: knobs.spacing_px ?? 4,
           samples_per_turn: 64,
-          wave_amp_px: amp,
-          waves_per_turn: knobs.waves_per_turn ?? 12,
+          wavelength_px: knobs.wavelength_px ?? 8,
+          tone_strength: knobs.tone_strength ?? 1,
         },
       }
     }
