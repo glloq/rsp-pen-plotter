@@ -64,6 +64,31 @@ function loadUpdateNotifications(): boolean {
   }
 }
 
+// How the plan (sheet) tab paints each placement:
+//   - 'image' : always the original raster source (cheapest to paint,
+//               heavy vector styles never touch the canvas)
+//   - 'svg'   : always the chosen-style plotter SVG (a true WYSIWYG of
+//               what will be drawn), raster only as a pre-conversion
+//               fallback
+//   - 'auto'  : prefer the style SVG, but fall back to the raster when
+//               the SVG is dense enough to risk laggy pan/zoom — the
+//               "best of both" default
+export type PlanPreviewMode = 'image' | 'svg' | 'auto'
+
+const PLAN_PREVIEW_KEY = 'omniplot.planPreviewMode'
+
+function loadPlanPreviewMode(): PlanPreviewMode {
+  try {
+    const raw = localStorage.getItem(PLAN_PREVIEW_KEY)
+    if (raw === 'image' || raw === 'svg' || raw === 'auto') return raw
+    // Default to the adaptive mode: WYSIWYG when it's cheap, raster when
+    // the vector is too heavy to scroll smoothly.
+    return 'auto'
+  } catch {
+    return 'auto'
+  }
+}
+
 export const useUiStore = defineStore('ui', () => {
   const canvasTab = ref<CanvasTab>('sheet')
   const settingsOpen = ref(false)
@@ -159,6 +184,17 @@ export const useUiStore = defineStore('ui', () => {
     } catch {
       // localStorage unavailable (private browsing / quota) — preference
       // simply won't survive a reload, which is acceptable.
+    }
+  })
+
+  // Plan-tab rendering preference (image / svg / auto). Persisted like the
+  // notification toggle so the operator's choice survives a reload.
+  const planPreviewMode = ref<PlanPreviewMode>(loadPlanPreviewMode())
+  watch(planPreviewMode, (value) => {
+    try {
+      localStorage.setItem(PLAN_PREVIEW_KEY, value)
+    } catch {
+      // localStorage unavailable — preference won't persist, no-op.
     }
   })
 
@@ -260,6 +296,7 @@ export const useUiStore = defineStore('ui', () => {
     previewSheet,
     updateState,
     updateNotificationsEnabled,
+    planPreviewMode,
     setPreviewSheet,
     openSettings,
     closeSettings,

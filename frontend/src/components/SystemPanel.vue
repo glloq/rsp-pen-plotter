@@ -14,7 +14,15 @@ import { useUiStore } from '../stores/ui'
 
 const { t, locale } = useI18n()
 const ui = useUiStore()
-const { updateNotificationsEnabled } = storeToRefs(ui)
+const { updateNotificationsEnabled, planPreviewMode } = storeToRefs(ui)
+
+// Plan-tab rendering choices surfaced in System settings. 'auto' keeps
+// the WYSIWYG vector unless it's heavy enough to risk laggy scrolling.
+const PLAN_PREVIEW_MODES = [
+  { id: 'auto', label: 'system.planPreviewAuto', hint: 'system.planPreviewAutoHint' },
+  { id: 'svg', label: 'system.planPreviewSvg', hint: 'system.planPreviewSvgHint' },
+  { id: 'image', label: 'system.planPreviewImage', hint: 'system.planPreviewImageHint' },
+] as const
 
 function setLocale(value: 'en' | 'fr'): void {
   locale.value = value
@@ -139,6 +147,32 @@ onMounted(loadVersion)
       </dl>
       <p v-else-if="versionError" class="text-amber-300">{{ versionError }}</p>
       <p v-else class="text-slate-500">{{ t('system.loading') }}</p>
+    </div>
+
+    <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+      <h3 class="text-[11px] uppercase tracking-wider text-slate-500">
+        {{ t('system.planPreview') }}
+      </h3>
+      <p class="text-[11px] text-slate-500">{{ t('system.planPreviewHint') }}</p>
+      <div class="space-y-1.5">
+        <label
+          v-for="mode in PLAN_PREVIEW_MODES"
+          :key="mode.id"
+          class="flex items-start gap-2 text-slate-300"
+        >
+          <input
+            v-model="planPreviewMode"
+            type="radio"
+            name="plan-preview-mode"
+            :value="mode.id"
+            class="mt-0.5 h-3.5 w-3.5 shrink-0 accent-emerald-500"
+          />
+          <span class="leading-snug">
+            {{ t(mode.label) }}
+            <span class="mt-0.5 block text-[11px] text-slate-500">{{ t(mode.hint) }}</span>
+          </span>
+        </label>
+      </div>
     </div>
 
     <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">

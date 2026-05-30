@@ -56,6 +56,7 @@ function makeRendered(id: string): RenderedPlacement {
     footprint: { x_min: 10, y_min: 10, x_max: 60, y_max: 60 },
     exceeds: false,
     cleanSvg: '',
+    svgPrimitiveCount: 0,
     previewUrl: '',
   }
 }
