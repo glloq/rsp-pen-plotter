@@ -105,6 +105,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/files/by-hash/{sha256}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get File By Hash
+         * @description Look up a library entry by its content SHA-256.
+         *
+         *     Lets the uploader skip the upload + convert round-trip entirely when the
+         *     bytes are already in the library: the client hashes the file locally and
+         *     calls this first. Returns the same :class:`FileDetail` the upload endpoint
+         *     would, so the frontend can merge it as a dedup hit. 404 when unknown.
+         *
+         *     Declared before ``/files/{file_id}`` so the literal ``by-hash`` segment is
+         *     never swallowed by the file-id route.
+         */
+        get: operations["get_file_by_hash_files_by_hash__sha256__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files/{file_id}": {
         parameters: {
             query?: never;
@@ -317,6 +345,12 @@ export interface paths {
          * Optimize
          * @description Optimize toolpaths to reduce pen-up travel.
          *
+         *     When ``OMNIPLOT_IR_ENABLED=1`` and a matching :class:`GeometryIR`
+         *     artifact has been previously cached for this SVG, we route through
+         *     :func:`optimize_geometry_ir` so the IR path gets real traffic in
+         *     production. The SVG path stays the fallback when no cached IR is
+         *     available (typical fresh upload, no prior cache hit).
+         *
          *     Args:
          *         request: The SVG to optimize plus optional per-layer settings.
          *
@@ -389,6 +423,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/preflight/svg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preflight Svg
+         * @description Estimate metrics for a standalone SVG against a profile.
+         *
+         *     Lightweight variant that skips plan resolution / TypographyPlan
+         *     re-rendering / placement composition. Returns the same
+         *     :class:`PreflightReport` shape as the full ``/preflight`` so
+         *     consumers (e.g. the Compare drawer) can read
+         *     ``drawing_length_mm``, ``travel_length_mm``,
+         *     ``estimated_seconds`` and ``pen_changes`` straight from the
+         *     report.
+         *
+         *     Raises:
+         *         HTTPException: 404 if the profile is unknown; 400 if the SVG
+         *             cannot be parsed.
+         */
+        post: operations["preflight_svg_preflight_svg_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plans/{plan_hash}": {
         parameters: {
             query?: never;
@@ -406,6 +472,30 @@ export interface paths {
         get: operations["get_plan_plans__plan_hash__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Policy
+         * @description Return the recommended algorithm + parameters for ``payload``.
+         *
+         *     Mirrors the matrix from audit #4 (see ``backend/pen_plotter/domain/policy``).
+         *     The reasoning trail in the response is what the modal V2 surfaces
+         *     next to the recommendation as "Pourquoi ce choix ?".
+         */
+        post: operations["resolve_policy_policy_resolve_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -929,6 +1019,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/preview/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Stream
+         * @description Open a Server-Sent Events stream emitting progress events.
+         *
+         *     When ``file_id`` is set, runs the real pipeline against the
+         *     matching library entry; otherwise falls back to the synthetic
+         *     emitter (useful for tests and frontend smoke).
+         */
+        get: operations["preview_stream_preview_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/preview-text": {
         parameters: {
             query?: never;
@@ -1151,7 +1265,7 @@ export interface paths {
         head?: never;
         /**
          * Patch Color
-         * @description Rewrite ``name`` / ``hex`` / ``position`` on one entry.
+         * @description Rewrite ``name`` / ``hex`` / ``position`` / ``stroke_width_mm`` on one entry.
          */
         patch: operations["patch_color_available_colors__color_id__patch"];
         trace?: never;
@@ -1174,6 +1288,103 @@ export interface paths {
          */
         put: operations["write_palette_source_settings_palette_source_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/manifests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Manifests
+         * @description List the manifest domains the backend serves.
+         *
+         *     Returns:
+         *         One entry per registered domain; the frontend uses this as a
+         *         capability probe before requesting a specific manifest.
+         */
+        get: operations["list_manifests_manifests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/manifests/{domain}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Manifest
+         * @description Return the manifest for ``domain``.
+         *
+         *     Raises:
+         *         ApiError: ``manifest.unknown_domain`` (404) when the domain is
+         *             not registered.
+         */
+        get: operations["read_manifest_manifests__domain__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slo/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Budgets
+         * @description Return the configured SLO budget table.
+         *
+         *     Used by the frontend dashboard to render the threshold rows even
+         *     when there are no samples yet.
+         */
+        get: operations["list_budgets_slo_budgets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slo/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Evaluate
+         * @description Evaluate the SLO budgets against ``request.samples``.
+         *
+         *     Also feeds the samples into the runtime accumulator so the
+         *     background evaluator (when enabled) sees the same data. A breach
+         *     on an ``alert_on_breach=True`` budget emits one structured log
+         *     line; the deployment is responsible for routing those to an
+         *     external alertmanager.
+         */
+        post: operations["evaluate_slo_evaluate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1282,6 +1493,8 @@ export interface components {
             position: number;
             /** Stroke Width Mm */
             stroke_width_mm: number;
+            /** Odometer Mm */
+            odometer_mm: number;
             /**
              * Created At
              * Format: date-time
@@ -1301,6 +1514,8 @@ export interface components {
             position?: number | null;
             /** Stroke Width Mm */
             stroke_width_mm?: number | null;
+            /** Odometer Mm */
+            odometer_mm?: number | null;
         };
         /**
          * Block
@@ -1393,6 +1608,65 @@ export interface components {
             y_max: number;
         };
         /**
+         * Budget
+         * @description One SLO row.
+         */
+        Budget: {
+            /** Metric */
+            metric: string;
+            /** Label */
+            label: string;
+            /** P95 Ms */
+            p95_ms: number;
+            /**
+             * Min Samples
+             * @default 10
+             */
+            min_samples: number;
+            /**
+             * Warn Breach Ratio
+             * @default 0.05
+             */
+            warn_breach_ratio: number;
+            /**
+             * Alert On Breach
+             * @default true
+             */
+            alert_on_breach: boolean;
+        };
+        /**
+         * BudgetReport
+         * @description The dashboard payload — all budgets + a roll-up severity.
+         */
+        BudgetReport: {
+            /** Statuses */
+            statuses: components["schemas"]["BudgetStatus"][];
+            overall: components["schemas"]["Severity"];
+        };
+        /**
+         * BudgetStatus
+         * @description Result of evaluating one budget.
+         */
+        BudgetStatus: {
+            budget: components["schemas"]["Budget"];
+            severity: components["schemas"]["Severity"];
+            /**
+             * Observed P95 Ms
+             * @default 0
+             */
+            observed_p95_ms: number;
+            /**
+             * Breach Count
+             * @default 0
+             */
+            breach_count: number;
+            /**
+             * Sample Count
+             * @default 0
+             */
+            sample_count: number;
+        };
+        /**
          * CheckUpdateResponse
          * @description Result of ``GET /system/check-update``: is a newer commit available?
          */
@@ -1411,6 +1685,12 @@ export interface components {
             error?: string | null;
         };
         /**
+         * CommandSource
+         * @description Who emits the actual commands for the swap.
+         * @enum {string}
+         */
+        CommandSource: "machine" | "host" | "operator";
+        /**
          * ConnectRequest
          * @description Serial connection parameters.
          */
@@ -1428,6 +1708,39 @@ export interface components {
              * @enum {string}
              */
             terminator: "cr" | "lf" | "crlf";
+        };
+        /**
+         * ConstraintHit
+         * @description One safety constraint (audit #4 §4) that fired.
+         */
+        ConstraintHit: {
+            /** Constraint */
+            constraint: string;
+            /** Description */
+            description: string;
+            /** Forbidden Algorithms */
+            forbidden_algorithms?: string[];
+        };
+        /**
+         * Deprecation
+         * @description One deprecated entry in a manifest.
+         *
+         *     ``remove_after`` is the **first manifest version** that may legally
+         *     omit the entry — frontends still pinned to an older version must
+         *     keep supporting it until then.
+         */
+        Deprecation: {
+            /** Name */
+            name: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Deprecated Since */
+            deprecated_since: number;
+            /** Remove After */
+            remove_after: number;
         };
         /**
          * DocumentAnalysis
@@ -1493,6 +1806,16 @@ export interface components {
              * @default 0
              */
             priority: number;
+        };
+        /**
+         * EvaluateRequest
+         * @description Payload for ``POST /slo/evaluate`` — accepts a sample list.
+         */
+        EvaluateRequest: {
+            /** Samples */
+            samples: components["schemas"]["MetricSample"][];
+            /** Budgets */
+            budgets?: components["schemas"]["Budget"][] | null;
         };
         /**
          * FileDetail
@@ -1639,6 +1962,12 @@ export interface components {
             resolved_plan: components["schemas"]["ResolvedPlan"];
         };
         /**
+         * Goal
+         * @description Operator intent — audit #4 § Entrées.
+         * @enum {string}
+         */
+        Goal: "fast" | "balanced" | "quality";
+        /**
          * GotoRequest
          * @description Absolute move parameters.
          */
@@ -1664,6 +1993,22 @@ export interface components {
             status: string;
             /** Version */
             version: string;
+        };
+        /**
+         * HostMacroStep
+         * @description One line of a host-emitted swap macro.
+         *
+         *     ``send`` is a literal command line written verbatim to the
+         *     transport; ``wait_ms`` is an optional pause **after** the send.
+         */
+        HostMacroStep: {
+            /** Send */
+            send: string;
+            /**
+             * Wait Ms
+             * @default 0
+             */
+            wait_ms: number;
         };
         /**
          * ImportRequest
@@ -1912,6 +2257,28 @@ export interface components {
             assigned_color_hex?: string | null;
         };
         /**
+         * MachineCapabilities
+         * @description Top-level capability container exposed on :class:`MachineProfile`.
+         */
+        MachineCapabilities: {
+            tool_change?: components["schemas"]["ToolChangeStrategy"];
+            /**
+             * Has Pen Sensor
+             * @default false
+             */
+            has_pen_sensor: boolean;
+            /**
+             * Has Sheet Loader
+             * @default false
+             */
+            has_sheet_loader: boolean;
+            /**
+             * Max Pens In Magazine
+             * @default 1
+             */
+            max_pens_in_magazine: number;
+        };
+        /**
          * MachineProfile
          * @description Describes a target pen plotter.
          *
@@ -1970,6 +2337,7 @@ export interface components {
             ebb?: components["schemas"]["EbbConfig"] | null;
             /** Pens */
             pens?: components["schemas"]["PenSlot"][] | null;
+            capabilities?: components["schemas"]["MachineCapabilities"] | null;
         };
         /**
          * Macro
@@ -1985,6 +2353,91 @@ export interface components {
             description: string;
             /** Commands */
             commands?: string[];
+        };
+        /**
+         * ManifestIndex
+         * @description Index of registered manifest domains.
+         */
+        ManifestIndex: {
+            /** Domains */
+            domains: string[];
+        };
+        /**
+         * ManifestMeta
+         * @description Envelope metadata shared by every manifest payload.
+         */
+        ManifestMeta: {
+            /** Domain */
+            domain: string;
+            /** Manifest Version */
+            manifest_version: number;
+            /**
+             * Schema Semver
+             * @default 0.1.0
+             */
+            schema_semver: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at?: string;
+            /** Deprecations */
+            deprecations?: components["schemas"]["Deprecation"][];
+            /** Feature Flags */
+            feature_flags?: {
+                [key: string]: boolean;
+            };
+        };
+        /** Manifest[Any] */
+        Manifest_Any_: {
+            meta: components["schemas"]["ManifestMeta"];
+            /** Entries */
+            entries?: unknown[];
+        };
+        /**
+         * ManualSwapPrompt
+         * @description Operator-facing prompt template used by :class:`ToolingMode.MANUAL`.
+         *
+         *     Three optional bodies cover the two real-world scenarios:
+         *     - ``multipen_body``: slot-based prompt for multi-pen profiles
+         *       (carousel / rack with explicit slot index). Substitutions:
+         *       ``{slot}``, ``{label}``, ``{color}``, ``{layer}``.
+         *     - ``monopen_body``: color-based prompt for mono-pen profiles
+         *       where the operator swaps the pen between layers. Same
+         *       substitutions; ``{slot}`` is empty for mono-pen.
+         *     - ``body``: legacy fallback when neither of the above is set
+         *       (kept for back-compat with v0.1 profile YAMLs).
+         *
+         *     The strategy picks the right body for each ``SwapContext``
+         *     based on ``context.slot_index`` — None → mono, non-None → multi.
+         */
+        ManualSwapPrompt: {
+            /**
+             * Title
+             * @default Change pen
+             */
+            title: string;
+            /**
+             * Body
+             * @default Insert pen {color} into the holder, then press Resume.
+             */
+            body: string;
+            /** Multipen Body */
+            multipen_body?: string | null;
+            /** Monopen Body */
+            monopen_body?: string | null;
+            /** Timeout S */
+            timeout_s?: number | null;
+        };
+        /**
+         * MetricSample
+         * @description One measured value of a metric (ms unless otherwise noted).
+         */
+        MetricSample: {
+            /** Metric */
+            metric: string;
+            /** Value Ms */
+            value_ms: number;
         };
         /**
          * OptimizeRequest
@@ -2036,6 +2489,12 @@ export interface components {
             /** Coverage */
             coverage: number;
         };
+        /**
+         * PaletteMode
+         * @description How the resolver is allowed to spend colours.
+         * @enum {string}
+         */
+        PaletteMode: "machine_only" | "union" | "free";
         /**
          * PaletteSourceResponse
          * @description Wire shape returned by ``GET /settings/palette-source``.
@@ -2137,6 +2596,58 @@ export interface components {
             y: number;
         };
         /**
+         * PolicyDecision
+         * @description The resolver's recommendation.
+         */
+        PolicyDecision: {
+            segmentation_method: components["schemas"]["SegmentationMethod"];
+            /** Default Algorithm */
+            default_algorithm: string;
+            /** Default Options */
+            default_options?: {
+                [key: string]: unknown;
+            };
+            /** Default Passes */
+            default_passes?: {
+                [key: string]: unknown;
+            }[];
+            quality_tier: components["schemas"]["QualityTier"];
+            /** Fallback Chain */
+            fallback_chain?: string[];
+            /** Reasoning */
+            reasoning?: components["schemas"]["RuleHit"][];
+            /** Hard Constraints Applied */
+            hard_constraints_applied?: components["schemas"]["ConstraintHit"][];
+        };
+        /**
+         * PolicyInput
+         * @description Everything the resolver needs to pick defaults.
+         */
+        PolicyInput: {
+            source_kind: components["schemas"]["SourceKind"];
+            /** @default fast */
+            goal: components["schemas"]["Goal"];
+            /** @default machine_only */
+            palette_mode: components["schemas"]["PaletteMode"];
+            /**
+             * Available Colors Count
+             * @default 1
+             */
+            available_colors_count: number;
+            /** Image Megapixels */
+            image_megapixels?: number | null;
+            /**
+             * Layer Count Estimate
+             * @default 1
+             */
+            layer_count_estimate: number;
+            /**
+             * Is Mono Pen Machine
+             * @default false
+             */
+            is_mono_pen_machine: boolean;
+        };
+        /**
          * PreflightReport
          * @description Pre-run safety and estimation checks for a placed drawing.
          */
@@ -2199,6 +2710,22 @@ export interface components {
             /** Source Mime */
             source_mime?: string | null;
             metadata?: components["schemas"]["PlanMetadata"];
+        };
+        /**
+         * PreflightSvgRequest
+         * @description Lightweight wire model for ``POST /preflight/svg``.
+         *
+         *     Accepts just an already-rendered SVG + a profile name; skips the
+         *     full :class:`PrintPlan` ceremony. Used by the Compare drawer to
+         *     compute per-candidate metrics (drawing length, travel length,
+         *     estimated time, pen-change count) without building a fake plan
+         *     around each variant.
+         */
+        PreflightSvgRequest: {
+            /** Svg */
+            svg: string;
+            /** Profile Name */
+            profile_name: string;
         };
         /**
          * Preset
@@ -2305,6 +2832,12 @@ export interface components {
             pause_points?: {
                 [key: string]: unknown;
             };
+            /** Swap Actions */
+            swap_actions?: {
+                [key: string]: unknown;
+            };
+            /** Skipped Layers */
+            skipped_layers?: unknown[];
             /** Idempotency Key */
             idempotency_key?: string | null;
             /**
@@ -2319,6 +2852,18 @@ export interface components {
             updated_at?: string;
         };
         /**
+         * QualityTier
+         * @description Preview-time quality tier the renderer should target.
+         * @enum {string}
+         */
+        QualityTier: "draft" | "standard" | "final";
+        /**
+         * RecoveryPolicy
+         * @description What happens when a swap fails or is aborted mid-flight.
+         * @enum {string}
+         */
+        RecoveryPolicy: "abort" | "pause_and_prompt" | "skip_layer";
+        /**
          * RerenderRequest
          * @description Request body for ``POST /rerender``.
          */
@@ -2327,6 +2872,10 @@ export interface components {
             job_id: string;
             /** Layers */
             layers?: components["schemas"]["LayerAlgorithm"][];
+            /** Layer Stroke Widths */
+            layer_stroke_widths?: {
+                [key: string]: number;
+            };
         };
         /**
          * RerenderResponse
@@ -2393,6 +2942,16 @@ export interface components {
             mono_pen: boolean;
         };
         /**
+         * RuleHit
+         * @description One rule from the matrix that contributed to the decision.
+         */
+        RuleHit: {
+            /** Rule */
+            rule: string;
+            /** Description */
+            description: string;
+        };
+        /**
          * RunRequest
          * @description G-code job to stream.
          */
@@ -2400,6 +2959,24 @@ export interface components {
             /** Gcode */
             gcode: string;
         };
+        /**
+         * SegmentationMethod
+         * @description Segmentation strategy on the way into the renderer.
+         * @enum {string}
+         */
+        SegmentationMethod: "fixed_palette" | "kmeans" | "none";
+        /**
+         * Severity
+         * @description Outcome of evaluating one budget.
+         * @enum {string}
+         */
+        Severity: "healthy" | "warning" | "breach";
+        /**
+         * SourceKind
+         * @description Source classifier — audit #4 § Entrées.
+         * @enum {string}
+         */
+        SourceKind: "bitmap_photo" | "bitmap_illustration" | "vector_svg" | "pdf_doc" | "text_typography";
         /**
          * StatusResponse
          * @description Connection and streaming status.
@@ -2418,6 +2995,27 @@ export interface components {
             /** Message */
             message?: string | null;
         };
+        /**
+         * ToolChangeStrategy
+         * @description Bundles the swap mode and its strategy-specific knobs.
+         */
+        ToolChangeStrategy: {
+            /** @default manual */
+            mode: components["schemas"]["ToolingMode"];
+            /** @default operator */
+            command_source: components["schemas"]["CommandSource"];
+            /** @default pause_and_prompt */
+            recovery_policy: components["schemas"]["RecoveryPolicy"];
+            manual_prompt?: components["schemas"]["ManualSwapPrompt"] | null;
+            /** Host Macro */
+            host_macro?: components["schemas"]["HostMacroStep"][];
+        };
+        /**
+         * ToolingMode
+         * @description Top-level orchestration strategy (audit #2).
+         * @enum {string}
+         */
+        ToolingMode: "firmware" | "host_macro" | "manual" | "single_pen";
         /**
          * ToolpathMetrics
          * @description Pen-up travel before and after optimization, in SVG user units.
@@ -2772,6 +3370,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+        };
+    };
+    get_file_by_hash_files_by_hash__sha256__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sha256: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3226,6 +3855,39 @@ export interface operations {
             };
         };
     };
+    preflight_svg_preflight_svg_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreflightSvgRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreflightReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_plan_plans__plan_hash__get: {
         parameters: {
             query?: never;
@@ -3244,6 +3906,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResolvedPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_policy_policy_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyDecision"];
                 };
             };
             /** @description Validation Error */
@@ -4099,6 +4794,38 @@ export interface operations {
             };
         };
     };
+    preview_stream_preview_stream_get: {
+        parameters: {
+            query?: {
+                layer_count?: number;
+                file_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     preview_text_preview_text_post: {
         parameters: {
             query?: never;
@@ -4462,6 +5189,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaletteSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_manifests_manifests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestIndex"];
+                };
+            };
+        };
+    };
+    read_manifest_manifests__domain__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Manifest_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_budgets_slo_budgets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"][];
+                };
+            };
+        };
+    };
+    evaluate_slo_evaluate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvaluateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetReport"];
                 };
             };
             /** @description Validation Error */
