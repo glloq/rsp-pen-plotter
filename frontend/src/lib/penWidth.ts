@@ -30,7 +30,20 @@ const DEFAULT_STROKE_WIDTH_MM = 0.5
  * both the value's type and the operator's locale.
  */
 export function parsePenWidthMm(value: unknown): number | null {
-  const n = typeof value === 'number' ? value : Number(String(value).replace(',', '.').trim())
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? value : null
+  }
+  // Extract the first decimal number from the raw text so the field is
+  // robust to what operators naturally type: a comma separator ("0,8"),
+  // leading/trailing spaces, and — crucially — a trailing unit ("0.8mm",
+  // "0,8 mm") since the UI shows "mm" right next to the input. Without
+  // this, "0.8mm" parsed to null and the save silently fell back to the
+  // 0.5 default, so the diameter appeared stuck.
+  const match = String(value)
+    .replace(',', '.')
+    .match(/-?\d*\.?\d+/)
+  if (!match) return null
+  const n = Number(match[0])
   return Number.isFinite(n) && n > 0 ? n : null
 }
 

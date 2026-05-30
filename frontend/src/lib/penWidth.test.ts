@@ -5,6 +5,7 @@ import {
   canonicalHex,
   layerStrokeWidthsPx,
   mmPerViewBoxUnit,
+  parsePenWidthMm,
   strokeWidthMmByHex,
 } from './penWidth'
 
@@ -12,6 +13,36 @@ describe('canonicalHex', () => {
   it('expands shorthand and lowercases', () => {
     expect(canonicalHex('#ABC')).toBe('#aabbcc')
     expect(canonicalHex('FF0000')).toBe('#ff0000')
+  })
+})
+
+describe('parsePenWidthMm', () => {
+  it('accepts a dot or a comma decimal separator', () => {
+    expect(parsePenWidthMm('0.8')).toBe(0.8)
+    expect(parsePenWidthMm('0,8')).toBe(0.8)
+    expect(parsePenWidthMm('.8')).toBe(0.8)
+  })
+
+  it('tolerates a trailing unit and surrounding spaces', () => {
+    // Regression: the UI shows "mm" next to the field, so operators type
+    // "0.8mm" / "0,8 mm"; the old parser returned null and the save
+    // silently fell back to 0.5, so the diameter appeared stuck.
+    expect(parsePenWidthMm('0.8mm')).toBe(0.8)
+    expect(parsePenWidthMm('0,8 mm')).toBe(0.8)
+    expect(parsePenWidthMm(' 0.8 ')).toBe(0.8)
+    expect(parsePenWidthMm('12,5 mm')).toBe(12.5)
+  })
+
+  it('passes through a finite positive number', () => {
+    expect(parsePenWidthMm(0.5)).toBe(0.5)
+  })
+
+  it('rejects non-positive, empty, or non-numeric input', () => {
+    expect(parsePenWidthMm('0')).toBeNull()
+    expect(parsePenWidthMm('-1')).toBeNull()
+    expect(parsePenWidthMm('')).toBeNull()
+    expect(parsePenWidthMm('abc')).toBeNull()
+    expect(parsePenWidthMm(0)).toBeNull()
   })
 })
 
