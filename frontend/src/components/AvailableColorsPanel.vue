@@ -156,7 +156,9 @@ function displayLabel(name: string, hex: string): string {
   <div class="space-y-3">
     <p class="text-xs text-slate-400">{{ t('availableColors.hint') }}</p>
 
-    <!-- Magazine (pen slot ↔ colour assignment) -->
+    <!-- Pen colours — adapts to the tool-change mode: a single colour
+         (mono), a colour list (manual), or the full magazine with
+         per-slot calibration (firmware / host). -->
     <MagazineEditor />
 
     <!-- Add a colour -->

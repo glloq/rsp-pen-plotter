@@ -74,11 +74,19 @@ const colorMode = computed<'mono' | 'manual' | 'firmware' | 'host'>(() => {
   }
 })
 
-// Mono (one pen) and manual (hand swap) have no physical magazine, so the
-// per-slot magazine editor is skipped for them — the colours come from the
-// single pen or the drawing's layers. Only firmware / host magazines show
-// the slot list.
-const hasMagazine = computed(() => colorMode.value === 'firmware' || colorMode.value === 'host')
+// The Colours tab adapts its framing to the mode: mono shows a single pen
+// colour, manual a colour list (no positions — there's no physical
+// magazine), firmware / host the full magazine. Only the title / hint
+// differ here; the per-slot calibration is gated separately below.
+const sectionTitle = computed(() => {
+  if (colorMode.value === 'mono') return t('magazine.titleMono')
+  if (colorMode.value === 'manual') return t('magazine.titleManual')
+  return t('magazine.title')
+})
+
+const listHint = computed(() =>
+  colorMode.value === 'manual' ? t('magazine.hintManual') : t('magazine.hint'),
+)
 
 // Carousel / rack profiles physically fetch the pen from a fixed slot
 // position, so the calibration editor (position + per-pen up/down
@@ -190,7 +198,7 @@ onUnmounted(() => clearTimeout(savedTimer))
   <section class="space-y-2 rounded-lg border border-slate-700 bg-slate-800 p-3">
     <div class="flex items-baseline justify-between">
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
-        {{ t('magazine.title') }}
+        {{ sectionTitle }}
       </p>
       <span class="flex items-center gap-2">
         <span v-if="justSaved" class="text-[10px] text-emerald-400" data-test="magazine-saved"
@@ -205,15 +213,44 @@ onUnmounted(() => clearTimeout(savedTimer))
     <p v-if="!profile" class="text-xs text-slate-500">{{ t('magazine.noProfile') }}</p>
 
     <template v-else>
-      <!-- No physical magazine for mono / manual: the colours come from the
-           single pen or the drawing's layers, so the per-slot editor is
-           skipped. Firmware / host magazines keep it. -->
-      <p v-if="!hasMagazine" class="text-xs text-slate-500" data-test="magazine-none">
-        {{ t(`magazine.noMagazine.${colorMode}`) }}
-      </p>
+      <!-- Mono: a single pen → just its colour, no slots / magazine. -->
+      <div v-if="colorMode === 'mono'" class="space-y-1.5" data-test="magazine-mono">
+        <p class="text-[11px] text-slate-500">{{ t('magazine.monoHint') }}</p>
+        <div
+          class="flex items-center gap-2 rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5"
+        >
+          <ColorPicker
+            :model-value="pens[0]?.color ?? '#000000'"
+            :label="t('availableColors.pickColor')"
+            swatch-class="h-7 w-9"
+            :disabled="saving"
+            @update:model-value="(hex) => onCustomColor(0, hex)"
+          />
+          <select
+            class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 disabled:opacity-60"
+            :value="matchAvailable(pens[0]?.color ?? '')"
+            :disabled="saving || !availableColors.ordered.length"
+            @change="(e) => onSelectColor(0, (e.target as HTMLSelectElement).value)"
+          >
+            <option value="" disabled>
+              {{
+                availableColors.ordered.length
+                  ? t('magazine.customColor', { hex: pens[0]?.color ?? '#000000' })
+                  : t('magazine.noAvailable')
+              }}
+            </option>
+            <option v-for="opt in availableColors.ordered" :key="opt.color_id" :value="opt.hex">
+              {{ displayLabel(opt.name, opt.hex) }}
+            </option>
+          </select>
+        </div>
+      </div>
 
+      <!-- Manual / firmware / host: per-slot list. Manual is a colour list
+           (no positions — no physical magazine); firmware / host add the
+           per-slot calibration block (gated by ``showsCalibration``). -->
       <template v-else>
-        <p class="text-[11px] text-slate-500">{{ t('magazine.hint') }}</p>
+        <p class="text-[11px] text-slate-500">{{ listHint }}</p>
 
         <ul v-if="pens.length" class="space-y-1.5">
           <li

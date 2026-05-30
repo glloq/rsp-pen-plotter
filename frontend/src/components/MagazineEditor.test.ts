@@ -82,8 +82,11 @@ const i18n = createI18n({
     en: {
       magazine: {
         title: 'Magazine',
+        titleMono: 'Pen colour',
+        titleManual: 'Pen colours',
+        monoHint: 'mono hint',
+        hintManual: 'manual hint',
         noProfile: 'No profile',
-        noMagazine: { mono: 'mono — no magazine', manual: 'manual — no magazine' },
         hint: 'hint',
         slotCount: 'Slots',
         empty: 'empty',
@@ -149,23 +152,34 @@ describe('MagazineEditor', () => {
     expect(swatch).toBeDefined()
   })
 
-  it('hides the whole magazine for manual / mono machines, showing a note', async () => {
-    // Default profile is manual_pause → no physical magazine.
+  it('shows a colour list without calibration for manual mode', async () => {
+    // Default profile is manual_pause → colour list, no physical magazine.
     const wrapper = mountEditor()
     await nextTick()
-    expect(wrapper.find('[data-test="magazine-none"]').exists()).toBe(true)
-    // No slot list (hence no per-slot colour select or calibration block).
-    expect(wrapper.findAll('select')).toHaveLength(0)
+    expect(wrapper.find('[data-test="magazine-mono"]').exists()).toBe(false)
+    // Per-slot colour selects are present, but no calibration block.
+    expect(wrapper.findAll('select').length).toBeGreaterThanOrEqual(2)
     expect(wrapper.find('[data-test="pen-calibration-0"]').exists()).toBe(false)
   })
 
-  it('shows the magazine slot list for a host (rack) magazine', async () => {
+  it('shows a single colour editor for mono mode', async () => {
+    const job = useJobStore()
+    job.profiles[0]!.tool_change_method = 'none'
+    job.profiles[0]!.pen_slot_count = 1
+    const wrapper = mountEditor()
+    await nextTick()
+    expect(wrapper.find('[data-test="magazine-mono"]').exists()).toBe(true)
+    // No per-slot calibration, no full slot list.
+    expect(wrapper.find('[data-test="pen-calibration-0"]').exists()).toBe(false)
+  })
+
+  it('shows the full magazine (slots + calibration) for a host (rack) magazine', async () => {
     useJobStore().profiles[0]!.tool_change_method = 'rack'
     const wrapper = mountEditor()
     await nextTick()
-    expect(wrapper.find('[data-test="magazine-none"]').exists()).toBe(false)
-    // Two slots → two colour selects.
+    expect(wrapper.find('[data-test="magazine-mono"]').exists()).toBe(false)
     expect(wrapper.findAll('select').length).toBeGreaterThanOrEqual(2)
+    expect(wrapper.find('[data-test="pen-calibration-0"]').exists()).toBe(true)
   })
 
   it('exposes per-slot calibration for carousel machines and saves a position', async () => {

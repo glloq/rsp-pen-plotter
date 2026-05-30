@@ -1293,10 +1293,10 @@
   },
   "magazine": {
     "title": "Magazine",
-    "noMagazine": {
-      "mono": "Mono colour: a single pen, no magazine to configure.",
-      "manual": "Manual swap: pens are changed by hand, no magazine. Colours come from the drawing's layers."
-    },
+    "titleMono": "Pen colour",
+    "titleManual": "Pen colours",
+    "monoHint": "A single pen: pick its colour.",
+    "hintManual": "The colour of each pen you alternate by hand. The app prompts you to insert the right pen at each change. No physical magazine — no position to set.",
     "hint": "Assign a colour to each magazine slot. Options come from the available colours above; click the swatch to set a free hex.",
     "slotCount": "Slot count",
     "noProfile": "No profile selected.",
