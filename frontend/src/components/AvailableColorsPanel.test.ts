@@ -171,9 +171,11 @@ describe('AvailableColorsPanel', () => {
     await wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!.trigger('click')
     await nextTick()
 
-    // Scope to the row's number input — the add form above also has one.
+    // Scope to the row's width input (title='Width'); it's a text input
+    // with inputmode=decimal so a comma locale can be normalised by
+    // ``parsePenWidthMm`` instead of mangled by ``v-model.number``.
     const row = wrapper.find('li')
-    const widthInput = row.findAll('input').find((i) => i.element.type === 'number')!
+    const widthInput = row.findAll('input').find((i) => i.attributes('title') === 'Width')!
     await widthInput.setValue('1.2')
 
     await row.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
@@ -182,11 +184,10 @@ describe('AvailableColorsPanel', () => {
     expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 1.2 }))
   })
 
-  it('coerces a comma-decimal width string so the diameter still saves', async () => {
-    // Regression: a real browser can leave a raw string in a
-    // ``v-model.number`` ref (e.g. a French keyboard's ``0,8``). The
-    // old strict ``Number.isFinite`` guard dropped it from the PATCH —
-    // the colour saved but the diameter never changed.
+  it('saves a comma-decimal width by normalising the raw text', async () => {
+    // The real-world bug: on a French locale the operator types ``0,8``.
+    // The field is plain text, so the raw string reaches the component,
+    // and ``parsePenWidthMm`` converts the comma → 0.8 mm.
     const store = useAvailableColorsStore()
     store.colors = [
       {
@@ -206,9 +207,8 @@ describe('AvailableColorsPanel', () => {
     await wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!.trigger('click')
     await nextTick()
     const row = wrapper.find('li')
-    const widthInput = row.findAll('input').find((i) => i.element.type === 'number')!
-    ;(widthInput.element as HTMLInputElement).value = '0,8'
-    await widthInput.trigger('input')
+    const widthInput = row.findAll('input').find((i) => i.attributes('title') === 'Width')!
+    await widthInput.setValue('0,8')
     await row.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
     await nextTick()
     expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 0.8 }))

@@ -16,6 +16,24 @@
 
 const DEFAULT_STROKE_WIDTH_MM = 0.5
 
+/**
+ * Parse a stroke-width form field into a positive number of mm, or
+ * ``null`` when blank / invalid.
+ *
+ * ``v-model.number`` *usually* hands the component a number, but a real
+ * browser can leave a raw string in the bound ref — e.g. a locale where
+ * the numeric keypad emits ``0,8`` with a comma decimal separator. A
+ * strict ``Number.isFinite(value)`` guard returns ``false`` for *any*
+ * string (it doesn't coerce), so the width would be silently dropped
+ * from the PATCH: the colour saves but its diameter never changes. We
+ * normalise the comma → dot and coerce here so the edit is robust to
+ * both the value's type and the operator's locale.
+ */
+export function parsePenWidthMm(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : Number(String(value).replace(',', '.').trim())
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 /** Canonicalise a hex string to lowercase ``#rrggbb`` (expands ``#rgb``). */
 export function canonicalHex(value: string): string {
   const trimmed = value.trim().replace(/^#/, '').toLowerCase()
