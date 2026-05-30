@@ -1,28 +1,65 @@
 <script setup lang="ts">
-// Pen + tool-change fieldset for ProfileEditor (L10 #3 extract).
+// Colour-management fieldset for ProfileEditor.
 //
-// Receives the draft profile via v-model so the parent stays the
-// single owner of the editable state. The fieldset binds nested
-// fields (pens[], pen_up_command, tool_change_method, etc.) via
-// two-way bindings against the draft slice — Vue allows mutating
-// nested object/array contents through a prop without tripping
-// ``vue/no-mutating-props``, which is what the parent expects.
+// This is the operator-facing "how does this plotter handle colour?"
+// switch. It deliberately does NOT manage individual pens / slot colours
+// — that lives in the Couleurs tab. Here we only pick the colour mode
+// and, when a magazine is involved, how many pens it holds:
 //
-// Why this fieldset specifically lives in its own component:
-// it's the biggest section in ProfileEditor (~160 LOC of template)
-// AND ships per-pen detail editing (color picker + pickup position +
-// per-pen up/down command overrides) that has no overlap with the
-// other sections. Splitting it makes ProfileEditor easier to read
-// and gives the per-pen UI a focused home for future tweaks.
+//   - mono     → single pen, no tool change (tool_change_method = none)
+//   - manual   → operator swaps pens by hand   (manual_pause)
+//   - magazine → automatic carousel / rack     (carousel)
+//
+// Receives the draft profile via v-model so the parent stays the single
+// owner of editable state; Vue allows mutating nested fields through a
+// prop without tripping ``vue/no-mutating-props``. The mechanical pen
+// commands (up / down / tool-change G-code) stay here too, tucked into a
+// collapsible block, because they're machine config rather than colour
+// inventory.
 
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { MachineProfile } from '../api/client'
+import type { MachineProfile, ToolChangeMethod } from '../api/client'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   draft: MachineProfile
 }>()
+
+type ColorMode = 'mono' | 'manual' | 'magazine'
+
+const colorMode = computed<ColorMode>(() => {
+  switch (props.draft.tool_change_method) {
+    case 'none':
+      return 'mono'
+    case 'manual_pause':
+      return 'manual'
+    default:
+      // carousel / rack both present as an automatic magazine.
+      return 'magazine'
+  }
+})
+
+const modes: Array<{ id: ColorMode; method: ToolChangeMethod; icon: string }> = [
+  { id: 'mono', method: 'none', icon: '✏️' },
+  { id: 'manual', method: 'manual_pause', icon: '✋' },
+  { id: 'magazine', method: 'carousel', icon: '🎡' },
+]
+
+function setMode(mode: ColorMode): void {
+  const target = modes.find((m) => m.id === mode)
+  if (!target) return
+  props.draft.tool_change_method = target.method
+  if (mode === 'mono') {
+    // A single-pen plotter only ever has one slot.
+    props.draft.pen_slot_count = 1
+  } else if (props.draft.pen_slot_count < 2) {
+    // Multicolour needs at least two pens — seed a sensible default the
+    // operator can adjust right away.
+    props.draft.pen_slot_count = 2
+  }
+}
 </script>
 
 <template>
@@ -30,155 +67,108 @@ defineProps<{
     <summary
       class="flex cursor-pointer items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
     >
-      <span>④ {{ t('profile.pen') }}</span>
-      <span class="text-[10px] text-slate-500 group-open:hidden"
-        >{{ draft.pen_slot_count }} slot(s)</span
-      >
+      <span>④ {{ t('profile.colorManagement') }}</span>
+      <span class="text-[10px] text-slate-500 group-open:hidden">
+        {{ t(`profile.colorMode.${colorMode}`) }}
+      </span>
     </summary>
-    <div class="space-y-3 border-t border-slate-700 p-3">
-      <div class="grid grid-cols-2 gap-2">
-        <label class="block text-slate-400"
-          >{{ t('profile.penUp') }}
-          <input
-            v-model="draft.pen_up_command"
-            type="text"
-            class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-          />
-          <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.penUpHint') }}</span>
-        </label>
-        <label class="block text-slate-400"
-          >{{ t('profile.penDown') }}
-          <input
-            v-model="draft.pen_down_command"
-            type="text"
-            class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-          />
-          <span class="mt-0.5 block text-[11px] text-slate-500">{{
-            t('profile.penDownHint')
-          }}</span>
-        </label>
-        <label class="block text-slate-400"
-          >{{ t('profile.toolChangeMethod') }}
-          <select
-            v-model="draft.tool_change_method"
-            class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-          >
-            <option value="manual_pause">{{ t('profile.tcManualPause') }}</option>
-            <option value="carousel">{{ t('profile.tcCarousel') }}</option>
-            <option value="rack">{{ t('profile.tcRack') }}</option>
-            <option value="none">{{ t('profile.tcNone') }}</option>
-          </select>
-          <span class="mt-0.5 block text-[11px] text-slate-500">{{
-            t('profile.toolChangeMethodHint')
-          }}</span>
-        </label>
-        <label class="block text-slate-400"
-          >{{ t('profile.toolChangeCommand') }}
-          <input
-            v-model="draft.tool_change_command"
-            type="text"
-            class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-          />
-        </label>
-        <label class="col-span-2 block text-slate-400"
-          >{{ t('profile.penSlots') }}
+    <div class="space-y-4 border-t border-slate-700 p-3">
+      <p class="text-[11px] text-slate-500">{{ t('profile.colorManagementHint') }}</p>
+
+      <!-- Mode selector: three big, obvious cards -->
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-3" data-test="color-mode-selector">
+        <button
+          v-for="mode in modes"
+          :key="mode.id"
+          type="button"
+          class="flex flex-col gap-1 rounded-lg border p-3 text-left transition"
+          :class="
+            colorMode === mode.id
+              ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500'
+              : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
+          "
+          :aria-pressed="colorMode === mode.id"
+          :data-test="`color-mode-${mode.id}`"
+          @click="setMode(mode.id)"
+        >
+          <span class="flex items-center gap-2">
+            <span class="text-lg leading-none">{{ mode.icon }}</span>
+            <span
+              class="text-sm font-medium"
+              :class="colorMode === mode.id ? 'text-emerald-200' : 'text-slate-200'"
+            >
+              {{ t(`profile.colorMode.${mode.id}`) }}
+            </span>
+          </span>
+          <span class="text-[11px] leading-snug text-slate-400">
+            {{ t(`profile.colorModeHint.${mode.id}`) }}
+          </span>
+        </button>
+      </div>
+
+      <!-- Pen count — only meaningful for multicolour plotters. -->
+      <div
+        v-if="colorMode !== 'mono'"
+        class="rounded-lg border border-slate-700 bg-slate-900/50 p-3"
+        data-test="magazine-pen-count"
+      >
+        <label class="block text-slate-400">
+          {{ t('profile.penCount') }}
           <input
             v-model.number="draft.pen_slot_count"
             type="number"
-            min="1"
-            class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            min="2"
+            class="mt-1 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
           />
-          <span class="mt-0.5 block text-[11px] text-slate-500">{{
-            t('profile.penSlotsHint')
-          }}</span>
         </label>
+        <p class="mt-1 text-[11px] text-slate-500">
+          {{
+            colorMode === 'magazine'
+              ? t('profile.penCountMagazineHint')
+              : t('profile.penCountManualHint')
+          }}
+        </p>
       </div>
+      <p v-else class="text-[11px] text-slate-500">{{ t('profile.monoNote') }}</p>
 
-      <div v-if="draft.pens && draft.pens.length" class="space-y-2 border-t border-slate-700 pt-3">
-        <div class="flex items-baseline justify-between">
-          <h4 class="text-[11px] uppercase tracking-wider text-slate-500">
-            {{ t('profile.magazine') }}
-          </h4>
-          <span class="text-[10px] text-slate-500">{{ t('profile.magazineMovedHint') }}</span>
-        </div>
-        <div
-          v-for="pen in draft.pens"
-          :key="pen.index"
-          class="rounded border border-slate-700 bg-slate-900/50 p-2"
+      <!-- Mechanical pen commands — machine config, not colour inventory. -->
+      <details class="rounded-lg border border-slate-700 bg-slate-900/40">
+        <summary
+          class="cursor-pointer px-3 py-2 text-[11px] uppercase tracking-wider text-slate-500 hover:text-slate-300"
         >
-          <div class="flex items-center gap-2">
-            <span class="w-6 shrink-0 text-center font-mono text-slate-500">{{ pen.index }}</span>
-            <span
-              class="h-7 w-9 shrink-0 rounded border border-slate-700"
-              :style="{ backgroundColor: pen.color }"
-              :title="pen.color"
-              :aria-label="pen.color"
-            />
+          {{ t('profile.penCommands') }}
+        </summary>
+        <div class="grid grid-cols-2 gap-2 border-t border-slate-700 p-3">
+          <label class="block text-slate-400"
+            >{{ t('profile.penUp') }}
             <input
-              v-model="pen.name"
+              v-model="draft.pen_up_command"
               type="text"
-              :placeholder="`Pen ${pen.index}`"
-              class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
             />
-            <label class="flex shrink-0 items-center gap-1 text-xs text-slate-400">
-              <input
-                v-model="pen.installed"
-                type="checkbox"
-                class="rounded border-slate-600 bg-slate-900"
-              />
-              {{ t('profile.installed') }}
-            </label>
-          </div>
-          <label class="mt-1 flex items-center gap-2 text-xs text-slate-400">
-            <input
-              type="checkbox"
-              :checked="pen.position !== null"
-              class="rounded border-slate-600 bg-slate-900"
-              @change="
-                (e) =>
-                  (pen.position = (e.target as HTMLInputElement).checked ? { x: 0, y: 0 } : null)
-              "
-            />
-            {{ t('profile.pickupPosition') }}
+            <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.penUpHint') }}</span>
           </label>
-          <div v-if="pen.position" class="mt-1 grid grid-cols-2 gap-2">
+          <label class="block text-slate-400"
+            >{{ t('profile.penDown') }}
             <input
-              v-model.number="pen.position.x"
-              type="number"
-              step="any"
-              placeholder="X"
-              class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              v-model="draft.pen_down_command"
+              type="text"
+              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
             />
+            <span class="mt-0.5 block text-[11px] text-slate-500">{{
+              t('profile.penDownHint')
+            }}</span>
+          </label>
+          <label v-if="colorMode === 'magazine'" class="col-span-2 block text-slate-400"
+            >{{ t('profile.toolChangeCommand') }}
             <input
-              v-model.number="pen.position.y"
-              type="number"
-              step="any"
-              placeholder="Y"
-              class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              v-model="draft.tool_change_command"
+              type="text"
+              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
             />
-          </div>
-          <div class="mt-1 grid grid-cols-2 gap-2">
-            <label class="block text-slate-500"
-              >{{ t('profile.penUpOverride') }}
-              <input
-                v-model="pen.pen_up_command"
-                type="text"
-                :placeholder="draft.pen_up_command"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-              />
-            </label>
-            <label class="block text-slate-500"
-              >{{ t('profile.penDownOverride') }}
-              <input
-                v-model="pen.pen_down_command"
-                type="text"
-                :placeholder="draft.pen_down_command"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-              />
-            </label>
-          </div>
+          </label>
         </div>
-      </div>
+      </details>
     </div>
   </details>
 </template>

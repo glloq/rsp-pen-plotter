@@ -83,26 +83,6 @@ async function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
   }
 }
 
-async function setSlotCount(value: number): Promise<void> {
-  if (!profile.value) return
-  const count = Math.max(0, Math.floor(value))
-  if (count === profile.value.pen_slot_count) return
-  saving.value = true
-  error.value = null
-  try {
-    const next: MachineProfile = structuredClone(toRaw(profile.value))
-    next.pen_slot_count = count
-    normalizePens(next)
-    await job.saveProfile(next)
-  } catch (err) {
-    error.value =
-      (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-      t('profile.saveFailed')
-  } finally {
-    saving.value = false
-  }
-}
-
 function onSelectColor(index: number, value: string): void {
   if (!value) return
   void patchPen(index, { color: value })
@@ -140,18 +120,6 @@ function displayLabel(name: string, hex: string): string {
 
     <template v-else>
       <p class="text-[11px] text-slate-500">{{ t('magazine.hint') }}</p>
-
-      <label class="flex items-center gap-2 text-[11px] text-slate-400">
-        {{ t('magazine.slotCount') }}
-        <input
-          type="number"
-          min="0"
-          :value="profile.pen_slot_count"
-          class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-          :disabled="saving"
-          @change="(e) => setSlotCount(Number((e.target as HTMLInputElement).value))"
-        />
-      </label>
 
       <ul v-if="pens.length" class="space-y-1.5">
         <li

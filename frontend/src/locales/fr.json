@@ -985,6 +985,23 @@
     "penSlotsHint": "Nombre d'encoches dans le magasin de stylos.",
     "magazine": "Magasin",
     "magazineMovedHint": "Couleur réglée dans l'onglet Couleurs",
+    "colorManagement": "Gestion des couleurs",
+    "colorManagementHint": "Indique comment ce traceur gère les couleurs. L'attribution des couleurs aux stylos se fait dans l'onglet Couleurs.",
+    "colorMode": {
+      "mono": "Mono couleur",
+      "manual": "Échange manuel",
+      "magazine": "Magasin automatique"
+    },
+    "colorModeHint": {
+      "mono": "Un seul stylo, aucun changement d'outil.",
+      "manual": "Plusieurs couleurs : le traceur s'arrête pour que tu changes le stylo à la main.",
+      "magazine": "Carrousel / rack motorisé : le traceur change de stylo tout seul."
+    },
+    "penCount": "Nombre de stylos",
+    "penCountMagazineHint": "Nombre d'emplacements disponibles dans le magasin.",
+    "penCountManualHint": "Nombre de stylos entre lesquels tu alternes manuellement.",
+    "monoNote": "Mode mono couleur : un seul stylo est utilisé.",
+    "penCommands": "Commandes machine du stylo",
     "installed": "Présent",
     "pickupPosition": "Position de prise",
     "penUpOverride": "Lever stylo (override)",
@@ -1133,7 +1150,9 @@
     "updateFailed": "Impossible de mettre à jour la source de palette."
   },
   "availableColors": {
-    "hint": "Inventaire global des feutres que tu possèdes. Déclare une fois chaque Sharpie / fineliner ; les calques pourront piocher dedans quand la source de palette est réglée sur \"couleurs disponibles\".",
+    "hint": "Inventaire global des feutres que tu possèdes, et attribution des couleurs aux emplacements du magasin. Déclare une fois chaque Sharpie / fineliner.",
+    "meters": "{value} m",
+    "metersUsedTitle": "Mètres tracés avec cette couleur pour le travail courant.",
     "add": "Ajouter une couleur",
     "addAction": "Ajouter",
     "hex": "Hex",
