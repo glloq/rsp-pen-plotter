@@ -110,6 +110,21 @@ class HostMacroStrategy(ToolChangeStrategy):
         travel_feed = (swap.travel_speed_mm_s or self.profile.travel_speed_mm_s) * 60.0
         out: list[SwapCommand] = []
         lead_wait = 0
+        # The slot the head is positioned at, tracked across steps so
+        # ``advance_to_slot`` / ``retract_from_slot`` know which engagement
+        # point to hop to. Set by the most recent ``move_to_*_slot``.
+        current_slot: int | None = None
+
+        # Clearance offset applied to a slot's engagement point to get its
+        # approach point (safe for lateral travel). dx/dy are zero on the
+        # axis that isn't the clearance axis.
+        sign = 1.0 if swap.clearance_dir == "+" else -1.0
+        off = swap.clearance_mm * sign
+        dx = off if swap.clearance_axis == "x" else 0.0
+        dy = off if swap.clearance_axis == "y" else 0.0
+
+        def goto(x: float, y: float) -> str:
+            return f"G0 X{x:.3f} Y{y:.3f} F{travel_feed:.1f}"
 
         def emit(send: str, wait_ms: int) -> None:
             nonlocal lead_wait
@@ -159,7 +174,19 @@ class HostMacroStrategy(ToolChangeStrategy):
                 )
                 pen = pens.get(slot) if slot is not None else None
                 if pen is not None and pen.position is not None:
-                    send = f"G0 X{pen.position.x:.3f} Y{pen.position.y:.3f} F{travel_feed:.1f}"
+                    # Travel to the *approach* point (engagement + clearance)
+                    # so lateral motion clears the neighbouring pens.
+                    current_slot = slot
+                    send = goto(pen.position.x + dx, pen.position.y + dy)
+            elif step.kind in ("advance_to_slot", "retract_from_slot"):
+                pen = pens.get(current_slot) if current_slot is not None else None
+                if pen is not None and pen.position is not None:
+                    if step.kind == "advance_to_slot":
+                        # Approach → engagement (move in to grab/release).
+                        send = goto(pen.position.x, pen.position.y)
+                    else:
+                        # Engagement → approach (back out before travelling).
+                        send = goto(pen.position.x + dx, pen.position.y + dy)
             elif step.kind == "raw":
                 send = _substitute(step.send, context) if step.send.strip() else None
 

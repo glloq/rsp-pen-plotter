@@ -155,4 +155,26 @@ describe('ProfileEditor save serialisation', () => {
     expect(swap?.head_up_command).toBe('M280 P0 S10')
     expect(swap?.head_down_command).toBe('M280 P0 S70')
   })
+
+  it('persists the slot clearance vector and seeds advance/retract steps', async () => {
+    const wrapper = mountSeeded()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    await wrapper.find('[data-test="host-clearance-axis"]').setValue('x')
+    await wrapper.find('[data-test="host-clearance-dir"]').setValue('-')
+    const mm = wrapper.find('[data-test="host-clearance-mm"]')
+    await mm.setValue('15')
+    await mm.trigger('change')
+    await nextTick()
+    await clickSave(wrapper)
+    const swap = saved.at(-1)!.capabilities?.tool_change.host_swap
+    expect(swap?.clearance_axis).toBe('x')
+    expect(swap?.clearance_dir).toBe('-')
+    expect(swap?.clearance_mm).toBe(15)
+    // The default sequence is crash-safe: it includes advance + retract.
+    const kinds = swap?.steps.map((s) => s.kind) ?? []
+    expect(kinds).toContain('advance_to_slot')
+    expect(kinds).toContain('retract_from_slot')
+  })
 })

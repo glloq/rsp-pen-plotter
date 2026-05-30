@@ -38,6 +38,8 @@ export const HostSwapStepKindSchema = z.enum([
   'release',
   'move_to_old_slot',
   'move_to_new_slot',
+  'advance_to_slot',
+  'retract_from_slot',
   'dwell',
   'raw',
 ])
@@ -66,6 +68,12 @@ export const HostSwapPlanSchema = z.object({
   // Informational machine Z travel limits (editor warns, no clamp).
   z_min_mm: z.number().nullable().default(null),
   z_max_mm: z.number().nullable().default(null),
+  // Clearance vector: the approach point = slot engagement point offset
+  // by clearance_mm along clearance_axis in clearance_dir. Lateral moves
+  // happen at the approach point; advance/retract hop the gap. 0 = no hop.
+  clearance_axis: z.enum(['x', 'y']).default('y'),
+  clearance_dir: z.enum(['+', '-']).default('+'),
+  clearance_mm: z.number().nonnegative().default(0),
   steps: z.array(HostSwapStepSchema).default([]),
 })
 export type HostSwapPlan = z.infer<typeof HostSwapPlanSchema>
