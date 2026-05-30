@@ -31,12 +31,40 @@ export const HostMacroStepSchema = z.object({
 })
 export type HostMacroStep = z.infer<typeof HostMacroStepSchema>
 
+export const HostSwapStepKindSchema = z.enum([
+  'head_up',
+  'head_down',
+  'grab',
+  'release',
+  'move_to_old_slot',
+  'move_to_new_slot',
+  'dwell',
+  'raw',
+])
+export type HostSwapStepKind = z.infer<typeof HostSwapStepKindSchema>
+
+export const HostSwapStepSchema = z.object({
+  kind: HostSwapStepKindSchema,
+  wait_ms: z.number().int().nonnegative().default(0),
+  send: z.string().default(''),
+})
+export type HostSwapStep = z.infer<typeof HostSwapStepSchema>
+
+export const HostSwapPlanSchema = z.object({
+  grab_command: z.string().default(''),
+  drop_command: z.string().default(''),
+  travel_speed_mm_s: z.number().positive().nullable().default(null),
+  steps: z.array(HostSwapStepSchema).default([]),
+})
+export type HostSwapPlan = z.infer<typeof HostSwapPlanSchema>
+
 export const ToolChangeStrategySchema = z.object({
   mode: ToolingModeSchema,
   command_source: CommandSourceSchema,
   recovery_policy: RecoveryPolicySchema,
   manual_prompt: ManualSwapPromptSchema.nullable().default(null),
   host_macro: z.array(HostMacroStepSchema).default([]),
+  host_swap: HostSwapPlanSchema.nullable().default(null),
 })
 export type ToolChangeStrategyValue = z.infer<typeof ToolChangeStrategySchema>
 
@@ -63,6 +91,7 @@ export function defaultCapabilities(mode: ToolingMode = 'manual'): MachineCapabi
           }
         : null,
       host_macro: [],
+      host_swap: null,
     },
     has_pen_sensor: false,
     has_sheet_loader: false,

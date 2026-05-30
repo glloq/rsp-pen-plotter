@@ -426,15 +426,15 @@ def _generate_gcode_impl(
                         if prompt_pen and prompt_pen.name
                         else f"Pen {effective_slot}"
                     )
-                    # Automated magazines (carousel / rack) physically fetch the
-                    # pen from a fixed slot position. When that position is
-                    # calibrated, route the head there before triggering the
-                    # change so the swap macro acts on the right slot. Positions
-                    # are already in machine coordinates, so they bypass the
-                    # drawing transform.
+                    # Firmware carousels swap on a single command, so we
+                    # park the head at the calibrated slot first. Host /
+                    # rack magazines drive their own travel through the
+                    # host_swap step sequence (move_to_*_slot), so we don't
+                    # pre-move here. Positions are machine coordinates and
+                    # bypass the drawing transform.
                     slot_pos = (
                         prompt_pen.position
-                        if prompt_pen and profile.tool_change_method in ("carousel", "rack")
+                        if prompt_pen and profile.tool_change_method == "carousel"
                         else None
                     )
                     out.append(

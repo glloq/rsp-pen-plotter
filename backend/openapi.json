@@ -4365,6 +4365,75 @@
         "title": "HostMacroStep",
         "description": "One line of a host-emitted swap macro.\n\n``send`` is a literal command line written verbatim to the\ntransport; ``wait_ms`` is an optional pause **after** the send."
       },
+      "HostSwapPlan": {
+        "properties": {
+          "grab_command": {
+            "type": "string",
+            "title": "Grab Command",
+            "default": ""
+          },
+          "drop_command": {
+            "type": "string",
+            "title": "Drop Command",
+            "default": ""
+          },
+          "travel_speed_mm_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Travel Speed Mm S"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/HostSwapStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "title": "HostSwapPlan",
+        "description": "Structured, G-code-free description of a host-driven pen swap.\n\nStored on the profile and compiled to commands at plan time so the\noperator configures positions + actions, never raw G-code (except the\noptional ``raw`` step). ``grab_command`` / ``drop_command`` are the\none machine primitive that needs a literal command (a servo / gripper\nline), surfaced under an \"advanced\" affordance with sane defaults."
+      },
+      "HostSwapStep": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "head_up",
+              "head_down",
+              "grab",
+              "release",
+              "move_to_old_slot",
+              "move_to_new_slot",
+              "dwell",
+              "raw"
+            ],
+            "title": "Kind"
+          },
+          "wait_ms": {
+            "type": "integer",
+            "title": "Wait Ms",
+            "default": 0
+          },
+          "send": {
+            "type": "string",
+            "title": "Send",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "HostSwapStep",
+        "description": "One high-level step of a host-driven pen swap.\n\nThe operator builds the swap from these blocks instead of writing\nG-code; :class:`~pen_plotter.domain.toolchange.strategies.HostMacroStrategy`\ncompiles them to concrete commands at plan time, filling in each\npen's calibrated position. ``raw`` is the escape hatch for exotic\nhardware.\n\nKinds:\n  - ``head_up`` / ``head_down``: emit the profile pen-up/-down command.\n  - ``grab`` / ``release``: emit the plan's ``grab_command`` /\n    ``drop_command`` (the clamp / gripper primitive).\n  - ``move_to_old_slot`` / ``move_to_new_slot``: travel to the\n    outgoing / incoming pen's calibrated position.\n  - ``dwell``: pause ``wait_ms`` host-side (no command sent).\n  - ``raw``: send ``send`` verbatim."
+      },
       "ImportRequest": {
         "properties": {
           "yaml": {
@@ -6331,6 +6400,16 @@
             },
             "type": "array",
             "title": "Host Macro"
+          },
+          "host_swap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HostSwapPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

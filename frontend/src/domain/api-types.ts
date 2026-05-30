@@ -2011,6 +2011,68 @@ export interface components {
             wait_ms: number;
         };
         /**
+         * HostSwapPlan
+         * @description Structured, G-code-free description of a host-driven pen swap.
+         *
+         *     Stored on the profile and compiled to commands at plan time so the
+         *     operator configures positions + actions, never raw G-code (except the
+         *     optional ``raw`` step). ``grab_command`` / ``drop_command`` are the
+         *     one machine primitive that needs a literal command (a servo / gripper
+         *     line), surfaced under an "advanced" affordance with sane defaults.
+         */
+        HostSwapPlan: {
+            /**
+             * Grab Command
+             * @default
+             */
+            grab_command: string;
+            /**
+             * Drop Command
+             * @default
+             */
+            drop_command: string;
+            /** Travel Speed Mm S */
+            travel_speed_mm_s?: number | null;
+            /** Steps */
+            steps?: components["schemas"]["HostSwapStep"][];
+        };
+        /**
+         * HostSwapStep
+         * @description One high-level step of a host-driven pen swap.
+         *
+         *     The operator builds the swap from these blocks instead of writing
+         *     G-code; :class:`~pen_plotter.domain.toolchange.strategies.HostMacroStrategy`
+         *     compiles them to concrete commands at plan time, filling in each
+         *     pen's calibrated position. ``raw`` is the escape hatch for exotic
+         *     hardware.
+         *
+         *     Kinds:
+         *       - ``head_up`` / ``head_down``: emit the profile pen-up/-down command.
+         *       - ``grab`` / ``release``: emit the plan's ``grab_command`` /
+         *         ``drop_command`` (the clamp / gripper primitive).
+         *       - ``move_to_old_slot`` / ``move_to_new_slot``: travel to the
+         *         outgoing / incoming pen's calibrated position.
+         *       - ``dwell``: pause ``wait_ms`` host-side (no command sent).
+         *       - ``raw``: send ``send`` verbatim.
+         */
+        HostSwapStep: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "head_up" | "head_down" | "grab" | "release" | "move_to_old_slot" | "move_to_new_slot" | "dwell" | "raw";
+            /**
+             * Wait Ms
+             * @default 0
+             */
+            wait_ms: number;
+            /**
+             * Send
+             * @default
+             */
+            send: string;
+        };
+        /**
          * ImportRequest
          * @description A profile to import, as a YAML document.
          */
@@ -3009,6 +3071,7 @@ export interface components {
             manual_prompt?: components["schemas"]["ManualSwapPrompt"] | null;
             /** Host Macro */
             host_macro?: components["schemas"]["HostMacroStep"][];
+            host_swap?: components["schemas"]["HostSwapPlan"] | null;
         };
         /**
          * ToolingMode

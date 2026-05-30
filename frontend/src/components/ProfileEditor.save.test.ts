@@ -106,7 +106,7 @@ describe('ProfileEditor save serialisation', () => {
     expect(saved[0]!.pens?.length).toBe(4)
   })
 
-  it('saves a host-macro profile end to end', async () => {
+  it('saves a host magazine profile with its visual swap steps', async () => {
     const wrapper = mountSeeded()
     await nextTick()
     await wrapper.find('[data-test="color-mode-host"]').trigger('click')
@@ -114,6 +114,6 @@ describe('ProfileEditor save serialisation', () => {
     await clickSave(wrapper)
     expect(saved).toHaveLength(1)
     expect(saved[0]!.capabilities?.tool_change.mode).toBe('host_macro')
-    expect(saved[0]!.capabilities?.tool_change.host_macro.length).toBeGreaterThan(0)
+    expect(saved[0]!.capabilities?.tool_change.host_swap?.steps.length).toBeGreaterThan(0)
   })
 })
