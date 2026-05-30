@@ -348,6 +348,38 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(wrapper.find('[data-test="host-engage-z"]').exists()).toBe(true)
   })
 
+  it('flags uncalibrated installed slots in the host positions table', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    // Seeded 2-slot magazine with no positions → both rows flagged + summary.
+    expect(wrapper.find('[data-test="host-uncalibrated"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-pos-cal-0"]').text()).toBe('⚠')
+    // Calibrate both slots → the row turns ✓ and the summary clears.
+    for (const i of [0, 1]) {
+      const x = wrapper.find(`[data-test="host-pos-x-${i}"]`)
+      await x.setValue('10')
+      await x.trigger('change')
+    }
+    await nextTick()
+    expect(wrapper.find('[data-test="host-pos-cal-0"]').text()).toBe('✓')
+    expect(wrapper.find('[data-test="host-uncalibrated"]').exists()).toBe(false)
+  })
+
+  it('groups the head-height fields under a collapsible block', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    const group = wrapper.find('[data-test="host-heights-group"]')
+    expect(group.exists()).toBe(true)
+    expect(group.element.tagName.toLowerCase()).toBe('details')
+    // Both the servo and the Z fields live inside the group.
+    expect(group.find('[data-test="host-head-up"]').exists()).toBe(true)
+    expect(group.find('[data-test="host-safe-z"]').exists()).toBe(true)
+  })
+
   it('shows magazine servo head-height fields, disabled once a Z axis is set', async () => {
     const wrapper = mountEditor()
     await nextTick()

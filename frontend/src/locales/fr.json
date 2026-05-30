@@ -1064,6 +1064,13 @@
       "positionsTitle": "Positions des stylos dans le magasin",
       "positionsHint": "X/Y de chaque emplacement, dans les unités du profil. C'est le point d'engagement où le stylo est saisi. « Aller à l'emplacement » se rend au point d'approche (décalé du dégagement ci-dessous). Laisse vide pour un emplacement non calibré.",
       "penLabel": "Stylo",
+      "cal": {
+        "ok": "Calibré : position définie.",
+        "warn": "Stylo installé sans position : le changement le sautera.",
+        "off": "Emplacement vide."
+      },
+      "uncalibrated": "{n} stylo(s) installé(s) sans position — le changement les sautera.",
+      "headHeightsTitle": "Hauteurs de tête (servo / Z)",
       "clearanceHint": "Distance de recul hors d'un emplacement avant tout déplacement latéral, pour que la tête dégage les stylos voisins. « Avancer/Reculer de l'emplacement » parcourent cet écart. Mets 0 si aucun mouvement d'insertion n'est nécessaire.",
       "clearanceAxis": "Axe",
       "clearanceDir": "Direction",

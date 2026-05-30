@@ -285,6 +285,22 @@ const penRows = computed(() => {
   return Array.from({ length: count }, (_, i) => existing.find((p) => p.index === i) ?? null)
 })
 
+// Calibration status for one magazine row, surfaced in the positions
+// table: a calibrated slot has an XY position; an installed slot without
+// one is skipped by the swap (a real footgun), so flag it; an empty slot
+// is just muted.
+type CalState = 'ok' | 'warn' | 'off'
+function calState(pen: { installed?: boolean; position?: unknown } | null): CalState {
+  if (pen?.position != null) return 'ok'
+  return pen?.installed === false ? 'off' : 'warn'
+}
+
+// How many installed pens still lack a position — the swap silently skips
+// them, so warn the operator up front.
+const uncalibratedCount = computed(
+  () => penRows.value.filter((pen) => calState(pen) === 'warn').length,
+)
+
 function setSlotPosition(index: number, axis: 'x' | 'y', raw: string): void {
   const pens = ensurePens()
   const pen = pens.find((p) => p.index === index)
@@ -582,17 +598,18 @@ function setMode(mode: ColorMode): void {
             }}
           </p>
           <div
-            class="grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-2 text-[10px] text-slate-500"
+            class="grid grid-cols-[2rem_1fr_5rem_5rem_1.25rem] items-center gap-2 text-[10px] text-slate-500"
           >
             <span></span>
             <span>{{ t('profile.hostSwap.penLabel') }}</span>
             <span>X</span>
             <span>Y</span>
+            <span></span>
           </div>
           <div
             v-for="(pen, i) in penRows"
             :key="i"
-            class="grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-2"
+            class="grid grid-cols-[2rem_1fr_5rem_5rem_1.25rem] items-center gap-2"
             :data-test="`host-pos-row-${i}`"
           >
             <span class="text-center font-mono text-[11px] text-slate-500">#{{ i }}</span>
@@ -615,7 +632,27 @@ function setMode(mode: ColorMode): void {
               :data-test="`host-pos-y-${i}`"
               @change="(e) => setSlotPosition(i, 'y', (e.target as HTMLInputElement).value)"
             />
+            <span
+              class="text-center text-[11px]"
+              :class="{
+                'text-emerald-400': calState(pen) === 'ok',
+                'text-amber-400': calState(pen) === 'warn',
+                'text-slate-600': calState(pen) === 'off',
+              }"
+              :title="t(`profile.hostSwap.cal.${calState(pen)}`)"
+              :data-test="`host-pos-cal-${i}`"
+            >
+              {{ calState(pen) === 'ok' ? '✓' : calState(pen) === 'warn' ? '⚠' : '·' }}
+            </span>
           </div>
+
+          <p
+            v-if="uncalibratedCount > 0"
+            class="text-[11px] text-amber-300"
+            data-test="host-uncalibrated"
+          >
+            ⚠ {{ t('profile.hostSwap.uncalibrated', { n: uncalibratedCount }) }}
+          </p>
 
           <!-- Clearance: how far to back out of a slot before moving
                sideways, so the head doesn't hit the neighbouring pens.
@@ -670,112 +707,125 @@ function setMode(mode: ColorMode): void {
           </div>
         </div>
 
-        <!-- Magazine head height (servo): the rack often sits higher than
-             the paper, so the raise/lower servo angle differs from the
-             normal pen-up/-down. Blank → reuse the profile's pen-up/-down.
-             Disabled when a real Z axis is configured below. -->
-        <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-servo-heights">
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            {{ t('profile.hostSwap.servoHeightsTitle') }}
-          </p>
-          <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.servoHeightsHint') }}</p>
-          <div class="grid grid-cols-2 gap-2" :class="{ 'opacity-40': usesZAxis }">
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.headUpCommand') }}
-              <input
-                type="text"
-                :value="hostSwap.head_up_command ?? ''"
-                :placeholder="draft.pen_up_command"
-                :disabled="usesZAxis"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
-                data-test="host-head-up"
-                @change="
-                  (e) => setHeadCommand('head_up_command', (e.target as HTMLInputElement).value)
-                "
-              />
-            </label>
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.headDownCommand') }}
-              <input
-                type="text"
-                :value="hostSwap.head_down_command ?? ''"
-                :placeholder="draft.pen_down_command"
-                :disabled="usesZAxis"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
-                data-test="host-head-down"
-                @change="
-                  (e) => setHeadCommand('head_down_command', (e.target as HTMLInputElement).value)
-                "
-              />
-            </label>
-          </div>
-          <p v-if="usesZAxis" class="text-[11px] text-slate-500">
-            {{ t('profile.hostSwap.zOverridesServo') }}
-          </p>
-        </div>
+        <!-- Head heights — servo angle and/or a real Z axis, grouped and
+             collapsible. Most servo machines just reuse the profile pen-up/
+             -down, so this stays folded out of the way by default. -->
+        <details class="border-t border-slate-700 pt-3" data-test="host-heights-group">
+          <summary
+            class="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+          >
+            {{ t('profile.hostSwap.headHeightsTitle') }}
+          </summary>
+          <div class="mt-3 space-y-3">
+            <!-- Magazine head height (servo): the rack often sits higher
+                 than the paper, so the raise/lower servo angle differs from
+                 the normal pen-up/-down. Blank → reuse the profile's
+                 pen-up/-down. Disabled when a real Z axis is set below. -->
+            <div class="space-y-2" data-test="host-servo-heights">
+              <p class="text-[11px] uppercase tracking-wider text-slate-500">
+                {{ t('profile.hostSwap.servoHeightsTitle') }}
+              </p>
+              <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.servoHeightsHint') }}</p>
+              <div class="grid grid-cols-2 gap-2" :class="{ 'opacity-40': usesZAxis }">
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.headUpCommand') }}
+                  <input
+                    type="text"
+                    :value="hostSwap.head_up_command ?? ''"
+                    :placeholder="draft.pen_up_command"
+                    :disabled="usesZAxis"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
+                    data-test="host-head-up"
+                    @change="
+                      (e) => setHeadCommand('head_up_command', (e.target as HTMLInputElement).value)
+                    "
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.headDownCommand') }}
+                  <input
+                    type="text"
+                    :value="hostSwap.head_down_command ?? ''"
+                    :placeholder="draft.pen_down_command"
+                    :disabled="usesZAxis"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
+                    data-test="host-head-down"
+                    @change="
+                      (e) =>
+                        setHeadCommand('head_down_command', (e.target as HTMLInputElement).value)
+                    "
+                  />
+                </label>
+              </div>
+              <p v-if="usesZAxis" class="text-[11px] text-slate-500">
+                {{ t('profile.hostSwap.zOverridesServo') }}
+              </p>
+            </div>
 
-        <!-- Z heights: travel (safe) + engage depth. Optional — only for
-             machines with a real motorised Z axis. When set they take
-             precedence over the servo magazine commands above. -->
-        <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-heights">
-          <p class="text-[11px] uppercase tracking-wider text-slate-500">
-            {{ t('profile.hostSwap.heightsTitle') }}
-          </p>
-          <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.heightsHint') }}</p>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.safeZ') }}
-              <input
-                type="number"
-                step="any"
-                :value="hostSwap.safe_z_mm ?? ''"
-                placeholder="—"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                data-test="host-safe-z"
-                @change="(e) => setZ('safe_z_mm', (e.target as HTMLInputElement).value)"
-              />
-            </label>
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.engageZ') }}
-              <input
-                type="number"
-                step="any"
-                :value="hostSwap.engage_z_mm ?? ''"
-                placeholder="—"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                data-test="host-engage-z"
-                @change="(e) => setZ('engage_z_mm', (e.target as HTMLInputElement).value)"
-              />
-            </label>
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.zMin') }}
-              <input
-                type="number"
-                step="any"
-                :value="hostSwap.z_min_mm ?? ''"
-                placeholder="—"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                data-test="host-z-min"
-                @change="(e) => setZ('z_min_mm', (e.target as HTMLInputElement).value)"
-              />
-            </label>
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.zMax') }}
-              <input
-                type="number"
-                step="any"
-                :value="hostSwap.z_max_mm ?? ''"
-                placeholder="—"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                data-test="host-z-max"
-                @change="(e) => setZ('z_max_mm', (e.target as HTMLInputElement).value)"
-              />
-            </label>
+            <!-- Z heights: travel (safe) + engage depth. Optional — only
+                 for machines with a real motorised Z axis. When set they
+                 take precedence over the servo commands above. -->
+            <div class="space-y-2 border-t border-slate-800 pt-3" data-test="host-heights">
+              <p class="text-[11px] uppercase tracking-wider text-slate-500">
+                {{ t('profile.hostSwap.heightsTitle') }}
+              </p>
+              <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.heightsHint') }}</p>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.safeZ') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="hostSwap.safe_z_mm ?? ''"
+                    placeholder="—"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="host-safe-z"
+                    @change="(e) => setZ('safe_z_mm', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.engageZ') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="hostSwap.engage_z_mm ?? ''"
+                    placeholder="—"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="host-engage-z"
+                    @change="(e) => setZ('engage_z_mm', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.zMin') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="hostSwap.z_min_mm ?? ''"
+                    placeholder="—"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="host-z-min"
+                    @change="(e) => setZ('z_min_mm', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.zMax') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="hostSwap.z_max_mm ?? ''"
+                    placeholder="—"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="host-z-max"
+                    @change="(e) => setZ('z_max_mm', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+              </div>
+              <p v-if="zWarning" class="text-[11px] text-amber-300" data-test="host-z-warning">
+                ⚠ {{ t(`profile.hostSwap.${zWarning}`) }}
+              </p>
+            </div>
           </div>
-          <p v-if="zWarning" class="text-[11px] text-amber-300" data-test="host-z-warning">
-            ⚠ {{ t(`profile.hostSwap.${zWarning}`) }}
-          </p>
-        </div>
+        </details>
 
         <!-- Swap sequence (kept visible): generated from the magazine +
              action above, then editable step by step for fine-tuning. -->

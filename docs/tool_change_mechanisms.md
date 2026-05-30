@@ -88,9 +88,13 @@ The host editor presents a guided flow rather than a flat dump of fields:
 2. **② Action type** — `command` vs `motion` cards, labelled per mechanism
    (rack: *servo gripper* / *mechanical · magnetic hold*; dock: *motorised
    latch* / *magnetic · kinematic*). Maps to `lock_mode`.
-3. **③ Positions** — per-slot X/Y + clearance / dock entry depth.
-4. **④ Heights** — magazine servo angle and/or real Z axis.
-5. **⑤ Sequence** — the generated, editable step list. Kept visible so power
+3. **Positions** — per-slot X/Y + clearance / dock entry depth. Each row shows a
+   calibration badge (✓ set · ⚠ installed but no position · · empty), and a
+   summary line warns how many installed pens still lack a position — the swap
+   silently skips an uncalibrated slot, so this surfaces the footgun.
+4. **Heights** — magazine servo angle and/or a real Z axis, grouped under one
+   collapsible block (most servo machines just reuse the profile pen-up/-down).
+5. **Sequence** — the generated, editable step list. Kept visible so power
    users can fine-tune; the advanced latch-command block (only for a `command`
    action) sits below it.
 
