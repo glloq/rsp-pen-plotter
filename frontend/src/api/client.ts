@@ -604,6 +604,7 @@ export async function rerenderJob(
   layers: LayerAlgorithmOverride[],
   signal?: AbortSignal,
   layerStrokeWidths?: Record<string, number>,
+  layerInkColors?: Record<string, string>,
 ): Promise<RerenderResponse> {
   const response = await api.post<RerenderResponse>(
     '/rerender',
@@ -614,6 +615,10 @@ export async function rerenderJob(
       // each layer's stroke at the real pen and floors fill spacing at
       // one pen width. Omitted when no inventory width is resolved.
       ...(layerStrokeWidths ? { layer_stroke_widths: layerStrokeWidths } : {}),
+      // Per-layer assigned ink hex (from the magazine / inventory pool)
+      // so the rendered SVG shows the colours that will actually be
+      // drawn rather than the segmentation centroids.
+      ...(layerInkColors ? { layer_ink_colors: layerInkColors } : {}),
     },
     // No timeout: a heavy multi-pass stack on a high-res placement
     // can take a while. The caller passes ``signal`` so the operator

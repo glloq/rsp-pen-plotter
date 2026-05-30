@@ -137,6 +137,7 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     background_luminance: float,
     per_layer_overrides: dict[str, dict[str, Any]] | None = None,
     layer_stroke_widths: dict[str, float] | None = None,
+    layer_ink_colors: dict[str, str] | None = None,
     n_workers: int = 1,
     progress_callback: ProgressCallback | None = None,
 ) -> tuple[str, list[str]]:
@@ -146,6 +147,13 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     dict with ``algorithm`` and/or ``algorithm_options`` keys, swapping
     in a different algorithm just for that layer. Layers without an
     override fall back to ``algorithm`` + ``algorithm_options``.
+
+    ``layer_ink_colors`` maps a layer label to the actual ink hex the
+    layer should be rendered with — the operator's assigned colour from
+    the magazine / inventory pool rather than the cluster's source
+    centroid. Wins over ``mono_ink_color`` so a per-layer pick still
+    shows in mono-machine previews. Missing entries fall back to
+    ``mono_ink_color`` then to the cluster centroid (legacy behaviour).
 
     ``n_workers > 1`` dispatches each colour layer to a separate
     process via :class:`ProcessPoolExecutor` (forkserver context so
@@ -157,6 +165,7 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     """
     overrides = per_layer_overrides or {}
     stroke_widths = layer_stroke_widths or {}
+    ink_colors = layer_ink_colors or {}
     warnings: list[str] = []
     # (mask, color_hex, ink_hex, label, algo_name, algo_options, passes)
     # Local type alias; uppercase matches the convention for type
@@ -179,10 +188,15 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
         mask = seg.labels == cluster
         color_hex = "#{:02x}{:02x}{:02x}".format(*rgb.astype(int))
         label = f"color-{color_hex.lstrip('#')}"
-        # Substitute the single mono ink at the last moment so the
-        # label (which keys band_recipes / extract_layers) keeps
-        # using the cluster's source colour.
-        ink_hex = mono_ink_color or color_hex
+        # Priority for the actual stroke colour:
+        #   1. per-layer assigned ink (from the magazine / inventory) —
+        #      so the preview shows the colour that will really be drawn,
+        #   2. global mono ink (a one-pen machine forcing every layer
+        #      onto the same nib),
+        #   3. the cluster's source centroid (legacy fallback).
+        # The label (which keys band_recipes / extract_layers) still
+        # uses the source centroid so cache lookups stay stable.
+        ink_hex = ink_colors.get(label) or mono_ink_color or color_hex
         override = overrides.get(label, {})
         # Multi-pass: stack several algorithms in the same labeled
         # group so the layer is drawn with multiple visual effects

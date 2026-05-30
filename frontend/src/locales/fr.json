@@ -1473,7 +1473,9 @@
       "resetView": "Recentrer (double-clic) · molette pour zoomer · glisser pour déplacer",
       "paletteLabel": "Couleurs",
       "paletteMachine": "Magazine machine",
-      "paletteFree": "Palette libre"
+      "paletteFree": "Palette libre",
+      "inksLabel": "Encres utilisées",
+      "inkFallback": "Aucune correspondance dans le magasin / l'inventaire — repli sur {hex}"
     },
     "intent": {
       "fast": "Rapide",

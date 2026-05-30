@@ -85,6 +85,12 @@ class RerenderRequest(BaseModel):
     # rendered stroke matches the real pen and fill spacing is floored at
     # one pen width. Omitted layers keep the historical 0.8 default.
     layer_stroke_widths: dict[str, float] = Field(default_factory=dict)
+    # Per-layer ink hex keyed by layer label (``color-{hex}``). The hex
+    # the operator assigned to each layer from the magazine / inventory
+    # pool; sent so the rendered SVG uses the colour that will actually
+    # be drawn instead of the segmentation centroid. Omitted layers fall
+    # back to the cluster's source colour (legacy behaviour).
+    layer_ink_colors: dict[str, str] = Field(default_factory=dict)
 
 
 class RerenderResponse(BaseModel):
@@ -145,6 +151,7 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
             entry.options,
             per_layer_overrides=overrides,
             layer_stroke_widths=request.layer_stroke_widths,
+            layer_ink_colors=request.layer_ink_colors,
         )
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
