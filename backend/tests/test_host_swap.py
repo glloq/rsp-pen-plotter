@@ -205,3 +205,30 @@ def test_head_steps_fall_back_to_servo_without_z() -> None:
     plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
     sends = [c.send for c in plan.commands]
     assert sends == ["M280 P0 S40", "M280 P0 S90"]
+
+
+def test_head_steps_use_magazine_servo_override() -> None:
+    """A servo machine whose magazine sits higher than the paper uses the
+    dedicated magazine head-up/-down servo commands, not the profile's."""
+    steps = [HostSwapStep(kind="head_up"), HostSwapStep(kind="head_down")]
+    profile = _host_profile(steps)
+    swap = profile.capabilities.tool_change.host_swap  # type: ignore[union-attr]
+    swap.head_up_command = "M280 P0 S10"
+    swap.head_down_command = "M280 P0 S70"
+    orch = ToolChangeOrchestrator(profile)
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    sends = [c.send for c in plan.commands]
+    assert sends == ["M280 P0 S10", "M280 P0 S70"]
+
+
+def test_z_axis_wins_over_servo_override() -> None:
+    """When both a Z height and a servo override are set, the real Z axis
+    takes precedence (the machine has a Z axis)."""
+    steps = [HostSwapStep(kind="head_up")]
+    profile = _host_profile(steps)
+    swap = profile.capabilities.tool_change.host_swap  # type: ignore[union-attr]
+    swap.head_up_command = "M280 P0 S10"
+    swap.safe_z_mm = 5.0
+    orch = ToolChangeOrchestrator(profile)
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    assert [c.send for c in plan.commands] == ["G0 Z5.000 F7200.0"]

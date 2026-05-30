@@ -137,4 +137,22 @@ describe('ProfileEditor save serialisation', () => {
     expect(profile.pens?.find((p) => p.index === 0)?.position).toEqual({ x: 12.5, y: 200 })
     expect(profile.capabilities?.tool_change.host_swap?.safe_z_mm).toBe(5)
   })
+
+  it('persists the dedicated magazine servo head-height commands', async () => {
+    const wrapper = mountSeeded()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    const up = wrapper.find('[data-test="host-head-up"]')
+    const down = wrapper.find('[data-test="host-head-down"]')
+    await up.setValue('M280 P0 S10')
+    await up.trigger('change')
+    await down.setValue('M280 P0 S70')
+    await down.trigger('change')
+    await nextTick()
+    await clickSave(wrapper)
+    const swap = saved.at(-1)!.capabilities?.tool_change.host_swap
+    expect(swap?.head_up_command).toBe('M280 P0 S10')
+    expect(swap?.head_down_command).toBe('M280 P0 S70')
+  })
 })

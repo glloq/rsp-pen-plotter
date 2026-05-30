@@ -301,6 +301,23 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(wrapper.find('[data-test="host-engage-z"]').exists()).toBe(true)
   })
 
+  it('shows magazine servo head-height fields, disabled once a Z axis is set', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    const up = wrapper.find('[data-test="host-head-up"]')
+    expect(up.exists()).toBe(true)
+    // Servo mode by default → editable.
+    expect(up.attributes('disabled')).toBeUndefined()
+    // Configure a Z axis → servo command greyed out (ignored).
+    const safe = wrapper.find('[data-test="host-safe-z"]')
+    await safe.setValue('5')
+    await safe.trigger('change')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-head-up"]').attributes('disabled')).toBeDefined()
+  })
+
   it('warns (without blocking) when the engage depth sits above the safe height', async () => {
     const wrapper = mountEditor()
     await nextTick()

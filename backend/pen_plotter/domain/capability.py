@@ -155,13 +155,21 @@ class HostSwapPlan(BaseModel):
     # Feed for the magazine travel moves; falls back to the profile's
     # travel speed when unset.
     travel_speed_mm_s: float | None = None
+    # Optional servo positions for the *magazine* head height, used by the
+    # ``head_up`` / ``head_down`` steps during a swap. The magazine often
+    # sits higher than the paper, so the servo angle to raise above /
+    # lower into the rack differs from the normal pen-up/-down. When set,
+    # these take precedence over the profile's pen-up/-down commands; when
+    # ``None`` the profile commands are used. ``safe_z_mm`` / ``engage_z_mm``
+    # (below) win over both when the machine has a real Z axis.
+    head_up_command: str | None = None
+    head_down_command: str | None = None
     # Optional Z heights (mm) for machines with a real motorised Z axis.
     # ``safe_z`` is the travel height the head rises to before moving
     # between slots; ``engage_z`` is the depth it descends to inside the
     # magazine to grab / release a pen. When set, ``head_up`` / ``head_down``
-    # emit ``G0 Z<height>`` instead of the servo pen-up/-down commands;
-    # when ``None`` the servo commands are used (so simple servo machines
-    # need not touch these).
+    # emit ``G0 Z<height>``; otherwise the servo commands above (or the
+    # profile's) are used — so simple servo machines need not touch these.
     safe_z_mm: float | None = None
     engage_z_mm: float | None = None
     # Machine Z travel limits (mm), informational — the editor warns when a

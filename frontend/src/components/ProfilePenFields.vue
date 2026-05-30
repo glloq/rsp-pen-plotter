@@ -109,6 +109,8 @@ function defaultHostSwap(): HostSwapPlan {
     grab_command: 'M280 P1 S90',
     drop_command: 'M280 P1 S20',
     travel_speed_mm_s: null,
+    head_up_command: null,
+    head_down_command: null,
     safe_z_mm: null,
     engage_z_mm: null,
     z_min_mm: null,
@@ -195,13 +197,26 @@ function setSlotPosition(index: number, axis: 'x' | 'y', raw: string): void {
   }
 }
 
+// Magazine servo head-height overrides: empty clears back to null (the
+// profile's pen-up/-down command is used instead).
+function setHeadCommand(field: 'head_up_command' | 'head_down_command', raw: string): void {
+  const swap = ensureHostSwap()
+  swap[field] = raw.trim() ? raw : null
+}
+
 // Z heights: edited as raw text so an empty field clears back to null
-// (servo mode). ``null`` means "use the servo pen-up/-down commands".
+// (servo mode). ``null`` means "no real Z axis — use the servo command".
 function setZ(field: 'safe_z_mm' | 'engage_z_mm' | 'z_min_mm' | 'z_max_mm', raw: string): void {
   const swap = ensureHostSwap()
   const v = raw.trim() === '' ? null : Number(raw)
   swap[field] = v !== null && Number.isFinite(v) ? v : null
 }
+
+// True when a real Z axis is in use (either height set) — the servo
+// overrides are then ignored, so the editor greys them out.
+const usesZAxis = computed(
+  () => hostSwap.value?.safe_z_mm != null || hostSwap.value?.engage_z_mm != null,
+)
 
 // Heads-up (non-blocking) warnings around the Z heights.
 const zWarning = computed<string | null>(() => {
@@ -499,9 +514,53 @@ function setMode(mode: ColorMode): void {
           </div>
         </div>
 
-        <!-- Z heights: travel (safe) + engage depth. Optional — leave
-             blank on servo machines to keep using the pen-up/-down
-             commands. Filled in for machines with a real Z axis. -->
+        <!-- Magazine head height (servo): the rack often sits higher than
+             the paper, so the raise/lower servo angle differs from the
+             normal pen-up/-down. Blank → reuse the profile's pen-up/-down.
+             Disabled when a real Z axis is configured below. -->
+        <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-servo-heights">
+          <p class="text-[11px] uppercase tracking-wider text-slate-500">
+            {{ t('profile.hostSwap.servoHeightsTitle') }}
+          </p>
+          <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.servoHeightsHint') }}</p>
+          <div class="grid grid-cols-2 gap-2" :class="{ 'opacity-40': usesZAxis }">
+            <label class="block text-[11px] text-slate-400"
+              >{{ t('profile.hostSwap.headUpCommand') }}
+              <input
+                type="text"
+                :value="hostSwap.head_up_command ?? ''"
+                :placeholder="draft.pen_up_command"
+                :disabled="usesZAxis"
+                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
+                data-test="host-head-up"
+                @change="
+                  (e) => setHeadCommand('head_up_command', (e.target as HTMLInputElement).value)
+                "
+              />
+            </label>
+            <label class="block text-[11px] text-slate-400"
+              >{{ t('profile.hostSwap.headDownCommand') }}
+              <input
+                type="text"
+                :value="hostSwap.head_down_command ?? ''"
+                :placeholder="draft.pen_down_command"
+                :disabled="usesZAxis"
+                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
+                data-test="host-head-down"
+                @change="
+                  (e) => setHeadCommand('head_down_command', (e.target as HTMLInputElement).value)
+                "
+              />
+            </label>
+          </div>
+          <p v-if="usesZAxis" class="text-[11px] text-slate-500">
+            {{ t('profile.hostSwap.zOverridesServo') }}
+          </p>
+        </div>
+
+        <!-- Z heights: travel (safe) + engage depth. Optional — only for
+             machines with a real motorised Z axis. When set they take
+             precedence over the servo magazine commands above. -->
         <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-heights">
           <p class="text-[11px] uppercase tracking-wider text-slate-500">
             {{ t('profile.hostSwap.heightsTitle') }}

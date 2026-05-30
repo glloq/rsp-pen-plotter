@@ -126,21 +126,23 @@ class HostMacroStrategy(ToolChangeStrategy):
 
             send: str | None = None
             if step.kind == "head_up":
-                # Real Z axis: rise to the safe travel height. Otherwise
-                # fall back to the servo pen-up command.
-                send = (
-                    f"G0 Z{swap.safe_z_mm:.3f} F{travel_feed:.1f}"
-                    if swap.safe_z_mm is not None
-                    else self.profile.pen_up_command
-                )
+                # Precedence: real Z axis → magazine servo override →
+                # profile pen-up. The magazine often sits higher than the
+                # paper, so its raise angle differs from the normal pen-up.
+                if swap.safe_z_mm is not None:
+                    send = f"G0 Z{swap.safe_z_mm:.3f} F{travel_feed:.1f}"
+                elif swap.head_up_command and swap.head_up_command.strip():
+                    send = _substitute(swap.head_up_command, context)
+                else:
+                    send = self.profile.pen_up_command
             elif step.kind == "head_down":
-                # Real Z axis: descend to the engage depth inside the
-                # magazine. Otherwise the servo pen-down command.
-                send = (
-                    f"G0 Z{swap.engage_z_mm:.3f} F{travel_feed:.1f}"
-                    if swap.engage_z_mm is not None
-                    else self.profile.pen_down_command
-                )
+                # Same precedence for lowering into the rack.
+                if swap.engage_z_mm is not None:
+                    send = f"G0 Z{swap.engage_z_mm:.3f} F{travel_feed:.1f}"
+                elif swap.head_down_command and swap.head_down_command.strip():
+                    send = _substitute(swap.head_down_command, context)
+                else:
+                    send = self.profile.pen_down_command
             elif step.kind == "grab":
                 send = (
                     _substitute(swap.grab_command, context) if swap.grab_command.strip() else None
