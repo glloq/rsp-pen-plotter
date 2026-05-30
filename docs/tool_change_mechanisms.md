@@ -95,8 +95,12 @@ The host editor presents a guided flow rather than a flat dump of fields:
 4. **Heights** — magazine servo angle and/or a real Z axis, grouped under one
    collapsible block (most servo machines just reuse the profile pen-up/-down).
 5. **Sequence** — the generated, editable step list. Kept visible so power
-   users can fine-tune; the advanced latch-command block (only for a `command`
-   action) sits below it.
+   users can fine-tune. A **Reset** button restores the current mechanism's
+   preset, and a read-only **preview** narrates an example swap (between the
+   first two installed slots) step by step with the resolved coordinates /
+   commands — mirroring the backend compiler so the operator sees "what will
+   actually happen" without running it. The advanced latch-command block (only
+   for a `command` action) sits below it.
 
 Picking a magazine type loads its preset sequence + a sensible default action
 (rack → command, dock → motion). Switching the action to `command` re-seeds the
