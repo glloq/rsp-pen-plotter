@@ -249,6 +249,11 @@ describe('useSheetGeometry plan-preview tier selection', () => {
     )
     const rp = g.renderedPlacements.value[0]!
     expect(g.showsPreviewImage(rp)).toBe(true)
+    // Mutually exclusive with the SVG tier — the canvas must never
+    // double-paint, otherwise the chosen-style SVG flashes through
+    // under the raster until the <img> finishes decoding.
+    expect(g.showsPlotterSvg(rp)).toBe(false)
+    expect(g.showsMimeBadge(rp)).toBe(false)
   })
 
   it("mode 'svg' paints the style SVG and hides the raster", () => {
@@ -305,6 +310,42 @@ describe('useSheetGeometry plan-preview tier selection', () => {
     const rp = g.renderedPlacements.value[0]!
     expect(rp.svgPrimitiveCount).toBe(heavy)
     expect(g.showsPreviewImage(rp)).toBe(true)
+    // Heavy SVG must NOT also be painted under the raster — the layered
+    // render is exactly the flicker that the tier selector exists to
+    // prevent.
+    expect(g.showsPlotterSvg(rp)).toBe(false)
+  })
+
+  it('keeps the three tier predicates mutually exclusive across every mode', () => {
+    // Walk every combination of (mode, hasSvg, hasRaster) and assert
+    // that exactly one of showsPreviewImage / showsPlotterSvg /
+    // showsMimeBadge ever fires per placement. The plan canvas relies on
+    // this invariant to avoid layering two tiers on top of each other.
+    const modes: PlanPreviewMode[] = ['auto', 'image', 'svg']
+    const placements = [
+      makeRasterWithSvg(3), // raster + svg
+      makePlacement({ id: 'rasterOnly', library_file_id: 'r', source_mime: 'image/png', svg: '' }),
+      makePlacement({ id: 'svgOnly', library_file_id: null, svg: makeSvg(4) }),
+      makePlacement({
+        id: 'nothing',
+        library_file_id: 'pdf',
+        source_mime: 'application/pdf',
+        svg: '',
+      }),
+    ]
+    for (const mode of modes) {
+      const g = useSheetGeometry(
+        makeInputs({ profile: makeProfile(), placements, planPreviewMode: mode }),
+      )
+      for (const rp of g.renderedPlacements.value) {
+        const picks = [
+          g.showsPreviewImage(rp),
+          g.showsPlotterSvg(rp),
+          g.showsMimeBadge(rp),
+        ].filter(Boolean).length
+        expect(picks).toBe(1)
+      }
+    }
   })
 
   it('always shows the SVG when there is no displayable raster (mode image)', () => {
