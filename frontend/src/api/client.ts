@@ -1039,6 +1039,8 @@ export interface AvailableColor {
   hex: string
   name: string
   position: number
+  // Pen tip / line width in mm — each marker draws a different stroke.
+  stroke_width_mm: number
   created_at: string
 }
 
@@ -1050,14 +1052,17 @@ export async function listAvailableColors(): Promise<AvailableColor[]> {
 export async function createAvailableColor(
   hex: string,
   name: string = '',
+  strokeWidthMm?: number,
 ): Promise<AvailableColor> {
-  const response = await api.post<AvailableColor>('/available-colors', { hex, name })
+  const body: { hex: string; name: string; stroke_width_mm?: number } = { hex, name }
+  if (strokeWidthMm !== undefined) body.stroke_width_mm = strokeWidthMm
+  const response = await api.post<AvailableColor>('/available-colors', body)
   return response.data
 }
 
 export async function patchAvailableColor(
   colorId: string,
-  patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position'>>,
+  patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm'>>,
 ): Promise<AvailableColor> {
   const response = await api.patch<AvailableColor>(
     `/available-colors/${encodeURIComponent(colorId)}`,

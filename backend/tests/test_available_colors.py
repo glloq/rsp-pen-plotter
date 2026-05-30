@@ -161,6 +161,38 @@ async def test_invalid_hex_returns_422() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stroke_width_default_create_and_patch() -> None:
+    """stroke_width_mm defaults to a fineliner, round-trips on create, and PATCHes."""
+    async with _client() as client:
+        # Default applied when the create body omits the width.
+        defaulted = await client.post("/available-colors", json={"hex": "#111111"})
+        assert defaulted.status_code == 200
+        assert defaulted.json()["stroke_width_mm"] == 0.5
+
+        # Explicit width on create round-trips.
+        created = await client.post(
+            "/available-colors", json={"hex": "#222222", "stroke_width_mm": 0.7}
+        )
+        assert created.status_code == 200
+        color_id = created.json()["color_id"]
+        assert created.json()["stroke_width_mm"] == 0.7
+
+        # PATCH updates only the width, leaving the rest untouched.
+        patched = await client.patch(
+            f"/available-colors/{color_id}", json={"stroke_width_mm": 1.2}
+        )
+        assert patched.status_code == 200
+        assert patched.json()["stroke_width_mm"] == 1.2
+        assert patched.json()["hex"] == "#222222"
+
+        # A non-positive width is rejected at the boundary.
+        bad = await client.post(
+            "/available-colors", json={"hex": "#333333", "stroke_width_mm": 0}
+        )
+        assert bad.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_position_auto_increments() -> None:
     """Successive inserts get position 0, 1, 2, … so the swatch strip orders chronologically."""
     async with _client() as client:

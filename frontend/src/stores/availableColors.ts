@@ -45,10 +45,14 @@ export const useAvailableColorsStore = defineStore('availableColors', () => {
     }
   }
 
-  async function add(hex: string, name: string = ''): Promise<AvailableColor | null> {
+  async function add(
+    hex: string,
+    name: string = '',
+    strokeWidthMm?: number,
+  ): Promise<AvailableColor | null> {
     error.value = null
     try {
-      const created = await createAvailableColor(hex, name)
+      const created = await createAvailableColor(hex, name, strokeWidthMm)
       // POST is idempotent on hex (backend dedups + may rename) — replace
       // any existing row with the returned shape so the local cache mirrors
       // the server state instead of growing a stale duplicate.
@@ -66,7 +70,7 @@ export const useAvailableColorsStore = defineStore('availableColors', () => {
 
   async function rename(
     colorId: string,
-    patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position'>>,
+    patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm'>>,
   ): Promise<AvailableColor | null> {
     error.value = null
     try {

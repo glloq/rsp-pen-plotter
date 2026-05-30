@@ -110,6 +110,12 @@ class AvailableColorRecord(SQLModel, table=True):
     # time so new entries land at the end of the strip; can be rewritten
     # by the PATCH endpoint to reorder.
     position: int = Field(default=0, index=True)
+    # Pen tip / line width in millimetres. Each marker lays down a
+    # different stroke, which drives line spacing for fills and the
+    # preview's rendered thickness. Defaults to a typical fineliner so
+    # rows migrated from an older DB (where the column is back-filled by
+    # ``_add_missing_columns``) get a sensible value rather than 0.
+    stroke_width_mm: float = Field(default=0.5)
     created_at: datetime
 
 

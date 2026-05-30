@@ -1261,6 +1261,11 @@ export interface components {
              * @default
              */
             name: string;
+            /**
+             * Stroke Width Mm
+             * @default 0.5
+             */
+            stroke_width_mm: number;
         };
         /**
          * AvailableColorOut
@@ -1275,6 +1280,8 @@ export interface components {
             name: string;
             /** Position */
             position: number;
+            /** Stroke Width Mm */
+            stroke_width_mm: number;
             /**
              * Created At
              * Format: date-time
@@ -1292,6 +1299,8 @@ export interface components {
             name?: string | null;
             /** Position */
             position?: number | null;
+            /** Stroke Width Mm */
+            stroke_width_mm?: number | null;
         };
         /**
          * Block

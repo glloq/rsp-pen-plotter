@@ -65,6 +65,7 @@ class AvailableColorOut(BaseModel):
     hex: str
     name: str
     position: int
+    stroke_width_mm: float
     created_at: datetime
 
 
@@ -74,6 +75,13 @@ def _record_to_out(record: AvailableColorRecord) -> AvailableColorOut:
         hex=record.hex,
         name=record.name,
         position=record.position,
+        # Rows back-filled by the additive migration land with a NULL
+        # width (ADD COLUMN doesn't apply the model default to existing
+        # rows); fall back to the fineliner default so legacy inventories
+        # serialise cleanly instead of 500-ing on a None.
+        stroke_width_mm=(
+            record.stroke_width_mm if record.stroke_width_mm is not None else 0.5
+        ),
         created_at=record.created_at,
     )
 
@@ -83,6 +91,8 @@ class AvailableColorCreate(BaseModel):
 
     hex: str
     name: str = ""
+    # Pen tip / line width in mm. Defaults to a typical fineliner.
+    stroke_width_mm: float = Field(default=0.5, gt=0)
 
     @field_validator("hex")
     @classmethod
@@ -98,6 +108,7 @@ class AvailableColorPatch(BaseModel):
     hex: str | None = None
     name: str | None = None
     position: int | None = Field(default=None, ge=0)
+    stroke_width_mm: float | None = Field(default=None, gt=0)
 
     @field_validator("hex")
     @classmethod
@@ -141,6 +152,7 @@ async def create_color(body: AvailableColorCreate) -> AvailableColorOut:
         hex=body.hex,
         name=body.name,
         position=next_available_color_position(),
+        stroke_width_mm=body.stroke_width_mm,
         created_at=datetime.now(UTC),
     )
     save_available_color(record)
@@ -149,7 +161,7 @@ async def create_color(body: AvailableColorCreate) -> AvailableColorOut:
 
 @router.patch("/available-colors/{color_id}")
 async def patch_color(color_id: str, body: AvailableColorPatch) -> AvailableColorOut:
-    """Rewrite ``name`` / ``hex`` / ``position`` on one entry."""
+    """Rewrite ``name`` / ``hex`` / ``position`` / ``stroke_width_mm`` on one entry."""
     record = get_available_color(color_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Unknown colour: {color_id!r}")
@@ -167,6 +179,8 @@ async def patch_color(color_id: str, body: AvailableColorPatch) -> AvailableColo
         record.name = body.name
     if body.position is not None:
         record.position = body.position
+    if body.stroke_width_mm is not None:
+        record.stroke_width_mm = body.stroke_width_mm
     save_available_color(record)
     return _record_to_out(record)
 
