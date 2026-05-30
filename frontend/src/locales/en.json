@@ -993,13 +993,25 @@
     "colorMode": {
       "mono": "Single colour",
       "manual": "Manual swap",
-      "magazine": "Automatic magazine"
+      "magazine": "Automatic magazine",
+      "firmware": "Firmware magazine",
+      "host": "Host magazine"
     },
     "colorModeHint": {
       "mono": "One pen only, no tool change.",
       "manual": "Multiple colours: the plotter pauses so you swap the pen by hand.",
-      "magazine": "Motorised carousel / rack: the plotter swaps pens on its own."
+      "magazine": "Motorised carousel / rack: the plotter swaps pens on its own.",
+      "firmware": "The controller swaps the pen itself on a single G-code command.",
+      "host": "No native swap: the Raspberry Pi sends a G-code sequence to drive the magazine."
     },
+    "firmwareCommandHint": "Single command the controller runs to change pen. {slot} / {color} / {label} are substituted.",
+    "hostMacroHint": "Ordered G-code lines the host streams at each pen change, with an optional pause after each.",
+    "hostMacroSend": "Command",
+    "hostMacroWait": "Wait (ms)",
+    "hostMacroAdd": "Add line",
+    "hostMacroRemove": "Remove line",
+    "hostMacroEmpty": "Add at least one command — a host magazine needs a sequence to run.",
+    "hostMacroPlaceholders": "Placeholders: {slot}, {color}, {label}, {layer}.",
     "penCount": "Number of pens",
     "penCountMagazineHint": "How many slots are available in the magazine.",
     "penCountManualHint": "How many pens you alternate between by hand.",

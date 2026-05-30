@@ -74,6 +74,18 @@ const accelOnWire = computed(() =>
   draft.value ? ACCEL_DIALECTS.includes(draft.value.gcode_dialect) : true,
 )
 
+// A host-macro magazine that ships no commands (or a blank ``send``)
+// fails at runtime — the HostMacroStrategy raises rather than emit an
+// empty sequence. Block the save so the operator can't persist a
+// run-breaking profile.
+const toolChangeInvalid = computed(() => {
+  const tc = draft.value?.capabilities?.tool_change
+  if (!tc || tc.mode !== 'host_macro') return false
+  return tc.host_macro.length === 0 || tc.host_macro.some((s) => !s.send.trim())
+})
+
+const saveBlocked = computed(() => workspaceInvalid.value || toolChangeInvalid.value)
+
 async function remove(): Promise<void> {
   if (!draft.value) return
   const confirmed = await confirmAction({
@@ -505,7 +517,7 @@ async function remove(): Promise<void> {
         <button
           type="button"
           class="flex-1 rounded bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          :disabled="saving || workspaceInvalid"
+          :disabled="saving || saveBlocked"
           @click="save"
         >
           {{ saving ? t('profile.saving') : t('profile.save') }}

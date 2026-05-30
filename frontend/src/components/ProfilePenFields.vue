@@ -1,25 +1,36 @@
 <script setup lang="ts">
-// Colour-management fieldset for ProfileEditor.
+// Tool-change fieldset for ProfileEditor.
 //
-// This is the operator-facing "how does this plotter handle colour?"
-// switch. It deliberately does NOT manage individual pens / slot colours
-// — that lives in the Couleurs tab. Here we only pick the colour mode
-// and, when a magazine is involved, how many pens it holds:
+// This is the operator-facing "how does this plotter change pens?"
+// switch. It writes the v0.2 capability model (the runtime source of
+// truth for *how* a swap executes) AND keeps the legacy
+// ``tool_change_method`` field in sync (it still drives *where* the
+// pauses are placed + back-compat YAML export). The two must never
+// disagree, so every mode change goes through ``setMode``.
 //
-//   - mono     → single pen, no tool change (tool_change_method = none)
-//   - manual   → operator swaps pens by hand   (manual_pause)
-//   - magazine → automatic carousel / rack     (carousel)
+// Four modes, mapped to capability ToolingMode + legacy method:
+//   - mono     → single_pen / none         (one pen, no swap)
+//   - manual   → manual     / manual_pause (operator swaps by hand)
+//   - firmware → firmware   / carousel     (plotter swaps on one G-code command)
+//   - host     → host_macro / rack         (the Pi emits a G-code sequence)
+//
+// Per-pen colours / slots live in the Couleurs tab; this fieldset only
+// owns the swap strategy + magazine size + the firmware trigger or the
+// host macro sequence.
 //
 // Receives the draft profile via v-model so the parent stays the single
 // owner of editable state; Vue allows mutating nested fields through a
-// prop without tripping ``vue/no-mutating-props``. The mechanical pen
-// commands (up / down / tool-change G-code) stay here too, tucked into a
-// collapsible block, because they're machine config rather than colour
-// inventory.
+// prop without tripping ``vue/no-mutating-props``.
 
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { MachineProfile, ToolChangeMethod } from '../api/client'
+import {
+  defaultCapabilities,
+  type CommandSource,
+  type MachineCapabilities,
+  type ToolingMode,
+} from '../domain/capability/schemas'
 
 const { t } = useI18n()
 
@@ -32,43 +43,110 @@ const props = defineProps<{
 // carousel exceeds this.
 const MAX_PEN_SLOTS = 64
 
-type ColorMode = 'mono' | 'manual' | 'magazine'
+type ColorMode = 'mono' | 'manual' | 'firmware' | 'host'
 
+interface ModeSpec {
+  id: ColorMode
+  method: ToolChangeMethod
+  tooling: ToolingMode
+  source: CommandSource
+  icon: string
+}
+
+const modes: ModeSpec[] = [
+  { id: 'mono', method: 'none', tooling: 'single_pen', source: 'machine', icon: '✏️' },
+  { id: 'manual', method: 'manual_pause', tooling: 'manual', source: 'operator', icon: '✋' },
+  { id: 'firmware', method: 'carousel', tooling: 'firmware', source: 'machine', icon: '🎡' },
+  { id: 'host', method: 'rack', tooling: 'host_macro', source: 'host', icon: '🤖' },
+]
+
+// Capabilities is the source of truth for the mode; fall back to the
+// legacy field for profiles untouched since migration.
 const colorMode = computed<ColorMode>(() => {
+  const tooling = props.draft.capabilities?.tool_change.mode
+  const byTooling = modes.find((m) => m.tooling === tooling)
+  if (byTooling) return byTooling.id
   switch (props.draft.tool_change_method) {
     case 'none':
       return 'mono'
     case 'manual_pause':
       return 'manual'
+    case 'rack':
+      return 'host'
     default:
-      // carousel / rack both present as an automatic magazine.
-      return 'magazine'
+      return 'firmware'
   }
 })
 
-const modes: Array<{ id: ColorMode; method: ToolChangeMethod; icon: string }> = [
-  { id: 'mono', method: 'none', icon: '✏️' },
-  { id: 'manual', method: 'manual_pause', icon: '✋' },
-  { id: 'magazine', method: 'carousel', icon: '🎡' },
-]
+// Ensure the draft carries an editable capabilities block, seeded from
+// the current legacy mode when absent (a freshly-created profile).
+function ensureCaps(): MachineCapabilities {
+  if (!props.draft.capabilities) {
+    const seed = modes.find((m) => m.method === props.draft.tool_change_method)
+    props.draft.capabilities = defaultCapabilities(seed?.tooling ?? 'manual')
+  }
+  return props.draft.capabilities
+}
+
+// Read-only view of the macro list (no side effects in the getter).
+// When host mode is active the capabilities block is guaranteed present
+// (setMode / backend migration ensure it), so this never hits the
+// fallback during the host editor render.
+const hostMacro = computed(() => props.draft.capabilities?.tool_change.host_macro ?? [])
 
 function clampPenCount(): void {
   const n = Math.floor(props.draft.pen_slot_count)
   props.draft.pen_slot_count = Math.min(MAX_PEN_SLOTS, Math.max(2, Number.isFinite(n) ? n : 2))
+  ensureCaps().max_pens_in_magazine = Math.max(1, props.draft.pen_slot_count)
 }
 
 function setMode(mode: ColorMode): void {
   const target = modes.find((m) => m.id === mode)
   if (!target) return
+  const caps = ensureCaps()
+  const tc = caps.tool_change
+
+  // Keep legacy + capability in lockstep so pause placement (legacy)
+  // and swap execution (capability) never disagree.
   props.draft.tool_change_method = target.method
+  tc.mode = target.tooling
+  tc.command_source = target.source
+
   if (mode === 'mono') {
-    // A single-pen plotter only ever has one slot.
     props.draft.pen_slot_count = 1
   } else if (props.draft.pen_slot_count < 2) {
-    // Multicolour needs at least two pens — seed a sensible default the
-    // operator can adjust right away.
+    // Multicolour needs at least two pens — seed a sensible default.
     props.draft.pen_slot_count = 2
   }
+  caps.max_pens_in_magazine = Math.max(1, props.draft.pen_slot_count)
+
+  // Manual keeps an editable prompt; clear it otherwise.
+  if (mode === 'manual' && !tc.manual_prompt) {
+    tc.manual_prompt = {
+      title: 'Change pen',
+      body: 'Insert pen {color} into the holder, then press Resume.',
+      timeout_s: null,
+    }
+  } else if (mode !== 'manual') {
+    tc.manual_prompt = null
+  }
+
+  // Firmware uses the single ``tool_change_command`` trigger, so the
+  // macro list must stay empty (FirmwareStrategy prefers a non-empty
+  // macro when present). Host mode needs at least one line — seed one.
+  if (mode === 'host') {
+    if (tc.host_macro.length === 0) tc.host_macro = [{ send: 'M6 T{slot}', wait_ms: 0 }]
+  } else {
+    tc.host_macro = []
+  }
+}
+
+function addMacroStep(): void {
+  ensureCaps().tool_change.host_macro.push({ send: '', wait_ms: 0 })
+}
+
+function removeMacroStep(index: number): void {
+  ensureCaps().tool_change.host_macro.splice(index, 1)
 }
 </script>
 
@@ -85,8 +163,10 @@ function setMode(mode: ColorMode): void {
     <div class="space-y-4 border-t border-slate-700 p-3">
       <p class="text-[11px] text-slate-500">{{ t('profile.colorManagementHint') }}</p>
 
-      <!-- Mode selector: three big, obvious cards -->
-      <div class="grid grid-cols-1 gap-2 sm:grid-cols-3" data-test="color-mode-selector">
+      <!-- Mode selector: four cards. Firmware vs Host make the two
+           magazine cases explicit (plotter-driven single command vs
+           Pi-driven G-code sequence). -->
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4" data-test="color-mode-selector">
         <button
           v-for="mode in modes"
           :key="mode.id"
@@ -135,25 +215,95 @@ function setMode(mode: ColorMode): void {
         </label>
         <p class="mt-1 text-[11px] text-slate-500">
           {{
-            colorMode === 'magazine'
-              ? t('profile.penCountMagazineHint')
-              : t('profile.penCountManualHint')
+            colorMode === 'manual'
+              ? t('profile.penCountManualHint')
+              : t('profile.penCountMagazineHint')
           }}
         </p>
       </div>
       <p v-else class="text-[11px] text-slate-500">{{ t('profile.monoNote') }}</p>
 
-      <!-- Tool-change command — only the magazine mode triggers it. The
-           mechanical pen up/down commands moved to the Motion section
-           (they're shared machine config, not magazine-specific). -->
-      <label v-if="colorMode === 'magazine'" class="block text-slate-400">
+      <!-- CASE 1 — firmware magazine: a single G-code command the
+           controller interprets to swap the pen itself. -->
+      <label
+        v-if="colorMode === 'firmware'"
+        class="block text-slate-400"
+        data-test="firmware-command"
+      >
         {{ t('profile.toolChangeCommand') }}
         <input
           v-model="draft.tool_change_command"
           type="text"
+          placeholder="M6 T{slot}"
           class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
         />
+        <span class="mt-0.5 block text-[11px] text-slate-500">{{
+          t('profile.firmwareCommandHint')
+        }}</span>
       </label>
+
+      <!-- CASE 2 — host macro: the Raspberry Pi streams an ordered
+           sequence of G-code lines (with optional waits) to drive a
+           magazine bolted onto a machine that has no native swap. -->
+      <div
+        v-else-if="colorMode === 'host'"
+        class="space-y-2 rounded-lg border border-slate-700 bg-slate-900/50 p-3"
+        data-test="host-macro-editor"
+      >
+        <p class="text-[11px] text-slate-400">{{ t('profile.hostMacroHint') }}</p>
+        <div
+          class="grid grid-cols-[1fr_5rem_1.75rem] items-center gap-2 text-[10px] text-slate-500"
+        >
+          <span>{{ t('profile.hostMacroSend') }}</span>
+          <span>{{ t('profile.hostMacroWait') }}</span>
+          <span></span>
+        </div>
+        <ol class="space-y-1.5">
+          <li
+            v-for="(step, i) in hostMacro"
+            :key="i"
+            class="grid grid-cols-[1fr_5rem_1.75rem] items-center gap-2"
+            :data-test="`host-macro-row-${i}`"
+          >
+            <input
+              v-model="step.send"
+              type="text"
+              placeholder="G0 X{slot}0 Y150"
+              class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100"
+              :data-test="`host-macro-send-${i}`"
+            />
+            <input
+              v-model.number="step.wait_ms"
+              type="number"
+              min="0"
+              step="50"
+              class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+              :data-test="`host-macro-wait-${i}`"
+            />
+            <button
+              type="button"
+              class="rounded border border-slate-700 bg-slate-800 text-slate-300 hover:bg-red-900/60 hover:text-red-200"
+              :title="t('profile.hostMacroRemove')"
+              :data-test="`host-macro-remove-${i}`"
+              @click="removeMacroStep(i)"
+            >
+              −
+            </button>
+          </li>
+        </ol>
+        <p v-if="!hostMacro.length" class="text-[11px] text-amber-300" data-test="host-macro-empty">
+          ⚠ {{ t('profile.hostMacroEmpty') }}
+        </p>
+        <button
+          type="button"
+          class="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+          data-test="host-macro-add"
+          @click="addMacroStep"
+        >
+          + {{ t('profile.hostMacroAdd') }}
+        </button>
+        <p class="text-[10px] text-slate-500">{{ t('profile.hostMacroPlaceholders') }}</p>
+      </div>
     </div>
   </details>
 </template>

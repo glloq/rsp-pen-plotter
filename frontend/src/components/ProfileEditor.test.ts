@@ -166,16 +166,17 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(xmax).toBeDefined()
   })
 
-  it('renders the colour-mode selector with the seeded mode active', async () => {
+  it('renders the four tool-change mode cards with the seeded mode active', async () => {
     // Per-pen colour cards now live in the Colours tab; the profile tab
-    // only exposes the colour-management mode (mono / manual / magazine)
-    // and, for multicolour modes, the pen count. The seeded profile uses
+    // exposes the tool-change mode (mono / manual / firmware / host) and,
+    // for multicolour modes, the pen count. The seeded profile uses
     // manual_pause → the "manual" card is active.
     const wrapper = mountEditor()
     await nextTick()
     expect(wrapper.find('[data-test="color-mode-mono"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="color-mode-manual"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="color-mode-magazine"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="color-mode-firmware"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="color-mode-host"]').exists()).toBe(true)
     const manual = wrapper.find('[data-test="color-mode-manual"]')
     expect(manual.attributes('aria-pressed')).toBe('true')
   })
@@ -234,5 +235,53 @@ describe('ProfileEditor with a profile seeded', () => {
     await nextTick()
     const originValues = wrapper.findAll('option').map((o) => o.attributes('value'))
     expect(originValues).not.toContain('center')
+  })
+
+  it('CASE 1 — firmware mode exposes the single tool-change command field', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-firmware"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="firmware-command"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-macro-editor"]').exists()).toBe(false)
+  })
+
+  it('CASE 2 — host mode exposes the macro editor seeded with one line', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    const editor = wrapper.find('[data-test="host-macro-editor"]')
+    expect(editor.exists()).toBe(true)
+    // setMode seeds a starter line so the profile is immediately valid.
+    expect(wrapper.find('[data-test="host-macro-row-0"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="firmware-command"]').exists()).toBe(false)
+  })
+
+  it('can add and remove host-macro lines', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    await wrapper.find('[data-test="host-macro-add"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-macro-row-1"]').exists()).toBe(true)
+    await wrapper.find('[data-test="host-macro-remove-1"]').trigger('click')
+    await wrapper.find('[data-test="host-macro-remove-0"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-macro-row-0"]').exists()).toBe(false)
+  })
+
+  it('blocks Save when a host magazine has no valid command', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    // Remove the seeded line → empty sequence → invalid.
+    await wrapper.find('[data-test="host-macro-remove-0"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-macro-empty"]').exists()).toBe(true)
+    const saveBtn = wrapper.findAll('button').find((b) => b.text() === 'Save')!
+    expect(saveBtn.attributes('disabled')).toBeDefined()
   })
 })

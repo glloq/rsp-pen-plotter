@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { MachineCapabilities } from '../domain/capability/schemas'
+import type { ToolChangeMethod } from '../api/client'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useToastStore } from '../stores/toasts'
@@ -50,7 +51,7 @@ function selectTab(tab: PlotterTab): void {
 const wizardOpen = ref(false)
 const toasts = useToastStore()
 
-function toolChangeMethodFor(mode: MachineCapabilities['tool_change']['mode']): string {
+function toolChangeMethodFor(mode: MachineCapabilities['tool_change']['mode']): ToolChangeMethod {
   switch (mode) {
     case 'firmware':
       return 'carousel'
@@ -84,10 +85,10 @@ async function onWizardConfirm(capabilities: MachineCapabilities): Promise<void>
     name,
     tool_change_method: toolChangeMethodFor(capabilities.tool_change.mode),
     pen_slot_count: Math.max(1, capabilities.max_pens_in_magazine),
-    capabilities: capabilities as unknown as Record<string, unknown>,
+    capabilities,
   }
   try {
-    await job.saveProfile(next as typeof base)
+    await job.saveProfile(next)
     wizardOpen.value = false
     toasts.success(t('plotter.newPlotterSaved', { name }))
   } catch (err) {

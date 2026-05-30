@@ -993,13 +993,25 @@
     "colorMode": {
       "mono": "Mono couleur",
       "manual": "Échange manuel",
-      "magazine": "Magasin automatique"
+      "magazine": "Magasin automatique",
+      "firmware": "Magasin firmware",
+      "host": "Magasin host"
     },
     "colorModeHint": {
       "mono": "Un seul stylo, aucun changement d'outil.",
       "manual": "Plusieurs couleurs : le traceur s'arrête pour que tu changes le stylo à la main.",
-      "magazine": "Carrousel / rack motorisé : le traceur change de stylo tout seul."
+      "magazine": "Carrousel / rack motorisé : le traceur change de stylo tout seul.",
+      "firmware": "Le contrôleur change le stylo lui-même via une seule commande G-code.",
+      "host": "Pas de changement natif : le Raspberry Pi envoie une séquence G-code pour piloter le magasin."
     },
+    "firmwareCommandHint": "Commande unique exécutée par le contrôleur pour changer de stylo. {slot} / {color} / {label} sont substitués.",
+    "hostMacroHint": "Lignes G-code envoyées dans l'ordre par le host à chaque changement, avec une pause optionnelle après chacune.",
+    "hostMacroSend": "Commande",
+    "hostMacroWait": "Attente (ms)",
+    "hostMacroAdd": "Ajouter une ligne",
+    "hostMacroRemove": "Supprimer la ligne",
+    "hostMacroEmpty": "Ajoute au moins une commande — un magasin host a besoin d'une séquence pour fonctionner.",
+    "hostMacroPlaceholders": "Variables : {slot}, {color}, {label}, {layer}.",
     "penCount": "Nombre de stylos",
     "penCountMagazineHint": "Nombre d'emplacements disponibles dans le magasin.",
     "penCountManualHint": "Nombre de stylos entre lesquels tu alternes manuellement.",
