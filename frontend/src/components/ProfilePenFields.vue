@@ -109,6 +109,10 @@ function defaultHostSwap(): HostSwapPlan {
     grab_command: 'M280 P1 S90',
     drop_command: 'M280 P1 S20',
     travel_speed_mm_s: null,
+    safe_z_mm: null,
+    engage_z_mm: null,
+    z_min_mm: null,
+    z_max_mm: null,
     steps: [
       { kind: 'head_up', wait_ms: 0, send: '' },
       { kind: 'move_to_old_slot', wait_ms: 0, send: '' },
@@ -144,6 +148,74 @@ function moveStep(index: number, delta: number): void {
   const [s] = steps.splice(index, 1)
   steps.splice(next, 0, s!)
 }
+
+// Per-slot X/Y positions, shown as a table right in the host editor so
+// the operator configures everything (steps + positions + heights) in
+// one place. Mirrors the magazine length so every slot has a row.
+function ensurePens(): NonNullable<MachineProfile['pens']> {
+  const count = Math.max(0, Math.floor(props.draft.pen_slot_count))
+  const existing = props.draft.pens ?? []
+  const pens = Array.from({ length: count }, (_, i) => {
+    const found = existing.find((p) => p.index === i)
+    return (
+      found ?? {
+        index: i,
+        name: `Pen ${i}`,
+        color: '#000000',
+        installed: true,
+        position: null,
+        pen_up_command: null,
+        pen_down_command: null,
+      }
+    )
+  })
+  props.draft.pens = pens
+  return pens
+}
+
+const penRows = computed(() => {
+  const count = Math.max(0, Math.floor(props.draft.pen_slot_count))
+  const existing = props.draft.pens ?? []
+  return Array.from({ length: count }, (_, i) => existing.find((p) => p.index === i) ?? null)
+})
+
+function setSlotPosition(index: number, axis: 'x' | 'y', raw: string): void {
+  const pens = ensurePens()
+  const pen = pens.find((p) => p.index === index)
+  if (!pen) return
+  const thisVal = raw.trim() === '' ? null : Number(raw)
+  const other = axis === 'x' ? (pen.position?.y ?? null) : (pen.position?.x ?? null)
+  if (thisVal === null && other === null) {
+    pen.position = null
+    return
+  }
+  pen.position = {
+    x: axis === 'x' ? (thisVal ?? 0) : (pen.position?.x ?? 0),
+    y: axis === 'y' ? (thisVal ?? 0) : (pen.position?.y ?? 0),
+  }
+}
+
+// Z heights: edited as raw text so an empty field clears back to null
+// (servo mode). ``null`` means "use the servo pen-up/-down commands".
+function setZ(field: 'safe_z_mm' | 'engage_z_mm' | 'z_min_mm' | 'z_max_mm', raw: string): void {
+  const swap = ensureHostSwap()
+  const v = raw.trim() === '' ? null : Number(raw)
+  swap[field] = v !== null && Number.isFinite(v) ? v : null
+}
+
+// Heads-up (non-blocking) warnings around the Z heights.
+const zWarning = computed<string | null>(() => {
+  const s = hostSwap.value
+  if (!s) return null
+  const { safe_z_mm: safe, engage_z_mm: engage, z_min_mm: lo, z_max_mm: hi } = s
+  if (safe != null && engage != null && engage >= safe) return 'engageAboveSafe'
+  for (const z of [safe, engage]) {
+    if (z == null) continue
+    if (lo != null && z < lo) return 'outOfRange'
+    if (hi != null && z > hi) return 'outOfRange'
+  }
+  return null
+})
 
 function clampPenCount(): void {
   const n = Math.floor(props.draft.pen_slot_count)
@@ -383,7 +455,112 @@ function setMode(mode: ColorMode): void {
           + {{ t('profile.hostSwap.add') }}
         </button>
 
-        <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.positionHint') }}</p>
+        <!-- Per-slot magazine positions: one row per pen, X/Y in profile
+             units. The "Go to slot" steps above travel to these. -->
+        <div class="space-y-1.5 border-t border-slate-700 pt-3" data-test="host-positions">
+          <p class="text-[11px] uppercase tracking-wider text-slate-500">
+            {{ t('profile.hostSwap.positionsTitle') }}
+          </p>
+          <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.positionsHint') }}</p>
+          <div
+            class="grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-2 text-[10px] text-slate-500"
+          >
+            <span></span>
+            <span>{{ t('profile.hostSwap.penLabel') }}</span>
+            <span>X</span>
+            <span>Y</span>
+          </div>
+          <div
+            v-for="(pen, i) in penRows"
+            :key="i"
+            class="grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-2"
+            :data-test="`host-pos-row-${i}`"
+          >
+            <span class="text-center font-mono text-[11px] text-slate-500">#{{ i }}</span>
+            <span class="truncate text-xs text-slate-300">{{ pen?.name || `Pen ${i}` }}</span>
+            <input
+              type="number"
+              step="any"
+              :value="pen?.position?.x ?? ''"
+              placeholder="—"
+              class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+              :data-test="`host-pos-x-${i}`"
+              @change="(e) => setSlotPosition(i, 'x', (e.target as HTMLInputElement).value)"
+            />
+            <input
+              type="number"
+              step="any"
+              :value="pen?.position?.y ?? ''"
+              placeholder="—"
+              class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+              :data-test="`host-pos-y-${i}`"
+              @change="(e) => setSlotPosition(i, 'y', (e.target as HTMLInputElement).value)"
+            />
+          </div>
+        </div>
+
+        <!-- Z heights: travel (safe) + engage depth. Optional — leave
+             blank on servo machines to keep using the pen-up/-down
+             commands. Filled in for machines with a real Z axis. -->
+        <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-heights">
+          <p class="text-[11px] uppercase tracking-wider text-slate-500">
+            {{ t('profile.hostSwap.heightsTitle') }}
+          </p>
+          <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.heightsHint') }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="block text-[11px] text-slate-400"
+              >{{ t('profile.hostSwap.safeZ') }}
+              <input
+                type="number"
+                step="any"
+                :value="hostSwap.safe_z_mm ?? ''"
+                placeholder="—"
+                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                data-test="host-safe-z"
+                @change="(e) => setZ('safe_z_mm', (e.target as HTMLInputElement).value)"
+              />
+            </label>
+            <label class="block text-[11px] text-slate-400"
+              >{{ t('profile.hostSwap.engageZ') }}
+              <input
+                type="number"
+                step="any"
+                :value="hostSwap.engage_z_mm ?? ''"
+                placeholder="—"
+                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                data-test="host-engage-z"
+                @change="(e) => setZ('engage_z_mm', (e.target as HTMLInputElement).value)"
+              />
+            </label>
+            <label class="block text-[11px] text-slate-400"
+              >{{ t('profile.hostSwap.zMin') }}
+              <input
+                type="number"
+                step="any"
+                :value="hostSwap.z_min_mm ?? ''"
+                placeholder="—"
+                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                data-test="host-z-min"
+                @change="(e) => setZ('z_min_mm', (e.target as HTMLInputElement).value)"
+              />
+            </label>
+            <label class="block text-[11px] text-slate-400"
+              >{{ t('profile.hostSwap.zMax') }}
+              <input
+                type="number"
+                step="any"
+                :value="hostSwap.z_max_mm ?? ''"
+                placeholder="—"
+                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                data-test="host-z-max"
+                @change="(e) => setZ('z_max_mm', (e.target as HTMLInputElement).value)"
+              />
+            </label>
+          </div>
+          <p v-if="zWarning" class="text-[11px] text-amber-300" data-test="host-z-warning">
+            ⚠ {{ t(`profile.hostSwap.${zWarning}`) }}
+          </p>
+        </div>
 
         <!-- Advanced: the clamp / gripper primitive (the one place a
              literal command is unavoidable). Sensible defaults provided. -->

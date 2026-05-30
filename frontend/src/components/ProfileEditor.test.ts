@@ -286,4 +286,40 @@ describe('ProfileEditor with a profile seeded', () => {
     await nextTick()
     expect(saveBtn().attributes('disabled')).toBeDefined()
   })
+
+  it('shows a per-slot position table and Z height fields in the host editor', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-positions"]').exists()).toBe(true)
+    // The seeded profile has 2 slots → rows 0 and 1.
+    expect(wrapper.find('[data-test="host-pos-row-0"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-pos-row-1"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-heights"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-safe-z"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-engage-z"]').exists()).toBe(true)
+  })
+
+  it('warns (without blocking) when the engage depth sits above the safe height', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    const safe = wrapper.find('[data-test="host-safe-z"]')
+    const engage = wrapper.find('[data-test="host-engage-z"]')
+    await safe.setValue('5')
+    await safe.trigger('change')
+    await engage.setValue('-2')
+    await engage.trigger('change')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-z-warning"]').exists()).toBe(false)
+    // Engage shallower than safe → non-blocking warning, Save still enabled.
+    await engage.setValue('8')
+    await engage.trigger('change')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-z-warning"]').exists()).toBe(true)
+    const saveBtn = wrapper.findAll('button').find((b) => b.text() === 'Save')!
+    expect(saveBtn.attributes('disabled')).toBeUndefined()
+  })
 })

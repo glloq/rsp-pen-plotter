@@ -181,3 +181,27 @@ def test_host_swap_skips_uncalibrated_slot_keeps_settle() -> None:
     plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
     assert [c.send for c in plan.commands] == ["M280 P1 S90"]
     assert plan.commands[0].wait_ms == 300
+
+
+def test_head_steps_use_z_axis_when_heights_set() -> None:
+    """With a real Z axis configured, head_up/head_down emit G0 Z moves
+    at the safe / engage heights instead of the servo commands."""
+    steps = [HostSwapStep(kind="head_up"), HostSwapStep(kind="head_down")]
+    profile = _host_profile(steps)
+    swap = profile.capabilities.tool_change.host_swap  # type: ignore[union-attr]
+    swap.safe_z_mm = 5.0
+    swap.engage_z_mm = -2.0
+    orch = ToolChangeOrchestrator(profile)
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    sends = [c.send for c in plan.commands]
+    assert sends == ["G0 Z5.000 F7200.0", "G0 Z-2.000 F7200.0"]
+
+
+def test_head_steps_fall_back_to_servo_without_z() -> None:
+    """Servo machines (no Z heights) keep emitting the pen-up/-down commands."""
+    steps = [HostSwapStep(kind="head_up"), HostSwapStep(kind="head_down")]
+    profile = _host_profile(steps)  # no safe_z / engage_z set
+    orch = ToolChangeOrchestrator(profile)
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    sends = [c.send for c in plan.commands]
+    assert sends == ["M280 P0 S40", "M280 P0 S90"]

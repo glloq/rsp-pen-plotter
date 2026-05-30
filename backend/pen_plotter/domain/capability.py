@@ -155,6 +155,19 @@ class HostSwapPlan(BaseModel):
     # Feed for the magazine travel moves; falls back to the profile's
     # travel speed when unset.
     travel_speed_mm_s: float | None = None
+    # Optional Z heights (mm) for machines with a real motorised Z axis.
+    # ``safe_z`` is the travel height the head rises to before moving
+    # between slots; ``engage_z`` is the depth it descends to inside the
+    # magazine to grab / release a pen. When set, ``head_up`` / ``head_down``
+    # emit ``G0 Z<height>`` instead of the servo pen-up/-down commands;
+    # when ``None`` the servo commands are used (so simple servo machines
+    # need not touch these).
+    safe_z_mm: float | None = None
+    engage_z_mm: float | None = None
+    # Machine Z travel limits (mm), informational — the editor warns when a
+    # height falls outside, but generation does not clamp.
+    z_min_mm: float | None = None
+    z_max_mm: float | None = None
     steps: list[HostSwapStep] = Field(default_factory=list)
 
 

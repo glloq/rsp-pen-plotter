@@ -54,6 +54,12 @@ export const HostSwapPlanSchema = z.object({
   grab_command: z.string().default(''),
   drop_command: z.string().default(''),
   travel_speed_mm_s: z.number().positive().nullable().default(null),
+  // Optional Z heights (mm) for a real motorised Z axis; null → servo.
+  safe_z_mm: z.number().nullable().default(null),
+  engage_z_mm: z.number().nullable().default(null),
+  // Informational machine Z travel limits (editor warns, no clamp).
+  z_min_mm: z.number().nullable().default(null),
+  z_max_mm: z.number().nullable().default(null),
   steps: z.array(HostSwapStepSchema).default([]),
 })
 export type HostSwapPlan = z.infer<typeof HostSwapPlanSchema>
