@@ -83,10 +83,10 @@ const toolChangeInvalid = computed(() => {
   const swap = tc.host_swap
   if (swap && swap.steps.length) {
     // Visual builder: every step must be runnable. A grab/release needs
-    // its command; a raw step needs a line. Exception: a motion-locked
-    // kinematic dock couples by the advance/retract motion alone, so its
-    // grab/release steps need no command.
-    const motionLock = swap.mechanism === 'dock' && swap.lock_mode === 'motion'
+    // its command; a raw step needs a line. Exception: a motion grab
+    // (friction / magnetic hold) couples by the advance/retract motion
+    // alone, so its grab/release steps need no command.
+    const motionLock = swap.lock_mode === 'motion'
     return swap.steps.some(
       (s) =>
         (s.kind === 'grab' && !motionLock && !swap.grab_command.trim()) ||

@@ -170,13 +170,14 @@ class HostSwapPlan(BaseModel):
     #     sliding in/out horizontally (``advance``/``retract``), so the
     #     ``grab``/``release`` steps mean *lock*/*unlock* the coupling.
     mechanism: Literal["rack", "dock"] = "rack"
-    # How a ``dock`` coupling is locked / unlocked:
-    #   - ``command``: a servo / motorised latch — ``grab``/``release`` emit
-    #     ``grab_command`` / ``drop_command``.
-    #   - ``motion``: a purely kinematic / magnetic coupling — no command is
-    #     sent; the lock *is* the advance/retract motion, so ``grab`` and
-    #     ``release`` are suppressed at compile time even if a command is
-    #     left over on the plan. Ignored for the ``rack`` mechanism.
+    # How the pen / tool is grabbed & held — the swap *action*. Applies to
+    # both mechanisms (a rack gripper or a dock coupling):
+    #   - ``command``: a servo gripper / motorised latch — ``grab``/
+    #     ``release`` emit ``grab_command`` / ``drop_command``.
+    #   - ``motion``: a friction / magnetic hold — no command is sent; the
+    #     grab *is* the advance/retract motion, so ``grab`` and ``release``
+    #     are suppressed at compile time even if a command is left over on
+    #     the plan.
     lock_mode: Literal["command", "motion"] = "command"
     grab_command: str = ""
     drop_command: str = ""

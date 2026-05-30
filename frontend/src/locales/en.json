@@ -1006,7 +1006,7 @@
     },
     "firmwareCommandHint": "Single command the controller runs to change pen. {slot} / {color} / {label} are substituted.",
     "hostSwap": {
-      "intro": "Build the pen change step by step — no G-code. Each pen's position is set in the magazine below.",
+      "intro": "The pen change, step by step — no G-code. Fine-tune the sequence below if needed.",
       "step": {
         "head_up": "Raise the head",
         "head_down": "Lower the head",
@@ -1023,21 +1023,38 @@
         "grab": "Lock the tool",
         "release": "Unlock the tool"
       },
-      "mechanismTitle": "Magazine mechanism",
+      "mechanismTitle": "Magazine type",
       "mechanism": {
         "rack": "Gripper rack",
         "dock": "Kinematic dock"
       },
       "mechanismHint": {
-        "rack": "A clamp/gripper on the carriage takes pens out of / puts them back into a rack (vertical engage).",
+        "rack": "A gripper on the carriage takes pens out of / puts them back into a rack (vertical engage).",
         "dock": "Each pen is a whole tool parked in a dock; the head slides in/out to (un)couple it (horizontal engage)."
       },
-      "lockModeTitle": "Dock locking",
-      "lockMode": {
-        "motion": "Motion (magnetic / kinematic) — no command",
-        "command": "Command (servo / motorised latch)"
+      "actionTitle": "Action type",
+      "action": {
+        "rack": {
+          "command": "Servo gripper",
+          "motion": "Mechanical / magnetic hold"
+        },
+        "dock": {
+          "command": "Motorised latch (servo)",
+          "motion": "Magnetic / kinematic"
+        }
       },
-      "dockIntro": "Build the tool change step by step. The head travels to a dock, slides in to (un)couple, and leaves. Each dock's position is set below.",
+      "actionHint": {
+        "rack": {
+          "command": "A motorised gripper clamps and releases the pen (servo command).",
+          "motion": "The pen is held by friction or a magnet: no command, the grab is the motion."
+        },
+        "dock": {
+          "command": "A motorised latch couples/decouples the tool (servo command).",
+          "motion": "Magnetic / kinematic coupling: no command, the slide into the dock is the lock."
+        }
+      },
+      "sequenceTitle": "Swap sequence",
+      "dockIntro": "The head travels to a dock, slides in to (un)couple, and leaves. Fine-tune the sequence below if needed.",
       "waitShort": "ms",
       "add": "Add a step",
       "remove": "Remove step",

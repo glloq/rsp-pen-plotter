@@ -353,3 +353,16 @@ def test_dock_defaults_to_rack_mechanism() -> None:
     plan = HostSwapPlan()
     assert plan.mechanism == "rack"
     assert plan.lock_mode == "command"
+
+
+def test_rack_motion_grab_also_emits_no_command() -> None:
+    """A motion grab (friction / magnetic pen holder) suppresses the
+    gripper command on a rack too, not just on a dock."""
+    steps = [HostSwapStep(kind="release"), HostSwapStep(kind="grab")]
+    profile = _host_profile(steps)
+    swap = profile.capabilities.tool_change.host_swap  # type: ignore[union-attr]
+    swap.mechanism = "rack"
+    swap.lock_mode = "motion"
+    orch = ToolChangeOrchestrator(profile)
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    assert [c.send for c in plan.commands] == []

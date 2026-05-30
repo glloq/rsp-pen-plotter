@@ -159,9 +159,9 @@ class HostMacroStrategy(ToolChangeStrategy):
                 else:
                     send = self.profile.pen_down_command
             elif step.kind == "grab":
-                # A kinematic dock with a motion lock couples by the
+                # A motion lock (magnetic / kinematic hold) couples by the
                 # advance/retract motion alone — emit no latch command.
-                if swap.mechanism == "dock" and swap.lock_mode == "motion":
+                if swap.lock_mode == "motion":
                     send = None
                 else:
                     send = (
@@ -170,7 +170,7 @@ class HostMacroStrategy(ToolChangeStrategy):
                         else None
                     )
             elif step.kind == "release":
-                if swap.mechanism == "dock" and swap.lock_mode == "motion":
+                if swap.lock_mode == "motion":
                     send = None
                 else:
                     send = (

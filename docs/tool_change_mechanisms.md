@@ -18,8 +18,8 @@ a preset + a couple of metadata fields, not a new code path.
 
 | field | meaning |
 |---|---|
-| `mechanism` | `"rack"` \| `"dock"` — which physical changer is bolted on. Default `"rack"` (back-compat). |
-| `lock_mode` | `"command"` \| `"motion"` — how a **dock** coupling latches. Ignored for a rack. |
+| `mechanism` | `"rack"` \| `"dock"` — which physical changer is bolted on (the **magazine type**). Default `"rack"` (back-compat). |
+| `lock_mode` | `"command"` \| `"motion"` — the **action type**: how the pen/tool is grabbed & held. Applies to both mechanisms. |
 | `steps` | the ordered high-level blocks (see below). |
 | per-pen `position` | each slot/dock engagement point (X/Y), stored on the `PenSlot`. |
 | `clearance_*` | the approach offset / insertion hop (axis, dir, mm). |
@@ -39,7 +39,9 @@ in a linear rack. A clamp/gripper (servo) closes to take a pen and opens to drop
 it. Engagement is **vertical**: the head lowers into a slot, the gripper acts,
 the head lifts.
 
-- `grab`/`release` → `grab_command`/`drop_command` (gripper close/open).
+- **Action** (`lock_mode`): `command` → a servo gripper (`grab`/`release` emit
+  `grab_command`/`drop_command`); `motion` → a friction / magnetic holder that
+  needs no command (the grab is the advance/retract motion).
 - `head_up`/`head_down` → magazine servo override or `G0 Z` (the rack often sits
   higher than the paper).
 - `clearance` → how far to back out of a slot before travelling sideways so the
@@ -74,9 +76,27 @@ the new tool out).
 
 A dock swap is the same primitive shape as a rack swap with the vertical
 head moves dropped and `grab`/`release` reinterpreted as lock/unlock. The only
-behavioural addition in the compiler is suppressing the latch command for a
-motion lock (`strategies.py`); everything else is preset + labels + a relaxed
-Save check.
+behavioural addition in the compiler is suppressing the latch command for any
+`motion` action (`strategies.py`); everything else is preset + labels + a
+relaxed Save check.
+
+## The editor (host mode)
+
+The host editor presents a guided flow rather than a flat dump of fields:
+
+1. **① Magazine type** — rack vs dock cards.
+2. **② Action type** — `command` vs `motion` cards, labelled per mechanism
+   (rack: *servo gripper* / *mechanical · magnetic hold*; dock: *motorised
+   latch* / *magnetic · kinematic*). Maps to `lock_mode`.
+3. **③ Positions** — per-slot X/Y + clearance / dock entry depth.
+4. **④ Heights** — magazine servo angle and/or real Z axis.
+5. **⑤ Sequence** — the generated, editable step list. Kept visible so power
+   users can fine-tune; the advanced latch-command block (only for a `command`
+   action) sits below it.
+
+Picking a magazine type loads its preset sequence + a sensible default action
+(rack → command, dock → motion). Switching the action to `command` re-seeds the
+latch commands if empty; switching to `motion` hides them (no command needed).
 
 ## Extending further
 

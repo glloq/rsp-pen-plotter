@@ -1006,7 +1006,7 @@
     },
     "firmwareCommandHint": "Commande unique exécutée par le contrôleur pour changer de stylo. {slot} / {color} / {label} sont substitués.",
     "hostSwap": {
-      "intro": "Construis le changement de stylo étape par étape — sans G-code. La position de chaque stylo se règle dans le magasin ci-dessous.",
+      "intro": "Le changement de stylo, étape par étape — sans G-code. Affine la séquence ci-dessous si besoin.",
       "step": {
         "head_up": "Lever la tête",
         "head_down": "Baisser la tête",
@@ -1023,21 +1023,38 @@
         "grab": "Verrouiller l'outil",
         "release": "Déverrouiller l'outil"
       },
-      "mechanismTitle": "Mécanisme du magasin",
+      "mechanismTitle": "Type de magasin",
       "mechanism": {
         "rack": "Rack à pince",
         "dock": "Dock cinématique"
       },
       "mechanismHint": {
-        "rack": "Une pince/clamp sur le chariot prend et repose les stylos dans un rack (engagement vertical).",
+        "rack": "Une pince sur le chariot prend et repose les stylos dans un rack (engagement vertical).",
         "dock": "Chaque stylo est un outil garé dans un dock ; la tête glisse pour s'y (dé)coupler (engagement horizontal)."
       },
-      "lockModeTitle": "Verrouillage du dock",
-      "lockMode": {
-        "motion": "Mouvement (aimant / cinématique) — aucune commande",
-        "command": "Commande (servo / verrou motorisé)"
+      "actionTitle": "Type d'action",
+      "action": {
+        "rack": {
+          "command": "Pince servo",
+          "motion": "Maintien mécanique / aimant"
+        },
+        "dock": {
+          "command": "Verrou motorisé (servo)",
+          "motion": "Aimant / cinématique"
+        }
       },
-      "dockIntro": "Construis l'échange d'outil étape par étape. La tête se rend au dock, glisse pour (dé)coupler, et repart. La position de chaque dock se règle ci-dessous.",
+      "actionHint": {
+        "rack": {
+          "command": "Une pince motorisée serre et relâche le stylo (commande servo).",
+          "motion": "Le stylo est retenu par friction ou un aimant : aucune commande, la saisie se fait par le mouvement."
+        },
+        "dock": {
+          "command": "Un verrou motorisé couple/découple l'outil (commande servo).",
+          "motion": "Accouplement aimanté/cinématique : aucune commande, le couplage se fait par le glissement dans le dock."
+        }
+      },
+      "sequenceTitle": "Séquence du changement",
+      "dockIntro": "La tête se rend au dock, glisse pour (dé)coupler, et repart. Affine la séquence ci-dessous si besoin.",
       "waitShort": "ms",
       "add": "Ajouter une étape",
       "remove": "Supprimer l'étape",

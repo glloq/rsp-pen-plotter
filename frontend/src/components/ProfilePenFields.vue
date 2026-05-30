@@ -186,8 +186,12 @@ function ensureHostSwap(): HostSwapPlan {
 // Read-only view for the template (no side effects in the getter).
 const hostSwap = computed(() => props.draft.capabilities?.tool_change.host_swap ?? null)
 
-// Mechanism sub-selector inside the host mode (rack vs kinematic dock).
+// Guided host config: ① magazine type (rack vs kinematic dock) → ② action
+// type (how the pen/tool is grabbed & held). Icons keep the cards scannable.
 type HostMechanism = 'rack' | 'dock'
+type HostAction = 'command' | 'motion'
+const MECH_ICON: Record<HostMechanism, string> = { rack: '🤖', dock: '🔗' }
+const ACTION_ICON: Record<HostAction, string> = { command: '🔩', motion: '🧲' }
 const hostMechanism = computed<HostMechanism>(() => hostSwap.value?.mechanism ?? 'rack')
 const isDock = computed(() => hostMechanism.value === 'dock')
 
@@ -208,8 +212,17 @@ function setMechanism(m: HostMechanism): void {
   }
 }
 
-function setLockMode(mode: 'command' | 'motion'): void {
-  ensureHostSwap().lock_mode = mode
+// ② action type. A 'command' grab (servo gripper / motorised latch) needs
+// its latch commands — seed sensible defaults if the operator never set
+// them. A 'motion' grab (friction / magnet) emits nothing.
+function setLockMode(mode: HostAction): void {
+  const swap = ensureHostSwap()
+  swap.lock_mode = mode
+  if (mode === 'command' && !swap.grab_command.trim() && !swap.drop_command.trim()) {
+    const preset = defaultHostSwap()
+    swap.grab_command = preset.grab_command
+    swap.drop_command = preset.drop_command
+  }
 }
 
 // Label for a step kind, mechanism-aware: on a dock, grab/release read as
@@ -221,9 +234,10 @@ function stepLabel(kind: HostSwapStepKind): string {
   return t(`profile.hostSwap.step.${kind}`)
 }
 
-// The advanced latch-command block only matters when a command actually
-// gets emitted: the rack always (clamp), the dock only with a command lock.
-const showsLatchCommands = computed(() => !isDock.value || hostSwap.value?.lock_mode === 'command')
+// The advanced latch-command block only matters when a command is actually
+// emitted — i.e. the ② action is 'command' (servo gripper / motorised
+// latch). A 'motion' grab (friction / magnet) sends nothing.
+const showsLatchCommands = computed(() => hostSwap.value?.lock_mode === 'command')
 
 function addStep(): void {
   ensureHostSwap().steps.push({ kind: 'dwell', wait_ms: 200, send: '' })
@@ -480,12 +494,12 @@ function setMode(mode: ColorMode): void {
         class="space-y-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3"
         data-test="host-swap-editor"
       >
-        <!-- Mechanism sub-selector: which physical changer is bolted on.
-             Both compile through the same step engine; this picks the
-             preset sequence + labels. -->
-        <div class="space-y-1" data-test="host-mechanism">
-          <p class="text-[11px] uppercase tracking-wider text-slate-500">
-            {{ t('profile.hostSwap.mechanismTitle') }}
+        <!-- ① Magazine type: which physical changer is bolted on. Both
+             compile through the same step engine; this picks the preset
+             sequence + labels. -->
+        <div class="space-y-1.5" data-test="host-mechanism">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            ① {{ t('profile.hostSwap.mechanismTitle') }}
           </p>
           <div class="grid grid-cols-2 gap-2">
             <button
@@ -502,8 +516,11 @@ function setMode(mode: ColorMode): void {
               :data-test="`host-mechanism-${mech}`"
               @click="setMechanism(mech)"
             >
-              <span class="text-sm font-medium text-slate-200">
-                {{ t(`profile.hostSwap.mechanism.${mech}`) }}
+              <span class="flex items-center gap-2">
+                <span class="text-lg leading-none">{{ MECH_ICON[mech] }}</span>
+                <span class="text-sm font-medium text-slate-200">
+                  {{ t(`profile.hostSwap.mechanism.${mech}`) }}
+                </span>
               </span>
               <span class="text-[11px] leading-snug text-slate-400">
                 {{ t(`profile.hostSwap.mechanismHint.${mech}`) }}
@@ -512,125 +529,47 @@ function setMode(mode: ColorMode): void {
           </div>
         </div>
 
-        <!-- Dock coupling: command latch (servo/motor) vs motion lock
-             (magnetic / kinematic — the slide-in motion is the lock). -->
-        <div v-if="isDock" class="space-y-1" data-test="host-lock-mode">
-          <p class="text-[11px] uppercase tracking-wider text-slate-500">
-            {{ t('profile.hostSwap.lockModeTitle') }}
+        <!-- ② Action type: how the pen / tool is grabbed & held (lock_mode),
+             labelled per mechanism. 'command' = servo gripper / motorised
+             latch (emits the grab/drop commands below); 'motion' = friction
+             / magnetic hold driven by the advance/retract motion (no
+             command). -->
+        <div class="space-y-1.5" data-test="host-action">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            ② {{ t('profile.hostSwap.actionTitle') }}
           </p>
           <div class="grid grid-cols-2 gap-2">
             <button
-              v-for="lm in ['motion', 'command'] as const"
-              :key="lm"
+              v-for="act in ['command', 'motion'] as const"
+              :key="act"
               type="button"
-              class="rounded-lg border p-2 text-left text-[11px] leading-snug transition"
+              class="flex flex-col gap-0.5 rounded-lg border p-2 text-left transition"
               :class="
-                hostSwap.lock_mode === lm
-                  ? 'border-emerald-500 bg-emerald-950/40 text-emerald-100 ring-1 ring-emerald-500'
-                  : 'border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500'
+                hostSwap.lock_mode === act
+                  ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500'
+                  : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
               "
-              :aria-pressed="hostSwap.lock_mode === lm"
-              :data-test="`host-lock-${lm}`"
-              @click="setLockMode(lm)"
+              :aria-pressed="hostSwap.lock_mode === act"
+              :data-test="`host-action-${act}`"
+              @click="setLockMode(act)"
             >
-              {{ t(`profile.hostSwap.lockMode.${lm}`) }}
+              <span class="flex items-center gap-2">
+                <span class="text-lg leading-none">{{ ACTION_ICON[act] }}</span>
+                <span class="text-sm font-medium text-slate-200">
+                  {{ t(`profile.hostSwap.action.${hostMechanism}.${act}`) }}
+                </span>
+              </span>
+              <span class="text-[11px] leading-snug text-slate-400">
+                {{ t(`profile.hostSwap.actionHint.${hostMechanism}.${act}`) }}
+              </span>
             </button>
           </div>
         </div>
 
-        <p class="text-[11px] text-slate-400">
-          {{ isDock ? t('profile.hostSwap.dockIntro') : t('profile.hostSwap.intro') }}
-        </p>
-
-        <ol class="space-y-1.5">
-          <li
-            v-for="(step, i) in hostSwap.steps"
-            :key="i"
-            class="flex items-center gap-2"
-            :data-test="`host-step-${i}`"
-          >
-            <span class="w-5 shrink-0 text-center font-mono text-[10px] text-slate-500">{{
-              i + 1
-            }}</span>
-            <select
-              v-model="step.kind"
-              class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-              :data-test="`host-step-kind-${i}`"
-            >
-              <option v-for="k in STEP_KINDS" :key="k" :value="k">
-                {{ stepLabel(k) }}
-              </option>
-            </select>
-            <input
-              v-if="step.kind === 'raw'"
-              v-model="step.send"
-              type="text"
-              placeholder="G4 P0.5"
-              class="w-32 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
-              :data-test="`host-step-send-${i}`"
-            />
-            <label class="flex shrink-0 items-center gap-1 text-[10px] text-slate-500">
-              <input
-                v-model.number="step.wait_ms"
-                type="number"
-                min="0"
-                step="50"
-                class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                :data-test="`host-step-wait-${i}`"
-              />
-              {{ t('profile.hostSwap.waitShort') }}
-            </label>
-            <button
-              type="button"
-              class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
-              :disabled="i === 0"
-              :title="t('profile.hostSwap.moveUp')"
-              @click="moveStep(i, -1)"
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
-              :disabled="i === hostSwap.steps.length - 1"
-              :title="t('profile.hostSwap.moveDown')"
-              @click="moveStep(i, 1)"
-            >
-              ↓
-            </button>
-            <button
-              type="button"
-              class="rounded border border-slate-700 bg-slate-800 px-1.5 text-slate-300 hover:bg-red-900/60 hover:text-red-200"
-              :title="t('profile.hostSwap.remove')"
-              :data-test="`host-step-remove-${i}`"
-              @click="removeStep(i)"
-            >
-              −
-            </button>
-          </li>
-        </ol>
-
-        <p
-          v-if="!hostSwap.steps.length"
-          class="text-[11px] text-amber-300"
-          data-test="host-swap-empty"
-        >
-          ⚠ {{ t('profile.hostSwap.empty') }}
-        </p>
-
-        <button
-          type="button"
-          class="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
-          data-test="host-step-add"
-          @click="addStep"
-        >
-          + {{ t('profile.hostSwap.add') }}
-        </button>
-
         <!-- Per-slot magazine positions: one row per pen, X/Y in profile
-             units. The "Go to slot" steps above travel to these. -->
+             units. The "Go to slot" steps travel to these. -->
         <div class="space-y-1.5 border-t border-slate-700 pt-3" data-test="host-positions">
-          <p class="text-[11px] uppercase tracking-wider text-slate-500">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             {{
               isDock
                 ? t('profile.hostSwap.dockPositionsTitle')
@@ -736,7 +675,7 @@ function setMode(mode: ColorMode): void {
              normal pen-up/-down. Blank → reuse the profile's pen-up/-down.
              Disabled when a real Z axis is configured below. -->
         <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-servo-heights">
-          <p class="text-[11px] uppercase tracking-wider text-slate-500">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             {{ t('profile.hostSwap.servoHeightsTitle') }}
           </p>
           <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.servoHeightsHint') }}</p>
@@ -836,6 +775,102 @@ function setMode(mode: ColorMode): void {
           <p v-if="zWarning" class="text-[11px] text-amber-300" data-test="host-z-warning">
             ⚠ {{ t(`profile.hostSwap.${zWarning}`) }}
           </p>
+        </div>
+
+        <!-- Swap sequence (kept visible): generated from the magazine +
+             action above, then editable step by step for fine-tuning. -->
+        <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-sequence">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            {{ t('profile.hostSwap.sequenceTitle') }}
+          </p>
+          <p class="text-[11px] text-slate-400">
+            {{ isDock ? t('profile.hostSwap.dockIntro') : t('profile.hostSwap.intro') }}
+          </p>
+
+          <ol class="space-y-1.5">
+            <li
+              v-for="(step, i) in hostSwap.steps"
+              :key="i"
+              class="flex items-center gap-2"
+              :data-test="`host-step-${i}`"
+            >
+              <span class="w-5 shrink-0 text-center font-mono text-[10px] text-slate-500">{{
+                i + 1
+              }}</span>
+              <select
+                v-model="step.kind"
+                class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                :data-test="`host-step-kind-${i}`"
+              >
+                <option v-for="k in STEP_KINDS" :key="k" :value="k">
+                  {{ stepLabel(k) }}
+                </option>
+              </select>
+              <input
+                v-if="step.kind === 'raw'"
+                v-model="step.send"
+                type="text"
+                placeholder="G4 P0.5"
+                class="w-32 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+                :data-test="`host-step-send-${i}`"
+              />
+              <label class="flex shrink-0 items-center gap-1 text-[10px] text-slate-500">
+                <input
+                  v-model.number="step.wait_ms"
+                  type="number"
+                  min="0"
+                  step="50"
+                  class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  :data-test="`host-step-wait-${i}`"
+                />
+                {{ t('profile.hostSwap.waitShort') }}
+              </label>
+              <button
+                type="button"
+                class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
+                :disabled="i === 0"
+                :title="t('profile.hostSwap.moveUp')"
+                @click="moveStep(i, -1)"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
+                :disabled="i === hostSwap.steps.length - 1"
+                :title="t('profile.hostSwap.moveDown')"
+                @click="moveStep(i, 1)"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                class="rounded border border-slate-700 bg-slate-800 px-1.5 text-slate-300 hover:bg-red-900/60 hover:text-red-200"
+                :title="t('profile.hostSwap.remove')"
+                :data-test="`host-step-remove-${i}`"
+                @click="removeStep(i)"
+              >
+                −
+              </button>
+            </li>
+          </ol>
+
+          <p
+            v-if="!hostSwap.steps.length"
+            class="text-[11px] text-amber-300"
+            data-test="host-swap-empty"
+          >
+            ⚠ {{ t('profile.hostSwap.empty') }}
+          </p>
+
+          <button
+            type="button"
+            class="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+            data-test="host-step-add"
+            @click="addStep"
+          >
+            + {{ t('profile.hostSwap.add') }}
+          </button>
         </div>
 
         <!-- Advanced: the clamp / gripper / latch primitive (the one place

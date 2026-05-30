@@ -287,36 +287,51 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(saveBtn().attributes('disabled')).toBeDefined()
   })
 
-  it('host mode offers a rack/dock mechanism selector, defaulting to rack', async () => {
+  it('host mode offers the ① magazine + ② action card selectors', async () => {
     const wrapper = mountEditor()
     await nextTick()
     await wrapper.find('[data-test="color-mode-host"]').trigger('click')
     await nextTick()
+    // ① magazine type.
     expect(wrapper.find('[data-test="host-mechanism-rack"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="host-mechanism-dock"]').exists()).toBe(true)
-    // Default is rack: no dock lock-mode toggle, latch commands present.
-    expect(wrapper.find('[data-test="host-lock-mode"]').exists()).toBe(false)
+    // ② action type — shown for both mechanisms now.
+    expect(wrapper.find('[data-test="host-action"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-action-command"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-action-motion"]').exists()).toBe(true)
+    // Default rack action is 'command' → latch command fields present.
     expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(true)
   })
 
-  it('switching to a motion-locked dock hides the latch commands and keeps Save valid', async () => {
+  it('a motion action hides the latch commands and keeps Save valid', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    // Switch the ② action to motion (friction / magnetic hold).
+    await wrapper.find('[data-test="host-action-motion"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(false)
+    // A motion grab needs no command → Save stays enabled despite the
+    // grab/release steps in the sequence.
+    const saveBtn = () => wrapper.findAll('button').find((b) => b.text() === 'Save')!
+    expect(saveBtn().attributes('disabled')).toBeUndefined()
+    // Back to 'command' reveals the latch command fields again.
+    await wrapper.find('[data-test="host-action-command"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(true)
+  })
+
+  it('switching to a dock defaults the action to motion (magnetic / kinematic)', async () => {
     const wrapper = mountEditor()
     await nextTick()
     await wrapper.find('[data-test="color-mode-host"]').trigger('click')
     await nextTick()
     await wrapper.find('[data-test="host-mechanism-dock"]').trigger('click')
     await nextTick()
-    // Dock exposes the lock-mode toggle; default 'motion' hides commands.
-    expect(wrapper.find('[data-test="host-lock-mode"]').exists()).toBe(true)
+    // Dock preset selects the motion action → latch commands hidden.
+    expect(wrapper.find('[data-test="host-action-motion"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(false)
-    // A motion dock needs no grab command → Save stays enabled despite the
-    // grab/release steps in the seeded dock sequence.
-    const saveBtn = () => wrapper.findAll('button').find((b) => b.text() === 'Save')!
-    expect(saveBtn().attributes('disabled')).toBeUndefined()
-    // Switching the lock to 'command' reveals the latch command fields.
-    await wrapper.find('[data-test="host-lock-command"]').trigger('click')
-    await nextTick()
-    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(true)
   })
 
   it('shows a per-slot position table and Z height fields in the host editor', async () => {
