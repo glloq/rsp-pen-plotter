@@ -1054,6 +1054,15 @@
         }
       },
       "sequenceTitle": "Séquence du changement",
+      "resetSequence": "Réinitialiser la séquence",
+      "preview": {
+        "title": "Aperçu de la séquence",
+        "exampleSwap": "Exemple : changement {from} → {to}",
+        "exampleLoad": "Exemple : pose du stylo {to}",
+        "motion": "mouvement (aucune commande)",
+        "uncalibrated": "ignoré — non calibré",
+        "empty": "Ajoute des étapes pour voir l'aperçu."
+      },
       "dockIntro": "La tête se rend au dock, glisse pour (dé)coupler, et repart. Affine la séquence ci-dessous si besoin.",
       "waitShort": "ms",
       "add": "Ajouter une étape",

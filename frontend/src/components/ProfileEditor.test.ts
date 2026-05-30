@@ -380,6 +380,46 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(group.find('[data-test="host-safe-z"]').exists()).toBe(true)
   })
 
+  it('reset sequence restores the mechanism preset', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    // Rack preset seeds 10 steps (indices 0..9).
+    expect(wrapper.find('[data-test="host-step-9"]').exists()).toBe(true)
+    await wrapper.find('[data-test="host-step-remove-9"]').trigger('click')
+    await wrapper.find('[data-test="host-step-remove-8"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-step-8"]').exists()).toBe(false)
+    // Reset → the full preset is back.
+    await wrapper.find('[data-test="host-step-reset"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-step-9"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-step-10"]').exists()).toBe(false)
+  })
+
+  it('previews the compiled sequence and resolves coordinates once calibrated', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    const preview = wrapper.find('[data-test="host-preview"]')
+    expect(preview.exists()).toBe(true)
+    expect(preview.find('[data-test="host-preview-line-0"]').exists()).toBe(true)
+    // Calibrate both example slots → a move line resolves to real coords.
+    for (const [i, x, y] of [
+      [0, '10', '200'],
+      [1, '40', '200'],
+    ] as const) {
+      await wrapper.find(`[data-test="host-pos-x-${i}"]`).setValue(x)
+      await wrapper.find(`[data-test="host-pos-x-${i}"]`).trigger('change')
+      await wrapper.find(`[data-test="host-pos-y-${i}"]`).setValue(y)
+      await wrapper.find(`[data-test="host-pos-y-${i}"]`).trigger('change')
+    }
+    await nextTick()
+    expect(preview.text()).toContain('X10 Y200')
+  })
+
   it('shows magazine servo head-height fields, disabled once a Z axis is set', async () => {
     const wrapper = mountEditor()
     await nextTick()

@@ -1054,6 +1054,15 @@
         }
       },
       "sequenceTitle": "Swap sequence",
+      "resetSequence": "Reset sequence",
+      "preview": {
+        "title": "Sequence preview",
+        "exampleSwap": "Example: swap {from} → {to}",
+        "exampleLoad": "Example: load pen {to}",
+        "motion": "motion (no command)",
+        "uncalibrated": "skipped — uncalibrated",
+        "empty": "Add steps to see the preview."
+      },
       "dockIntro": "The head travels to a dock, slides in to (un)couple, and leaves. Fine-tune the sequence below if needed.",
       "waitShort": "ms",
       "add": "Add a step",

@@ -255,6 +255,14 @@ function moveStep(index: number, delta: number): void {
   steps.splice(next, 0, s!)
 }
 
+// Reset the step list to the current mechanism's preset — handy after
+// hand-editing has drifted from a working sequence. Positions and latch
+// commands are left untouched (they live elsewhere on the plan / pens).
+function resetSequence(): void {
+  const swap = ensureHostSwap()
+  swap.steps = (swap.mechanism === 'dock' ? defaultDockSwap() : defaultHostSwap()).steps
+}
+
 // Per-slot X/Y positions, shown as a table right in the host editor so
 // the operator configures everything (steps + positions + heights) in
 // one place. Mirrors the magazine length so every slot has a row.
@@ -300,6 +308,116 @@ function calState(pen: { installed?: boolean; position?: unknown } | null): CalS
 const uncalibratedCount = computed(
   () => penRows.value.filter((pen) => calState(pen) === 'warn').length,
 )
+
+// ── Sequence preview ─────────────────────────────────────────────────
+// A readable, resolved preview of the compiled swap. It mirrors the
+// backend HostMacroStrategy closely enough to show "what will actually
+// happen" without running it, playing an *example* swap between the first
+// two installed slots so the slot moves resolve to real coordinates.
+interface PreviewLine {
+  text: string
+  detail: string
+  skipped: boolean
+}
+
+function fmtNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/\.?0+$/, '')
+}
+
+// The example slots the preview narrates: the new pen is the first
+// installed slot, the old pen (in hand) the next installed one (if any).
+const previewExample = computed(() => {
+  const installed = penRows.value
+    .map((pen, i) => ({ pen, i }))
+    .filter(({ pen }) => pen?.installed !== false)
+    .map(({ i }) => i)
+  const newIdx = installed[0] ?? 0
+  const oldIdx = installed.find((i) => i !== newIdx) ?? null
+  return { newIdx, oldIdx }
+})
+
+function penName(idx: number): string {
+  return (props.draft.pens ?? []).find((p) => p.index === idx)?.name || `#${idx}`
+}
+
+const previewCaption = computed(() => {
+  const { newIdx, oldIdx } = previewExample.value
+  return oldIdx != null
+    ? t('profile.hostSwap.preview.exampleSwap', { from: penName(oldIdx), to: penName(newIdx) })
+    : t('profile.hostSwap.preview.exampleLoad', { to: penName(newIdx) })
+})
+
+function resolvedHead(which: 'up' | 'down', swap: HostSwapPlan): string {
+  if (which === 'up') {
+    if (swap.safe_z_mm != null) return `Z${fmtNum(swap.safe_z_mm)}`
+    if (swap.head_up_command?.trim()) return swap.head_up_command
+    return props.draft.pen_up_command
+  }
+  if (swap.engage_z_mm != null) return `Z${fmtNum(swap.engage_z_mm)}`
+  if (swap.head_down_command?.trim()) return swap.head_down_command
+  return props.draft.pen_down_command
+}
+
+const sequencePreview = computed<PreviewLine[]>(() => {
+  const swap = hostSwap.value
+  if (!swap) return []
+  const { newIdx, oldIdx } = previewExample.value
+  const sign = swap.clearance_dir === '+' ? 1 : -1
+  const off = swap.clearance_mm * sign
+  const dx = swap.clearance_axis === 'x' ? off : 0
+  const dy = swap.clearance_axis === 'y' ? off : 0
+  const posOf = (idx: number | null) =>
+    idx == null ? null : ((props.draft.pens ?? []).find((p) => p.index === idx)?.position ?? null)
+  const goto = (x: number, y: number) => `X${fmtNum(x)} Y${fmtNum(y)}`
+
+  let current: number | null = null
+  const lines: PreviewLine[] = []
+  const add = (kind: HostSwapStepKind, detail: string, skipped: boolean, wait: number) => {
+    lines.push({
+      text: stepLabel(kind),
+      detail: detail + (wait > 0 ? ` · ${wait}ms` : ''),
+      skipped,
+    })
+  }
+
+  for (const step of swap.steps) {
+    const wait = step.wait_ms
+    if (step.kind === 'head_up' || step.kind === 'head_down') {
+      add(step.kind, resolvedHead(step.kind === 'head_up' ? 'up' : 'down', swap), false, wait)
+    } else if (step.kind === 'grab' || step.kind === 'release') {
+      if (swap.lock_mode === 'motion') {
+        add(step.kind, t('profile.hostSwap.preview.motion'), false, wait)
+      } else {
+        const cmd = step.kind === 'grab' ? swap.grab_command : swap.drop_command
+        add(step.kind, cmd.trim() || '—', false, wait)
+      }
+    } else if (step.kind === 'move_to_old_slot' || step.kind === 'move_to_new_slot') {
+      const idx = step.kind === 'move_to_old_slot' ? oldIdx : newIdx
+      const pos = posOf(idx)
+      if (pos && idx != null) {
+        current = idx
+        add(step.kind, `${goto(pos.x + dx, pos.y + dy)} (${penName(idx)})`, false, wait)
+      } else {
+        add(step.kind, t('profile.hostSwap.preview.uncalibrated'), true, wait)
+      }
+    } else if (step.kind === 'advance_to_slot' || step.kind === 'retract_from_slot') {
+      const pos = posOf(current)
+      if (pos) {
+        const target =
+          step.kind === 'advance_to_slot' ? goto(pos.x, pos.y) : goto(pos.x + dx, pos.y + dy)
+        add(step.kind, target, false, wait)
+      } else {
+        add(step.kind, t('profile.hostSwap.preview.uncalibrated'), true, wait)
+      }
+    } else if (step.kind === 'dwell') {
+      add('dwell', `${wait}ms`, false, 0)
+    } else {
+      // raw
+      add('raw', step.send.trim() || '—', !step.send.trim(), wait)
+    }
+  }
+  return lines
+})
 
 function setSlotPosition(index: number, axis: 'x' | 'y', raw: string): void {
   const pens = ensurePens()
@@ -913,14 +1031,62 @@ function setMode(mode: ColorMode): void {
             ⚠ {{ t('profile.hostSwap.empty') }}
           </p>
 
-          <button
-            type="button"
-            class="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
-            data-test="host-step-add"
-            @click="addStep"
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+              data-test="host-step-add"
+              @click="addStep"
+            >
+              + {{ t('profile.hostSwap.add') }}
+            </button>
+            <button
+              type="button"
+              class="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700"
+              data-test="host-step-reset"
+              @click="resetSequence"
+            >
+              ↺ {{ t('profile.hostSwap.resetSequence') }}
+            </button>
+          </div>
+
+          <!-- Resolved preview: an example swap narrated step by step so the
+               operator sees the concrete coordinates / commands without
+               running it. Read-only; mirrors the backend compiler. -->
+          <details
+            open
+            class="rounded border border-slate-800 bg-slate-950/40"
+            data-test="host-preview"
           >
-            + {{ t('profile.hostSwap.add') }}
-          </button>
+            <summary
+              class="cursor-pointer px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 hover:text-slate-300"
+            >
+              {{ t('profile.hostSwap.preview.title') }}
+            </summary>
+            <div class="space-y-1 border-t border-slate-800 p-2">
+              <p class="text-[10px] text-slate-500">{{ previewCaption }}</p>
+              <ol v-if="sequencePreview.length" class="space-y-0.5">
+                <li
+                  v-for="(line, i) in sequencePreview"
+                  :key="i"
+                  class="flex items-baseline gap-2 text-[11px]"
+                  :class="line.skipped ? 'text-slate-600 line-through' : 'text-slate-300'"
+                  :data-test="`host-preview-line-${i}`"
+                >
+                  <span class="w-4 shrink-0 text-right font-mono text-[10px] text-slate-600">{{
+                    i + 1
+                  }}</span>
+                  <span class="flex-1">{{ line.text }}</span>
+                  <span class="shrink-0 font-mono text-[10px] text-slate-500">{{
+                    line.detail
+                  }}</span>
+                </li>
+              </ol>
+              <p v-else class="text-[11px] text-slate-500">
+                {{ t('profile.hostSwap.preview.empty') }}
+              </p>
+            </div>
+          </details>
         </div>
 
         <!-- Advanced: the clamp / gripper / latch primitive (the one place
