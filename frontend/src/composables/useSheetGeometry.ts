@@ -245,48 +245,65 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
     return out
   })
 
-  /** Should the chosen-style plotter SVG win over the raster source for
-   *  this placement? Only meaningful when both are actually available;
-   *  callers still guard on ``cleanSvg`` / ``previewUrl`` presence. */
-  function prefersStyleSvg(rp: RenderedPlacement): boolean {
-    if (!rp.cleanSvg) return false
+  /** Pick exactly one layer to paint for this placement, honouring the
+   *  operator's plan-preview preference. Mutually exclusive by design —
+   *  the canvas must never double-paint (raster on top of SVG, or the
+   *  reverse) because the two layers occupy the same footprint and the
+   *  bottom one flickers through whenever the top one is still decoding,
+   *  fails to load, or has transparency. Each placement picks its layer
+   *  independently, but the rule for any given (mode, availability) pair
+   *  is deterministic so the whole plan stays visually consistent.
+   *
+   *  Decision table (✓ = picked, — = skipped, ↘ = fallback):
+   *    mode    cleanSvg  rasterUsable    picked
+   *    image      —           ✓          image
+   *    image      ✓           ✓          image
+   *    image      ✓           —          svg   ↘ (raster unavailable)
+   *    image      —           —          badge
+   *    svg        ✓           ✓          svg
+   *    svg        ✓           —          svg
+   *    svg        —           ✓          image ↘ (no SVG yet)
+   *    svg        —           —          badge
+   *    auto       light       ✓          svg   (WYSIWYG when cheap)
+   *    auto       light       —          svg
+   *    auto       heavy       ✓          image (protect pan/zoom)
+   *    auto       heavy       —          svg   ↘ (no raster, accept cost)
+   *    auto       —           ✓          image
+   *    auto       —           —          badge */
+  function chooseLayer(rp: RenderedPlacement): 'image' | 'svg' | 'badge' {
     const mode = inputs.planPreviewMode?.value ?? 'auto'
-    if (mode === 'image') return false
-    if (mode === 'svg') return true
+    const hasSvg = !!rp.cleanSvg
+    const status = rp.previewUrl ? previewStatus[rp.placement.library_file_id ?? ''] : undefined
+    const rasterUsable = !!rp.previewUrl && status !== 'failed'
+    if (mode === 'image') {
+      if (rasterUsable) return 'image'
+      if (hasSvg) return 'svg'
+      return 'badge'
+    }
+    if (mode === 'svg') {
+      if (hasSvg) return 'svg'
+      if (rasterUsable) return 'image'
+      return 'badge'
+    }
     // 'auto': WYSIWYG vector unless it's dense enough to risk laggy
-    // pan/zoom, in which case keep the cheap raster.
-    return rp.svgPrimitiveCount <= AUTO_SVG_PRIMITIVE_LIMIT
+    // pan/zoom, in which case keep the cheap raster. Fall through to the
+    // SVG when there is no raster to fall back to.
+    if (hasSvg && rp.svgPrimitiveCount <= AUTO_SVG_PRIMITIVE_LIMIT) return 'svg'
+    if (rasterUsable) return 'image'
+    if (hasSvg) return 'svg'
+    return 'badge'
   }
 
-  /** Should tier 1 (source preview ``<image>``) actually be shown? */
   function showsPreviewImage(rp: RenderedPlacement): boolean {
-    if (!rp.previewUrl) return false
-    const status = previewStatus[rp.placement.library_file_id ?? '']
-    if (status === 'failed') return false
-    // The operator (or the auto heuristic) asked for the style SVG and
-    // we have one — don't paint the raster underneath it.
-    if (prefersStyleSvg(rp)) return false
-    return true
+    return chooseLayer(rp) === 'image'
   }
 
-  /** Should tier 2 (inline plotter SVG) be shown? When the raster is the
-   *  preferred layer we still paint the SVG until the image finishes
-   *  loading (so the footprint isn't blank), then hide it to avoid
-   *  double-painting. When the SVG is preferred it's shown outright. */
   function showsPlotterSvg(rp: RenderedPlacement): boolean {
-    if (!rp.cleanSvg) return false
-    if (!rp.previewUrl) return true
-    if (prefersStyleSvg(rp)) return true
-    const status = previewStatus[rp.placement.library_file_id ?? '']
-    return status !== 'loaded'
+    return chooseLayer(rp) === 'svg'
   }
 
-  /** Tier 3: nothing else worked — render a small MIME badge so the
-   *  placement footprint isn't visually empty. */
   function showsMimeBadge(rp: RenderedPlacement): boolean {
-    if (rp.cleanSvg) return false
-    if (showsPreviewImage(rp)) return false
-    return true
+    return chooseLayer(rp) === 'badge'
   }
 
   const anyExceeds = computed(() => renderedPlacements.value.some((r) => r.exceeds))
