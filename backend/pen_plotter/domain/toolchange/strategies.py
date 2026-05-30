@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import ClassVar
 
 from pen_plotter.domain.capability import (
+    HostSwapPlan,
     MachineCapabilities,
     ManualSwapPrompt,
     ToolingMode,
@@ -66,25 +67,94 @@ class FirmwareStrategy(ToolChangeStrategy):
 
 
 class HostMacroStrategy(ToolChangeStrategy):
-    """The host emits a YAML-defined macro sequence, with explicit waits."""
+    """The host emits a swap sequence.
+
+    Two authoring paths, in preference order:
+      1. ``host_swap`` — the structured, G-code-free visual builder
+         (move-to-slot / grab / release / head up-down / dwell), compiled
+         here using each pen's calibrated position.
+      2. ``host_macro`` — a raw G-code line list (legacy / power users).
+    """
 
     mode: ClassVar[ToolingMode] = ToolingMode.HOST_MACRO
 
     def plan(self, context: SwapContext, capabilities: MachineCapabilities) -> SwapPlan:
-        """Render the configured macro lines + record wait_ms timings."""
-        macro = capabilities.tool_change.host_macro
-        if not macro:
+        """Compile the structured swap (preferred) or render the raw macro."""
+        tc = capabilities.tool_change
+        if tc.host_swap is not None and tc.host_swap.steps:
+            commands = self._compile_swap(tc.host_swap, context)
+        elif tc.host_macro:
+            commands = [_render(step.send, context, step.wait_ms) for step in tc.host_macro]
+        else:
             raise ValueError(
-                "ToolingMode.HOST_MACRO requires capabilities.tool_change.host_macro "
-                "to be set; profile is missing the macro definition."
+                "ToolingMode.HOST_MACRO requires capabilities.tool_change.host_swap "
+                "(steps) or host_macro to be set; profile is missing the swap definition."
             )
-        commands = [_render(step.send, context, step.wait_ms) for step in macro]
         return SwapPlan(
             mode=self.mode,
             pause_kind=PauseKind.HOST_TIMED,
             commands=commands,
-            recovery_policy=capabilities.tool_change.recovery_policy,
+            recovery_policy=tc.recovery_policy,
         )
+
+    def _compile_swap(self, swap: HostSwapPlan, context: SwapContext) -> list[SwapCommand]:
+        """Turn high-level swap steps into concrete G-code commands.
+
+        Per-pen positions come from the bound profile's magazine, the
+        pen-up/-down primitives from the profile, and grab/release from
+        the plan. A ``dwell`` adds host-side wait without sending a line;
+        a step whose action can't be produced (e.g. an uncalibrated slot)
+        is skipped but keeps its settle time.
+        """
+        pens = {pen.index: pen for pen in self.profile.effective_pens()}
+        travel_feed = (swap.travel_speed_mm_s or self.profile.travel_speed_mm_s) * 60.0
+        out: list[SwapCommand] = []
+        lead_wait = 0
+
+        def emit(send: str, wait_ms: int) -> None:
+            nonlocal lead_wait
+            out.append(SwapCommand(send=send, wait_ms=wait_ms + lead_wait))
+            lead_wait = 0
+
+        for step in swap.steps:
+            if step.kind == "dwell":
+                if out:
+                    out[-1].wait_ms += step.wait_ms
+                else:
+                    lead_wait += step.wait_ms
+                continue
+
+            send: str | None = None
+            if step.kind == "head_up":
+                send = self.profile.pen_up_command
+            elif step.kind == "head_down":
+                send = self.profile.pen_down_command
+            elif step.kind == "grab":
+                send = (
+                    _substitute(swap.grab_command, context) if swap.grab_command.strip() else None
+                )
+            elif step.kind == "release":
+                send = (
+                    _substitute(swap.drop_command, context) if swap.drop_command.strip() else None
+                )
+            elif step.kind in ("move_to_old_slot", "move_to_new_slot"):
+                slot = (
+                    context.from_slot_index
+                    if step.kind == "move_to_old_slot"
+                    else context.slot_index
+                )
+                pen = pens.get(slot) if slot is not None else None
+                if pen is not None and pen.position is not None:
+                    send = f"G0 X{pen.position.x:.3f} Y{pen.position.y:.3f} F{travel_feed:.1f}"
+            elif step.kind == "raw":
+                send = _substitute(step.send, context) if step.send.strip() else None
+
+            if send is not None:
+                emit(send, step.wait_ms)
+            elif step.wait_ms and out:
+                out[-1].wait_ms += step.wait_ms
+
+        return out
 
 
 class ManualStrategy(ToolChangeStrategy):

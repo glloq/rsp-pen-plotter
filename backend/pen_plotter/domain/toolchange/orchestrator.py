@@ -47,6 +47,10 @@ class SwapContext(BaseModel):
     """
 
     slot_index: int | None = None
+    # The slot the outgoing pen came from, when known — lets a full host
+    # swap travel to the old pen's holder to deposit it before fetching
+    # the new one. ``None`` on the first swap (nothing in hand yet).
+    from_slot_index: int | None = None
     pen_label: str = ""
     pen_color: str = ""
     layer_id: str = ""

@@ -74,13 +74,25 @@ const accelOnWire = computed(() =>
   draft.value ? ACCEL_DIALECTS.includes(draft.value.gcode_dialect) : true,
 )
 
-// A host-macro magazine that ships no commands (or a blank ``send``)
-// fails at runtime — the HostMacroStrategy raises rather than emit an
-// empty sequence. Block the save so the operator can't persist a
-// run-breaking profile.
+// A host magazine that can't run a swap fails at runtime — the
+// HostMacroStrategy raises rather than emit an empty sequence. Block the
+// save so the operator can't persist a run-breaking profile.
 const toolChangeInvalid = computed(() => {
   const tc = draft.value?.capabilities?.tool_change
   if (!tc || tc.mode !== 'host_macro') return false
+  const swap = tc.host_swap
+  if (swap && swap.steps.length) {
+    // Visual builder: every step must be runnable. A grab/release needs
+    // its command; a raw step needs a line.
+    return swap.steps.some(
+      (s) =>
+        (s.kind === 'grab' && !swap.grab_command.trim()) ||
+        (s.kind === 'release' && !swap.drop_command.trim()) ||
+        (s.kind === 'raw' && !s.send.trim()),
+    )
+  }
+  if (swap) return true // host_swap present but no steps → nothing to run
+  // Legacy raw macro contract.
   return tc.host_macro.length === 0 || tc.host_macro.some((s) => !s.send.trim())
 })
 

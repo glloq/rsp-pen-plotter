@@ -124,12 +124,19 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
     actions: dict[int, SwapAction] = {}
     exec_index = 0
     pending: SwapAction | None = None
+    # The slot currently in the head, so a full host swap can deposit the
+    # outgoing pen before fetching the new one. ``None`` until the first
+    # slot-based change completes.
+    last_slot: int | None = None
     for raw in gcode.splitlines():
         comment = raw.split(";", 1)[1].strip() if ";" in raw else ""
         code = raw.split(";", 1)[0].strip()
         if comment and pending is None:
             context = _context_from_comment(comment)
             if context is not None:
+                if context.slot_index is not None:
+                    context = context.model_copy(update={"from_slot_index": last_slot})
+                    last_slot = context.slot_index
                 plan = orchestrator.plan(context)
                 pending = SwapAction(
                     kind=_PAUSE_KIND_TO_ACTION[plan.pause_kind],  # type: ignore[arg-type]

@@ -28,6 +28,8 @@ import type { MachineProfile, ToolChangeMethod } from '../api/client'
 import {
   defaultCapabilities,
   type CommandSource,
+  type HostSwapPlan,
+  type HostSwapStepKind,
   type MachineCapabilities,
   type ToolingMode,
 } from '../domain/capability/schemas'
@@ -92,7 +94,60 @@ function ensureCaps(): MachineCapabilities {
 // When host mode is active the capabilities block is guaranteed present
 // (setMode / backend migration ensure it), so this never hits the
 // fallback during the host editor render.
-const hostMacro = computed(() => props.draft.capabilities?.tool_change.host_macro ?? [])
+// Structured, G-code-free host swap. The operator orders high-level
+// blocks; the backend compiles them using each pen's calibrated
+// position (set in the magazine editor).
+const STEP_KINDS: HostSwapStepKind[] = [
+  'head_up',
+  'head_down',
+  'move_to_old_slot',
+  'move_to_new_slot',
+  'grab',
+  'release',
+  'dwell',
+  'raw',
+]
+
+function defaultHostSwap(): HostSwapPlan {
+  return {
+    grab_command: 'M280 P1 S90',
+    drop_command: 'M280 P1 S20',
+    travel_speed_mm_s: null,
+    steps: [
+      { kind: 'head_up', wait_ms: 0, send: '' },
+      { kind: 'move_to_old_slot', wait_ms: 0, send: '' },
+      { kind: 'release', wait_ms: 200, send: '' },
+      { kind: 'move_to_new_slot', wait_ms: 0, send: '' },
+      { kind: 'grab', wait_ms: 200, send: '' },
+      { kind: 'head_down', wait_ms: 0, send: '' },
+    ],
+  }
+}
+
+function ensureHostSwap(): HostSwapPlan {
+  const tc = ensureCaps().tool_change
+  if (!tc.host_swap) tc.host_swap = defaultHostSwap()
+  return tc.host_swap
+}
+
+// Read-only view for the template (no side effects in the getter).
+const hostSwap = computed(() => props.draft.capabilities?.tool_change.host_swap ?? null)
+
+function addStep(): void {
+  ensureHostSwap().steps.push({ kind: 'dwell', wait_ms: 200, send: '' })
+}
+
+function removeStep(index: number): void {
+  ensureHostSwap().steps.splice(index, 1)
+}
+
+function moveStep(index: number, delta: number): void {
+  const steps = ensureHostSwap().steps
+  const next = index + delta
+  if (next < 0 || next >= steps.length) return
+  const [s] = steps.splice(index, 1)
+  steps.splice(next, 0, s!)
+}
 
 function clampPenCount(): void {
   const n = Math.floor(props.draft.pen_slot_count)
@@ -131,22 +186,15 @@ function setMode(mode: ColorMode): void {
     tc.manual_prompt = null
   }
 
-  // Firmware uses the single ``tool_change_command`` trigger, so the
-  // macro list must stay empty (FirmwareStrategy prefers a non-empty
-  // macro when present). Host mode needs at least one line — seed one.
+  // Firmware uses the single ``tool_change_command`` trigger. Host uses
+  // the structured visual builder (``host_swap``); the raw ``host_macro``
+  // list stays empty so the builder is the single source of truth.
   if (mode === 'host') {
-    if (tc.host_macro.length === 0) tc.host_macro = [{ send: 'M6 T{slot}', wait_ms: 0 }]
+    if (!tc.host_swap) tc.host_swap = defaultHostSwap()
   } else {
-    tc.host_macro = []
+    tc.host_swap = null
   }
-}
-
-function addMacroStep(): void {
-  ensureCaps().tool_change.host_macro.push({ send: '', wait_ms: 0 })
-}
-
-function removeMacroStep(index: number): void {
-  ensureCaps().tool_change.host_macro.splice(index, 1)
+  tc.host_macro = []
 }
 </script>
 

@@ -27,6 +27,7 @@ explicit control can populate ``capabilities`` in their YAML.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -103,6 +104,60 @@ class HostMacroStep(BaseModel):
     wait_ms: int = 0
 
 
+class HostSwapStep(BaseModel):
+    """One high-level step of a host-driven pen swap.
+
+    The operator builds the swap from these blocks instead of writing
+    G-code; :class:`~pen_plotter.domain.toolchange.strategies.HostMacroStrategy`
+    compiles them to concrete commands at plan time, filling in each
+    pen's calibrated position. ``raw`` is the escape hatch for exotic
+    hardware.
+
+    Kinds:
+      - ``head_up`` / ``head_down``: emit the profile pen-up/-down command.
+      - ``grab`` / ``release``: emit the plan's ``grab_command`` /
+        ``drop_command`` (the clamp / gripper primitive).
+      - ``move_to_old_slot`` / ``move_to_new_slot``: travel to the
+        outgoing / incoming pen's calibrated position.
+      - ``dwell``: pause ``wait_ms`` host-side (no command sent).
+      - ``raw``: send ``send`` verbatim.
+    """
+
+    kind: Literal[
+        "head_up",
+        "head_down",
+        "grab",
+        "release",
+        "move_to_old_slot",
+        "move_to_new_slot",
+        "dwell",
+        "raw",
+    ]
+    # Host-side pause applied after the step (for ``dwell`` this is the
+    # whole point; for the others it's an optional settle time).
+    wait_ms: int = 0
+    # Only meaningful for ``raw`` — the literal G-code line.
+    send: str = ""
+
+
+class HostSwapPlan(BaseModel):
+    """Structured, G-code-free description of a host-driven pen swap.
+
+    Stored on the profile and compiled to commands at plan time so the
+    operator configures positions + actions, never raw G-code (except the
+    optional ``raw`` step). ``grab_command`` / ``drop_command`` are the
+    one machine primitive that needs a literal command (a servo / gripper
+    line), surfaced under an "advanced" affordance with sane defaults.
+    """
+
+    grab_command: str = ""
+    drop_command: str = ""
+    # Feed for the magazine travel moves; falls back to the profile's
+    # travel speed when unset.
+    travel_speed_mm_s: float | None = None
+    steps: list[HostSwapStep] = Field(default_factory=list)
+
+
 class ToolChangeStrategy(BaseModel):
     """Bundles the swap mode and its strategy-specific knobs."""
 
@@ -111,6 +166,9 @@ class ToolChangeStrategy(BaseModel):
     recovery_policy: RecoveryPolicy = RecoveryPolicy.PAUSE_AND_PROMPT
     manual_prompt: ManualSwapPrompt | None = None
     host_macro: list[HostMacroStep] = Field(default_factory=list)
+    # Structured visual swap builder (preferred for host magazines). When
+    # set with steps, the strategy compiles it instead of ``host_macro``.
+    host_swap: HostSwapPlan | None = None
 
 
 class MachineCapabilities(BaseModel):
