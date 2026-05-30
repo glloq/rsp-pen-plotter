@@ -85,11 +85,19 @@ async function addColor(): Promise<void> {
   }
 }
 
-function startEdit(colorId: string, hex: string, name: string, width: number): void {
+function startEdit(
+  colorId: string,
+  hex: string,
+  name: string,
+  width: number | null | undefined,
+): void {
   editingId.value = colorId
   editHex.value = hex
   editName.value = name
-  editWidth.value = String(width)
+  // Coerce a missing / invalid width to a sane default so the field
+  // never shows the literal string "undefined" (which then parsed back
+  // to null and silently dropped the diameter on save).
+  editWidth.value = String(parsePenWidthMm(width) ?? 0.5)
 }
 
 function cancelEdit(): void {
@@ -97,11 +105,15 @@ function cancelEdit(): void {
 }
 
 async function saveEdit(colorId: string): Promise<void> {
-  const w = parsePenWidthMm(editWidth.value)
+  // Always persist a real, positive number: a comma decimal is
+  // normalised by ``parsePenWidthMm`` (so "0,8" === "0.8"), and an
+  // empty / unparseable field falls back to the default rather than
+  // being omitted from the patch (which left the diameter undefined).
+  const w = parsePenWidthMm(editWidth.value) ?? 0.5
   const result = await store.rename(colorId, {
     hex: editHex.value,
     name: editName.value.trim(),
-    ...(w !== null ? { stroke_width_mm: w } : {}),
+    stroke_width_mm: w,
   })
   if (result !== null) editingId.value = null
 }
@@ -277,7 +289,7 @@ function displayLabel(name: string, hex: string): string {
               class="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
               :title="t('availableColors.strokeWidthTitle')"
             >
-              Ø {{ color.stroke_width_mm }} {{ t('availableColors.mmUnit') }}
+              Ø {{ color.stroke_width_mm ?? '0.5' }} {{ t('availableColors.mmUnit') }}
             </span>
 
             <span
