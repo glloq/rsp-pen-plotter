@@ -7,6 +7,8 @@ import { useEditState } from '../../composables/useEditState'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
 import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimator'
 import { useAlgorithmsStore } from '../../stores/algorithms'
+import { useAvailableColorsStore } from '../../stores/availableColors'
+import { applyPhysicalStrokeWidth, mmPerViewBoxUnit, strokeWidthMmByHex } from '../../lib/penWidth'
 import { libraryFileOriginalUrl, type AlgorithmComplexity } from '../../api/client'
 
 const { t } = useI18n()
@@ -15,6 +17,25 @@ const edit = useEditState()
 const draft = useBitmapDraft()
 const costEstimator = usePreviewCostEstimator()
 const algorithms = useAlgorithmsStore()
+const availableColors = useAvailableColorsStore()
+
+// Pen tip widths keyed by colour, used to render the editor preview at
+// each feutre's physical line thickness.
+const strokeWidthMm = computed(() => strokeWidthMmByHex(availableColors.ordered))
+
+// Re-stroke a vectorised SVG so its coloured groups display at the
+// assigned pen's physical width. ``store.svg`` shares the selected
+// placement's viewBox, so we derive mm/unit from that placement's
+// committed size. A no-op when the inventory is empty or the scale
+// can't be resolved.
+function withPenWidths(svg: string): string {
+  const map = strokeWidthMm.value
+  if (!svg || map.size === 0) return svg
+  const p = store.selectedPlacement
+  if (!p) return svg
+  const mmPerUnit = mmPerViewBoxUnit(svg, p.width_mm, p.height_mm)
+  return mmPerUnit ? applyPhysicalStrokeWidth(svg, map, mmPerUnit) : svg
+}
 
 // Algorithm metadata. Sourced from the versioned manifest store
 // (B.4 — pen_plotter.manifests.algorithms), which handles cache +
@@ -22,6 +43,7 @@ const algorithms = useAlgorithmsStore()
 // stays accurate even when the backend is offline.
 onMounted(() => {
   if (!algorithms.loaded) void algorithms.refresh()
+  if (!availableColors.loaded) void availableColors.refresh()
 })
 const currentComplexity = computed<AlgorithmComplexity>(() => {
   const algo = algorithms.list.find((a) => a.name === draft.bitmap.value.algorithm)
@@ -208,7 +230,8 @@ const activeVariantId = computed(() => store.selectedPlacement?.active_variant_i
 const placementSvg = computed(() => {
   const svg = store.svg
   if (!svg) return ''
-  return DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+  const clean = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+  return withPenWidths(clean)
 })
 
 // ``source`` mode (set by EditModal when the Image tab is active)
