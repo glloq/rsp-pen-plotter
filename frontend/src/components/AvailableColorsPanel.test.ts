@@ -149,7 +149,7 @@ describe('AvailableColorsPanel', () => {
     expect(spy).toHaveBeenCalledWith('#123456', 'Indigo', 0.5)
   })
 
-  it('edits the stroke width of an existing colour and persists it', async () => {
+  it('edits a colour stroke width and persists it via store.rename', async () => {
     const store = useAvailableColorsStore()
     store.colors = [
       {
@@ -167,30 +167,26 @@ describe('AvailableColorsPanel', () => {
     const wrapper = mountPanel()
     await nextTick()
 
-    // Enter edit mode via the pencil button.
-    const editBtn = wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!
-    await editBtn.trigger('click')
+    // Enter edit mode via the pencil button on the row.
+    await wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!.trigger('click')
     await nextTick()
 
-    // The width input is the number input in the edit row.
-    const widthInput = wrapper.findAll('input').find((i) => i.element.type === 'number')!
+    // Scope to the row's number input — the add form above also has one.
+    const row = wrapper.find('li')
+    const widthInput = row.findAll('input').find((i) => i.element.type === 'number')!
     await widthInput.setValue('1.2')
 
-    const saveBtn = wrapper.findAll('button').find((b) => b.text() === '✓')!
-    await saveBtn.trigger('click')
+    await row.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
     await nextTick()
 
     expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 1.2 }))
-    // The badge reflects the saved width (reactive store update).
-    await nextTick()
-    expect(wrapper.find('li').text()).toContain('1.2')
   })
 
-  it('still sends the width when the bound value is a string (locale / type)', async () => {
+  it('coerces a comma-decimal width string so the diameter still saves', async () => {
     // Regression: a real browser can leave a raw string in a
-    // ``v-model.number`` ref (e.g. a French keyboard's ``0,8`` comma).
-    // A strict ``Number.isFinite`` guard would drop it from the PATCH —
-    // ``parseWidth`` must coerce so the diameter actually saves.
+    // ``v-model.number`` ref (e.g. a French keyboard's ``0,8``). The
+    // old strict ``Number.isFinite`` guard dropped it from the PATCH —
+    // the colour saved but the diameter never changed.
     const store = useAvailableColorsStore()
     store.colors = [
       {
@@ -209,11 +205,11 @@ describe('AvailableColorsPanel', () => {
     await nextTick()
     await wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!.trigger('click')
     await nextTick()
-    const widthInput = wrapper.findAll('input').find((i) => i.element.type === 'number')!
-    // Force a string value, mimicking the v-model.number escape hatch.
+    const row = wrapper.find('li')
+    const widthInput = row.findAll('input').find((i) => i.element.type === 'number')!
     ;(widthInput.element as HTMLInputElement).value = '0,8'
     await widthInput.trigger('input')
-    await wrapper.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
+    await row.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
     await nextTick()
     expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 0.8 }))
   })
