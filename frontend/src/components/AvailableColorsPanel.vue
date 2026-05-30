@@ -14,7 +14,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAvailableColorsStore } from '../stores/availableColors'
-import { useJobStore } from '../stores/job'
 import ColorPicker from './ColorPicker.vue'
 import MagazineEditor from './MagazineEditor.vue'
 
@@ -31,7 +30,6 @@ function canonicaliseHex(value: string): string {
 
 const { t } = useI18n()
 const store = useAvailableColorsStore()
-const job = useJobStore()
 
 const newHex = ref('#000000')
 const newName = ref('')
@@ -61,22 +59,6 @@ onMounted(() => {
   if (!store.loaded) void store.refresh()
 })
 
-// Metres of line drawn with each inventory colour, derived from the
-// current job's layers (grouped by their assigned hex). Lets the operator
-// gauge how much of each ink a print will consume. Zero when no job is
-// loaded or the colour isn't used by any layer.
-const metersByColor = computed<Record<string, number>>(() => {
-  const out: Record<string, number> = {}
-  for (const [hex, mm] of Object.entries(job.lengthMmByColor)) {
-    out[hex] = mm / 1000
-  }
-  return out
-})
-
-function metersFor(hex: string): number {
-  return metersByColor.value[hex] ?? 0
-}
-
 async function addColor(): Promise<void> {
   if (!newHex.value) return
   submitting.value = true
@@ -105,12 +87,13 @@ function cancelEdit(): void {
 }
 
 async function saveEdit(colorId: string): Promise<void> {
-  await store.rename(colorId, {
+  const w = Number.isFinite(editWidth.value) && editWidth.value > 0 ? editWidth.value : null
+  const result = await store.rename(colorId, {
     hex: editHex.value,
     name: editName.value.trim(),
-    ...(editWidth.value > 0 ? { stroke_width_mm: editWidth.value } : {}),
+    ...(w !== null ? { stroke_width_mm: w } : {}),
   })
-  editingId.value = null
+  if (result !== null) editingId.value = null
 }
 
 async function moveUp(colorId: string): Promise<void> {
@@ -297,14 +280,24 @@ function displayLabel(name: string, hex: string): string {
             <span
               class="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
               :class="
-                metersFor(color.hex) > 0
+                color.odometer_mm > 0
                   ? 'bg-emerald-950/60 text-emerald-300'
                   : 'text-slate-600'
               "
-              :title="t('availableColors.metersUsedTitle')"
+              :title="t('availableColors.odometerTitle')"
             >
-              {{ t('availableColors.meters', { value: metersFor(color.hex).toFixed(1) }) }}
+              {{ t('availableColors.meters', { value: (color.odometer_mm / 1000).toFixed(3) }) }}
             </span>
+
+            <button
+              type="button"
+              class="rounded p-1 text-slate-400 hover:bg-amber-900/40 hover:text-amber-300 disabled:opacity-30"
+              :disabled="color.odometer_mm === 0"
+              :title="t('availableColors.resetOdometer')"
+              @click="store.resetOdometer(color.color_id)"
+            >
+              ↺
+            </button>
 
             <button
               type="button"

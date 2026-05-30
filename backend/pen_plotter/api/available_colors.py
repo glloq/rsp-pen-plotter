@@ -66,6 +66,7 @@ class AvailableColorOut(BaseModel):
     name: str
     position: int
     stroke_width_mm: float
+    odometer_mm: float
     created_at: datetime
 
 
@@ -75,13 +76,14 @@ def _record_to_out(record: AvailableColorRecord) -> AvailableColorOut:
         hex=record.hex,
         name=record.name,
         position=record.position,
-        # Rows back-filled by the additive migration land with a NULL
-        # width (ADD COLUMN doesn't apply the model default to existing
-        # rows); fall back to the fineliner default so legacy inventories
-        # serialise cleanly instead of 500-ing on a None.
+        # Rows back-filled by the additive migration land with NULL for
+        # columns added after initial creation (ADD COLUMN doesn't apply
+        # the model default to existing rows); fall back to sensible
+        # defaults so legacy inventories serialise cleanly.
         stroke_width_mm=(
             record.stroke_width_mm if record.stroke_width_mm is not None else 0.5
         ),
+        odometer_mm=(record.odometer_mm if record.odometer_mm is not None else 0.0),
         created_at=record.created_at,
     )
 
@@ -109,6 +111,9 @@ class AvailableColorPatch(BaseModel):
     name: str | None = None
     position: int | None = Field(default=None, ge=0)
     stroke_width_mm: float | None = Field(default=None, gt=0)
+    # Odometer: set to 0 to reset, or to any value to overwrite.
+    # The frontend increments by computing old + delta client-side.
+    odometer_mm: float | None = Field(default=None, ge=0)
 
     @field_validator("hex")
     @classmethod
@@ -136,14 +141,19 @@ async def create_color(body: AvailableColorCreate) -> AvailableColorOut:
     """
     existing = get_available_color_by_hex(body.hex)
     if existing is not None:
-        # Allow callers to update the human label when re-adding — handy
-        # when the operator typo'd the first name and re-submits with
-        # the corrected one. An empty ``name`` is treated as "no change"
-        # so an idempotent re-add (e.g. the picker defaulting to a hex
-        # already in the inventory) can't wipe an existing label; use
-        # PATCH to clear a name explicitly.
+        # Allow callers to update mutable fields when re-adding — handy
+        # when the operator wants to change the tip width or name after
+        # the initial create. Empty ``name`` is treated as "no change"
+        # so an idempotent re-add can't wipe an existing label.
+        changed = False
         if body.name and body.name != existing.name:
             existing.name = body.name
+            changed = True
+        existing_sw = existing.stroke_width_mm if existing.stroke_width_mm is not None else 0.5
+        if body.stroke_width_mm != existing_sw:
+            existing.stroke_width_mm = body.stroke_width_mm
+            changed = True
+        if changed:
             save_available_color(existing)
         return _record_to_out(existing)
 
@@ -181,6 +191,8 @@ async def patch_color(color_id: str, body: AvailableColorPatch) -> AvailableColo
         record.position = body.position
     if body.stroke_width_mm is not None:
         record.stroke_width_mm = body.stroke_width_mm
+    if body.odometer_mm is not None:
+        record.odometer_mm = body.odometer_mm
     save_available_color(record)
     return _record_to_out(record)
 

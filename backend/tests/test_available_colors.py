@@ -185,10 +185,47 @@ async def test_stroke_width_default_create_and_patch() -> None:
         assert patched.json()["stroke_width_mm"] == 1.2
         assert patched.json()["hex"] == "#222222"
 
+        # Re-posting an existing hex with a different width updates it.
+        repost = await client.post(
+            "/available-colors", json={"hex": "#222222", "stroke_width_mm": 0.3}
+        )
+        assert repost.status_code == 200
+        assert repost.json()["stroke_width_mm"] == pytest.approx(0.3)
+
         # A non-positive width is rejected at the boundary.
         bad = await client.post(
             "/available-colors", json={"hex": "#333333", "stroke_width_mm": 0}
         )
+        assert bad.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_odometer_defaults_increments_and_resets() -> None:
+    """odometer_mm starts at 0, can be set via PATCH, and resets to 0."""
+    async with _client() as client:
+        created = await client.post("/available-colors", json={"hex": "#aabbcc"})
+        assert created.status_code == 200
+        color_id = created.json()["color_id"]
+        assert created.json()["odometer_mm"] == 0.0
+
+        # Accumulate some distance.
+        acc = await client.patch(f"/available-colors/{color_id}", json={"odometer_mm": 1234.5})
+        assert acc.status_code == 200
+        assert acc.json()["odometer_mm"] == pytest.approx(1234.5)
+
+        # Add more (frontend computes old + delta then sends the total).
+        acc2 = await client.patch(
+            f"/available-colors/{color_id}", json={"odometer_mm": 1234.5 + 500.0}
+        )
+        assert acc2.json()["odometer_mm"] == pytest.approx(1734.5)
+
+        # Reset to zero.
+        reset = await client.patch(f"/available-colors/{color_id}", json={"odometer_mm": 0})
+        assert reset.status_code == 200
+        assert reset.json()["odometer_mm"] == 0.0
+
+        # Negative value rejected.
+        bad = await client.patch(f"/available-colors/{color_id}", json={"odometer_mm": -1})
         assert bad.status_code == 422
 
 

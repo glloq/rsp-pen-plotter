@@ -21,6 +21,7 @@ vi.mock('../api/client', () => ({
     name,
     position: 0,
     stroke_width_mm: strokeWidthMm ?? 0.5,
+    odometer_mm: 0,
     created_at: '2026-01-01T00:00:00Z',
   })),
   patchAvailableColor: vi.fn(async (colorId: string, patch: Record<string, unknown>) => ({
@@ -29,6 +30,7 @@ vi.mock('../api/client', () => ({
     name: (patch.name as string) ?? '',
     position: (patch.position as number) ?? 0,
     stroke_width_mm: (patch.stroke_width_mm as number) ?? 0.5,
+    odometer_mm: (patch.odometer_mm as number) ?? 0,
     created_at: '2026-01-01T00:00:00Z',
   })),
   deleteAvailableColor: vi.fn(async () => undefined),
@@ -88,6 +90,7 @@ describe('AvailableColorsPanel', () => {
         name: 'Red',
         position: 0,
         stroke_width_mm: 0.5,
+        odometer_mm: 0,
         created_at: '2026-01-01T00:00:00Z',
       },
       {
@@ -96,6 +99,7 @@ describe('AvailableColorsPanel', () => {
         name: '',
         position: 1,
         stroke_width_mm: 0.5,
+        odometer_mm: 0,
         created_at: '2026-01-02T00:00:00Z',
       },
     ]
@@ -119,6 +123,7 @@ describe('AvailableColorsPanel', () => {
       name: 'Indigo',
       position: 0,
       stroke_width_mm: 0.5,
+      odometer_mm: 0,
       created_at: '2026-01-01T00:00:00Z',
     })
     const wrapper = mountPanel()

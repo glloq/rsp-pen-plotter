@@ -15,6 +15,7 @@ import {
   listAvailableColors,
   patchAvailableColor,
 } from '../api/client'
+import { canonicalHex } from '../lib/penWidth'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
 import { useToastStore } from './toasts'
@@ -70,7 +71,7 @@ export const useAvailableColorsStore = defineStore('availableColors', () => {
 
   async function rename(
     colorId: string,
-    patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm'>>,
+    patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm' | 'odometer_mm'>>,
   ): Promise<AvailableColor | null> {
     error.value = null
     try {
@@ -84,6 +85,18 @@ export const useAvailableColorsStore = defineStore('availableColors', () => {
       useToastStore().error(message)
       return null
     }
+  }
+
+  async function resetOdometer(colorId: string): Promise<void> {
+    await rename(colorId, { odometer_mm: 0 })
+  }
+
+  async function addToOdometer(hex: string, deltaMm: number): Promise<void> {
+    if (deltaMm <= 0) return
+    const canon = canonicalHex(hex)
+    const color = ordered.value.find((c) => c.hex === canon)
+    if (!color) return
+    await rename(color.color_id, { odometer_mm: color.odometer_mm + deltaMm })
   }
 
   async function remove(colorId: string): Promise<boolean> {
@@ -109,6 +122,8 @@ export const useAvailableColorsStore = defineStore('availableColors', () => {
     refresh,
     add,
     rename,
+    resetOdometer,
+    addToOdometer,
     remove,
   }
 })

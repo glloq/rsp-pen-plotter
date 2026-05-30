@@ -1152,7 +1152,8 @@
   "availableColors": {
     "hint": "Your global ink inventory, and the colour assignment for each magazine slot. Declare every Sharpie / fineliner you own once.",
     "meters": "{value} m",
-    "metersUsedTitle": "Metres drawn with this colour for the current job.",
+    "odometerTitle": "Total distance actually drawn with this pen. Accumulates on each print — reset when you swap the pen.",
+    "resetOdometer": "Reset counter (new pen)",
     "strokeWidthTitle": "Pen tip / line width (mm).",
     "mmUnit": "mm",
     "add": "Add a colour",

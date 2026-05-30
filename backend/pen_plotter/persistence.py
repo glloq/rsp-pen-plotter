@@ -116,6 +116,11 @@ class AvailableColorRecord(SQLModel, table=True):
     # rows migrated from an older DB (where the column is back-filled by
     # ``_add_missing_columns``) get a sensible value rather than 0.
     stroke_width_mm: float = Field(default=0.5)
+    # Accumulated distance actually drawn with this pen, in millimetres.
+    # Incremented by the frontend each time a job is sent/queued; reset
+    # manually when the operator swaps the pen. Lets the operator track
+    # wear and know when to replace a marker.
+    odometer_mm: float = Field(default=0.0)
     created_at: datetime
 
 
