@@ -84,6 +84,36 @@ def test_rerender_overrides_one_layer_algorithm(client: TestClient) -> None:
     assert "<line" in body["svg"]
 
 
+def test_rerender_layer_ink_colors_overrides_stroke(client: TestClient) -> None:
+    """``layer_ink_colors`` swaps the rendered stroke for the assigned ink.
+
+    The cached black cluster (``#000000``) should render in the operator's
+    pick (``#ff00aa``) rather than its segmentation centroid, so the
+    preview reflects the magazine / inventory colour that will really be
+    drawn. Layers not in the map keep their centroid stroke.
+    """
+    job_id = _seed_cache()
+    response = client.post(
+        "/rerender",
+        json={
+            "job_id": job_id,
+            "layers": [
+                {
+                    "layer_id": "color-000000",
+                    "algorithm": "crosshatch",
+                    "algorithm_options": {"angle_deg": 0, "spacing_px": 2},
+                }
+            ],
+            "layer_ink_colors": {"color-000000": "#ff00aa"},
+        },
+    )
+    assert response.status_code == 200, response.text
+    svg = response.json()["svg"]
+    # The assigned ink wins over the centroid: the black layer paints in pink.
+    assert "#ff00aa" in svg.lower()
+    assert "#000000" not in svg.lower()
+
+
 def test_rerender_unknown_algorithm_falls_back_with_warning(client: TestClient) -> None:
     job_id = _seed_cache()
     response = client.post(

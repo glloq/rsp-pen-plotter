@@ -482,6 +482,24 @@ export const useJobStore = defineStore('job', () => {
     return layerStrokeWidthsPx(p.layers, hexToMm, mmPerUnit)
   }
 
+  // Per-layer ink hex (assigned colour from magazine / inventory pool)
+  // keyed by ``layer_id`` — which equals the backend label
+  // ``color-{hex}`` for bitmap-derived layers. Sent with /rerender so
+  // the preview SVG uses the colour that will actually be drawn rather
+  // than the segmentation centroid. Layers without an assigned colour
+  // (or with the same hex as the centroid) drop out of the map so the
+  // backend's legacy fallback kicks in.
+  function inkColorsFor(p: Placement): Record<string, string> {
+    const map: Record<string, string> = {}
+    for (const layer of p.layers) {
+      const ink = layer.assigned_color_hex
+      if (!ink) continue
+      if (ink.toLowerCase() === layer.source_color.toLowerCase()) continue
+      map[layer.layer_id] = ink
+    }
+    return map
+  }
+
   let rerenderController: AbortController | null = null
   let rerenderTimer: ReturnType<typeof setTimeout> | null = null
   // Promise of the currently in-flight ``triggerRerender`` call. Used by
@@ -593,6 +611,7 @@ export const useJobStore = defineStore('job', () => {
         layersPayload,
         signal,
         penWidthsFor(placement),
+        inkColorsFor(placement),
       )
       return { svg: result.svg, warnings: result.warnings ?? [] }
     } catch (err) {
@@ -623,7 +642,13 @@ export const useJobStore = defineStore('job', () => {
       algorithm_options: { ...algorithmOptions },
     }))
     try {
-      const result = await rerenderJob(p.job_id, layersPayload, signal)
+      const result = await rerenderJob(
+        p.job_id,
+        layersPayload,
+        signal,
+        penWidthsFor(p),
+        inkColorsFor(p),
+      )
       return { svg: result.svg, warnings: result.warnings ?? [] }
     } catch (err) {
       if ((err as { name?: string }).name === 'CanceledError') return null
@@ -651,7 +676,13 @@ export const useJobStore = defineStore('job', () => {
       })),
     }))
     try {
-      const result = await rerenderJob(p.job_id, layersPayload, signal)
+      const result = await rerenderJob(
+        p.job_id,
+        layersPayload,
+        signal,
+        penWidthsFor(p),
+        inkColorsFor(p),
+      )
       return { svg: result.svg, warnings: result.warnings ?? [] }
     } catch (err) {
       if ((err as { name?: string }).name === 'CanceledError') return null
@@ -789,7 +820,13 @@ export const useJobStore = defineStore('job', () => {
           algorithm_options: spec.algorithm_options,
         }
       })
-      const result = await rerenderJob(p.job_id, layersPayload, controller.signal, penWidthsFor(p))
+      const result = await rerenderJob(
+        p.job_id,
+        layersPayload,
+        controller.signal,
+        penWidthsFor(p),
+        inkColorsFor(p),
+      )
       if (controller.signal.aborted) return
       // patchPlacement already invalidates the cached outputs for the new SVG.
       patchPlacement(p.id, { svg: result.svg })
@@ -910,6 +947,14 @@ export const useJobStore = defineStore('job', () => {
         layer.layer_id === layerId ? { ...layer, ...patch } : layer,
       ),
     })
+    // Picking a new ink for a layer (assigned_color_hex / color_assignment)
+    // changes what the rendered SVG should look like. Schedule a debounced
+    // rerender so the canvas reflects the new colour without waiting for
+    // the next algorithm tweak.
+    if ('assigned_color_hex' in patch || 'color_assignment' in patch) {
+      if (rerenderTimer) clearTimeout(rerenderTimer)
+      rerenderTimer = setTimeout(trackRerender, 250)
+    }
   }
 
   function reorderLayers(ordered: LayerInfo[]): void {
@@ -953,7 +998,14 @@ export const useJobStore = defineStore('job', () => {
       changed = true
       return { ...p, layers }
     })
-    if (changed) invalidateOutputs()
+    if (changed) {
+      invalidateOutputs()
+      // Re-render the selected placement so the canvas/preview SVG
+      // reflects the new assigned inks. Without this the operator sees
+      // the stale centroid colours until the next algorithm tweak.
+      if (rerenderTimer) clearTimeout(rerenderTimer)
+      rerenderTimer = setTimeout(trackRerender, 50)
+    }
   }
 
   watch([scaleMode, marginMm, selectedProfileName], invalidateOutputs)

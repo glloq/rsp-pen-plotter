@@ -20,6 +20,8 @@ import type { LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
 import type { Goal, PaletteMode, PolicyDecision, SourceKind } from '../../domain/policy/schemas'
+import { useAvailableColorsStore } from '../../stores/availableColors'
+import { usePaletteSourceStore } from '../../stores/paletteSource'
 import { useUiStore } from '../../stores/ui'
 import { useJobStore } from '../../stores/job'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
@@ -50,9 +52,17 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const ui = useUiStore()
 const job = useJobStore()
+const paletteSource = usePaletteSourceStore()
+const availableColors = useAvailableColorsStore()
 
 const sourceKind = ref<SourceKind>(props.initialSourceKind ?? 'bitmap_photo')
-const paletteMode = ref<PaletteMode>(props.initialPaletteMode ?? 'machine_only')
+// Initial palette mode: prop wins, else mirror the global palette source
+// so the modal opens consistent with whatever the operator has already
+// configured in the Plotter drawer (``pens`` → ``machine_only``, anything
+// else → ``free``).
+const paletteMode = ref<PaletteMode>(
+  props.initialPaletteMode ?? (paletteSource.source === 'pens' ? 'machine_only' : 'free'),
+)
 
 // Équilibré is the sensible default for a beginner: one good-enough
 // result with no questions asked. They can nudge faster/finer with a
@@ -146,9 +156,17 @@ function selectGoal(g: Goal): void {
   void resolveAndPreview()
 }
 
-function selectPalette(mode: PaletteMode): void {
+async function selectPalette(mode: PaletteMode): Promise<void> {
   if (paletteMode.value === mode && decision.value) return
   paletteMode.value = mode
+  // Mirror to the global palette source so the job store's resnap
+  // watcher refreshes each layer's ``assigned_color_hex`` against the
+  // pool the operator just picked. The preview call below then sends
+  // those fresh assigned hexes to ``/rerender`` (via
+  // ``inkColorsFor``) so the SVG it returns uses the colours that
+  // will actually be drawn.
+  await paletteSource.update(mode === 'machine_only' ? 'pens' : 'union')
+  await nextTick()
   void resolveAndPreview()
 }
 
@@ -229,6 +247,42 @@ function confirm(): void {
 
 // Compare needs two variants on the active placement to be useful.
 const canCompare = computed(() => (job.selectedPlacement?.variants.length ?? 0) >= 2)
+
+// Swatches shown under the preview: one per layer of the active
+// placement, in draw order, showing the colour the layer will actually
+// be drawn with (assigned ink hex from the magazine / inventory pool,
+// or the segmentation centroid as a fallback). Used to make the
+// "which inks will this print use" question answerable at a glance,
+// independent of the preview SVG itself.
+interface InkSwatch {
+  layerId: string
+  hex: string
+  name: string
+  isFallback: boolean
+}
+const inventoryNameByHex = computed(() => {
+  const map = new Map<string, string>()
+  for (const entry of availableColors.colors) {
+    if (entry.name && entry.name.trim()) {
+      map.set(entry.hex.toLowerCase(), entry.name)
+    }
+  }
+  return map
+})
+const inkSwatches = computed<InkSwatch[]>(() => {
+  const layers = job.selectedPlacement?.layers ?? []
+  const ordered = [...layers].sort((a, b) => a.draw_order - b.draw_order)
+  return ordered.map((layer) => {
+    const assigned = layer.assigned_color_hex
+    const hex = assigned ?? layer.source_color
+    return {
+      layerId: layer.layer_id,
+      hex,
+      name: inventoryNameByHex.value.get(hex.toLowerCase()) ?? hex,
+      isFallback: !assigned,
+    }
+  })
+})
 
 // Ctrl/Cmd+Enter = Générer. No prev/next anymore — there's one screen.
 useKeyboardShortcuts([
@@ -450,6 +504,35 @@ watch(
             · {{ t('v2.modal.layerCount', { count: props.layers.length }) }}
           </span>
         </p>
+
+        <!-- Per-layer ink swatches: which colours from the
+             magazine / inventory pool the preview is using, in draw
+             order. A fallback badge flags layers that fell back to the
+             segmentation centroid because nothing in the pool matched. -->
+        <div
+          v-if="inkSwatches.length"
+          class="modal-v2__inks"
+          data-test="modal-v2-inks"
+          :aria-label="t('v2.modal.inksLabel')"
+        >
+          <span class="modal-v2__inks-label">{{ t('v2.modal.inksLabel') }}</span>
+          <ul class="modal-v2__inks-list">
+            <li
+              v-for="ink in inkSwatches"
+              :key="ink.layerId"
+              class="modal-v2__ink"
+              :class="{ 'is-fallback': ink.isFallback }"
+              :title="ink.isFallback ? t('v2.modal.inkFallback', { hex: ink.hex }) : ink.name"
+            >
+              <span
+                class="modal-v2__ink-swatch"
+                :style="{ backgroundColor: ink.hex }"
+                aria-hidden="true"
+              />
+              <span class="modal-v2__ink-name">{{ ink.name }}</span>
+            </li>
+          </ul>
+        </div>
 
         <!-- The single decision: intent. Équilibré pre-selected. -->
         <fieldset class="modal-v2__intent">
@@ -702,6 +785,59 @@ watch(
 .modal-v2__filename {
   font-family: ui-monospace, Menlo, monospace;
   color: #334155;
+}
+
+.modal-v2__inks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0 0 0.6rem;
+}
+.modal-v2__inks-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.modal-v2__inks-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.modal-v2__ink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.45rem 0.15rem 0.25rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: white;
+  font-size: 0.72rem;
+  color: #334155;
+  max-width: 12rem;
+}
+.modal-v2__ink.is-fallback {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+}
+.modal-v2__ink-swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  border: 1px solid rgba(15, 23, 42, 0.25);
+  flex-shrink: 0;
+}
+.modal-v2__ink-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, Menlo, monospace;
 }
 
 .modal-v2__intent {

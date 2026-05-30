@@ -1473,7 +1473,9 @@
       "resetView": "Reset view (double-click) · wheel to zoom · drag to pan",
       "paletteLabel": "Colours",
       "paletteMachine": "Machine magazine",
-      "paletteFree": "Free palette"
+      "paletteFree": "Free palette",
+      "inksLabel": "Inks in use",
+      "inkFallback": "No match in the magazine / inventory — falling back to {hex}"
     },
     "intent": {
       "fast": "Fast",
