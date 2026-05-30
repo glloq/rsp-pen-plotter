@@ -2033,6 +2033,23 @@ export interface components {
             drop_command: string;
             /** Travel Speed Mm S */
             travel_speed_mm_s?: number | null;
+            /**
+             * Clearance Axis
+             * @default y
+             * @enum {string}
+             */
+            clearance_axis: "x" | "y";
+            /**
+             * Clearance Dir
+             * @default +
+             * @enum {string}
+             */
+            clearance_dir: "+" | "-";
+            /**
+             * Clearance Mm
+             * @default 0
+             */
+            clearance_mm: number;
             /** Head Up Command */
             head_up_command?: string | null;
             /** Head Down Command */
@@ -2063,7 +2080,12 @@ export interface components {
          *       - ``grab`` / ``release``: emit the plan's ``grab_command`` /
          *         ``drop_command`` (the clamp / gripper primitive).
          *       - ``move_to_old_slot`` / ``move_to_new_slot``: travel to the
-         *         outgoing / incoming pen's calibrated position.
+         *         outgoing / incoming pen's *approach* point (the slot position
+         *         offset by the clearance vector), safe for lateral motion.
+         *       - ``advance_to_slot`` / ``retract_from_slot``: move in/out of the
+         *         slot along the clearance vector (approach ↔ engagement) so the
+         *         head doesn't crash the neighbouring pens. They act on the most
+         *         recent ``move_to_*_slot``.
          *       - ``dwell``: pause ``wait_ms`` host-side (no command sent).
          *       - ``raw``: send ``send`` verbatim.
          */
@@ -2072,7 +2094,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "head_up" | "head_down" | "grab" | "release" | "move_to_old_slot" | "move_to_new_slot" | "dwell" | "raw";
+            kind: "head_up" | "head_down" | "grab" | "release" | "move_to_old_slot" | "move_to_new_slot" | "advance_to_slot" | "retract_from_slot" | "dwell" | "raw";
             /**
              * Wait Ms
              * @default 0

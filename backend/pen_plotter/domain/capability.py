@@ -118,7 +118,12 @@ class HostSwapStep(BaseModel):
       - ``grab`` / ``release``: emit the plan's ``grab_command`` /
         ``drop_command`` (the clamp / gripper primitive).
       - ``move_to_old_slot`` / ``move_to_new_slot``: travel to the
-        outgoing / incoming pen's calibrated position.
+        outgoing / incoming pen's *approach* point (the slot position
+        offset by the clearance vector), safe for lateral motion.
+      - ``advance_to_slot`` / ``retract_from_slot``: move in/out of the
+        slot along the clearance vector (approach ↔ engagement) so the
+        head doesn't crash the neighbouring pens. They act on the most
+        recent ``move_to_*_slot``.
       - ``dwell``: pause ``wait_ms`` host-side (no command sent).
       - ``raw``: send ``send`` verbatim.
     """
@@ -130,6 +135,8 @@ class HostSwapStep(BaseModel):
         "release",
         "move_to_old_slot",
         "move_to_new_slot",
+        "advance_to_slot",
+        "retract_from_slot",
         "dwell",
         "raw",
     ]
@@ -155,6 +162,17 @@ class HostSwapPlan(BaseModel):
     # Feed for the magazine travel moves; falls back to the profile's
     # travel speed when unset.
     travel_speed_mm_s: float | None = None
+    # Clearance vector for engaging / disengaging a slot. A pen's stored
+    # ``position`` is its *engagement* point (where the gripper closes);
+    # the *approach* point sits ``clearance_mm`` away from it along
+    # ``clearance_axis`` in the ``clearance_dir`` direction. Lateral moves
+    # between slots happen at the approach point so the head clears the
+    # neighbouring pens; ``advance_to_slot`` / ``retract_from_slot`` travel
+    # the short hop between the two. ``clearance_mm = 0`` disables the hop
+    # (approach == engagement) for racks that need no insertion move.
+    clearance_axis: Literal["x", "y"] = "y"
+    clearance_dir: Literal["+", "-"] = "+"
+    clearance_mm: float = 0.0
     # Optional servo positions for the *magazine* head height, used by the
     # ``head_up`` / ``head_down`` steps during a swap. The magazine often
     # sits higher than the paper, so the servo angle to raise above /

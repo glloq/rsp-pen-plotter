@@ -98,6 +98,8 @@ const STEP_KINDS: HostSwapStepKind[] = [
   'head_down',
   'move_to_old_slot',
   'move_to_new_slot',
+  'advance_to_slot',
+  'retract_from_slot',
   'grab',
   'release',
   'dwell',
@@ -115,12 +117,23 @@ function defaultHostSwap(): HostSwapPlan {
     engage_z_mm: null,
     z_min_mm: null,
     z_max_mm: null,
+    clearance_axis: 'y',
+    clearance_dir: '+',
+    clearance_mm: 0,
+    // Default sequence is crash-safe: travel to each slot's approach
+    // point, advance in to act on the pen, then retract before the next
+    // lateral move. (With clearance 0 the advance/retract are no-ops, so
+    // the operator only needs to set the clearance distance.)
     steps: [
       { kind: 'head_up', wait_ms: 0, send: '' },
       { kind: 'move_to_old_slot', wait_ms: 0, send: '' },
+      { kind: 'advance_to_slot', wait_ms: 0, send: '' },
       { kind: 'release', wait_ms: 200, send: '' },
+      { kind: 'retract_from_slot', wait_ms: 0, send: '' },
       { kind: 'move_to_new_slot', wait_ms: 0, send: '' },
+      { kind: 'advance_to_slot', wait_ms: 0, send: '' },
       { kind: 'grab', wait_ms: 200, send: '' },
+      { kind: 'retract_from_slot', wait_ms: 0, send: '' },
       { kind: 'head_down', wait_ms: 0, send: '' },
     ],
   }
@@ -210,6 +223,13 @@ function setZ(field: 'safe_z_mm' | 'engage_z_mm' | 'z_min_mm' | 'z_max_mm', raw:
   const swap = ensureHostSwap()
   const v = raw.trim() === '' ? null : Number(raw)
   swap[field] = v !== null && Number.isFinite(v) ? v : null
+}
+
+// Clearance distance (mm) for the advance/retract hop. Empty / invalid → 0.
+function setClearanceMm(raw: string): void {
+  const swap = ensureHostSwap()
+  const v = Number(raw)
+  swap.clearance_mm = Number.isFinite(v) && v > 0 ? v : 0
 }
 
 // True when a real Z axis is in use (either height set) — the servo
@@ -511,6 +531,50 @@ function setMode(mode: ColorMode): void {
               :data-test="`host-pos-y-${i}`"
               @change="(e) => setSlotPosition(i, 'y', (e.target as HTMLInputElement).value)"
             />
+          </div>
+
+          <!-- Clearance: how far to back out of a slot before moving
+               sideways, so the head doesn't hit the neighbouring pens.
+               The slot position above is the engagement point; the
+               approach point sits this far away along the chosen axis. -->
+          <div class="mt-2 space-y-1 rounded border border-slate-800 bg-slate-950/40 p-2">
+            <p class="text-[11px] text-slate-400">{{ t('profile.hostSwap.clearanceHint') }}</p>
+            <div class="flex items-end gap-2">
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('profile.hostSwap.clearanceAxis') }}
+                <select
+                  v-model="hostSwap.clearance_axis"
+                  class="mt-0.5 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="host-clearance-axis"
+                >
+                  <option value="x">X</option>
+                  <option value="y">Y</option>
+                </select>
+              </label>
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('profile.hostSwap.clearanceDir') }}
+                <select
+                  v-model="hostSwap.clearance_dir"
+                  class="mt-0.5 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="host-clearance-dir"
+                >
+                  <option value="+">+</option>
+                  <option value="-">−</option>
+                </select>
+              </label>
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('profile.hostSwap.clearanceMm') }}
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  :value="hostSwap.clearance_mm"
+                  class="mt-0.5 w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="host-clearance-mm"
+                  @change="(e) => setClearanceMm((e.target as HTMLInputElement).value)"
+                />
+              </label>
+            </div>
           </div>
         </div>
 

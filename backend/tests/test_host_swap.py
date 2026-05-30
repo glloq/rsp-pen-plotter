@@ -232,3 +232,64 @@ def test_z_axis_wins_over_servo_override() -> None:
     orch = ToolChangeOrchestrator(profile)
     plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
     assert [c.send for c in plan.commands] == ["G0 Z5.000 F7200.0"]
+
+
+def test_clearance_approach_then_advance_retract() -> None:
+    """With a clearance vector, move_to_slot lands at the approach point
+    (engagement + clearance) and advance/retract hop in and out."""
+    steps = [
+        HostSwapStep(kind="move_to_new_slot"),  # → approach
+        HostSwapStep(kind="advance_to_slot"),  # → engagement
+        HostSwapStep(kind="grab"),
+        HostSwapStep(kind="retract_from_slot"),  # → approach
+    ]
+    profile = _host_profile(steps)
+    swap = profile.capabilities.tool_change.host_swap  # type: ignore[union-attr]
+    swap.clearance_axis = "y"
+    swap.clearance_dir = "+"
+    swap.clearance_mm = 15.0
+    orch = ToolChangeOrchestrator(profile)
+    # Slot 1 engagement is (40, 200); approach = (40, 215).
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    sends = [c.send for c in plan.commands]
+    assert sends == [
+        "G0 X40.000 Y215.000 F7200.0",  # move to approach
+        "G0 X40.000 Y200.000 F7200.0",  # advance to engagement
+        "M280 P1 S90",  # grab
+        "G0 X40.000 Y215.000 F7200.0",  # retract to approach
+    ]
+
+
+def test_clearance_negative_x_direction() -> None:
+    steps = [HostSwapStep(kind="move_to_new_slot"), HostSwapStep(kind="advance_to_slot")]
+    profile = _host_profile(steps)
+    swap = profile.capabilities.tool_change.host_swap  # type: ignore[union-attr]
+    swap.clearance_axis = "x"
+    swap.clearance_dir = "-"
+    swap.clearance_mm = 20.0
+    orch = ToolChangeOrchestrator(profile)
+    # Slot 1 engagement (40, 200); approach = (40 - 20, 200) = (20, 200).
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    sends = [c.send for c in plan.commands]
+    assert sends == ["G0 X20.000 Y200.000 F7200.0", "G0 X40.000 Y200.000 F7200.0"]
+
+
+def test_zero_clearance_keeps_approach_equal_to_engagement() -> None:
+    """Default clearance (0) → approach == engagement (no insertion hop)."""
+    steps = [HostSwapStep(kind="move_to_new_slot"), HostSwapStep(kind="advance_to_slot")]
+    profile = _host_profile(steps)  # clearance_mm defaults to 0
+    orch = ToolChangeOrchestrator(profile)
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    sends = [c.send for c in plan.commands]
+    assert sends == ["G0 X40.000 Y200.000 F7200.0", "G0 X40.000 Y200.000 F7200.0"]
+
+
+def test_advance_without_prior_move_is_skipped() -> None:
+    """advance_to_slot before any move_to_slot has no current slot → no-op."""
+    steps = [HostSwapStep(kind="advance_to_slot"), HostSwapStep(kind="grab")]
+    profile = _host_profile(steps)
+    swap = profile.capabilities.tool_change.host_swap  # type: ignore[union-attr]
+    swap.clearance_mm = 15.0
+    orch = ToolChangeOrchestrator(profile)
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    assert [c.send for c in plan.commands] == ["M280 P1 S90"]

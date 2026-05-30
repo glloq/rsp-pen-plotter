@@ -262,15 +262,15 @@ describe('ProfileEditor with a profile seeded', () => {
     await nextTick()
     await wrapper.find('[data-test="color-mode-host"]').trigger('click')
     await nextTick()
-    // Default seeds 6 steps (indices 0..5).
-    expect(wrapper.find('[data-test="host-step-5"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="host-step-6"]').exists()).toBe(false)
+    // Default seeds a crash-safe sequence of 10 steps (indices 0..9).
+    expect(wrapper.find('[data-test="host-step-9"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-step-10"]').exists()).toBe(false)
     await wrapper.find('[data-test="host-step-add"]').trigger('click')
     await nextTick()
-    expect(wrapper.find('[data-test="host-step-6"]').exists()).toBe(true)
-    await wrapper.find('[data-test="host-step-remove-6"]').trigger('click')
+    expect(wrapper.find('[data-test="host-step-10"]').exists()).toBe(true)
+    await wrapper.find('[data-test="host-step-remove-10"]').trigger('click')
     await nextTick()
-    expect(wrapper.find('[data-test="host-step-6"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="host-step-10"]').exists()).toBe(false)
   })
 
   it('blocks Save when a grab step has no take command', async () => {

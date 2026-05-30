@@ -4388,6 +4388,29 @@
             ],
             "title": "Travel Speed Mm S"
           },
+          "clearance_axis": {
+            "type": "string",
+            "enum": [
+              "x",
+              "y"
+            ],
+            "title": "Clearance Axis",
+            "default": "y"
+          },
+          "clearance_dir": {
+            "type": "string",
+            "enum": [
+              "+",
+              "-"
+            ],
+            "title": "Clearance Dir",
+            "default": "+"
+          },
+          "clearance_mm": {
+            "type": "number",
+            "title": "Clearance Mm",
+            "default": 0.0
+          },
           "head_up_command": {
             "anyOf": [
               {
@@ -4477,6 +4500,8 @@
               "release",
               "move_to_old_slot",
               "move_to_new_slot",
+              "advance_to_slot",
+              "retract_from_slot",
               "dwell",
               "raw"
             ],
@@ -4498,7 +4523,7 @@
           "kind"
         ],
         "title": "HostSwapStep",
-        "description": "One high-level step of a host-driven pen swap.\n\nThe operator builds the swap from these blocks instead of writing\nG-code; :class:`~pen_plotter.domain.toolchange.strategies.HostMacroStrategy`\ncompiles them to concrete commands at plan time, filling in each\npen's calibrated position. ``raw`` is the escape hatch for exotic\nhardware.\n\nKinds:\n  - ``head_up`` / ``head_down``: emit the profile pen-up/-down command.\n  - ``grab`` / ``release``: emit the plan's ``grab_command`` /\n    ``drop_command`` (the clamp / gripper primitive).\n  - ``move_to_old_slot`` / ``move_to_new_slot``: travel to the\n    outgoing / incoming pen's calibrated position.\n  - ``dwell``: pause ``wait_ms`` host-side (no command sent).\n  - ``raw``: send ``send`` verbatim."
+        "description": "One high-level step of a host-driven pen swap.\n\nThe operator builds the swap from these blocks instead of writing\nG-code; :class:`~pen_plotter.domain.toolchange.strategies.HostMacroStrategy`\ncompiles them to concrete commands at plan time, filling in each\npen's calibrated position. ``raw`` is the escape hatch for exotic\nhardware.\n\nKinds:\n  - ``head_up`` / ``head_down``: emit the profile pen-up/-down command.\n  - ``grab`` / ``release``: emit the plan's ``grab_command`` /\n    ``drop_command`` (the clamp / gripper primitive).\n  - ``move_to_old_slot`` / ``move_to_new_slot``: travel to the\n    outgoing / incoming pen's *approach* point (the slot position\n    offset by the clearance vector), safe for lateral motion.\n  - ``advance_to_slot`` / ``retract_from_slot``: move in/out of the\n    slot along the clearance vector (approach \u2194 engagement) so the\n    head doesn't crash the neighbouring pens. They act on the most\n    recent ``move_to_*_slot``.\n  - ``dwell``: pause ``wait_ms`` host-side (no command sent).\n  - ``raw``: send ``send`` verbatim."
       },
       "ImportRequest": {
         "properties": {
