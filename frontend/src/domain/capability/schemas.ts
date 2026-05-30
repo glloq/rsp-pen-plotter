@@ -54,7 +54,13 @@ export const HostSwapPlanSchema = z.object({
   grab_command: z.string().default(''),
   drop_command: z.string().default(''),
   travel_speed_mm_s: z.number().positive().nullable().default(null),
-  // Optional Z heights (mm) for a real motorised Z axis; null → servo.
+  // Optional servo head-height overrides for the magazine (often higher
+  // than the paper, so a different servo angle than the normal pen-up).
+  // null → use the profile's pen-up/-down commands.
+  head_up_command: z.string().nullable().default(null),
+  head_down_command: z.string().nullable().default(null),
+  // Optional Z heights (mm) for a real motorised Z axis; win over the
+  // servo overrides above. null → servo.
   safe_z_mm: z.number().nullable().default(null),
   engage_z_mm: z.number().nullable().default(null),
   // Informational machine Z travel limits (editor warns, no clamp).

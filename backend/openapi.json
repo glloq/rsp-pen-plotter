@@ -4388,6 +4388,28 @@
             ],
             "title": "Travel Speed Mm S"
           },
+          "head_up_command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Up Command"
+          },
+          "head_down_command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Down Command"
+          },
           "safe_z_mm": {
             "anyOf": [
               {

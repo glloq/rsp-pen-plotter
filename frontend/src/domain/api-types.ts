@@ -2033,6 +2033,10 @@ export interface components {
             drop_command: string;
             /** Travel Speed Mm S */
             travel_speed_mm_s?: number | null;
+            /** Head Up Command */
+            head_up_command?: string | null;
+            /** Head Down Command */
+            head_down_command?: string | null;
             /** Safe Z Mm */
             safe_z_mm?: number | null;
             /** Engage Z Mm */
