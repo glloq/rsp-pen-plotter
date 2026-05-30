@@ -43,7 +43,9 @@ _TEMPLATE_EXPECTED_VARS: dict[str, frozenset[str]] = {
     "footer.j2": frozenset({"profile", "home_x", "home_y", "travel_feed"}),
     "pen_up.j2": frozenset({"profile"}),
     "pen_down.j2": frozenset({"profile"}),
-    "tool_change.j2": frozenset({"profile", "slot", "pen_name"}),
+    "tool_change.j2": frozenset(
+        {"profile", "slot", "pen_name", "slot_x", "slot_y", "travel_feed"}
+    ),
     "pen_color_change.j2": frozenset({"profile", "color", "label"}),
     "line.j2": frozenset({"x", "y", "feed"}),
     "travel.j2": frozenset({"x", "y", "feed"}),
@@ -203,7 +205,7 @@ def _make_transform(
     bbox_cy = (bounds.y_min + bounds.y_max) / 2
     region_cx = region_x + region_w / 2
     region_cy = region_y + region_h / 2
-    y_up = profile.origin in ("bottom_left", "center")
+    y_up = profile.origin == "bottom_left"
     # For Y-up profiles, the operator's mental model is "top of the work plan
     # = top of the paper". The composite SVG carries geometry with Y growing
     # downward, so we mirror around the workspace centre after positioning.
@@ -424,9 +426,26 @@ def _generate_gcode_impl(
                         if prompt_pen and prompt_pen.name
                         else f"Pen {effective_slot}"
                     )
+                    # Automated magazines (carousel / rack) physically fetch the
+                    # pen from a fixed slot position. When that position is
+                    # calibrated, route the head there before triggering the
+                    # change so the swap macro acts on the right slot. Positions
+                    # are already in machine coordinates, so they bypass the
+                    # drawing transform.
+                    slot_pos = (
+                        prompt_pen.position
+                        if prompt_pen
+                        and profile.tool_change_method in ("carousel", "rack")
+                        else None
+                    )
                     out.append(
                         tool_change_t.render(
-                            profile=profile, slot=effective_slot, pen_name=pen_name
+                            profile=profile,
+                            slot=effective_slot,
+                            pen_name=pen_name,
+                            slot_x=slot_pos.x if slot_pos else None,
+                            slot_y=slot_pos.y if slot_pos else None,
+                            travel_feed=profile.travel_speed_mm_s * 60.0,
                         )
                     )
                 else:

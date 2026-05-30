@@ -8,7 +8,7 @@ and jobs track a single conversion-to-plot lifecycle.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, model_validator
@@ -109,7 +109,7 @@ class MachineProfile(BaseModel):
     name: str
     units: Literal["mm", "inch"]
     workspace: WorkspaceBounds
-    origin: Literal["top_left", "bottom_left", "center"]
+    origin: Literal["top_left", "bottom_left"]
     gcode_dialect: Literal["grbl", "marlin", "klipper", "ebb", "custom"]
     pen_up_command: str
     pen_down_command: str
@@ -128,6 +128,19 @@ class MachineProfile(BaseModel):
     # profiles load unchanged. When set, the explicit block wins and
     # the orchestrator (roadmap B.2) routes through it.
     capabilities: MachineCapabilities | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_fields(cls, data: Any) -> Any:
+        """Coerce retired field values so older profiles keep loading.
+
+        ``origin: "center"`` was only ever treated as ``"bottom_left"`` (a Y-axis
+        flip with no real re-centring), so map it forward to preserve behaviour
+        now that the canonical set is ``top_left`` / ``bottom_left``.
+        """
+        if isinstance(data, dict) and data.get("origin") == "center":
+            data = {**data, "origin": "bottom_left"}
+        return data
 
     @model_validator(mode="after")
     def _populate_capabilities(self) -> MachineProfile:

@@ -29,6 +29,28 @@ def _polyline_length(points: list[tuple[float, float]]) -> float:
     )
 
 
+def _move_seconds(distance: float, speed: float, accel: float) -> float:
+    """Time to cover ``distance`` under a trapezoidal velocity profile.
+
+    The head accelerates from rest to ``speed`` at ``accel`` (mm/s²), cruises,
+    then decelerates back to rest. Short moves never reach ``speed`` and follow
+    a triangular profile instead. With ``accel <= 0`` the estimate falls back to
+    the constant-velocity model so dialects without an acceleration limit (and
+    misconfigured profiles) keep a sane number.
+    """
+    if distance <= 0.0:
+        return 0.0
+    if accel <= 0.0 or speed <= 0.0:
+        return distance / max(speed, 1e-9)
+    # Distance spent ramping up to (and back down from) the cruise speed.
+    ramp_distance = speed * speed / accel
+    if ramp_distance <= distance:
+        cruise = distance - ramp_distance
+        return 2.0 * (speed / accel) + cruise / speed
+    # Triangular profile: peak speed is reached exactly at the midpoint.
+    return 2.0 * math.sqrt(distance / accel)
+
+
 def preflight_report(
     svg: str,
     profile: MachineProfile,
@@ -77,6 +99,7 @@ def preflight_report(
     previous_color: str | None = None
     previous_end: tuple[float, float] | None = None
     travel_speed = max(profile.travel_speed_mm_s, 1e-9)
+    accel = profile.acceleration_mm_s2
     mono_pen = profile.pen_slot_count <= 1
 
     for layer in geometry:
@@ -117,10 +140,10 @@ def preflight_report(
             if previous_end is not None:
                 hop = math.dist(previous_end, machine_points[0])
                 travel_length += hop
-                travel_time += hop / travel_speed
+                travel_time += _move_seconds(hop, travel_speed, accel)
             length = _polyline_length(machine_points)
             drawing_length += length
-            drawing_time += length / speed
+            drawing_time += _move_seconds(length, speed, accel)
             previous_end = machine_points[-1]
 
     for slot in missing:

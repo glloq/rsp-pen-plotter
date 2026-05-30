@@ -10,13 +10,15 @@
 // The rail auto-collapses when the active workspace contains nothing
 // to render, so the Beginner workspace doesn't steal space.
 
-import { computed } from 'vue'
+import { computed, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { useJobStore } from '../../stores/job'
 import { usePlotterStore } from '../../stores/plotter'
 import { useQueueStore } from '../../stores/queue'
+import { useUiStore } from '../../stores/ui'
 import { useWorkspacesStore, type PanelId } from '../../stores/workspaces'
+import { normalizePens } from '../../composables/useProfileDraft'
 import MachineStatusPill from '../MachineStatusPill.vue'
 import LayerInspector from './LayerInspector.vue'
 import MagazineView from './MagazineView.vue'
@@ -33,6 +35,7 @@ const workspaces = useWorkspacesStore()
 const job = useJobStore()
 const queue = useQueueStore()
 const plotter = usePlotterStore()
+const ui = useUiStore()
 const { status: plotterStatus } = storeToRefs(plotter)
 
 const V2_PANELS: ReadonlySet<PanelId> = new Set<PanelId>([
@@ -44,9 +47,7 @@ const V2_PANELS: ReadonlySet<PanelId> = new Set<PanelId>([
   'compare',
 ])
 
-const visiblePanels = computed(() =>
-  workspaces.active.panels.filter((id) => V2_PANELS.has(id)),
-)
+const visiblePanels = computed(() => workspaces.active.panels.filter((id) => V2_PANELS.has(id)))
 
 const activeRun = computed(() => queue.active[0] ?? null)
 const activeLayers = computed(() => job.selectedPlacement?.layers ?? [])
@@ -60,6 +61,24 @@ async function onResume(): Promise<void> {
 }
 async function onCancel(): Promise<void> {
   if (activeRun.value) await queue.act(activeRun.value.id, 'cancel')
+}
+
+// Magazine view edits route back to the canonical surfaces: toggling a
+// slot's install state persists straight to the profile, while the ✎
+// "edit slot" affordance opens the full magazine editor (Colours tab).
+async function onToggleInstall(slotIndex: number): Promise<void> {
+  const profile = activeProfile.value
+  if (!profile) return
+  const next = structuredClone(toRaw(profile))
+  normalizePens(next)
+  const pen = next.pens?.find((s) => s.index === slotIndex)
+  if (!pen) return
+  pen.installed = !pen.installed
+  await job.saveProfile(next)
+}
+
+function onEditSlot(): void {
+  ui.openPlotterSettings('colors')
 }
 </script>
 
@@ -87,6 +106,8 @@ async function onCancel(): Promise<void> {
             v-if="activeProfile"
             :slots="activeProfile.pens ?? []"
             :capacity="activeProfile.pen_slot_count"
+            @toggle-install="onToggleInstall"
+            @edit-slot="onEditSlot"
           />
           <p v-else class="empty">{{ t('workspaces.empty.magazine') }}</p>
         </section>
@@ -102,11 +123,7 @@ async function onCancel(): Promise<void> {
           </template>
           <p v-else class="empty">{{ t('workspaces.empty.queue') }}</p>
         </section>
-        <section
-          v-else-if="id === 'machine_telemetry'"
-          :data-test="`rail-${id}`"
-          class="telemetry"
-        >
+        <section v-else-if="id === 'machine_telemetry'" :data-test="`rail-${id}`" class="telemetry">
           <header class="telemetry__header">
             <strong>{{ t('workspaces.panel.machineTelemetry') }}</strong>
             <MachineStatusPill />
@@ -118,9 +135,7 @@ async function onCancel(): Promise<void> {
             </li>
             <li v-if="plotterStatus.total > 0">
               <span>{{ t('workspaces.telemetry.progress') }}</span>
-              <span class="value">
-                {{ plotterStatus.acked }} / {{ plotterStatus.total }}
-              </span>
+              <span class="value"> {{ plotterStatus.acked }} / {{ plotterStatus.total }} </span>
             </li>
             <li v-if="plotterStatus.message">
               <span>{{ t('workspaces.telemetry.message') }}</span>

@@ -3,10 +3,10 @@
 //
 // Renders the operator's pen magazine as a grid of slots — each
 // slot showing its colour, install state, and per-slot calibration
-// hint. Pure / props-driven; the editing surface is intentionally
-// left to the existing profile editor today, but the component
-// exposes events ('toggle-install', 'edit-slot') so a future
-// wrapper can wire them up.
+// hint. Pure / props-driven: it emits 'toggle-install' and
+// 'edit-slot' rather than mutating anything itself. WorkspaceRail
+// wires those to the profile (persist the install flag) and to the
+// full magazine editor (Colours tab) respectively.
 
 import { computed } from 'vue'
 import type { PenSlot } from '../../api/client'

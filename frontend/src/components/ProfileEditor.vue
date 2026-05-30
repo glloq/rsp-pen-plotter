@@ -60,6 +60,20 @@ const workspaceSize = computed(() => {
   return { w, h }
 })
 
+// A zero/negative span means the workspace rectangle is degenerate or
+// inverted — generation would silently divide by a tiny epsilon, so we
+// block the save and tell the operator which axis is wrong.
+const workspaceInvalid = computed(() => workspaceSize.value.w <= 0 || workspaceSize.value.h <= 0)
+
+// ``M204`` (acceleration) is only emitted for the firmwares that
+// understand it. EBB / custom profiles ignore the field on the wire,
+// though it still feeds the time estimate. Surface that so the operator
+// isn't surprised the value "does nothing" on an AxiDraw.
+const ACCEL_DIALECTS = ['grbl', 'marlin', 'klipper']
+const accelOnWire = computed(() =>
+  draft.value ? ACCEL_DIALECTS.includes(draft.value.gcode_dialect) : true,
+)
+
 async function remove(): Promise<void> {
   if (!draft.value) return
   const confirmed = await confirmAction({
@@ -178,6 +192,9 @@ async function remove(): Promise<void> {
                     <option value="mm">mm</option>
                     <option value="inch">inch</option>
                   </select>
+                  <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                    t('profile.unitsNoConvertHint')
+                  }}</span>
                 </label>
                 <label class="block text-slate-400"
                   >{{ t('profile.origin') }}
@@ -187,7 +204,6 @@ async function remove(): Promise<void> {
                   >
                     <option value="top_left">{{ t('profile.originTopLeft') }}</option>
                     <option value="bottom_left">{{ t('profile.originBottomLeft') }}</option>
-                    <option value="center">{{ t('profile.originCenter') }}</option>
                   </select>
                 </label>
                 <label class="block text-slate-400"
@@ -228,6 +244,13 @@ async function remove(): Promise<void> {
                 </label>
               </div>
               <p class="text-[11px] text-slate-500">{{ t('profile.originHint') }}</p>
+              <p
+                v-if="workspaceInvalid"
+                class="text-[11px] text-red-400"
+                data-test="workspace-invalid"
+              >
+                ⚠ {{ t('profile.workspaceInvalid') }}
+              </p>
             </div>
 
             <!-- Workspace preview -->
@@ -265,13 +288,9 @@ async function remove(): Promise<void> {
                   <circle cx="10" cy="10" r="2" fill="#10b981" />
                   <text x="14" y="9" fill="#10b981" font-size="5">0,0</text>
                 </g>
-                <g v-else-if="draft.origin === 'bottom_left'">
+                <g v-else>
                   <circle cx="10" cy="70" r="2" fill="#10b981" />
                   <text x="14" y="73" fill="#10b981" font-size="5">0,0</text>
-                </g>
-                <g v-else>
-                  <circle cx="50" cy="40" r="2" fill="#10b981" />
-                  <text x="54" y="39" fill="#10b981" font-size="5">0,0</text>
                 </g>
               </svg>
             </div>
@@ -326,7 +345,48 @@ async function remove(): Promise<void> {
               <span class="mt-0.5 block text-[11px] text-slate-500">{{
                 t('profile.accelerationHint')
               }}</span>
+              <span
+                v-if="!accelOnWire"
+                class="mt-0.5 block text-[11px] text-amber-300"
+                data-test="accel-not-on-wire"
+                >⚠ {{ t('profile.accelerationNotOnWire') }}</span
+              >
             </label>
+          </div>
+
+          <!-- Mechanical pen commands — machine motion config (the raw
+               G-code that raises / lowers the pen). Lives here next to
+               speed / acceleration rather than under colour management,
+               because it's the same "how does the head move?" concern.
+               Per-pen overrides live in the magazine editor. -->
+          <div class="space-y-2 border-t border-slate-700 pt-3">
+            <p class="text-[11px] uppercase tracking-wider text-slate-500">
+              {{ t('profile.penCommands') }}
+            </p>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="block text-slate-400"
+                >{{ t('profile.penUp') }}
+                <input
+                  v-model="draft.pen_up_command"
+                  type="text"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+                />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                  t('profile.penUpHint')
+                }}</span>
+              </label>
+              <label class="block text-slate-400"
+                >{{ t('profile.penDown') }}
+                <input
+                  v-model="draft.pen_down_command"
+                  type="text"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+                />
+                <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                  t('profile.penDownHint')
+                }}</span>
+              </label>
+            </div>
           </div>
         </div>
       </details>
@@ -445,7 +505,7 @@ async function remove(): Promise<void> {
         <button
           type="button"
           class="flex-1 rounded bg-emerald-600 px-3 py-2 font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          :disabled="saving"
+          :disabled="saving || workspaceInvalid"
           @click="save"
         >
           {{ saving ? t('profile.saving') : t('profile.save') }}

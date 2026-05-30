@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import MagazineEditor from './MagazineEditor.vue'
 import { useAvailableColorsStore } from '../stores/availableColors'
+import { useJobStore } from '../stores/job'
 import type { MachineProfile } from '../api/client'
 
 // Regression guard for the "assigned colour stays black" bug: the
@@ -87,6 +88,12 @@ const i18n = createI18n({
         empty: 'empty',
         customColor: 'Custom {hex}',
         noAvailable: 'No colours',
+        calibration: 'Calibration',
+        posX: 'Slot X',
+        posY: 'Slot Y',
+        penUpOverride: 'Pen-up override',
+        penDownOverride: 'Pen-down override',
+        useProfileDefault: 'Profile default',
       },
       availableColors: { pickColor: 'Pick' },
       colorPicker: { title: 'Colour', cancel: 'Cancel', confirm: 'OK' },
@@ -108,7 +115,15 @@ describe('MagazineEditor', () => {
   it('persists an assigned available colour onto the pen slot', async () => {
     const colors = useAvailableColorsStore()
     colors.colors = [
-      { color_id: 'r', hex: '#ff0000', name: 'Red', position: 0, stroke_width_mm: 0.5, odometer_mm: 0, created_at: '2026-01-01T00:00:00Z' },
+      {
+        color_id: 'r',
+        hex: '#ff0000',
+        name: 'Red',
+        position: 0,
+        stroke_width_mm: 0.5,
+        odometer_mm: 0,
+        created_at: '2026-01-01T00:00:00Z',
+      },
     ]
     colors.loaded = true
 
@@ -129,5 +144,54 @@ describe('MagazineEditor', () => {
     // ...and the slot's swatch reflects it rather than staying black.
     const swatch = wrapper.findAll('button[title]').find((b) => b.attributes('title') === '#ff0000')
     expect(swatch).toBeDefined()
+  })
+
+  it('hides the calibration block for manual / mono machines', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    expect(wrapper.find('[data-test="pen-calibration-0"]').exists()).toBe(false)
+  })
+
+  it('exposes per-slot calibration for carousel machines and saves a position', async () => {
+    const job = useJobStore()
+    job.profiles[0]!.tool_change_method = 'carousel'
+
+    const wrapper = mountEditor()
+    await nextTick()
+
+    const block = wrapper.find('[data-test="pen-calibration-0"]')
+    expect(block.exists()).toBe(true)
+
+    // The first number input inside the calibration block is Slot X.
+    const xInput = block.findAll('input[type="number"]')[0]!
+    await xInput.setValue('42')
+    await xInput.trigger('change')
+    await nextTick()
+
+    expect(saveSpy).toHaveBeenCalled()
+    const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
+    expect(saved.pens?.find((p) => p.index === 0)?.position).toEqual({ x: 42, y: 0 })
+  })
+
+  it('saves a per-slot pen-up override and clears it back to null', async () => {
+    const job = useJobStore()
+    job.profiles[0]!.tool_change_method = 'carousel'
+
+    const wrapper = mountEditor()
+    await nextTick()
+
+    const block = wrapper.find('[data-test="pen-calibration-0"]')
+    const upInput = block.findAll('input[type="text"]')[0]!
+    await upInput.setValue('M280 P0 S30')
+    await upInput.trigger('change')
+    await nextTick()
+    let saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
+    expect(saved.pens?.find((p) => p.index === 0)?.pen_up_command).toBe('M280 P0 S30')
+
+    await upInput.setValue('   ')
+    await upInput.trigger('change')
+    await nextTick()
+    saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
+    expect(saved.pens?.find((p) => p.index === 0)?.pen_up_command).toBeNull()
   })
 })

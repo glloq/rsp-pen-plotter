@@ -1,2 +1,6 @@
 ; Change to pen slot {{ slot }} ({{ pen_name }})
+{% if slot_x is not none and slot_y is not none -%}
+{{ profile.pen_up_command }}
+G0 X{{ "%.3f"|format(slot_x) }} Y{{ "%.3f"|format(slot_y) }} F{{ "%.1f"|format(travel_feed) }}
+{% endif -%}
 {{ profile.tool_change_command }}

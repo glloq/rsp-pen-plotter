@@ -20,9 +20,10 @@ const { plotterSettingsOpen, plotterTab } = storeToRefs(ui)
 const { status, port, baudrate, terminator, error, progress } = storeToRefs(plotter)
 
 watch(
-  // Re-derive the default serial terminator whenever the active profile
-  // (or its EBB config) changes. The operator can still override it
-  // on-the-fly for debugging — we only seed the default here.
+  // The serial terminator follows the active profile so there's a single
+  // source of truth: EBB profiles carry their own ``serial_terminator``
+  // (default CR), every other dialect uses LF. The connection tab shows
+  // this value read-only rather than letting it drift from the profile.
   () => [job.selectedProfile?.gcode_dialect, job.selectedProfile?.ebb?.serial_terminator] as const,
   ([dialect, ebbTerminator]) => {
     if (dialect === 'ebb') {
@@ -206,14 +207,15 @@ onBeforeUnmount(() => {
                   </label>
                   <label class="block text-xs text-slate-400">
                     {{ t('execute.terminator') }}
-                    <select
-                      v-model="terminator"
-                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+                    <div
+                      class="mt-0.5 flex w-full items-center rounded border border-slate-700 bg-slate-800/60 px-2 py-1 text-sm text-slate-300"
+                      data-test="terminator-readonly"
                     >
-                      <option value="lf">LF</option>
-                      <option value="cr">CR</option>
-                      <option value="crlf">CRLF</option>
-                    </select>
+                      <span class="font-mono uppercase">{{ terminator }}</span>
+                      <span class="ml-auto text-[10px] text-slate-500">{{
+                        t('execute.terminatorFromProfile')
+                      }}</span>
+                    </div>
                   </label>
                 </div>
                 <button

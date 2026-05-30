@@ -198,4 +198,41 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(saveBtn).toBeDefined()
     expect(saveBtn!.attributes('disabled')).toBeUndefined()
   })
+
+  it('hides the acceleration-not-on-wire warning for a GRBL profile', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    expect(wrapper.find('[data-test="accel-not-on-wire"]').exists()).toBe(false)
+  })
+
+  it('warns that acceleration is not sent on the wire for an EBB profile', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    const dialect = wrapper
+      .findAll('select')
+      .find((s) => s.findAll('option').some((o) => o.attributes('value') === 'ebb'))!
+    await dialect.setValue('ebb')
+    await nextTick()
+    expect(wrapper.find('[data-test="accel-not-on-wire"]').exists()).toBe(true)
+  })
+
+  it('flags an inverted workspace and disables Save', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    // Drive X max below X min → degenerate rectangle.
+    const inputs = wrapper.findAll('input[type="number"]')
+    const xmax = inputs.find((i) => (i.element as HTMLInputElement).valueAsNumber === 297)!
+    await xmax.setValue('-5')
+    await nextTick()
+    expect(wrapper.find('[data-test="workspace-invalid"]').exists()).toBe(true)
+    const saveBtn = wrapper.findAll('button').find((b) => b.text() === 'Save')!
+    expect(saveBtn.attributes('disabled')).toBeDefined()
+  })
+
+  it('no longer offers the removed "center" origin option', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    const originValues = wrapper.findAll('option').map((o) => o.attributes('value'))
+    expect(originValues).not.toContain('center')
+  })
 })
