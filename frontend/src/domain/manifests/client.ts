@@ -55,9 +55,7 @@ async function tryFetch(domain: string): Promise<unknown> {
   return response.data
 }
 
-export async function fetchAlgorithmsManifest(): Promise<
-  ManifestFetchResult<AlgorithmsManifest>
-> {
+export async function fetchAlgorithmsManifest(): Promise<ManifestFetchResult<AlgorithmsManifest>> {
   try {
     const raw = await tryFetch('algorithms')
     const parsed = AlgorithmsManifestSchema.parse(raw)

@@ -17,8 +17,7 @@ from pen_plotter.converters.dxf import DxfConverter
 _INKSCAPE_LABEL = "{http://www.inkscape.org/namespaces/inkscape}label"
 
 
-def _make_dxf(*, with_text: bool = True, with_mtext: bool = False,
-              rotated: bool = False) -> bytes:
+def _make_dxf(*, with_text: bool = True, with_mtext: bool = False, rotated: bool = False) -> bytes:
     doc = ezdxf.new("R2010")
     msp = doc.modelspace()
     # Geometry so the bounding box is well-defined.
@@ -47,9 +46,7 @@ def test_dxf_without_hershey_keeps_outline_text() -> None:
 
 def test_dxf_hershey_text_layer_present_when_enabled() -> None:
     """Enabling ``hershey_text`` adds a dedicated text layer."""
-    result = DxfConverter().convert(
-        _make_dxf(), options={"hershey_text": True, "font": "futural"}
-    )
+    result = DxfConverter().convert(_make_dxf(), options={"hershey_text": True, "font": "futural"})
     root = ET.fromstring(result.svg)
     labels = {child.get(_INKSCAPE_LABEL) for child in root.iter()}
     assert "text" in labels
@@ -64,10 +61,7 @@ def test_dxf_hershey_handles_mtext_multilines() -> None:
     # Two lines of MTEXT → at least two pen-down M commands in the
     # Hershey text layer.
     root = ET.fromstring(result.svg)
-    text_layer = next(
-        child for child in root.iter()
-        if child.get(_INKSCAPE_LABEL) == "text"
-    )
+    text_layer = next(child for child in root.iter() if child.get(_INKSCAPE_LABEL) == "text")
     serialised = ET.tostring(text_layer, encoding="unicode")
     assert serialised.count("M") >= 2
 
@@ -83,9 +77,7 @@ def test_dxf_hershey_warns_on_rotated_text() -> None:
 
 def test_dxf_hershey_disabled_emits_no_extra_text_layer() -> None:
     """When the toggle is off, no Hershey overlay is appended."""
-    result = DxfConverter().convert(
-        _make_dxf(), options={"hershey_text": False}
-    )
+    result = DxfConverter().convert(_make_dxf(), options={"hershey_text": False})
     root = ET.fromstring(result.svg)
     labels = [child.get(_INKSCAPE_LABEL) for child in root.iter()]
     # No "text" label produced by the converter (the per-colour groups

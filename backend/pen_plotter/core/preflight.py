@@ -24,9 +24,7 @@ from pen_plotter.models import MachineProfile, Placement, PreflightReport
 
 def _polyline_length(points: list[tuple[float, float]]) -> float:
     """Total length of a polyline in its coordinate space."""
-    return sum(
-        math.dist(points[i], points[i + 1]) for i in range(len(points) - 1)
-    )
+    return sum(math.dist(points[i], points[i + 1]) for i in range(len(points) - 1))
 
 
 def _move_seconds(distance: float, speed: float, accel: float) -> float:

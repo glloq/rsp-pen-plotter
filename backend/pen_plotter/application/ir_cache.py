@@ -100,9 +100,7 @@ def fetch_geometry(
     try:
         key = _cache_key("geometry", source_hash, options)
         with Session(target) as session:
-            row = session.exec(
-                select(IrArtifactRow).where(IrArtifactRow.cache_key == key)
-            ).first()
+            row = session.exec(select(IrArtifactRow).where(IrArtifactRow.cache_key == key)).first()
             if row is None:
                 return None
             return GeometryIR.model_validate_json(row.payload.decode("utf-8"))

@@ -120,9 +120,7 @@ def _measure_vector(data: bytes, runs: int) -> dict[str, list[float]]:
     profile = next(iter(load_profiles()))
     samples: dict[str, list[float]] = {"convert": [], "optimize": [], "gcode": []}
     for _ in range(runs):
-        t1, converted = _time(
-            lambda: convert_file(data, "fixture.svg", "image/svg+xml")
-        )
+        t1, converted = _time(lambda: convert_file(data, "fixture.svg", "image/svg+xml"))
         samples["convert"].append(t1)
         cvt = converted  # bind loop var into the closures below
         t2, optimized = _time(lambda c=cvt: optimize_svg(c.svg))  # type: ignore[attr-defined]

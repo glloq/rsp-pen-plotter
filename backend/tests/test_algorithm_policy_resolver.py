@@ -80,17 +80,13 @@ def test_bitmap_illustration_fast_picks_direct() -> None:
 
 
 def test_bitmap_illustration_balanced_picks_contours() -> None:
-    d = resolve(
-        _input(source_kind=SourceKind.BITMAP_ILLUSTRATION, goal=Goal.BALANCED)
-    )
+    d = resolve(_input(source_kind=SourceKind.BITMAP_ILLUSTRATION, goal=Goal.BALANCED))
     assert d.default_algorithm == "contours"
     assert d.default_options["max_rings"] == 24
 
 
 def test_bitmap_illustration_quality_picks_centerline() -> None:
-    d = resolve(
-        _input(source_kind=SourceKind.BITMAP_ILLUSTRATION, goal=Goal.QUALITY)
-    )
+    d = resolve(_input(source_kind=SourceKind.BITMAP_ILLUSTRATION, goal=Goal.QUALITY))
     assert d.default_algorithm == "centerline"
     assert d.default_options["smooth"] is True
 
@@ -157,9 +153,7 @@ def test_machine_only_palette_uses_fixed_palette() -> None:
 
 
 def test_vector_input_ignores_palette_mode_for_segmentation() -> None:
-    d = resolve(
-        _input(source_kind=SourceKind.VECTOR_SVG, palette_mode=PaletteMode.FREE)
-    )
+    d = resolve(_input(source_kind=SourceKind.VECTOR_SVG, palette_mode=PaletteMode.FREE))
     assert d.segmentation_method is SegmentationMethod.NONE
 
 
@@ -217,25 +211,19 @@ def test_sparse_palette_constraint_overrides_to_scanlines() -> None:
         )
     )
     assert d.default_algorithm == "scanlines"
-    assert any(
-        c.constraint == "sparse_palette" for c in d.hard_constraints_applied
-    )
+    assert any(c.constraint == "sparse_palette" for c in d.hard_constraints_applied)
 
 
 def test_sparse_palette_does_not_fire_for_friendly_algo() -> None:
     # bitmap_illustration / fast already proposes 'direct' which is in
     # the friendly list, so the constraint is silent.
-    d = resolve(
-        _input(source_kind=SourceKind.BITMAP_ILLUSTRATION, available_colors_count=2)
-    )
+    d = resolve(_input(source_kind=SourceKind.BITMAP_ILLUSTRATION, available_colors_count=2))
     assert d.default_algorithm == "direct"
 
 
 def test_mono_pen_machine_constraint_records_explanation() -> None:
     d = resolve(_input(is_mono_pen_machine=True))
-    assert any(
-        c.constraint == "mono_pen_machine" for c in d.hard_constraints_applied
-    )
+    assert any(c.constraint == "mono_pen_machine" for c in d.hard_constraints_applied)
 
 
 def test_mono_pen_caps_num_colors_to_one() -> None:
@@ -244,9 +232,7 @@ def test_mono_pen_caps_num_colors_to_one() -> None:
 
 
 def test_mono_pen_with_free_palette_falls_back_to_fixed_palette() -> None:
-    d = resolve(
-        _input(is_mono_pen_machine=True, palette_mode=PaletteMode.FREE)
-    )
+    d = resolve(_input(is_mono_pen_machine=True, palette_mode=PaletteMode.FREE))
     assert d.segmentation_method is SegmentationMethod.FIXED_PALETTE
 
 

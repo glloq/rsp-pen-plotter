@@ -65,6 +65,4 @@ async def test_policy_resolve_applies_hard_constraint_for_large_image() -> None:
     # the sparse-palette override down to scanlines. (bitmap_photo/quality
     # is now palette-friendly crosshatch and would not trip this.)
     assert body["default_algorithm"] == "scanlines"
-    assert any(
-        c["constraint"] == "sparse_palette" for c in body["hard_constraints_applied"]
-    )
+    assert any(c["constraint"] == "sparse_palette" for c in body["hard_constraints_applied"])

@@ -215,9 +215,7 @@ class GcodeStreamer:
             # operator-confirm action.
             action = self._swap_actions.get(index)
             if action is None and index in self._pause_points:
-                action = SwapAction(
-                    kind="operator_confirm", prompt=self._pause_points[index]
-                )
+                action = SwapAction(kind="operator_confirm", prompt=self._pause_points[index])
             if action is not None:
                 aborted = await self._handle_swap(action)
                 if aborted:

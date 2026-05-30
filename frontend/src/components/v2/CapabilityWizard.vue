@@ -42,7 +42,7 @@ const modeOptions: { value: ToolingMode; label: string; help: string }[] = [
   {
     value: 'manual',
     label: 'Manuel guidé',
-    help: 'La machine se positionne, l\'opérateur change le stylo, puis confirme.',
+    help: "La machine se positionne, l'opérateur change le stylo, puis confirme.",
   },
   {
     value: 'single_pen',
@@ -81,8 +81,10 @@ function removeMacroStep(i: number): void {
 const canAdvance = computed<boolean>(() => {
   if (activeStep.value === 1) {
     if (state.tool_change.mode === 'host_macro') {
-      return state.tool_change.host_macro.length > 0 &&
+      return (
+        state.tool_change.host_macro.length > 0 &&
         state.tool_change.host_macro.every((s) => s.send.trim().length > 0)
+      )
     }
     if (state.tool_change.mode === 'manual') {
       return !!state.tool_change.manual_prompt?.body?.trim()
@@ -92,10 +94,10 @@ const canAdvance = computed<boolean>(() => {
 })
 
 function next(): void {
-  if (activeStep.value < 2) activeStep.value = ((activeStep.value + 1) as 0 | 1 | 2)
+  if (activeStep.value < 2) activeStep.value = (activeStep.value + 1) as 0 | 1 | 2
 }
 function previous(): void {
-  if (activeStep.value > 0) activeStep.value = ((activeStep.value - 1) as 0 | 1 | 2)
+  if (activeStep.value > 0) activeStep.value = (activeStep.value - 1) as 0 | 1 | 2
 }
 
 function confirm(): void {
@@ -106,7 +108,7 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
   { value: 'abort', label: 'Abandonner — le job est marqué en échec.' },
   {
     value: 'pause_and_prompt',
-    label: 'Pause et demande à l\'opérateur (recommandé).',
+    label: "Pause et demande à l'opérateur (recommandé).",
   },
   {
     value: 'skip_layer',
@@ -131,11 +133,7 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
           :key="opt.value"
           :class="{ active: state.tool_change.mode === opt.value }"
         >
-          <button
-            type="button"
-            :data-test="`cap-mode-${opt.value}`"
-            @click="setMode(opt.value)"
-          >
+          <button type="button" :data-test="`cap-mode-${opt.value}`" @click="setMode(opt.value)">
             <strong>{{ opt.label }}</strong>
             <span>{{ opt.help }}</span>
           </button>
@@ -163,7 +161,10 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
             data-test="cap-manual-body"
           ></textarea>
         </label>
-        <small>Variables supportées&nbsp;: <code>{color}</code>, <code>{slot}</code>, <code>{label}</code>.</small>
+        <small
+          >Variables supportées&nbsp;: <code>{color}</code>, <code>{slot}</code>,
+          <code>{label}</code>.</small
+        >
       </div>
 
       <div v-else-if="state.tool_change.mode === 'host_macro'" data-test="cap-macro-knobs">
@@ -183,11 +184,7 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
               step="50"
               :data-test="`cap-macro-wait-${i}`"
             />
-            <button
-              type="button"
-              :data-test="`cap-macro-remove-${i}`"
-              @click="removeMacroStep(i)"
-            >
+            <button type="button" :data-test="`cap-macro-remove-${i}`" @click="removeMacroStep(i)">
               −
             </button>
           </li>
@@ -196,8 +193,7 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
       </div>
 
       <div v-else data-test="cap-no-knobs">
-        Aucune configuration requise pour le mode
-        « {{ state.tool_change.mode }} ».
+        Aucune configuration requise pour le mode « {{ state.tool_change.mode }} ».
       </div>
     </section>
 
@@ -207,11 +203,7 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
       <ul class="recovery">
         <li v-for="opt in recoveryOptions" :key="opt.value">
           <label>
-            <input
-              v-model="state.tool_change.recovery_policy"
-              type="radio"
-              :value="opt.value"
-            />
+            <input v-model="state.tool_change.recovery_policy" type="radio" :value="opt.value" />
             {{ opt.label }}
           </label>
         </li>
@@ -240,9 +232,7 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
       >
         Suivant
       </button>
-      <button v-else type="button" data-test="cap-confirm" @click="confirm">
-        Enregistrer
-      </button>
+      <button v-else type="button" data-test="cap-confirm" @click="confirm">Enregistrer</button>
     </footer>
   </div>
 </template>

@@ -40,6 +40,7 @@ def _gradient_field(
     """Return (vx, vy): unit vectors perpendicular to ``∇intensity``."""
     try:
         from skimage.filters import sobel_h, sobel_v  # type: ignore[import-untyped]
+
         gy = sobel_h(intensity).astype(np.float32)
         gx = sobel_v(intensity).astype(np.float32)
     except ImportError:
@@ -83,10 +84,7 @@ def _perlin_field(
     c10 = coarse[np.ix_(y1, x0)]
     c11 = coarse[np.ix_(y1, x1)]
     angle_field = (
-        c00 * (1 - ty) * (1 - tx)
-        + c01 * (1 - ty) * tx
-        + c10 * ty * (1 - tx)
-        + c11 * ty * tx
+        c00 * (1 - ty) * (1 - tx) + c01 * (1 - ty) * tx + c10 * ty * (1 - tx) + c11 * ty * tx
     ) * math.pi
     vx = np.cos(angle_field).astype(np.float32)
     vy = np.sin(angle_field).astype(np.float32)
@@ -182,6 +180,7 @@ class FlowFieldAlgorithm(RasterAlgorithm):
                 # gradient even without caller-supplied intensity.
                 try:
                     from scipy.ndimage import distance_transform_edt  # type: ignore[import-untyped]
+
                     intensity = distance_transform_edt(bool_mask).astype(np.float32)
                 except ImportError:
                     intensity = bool_mask.astype(np.float32)
@@ -206,13 +205,25 @@ class FlowFieldAlgorithm(RasterAlgorithm):
             if not bool_mask[iy, ix] or occupancy[iy, ix]:
                 continue
             fwd = _integrate_streamline(
-                vx, vy, bool_mask, occupancy, (sx, sy),
-                step=step, max_steps=max_steps, direction=1,
+                vx,
+                vy,
+                bool_mask,
+                occupancy,
+                (sx, sy),
+                step=step,
+                max_steps=max_steps,
+                direction=1,
             )
             if bidirectional:
                 bwd = _integrate_streamline(
-                    vx, vy, bool_mask, occupancy, (sx, sy),
-                    step=step, max_steps=max_steps, direction=-1,
+                    vx,
+                    vy,
+                    bool_mask,
+                    occupancy,
+                    (sx, sy),
+                    step=step,
+                    max_steps=max_steps,
+                    direction=-1,
                 )
                 # Reverse backward path and stitch in front of forward.
                 if len(bwd) > 1:

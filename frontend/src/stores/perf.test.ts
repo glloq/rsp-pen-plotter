@@ -109,7 +109,11 @@ describe('usePerfTracker', () => {
   it('still records when the wrapped fn throws', () => {
     const store = usePerfStore()
     const tracker = usePerfTracker()
-    expect(() => tracker.time('preview_refresh', undefined, () => { throw new Error('boom') })).toThrow()
+    expect(() =>
+      tracker.time('preview_refresh', undefined, () => {
+        throw new Error('boom')
+      }),
+    ).toThrow()
     expect(store.summary('preview_refresh').count).toBe(1)
   })
 

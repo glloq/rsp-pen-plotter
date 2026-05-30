@@ -43,27 +43,14 @@ const BUILTIN_BEGINNER: Workspace = {
   // plot surfaces, so the casual operator sees a live run timeline,
   // the pen magazine and the plotter state without changing
   // workspace. The Pro preset adds the inspectors.
-  panels: [
-    'source',
-    'style',
-    'preview',
-    'plot',
-    'queue',
-    'magazine',
-    'machine_telemetry',
-  ],
+  panels: ['source', 'style', 'preview', 'plot', 'queue', 'magazine', 'machine_telemetry'],
   builtin: true,
 }
 
 const BUILTIN_PRO: Workspace = {
   id: 'builtin.pro',
   name: 'Pro',
-  panels: [
-    'layer_inspector',
-    'pipeline_inspector',
-    'queue',
-    'machine_telemetry',
-  ],
+  panels: ['layer_inspector', 'pipeline_inspector', 'queue', 'machine_telemetry'],
   builtin: true,
 }
 

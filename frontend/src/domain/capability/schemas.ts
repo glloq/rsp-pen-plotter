@@ -9,22 +9,13 @@
  */
 import { z } from 'zod'
 
-export const ToolingModeSchema = z.enum([
-  'firmware',
-  'host_macro',
-  'manual',
-  'single_pen',
-])
+export const ToolingModeSchema = z.enum(['firmware', 'host_macro', 'manual', 'single_pen'])
 export type ToolingMode = z.infer<typeof ToolingModeSchema>
 
 export const CommandSourceSchema = z.enum(['machine', 'host', 'operator'])
 export type CommandSource = z.infer<typeof CommandSourceSchema>
 
-export const RecoveryPolicySchema = z.enum([
-  'abort',
-  'pause_and_prompt',
-  'skip_layer',
-])
+export const RecoveryPolicySchema = z.enum(['abort', 'pause_and_prompt', 'skip_layer'])
 export type RecoveryPolicy = z.infer<typeof RecoveryPolicySchema>
 
 export const ManualSwapPromptSchema = z.object({
@@ -62,8 +53,7 @@ export function defaultCapabilities(mode: ToolingMode = 'manual'): MachineCapabi
   return {
     tool_change: {
       mode,
-      command_source:
-        mode === 'firmware' ? 'machine' : mode === 'host_macro' ? 'host' : 'operator',
+      command_source: mode === 'firmware' ? 'machine' : mode === 'host_macro' ? 'host' : 'operator',
       recovery_policy: 'pause_and_prompt',
       manual_prompt: isManual
         ? {

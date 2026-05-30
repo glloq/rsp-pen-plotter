@@ -30,9 +30,7 @@ const showExpectedCount = computed(
 // i.e. the operator opened the modal via the Edit button on a library
 // row and hasn't yet placed the file on the sheet. The "Add to plan"
 // button below promotes the draft to a visible placement.
-const isLibraryDraft = computed(
-  () => store.selectedPlacement?.is_library_draft === true,
-)
+const isLibraryDraft = computed(() => store.selectedPlacement?.is_library_draft === true)
 
 function addToPlan(): void {
   const id = store.selectedPlacementId

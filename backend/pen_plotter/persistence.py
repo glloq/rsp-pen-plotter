@@ -322,9 +322,7 @@ def delete_file_record(file_id: str, target: Engine = engine) -> bool:
         return True
 
 
-def save_plan_snapshot(
-    resolved: ResolvedPlan, target: Engine = engine
-) -> PlanSnapshotRecord:
+def save_plan_snapshot(resolved: ResolvedPlan, target: Engine = engine) -> PlanSnapshotRecord:
     """Persist a resolved plan; idempotent on ``plan_hash``.
 
     Best-effort by design: a DB failure should not prevent the
@@ -347,9 +345,7 @@ def save_plan_snapshot(
     return record
 
 
-def get_plan_snapshot(
-    plan_hash: str, target: Engine = engine
-) -> PlanSnapshotRecord | None:
+def get_plan_snapshot(plan_hash: str, target: Engine = engine) -> PlanSnapshotRecord | None:
     """Return a stored snapshot by its hash, or ``None``."""
     with Session(target) as session:
         return session.get(PlanSnapshotRecord, plan_hash)
@@ -392,9 +388,7 @@ def list_available_colors(target: Engine = engine) -> list[AvailableColorRecord]
         return list(session.exec(statement).all())
 
 
-def get_available_color(
-    color_id: str, target: Engine = engine
-) -> AvailableColorRecord | None:
+def get_available_color(color_id: str, target: Engine = engine) -> AvailableColorRecord | None:
     """Return one entry by id, or ``None`` if it doesn't exist."""
     with Session(target) as session:
         return session.get(AvailableColorRecord, color_id)
@@ -405,9 +399,7 @@ def get_available_color_by_hex(
 ) -> AvailableColorRecord | None:
     """Return the (at most one) entry matching this hex, lookup helper for dedup."""
     with Session(target) as session:
-        statement = select(AvailableColorRecord).where(
-            AvailableColorRecord.hex == hex_value
-        )
+        statement = select(AvailableColorRecord).where(AvailableColorRecord.hex == hex_value)
         return session.exec(statement).first()
 
 
@@ -453,9 +445,7 @@ def next_available_color_position(target: Engine = engine) -> int:
     starts at position 0.
     """
     with Session(target) as session:
-        statement = select(AvailableColorRecord).order_by(
-            desc(AvailableColorRecord.position)
-        )
+        statement = select(AvailableColorRecord).order_by(desc(AvailableColorRecord.position))
         last = session.exec(statement).first()
         return 0 if last is None else last.position + 1
 

@@ -19,13 +19,11 @@ const props = defineProps<{
   totalPenUpLengthMm?: number
 }>()
 
-const ordered = computed(() =>
-  [...props.layers].sort((a, b) => a.draw_order - b.draw_order),
-)
+const ordered = computed(() => [...props.layers].sort((a, b) => a.draw_order - b.draw_order))
 
-const totalDraw = computed(() =>
-  props.totalDrawLengthMm ??
-  ordered.value.reduce((acc, l) => acc + (l.total_length_mm ?? 0), 0),
+const totalDraw = computed(
+  () =>
+    props.totalDrawLengthMm ?? ordered.value.reduce((acc, l) => acc + (l.total_length_mm ?? 0), 0),
 )
 
 // Number of swaps the operator is going to perform: every transition
@@ -77,10 +75,17 @@ function fmtMm(value: number): string {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(layer, i) in ordered" :key="layer.layer_id" :data-test="`layer-row-${layer.layer_id}`">
+        <tr
+          v-for="(layer, i) in ordered"
+          :key="layer.layer_id"
+          :data-test="`layer-row-${layer.layer_id}`"
+        >
           <td>{{ i + 1 }}</td>
           <td>
-            <span class="dot" :style="{ background: layer.assigned_color_hex ?? layer.source_color }" />
+            <span
+              class="dot"
+              :style="{ background: layer.assigned_color_hex ?? layer.source_color }"
+            />
             {{ layer.color_label ?? layer.source_color }}
           </td>
           <td>

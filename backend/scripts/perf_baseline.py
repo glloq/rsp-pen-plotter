@@ -117,8 +117,9 @@ def _run_bitmap(data: bytes) -> dict[str, float]:
 
     timings: dict[str, float] = {}
     t_convert, converted = _time_ms(
-        lambda: convert_file(data, "fixture.png", "image/png",
-                             options={"algorithm": "halftone", "num_colors": 2})
+        lambda: convert_file(
+            data, "fixture.png", "image/png", options={"algorithm": "halftone", "num_colors": 2}
+        )
     )
     timings["convert"] = t_convert
     t_opt, optimized = _time_ms(lambda: optimize_svg(converted.svg))  # type: ignore[union-attr]
@@ -138,9 +139,7 @@ def _run_svg(data: bytes) -> dict[str, float]:
     profile: MachineProfile = next(iter(load_profiles()))
 
     timings: dict[str, float] = {}
-    t_convert, converted = _time_ms(
-        lambda: convert_file(data, "fixture.svg", "image/svg+xml")
-    )
+    t_convert, converted = _time_ms(lambda: convert_file(data, "fixture.svg", "image/svg+xml"))
     timings["convert"] = t_convert
     t_opt, optimized = _time_ms(lambda: optimize_svg(converted.svg))  # type: ignore[union-attr]
     timings["optimize"] = t_opt
@@ -167,9 +166,7 @@ def _warmup() -> None:
 def main() -> int:
     """CLI entry point: run fixtures, print markdown table, return 0."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--runs", type=int, default=5, help="Samples per fixture (default 5)"
-    )
+    parser.add_argument("--runs", type=int, default=5, help="Samples per fixture (default 5)")
     parser.add_argument(
         "--warmup", type=int, default=1, help="Untimed warmup iterations (default 1)"
     )

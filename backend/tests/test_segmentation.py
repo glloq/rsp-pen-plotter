@@ -55,9 +55,7 @@ def test_thresholds_empty_falls_back_to_single_layer() -> None:
 
 def test_fixed_palette_snaps_to_nearest_colour() -> None:
     image = _gradient_image(width=8, height=1)
-    labels, palette = segmentation.fixed_palette(
-        image, palette_hex=["#000000", "#ffffff"]
-    )
+    labels, palette = segmentation.fixed_palette(image, palette_hex=["#000000", "#ffffff"])
     # 8 pixels going dark→light: roughly half go to black, half to white.
     assert sorted(np.unique(labels).tolist()) == [0, 1]
     assert np.array_equal(palette, np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8))
@@ -155,15 +153,13 @@ def test_merge_similar_colours_collapses_near_duplicates() -> None:
     labels = np.array([[0, 1], [2, 0]], dtype=np.intp)
     palette = np.array(
         [
-            [255, 0, 0],    # red
-            [254, 1, 1],    # very near red → should merge with 0
-            [0, 0, 255],    # blue (well apart)
+            [255, 0, 0],  # red
+            [254, 1, 1],  # very near red → should merge with 0
+            [0, 0, 255],  # blue (well apart)
         ],
         dtype=np.uint8,
     )
-    new_labels, new_palette = segmentation.merge_similar_colours(
-        labels, palette, threshold=2.0
-    )
+    new_labels, new_palette = segmentation.merge_similar_colours(labels, palette, threshold=2.0)
     # Three clusters → two after collapse.
     assert len(new_palette) == 2
     # Labels 0 and 1 merged into the lowest-indexed root.
@@ -173,9 +169,7 @@ def test_merge_similar_colours_collapses_near_duplicates() -> None:
 def test_merge_similar_colours_noop_under_threshold() -> None:
     labels = np.array([[0, 1]], dtype=np.intp)
     palette = np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8)
-    new_labels, new_palette = segmentation.merge_similar_colours(
-        labels, palette, threshold=1.0
-    )
+    new_labels, new_palette = segmentation.merge_similar_colours(labels, palette, threshold=1.0)
     assert np.array_equal(new_labels, labels)
     assert np.array_equal(new_palette, palette)
 
@@ -219,8 +213,14 @@ def test_bitmap_converter_applies_band_recipes_in_preview() -> None:
             "drop_background": False,
             "band_recipes": [
                 {"algorithm": "halftone", "algorithm_options": {"cell_size_px": 3}},
-                {"algorithm": "crosshatch", "algorithm_options": {"angle_deg": 45, "spacing_px": 3, "crossed": False}},
-                {"algorithm": "crosshatch", "algorithm_options": {"angle_deg": 135, "spacing_px": 5, "crossed": False}},
+                {
+                    "algorithm": "crosshatch",
+                    "algorithm_options": {"angle_deg": 45, "spacing_px": 3, "crossed": False},
+                },
+                {
+                    "algorithm": "crosshatch",
+                    "algorithm_options": {"angle_deg": 135, "spacing_px": 5, "crossed": False},
+                },
             ],
         },
         fast=True,
@@ -229,8 +229,8 @@ def test_bitmap_converter_applies_band_recipes_in_preview() -> None:
     assert result.svg.count('inkscape:label="color-') == 3
     # The first (darkest) band uses halftone → carries <circle> tags
     # somewhere; the two crosshatch bands together carry <line> tags.
-    assert '<circle' in result.svg
-    assert '<line' in result.svg
+    assert "<circle" in result.svg
+    assert "<line" in result.svg
 
 
 def test_bitmap_converter_band_recipes_skip_dropped_background() -> None:
@@ -258,7 +258,7 @@ def test_bitmap_converter_band_recipes_skip_dropped_background() -> None:
     # drop_background trimmed the lightest band(s); the surviving ones
     # all rendered through the halftone recipe so the SVG has circles
     # and no <line>/<path> from a fallback algorithm.
-    assert '<circle' in result.svg
+    assert "<circle" in result.svg
 
 
 def test_bitmap_converter_fixed_palette_via_options() -> None:
@@ -273,7 +273,7 @@ def test_bitmap_converter_fixed_palette_via_options() -> None:
         },
         fast=True,
     )
-    assert 'color-ff0000' in result.svg or 'color-0000ff' in result.svg
+    assert "color-ff0000" in result.svg or "color-0000ff" in result.svg
 
 
 def test_bitmap_converter_routes_through_kmeans_lab() -> None:
@@ -289,7 +289,7 @@ def test_bitmap_converter_routes_through_kmeans_lab() -> None:
         },
         fast=True,
     )
-    assert 'color-ff0000' in result.svg or 'color-0000ff' in result.svg
+    assert "color-ff0000" in result.svg or "color-0000ff" in result.svg
 
 
 def test_bitmap_converter_routes_through_palette_dither() -> None:
@@ -305,7 +305,7 @@ def test_bitmap_converter_routes_through_palette_dither() -> None:
         },
         fast=True,
     )
-    assert 'color-ff0000' in result.svg or 'color-0000ff' in result.svg
+    assert "color-ff0000" in result.svg or "color-0000ff" in result.svg
 
 
 def test_bitmap_converter_rejects_bad_segmentation_args() -> None:

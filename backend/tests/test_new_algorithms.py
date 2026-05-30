@@ -103,9 +103,7 @@ def test_centerline_traces_horizontal_bar() -> None:
     # roughly across the middle row from one end to the other.
     mask = np.zeros((10, 100), dtype=bool)
     mask[3:7, 1:99] = True
-    svg = CenterlineAlgorithm().render_layer(
-        mask, "#000000", "test", options={"min_branch_px": 3}
-    )
+    svg = CenterlineAlgorithm().render_layer(mask, "#000000", "test", options={"min_branch_px": 3})
     assert "<polyline" in svg
     assert svg.count("<polyline") == 1
     assert 'fill="none"' in svg
@@ -149,18 +147,16 @@ def test_centerline_skimage_missing_falls_back_to_edges(monkeypatch) -> None:
         ("circle_pack", "<circle"),
     ],
 )
-def test_algorithm_emits_geometry_for_filled_square(
-    name: str, expected_element: str
-) -> None:
+def test_algorithm_emits_geometry_for_filled_square(name: str, expected_element: str) -> None:
     algo = get_algorithm(name)
     mask = _square_mask()
     svg = algo.render_layer(mask, "#123456", f"layer-{name}")
     assert svg.startswith("<g ")
     assert svg.endswith("</g>")
     assert "#123456" in svg or "stroke-width" in svg
-    assert expected_element in svg, (
-        f"Expected {expected_element!r} for {name}, got start: {svg[:200]}"
-    )
+    assert (
+        expected_element in svg
+    ), f"Expected {expected_element!r} for {name}, got start: {svg[:200]}"
 
 
 def test_spiral_amplitude_modulation_adds_detail() -> None:
@@ -241,9 +237,7 @@ def test_contours_concentric_rings_decrease() -> None:
     """Each successive contour ring is strictly inside the previous one."""
     algo = ContoursAlgorithm()
     mask = _square_mask(size=24, inset=2)
-    svg = algo.render_layer(
-        mask, "#000000", "rings", options={"spacing_px": 2, "max_rings": 5}
-    )
+    svg = algo.render_layer(mask, "#000000", "rings", options={"spacing_px": 2, "max_rings": 5})
     # At least two distinct contour polygons emitted for a 24×24 square with
     # spacing=2 (5 rings worth of room).
     assert svg.count("<polygon") >= 2
@@ -260,9 +254,7 @@ def test_tsp_respects_density_cap() -> None:
     """Density of 1.0 still produces a bounded number of dots (≤4000)."""
     algo = TspAlgorithm()
     mask = np.ones((64, 64), dtype=bool)  # 4096 candidate pixels
-    svg = algo.render_layer(
-        mask, "#000000", "tour", options={"density": 1.0, "seed": 1}
-    )
+    svg = algo.render_layer(mask, "#000000", "tour", options={"density": 1.0, "seed": 1})
     # Single polyline; point count = comma-separated x,y pairs.
     chunk = svg.split('points="', 1)[1].split('"', 1)[0]
     point_count = len(chunk.split())
@@ -428,12 +420,8 @@ def test_scribble_empty_mask_yields_empty_group() -> None:
 def test_grid_emits_both_orientations() -> None:
     """A filled square yields more grid lines at tighter spacing."""
     mask = _square_mask(size=40, inset=4)
-    coarse = get_algorithm("grid").render_layer(
-        mask, "#000", "g", options={"spacing_px": 10}
-    )
-    fine = get_algorithm("grid").render_layer(
-        mask, "#000", "g", options={"spacing_px": 4}
-    )
+    coarse = get_algorithm("grid").render_layer(mask, "#000", "g", options={"spacing_px": 10})
+    fine = get_algorithm("grid").render_layer(mask, "#000", "g", options={"spacing_px": 4})
     assert fine.count("<line") > coarse.count("<line") >= 4
 
 
@@ -465,9 +453,7 @@ def test_dashes_break_strokes_into_more_segments_than_crosshatch() -> None:
 def test_rings_centre_on_centroid() -> None:
     """Concentric rings emit arcs for a filled disc-like square."""
     mask = _square_mask(size=60, inset=4)
-    svg = get_algorithm("rings").render_layer(
-        mask, "#000", "r", options={"spacing_px": 5}
-    )
+    svg = get_algorithm("rings").render_layer(mask, "#000", "r", options={"spacing_px": 5})
     assert svg.count("<polyline") >= 2
 
 
@@ -484,9 +470,7 @@ def test_circle_pack_circles_do_not_overlap() -> None:
     )
     circles = [
         (float(m[0]), float(m[1]), float(m[2]))
-        for m in re.findall(
-            r'<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([-\d.]+)"/>', svg
-        )
+        for m in re.findall(r'<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([-\d.]+)"/>', svg)
     ]
     assert len(circles) >= 5
     for i in range(len(circles)):

@@ -168,9 +168,7 @@ describe('EditModalV2 (beginner single-screen)', () => {
     vi.mocked(api.post).mockRejectedValue(new Error('500 oops'))
     const wrapper = mountModal(PLACEMENT_PROPS)
     await flushPromises()
-    expect(wrapper.find('[data-test="modal-v2-resolve-error"]').text()).toContain(
-      'Erreur resolver',
-    )
+    expect(wrapper.find('[data-test="modal-v2-resolve-error"]').text()).toContain('Erreur resolver')
     expect(wrapper.find('[data-test="modal-v2-preview-svg"]').exists()).toBe(true)
   })
 

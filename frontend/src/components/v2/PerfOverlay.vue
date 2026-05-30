@@ -47,12 +47,7 @@ function labelFor(kpi: string): string {
   >
     <header>
       <span>{{ t('v2.perf.title') }}</span>
-      <button
-        type="button"
-        data-test="perf-clear"
-        :title="t('v2.perf.clear')"
-        @click="store.clear"
-      >
+      <button type="button" data-test="perf-clear" :title="t('v2.perf.clear')" @click="store.clear">
         ×
       </button>
     </header>

@@ -105,9 +105,7 @@ def segment_image(
     if method in ("fixed_palette", "palette_dither"):
         palette_hex = options.get("palette", [])
         if not isinstance(palette_hex, list) or not palette_hex:
-            raise ValueError(
-                "segmentation_options.palette must be a non-empty list of hex colours"
-            )
+            raise ValueError("segmentation_options.palette must be a non-empty list of hex colours")
         # Preserve white background: when the operator's palette
         # follows their pen rack (typically no white pen), white
         # pixels would otherwise snap to the nearest pen colour

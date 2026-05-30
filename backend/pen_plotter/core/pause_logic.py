@@ -74,17 +74,12 @@ def should_pause(
         flags that justified it.
     """
     slot_changed = slot is not None and slot != previous_slot
-    color_changed = (
-        mono_pen and source_color is not None and source_color != previous_color
-    )
+    color_changed = mono_pen and source_color is not None and source_color != previous_color
     # First pose on a mono-pen machine: prompt the operator to install
     # the initial pen before drawing anything. Multi-pen profiles still
     # rely on slot_changed for the first layer (slot != None != None).
     first_pose = (
-        mono_pen
-        and previous_color is None
-        and previous_slot is None
-        and source_color is not None
+        mono_pen and previous_color is None and previous_slot is None and source_color is not None
     )
     pause = (
         tool_change_method != "none"

@@ -71,9 +71,7 @@ def _boundary_chains_polar(mask: NDArray[np.bool_]) -> list[list[tuple[float, fl
     except ImportError:
         return []
     pad = np.pad(mask, 1, mode="constant", constant_values=False)
-    border = mask & ~(
-        pad[:-2, 1:-1] & pad[2:, 1:-1] & pad[1:-1, :-2] & pad[1:-1, 2:]
-    )
+    border = mask & ~(pad[:-2, 1:-1] & pad[2:, 1:-1] & pad[1:-1, :-2] & pad[1:-1, 2:])
     if not border.any():
         return []
     components, count = nd_label(border)
@@ -93,9 +91,7 @@ class EdgesAlgorithm(RasterAlgorithm):
     """Renders only the outline of the region (no fill)."""
 
     name: ClassVar[str] = "edges"
-    description: ClassVar[str] = (
-        "Trace the region boundary — a line-art / technical-drawing style."
-    )
+    description: ClassVar[str] = "Trace the region boundary — a line-art / technical-drawing style."
 
     def render_layer(
         self,
@@ -110,15 +106,11 @@ class EdgesAlgorithm(RasterAlgorithm):
         bool_mask = mask.astype(bool)
         chains = _boundary_chains(bool_mask)
         paths = "".join(
-            '<polyline points="'
-            + " ".join(f"{x:.2f},{y:.2f}" for x, y in chain)
-            + '"/>'
+            '<polyline points="' + " ".join(f"{x:.2f},{y:.2f}" for x, y in chain) + '"/>'
             for chain in chains
         )
         return (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
             f'fill="none" stroke-width="{thickness}" stroke-linejoin="round" '
-            f'stroke-linecap="round">'
-            + paths
-            + "</g>"
+            f'stroke-linecap="round">' + paths + "</g>"
         )

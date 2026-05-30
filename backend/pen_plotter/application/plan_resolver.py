@@ -46,8 +46,7 @@ def _resolve_layer(
         color_label=layer.color_label,
         pause_before=layer.pause_before,
         pen_slot_installed=(
-            layer.target_pen_slot is None
-            or layer.target_pen_slot in installed_slots
+            layer.target_pen_slot is None or layer.target_pen_slot in installed_slots
         ),
         optimize=layer.optimize,
         simplify_tolerance_mm=(
@@ -88,9 +87,7 @@ def resolve_plan(plan: PrintPlan, profile: MachineProfile) -> ResolvedPlan:
     except PlanValidationError as exc:
         raise PlanResolutionError(str(exc)) from exc
 
-    installed_slots = {
-        pen.index for pen in profile.effective_pens() if pen.installed
-    }
+    installed_slots = {pen.index for pen in profile.effective_pens() if pen.installed}
     profile_speed = profile.drawing_speed_mm_s
 
     resolved_layers = [

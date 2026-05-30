@@ -165,9 +165,7 @@ class SpiralAlgorithm(RasterAlgorithm):
             polylines.append(current)
 
         paths = "".join(
-            '<polyline points="'
-            + " ".join(f"{x:.2f},{y:.2f}" for x, y in poly)
-            + '"/>'
+            '<polyline points="' + " ".join(f"{x:.2f},{y:.2f}" for x, y in poly) + '"/>'
             for poly in polylines
         )
         return (

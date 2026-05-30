@@ -162,9 +162,7 @@ async function activeCancel(): Promise<void> {
                 {{ run.name }}
               </p>
               <p class="text-[10px]" :class="stateClass[run.state]">
-                {{ t(`queue.state.${run.state}`) }} · {{ run.acked_lines }}/{{
-                  run.total_lines
-                }}
+                {{ t(`queue.state.${run.state}`) }} · {{ run.acked_lines }}/{{ run.total_lines }}
               </p>
             </div>
             <button
@@ -201,10 +199,7 @@ async function activeCancel(): Promise<void> {
             v-if="run.state === 'running' || run.state === 'paused'"
             class="mt-1 h-0.5 w-full overflow-hidden rounded bg-slate-700"
           >
-            <div
-              class="h-full bg-emerald-500"
-              :style="{ width: `${runProgress(run) * 100}%` }"
-            />
+            <div class="h-full bg-emerald-500" :style="{ width: `${runProgress(run) * 100}%` }" />
           </div>
           <p v-if="run.error" class="mt-1 text-[10px] text-red-400">{{ run.error }}</p>
           <div

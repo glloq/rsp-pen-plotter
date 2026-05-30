@@ -155,9 +155,7 @@ def test_preprocess_invert_swaps_extremes() -> None:
 
 def test_preprocess_crop_returns_expected_size() -> None:
     img = Image.fromarray(_decode_png(_gradient_png()))
-    out = BitmapConverter._preprocess(
-        img, PreprocessOptions(crop=(0.25, 0.0, 0.5, 1.0))
-    )
+    out = BitmapConverter._preprocess(img, PreprocessOptions(crop=(0.25, 0.0, 0.5, 1.0)))
     # Cropped width is roughly half the original (±1 for rounding);
     # height untouched.
     assert 24 <= out.width <= 26
@@ -183,9 +181,7 @@ def test_preprocess_grayscale_collapses_channels() -> None:
 
 def test_preprocess_levels_stretch() -> None:
     img = Image.fromarray(_decode_png(_gradient_png()))
-    out = BitmapConverter._preprocess(
-        img, PreprocessOptions(black_point=64, white_point=192)
-    )
+    out = BitmapConverter._preprocess(img, PreprocessOptions(black_point=64, white_point=192))
     arr = np.asarray(out)
     # Anything <= 64 should clip to 0, anything >= 192 to 255.
     assert arr[0, 0, 0] == 0

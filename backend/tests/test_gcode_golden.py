@@ -101,9 +101,7 @@ CASES: tuple[GoldenCase, ...] = (
     GoldenCase(
         name="simple_square",
         svg_filename="simple_square.svg",
-        layers=(
-            LayerPlan(layer_id="black", target_pen_slot=0, source_color="#000000"),
-        ),
+        layers=(LayerPlan(layer_id="black", target_pen_slot=0, source_color="#000000"),),
     ),
     GoldenCase(
         name="two_layers",

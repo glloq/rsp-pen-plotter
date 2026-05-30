@@ -92,9 +92,7 @@ def _render_one_layer(
                 )
                 pass_algorithm = get_algorithm(fallback_algo)
             fragments.append(
-                pass_algorithm.render_layer(
-                    mask, ink_hex, f"{label}-pass-{idx}", options=pass_opts
-                )
+                pass_algorithm.render_layer(mask, ink_hex, f"{label}-pass-{idx}", options=pass_opts)
             )
         if not fragments:
             return f"<g inkscape:label={quoteattr(label)}></g>", warnings
@@ -105,9 +103,7 @@ def _render_one_layer(
     try:
         algorithm = get_algorithm(algo_name)
     except KeyError:
-        warnings.append(
-            f"Layer {label}: unknown algorithm {algo_name!r}, using {fallback_algo!r}."
-        )
+        warnings.append(f"Layer {label}: unknown algorithm {algo_name!r}, using {fallback_algo!r}.")
         algorithm = get_algorithm(fallback_algo)
     return (
         algorithm.render_layer(mask, ink_hex, label, options=algo_options),

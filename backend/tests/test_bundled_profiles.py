@@ -78,9 +78,7 @@ def test_corexy_rack_routes_to_host_macro_strategy(
     orch = ToolChangeOrchestrator(profile)
     assert orch.mode is ToolingMode.HOST_MACRO
 
-    plan = orch.plan(
-        SwapContext(slot_index=3, pen_label="Cyan", pen_color="#00ffff")
-    )
+    plan = orch.plan(SwapContext(slot_index=3, pen_label="Cyan", pen_color="#00ffff"))
     sends = [c.send for c in plan.commands]
     # Macro starts with the swap comment and ends with the "ready" comment.
     assert sends[0].startswith("; rack swap")
@@ -108,8 +106,6 @@ def test_all_bundled_profiles_route_through_orchestrator(
     # SwapContext; everything else exercises the default flow.
     for name, profile in bundled.items():
         orch = ToolChangeOrchestrator(profile)
-        ctx = SwapContext(
-            slot_index=1, pen_label="Black", pen_color="#000000", layer_id="l1"
-        )
+        ctx = SwapContext(slot_index=1, pen_label="Black", pen_color="#000000", layer_id="l1")
         plan = orch.plan(ctx)
         assert plan.mode in set(ToolingMode), name

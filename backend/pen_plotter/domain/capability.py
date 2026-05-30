@@ -176,9 +176,7 @@ def derive_capabilities(
     carry an explicit ``capabilities`` block still loads with a
     coherent strategy populated.
     """
-    mode, source = _LEGACY_MAP.get(
-        tool_change_method, (ToolingMode.MANUAL, CommandSource.OPERATOR)
-    )
+    mode, source = _LEGACY_MAP.get(tool_change_method, (ToolingMode.MANUAL, CommandSource.OPERATOR))
     prompt = default_manual_prompt(pen_slot_count) if mode == ToolingMode.MANUAL else None
     strategy = ToolChangeStrategy(
         mode=mode,

@@ -23,9 +23,7 @@ def _import_check_contracts():
     # The script lives outside the package; import by path.
     import importlib.util
 
-    script = (
-        Path(__file__).resolve().parents[1] / "scripts" / "check_contracts.py"
-    )
+    script = Path(__file__).resolve().parents[1] / "scripts" / "check_contracts.py"
     spec = importlib.util.spec_from_file_location("check_contracts", script)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -45,12 +43,14 @@ def test_matching_snapshot_passes(snapshot_path: Path) -> None:
     _write(snapshot_path, payload)
     with patch.object(cc, "SNAPSHOT", snapshot_path):
         with patch.object(cc, "available_domains", return_value=["system"]):
+
             class _M:
                 def model_dump(self, mode: str = "json") -> dict[str, object]:  # noqa: ARG002
                     return {
                         "meta": {"domain": "system", "manifest_version": 1},
                         "entries": [{"id": "version"}],
                     }
+
             with patch.object(cc, "get_manifest", return_value=_M()):
                 rc = cc.check()
     assert rc == 0
@@ -75,12 +75,14 @@ def test_backend_ahead_of_snapshot_fails(snapshot_path: Path) -> None:
     _write(snapshot_path, payload)
     with patch.object(cc, "SNAPSHOT", snapshot_path):
         with patch.object(cc, "available_domains", return_value=["system"]):
+
             class _M:
                 def model_dump(self, mode: str = "json") -> dict[str, object]:  # noqa: ARG002
                     return {
                         "meta": {"domain": "system", "manifest_version": 2},
                         "entries": [{"id": "version"}],
                     }
+
             with patch.object(cc, "get_manifest", return_value=_M()):
                 rc = cc.check()
     assert rc == 1
@@ -97,12 +99,14 @@ def test_entry_drift_without_bump_fails(snapshot_path: Path) -> None:
     _write(snapshot_path, payload)
     with patch.object(cc, "SNAPSHOT", snapshot_path):
         with patch.object(cc, "available_domains", return_value=["system"]):
+
             class _M:
                 def model_dump(self, mode: str = "json") -> dict[str, object]:  # noqa: ARG002
                     return {
                         "meta": {"domain": "system", "manifest_version": 1},
                         "entries": [{"id": "version"}, {"id": "new_entry"}],
                     }
+
             with patch.object(cc, "get_manifest", return_value=_M()):
                 rc = cc.check()
     assert rc == 1
@@ -119,12 +123,14 @@ def test_snapshot_ahead_of_backend_fails(snapshot_path: Path) -> None:
     _write(snapshot_path, payload)
     with patch.object(cc, "SNAPSHOT", snapshot_path):
         with patch.object(cc, "available_domains", return_value=["system"]):
+
             class _M:
                 def model_dump(self, mode: str = "json") -> dict[str, object]:  # noqa: ARG002
                     return {
                         "meta": {"domain": "system", "manifest_version": 1},
                         "entries": [{"id": "version"}],
                     }
+
             with patch.object(cc, "get_manifest", return_value=_M()):
                 rc = cc.check()
     assert rc == 1
@@ -135,12 +141,14 @@ def test_domain_missing_from_snapshot_fails(snapshot_path: Path) -> None:
     _write(snapshot_path, {})  # empty snapshot
     with patch.object(cc, "SNAPSHOT", snapshot_path):
         with patch.object(cc, "available_domains", return_value=["system"]):
+
             class _M:
                 def model_dump(self, mode: str = "json") -> dict[str, object]:  # noqa: ARG002
                     return {
                         "meta": {"domain": "system", "manifest_version": 1},
                         "entries": [],
                     }
+
             with patch.object(cc, "get_manifest", return_value=_M()):
                 rc = cc.check()
     assert rc == 1

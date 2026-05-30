@@ -82,12 +82,8 @@ def configure_tracing(app: Any | None = None) -> None:
     if exporter_kind == "console":
         provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
     else:
-        endpoint = os.environ.get(
-            "OMNIPLOT_OTLP_ENDPOINT", "http://localhost:4318/v1/traces"
-        )
-        provider.add_span_processor(
-            BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
-        )
+        endpoint = os.environ.get("OMNIPLOT_OTLP_ENDPOINT", "http://localhost:4318/v1/traces")
+        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
 
     trace.set_tracer_provider(provider)
     if app is not None:

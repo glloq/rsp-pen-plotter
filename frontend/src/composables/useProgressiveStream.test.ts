@@ -44,9 +44,17 @@ describe('useProgressiveStream', () => {
       return stub as unknown as EventSource
     })
     stream.open('/preview/stream')
-    stub!.emit('progress', { sequence: 1, elapsed_ms: 10, payload: { layer_index: 0, percent: 33 } })
+    stub!.emit('progress', {
+      sequence: 1,
+      elapsed_ms: 10,
+      payload: { layer_index: 0, percent: 33 },
+    })
     expect(stream.percent.value).toBe(33)
-    stub!.emit('progress', { sequence: 2, elapsed_ms: 20, payload: { layer_index: 1, percent: 66 } })
+    stub!.emit('progress', {
+      sequence: 2,
+      elapsed_ms: 20,
+      payload: { layer_index: 1, percent: 66 },
+    })
     expect(stream.percent.value).toBe(66)
   })
 

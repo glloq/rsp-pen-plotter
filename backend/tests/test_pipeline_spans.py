@@ -67,9 +67,7 @@ def test_convert_file_span_carries_size_and_mime(
     convert_file(
         data, "fixture.png", "image/png", options={"algorithm": "halftone", "num_colors": 2}
     )
-    spans = [
-        s for s in memory_exporter.get_finished_spans() if s.name == "pipeline.convert_file"
-    ]
+    spans = [s for s in memory_exporter.get_finished_spans() if s.name == "pipeline.convert_file"]
     attrs = dict(spans[0].attributes or {})
     assert attrs["mime"] == "image/png"
     assert attrs["size_bytes"] == len(data)

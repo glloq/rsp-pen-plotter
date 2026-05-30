@@ -38,7 +38,10 @@ export function parsePenWidthMm(value: unknown): number | null {
 export function canonicalHex(value: string): string {
   const trimmed = value.trim().replace(/^#/, '').toLowerCase()
   if (/^[0-9a-f]{3}$/.test(trimmed)) {
-    return `#${trimmed.split('').map((c) => c + c).join('')}`
+    return `#${trimmed
+      .split('')
+      .map((c) => c + c)
+      .join('')}`
   }
   if (/^[0-9a-f]{6}$/.test(trimmed)) return `#${trimmed}`
   return value.trim().toLowerCase()
@@ -59,7 +62,10 @@ export function strokeWidthMmByHex(
 export function mmPerViewBoxUnit(svg: string, widthMm: number, heightMm: number): number | null {
   const match = svg.match(/viewBox\s*=\s*"([^"]+)"/)
   if (!match) return null
-  const parts = match[1]!.trim().split(/[\s,]+/).map(Number)
+  const parts = match[1]!
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number)
   if (parts.length !== 4 || !parts.every(Number.isFinite)) return null
   const vbW = parts[2]!
   const vbH = parts[3]!

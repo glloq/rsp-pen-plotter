@@ -87,7 +87,10 @@ function onKey(event: KeyboardEvent, i: number): void {
   cursor: pointer;
   font-size: 0.85rem;
   color: #555;
-  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.08s ease;
 }
 .step button:disabled {
   cursor: default;

@@ -258,8 +258,8 @@ def test_assigned_color_promotes_to_tool_change_when_pen_installed() -> None:
     assert "; Change to pen slot 1 (Red)" in gcode
     assert "; Change to pen slot 0 (Black)" in gcode
     # Layer marker should reflect the promoted slot + assigned colour.
-    assert 'slot=1' in gcode
-    assert 'slot=0' in gcode
+    assert "slot=1" in gcode
+    assert "slot=0" in gcode
 
 
 def test_template_contract_blocks_undeclared_variable_at_import() -> None:

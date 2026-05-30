@@ -80,9 +80,7 @@ def _record_to_out(record: AvailableColorRecord) -> AvailableColorOut:
         # columns added after initial creation (ADD COLUMN doesn't apply
         # the model default to existing rows); fall back to sensible
         # defaults so legacy inventories serialise cleanly.
-        stroke_width_mm=(
-            record.stroke_width_mm if record.stroke_width_mm is not None else 0.5
-        ),
+        stroke_width_mm=(record.stroke_width_mm if record.stroke_width_mm is not None else 0.5),
         odometer_mm=(record.odometer_mm if record.odometer_mm is not None else 0.0),
         created_at=record.created_at,
     )

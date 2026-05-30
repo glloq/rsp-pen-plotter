@@ -91,9 +91,7 @@ const installedPenColors = computed<string[]>(() => {
   return pens.filter((p) => p.installed && p.color).map((p) => p.color)
 })
 
-const availableHexes = computed<string[]>(() =>
-  availableColorsStore.ordered.map((c) => c.hex),
-)
+const availableHexes = computed<string[]>(() => availableColorsStore.ordered.map((c) => c.hex))
 
 const effectivePalette = computed<string[]>(() =>
   resolveEffectivePalette(paletteSource.source, installedPenColors.value, availableHexes.value),

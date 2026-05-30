@@ -23,9 +23,7 @@ def test_short_text_preserves_page_height() -> None:
 
 
 def test_overflowing_text_grows_page_height() -> None:
-    opts = TypographyOptions(
-        font_size_mm=10, page_width_mm=80, page_height_mm=30, margin_mm=5
-    )
+    opts = TypographyOptions(font_size_mm=10, page_width_mm=80, page_height_mm=30, margin_mm=5)
     svg = HersheyRenderer(opts).render_text("\n".join(f"l{i}" for i in range(10)))
     # 10 lines at 10mm × 1.5 line-spacing = 150mm of content. The output
     # must be at least tall enough to fit them (plus margins).
@@ -33,9 +31,7 @@ def test_overflowing_text_grows_page_height() -> None:
 
 
 def test_viewbox_matches_page_height_after_overflow() -> None:
-    opts = TypographyOptions(
-        font_size_mm=10, page_width_mm=80, page_height_mm=30, margin_mm=5
-    )
+    opts = TypographyOptions(font_size_mm=10, page_width_mm=80, page_height_mm=30, margin_mm=5)
     svg = HersheyRenderer(opts).render_text("\n".join(f"l{i}" for i in range(8)))
     height = _page_height(svg)
     vb = re.search(r'viewBox="0 0 ([0-9.]+) ([0-9.]+)"', svg)

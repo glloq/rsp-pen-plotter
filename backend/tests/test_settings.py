@@ -51,9 +51,7 @@ async def test_put_persists_each_enum_value() -> None:
 async def test_put_rejects_unknown_source() -> None:
     """Pydantic Literal rejects anything outside the enum at validation time."""
     async with _client() as client:
-        resp = await client.put(
-            "/settings/palette-source", json={"source": "magazine"}
-        )
+        resp = await client.put("/settings/palette-source", json={"source": "magazine"})
         assert resp.status_code == 422
 
 

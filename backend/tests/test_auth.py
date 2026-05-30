@@ -75,9 +75,7 @@ async def test_preflight_not_guarded(api_key: str) -> None:
         '<g inkscape:label="red" stroke="#ff0000"><path d="M10 10 L90 90"/></g></svg>'
     )
     async with _client() as client:
-        response = await client.post(
-            "/preflight", json={"svg": svg, "profile_name": PROFILE}
-        )
+        response = await client.post("/preflight", json={"svg": svg, "profile_name": PROFILE})
     assert response.status_code == 200
 
 
@@ -110,8 +108,7 @@ def test_websocket_rejects_missing_token(api_key: str) -> None:
     from starlette.routing import WebSocketRoute
 
     ws_route = next(
-        r for r in app.router.routes
-        if isinstance(r, WebSocketRoute) and r.path == "/ws/plotter"
+        r for r in app.router.routes if isinstance(r, WebSocketRoute) and r.path == "/ws/plotter"
     )
     closes: list[tuple[int, str]] = []
     accepts: list[bool] = []

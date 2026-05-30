@@ -295,9 +295,7 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
     except TimeoutError as exc:
         process.kill()
         record("system.update_timeout")
-        raise HTTPException(
-            status_code=504, detail="update timed out after 10 minutes"
-        ) from exc
+        raise HTTPException(status_code=504, detail="update timed out after 10 minutes") from exc
 
     log = stdout.decode("utf-8", errors="replace") if stdout else ""
     ok = process.returncode == 0

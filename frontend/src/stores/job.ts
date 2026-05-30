@@ -678,7 +678,10 @@ export const useJobStore = defineStore('job', () => {
       next[layer.layer_id] = {
         algorithm: first.algorithm,
         algorithm_options: { ...first.algorithm_options },
-        passes: stack.map((pass) => ({ ...pass, algorithm_options: { ...pass.algorithm_options } })),
+        passes: stack.map((pass) => ({
+          ...pass,
+          algorithm_options: { ...pass.algorithm_options },
+        })),
       }
     }
     patchSelected({ layer_algorithms: next })
@@ -786,12 +789,7 @@ export const useJobStore = defineStore('job', () => {
           algorithm_options: spec.algorithm_options,
         }
       })
-      const result = await rerenderJob(
-        p.job_id,
-        layersPayload,
-        controller.signal,
-        penWidthsFor(p),
-      )
+      const result = await rerenderJob(p.job_id, layersPayload, controller.signal, penWidthsFor(p))
       if (controller.signal.aborted) return
       // patchPlacement already invalidates the cached outputs for the new SVG.
       patchPlacement(p.id, { svg: result.svg })
@@ -876,7 +874,10 @@ export const useJobStore = defineStore('job', () => {
     const canon = (value: string): string => {
       const trimmed = value.trim().replace(/^#/, '').toLowerCase()
       if (/^[0-9a-f]{3}$/.test(trimmed)) {
-        return `#${trimmed.split('').map((c) => c + c).join('')}`
+        return `#${trimmed
+          .split('')
+          .map((c) => c + c)
+          .join('')}`
       }
       if (/^[0-9a-f]{6}$/.test(trimmed)) return `#${trimmed}`
       return value

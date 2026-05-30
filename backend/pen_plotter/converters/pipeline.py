@@ -152,16 +152,12 @@ def convert_file(
                     )
                 bitmap_options = BitmapOptions.model_validate(parsed_options)
             else:
-                with traced_span(
-                    "pipeline.convert", converter=type(converter).__name__
-                ):
+                with traced_span("pipeline.convert", converter=type(converter).__name__):
                     result = converter.convert(data, options=parsed_options)
         except (KeyError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(
-                status_code=422, detail=f"Could not convert file: {exc}"
-            ) from exc
+            raise HTTPException(status_code=422, detail=f"Could not convert file: {exc}") from exc
 
         with traced_span("pipeline.sanitize_svg"):
             svg = sanitize_svg(result.svg)

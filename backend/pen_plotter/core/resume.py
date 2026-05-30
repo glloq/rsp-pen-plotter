@@ -65,9 +65,7 @@ def _replay(lines: list[str]) -> _ModalState:
     return state
 
 
-def build_resume_program(
-    gcode: str, acked_lines: int, profile: MachineProfile
-) -> list[str]:
+def build_resume_program(gcode: str, acked_lines: int, profile: MachineProfile) -> list[str]:
     """Build the executable line list needed to resume a job from a checkpoint.
 
     Args:

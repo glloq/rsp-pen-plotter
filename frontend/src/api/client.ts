@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance } from 'axios'
+import type { MachineCapabilities } from '../domain/capability/schemas'
 
 // Empty default = same origin, so the production appliance can serve the UI
 // and API from one host without baking in an address. Dev sets VITE_API_URL
@@ -181,13 +182,14 @@ export interface MachineProfile {
   arc_tolerance_mm: number
   ebb: EbbConfig | null
   pens: PenSlot[] | null
-  // v0.2 capability model. When set, the backend persists it
-  // verbatim; when null the backend derives one from the legacy
-  // tool_change_* fields on the fly via ``derive_capabilities``.
-  // The CapabilityWizard sends a fully-formed block here when
-  // creating a profile, so manual_prompt templates and host_macro
-  // line lists round-trip cleanly.
-  capabilities?: Record<string, unknown> | null
+  // v0.2 capability model — the runtime source of truth for *how* a
+  // tool change executes (firmware trigger vs host macro vs manual
+  // prompt). When set the backend persists it verbatim; when null it
+  // derives one from the legacy tool_change_* fields via
+  // ``derive_capabilities``. Both the CapabilityWizard and the inline
+  // ProfilePenFields editor write a fully-formed block here so
+  // host_macro sequences round-trip cleanly.
+  capabilities?: MachineCapabilities | null
 }
 
 export async function getProfiles(): Promise<MachineProfile[]> {

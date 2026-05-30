@@ -10,11 +10,7 @@
 
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  getManifestDomain,
-  listManifestDomains,
-  type ManifestEnvelope,
-} from '../api/client'
+import { getManifestDomain, listManifestDomains, type ManifestEnvelope } from '../api/client'
 import { errorDetail } from '../api/error'
 
 const { t } = useI18n()
@@ -74,12 +70,9 @@ onMounted(refresh)
     >
       <header class="flex items-baseline justify-between">
         <h4 class="font-semibold text-slate-100">{{ domain }}</h4>
-        <span
-          v-if="envelopes[domain]"
-          class="text-[10px] uppercase tracking-wider text-slate-400"
-        >
-          v{{ envelopes[domain].meta.manifest_version }} ·
-          schema {{ envelopes[domain].meta.schema_semver }}
+        <span v-if="envelopes[domain]" class="text-[10px] uppercase tracking-wider text-slate-400">
+          v{{ envelopes[domain].meta.manifest_version }} · schema
+          {{ envelopes[domain].meta.schema_semver }}
         </span>
       </header>
       <p v-if="envelopes[domain]" class="text-[11px] text-slate-500">

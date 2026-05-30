@@ -99,9 +99,7 @@ async def test_streamer_runs_inline_host_macro_commands() -> None:
         )
     }
     streamer = GcodeStreamer(transport, swap_actions=swap_actions)
-    final = await asyncio.wait_for(
-        streamer.run("G0 X1\nM0\nG1 X2 Y2 F600\n"), timeout=2.0
-    )
+    final = await asyncio.wait_for(streamer.run("G0 X1\nM0\nG1 X2 Y2 F600\n"), timeout=2.0)
 
     assert final.state == StreamState.DONE
     # M0 is replaced by the three macro commands; the original G0/G1
@@ -123,13 +121,7 @@ def test_guided_swap_actions_for_rack_profile_emits_host_timed_plans() -> None:
     profile = get_profile("Custom CoreXY A3 (rack)")
     assert profile is not None
     # Hand-rolled G-code with a single slot-change comment + M0.
-    gcode = (
-        "G21\n"
-        "G90\n"
-        "; Change to pen slot 1 (Red)\n"
-        "M0\n"
-        "G1 X10 Y10\n"
-    )
+    gcode = "G21\n" "G90\n" "; Change to pen slot 1 (Red)\n" "M0\n" "G1 X10 Y10\n"
     actions = guided_swap_actions(gcode, profile)
     assert list(actions.keys()) == [2]  # M0 is the third executable line (idx=2)
     action = actions[2]
@@ -145,11 +137,5 @@ def test_guided_pause_points_stays_legacy_for_rack_profile() -> None:
     (no operator confirm), so ``guided_pause_points`` returns empty."""
     profile = get_profile("Custom CoreXY A3 (rack)")
     assert profile is not None
-    gcode = (
-        "G21\n"
-        "G90\n"
-        "; Change to pen slot 1 (Red)\n"
-        "M0\n"
-        "G1 X10 Y10\n"
-    )
+    gcode = "G21\n" "G90\n" "; Change to pen slot 1 (Red)\n" "M0\n" "G1 X10 Y10\n"
     assert guided_pause_points(gcode, profile) == {}

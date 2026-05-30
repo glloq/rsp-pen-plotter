@@ -30,7 +30,9 @@ export const useAvailableColorsStore = defineStore('availableColors', () => {
   const loaded = ref(false)
 
   const ordered = computed(() =>
-    [...colors.value].sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at)),
+    [...colors.value].sort(
+      (a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at),
+    ),
   )
 
   async function refresh(): Promise<void> {
@@ -71,7 +73,9 @@ export const useAvailableColorsStore = defineStore('availableColors', () => {
 
   async function rename(
     colorId: string,
-    patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm' | 'odometer_mm'>>,
+    patch: Partial<
+      Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm' | 'odometer_mm'>
+    >,
   ): Promise<AvailableColor | null> {
     error.value = null
     try {

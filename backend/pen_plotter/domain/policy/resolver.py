@@ -70,9 +70,7 @@ def resolve(inp: PolicyInput) -> PolicyDecision:
         )
     ]
 
-    segmentation, seg_hit = rules.derive_segmentation(
-        base, inp.source_kind, inp.palette_mode
-    )
+    segmentation, seg_hit = rules.derive_segmentation(base, inp.source_kind, inp.palette_mode)
     if seg_hit is not None:
         reasoning.append(seg_hit)
 
@@ -87,9 +85,7 @@ def resolve(inp: PolicyInput) -> PolicyDecision:
 
     algorithm = base.algorithm
     fallback_chain = list(base.fallback_chain)
-    algorithm, fallback_chain, constraint_hits = constraints.apply(
-        inp, algorithm, fallback_chain
-    )
+    algorithm, fallback_chain, constraint_hits = constraints.apply(inp, algorithm, fallback_chain)
 
     passes: list[dict[str, object]] = [deepcopy(dict(p)) for p in base.passes]
 
@@ -98,8 +94,7 @@ def resolve(inp: PolicyInput) -> PolicyDecision:
     # constraint-imposed algorithm uses out of the box. The multi-pass
     # stack is dropped too: it was tuned for the original algorithm.
     forced = any(
-        c.constraint in {"heavy_algo_on_large_input", "sparse_palette"}
-        for c in constraint_hits
+        c.constraint in {"heavy_algo_on_large_input", "sparse_palette"} for c in constraint_hits
     )
     if forced and algorithm != base.algorithm:
         options = {}
@@ -115,10 +110,7 @@ def resolve(inp: PolicyInput) -> PolicyDecision:
     # Mono-pen + non-vector source still needs *some* segmentation to
     # pick the printable area; ``fixed_palette`` with a single colour
     # is the cheapest answer.
-    if (
-        inp.is_mono_pen_machine
-        and segmentation is SegmentationMethod.KMEANS
-    ):
+    if inp.is_mono_pen_machine and segmentation is SegmentationMethod.KMEANS:
         segmentation = SegmentationMethod.FIXED_PALETTE
 
     return PolicyDecision(

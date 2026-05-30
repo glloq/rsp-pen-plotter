@@ -68,9 +68,7 @@ describe('useQueueStore — skip_layer toast priming', () => {
   })
 
   it('does NOT emit a critical toast on the first load for pre-existing skips', async () => {
-    vi.mocked(listQueue).mockResolvedValueOnce([
-      makeRun({ skipped_layers: ['A', 'B'] }),
-    ])
+    vi.mocked(listQueue).mockResolvedValueOnce([makeRun({ skipped_layers: ['A', 'B'] })])
     const queue = useQueueStore()
     const toasts = useToastStore()
     await queue.load()

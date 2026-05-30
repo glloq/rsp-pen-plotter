@@ -19,10 +19,10 @@ class _FakeUpload:
 
     async def read(self, n: int = -1) -> bytes:
         if n < 0:
-            chunk = self._data[self._pos:]
+            chunk = self._data[self._pos :]
             self._pos = len(self._data)
             return chunk
-        chunk = self._data[self._pos:self._pos + n]
+        chunk = self._data[self._pos : self._pos + n]
         self._pos += n
         return chunk
 

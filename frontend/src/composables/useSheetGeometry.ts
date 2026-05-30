@@ -169,9 +169,7 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
     const widthMap = inputs.strokeWidthMm?.value ?? null
     // Compact signature of the inventory widths so the styled cache busts
     // when the operator changes a pen tip width.
-    const mapSig = widthMap
-      ? [...widthMap.entries()].map(([h, mm]) => `${h}:${mm}`).join(',')
-      : ''
+    const mapSig = widthMap ? [...widthMap.entries()].map(([h, mm]) => `${h}:${mm}`).join(',') : ''
     const seen = new Set<string>()
     const out = inputs.placements.value.map((p) => {
       seen.add(p.id)

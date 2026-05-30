@@ -547,9 +547,9 @@ function bandSwatchStyle(i: number): Record<string, string> {
       <div class="space-y-1">
         <p class="text-[10px] uppercase tracking-wider text-slate-400">
           {{ t('mono.spiralStrength') }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{
-            Math.round((knobs.tone_strength ?? 1) * 100)
-          }}%</span>
+          <span class="ml-1 font-mono text-[11px] text-slate-300"
+            >{{ Math.round((knobs.tone_strength ?? 1) * 100) }}%</span
+          >
         </p>
         <input
           type="range"

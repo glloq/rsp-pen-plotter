@@ -117,10 +117,7 @@ export const usePlotterStore = defineStore('plotter', () => {
   // reference; an object-literal getter would re-trigger on every
   // WebSocket frame even when the relevant fields didn't move.
   watch(
-    [
-      () => status.value.connected,
-      () => status.value.state,
-    ],
+    [() => status.value.connected, () => status.value.state],
     ([nextConnected, _nextState], [prevConnected, prevState]) => {
       const wasRunning = prevState === 'running' || prevState === 'paused'
       if (prevConnected && !nextConnected && wasRunning) {

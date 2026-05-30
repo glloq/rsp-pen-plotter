@@ -20,20 +20,12 @@ describe('resolveEffectivePalette', () => {
   })
 
   it('returns pens then inventory extras when source is "union"', () => {
-    const result = resolveEffectivePalette(
-      'union',
-      ['#111111', '#222222'],
-      ['#aaaaaa', '#bbbbbb'],
-    )
+    const result = resolveEffectivePalette('union', ['#111111', '#222222'], ['#aaaaaa', '#bbbbbb'])
     expect(result).toEqual(['#111111', '#222222', '#aaaaaa', '#bbbbbb'])
   })
 
   it('dedups the union case-insensitively so #FF0000 + #ff0000 collapse', () => {
-    const result = resolveEffectivePalette(
-      'union',
-      ['#FF0000', '#00FF00'],
-      ['#ff0000', '#0000FF'],
-    )
+    const result = resolveEffectivePalette('union', ['#FF0000', '#00FF00'], ['#ff0000', '#0000FF'])
     // Pens preserved verbatim; inventory contributes only the non-dup.
     expect(result).toEqual(['#FF0000', '#00FF00', '#0000FF'])
   })

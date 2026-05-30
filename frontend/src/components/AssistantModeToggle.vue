@@ -14,11 +14,7 @@ const ui = useUiModeStore()
 </script>
 
 <template>
-  <div
-    class="assistant-mode-toggle"
-    role="group"
-    :aria-label="t('v2.mode.groupLabel')"
-  >
+  <div class="assistant-mode-toggle" role="group" :aria-label="t('v2.mode.groupLabel')">
     <button
       type="button"
       :class="{ active: ui.isAssisted }"
@@ -66,7 +62,9 @@ const ui = useUiModeStore()
   outline-offset: -2px;
 }
 .assistant-mode-toggle button {
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .assistant-mode-toggle button:hover:not(.active) {
   background: #f1f5f9;

@@ -52,7 +52,9 @@ describe('applyPhysicalStrokeWidth', () => {
     const map = new Map<string, number>([['#ff0000', 1.0]])
     const out = applyPhysicalStrokeWidth(svg, map, 0.5)
     expect(out).toContain('stroke="#ff0000"')
-    expect(out).toMatch(/stroke="#ff0000"[^>]*stroke-width="2(\.0+)?"|stroke-width="2(\.0+)?"[^>]*stroke="#ff0000"/)
+    expect(out).toMatch(
+      /stroke="#ff0000"[^>]*stroke-width="2(\.0+)?"|stroke-width="2(\.0+)?"[^>]*stroke="#ff0000"/,
+    )
     // Blue group untouched (still 0.8).
     const blue = out.slice(out.indexOf('#0000ff'))
     expect(blue).toContain('0.8')

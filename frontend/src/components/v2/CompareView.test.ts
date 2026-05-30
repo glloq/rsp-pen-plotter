@@ -85,9 +85,7 @@ describe('CompareView', () => {
         b: candidate('b', {}),
       },
     })
-    await wrapper
-      .find('[data-test="overlay-penup_heatmap"] input')
-      .trigger('change')
+    await wrapper.find('[data-test="overlay-penup_heatmap"] input').trigger('change')
     expect(wrapper.emitted('toggle-overlay')?.[0]).toEqual(['penup_heatmap'])
   })
 

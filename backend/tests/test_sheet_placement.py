@@ -164,9 +164,7 @@ def test_top_left_profile_keeps_drawing_at_offset() -> None:
         offset_x_mm=20.0,
         offset_y_mm=10.0,
     )
-    gcode = generate_gcode(
-        ONE_LINE, profile, scale_mode="fit", margin_mm=0.0, placement=placement
-    )
+    gcode = generate_gcode(ONE_LINE, profile, scale_mode="fit", margin_mm=0.0, placement=placement)
     ys: list[float] = []
     for line in gcode.splitlines():
         if line.startswith("G1"):
@@ -199,7 +197,7 @@ def test_composite_with_top_level_labeled_groups_extracts_each_layer() -> None:
         'data-placement-id="p1" '
         'transform="translate(10 10) scale(0.5 0.5)" '
         'stroke="#0000ff"><path d="M0 50 L100 50"/></g>'
-        '</svg>'
+        "</svg>"
     )
     layers = _read_layers(composite)
     labels = {layer.label for layer in layers}
@@ -218,7 +216,7 @@ def test_per_layer_pen_assignments_apply_to_composite_layers() -> None:
         '<g inkscape:label="p1__color-0000ff" '
         'transform="translate(10 10) scale(0.5 0.5)" '
         'stroke="#0000ff"><path d="M0 50 L100 50"/></g>'
-        '</svg>'
+        "</svg>"
     )
     profile = _grbl_profile().model_copy(update={"origin": "top_left"})
     gcode = generate_gcode(
@@ -243,7 +241,5 @@ def test_sheet_warning_in_generated_gcode() -> None:
         offset_x_mm=0.0,
         offset_y_mm=0.0,
     )
-    gcode = generate_gcode(
-        ONE_LINE, profile, scale_mode="fit", margin_mm=0.0, placement=placement
-    )
+    gcode = generate_gcode(ONE_LINE, profile, scale_mode="fit", margin_mm=0.0, placement=placement)
     assert "; WARNING: sheet exceeds the workspace" in gcode

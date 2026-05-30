@@ -210,6 +210,46 @@
         }
       }
     },
+    "/files/by-hash/{sha256}": {
+      "get": {
+        "summary": "Get File By Hash",
+        "description": "Look up a library entry by its content SHA-256.\n\nLets the uploader skip the upload + convert round-trip entirely when the\nbytes are already in the library: the client hashes the file locally and\ncalls this first. Returns the same :class:`FileDetail` the upload endpoint\nwould, so the frontend can merge it as a dedup hit. 404 when unknown.\n\nDeclared before ``/files/{file_id}`` so the literal ``by-hash`` segment is\nnever swallowed by the file-id route.",
+        "operationId": "get_file_by_hash_files_by_hash__sha256__get",
+        "parameters": [
+          {
+            "name": "sha256",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sha256"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/files/{file_id}": {
       "get": {
         "summary": "Get File",
@@ -648,7 +688,7 @@
     "/optimize": {
       "post": {
         "summary": "Optimize",
-        "description": "Optimize toolpaths to reduce pen-up travel.\n\nArgs:\n    request: The SVG to optimize plus optional per-layer settings.\n\nReturns:\n    An :class:`OptimizeResponse` with the optimized SVG, refreshed layer\n    descriptors, and before/after travel metrics.\n\nRaises:\n    HTTPException: 400 if the SVG cannot be processed.",
+        "description": "Optimize toolpaths to reduce pen-up travel.\n\nWhen ``OMNIPLOT_IR_ENABLED=1`` and a matching :class:`GeometryIR`\nartifact has been previously cached for this SVG, we route through\n:func:`optimize_geometry_ir` so the IR path gets real traffic in\nproduction. The SVG path stays the fallback when no cached IR is\navailable (typical fresh upload, no prior cache hit).\n\nArgs:\n    request: The SVG to optimize plus optional per-layer settings.\n\nReturns:\n    An :class:`OptimizeResponse` with the optimized SVG, refreshed layer\n    descriptors, and before/after travel metrics.\n\nRaises:\n    HTTPException: 400 if the SVG cannot be processed.",
         "operationId": "optimize_optimize_post",
         "requestBody": {
           "content": {
@@ -762,6 +802,45 @@
         }
       }
     },
+    "/preflight/svg": {
+      "post": {
+        "summary": "Preflight Svg",
+        "description": "Estimate metrics for a standalone SVG against a profile.\n\nLightweight variant that skips plan resolution / TypographyPlan\nre-rendering / placement composition. Returns the same\n:class:`PreflightReport` shape as the full ``/preflight`` so\nconsumers (e.g. the Compare drawer) can read\n``drawing_length_mm``, ``travel_length_mm``,\n``estimated_seconds`` and ``pen_changes`` straight from the\nreport.\n\nRaises:\n    HTTPException: 404 if the profile is unknown; 400 if the SVG\n        cannot be parsed.",
+        "operationId": "preflight_svg_preflight_svg_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreflightSvgRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreflightReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/plans/{plan_hash}": {
       "get": {
         "summary": "Get Plan",
@@ -785,6 +864,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ResolvedPlan"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/policy/resolve": {
+      "post": {
+        "summary": "Resolve Policy",
+        "description": "Return the recommended algorithm + parameters for ``payload``.\n\nMirrors the matrix from audit #4 (see ``backend/pen_plotter/domain/policy``).\nThe reasoning trail in the response is what the modal V2 surfaces\nnext to the recommendation as \"Pourquoi ce choix ?\".",
+        "operationId": "resolve_policy_policy_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyDecision"
                 }
               }
             }
@@ -2325,6 +2443,63 @@
         }
       }
     },
+    "/preview/stream": {
+      "get": {
+        "summary": "Preview Stream",
+        "description": "Open a Server-Sent Events stream emitting progress events.\n\nWhen ``file_id`` is set, runs the real pipeline against the\nmatching library entry; otherwise falls back to the synthetic\nemitter (useful for tests and frontend smoke).",
+        "operationId": "preview_stream_preview_stream_get",
+        "parameters": [
+          {
+            "name": "layer_count",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 64,
+              "minimum": 1,
+              "default": 4,
+              "title": "Layer Count"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/preview-text": {
       "post": {
         "summary": "Preview Text",
@@ -2720,7 +2895,7 @@
     "/available-colors/{color_id}": {
       "patch": {
         "summary": "Patch Color",
-        "description": "Rewrite ``name`` / ``hex`` / ``position`` on one entry.",
+        "description": "Rewrite ``name`` / ``hex`` / ``position`` / ``stroke_width_mm`` on one entry.",
         "operationId": "patch_color_available_colors__color_id__patch",
         "parameters": [
           {
@@ -2865,6 +3040,127 @@
         }
       }
     },
+    "/manifests": {
+      "get": {
+        "summary": "List Manifests",
+        "description": "List the manifest domains the backend serves.\n\nReturns:\n    One entry per registered domain; the frontend uses this as a\n    capability probe before requesting a specific manifest.",
+        "operationId": "list_manifests_manifests_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManifestIndex"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/manifests/{domain}": {
+      "get": {
+        "summary": "Read Manifest",
+        "description": "Return the manifest for ``domain``.\n\nRaises:\n    ApiError: ``manifest.unknown_domain`` (404) when the domain is\n        not registered.",
+        "operationId": "read_manifest_manifests__domain__get",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Domain"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Manifest_Any_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slo/budgets": {
+      "get": {
+        "summary": "List Budgets",
+        "description": "Return the configured SLO budget table.\n\nUsed by the frontend dashboard to render the threshold rows even\nwhen there are no samples yet.",
+        "operationId": "list_budgets_slo_budgets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Budget"
+                  },
+                  "type": "array",
+                  "title": "Response List Budgets Slo Budgets Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slo/evaluate": {
+      "post": {
+        "summary": "Evaluate",
+        "description": "Evaluate the SLO budgets against ``request.samples``.\n\nAlso feeds the samples into the runtime accumulator so the\nbackground evaluator (when enabled) sees the same data. A breach\non an ``alert_on_breach=True`` budget emits one structured log\nline; the deployment is responsible for routing those to an\nexternal alertmanager.",
+        "operationId": "evaluate_slo_evaluate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -2971,6 +3267,12 @@
             "type": "string",
             "title": "Name",
             "default": ""
+          },
+          "stroke_width_mm": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Stroke Width Mm",
+            "default": 0.5
           }
         },
         "type": "object",
@@ -2998,6 +3300,14 @@
             "type": "integer",
             "title": "Position"
           },
+          "stroke_width_mm": {
+            "type": "number",
+            "title": "Stroke Width Mm"
+          },
+          "odometer_mm": {
+            "type": "number",
+            "title": "Odometer Mm"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -3010,6 +3320,8 @@
           "hex",
           "name",
           "position",
+          "stroke_width_mm",
+          "odometer_mm",
           "created_at"
         ],
         "title": "AvailableColorOut",
@@ -3050,6 +3362,30 @@
               }
             ],
             "title": "Position"
+          },
+          "stroke_width_mm": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stroke Width Mm"
+          },
+          "odometer_mm": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Odometer Mm"
           }
         },
         "type": "object",
@@ -3272,6 +3608,102 @@
         "title": "BoundingBox",
         "description": "Axis-aligned bounding box of a layer's geometry, in millimeters."
       },
+      "Budget": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "title": "Metric"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "p95_ms": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "P95 Ms"
+          },
+          "min_samples": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Min Samples",
+            "default": 10
+          },
+          "warn_breach_ratio": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Warn Breach Ratio",
+            "default": 0.05
+          },
+          "alert_on_breach": {
+            "type": "boolean",
+            "title": "Alert On Breach",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric",
+          "label",
+          "p95_ms"
+        ],
+        "title": "Budget",
+        "description": "One SLO row."
+      },
+      "BudgetReport": {
+        "properties": {
+          "statuses": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetStatus"
+            },
+            "type": "array",
+            "title": "Statuses"
+          },
+          "overall": {
+            "$ref": "#/components/schemas/Severity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "statuses",
+          "overall"
+        ],
+        "title": "BudgetReport",
+        "description": "The dashboard payload \u2014 all budgets + a roll-up severity."
+      },
+      "BudgetStatus": {
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/Budget"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "observed_p95_ms": {
+            "type": "number",
+            "title": "Observed P95 Ms",
+            "default": 0.0
+          },
+          "breach_count": {
+            "type": "integer",
+            "title": "Breach Count",
+            "default": 0
+          },
+          "sample_count": {
+            "type": "integer",
+            "title": "Sample Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "budget",
+          "severity"
+        ],
+        "title": "BudgetStatus",
+        "description": "Result of evaluating one budget."
+      },
       "CheckUpdateResponse": {
         "properties": {
           "update_available": {
@@ -3338,6 +3770,16 @@
         "title": "CheckUpdateResponse",
         "description": "Result of ``GET /system/check-update``: is a newer commit available?"
       },
+      "CommandSource": {
+        "type": "string",
+        "enum": [
+          "machine",
+          "host",
+          "operator"
+        ],
+        "title": "CommandSource",
+        "description": "Who emits the actual commands for the swap."
+      },
       "ConnectRequest": {
         "properties": {
           "port": {
@@ -3366,6 +3808,61 @@
         ],
         "title": "ConnectRequest",
         "description": "Serial connection parameters."
+      },
+      "ConstraintHit": {
+        "properties": {
+          "constraint": {
+            "type": "string",
+            "title": "Constraint"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "forbidden_algorithms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Forbidden Algorithms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "constraint",
+          "description"
+        ],
+        "title": "ConstraintHit",
+        "description": "One safety constraint (audit #4 \u00a74) that fired."
+      },
+      "Deprecation": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          },
+          "deprecated_since": {
+            "type": "integer",
+            "title": "Deprecated Since"
+          },
+          "remove_after": {
+            "type": "integer",
+            "title": "Remove After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "deprecated_since",
+          "remove_after"
+        ],
+        "title": "Deprecation",
+        "description": "One deprecated entry in a manifest.\n\n``remove_after`` is the **first manifest version** that may legally\nomit the entry \u2014 frontends still pinned to an older version must\nkeep supporting it until then."
       },
       "DocumentAnalysis": {
         "properties": {
@@ -3456,6 +3953,37 @@
         ],
         "title": "EnqueueRequest",
         "description": "Body for adding a run to the print queue."
+      },
+      "EvaluateRequest": {
+        "properties": {
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/MetricSample"
+            },
+            "type": "array",
+            "title": "Samples"
+          },
+          "budgets": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Budget"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budgets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "samples"
+        ],
+        "title": "EvaluateRequest",
+        "description": "Payload for ``POST /slo/evaluate`` \u2014 accepts a sample list."
       },
       "FileDetail": {
         "properties": {
@@ -3752,6 +4280,16 @@
         "title": "GenerateResponse",
         "description": "Generated G-code, its line count, and the resolved plan snapshot."
       },
+      "Goal": {
+        "type": "string",
+        "enum": [
+          "fast",
+          "balanced",
+          "quality"
+        ],
+        "title": "Goal",
+        "description": "Operator intent \u2014 audit #4 \u00a7 Entr\u00e9es."
+      },
       "GotoRequest": {
         "properties": {
           "x_mm": {
@@ -3807,6 +4345,25 @@
         ],
         "title": "HealthResponse",
         "description": "Response body for the health check endpoint."
+      },
+      "HostMacroStep": {
+        "properties": {
+          "send": {
+            "type": "string",
+            "title": "Send"
+          },
+          "wait_ms": {
+            "type": "integer",
+            "title": "Wait Ms",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "send"
+        ],
+        "title": "HostMacroStep",
+        "description": "One line of a host-emitted swap macro.\n\n``send`` is a literal command line written verbatim to the\ntransport; ``wait_ms`` is an optional pause **after** the send."
       },
       "ImportRequest": {
         "properties": {
@@ -4276,6 +4833,31 @@
         "title": "LayerPlan",
         "description": "Per-layer print settings \u2014 the unified pivot type.\n\nReplaces the old ``GenerateLayer`` Pydantic model and\n``LayerGeneration`` dataclass. Every field is optional except\n``layer_id``; defaults are filled in later by\n:func:`pen_plotter.application.plan_resolver.resolve_plan` using\nthe active machine profile.\n\nNote on ``optimize`` / ``simplify_tolerance_mm``: today the SVG\ninside the surrounding :class:`PrintPlan` is already optimized by\nthe frontend's ``optimize \u2192 preflight \u2192 generate`` pipeline, so\nthese fields are traceability data \u2014 they ride along into the\nresolved plan and the persisted snapshot, and they participate in\n``plan_hash`` so equal SVG + different optimize intent cannot\ncollide. A later refactor (lot L3+) will let the application\nservices drive optimization directly from these fields."
       },
+      "MachineCapabilities": {
+        "properties": {
+          "tool_change": {
+            "$ref": "#/components/schemas/ToolChangeStrategy"
+          },
+          "has_pen_sensor": {
+            "type": "boolean",
+            "title": "Has Pen Sensor",
+            "default": false
+          },
+          "has_sheet_loader": {
+            "type": "boolean",
+            "title": "Has Sheet Loader",
+            "default": false
+          },
+          "max_pens_in_magazine": {
+            "type": "integer",
+            "title": "Max Pens In Magazine",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "title": "MachineCapabilities",
+        "description": "Top-level capability container exposed on :class:`MachineProfile`."
+      },
       "MachineProfile": {
         "properties": {
           "name": {
@@ -4383,6 +4965,16 @@
               }
             ],
             "title": "Pens"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MachineCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -4431,6 +5023,154 @@
         ],
         "title": "Macro",
         "description": "A user-defined sequence of raw plotter commands triggerable as one action."
+      },
+      "ManifestIndex": {
+        "properties": {
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Domains"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domains"
+        ],
+        "title": "ManifestIndex",
+        "description": "Index of registered manifest domains."
+      },
+      "ManifestMeta": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "manifest_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Manifest Version"
+          },
+          "schema_semver": {
+            "type": "string",
+            "title": "Schema Semver",
+            "default": "0.1.0"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "deprecations": {
+            "items": {
+              "$ref": "#/components/schemas/Deprecation"
+            },
+            "type": "array",
+            "title": "Deprecations"
+          },
+          "feature_flags": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Feature Flags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "manifest_version"
+        ],
+        "title": "ManifestMeta",
+        "description": "Envelope metadata shared by every manifest payload."
+      },
+      "Manifest_Any_": {
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/ManifestMeta"
+          },
+          "entries": {
+            "items": {},
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meta"
+        ],
+        "title": "Manifest[Any]"
+      },
+      "ManualSwapPrompt": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": "Change pen"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body",
+            "default": "Insert pen {color} into the holder, then press Resume."
+          },
+          "multipen_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multipen Body"
+          },
+          "monopen_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monopen Body"
+          },
+          "timeout_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout S"
+          }
+        },
+        "type": "object",
+        "title": "ManualSwapPrompt",
+        "description": "Operator-facing prompt template used by :class:`ToolingMode.MANUAL`.\n\nThree optional bodies cover the two real-world scenarios:\n- ``multipen_body``: slot-based prompt for multi-pen profiles\n  (carousel / rack with explicit slot index). Substitutions:\n  ``{slot}``, ``{label}``, ``{color}``, ``{layer}``.\n- ``monopen_body``: color-based prompt for mono-pen profiles\n  where the operator swaps the pen between layers. Same\n  substitutions; ``{slot}`` is empty for mono-pen.\n- ``body``: legacy fallback when neither of the above is set\n  (kept for back-compat with v0.1 profile YAMLs).\n\nThe strategy picks the right body for each ``SwapContext``\nbased on ``context.slot_index`` \u2014 None \u2192 mono, non-None \u2192 multi."
+      },
+      "MetricSample": {
+        "properties": {
+          "metric": {
+            "type": "string",
+            "title": "Metric"
+          },
+          "value_ms": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Value Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metric",
+          "value_ms"
+        ],
+        "title": "MetricSample",
+        "description": "One measured value of a metric (ms unless otherwise noted)."
       },
       "OptimizeRequest": {
         "properties": {
@@ -4534,6 +5274,16 @@
         ],
         "title": "PaletteEntry",
         "description": "One cluster colour and its share of the image (0..1)."
+      },
+      "PaletteMode": {
+        "type": "string",
+        "enum": [
+          "machine_only",
+          "union",
+          "free"
+        ],
+        "title": "PaletteMode",
+        "description": "How the resolver is allowed to spend colours."
       },
       "PaletteSourceResponse": {
         "properties": {
@@ -4706,6 +5456,111 @@
         ],
         "title": "Point",
         "description": "A point in the machine's coordinate space, in profile units."
+      },
+      "PolicyDecision": {
+        "properties": {
+          "segmentation_method": {
+            "$ref": "#/components/schemas/SegmentationMethod"
+          },
+          "default_algorithm": {
+            "type": "string",
+            "title": "Default Algorithm"
+          },
+          "default_options": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Default Options"
+          },
+          "default_passes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Default Passes"
+          },
+          "quality_tier": {
+            "$ref": "#/components/schemas/QualityTier"
+          },
+          "fallback_chain": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fallback Chain"
+          },
+          "reasoning": {
+            "items": {
+              "$ref": "#/components/schemas/RuleHit"
+            },
+            "type": "array",
+            "title": "Reasoning"
+          },
+          "hard_constraints_applied": {
+            "items": {
+              "$ref": "#/components/schemas/ConstraintHit"
+            },
+            "type": "array",
+            "title": "Hard Constraints Applied"
+          }
+        },
+        "type": "object",
+        "required": [
+          "segmentation_method",
+          "default_algorithm",
+          "quality_tier"
+        ],
+        "title": "PolicyDecision",
+        "description": "The resolver's recommendation."
+      },
+      "PolicyInput": {
+        "properties": {
+          "source_kind": {
+            "$ref": "#/components/schemas/SourceKind"
+          },
+          "goal": {
+            "$ref": "#/components/schemas/Goal",
+            "default": "fast"
+          },
+          "palette_mode": {
+            "$ref": "#/components/schemas/PaletteMode",
+            "default": "machine_only"
+          },
+          "available_colors_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Available Colors Count",
+            "default": 1
+          },
+          "image_megapixels": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Megapixels"
+          },
+          "layer_count_estimate": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Layer Count Estimate",
+            "default": 1
+          },
+          "is_mono_pen_machine": {
+            "type": "boolean",
+            "title": "Is Mono Pen Machine",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_kind"
+        ],
+        "title": "PolicyInput",
+        "description": "Everything the resolver needs to pick defaults."
       },
       "PreflightReport": {
         "properties": {
@@ -4880,6 +5735,25 @@
         ],
         "title": "PreflightRequest",
         "description": "Wire model for ``POST /preflight`` \u2014 same shape as a print plan."
+      },
+      "PreflightSvgRequest": {
+        "properties": {
+          "svg": {
+            "type": "string",
+            "title": "Svg"
+          },
+          "profile_name": {
+            "type": "string",
+            "title": "Profile Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "svg",
+          "profile_name"
+        ],
+        "title": "PreflightSvgRequest",
+        "description": "Lightweight wire model for ``POST /preflight/svg``.\n\nAccepts just an already-rendered SVG + a profile name; skips the\nfull :class:`PrintPlan` ceremony. Used by the Compare drawer to\ncompute per-candidate metrics (drawing length, travel length,\nestimated time, pen-change count) without building a fake plan\naround each variant."
       },
       "Preset": {
         "properties": {
@@ -5084,6 +5958,16 @@
             "type": "object",
             "title": "Pause Points"
           },
+          "swap_actions": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Swap Actions"
+          },
+          "skipped_layers": {
+            "items": {},
+            "type": "array",
+            "title": "Skipped Layers"
+          },
           "idempotency_key": {
             "anyOf": [
               {
@@ -5117,6 +6001,26 @@
         "title": "PrintRun",
         "description": "A persisted print job in the production queue."
       },
+      "QualityTier": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "standard",
+          "final"
+        ],
+        "title": "QualityTier",
+        "description": "Preview-time quality tier the renderer should target."
+      },
+      "RecoveryPolicy": {
+        "type": "string",
+        "enum": [
+          "abort",
+          "pause_and_prompt",
+          "skip_layer"
+        ],
+        "title": "RecoveryPolicy",
+        "description": "What happens when a swap fails or is aborted mid-flight."
+      },
       "RerenderRequest": {
         "properties": {
           "job_id": {
@@ -5129,6 +6033,13 @@
             },
             "type": "array",
             "title": "Layers"
+          },
+          "layer_stroke_widths": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Layer Stroke Widths"
           }
         },
         "type": "object",
@@ -5280,6 +6191,25 @@
         "title": "ResolvedPlan",
         "description": "The plan after defaults + validation, ready to feed the engines.\n\nCarries the original ``PrintPlan`` plus the per-layer resolution and\na deterministic content hash. Engines never re-read the raw plan;\nthey read the resolved one. Snapshots stored in SQLite are exactly\ninstances of this model."
       },
+      "RuleHit": {
+        "properties": {
+          "rule": {
+            "type": "string",
+            "title": "Rule"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rule",
+          "description"
+        ],
+        "title": "RuleHit",
+        "description": "One rule from the matrix that contributed to the decision."
+      },
       "RunRequest": {
         "properties": {
           "gcode": {
@@ -5293,6 +6223,38 @@
         ],
         "title": "RunRequest",
         "description": "G-code job to stream."
+      },
+      "SegmentationMethod": {
+        "type": "string",
+        "enum": [
+          "fixed_palette",
+          "kmeans",
+          "none"
+        ],
+        "title": "SegmentationMethod",
+        "description": "Segmentation strategy on the way into the renderer."
+      },
+      "Severity": {
+        "type": "string",
+        "enum": [
+          "healthy",
+          "warning",
+          "breach"
+        ],
+        "title": "Severity",
+        "description": "Outcome of evaluating one budget."
+      },
+      "SourceKind": {
+        "type": "string",
+        "enum": [
+          "bitmap_photo",
+          "bitmap_illustration",
+          "vector_svg",
+          "pdf_doc",
+          "text_typography"
+        ],
+        "title": "SourceKind",
+        "description": "Source classifier \u2014 audit #4 \u00a7 Entr\u00e9es."
       },
       "StatusResponse": {
         "properties": {
@@ -5338,6 +6300,53 @@
         ],
         "title": "StatusResponse",
         "description": "Connection and streaming status."
+      },
+      "ToolChangeStrategy": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/ToolingMode",
+            "default": "manual"
+          },
+          "command_source": {
+            "$ref": "#/components/schemas/CommandSource",
+            "default": "operator"
+          },
+          "recovery_policy": {
+            "$ref": "#/components/schemas/RecoveryPolicy",
+            "default": "pause_and_prompt"
+          },
+          "manual_prompt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ManualSwapPrompt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "host_macro": {
+            "items": {
+              "$ref": "#/components/schemas/HostMacroStep"
+            },
+            "type": "array",
+            "title": "Host Macro"
+          }
+        },
+        "type": "object",
+        "title": "ToolChangeStrategy",
+        "description": "Bundles the swap mode and its strategy-specific knobs."
+      },
+      "ToolingMode": {
+        "type": "string",
+        "enum": [
+          "firmware",
+          "host_macro",
+          "manual",
+          "single_pen"
+        ],
+        "title": "ToolingMode",
+        "description": "Top-level orchestration strategy (audit #2)."
       },
       "ToolpathMetrics": {
         "properties": {

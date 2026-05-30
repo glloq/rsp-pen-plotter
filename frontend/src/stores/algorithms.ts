@@ -15,10 +15,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { AlgorithmComplexity, AlgorithmInfo, AlgorithmKind } from '../api/client'
-import {
-  fetchAlgorithmsManifest,
-  type ManifestSource,
-} from '../domain/manifests/client'
+import { fetchAlgorithmsManifest, type ManifestSource } from '../domain/manifests/client'
 import type { AlgorithmManifestEntry } from '../domain/manifests/schemas'
 
 export const useAlgorithmsStore = defineStore('algorithms', () => {

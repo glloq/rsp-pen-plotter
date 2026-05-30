@@ -46,7 +46,11 @@ function hexToRgb(hex: string): [number, number, number] | null {
   const m3 = /^#?([0-9a-fA-F]{3})$/.exec(trimmed)
   let body: string | null = null
   if (m6 && m6[1]) body = m6[1]
-  else if (m3 && m3[1]) body = m3[1].split('').map((c) => c + c).join('')
+  else if (m3 && m3[1])
+    body = m3[1]
+      .split('')
+      .map((c) => c + c)
+      .join('')
   if (!body) return null
   return [
     parseInt(body.slice(0, 2), 16),
@@ -56,7 +60,10 @@ function hexToRgb(hex: string): [number, number, number] | null {
 }
 
 function rgbToHex(r: number, g: number, b: number): string {
-  const toH = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
+  const toH = (n: number) =>
+    Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, '0')
   return `#${toH(r)}${toH(g)}${toH(b)}`
 }
 
@@ -267,11 +274,11 @@ const hueColor = computed(() => {
         >
           <div
             class="absolute inset-0"
-            style="background: linear-gradient(to right, #fff, rgba(255,255,255,0))"
+            style="background: linear-gradient(to right, #fff, rgba(255, 255, 255, 0))"
           />
           <div
             class="absolute inset-0"
-            style="background: linear-gradient(to top, #000, rgba(0,0,0,0))"
+            style="background: linear-gradient(to top, #000, rgba(0, 0, 0, 0))"
           />
           <div
             class="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-lg"
