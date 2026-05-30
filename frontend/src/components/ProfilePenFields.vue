@@ -90,10 +90,6 @@ function ensureCaps(): MachineCapabilities {
   return props.draft.capabilities
 }
 
-// Read-only view of the macro list (no side effects in the getter).
-// When host mode is active the capabilities block is guaranteed present
-// (setMode / backend migration ensure it), so this never hits the
-// fallback during the host editor render.
 // Structured, G-code-free host swap. The operator orders high-level
 // blocks; the backend compiles them using each pen's calibrated
 // position (set in the magazine editor).
@@ -290,67 +286,136 @@ function setMode(mode: ColorMode): void {
         }}</span>
       </label>
 
-      <!-- CASE 2 — host macro: the Raspberry Pi streams an ordered
-           sequence of G-code lines (with optional waits) to drive a
-           magazine bolted onto a machine that has no native swap. -->
+      <!-- CASE 2 — host magazine: a visual, G-code-free swap builder.
+           The operator orders high-level blocks (move to slot, grab,
+           release, head up/down, wait); the backend compiles them using
+           each pen's position (set in the magazine below). A raw G-code
+           block remains as an escape hatch for exotic hardware. -->
       <div
-        v-else-if="colorMode === 'host'"
-        class="space-y-2 rounded-lg border border-slate-700 bg-slate-900/50 p-3"
-        data-test="host-macro-editor"
+        v-else-if="colorMode === 'host' && hostSwap"
+        class="space-y-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3"
+        data-test="host-swap-editor"
       >
-        <p class="text-[11px] text-slate-400">{{ t('profile.hostMacroHint') }}</p>
-        <div
-          class="grid grid-cols-[1fr_5rem_1.75rem] items-center gap-2 text-[10px] text-slate-500"
-        >
-          <span>{{ t('profile.hostMacroSend') }}</span>
-          <span>{{ t('profile.hostMacroWait') }}</span>
-          <span></span>
-        </div>
+        <p class="text-[11px] text-slate-400">{{ t('profile.hostSwap.intro') }}</p>
+
         <ol class="space-y-1.5">
           <li
-            v-for="(step, i) in hostMacro"
+            v-for="(step, i) in hostSwap.steps"
             :key="i"
-            class="grid grid-cols-[1fr_5rem_1.75rem] items-center gap-2"
-            :data-test="`host-macro-row-${i}`"
+            class="flex items-center gap-2"
+            :data-test="`host-step-${i}`"
           >
+            <span class="w-5 shrink-0 text-center font-mono text-[10px] text-slate-500">{{
+              i + 1
+            }}</span>
+            <select
+              v-model="step.kind"
+              class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+              :data-test="`host-step-kind-${i}`"
+            >
+              <option v-for="k in STEP_KINDS" :key="k" :value="k">
+                {{ t(`profile.hostSwap.step.${k}`) }}
+              </option>
+            </select>
             <input
+              v-if="step.kind === 'raw'"
               v-model="step.send"
               type="text"
-              placeholder="G0 X{slot}0 Y150"
-              class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100"
-              :data-test="`host-macro-send-${i}`"
+              placeholder="G4 P0.5"
+              class="w-32 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+              :data-test="`host-step-send-${i}`"
             />
-            <input
-              v-model.number="step.wait_ms"
-              type="number"
-              min="0"
-              step="50"
-              class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-              :data-test="`host-macro-wait-${i}`"
-            />
+            <label class="flex shrink-0 items-center gap-1 text-[10px] text-slate-500">
+              <input
+                v-model.number="step.wait_ms"
+                type="number"
+                min="0"
+                step="50"
+                class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                :data-test="`host-step-wait-${i}`"
+              />
+              {{ t('profile.hostSwap.waitShort') }}
+            </label>
             <button
               type="button"
-              class="rounded border border-slate-700 bg-slate-800 text-slate-300 hover:bg-red-900/60 hover:text-red-200"
-              :title="t('profile.hostMacroRemove')"
-              :data-test="`host-macro-remove-${i}`"
-              @click="removeMacroStep(i)"
+              class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
+              :disabled="i === 0"
+              :title="t('profile.hostSwap.moveUp')"
+              @click="moveStep(i, -1)"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
+              :disabled="i === hostSwap.steps.length - 1"
+              :title="t('profile.hostSwap.moveDown')"
+              @click="moveStep(i, 1)"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              class="rounded border border-slate-700 bg-slate-800 px-1.5 text-slate-300 hover:bg-red-900/60 hover:text-red-200"
+              :title="t('profile.hostSwap.remove')"
+              :data-test="`host-step-remove-${i}`"
+              @click="removeStep(i)"
             >
               −
             </button>
           </li>
         </ol>
-        <p v-if="!hostMacro.length" class="text-[11px] text-amber-300" data-test="host-macro-empty">
-          ⚠ {{ t('profile.hostMacroEmpty') }}
+
+        <p
+          v-if="!hostSwap.steps.length"
+          class="text-[11px] text-amber-300"
+          data-test="host-swap-empty"
+        >
+          ⚠ {{ t('profile.hostSwap.empty') }}
         </p>
+
         <button
           type="button"
           class="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
-          data-test="host-macro-add"
-          @click="addMacroStep"
+          data-test="host-step-add"
+          @click="addStep"
         >
-          + {{ t('profile.hostMacroAdd') }}
+          + {{ t('profile.hostSwap.add') }}
         </button>
-        <p class="text-[10px] text-slate-500">{{ t('profile.hostMacroPlaceholders') }}</p>
+
+        <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.positionHint') }}</p>
+
+        <!-- Advanced: the clamp / gripper primitive (the one place a
+             literal command is unavoidable). Sensible defaults provided. -->
+        <details class="rounded border border-slate-700 bg-slate-900/40">
+          <summary
+            class="cursor-pointer px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 hover:text-slate-300"
+          >
+            {{ t('profile.hostSwap.advanced') }}
+          </summary>
+          <div class="grid grid-cols-2 gap-2 border-t border-slate-700 p-2">
+            <label class="block text-[11px] text-slate-400"
+              >{{ t('profile.hostSwap.grabCommand') }}
+              <input
+                v-model="hostSwap.grab_command"
+                type="text"
+                placeholder="M280 P1 S90"
+                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+                data-test="host-grab-command"
+              />
+            </label>
+            <label class="block text-[11px] text-slate-400"
+              >{{ t('profile.hostSwap.dropCommand') }}
+              <input
+                v-model="hostSwap.drop_command"
+                type="text"
+                placeholder="M280 P1 S20"
+                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+                data-test="host-drop-command"
+              />
+            </label>
+          </div>
+        </details>
       </div>
     </div>
   </details>
