@@ -1049,6 +1049,9 @@ export interface AvailableColor {
   position: number
   // Pen tip / line width in mm — each marker draws a different stroke.
   stroke_width_mm: number
+  // Accumulated distance drawn with this pen (mm). Incremented when a
+  // job is sent/queued; reset manually when the pen is replaced.
+  odometer_mm: number
   created_at: string
 }
 
@@ -1070,7 +1073,7 @@ export async function createAvailableColor(
 
 export async function patchAvailableColor(
   colorId: string,
-  patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm'>>,
+  patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm' | 'odometer_mm'>>,
 ): Promise<AvailableColor> {
   const response = await api.patch<AvailableColor>(
     `/available-colors/${encodeURIComponent(colorId)}`,

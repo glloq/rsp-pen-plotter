@@ -15,6 +15,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { PrintRun } from '../api/client'
 import { confirmAction } from '../composables/confirm'
+import { useAvailableColorsStore } from '../stores/availableColors'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useQueueStore } from '../stores/queue'
@@ -25,6 +26,7 @@ const { t } = useI18n()
 const job = useJobStore()
 const plotter = usePlotterStore()
 const queue = useQueueStore()
+const availableColors = useAvailableColorsStore()
 const { status } = storeToRefs(plotter)
 
 const stateClass: Record<PrintRun['state'], string> = {
@@ -42,6 +44,12 @@ function runProgress(run: PrintRun): number {
   return run.total_lines > 0 ? run.acked_lines / run.total_lines : 0
 }
 
+function logOdometerForCurrentJob(): void {
+  for (const [hex, mm] of Object.entries(job.lengthMmByColor)) {
+    void availableColors.addToOdometer(hex, mm)
+  }
+}
+
 async function sendNow(): Promise<void> {
   if (!job.gcode) return
   const confirmed = await confirmAction({
@@ -50,11 +58,15 @@ async function sendNow(): Promise<void> {
     confirmLabel: t('plotter.sendJob'),
     cancelLabel: t('confirm.cancel'),
   })
-  if (confirmed) plotter.run(job.gcode)
+  if (confirmed) {
+    logOdometerForCurrentJob()
+    plotter.run(job.gcode)
+  }
 }
 
 async function enqueue(): Promise<void> {
   if (!job.gcode) return
+  logOdometerForCurrentJob()
   const name = job.job?.source_file ?? 'job'
   await queue.enqueue(name, job.selectedProfileName, job.gcode)
 }

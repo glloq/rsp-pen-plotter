@@ -1152,7 +1152,8 @@
   "availableColors": {
     "hint": "Inventaire global des feutres que tu possèdes, et attribution des couleurs aux emplacements du magasin. Déclare une fois chaque Sharpie / fineliner.",
     "meters": "{value} m",
-    "metersUsedTitle": "Mètres tracés avec cette couleur pour le travail courant.",
+    "odometerTitle": "Distance totale réellement tracée avec ce stylo. Se cumule à chaque impression, à remettre à zéro quand on change le stylo.",
+    "resetOdometer": "Remettre le compteur à zéro (nouveau stylo)",
     "strokeWidthTitle": "Largeur du trait du feutre (mm).",
     "mmUnit": "mm",
     "add": "Ajouter une couleur",
