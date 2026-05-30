@@ -15,7 +15,7 @@
 // the lifecycle calls back to the store via callbacks. This shape
 // keeps the composable unit-testable without spinning up Pinia.
 
-import { computed, ref, toRaw, watch, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import { exportProfileYaml, type EbbConfig, type MachineProfile, type PenSlot } from '../api/client'
 
 export interface ProfileDraftCallbacks {
@@ -65,13 +65,27 @@ export function defaultPen(index: number): PenSlot {
   }
 }
 
+// Deep, reactivity-free clone for the profile payload. Profiles are pure
+// data (numbers / strings / booleans / null / nested objects), so a JSON
+// round-trip is both correct and bulletproof: unlike ``structuredClone``
+// it reads *through* Vue reactive proxies, so a proxy that leaked into a
+// nested field (e.g. a retained pen slot) can never raise a
+// ``DataCloneError`` at save time.
+function plainClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 export function normalizePens(profile: MachineProfile): void {
   const existing = profile.pens ?? []
   const count = Math.max(0, Math.floor(profile.pen_slot_count))
-  profile.pens = Array.from(
-    { length: count },
-    (_, i) => existing.find((p) => p.index === i) ?? defaultPen(i),
-  )
+  profile.pens = Array.from({ length: count }, (_, i) => {
+    const found = existing.find((p) => p.index === i)
+    // Deep-plain copy of a retained slot: when this runs on a reactive
+    // draft (the pen-count watcher), ``found`` is a reactive proxy, and
+    // re-inserting it would poison the array so ``structuredClone`` later
+    // throws. A plain copy keeps the draft serialisable.
+    return found ? plainClone(found) : defaultPen(i)
+  })
 }
 
 export function useProfileDraft(inputs: ProfileDraftInputs, callbacks: ProfileDraftCallbacks) {
@@ -115,7 +129,7 @@ export function useProfileDraft(inputs: ProfileDraftInputs, callbacks: ProfileDr
       draft.value = null
       return
     }
-    const clone = structuredClone(toRaw(inputs.selectedProfile.value))
+    const clone = plainClone(inputs.selectedProfile.value)
     normalizePens(clone)
     draft.value = clone
   }
@@ -155,7 +169,7 @@ export function useProfileDraft(inputs: ProfileDraftInputs, callbacks: ProfileDr
     error.value = null
     try {
       if (!isEbb.value) draft.value.ebb = null
-      await callbacks.saveProfile(structuredClone(toRaw(draft.value)))
+      await callbacks.saveProfile(plainClone(draft.value))
       isUnsavedDraft.value = false
     } catch (err) {
       error.value =
@@ -168,7 +182,7 @@ export function useProfileDraft(inputs: ProfileDraftInputs, callbacks: ProfileDr
 
   function duplicate(): void {
     if (!draft.value) return
-    const clone = structuredClone(toRaw(draft.value))
+    const clone = plainClone(draft.value)
     draft.value = { ...clone, name: `${draft.value.name} copy` }
     isUnsavedDraft.value = true
   }
