@@ -126,9 +126,21 @@ class HostMacroStrategy(ToolChangeStrategy):
 
             send: str | None = None
             if step.kind == "head_up":
-                send = self.profile.pen_up_command
+                # Real Z axis: rise to the safe travel height. Otherwise
+                # fall back to the servo pen-up command.
+                send = (
+                    f"G0 Z{swap.safe_z_mm:.3f} F{travel_feed:.1f}"
+                    if swap.safe_z_mm is not None
+                    else self.profile.pen_up_command
+                )
             elif step.kind == "head_down":
-                send = self.profile.pen_down_command
+                # Real Z axis: descend to the engage depth inside the
+                # magazine. Otherwise the servo pen-down command.
+                send = (
+                    f"G0 Z{swap.engage_z_mm:.3f} F{travel_feed:.1f}"
+                    if swap.engage_z_mm is not None
+                    else self.profile.pen_down_command
+                )
             elif step.kind == "grab":
                 send = (
                     _substitute(swap.grab_command, context) if swap.grab_command.strip() else None

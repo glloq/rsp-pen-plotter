@@ -4388,6 +4388,50 @@
             ],
             "title": "Travel Speed Mm S"
           },
+          "safe_z_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Z Mm"
+          },
+          "engage_z_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engage Z Mm"
+          },
+          "z_min_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Min Mm"
+          },
+          "z_max_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Max Mm"
+          },
           "steps": {
             "items": {
               "$ref": "#/components/schemas/HostSwapStep"

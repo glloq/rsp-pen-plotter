@@ -2033,6 +2033,14 @@ export interface components {
             drop_command: string;
             /** Travel Speed Mm S */
             travel_speed_mm_s?: number | null;
+            /** Safe Z Mm */
+            safe_z_mm?: number | null;
+            /** Engage Z Mm */
+            engage_z_mm?: number | null;
+            /** Z Min Mm */
+            z_min_mm?: number | null;
+            /** Z Max Mm */
+            z_max_mm?: number | null;
             /** Steps */
             steps?: components["schemas"]["HostSwapStep"][];
         };
