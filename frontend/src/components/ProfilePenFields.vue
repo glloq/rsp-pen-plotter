@@ -108,6 +108,8 @@ const STEP_KINDS: HostSwapStepKind[] = [
 
 function defaultHostSwap(): HostSwapPlan {
   return {
+    mechanism: 'rack',
+    lock_mode: 'command',
     grab_command: 'M280 P1 S90',
     drop_command: 'M280 P1 S20',
     travel_speed_mm_s: null,
@@ -139,6 +141,42 @@ function defaultHostSwap(): HostSwapPlan {
   }
 }
 
+// Kinematic dock changer: each pen+holder is a whole tool parked in a
+// fixed dock; the head couples to one at a time by sliding in/out
+// (advance/retract), so there is no vertical head_up/down and the
+// grab/release steps mean lock/unlock the coupling. The default lock is
+// 'motion' (magnetic / kinematic), so no command is emitted.
+function defaultDockSwap(): HostSwapPlan {
+  return {
+    mechanism: 'dock',
+    lock_mode: 'motion',
+    grab_command: '',
+    drop_command: '',
+    travel_speed_mm_s: null,
+    head_up_command: null,
+    head_down_command: null,
+    safe_z_mm: null,
+    engage_z_mm: null,
+    z_min_mm: null,
+    z_max_mm: null,
+    // Clearance is the dock entry depth: travel to the approach point, then
+    // slide this far in to seat the coupling, and back out to leave/take.
+    clearance_axis: 'y',
+    clearance_dir: '+',
+    clearance_mm: 30,
+    steps: [
+      { kind: 'move_to_old_slot', wait_ms: 0, send: '' }, // approach old dock
+      { kind: 'advance_to_slot', wait_ms: 0, send: '' }, // slide tool into dock
+      { kind: 'release', wait_ms: 200, send: '' }, // unlock coupling
+      { kind: 'retract_from_slot', wait_ms: 0, send: '' }, // back out, tool stays
+      { kind: 'move_to_new_slot', wait_ms: 0, send: '' }, // approach new dock
+      { kind: 'advance_to_slot', wait_ms: 0, send: '' }, // slide onto the new tool
+      { kind: 'grab', wait_ms: 200, send: '' }, // lock coupling
+      { kind: 'retract_from_slot', wait_ms: 0, send: '' }, // pull tool out of dock
+    ],
+  }
+}
+
 function ensureHostSwap(): HostSwapPlan {
   const tc = ensureCaps().tool_change
   if (!tc.host_swap) tc.host_swap = defaultHostSwap()
@@ -147,6 +185,45 @@ function ensureHostSwap(): HostSwapPlan {
 
 // Read-only view for the template (no side effects in the getter).
 const hostSwap = computed(() => props.draft.capabilities?.tool_change.host_swap ?? null)
+
+// Mechanism sub-selector inside the host mode (rack vs kinematic dock).
+type HostMechanism = 'rack' | 'dock'
+const hostMechanism = computed<HostMechanism>(() => hostSwap.value?.mechanism ?? 'rack')
+const isDock = computed(() => hostMechanism.value === 'dock')
+
+// Switching mechanism reloads the matching preset sequence (positions are
+// kept — they live on the pens, not the plan) so the step list always
+// reflects the chosen hardware.
+function setMechanism(m: HostMechanism): void {
+  const swap = ensureHostSwap()
+  if (swap.mechanism === m) return
+  const preset = m === 'dock' ? defaultDockSwap() : defaultHostSwap()
+  swap.mechanism = m
+  swap.steps = preset.steps
+  swap.lock_mode = preset.lock_mode
+  swap.clearance_mm = swap.clearance_mm || preset.clearance_mm
+  if (m === 'rack') {
+    if (!swap.grab_command) swap.grab_command = preset.grab_command
+    if (!swap.drop_command) swap.drop_command = preset.drop_command
+  }
+}
+
+function setLockMode(mode: 'command' | 'motion'): void {
+  ensureHostSwap().lock_mode = mode
+}
+
+// Label for a step kind, mechanism-aware: on a dock, grab/release read as
+// lock/unlock the coupling rather than clamp/release a pen.
+function stepLabel(kind: HostSwapStepKind): string {
+  if (isDock.value && (kind === 'grab' || kind === 'release')) {
+    return t(`profile.hostSwap.dockStep.${kind}`)
+  }
+  return t(`profile.hostSwap.step.${kind}`)
+}
+
+// The advanced latch-command block only matters when a command actually
+// gets emitted: the rack always (clamp), the dock only with a command lock.
+const showsLatchCommands = computed(() => !isDock.value || hostSwap.value?.lock_mode === 'command')
 
 function addStep(): void {
   ensureHostSwap().steps.push({ kind: 'dwell', wait_ms: 200, send: '' })
@@ -403,7 +480,67 @@ function setMode(mode: ColorMode): void {
         class="space-y-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3"
         data-test="host-swap-editor"
       >
-        <p class="text-[11px] text-slate-400">{{ t('profile.hostSwap.intro') }}</p>
+        <!-- Mechanism sub-selector: which physical changer is bolted on.
+             Both compile through the same step engine; this picks the
+             preset sequence + labels. -->
+        <div class="space-y-1" data-test="host-mechanism">
+          <p class="text-[11px] uppercase tracking-wider text-slate-500">
+            {{ t('profile.hostSwap.mechanismTitle') }}
+          </p>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              v-for="mech in ['rack', 'dock'] as const"
+              :key="mech"
+              type="button"
+              class="flex flex-col gap-0.5 rounded-lg border p-2 text-left transition"
+              :class="
+                hostMechanism === mech
+                  ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500'
+                  : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
+              "
+              :aria-pressed="hostMechanism === mech"
+              :data-test="`host-mechanism-${mech}`"
+              @click="setMechanism(mech)"
+            >
+              <span class="text-sm font-medium text-slate-200">
+                {{ t(`profile.hostSwap.mechanism.${mech}`) }}
+              </span>
+              <span class="text-[11px] leading-snug text-slate-400">
+                {{ t(`profile.hostSwap.mechanismHint.${mech}`) }}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dock coupling: command latch (servo/motor) vs motion lock
+             (magnetic / kinematic — the slide-in motion is the lock). -->
+        <div v-if="isDock" class="space-y-1" data-test="host-lock-mode">
+          <p class="text-[11px] uppercase tracking-wider text-slate-500">
+            {{ t('profile.hostSwap.lockModeTitle') }}
+          </p>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              v-for="lm in ['motion', 'command'] as const"
+              :key="lm"
+              type="button"
+              class="rounded-lg border p-2 text-left text-[11px] leading-snug transition"
+              :class="
+                hostSwap.lock_mode === lm
+                  ? 'border-emerald-500 bg-emerald-950/40 text-emerald-100 ring-1 ring-emerald-500'
+                  : 'border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500'
+              "
+              :aria-pressed="hostSwap.lock_mode === lm"
+              :data-test="`host-lock-${lm}`"
+              @click="setLockMode(lm)"
+            >
+              {{ t(`profile.hostSwap.lockMode.${lm}`) }}
+            </button>
+          </div>
+        </div>
+
+        <p class="text-[11px] text-slate-400">
+          {{ isDock ? t('profile.hostSwap.dockIntro') : t('profile.hostSwap.intro') }}
+        </p>
 
         <ol class="space-y-1.5">
           <li
@@ -421,7 +558,7 @@ function setMode(mode: ColorMode): void {
               :data-test="`host-step-kind-${i}`"
             >
               <option v-for="k in STEP_KINDS" :key="k" :value="k">
-                {{ t(`profile.hostSwap.step.${k}`) }}
+                {{ stepLabel(k) }}
               </option>
             </select>
             <input
@@ -494,9 +631,17 @@ function setMode(mode: ColorMode): void {
              units. The "Go to slot" steps above travel to these. -->
         <div class="space-y-1.5 border-t border-slate-700 pt-3" data-test="host-positions">
           <p class="text-[11px] uppercase tracking-wider text-slate-500">
-            {{ t('profile.hostSwap.positionsTitle') }}
+            {{
+              isDock
+                ? t('profile.hostSwap.dockPositionsTitle')
+                : t('profile.hostSwap.positionsTitle')
+            }}
           </p>
-          <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.positionsHint') }}</p>
+          <p class="text-[11px] text-slate-500">
+            {{
+              isDock ? t('profile.hostSwap.dockPositionsHint') : t('profile.hostSwap.positionsHint')
+            }}
+          </p>
           <div
             class="grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-2 text-[10px] text-slate-500"
           >
@@ -538,7 +683,13 @@ function setMode(mode: ColorMode): void {
                The slot position above is the engagement point; the
                approach point sits this far away along the chosen axis. -->
           <div class="mt-2 space-y-1 rounded border border-slate-800 bg-slate-950/40 p-2">
-            <p class="text-[11px] text-slate-400">{{ t('profile.hostSwap.clearanceHint') }}</p>
+            <p class="text-[11px] text-slate-400">
+              {{
+                isDock
+                  ? t('profile.hostSwap.dockClearanceHint')
+                  : t('profile.hostSwap.clearanceHint')
+              }}
+            </p>
             <div class="flex items-end gap-2">
               <label class="block text-[11px] text-slate-400"
                 >{{ t('profile.hostSwap.clearanceAxis') }}
@@ -563,7 +714,9 @@ function setMode(mode: ColorMode): void {
                 </select>
               </label>
               <label class="block text-[11px] text-slate-400"
-                >{{ t('profile.hostSwap.clearanceMm') }}
+                >{{
+                  isDock ? t('profile.hostSwap.dockEntryMm') : t('profile.hostSwap.clearanceMm')
+                }}
                 <input
                   type="number"
                   min="0"
@@ -685,17 +838,18 @@ function setMode(mode: ColorMode): void {
           </p>
         </div>
 
-        <!-- Advanced: the clamp / gripper primitive (the one place a
-             literal command is unavoidable). Sensible defaults provided. -->
-        <details class="rounded border border-slate-700 bg-slate-900/40">
+        <!-- Advanced: the clamp / gripper / latch primitive (the one place
+             a literal command is unavoidable). Hidden for a motion-locked
+             dock, where the coupling needs no command. -->
+        <details v-if="showsLatchCommands" class="rounded border border-slate-700 bg-slate-900/40">
           <summary
             class="cursor-pointer px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 hover:text-slate-300"
           >
-            {{ t('profile.hostSwap.advanced') }}
+            {{ isDock ? t('profile.hostSwap.lockAdvanced') : t('profile.hostSwap.advanced') }}
           </summary>
           <div class="grid grid-cols-2 gap-2 border-t border-slate-700 p-2">
             <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.grabCommand') }}
+              >{{ isDock ? t('profile.hostSwap.lockCommand') : t('profile.hostSwap.grabCommand') }}
               <input
                 v-model="hostSwap.grab_command"
                 type="text"
@@ -705,7 +859,9 @@ function setMode(mode: ColorMode): void {
               />
             </label>
             <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.dropCommand') }}
+              >{{
+                isDock ? t('profile.hostSwap.unlockCommand') : t('profile.hostSwap.dropCommand')
+              }}
               <input
                 v-model="hostSwap.drop_command"
                 type="text"

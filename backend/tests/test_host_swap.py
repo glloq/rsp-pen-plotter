@@ -293,3 +293,63 @@ def test_advance_without_prior_move_is_skipped() -> None:
     orch = ToolChangeOrchestrator(profile)
     plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
     assert [c.send for c in plan.commands] == ["M280 P1 S90"]
+
+
+# ── kinematic dock mechanism ─────────────────────────────────────────
+
+
+def test_dock_motion_lock_emits_no_latch_command() -> None:
+    """A dock with a motion (magnetic / kinematic) lock couples by the
+    advance/retract motion alone — grab/release send nothing, even if a
+    stale command is left on the plan."""
+    steps = [
+        HostSwapStep(kind="move_to_old_slot"),  # approach old dock
+        HostSwapStep(kind="advance_to_slot"),  # slide tool into dock
+        HostSwapStep(kind="release", wait_ms=200),  # unlock (motion → no cmd)
+        HostSwapStep(kind="retract_from_slot"),  # back out, tool stays
+        HostSwapStep(kind="move_to_new_slot"),  # approach new dock
+        HostSwapStep(kind="advance_to_slot"),  # slide onto the new tool
+        HostSwapStep(kind="grab", wait_ms=200),  # lock (motion → no cmd)
+        HostSwapStep(kind="retract_from_slot"),  # pull tool out
+    ]
+    profile = _host_profile(steps)
+    swap = profile.capabilities.tool_change.host_swap  # type: ignore[union-attr]
+    swap.mechanism = "dock"
+    swap.lock_mode = "motion"
+    swap.clearance_mm = 30.0
+    orch = ToolChangeOrchestrator(profile)
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    sends = [c.send for c in plan.commands]
+    # Slots: 0 → (10, 200), 1 → (40, 200); +Y clearance 30 → approach +30.
+    # Pure motion: every command is a move, no latch line is emitted.
+    assert sends == [
+        "G0 X10.000 Y230.000 F7200.0",  # approach old dock (0)
+        "G0 X10.000 Y200.000 F7200.0",  # advance into old dock
+        "G0 X10.000 Y230.000 F7200.0",  # retract from old dock
+        "G0 X40.000 Y230.000 F7200.0",  # approach new dock (1)
+        "G0 X40.000 Y200.000 F7200.0",  # advance into new dock
+        "G0 X40.000 Y230.000 F7200.0",  # retract with the new tool
+    ]
+    # The unlock/lock settle time survives onto the advance it folds into.
+    assert plan.commands[1].wait_ms == 200  # release dwell → advance into old dock
+    assert plan.commands[4].wait_ms == 200  # grab dwell → advance into new dock
+
+
+def test_dock_command_lock_emits_lock_unlock() -> None:
+    """A dock with a command lock (servo / motorised latch) emits the
+    grab/drop commands as the lock / unlock primitives."""
+    steps = [HostSwapStep(kind="release"), HostSwapStep(kind="grab")]
+    profile = _host_profile(steps)
+    swap = profile.capabilities.tool_change.host_swap  # type: ignore[union-attr]
+    swap.mechanism = "dock"
+    swap.lock_mode = "command"
+    orch = ToolChangeOrchestrator(profile)
+    plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
+    assert [c.send for c in plan.commands] == ["M280 P1 S20", "M280 P1 S90"]
+
+
+def test_dock_defaults_to_rack_mechanism() -> None:
+    """An unset mechanism keeps the legacy rack behaviour (grab emits)."""
+    plan = HostSwapPlan()
+    assert plan.mechanism == "rack"
+    assert plan.lock_mode == "command"

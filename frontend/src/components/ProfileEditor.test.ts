@@ -287,6 +287,38 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(saveBtn().attributes('disabled')).toBeDefined()
   })
 
+  it('host mode offers a rack/dock mechanism selector, defaulting to rack', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-mechanism-rack"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-mechanism-dock"]').exists()).toBe(true)
+    // Default is rack: no dock lock-mode toggle, latch commands present.
+    expect(wrapper.find('[data-test="host-lock-mode"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(true)
+  })
+
+  it('switching to a motion-locked dock hides the latch commands and keeps Save valid', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    await wrapper.find('[data-test="host-mechanism-dock"]').trigger('click')
+    await nextTick()
+    // Dock exposes the lock-mode toggle; default 'motion' hides commands.
+    expect(wrapper.find('[data-test="host-lock-mode"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(false)
+    // A motion dock needs no grab command → Save stays enabled despite the
+    // grab/release steps in the seeded dock sequence.
+    const saveBtn = () => wrapper.findAll('button').find((b) => b.text() === 'Save')!
+    expect(saveBtn().attributes('disabled')).toBeUndefined()
+    // Switching the lock to 'command' reveals the latch command fields.
+    await wrapper.find('[data-test="host-lock-command"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(true)
+  })
+
   it('shows a per-slot position table and Z height fields in the host editor', async () => {
     const wrapper = mountEditor()
     await nextTick()

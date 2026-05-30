@@ -53,6 +53,14 @@ export const HostSwapStepSchema = z.object({
 export type HostSwapStep = z.infer<typeof HostSwapStepSchema>
 
 export const HostSwapPlanSchema = z.object({
+  // Physical mechanism the host drives. 'rack' = clamp/gripper picking
+  // pens out of a linear rack (vertical engage); 'dock' = kinematic
+  // tool-changer where the head slides in/out to (un)couple a whole tool.
+  mechanism: z.enum(['rack', 'dock']).default('rack'),
+  // How a 'dock' coupling latches: 'command' = servo/motorised latch
+  // (grab/release emit grab_command/drop_command); 'motion' = magnetic /
+  // kinematic coupling driven by the advance/retract motion (no command).
+  lock_mode: z.enum(['command', 'motion']).default('command'),
   grab_command: z.string().default(''),
   drop_command: z.string().default(''),
   travel_speed_mm_s: z.number().positive().nullable().default(null),

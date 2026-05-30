@@ -1019,6 +1019,25 @@
         "dwell": "Attendre",
         "raw": "G-code personnalisé (avancé)"
       },
+      "dockStep": {
+        "grab": "Verrouiller l'outil",
+        "release": "Déverrouiller l'outil"
+      },
+      "mechanismTitle": "Mécanisme du magasin",
+      "mechanism": {
+        "rack": "Rack à pince",
+        "dock": "Dock cinématique"
+      },
+      "mechanismHint": {
+        "rack": "Une pince/clamp sur le chariot prend et repose les stylos dans un rack (engagement vertical).",
+        "dock": "Chaque stylo est un outil garé dans un dock ; la tête glisse pour s'y (dé)coupler (engagement horizontal)."
+      },
+      "lockModeTitle": "Verrouillage du dock",
+      "lockMode": {
+        "motion": "Mouvement (aimant / cinématique) — aucune commande",
+        "command": "Commande (servo / verrou motorisé)"
+      },
+      "dockIntro": "Construis l'échange d'outil étape par étape. La tête se rend au dock, glisse pour (dé)coupler, et repart. La position de chaque dock se règle ci-dessous.",
       "waitShort": "ms",
       "add": "Ajouter une étape",
       "remove": "Supprimer l'étape",
@@ -1047,7 +1066,14 @@
       "outOfRange": "Une hauteur est hors des limites Z de la machine.",
       "advanced": "Commandes prendre / poser (avancé)",
       "grabCommand": "Commande prendre",
-      "dropCommand": "Commande poser"
+      "dropCommand": "Commande poser",
+      "dockPositionsTitle": "Positions des docks",
+      "dockPositionsHint": "X/Y de chaque dock, dans les unités du profil. C'est le point où l'outil est couplé. « Aller à l'emplacement » se rend au point d'approche (décalé de la profondeur d'entrée ci-dessous). Laisse vide pour un dock non calibré.",
+      "dockClearanceHint": "Profondeur de glissement dans le dock pour (dé)coupler l'outil. La tête va d'abord au point d'approche, puis « Avancer/Reculer » parcourent cet écart pour entrer/sortir du dock.",
+      "dockEntryMm": "Profondeur d'entrée (mm)",
+      "lockAdvanced": "Commandes de (dé)verrouillage (avancé)",
+      "lockCommand": "Commande verrouiller",
+      "unlockCommand": "Commande déverrouiller"
     },
     "penCount": "Nombre de stylos",
     "penCountMagazineHint": "Nombre d'emplacements disponibles dans le magasin.",

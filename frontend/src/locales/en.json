@@ -1019,6 +1019,25 @@
         "dwell": "Wait",
         "raw": "Custom G-code (advanced)"
       },
+      "dockStep": {
+        "grab": "Lock the tool",
+        "release": "Unlock the tool"
+      },
+      "mechanismTitle": "Magazine mechanism",
+      "mechanism": {
+        "rack": "Gripper rack",
+        "dock": "Kinematic dock"
+      },
+      "mechanismHint": {
+        "rack": "A clamp/gripper on the carriage takes pens out of / puts them back into a rack (vertical engage).",
+        "dock": "Each pen is a whole tool parked in a dock; the head slides in/out to (un)couple it (horizontal engage)."
+      },
+      "lockModeTitle": "Dock locking",
+      "lockMode": {
+        "motion": "Motion (magnetic / kinematic) — no command",
+        "command": "Command (servo / motorised latch)"
+      },
+      "dockIntro": "Build the tool change step by step. The head travels to a dock, slides in to (un)couple, and leaves. Each dock's position is set below.",
       "waitShort": "ms",
       "add": "Add a step",
       "remove": "Remove step",
@@ -1047,7 +1066,14 @@
       "outOfRange": "A height is outside the machine Z limits.",
       "advanced": "Take / put-down commands (advanced)",
       "grabCommand": "Take command",
-      "dropCommand": "Put-down command"
+      "dropCommand": "Put-down command",
+      "dockPositionsTitle": "Dock positions",
+      "dockPositionsHint": "X/Y of each dock, in profile units. This is where the tool is coupled. “Go to slot” travels to the approach point (offset by the entry depth below). Leave blank for an uncalibrated dock.",
+      "dockClearanceHint": "How far to slide into the dock to (un)couple the tool. The head goes to the approach point first, then “Advance/Back out” hop this gap to enter/leave the dock.",
+      "dockEntryMm": "Entry depth (mm)",
+      "lockAdvanced": "Lock / unlock commands (advanced)",
+      "lockCommand": "Lock command",
+      "unlockCommand": "Unlock command"
     },
     "penCount": "Number of pens",
     "penCountMagazineHint": "How many slots are available in the magazine.",
