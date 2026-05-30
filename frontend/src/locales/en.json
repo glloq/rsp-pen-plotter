@@ -578,6 +578,8 @@
     "size": "Size",
     "scale": "Scale",
     "estimate": "Est.",
+    "estimatePending": "— generate to estimate",
+    "estimatePendingHint": "Generate the G-code to get a realistic time estimate (includes pen-up travel and tool changes).",
     "penChanges": "Pen changes"
   },
   "settings": {
@@ -1267,7 +1269,15 @@
     "forcedNotice": "Forced update — local changes were discarded.",
     "notifications": "Notifications",
     "notifyOnStartup": "Notify on startup when an update is available",
-    "notifyOnStartupHint": "Shows a toast on page load when a new commit is available on the remote."
+    "notifyOnStartupHint": "Shows a toast on page load when a new commit is available on the remote.",
+    "planPreview": "Plan preview",
+    "planPreviewHint": "What the Plan tab paints for each placement.",
+    "planPreviewAuto": "Adaptive (recommended)",
+    "planPreviewAutoHint": "Shows the chosen-style preview, but falls back to the original image for heavy drawings so panning and zooming stay smooth.",
+    "planPreviewSvg": "Style preview",
+    "planPreviewSvgHint": "Always shows the chosen style — a true preview of what will be plotted. May feel slow on very dense drawings.",
+    "planPreviewImage": "Original image",
+    "planPreviewImageHint": "Always shows the original source image. Lightest to render, but doesn't reflect the chosen style."
   },
   "updateModal": {
     "titleRunning": "Update in progress",

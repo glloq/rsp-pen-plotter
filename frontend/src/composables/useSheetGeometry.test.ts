@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import { ref } from 'vue'
-import { useSheetGeometry } from './useSheetGeometry'
+import { useSheetGeometry, countSvgPrimitives, AUTO_SVG_PRIMITIVE_LIMIT } from './useSheetGeometry'
 import type { MachineProfile } from '../api/client'
 import type { Placement } from '../stores/job'
+import type { PlanPreviewMode } from '../stores/ui'
 
 function makeProfile(): MachineProfile {
   return {
@@ -53,16 +54,39 @@ function makeInputs(opts: {
   profile?: MachineProfile | null
   placements?: Placement[]
   previewSheet?: { width_mm: number; height_mm: number } | null
+  planPreviewMode?: PlanPreviewMode
   snapMm?: number
 }) {
   return {
     profile: ref<MachineProfile | null>(opts.profile ?? null),
     placements: ref<readonly Placement[]>(opts.placements ?? []),
     previewSheet: ref<{ width_mm: number; height_mm: number } | null>(opts.previewSheet ?? null),
+    planPreviewMode: ref<PlanPreviewMode>(opts.planPreviewMode ?? 'auto'),
     snapMm: ref<number>(opts.snapMm ?? 0),
     container: ref<HTMLElement | null>(null),
     svgEl: ref<SVGSVGElement | null>(null),
   }
+}
+
+// A well-formed SVG (xmlns + viewBox) survives DOMPurify under happy-dom
+// — unlike the bare ``<svg>`` snippets elsewhere in this file, which come
+// back empty. ``paths`` controls the primitive count the 'auto'
+// heuristic reads.
+function makeSvg(paths: number): string {
+  const body = Array.from({ length: paths }, (_, i) => `<path d="M${i} 0 L${i} 1"/>`).join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">${body}</svg>`
+}
+
+// A raster placement that ALSO carries a chosen-style SVG: both the
+// tier-1 image and the tier-2 plotter SVG are available, so the mode
+// decides which one wins.
+function makeRasterWithSvg(paths: number): Placement {
+  return makePlacement({
+    id: 'raster',
+    library_file_id: 'lib-png',
+    source_mime: 'image/png',
+    svg: makeSvg(paths),
+  })
 }
 
 describe('useSheetGeometry workspace', () => {
@@ -193,6 +217,109 @@ describe('useSheetGeometry previewSheetRect', () => {
     expect(rect!.height).toBe(420)
     expect(rect!.x).toBe(0)
     expect(rect!.y).toBe(0)
+  })
+})
+
+describe('countSvgPrimitives', () => {
+  it('counts each stroke-bearing element', () => {
+    const svg = '<svg><path d="M0 0"/><line/><circle/><polyline/><polygon/><rect/><g></g></svg>'
+    // path + line + circle + polyline + polygon = 5; rect / g don't count.
+    expect(countSvgPrimitives(svg)).toBe(5)
+  })
+
+  it('returns 0 for an empty string', () => {
+    expect(countSvgPrimitives('')).toBe(0)
+  })
+
+  it('does not over-count substrings (e.g. <pathological>)', () => {
+    // The trailing delimiter in the regex stops <pathological> matching
+    // the <path counter.
+    expect(countSvgPrimitives('<pathological/>')).toBe(0)
+  })
+})
+
+describe('useSheetGeometry plan-preview tier selection', () => {
+  it("mode 'image' paints the raster even when a style SVG exists", () => {
+    const g = useSheetGeometry(
+      makeInputs({
+        profile: makeProfile(),
+        placements: [makeRasterWithSvg(3)],
+        planPreviewMode: 'image',
+      }),
+    )
+    const rp = g.renderedPlacements.value[0]!
+    expect(g.showsPreviewImage(rp)).toBe(true)
+  })
+
+  it("mode 'svg' paints the style SVG and hides the raster", () => {
+    const g = useSheetGeometry(
+      makeInputs({
+        profile: makeProfile(),
+        placements: [makeRasterWithSvg(3)],
+        planPreviewMode: 'svg',
+      }),
+    )
+    const rp = g.renderedPlacements.value[0]!
+    expect(g.showsPreviewImage(rp)).toBe(false)
+    expect(g.showsPlotterSvg(rp)).toBe(true)
+  })
+
+  it("mode 'svg' still falls back to the raster before conversion (no SVG yet)", () => {
+    const noSvg = makePlacement({
+      id: 'raster',
+      library_file_id: 'lib-png',
+      source_mime: 'image/png',
+      svg: '',
+    })
+    const g = useSheetGeometry(
+      makeInputs({ profile: makeProfile(), placements: [noSvg], planPreviewMode: 'svg' }),
+    )
+    const rp = g.renderedPlacements.value[0]!
+    expect(g.showsPreviewImage(rp)).toBe(true)
+    expect(g.showsPlotterSvg(rp)).toBe(false)
+  })
+
+  it("mode 'auto' prefers the style SVG for light drawings", () => {
+    const g = useSheetGeometry(
+      makeInputs({
+        profile: makeProfile(),
+        placements: [makeRasterWithSvg(10)],
+        planPreviewMode: 'auto',
+      }),
+    )
+    const rp = g.renderedPlacements.value[0]!
+    expect(rp.svgPrimitiveCount).toBe(10)
+    expect(g.showsPreviewImage(rp)).toBe(false)
+    expect(g.showsPlotterSvg(rp)).toBe(true)
+  })
+
+  it("mode 'auto' keeps the raster for heavy drawings past the limit", () => {
+    const heavy = AUTO_SVG_PRIMITIVE_LIMIT + 1
+    const g = useSheetGeometry(
+      makeInputs({
+        profile: makeProfile(),
+        placements: [makeRasterWithSvg(heavy)],
+        planPreviewMode: 'auto',
+      }),
+    )
+    const rp = g.renderedPlacements.value[0]!
+    expect(rp.svgPrimitiveCount).toBe(heavy)
+    expect(g.showsPreviewImage(rp)).toBe(true)
+  })
+
+  it('always shows the SVG when there is no displayable raster (mode image)', () => {
+    // A vector/typography source with no library image: even in 'image'
+    // mode the plotter SVG is the only thing to paint.
+    const g = useSheetGeometry(
+      makeInputs({
+        profile: makeProfile(),
+        placements: [makePlacement({ library_file_id: null, svg: makeSvg(4) })],
+        planPreviewMode: 'image',
+      }),
+    )
+    const rp = g.renderedPlacements.value[0]!
+    expect(g.showsPreviewImage(rp)).toBe(false)
+    expect(g.showsPlotterSvg(rp)).toBe(true)
   })
 })
 

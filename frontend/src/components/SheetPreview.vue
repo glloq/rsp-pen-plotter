@@ -65,6 +65,10 @@ const profileRef = computed(() => store.selectedProfile)
 // audit 2026-05-27 fix.
 const placementsRef = computed(() => store.visiblePlacements)
 const previewSheetRef = computed(() => ui.previewSheet)
+// Operator's plan-tab rendering preference (System settings → Plan
+// preview). Drives whether each placement paints the original raster,
+// the chosen-style SVG, or the adaptive 'auto' mix.
+const planPreviewModeRef = computed(() => ui.planPreviewMode)
 
 const {
   workspace,
@@ -84,6 +88,7 @@ const {
   profile: profileRef,
   placements: placementsRef,
   previewSheet: previewSheetRef,
+  planPreviewMode: planPreviewModeRef,
   snapMm,
   container,
   svgEl,
