@@ -55,6 +55,11 @@ const i18n = createI18n({
         edit: 'Edit',
         delete: 'Delete',
         deleteConfirm: 'Remove?',
+        meters: '{value} m',
+        odometerTitle: 'Odometer',
+        resetOdometer: 'Reset',
+        strokeWidthTitle: 'Width',
+        mmUnit: 'mm',
         loadFailed: 'load failed',
         createFailed: 'create failed',
         updateFailed: 'update failed',
@@ -142,5 +147,70 @@ describe('AvailableColorsPanel', () => {
     const addBtn = wrapper.findAll('button').find((b) => b.text() === 'Add')!
     await addBtn.trigger('click')
     expect(spy).toHaveBeenCalledWith('#123456', 'Indigo', 0.5)
+  })
+
+  it('edits a colour stroke width and persists it via store.rename', async () => {
+    const store = useAvailableColorsStore()
+    store.colors = [
+      {
+        color_id: 'a',
+        hex: '#ff0000',
+        name: 'Red',
+        position: 0,
+        stroke_width_mm: 0.5,
+        odometer_mm: 0,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    store.loaded = true
+    const spy = vi.spyOn(store, 'rename')
+    const wrapper = mountPanel()
+    await nextTick()
+
+    // Enter edit mode via the pencil button on the row.
+    await wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!.trigger('click')
+    await nextTick()
+
+    // Scope to the row's width input (title='Width'); it's a text input
+    // with inputmode=decimal so a comma locale can be normalised by
+    // ``parsePenWidthMm`` instead of mangled by ``v-model.number``.
+    const row = wrapper.find('li')
+    const widthInput = row.findAll('input').find((i) => i.attributes('title') === 'Width')!
+    await widthInput.setValue('1.2')
+
+    await row.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
+    await nextTick()
+
+    expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 1.2 }))
+  })
+
+  it('saves a comma-decimal width by normalising the raw text', async () => {
+    // The real-world bug: on a French locale the operator types ``0,8``.
+    // The field is plain text, so the raw string reaches the component,
+    // and ``parsePenWidthMm`` converts the comma → 0.8 mm.
+    const store = useAvailableColorsStore()
+    store.colors = [
+      {
+        color_id: 'a',
+        hex: '#ff0000',
+        name: 'Red',
+        position: 0,
+        stroke_width_mm: 0.5,
+        odometer_mm: 0,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    store.loaded = true
+    const spy = vi.spyOn(store, 'rename')
+    const wrapper = mountPanel()
+    await nextTick()
+    await wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!.trigger('click')
+    await nextTick()
+    const row = wrapper.find('li')
+    const widthInput = row.findAll('input').find((i) => i.attributes('title') === 'Width')!
+    await widthInput.setValue('0,8')
+    await row.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
+    await nextTick()
+    expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 0.8 }))
   })
 })

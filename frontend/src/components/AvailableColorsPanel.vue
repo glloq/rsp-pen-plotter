@@ -14,6 +14,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAvailableColorsStore } from '../stores/availableColors'
+import { parsePenWidthMm } from '../lib/penWidth'
 import ColorPicker from './ColorPicker.vue'
 import MagazineEditor from './MagazineEditor.vue'
 
@@ -33,8 +34,13 @@ const store = useAvailableColorsStore()
 
 const newHex = ref('#000000')
 const newName = ref('')
-// Default to a common fineliner tip so a quick add lands on a sane width.
-const newWidth = ref(0.5)
+// Width is kept as the raw text the operator typed (not ``v-model.number``)
+// so ``parsePenWidthMm`` can normalise a comma decimal separator itself.
+// ``type="number"`` + ``.number`` would otherwise run ``parseFloat`` on
+// "0,8" → 0 (or "" on some locales) and silently drop the change — the
+// reason editing the diameter appeared to do nothing. Default to a common
+// fineliner tip so a quick add lands on a sane width.
+const newWidth = ref('0.5')
 const submitting = ref(false)
 
 const ordered = computed(() => store.ordered)
@@ -53,7 +59,8 @@ const duplicate = computed(() => {
 const editingId = ref<string | null>(null)
 const editName = ref('')
 const editHex = ref('#000000')
-const editWidth = ref(0.5)
+// Raw text (see ``newWidth`` above) — parsed via ``parsePenWidthMm``.
+const editWidth = ref('0.5')
 
 onMounted(() => {
   if (!store.loaded) void store.refresh()
@@ -63,12 +70,12 @@ async function addColor(): Promise<void> {
   if (!newHex.value) return
   submitting.value = true
   try {
-    const width = newWidth.value > 0 ? newWidth.value : undefined
+    const width = parsePenWidthMm(newWidth.value) ?? undefined
     const created = await store.add(newHex.value, newName.value.trim(), width)
     if (created) {
       newHex.value = '#000000'
       newName.value = ''
-      newWidth.value = 0.5
+      newWidth.value = '0.5'
     }
   } finally {
     submitting.value = false
@@ -79,7 +86,7 @@ function startEdit(colorId: string, hex: string, name: string, width: number): v
   editingId.value = colorId
   editHex.value = hex
   editName.value = name
-  editWidth.value = width
+  editWidth.value = String(width)
 }
 
 function cancelEdit(): void {
@@ -87,7 +94,7 @@ function cancelEdit(): void {
 }
 
 async function saveEdit(colorId: string): Promise<void> {
-  const w = Number.isFinite(editWidth.value) && editWidth.value > 0 ? editWidth.value : null
+  const w = parsePenWidthMm(editWidth.value)
   const result = await store.rename(colorId, {
     hex: editHex.value,
     name: editName.value.trim(),
@@ -163,10 +170,9 @@ function displayLabel(name: string, hex: string): string {
         />
         <label class="flex shrink-0 items-center gap-1 text-[11px] text-slate-400">
           <input
-            v-model.number="newWidth"
-            type="number"
-            min="0.05"
-            step="0.05"
+            v-model="newWidth"
+            type="text"
+            inputmode="decimal"
             class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100"
             :title="t('availableColors.strokeWidthTitle')"
           />
@@ -234,10 +240,9 @@ function displayLabel(name: string, hex: string): string {
             />
             <label class="flex shrink-0 items-center gap-1 text-[11px] text-slate-400">
               <input
-                v-model.number="editWidth"
-                type="number"
-                min="0.05"
-                step="0.05"
+                v-model="editWidth"
+                type="text"
+                inputmode="decimal"
                 class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
                 :title="t('availableColors.strokeWidthTitle')"
               />
