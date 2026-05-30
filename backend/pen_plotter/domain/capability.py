@@ -116,7 +116,10 @@ class HostSwapStep(BaseModel):
     Kinds:
       - ``head_up`` / ``head_down``: emit the profile pen-up/-down command.
       - ``grab`` / ``release``: emit the plan's ``grab_command`` /
-        ``drop_command`` (the clamp / gripper primitive).
+        ``drop_command`` (the clamp / gripper primitive). On a ``dock``
+        mechanism these mean lock / unlock the coupling; with
+        ``lock_mode == "motion"`` they emit nothing (the advance/retract
+        motion is the lock).
       - ``move_to_old_slot`` / ``move_to_new_slot``: travel to the
         outgoing / incoming pen's *approach* point (the slot position
         offset by the clearance vector), safe for lateral motion.
@@ -157,6 +160,25 @@ class HostSwapPlan(BaseModel):
     line), surfaced under an "advanced" affordance with sane defaults.
     """
 
+    # Which physical mechanism the host drives. Both compile through the
+    # same step engine; the field selects the editor preset / labels and
+    # (with ``lock_mode``) how the coupling is driven:
+    #   - ``rack``: a single carriage tool-holder with a clamp/gripper that
+    #     picks a pen out of / drops it into a linear rack (vertical engage).
+    #   - ``dock``: a kinematic tool-changer — each pen+holder is a full
+    #     tool parked in a fixed dock; the head couples to one at a time by
+    #     sliding in/out horizontally (``advance``/``retract``), so the
+    #     ``grab``/``release`` steps mean *lock*/*unlock* the coupling.
+    mechanism: Literal["rack", "dock"] = "rack"
+    # How the pen / tool is grabbed & held — the swap *action*. Applies to
+    # both mechanisms (a rack gripper or a dock coupling):
+    #   - ``command``: a servo gripper / motorised latch — ``grab``/
+    #     ``release`` emit ``grab_command`` / ``drop_command``.
+    #   - ``motion``: a friction / magnetic hold — no command is sent; the
+    #     grab *is* the advance/retract motion, so ``grab`` and ``release``
+    #     are suppressed at compile time even if a command is left over on
+    #     the plan.
+    lock_mode: Literal["command", "motion"] = "command"
     grab_command: str = ""
     drop_command: str = ""
     # Feed for the magazine travel moves; falls back to the profile's

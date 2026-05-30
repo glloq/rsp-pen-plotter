@@ -1006,7 +1006,7 @@
     },
     "firmwareCommandHint": "Commande unique exécutée par le contrôleur pour changer de stylo. {slot} / {color} / {label} sont substitués.",
     "hostSwap": {
-      "intro": "Construis le changement de stylo étape par étape — sans G-code. La position de chaque stylo se règle dans le magasin ci-dessous.",
+      "intro": "Le changement de stylo, étape par étape — sans G-code. Affine la séquence ci-dessous si besoin.",
       "step": {
         "head_up": "Lever la tête",
         "head_down": "Baisser la tête",
@@ -1019,6 +1019,42 @@
         "dwell": "Attendre",
         "raw": "G-code personnalisé (avancé)"
       },
+      "dockStep": {
+        "grab": "Verrouiller l'outil",
+        "release": "Déverrouiller l'outil"
+      },
+      "mechanismTitle": "Type de magasin",
+      "mechanism": {
+        "rack": "Rack à pince",
+        "dock": "Dock cinématique"
+      },
+      "mechanismHint": {
+        "rack": "Une pince sur le chariot prend et repose les stylos dans un rack (engagement vertical).",
+        "dock": "Chaque stylo est un outil garé dans un dock ; la tête glisse pour s'y (dé)coupler (engagement horizontal)."
+      },
+      "actionTitle": "Type d'action",
+      "action": {
+        "rack": {
+          "command": "Pince servo",
+          "motion": "Maintien mécanique / aimant"
+        },
+        "dock": {
+          "command": "Verrou motorisé (servo)",
+          "motion": "Aimant / cinématique"
+        }
+      },
+      "actionHint": {
+        "rack": {
+          "command": "Une pince motorisée serre et relâche le stylo (commande servo).",
+          "motion": "Le stylo est retenu par friction ou un aimant : aucune commande, la saisie se fait par le mouvement."
+        },
+        "dock": {
+          "command": "Un verrou motorisé couple/découple l'outil (commande servo).",
+          "motion": "Accouplement aimanté/cinématique : aucune commande, le couplage se fait par le glissement dans le dock."
+        }
+      },
+      "sequenceTitle": "Séquence du changement",
+      "dockIntro": "La tête se rend au dock, glisse pour (dé)coupler, et repart. Affine la séquence ci-dessous si besoin.",
       "waitShort": "ms",
       "add": "Ajouter une étape",
       "remove": "Supprimer l'étape",
@@ -1028,6 +1064,13 @@
       "positionsTitle": "Positions des stylos dans le magasin",
       "positionsHint": "X/Y de chaque emplacement, dans les unités du profil. C'est le point d'engagement où le stylo est saisi. « Aller à l'emplacement » se rend au point d'approche (décalé du dégagement ci-dessous). Laisse vide pour un emplacement non calibré.",
       "penLabel": "Stylo",
+      "cal": {
+        "ok": "Calibré : position définie.",
+        "warn": "Stylo installé sans position : le changement le sautera.",
+        "off": "Emplacement vide."
+      },
+      "uncalibrated": "{n} stylo(s) installé(s) sans position — le changement les sautera.",
+      "headHeightsTitle": "Hauteurs de tête (servo / Z)",
       "clearanceHint": "Distance de recul hors d'un emplacement avant tout déplacement latéral, pour que la tête dégage les stylos voisins. « Avancer/Reculer de l'emplacement » parcourent cet écart. Mets 0 si aucun mouvement d'insertion n'est nécessaire.",
       "clearanceAxis": "Axe",
       "clearanceDir": "Direction",
@@ -1047,7 +1090,14 @@
       "outOfRange": "Une hauteur est hors des limites Z de la machine.",
       "advanced": "Commandes prendre / poser (avancé)",
       "grabCommand": "Commande prendre",
-      "dropCommand": "Commande poser"
+      "dropCommand": "Commande poser",
+      "dockPositionsTitle": "Positions des docks",
+      "dockPositionsHint": "X/Y de chaque dock, dans les unités du profil. C'est le point où l'outil est couplé. « Aller à l'emplacement » se rend au point d'approche (décalé de la profondeur d'entrée ci-dessous). Laisse vide pour un dock non calibré.",
+      "dockClearanceHint": "Profondeur de glissement dans le dock pour (dé)coupler l'outil. La tête va d'abord au point d'approche, puis « Avancer/Reculer » parcourent cet écart pour entrer/sortir du dock.",
+      "dockEntryMm": "Profondeur d'entrée (mm)",
+      "lockAdvanced": "Commandes de (dé)verrouillage (avancé)",
+      "lockCommand": "Commande verrouiller",
+      "unlockCommand": "Commande déverrouiller"
     },
     "penCount": "Nombre de stylos",
     "penCountMagazineHint": "Nombre d'emplacements disponibles dans le magasin.",

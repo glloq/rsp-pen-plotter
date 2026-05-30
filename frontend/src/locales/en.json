@@ -1006,7 +1006,7 @@
     },
     "firmwareCommandHint": "Single command the controller runs to change pen. {slot} / {color} / {label} are substituted.",
     "hostSwap": {
-      "intro": "Build the pen change step by step — no G-code. Each pen's position is set in the magazine below.",
+      "intro": "The pen change, step by step — no G-code. Fine-tune the sequence below if needed.",
       "step": {
         "head_up": "Raise the head",
         "head_down": "Lower the head",
@@ -1019,6 +1019,42 @@
         "dwell": "Wait",
         "raw": "Custom G-code (advanced)"
       },
+      "dockStep": {
+        "grab": "Lock the tool",
+        "release": "Unlock the tool"
+      },
+      "mechanismTitle": "Magazine type",
+      "mechanism": {
+        "rack": "Gripper rack",
+        "dock": "Kinematic dock"
+      },
+      "mechanismHint": {
+        "rack": "A gripper on the carriage takes pens out of / puts them back into a rack (vertical engage).",
+        "dock": "Each pen is a whole tool parked in a dock; the head slides in/out to (un)couple it (horizontal engage)."
+      },
+      "actionTitle": "Action type",
+      "action": {
+        "rack": {
+          "command": "Servo gripper",
+          "motion": "Mechanical / magnetic hold"
+        },
+        "dock": {
+          "command": "Motorised latch (servo)",
+          "motion": "Magnetic / kinematic"
+        }
+      },
+      "actionHint": {
+        "rack": {
+          "command": "A motorised gripper clamps and releases the pen (servo command).",
+          "motion": "The pen is held by friction or a magnet: no command, the grab is the motion."
+        },
+        "dock": {
+          "command": "A motorised latch couples/decouples the tool (servo command).",
+          "motion": "Magnetic / kinematic coupling: no command, the slide into the dock is the lock."
+        }
+      },
+      "sequenceTitle": "Swap sequence",
+      "dockIntro": "The head travels to a dock, slides in to (un)couple, and leaves. Fine-tune the sequence below if needed.",
       "waitShort": "ms",
       "add": "Add a step",
       "remove": "Remove step",
@@ -1028,6 +1064,13 @@
       "positionsTitle": "Pen positions in the magazine",
       "positionsHint": "X/Y of each slot, in profile units. This is the engagement point where the pen is grabbed. “Go to slot” travels to the approach point (offset by the clearance below). Leave blank for an uncalibrated slot.",
       "penLabel": "Pen",
+      "cal": {
+        "ok": "Calibrated: position set.",
+        "warn": "Installed pen with no position: the swap will skip it.",
+        "off": "Empty slot."
+      },
+      "uncalibrated": "{n} installed pen(s) with no position — the swap will skip them.",
+      "headHeightsTitle": "Head heights (servo / Z)",
       "clearanceHint": "How far to back out of a slot before moving sideways, so the head clears the neighbouring pens. “Advance/Back out of the slot” hop this gap. Set 0 if no insertion move is needed.",
       "clearanceAxis": "Axis",
       "clearanceDir": "Direction",
@@ -1047,7 +1090,14 @@
       "outOfRange": "A height is outside the machine Z limits.",
       "advanced": "Take / put-down commands (advanced)",
       "grabCommand": "Take command",
-      "dropCommand": "Put-down command"
+      "dropCommand": "Put-down command",
+      "dockPositionsTitle": "Dock positions",
+      "dockPositionsHint": "X/Y of each dock, in profile units. This is where the tool is coupled. “Go to slot” travels to the approach point (offset by the entry depth below). Leave blank for an uncalibrated dock.",
+      "dockClearanceHint": "How far to slide into the dock to (un)couple the tool. The head goes to the approach point first, then “Advance/Back out” hop this gap to enter/leave the dock.",
+      "dockEntryMm": "Entry depth (mm)",
+      "lockAdvanced": "Lock / unlock commands (advanced)",
+      "lockCommand": "Lock command",
+      "unlockCommand": "Unlock command"
     },
     "penCount": "Number of pens",
     "penCountMagazineHint": "How many slots are available in the magazine.",

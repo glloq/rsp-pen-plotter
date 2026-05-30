@@ -108,6 +108,8 @@ const STEP_KINDS: HostSwapStepKind[] = [
 
 function defaultHostSwap(): HostSwapPlan {
   return {
+    mechanism: 'rack',
+    lock_mode: 'command',
     grab_command: 'M280 P1 S90',
     drop_command: 'M280 P1 S20',
     travel_speed_mm_s: null,
@@ -139,6 +141,42 @@ function defaultHostSwap(): HostSwapPlan {
   }
 }
 
+// Kinematic dock changer: each pen+holder is a whole tool parked in a
+// fixed dock; the head couples to one at a time by sliding in/out
+// (advance/retract), so there is no vertical head_up/down and the
+// grab/release steps mean lock/unlock the coupling. The default lock is
+// 'motion' (magnetic / kinematic), so no command is emitted.
+function defaultDockSwap(): HostSwapPlan {
+  return {
+    mechanism: 'dock',
+    lock_mode: 'motion',
+    grab_command: '',
+    drop_command: '',
+    travel_speed_mm_s: null,
+    head_up_command: null,
+    head_down_command: null,
+    safe_z_mm: null,
+    engage_z_mm: null,
+    z_min_mm: null,
+    z_max_mm: null,
+    // Clearance is the dock entry depth: travel to the approach point, then
+    // slide this far in to seat the coupling, and back out to leave/take.
+    clearance_axis: 'y',
+    clearance_dir: '+',
+    clearance_mm: 30,
+    steps: [
+      { kind: 'move_to_old_slot', wait_ms: 0, send: '' }, // approach old dock
+      { kind: 'advance_to_slot', wait_ms: 0, send: '' }, // slide tool into dock
+      { kind: 'release', wait_ms: 200, send: '' }, // unlock coupling
+      { kind: 'retract_from_slot', wait_ms: 0, send: '' }, // back out, tool stays
+      { kind: 'move_to_new_slot', wait_ms: 0, send: '' }, // approach new dock
+      { kind: 'advance_to_slot', wait_ms: 0, send: '' }, // slide onto the new tool
+      { kind: 'grab', wait_ms: 200, send: '' }, // lock coupling
+      { kind: 'retract_from_slot', wait_ms: 0, send: '' }, // pull tool out of dock
+    ],
+  }
+}
+
 function ensureHostSwap(): HostSwapPlan {
   const tc = ensureCaps().tool_change
   if (!tc.host_swap) tc.host_swap = defaultHostSwap()
@@ -147,6 +185,59 @@ function ensureHostSwap(): HostSwapPlan {
 
 // Read-only view for the template (no side effects in the getter).
 const hostSwap = computed(() => props.draft.capabilities?.tool_change.host_swap ?? null)
+
+// Guided host config: ① magazine type (rack vs kinematic dock) → ② action
+// type (how the pen/tool is grabbed & held). Icons keep the cards scannable.
+type HostMechanism = 'rack' | 'dock'
+type HostAction = 'command' | 'motion'
+const MECH_ICON: Record<HostMechanism, string> = { rack: '🤖', dock: '🔗' }
+const ACTION_ICON: Record<HostAction, string> = { command: '🔩', motion: '🧲' }
+const hostMechanism = computed<HostMechanism>(() => hostSwap.value?.mechanism ?? 'rack')
+const isDock = computed(() => hostMechanism.value === 'dock')
+
+// Switching mechanism reloads the matching preset sequence (positions are
+// kept — they live on the pens, not the plan) so the step list always
+// reflects the chosen hardware.
+function setMechanism(m: HostMechanism): void {
+  const swap = ensureHostSwap()
+  if (swap.mechanism === m) return
+  const preset = m === 'dock' ? defaultDockSwap() : defaultHostSwap()
+  swap.mechanism = m
+  swap.steps = preset.steps
+  swap.lock_mode = preset.lock_mode
+  swap.clearance_mm = swap.clearance_mm || preset.clearance_mm
+  if (m === 'rack') {
+    if (!swap.grab_command) swap.grab_command = preset.grab_command
+    if (!swap.drop_command) swap.drop_command = preset.drop_command
+  }
+}
+
+// ② action type. A 'command' grab (servo gripper / motorised latch) needs
+// its latch commands — seed sensible defaults if the operator never set
+// them. A 'motion' grab (friction / magnet) emits nothing.
+function setLockMode(mode: HostAction): void {
+  const swap = ensureHostSwap()
+  swap.lock_mode = mode
+  if (mode === 'command' && !swap.grab_command.trim() && !swap.drop_command.trim()) {
+    const preset = defaultHostSwap()
+    swap.grab_command = preset.grab_command
+    swap.drop_command = preset.drop_command
+  }
+}
+
+// Label for a step kind, mechanism-aware: on a dock, grab/release read as
+// lock/unlock the coupling rather than clamp/release a pen.
+function stepLabel(kind: HostSwapStepKind): string {
+  if (isDock.value && (kind === 'grab' || kind === 'release')) {
+    return t(`profile.hostSwap.dockStep.${kind}`)
+  }
+  return t(`profile.hostSwap.step.${kind}`)
+}
+
+// The advanced latch-command block only matters when a command is actually
+// emitted — i.e. the ② action is 'command' (servo gripper / motorised
+// latch). A 'motion' grab (friction / magnet) sends nothing.
+const showsLatchCommands = computed(() => hostSwap.value?.lock_mode === 'command')
 
 function addStep(): void {
   ensureHostSwap().steps.push({ kind: 'dwell', wait_ms: 200, send: '' })
@@ -193,6 +284,22 @@ const penRows = computed(() => {
   const existing = props.draft.pens ?? []
   return Array.from({ length: count }, (_, i) => existing.find((p) => p.index === i) ?? null)
 })
+
+// Calibration status for one magazine row, surfaced in the positions
+// table: a calibrated slot has an XY position; an installed slot without
+// one is skipped by the swap (a real footgun), so flag it; an empty slot
+// is just muted.
+type CalState = 'ok' | 'warn' | 'off'
+function calState(pen: { installed?: boolean; position?: unknown } | null): CalState {
+  if (pen?.position != null) return 'ok'
+  return pen?.installed === false ? 'off' : 'warn'
+}
+
+// How many installed pens still lack a position — the swap silently skips
+// them, so warn the operator up front.
+const uncalibratedCount = computed(
+  () => penRows.value.filter((pen) => calState(pen) === 'warn').length,
+)
 
 function setSlotPosition(index: number, axis: 'x' | 'y', raw: string): void {
   const pens = ensurePens()
@@ -403,112 +510,106 @@ function setMode(mode: ColorMode): void {
         class="space-y-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3"
         data-test="host-swap-editor"
       >
-        <p class="text-[11px] text-slate-400">{{ t('profile.hostSwap.intro') }}</p>
-
-        <ol class="space-y-1.5">
-          <li
-            v-for="(step, i) in hostSwap.steps"
-            :key="i"
-            class="flex items-center gap-2"
-            :data-test="`host-step-${i}`"
-          >
-            <span class="w-5 shrink-0 text-center font-mono text-[10px] text-slate-500">{{
-              i + 1
-            }}</span>
-            <select
-              v-model="step.kind"
-              class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-              :data-test="`host-step-kind-${i}`"
-            >
-              <option v-for="k in STEP_KINDS" :key="k" :value="k">
-                {{ t(`profile.hostSwap.step.${k}`) }}
-              </option>
-            </select>
-            <input
-              v-if="step.kind === 'raw'"
-              v-model="step.send"
-              type="text"
-              placeholder="G4 P0.5"
-              class="w-32 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
-              :data-test="`host-step-send-${i}`"
-            />
-            <label class="flex shrink-0 items-center gap-1 text-[10px] text-slate-500">
-              <input
-                v-model.number="step.wait_ms"
-                type="number"
-                min="0"
-                step="50"
-                class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                :data-test="`host-step-wait-${i}`"
-              />
-              {{ t('profile.hostSwap.waitShort') }}
-            </label>
+        <!-- ① Magazine type: which physical changer is bolted on. Both
+             compile through the same step engine; this picks the preset
+             sequence + labels. -->
+        <div class="space-y-1.5" data-test="host-mechanism">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            ① {{ t('profile.hostSwap.mechanismTitle') }}
+          </p>
+          <div class="grid grid-cols-2 gap-2">
             <button
+              v-for="mech in ['rack', 'dock'] as const"
+              :key="mech"
               type="button"
-              class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
-              :disabled="i === 0"
-              :title="t('profile.hostSwap.moveUp')"
-              @click="moveStep(i, -1)"
+              class="flex flex-col gap-0.5 rounded-lg border p-2 text-left transition"
+              :class="
+                hostMechanism === mech
+                  ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500'
+                  : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
+              "
+              :aria-pressed="hostMechanism === mech"
+              :data-test="`host-mechanism-${mech}`"
+              @click="setMechanism(mech)"
             >
-              ↑
+              <span class="flex items-center gap-2">
+                <span class="text-lg leading-none">{{ MECH_ICON[mech] }}</span>
+                <span class="text-sm font-medium text-slate-200">
+                  {{ t(`profile.hostSwap.mechanism.${mech}`) }}
+                </span>
+              </span>
+              <span class="text-[11px] leading-snug text-slate-400">
+                {{ t(`profile.hostSwap.mechanismHint.${mech}`) }}
+              </span>
             </button>
-            <button
-              type="button"
-              class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
-              :disabled="i === hostSwap.steps.length - 1"
-              :title="t('profile.hostSwap.moveDown')"
-              @click="moveStep(i, 1)"
-            >
-              ↓
-            </button>
-            <button
-              type="button"
-              class="rounded border border-slate-700 bg-slate-800 px-1.5 text-slate-300 hover:bg-red-900/60 hover:text-red-200"
-              :title="t('profile.hostSwap.remove')"
-              :data-test="`host-step-remove-${i}`"
-              @click="removeStep(i)"
-            >
-              −
-            </button>
-          </li>
-        </ol>
+          </div>
+        </div>
 
-        <p
-          v-if="!hostSwap.steps.length"
-          class="text-[11px] text-amber-300"
-          data-test="host-swap-empty"
-        >
-          ⚠ {{ t('profile.hostSwap.empty') }}
-        </p>
-
-        <button
-          type="button"
-          class="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
-          data-test="host-step-add"
-          @click="addStep"
-        >
-          + {{ t('profile.hostSwap.add') }}
-        </button>
+        <!-- ② Action type: how the pen / tool is grabbed & held (lock_mode),
+             labelled per mechanism. 'command' = servo gripper / motorised
+             latch (emits the grab/drop commands below); 'motion' = friction
+             / magnetic hold driven by the advance/retract motion (no
+             command). -->
+        <div class="space-y-1.5" data-test="host-action">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            ② {{ t('profile.hostSwap.actionTitle') }}
+          </p>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              v-for="act in ['command', 'motion'] as const"
+              :key="act"
+              type="button"
+              class="flex flex-col gap-0.5 rounded-lg border p-2 text-left transition"
+              :class="
+                hostSwap.lock_mode === act
+                  ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500'
+                  : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
+              "
+              :aria-pressed="hostSwap.lock_mode === act"
+              :data-test="`host-action-${act}`"
+              @click="setLockMode(act)"
+            >
+              <span class="flex items-center gap-2">
+                <span class="text-lg leading-none">{{ ACTION_ICON[act] }}</span>
+                <span class="text-sm font-medium text-slate-200">
+                  {{ t(`profile.hostSwap.action.${hostMechanism}.${act}`) }}
+                </span>
+              </span>
+              <span class="text-[11px] leading-snug text-slate-400">
+                {{ t(`profile.hostSwap.actionHint.${hostMechanism}.${act}`) }}
+              </span>
+            </button>
+          </div>
+        </div>
 
         <!-- Per-slot magazine positions: one row per pen, X/Y in profile
-             units. The "Go to slot" steps above travel to these. -->
+             units. The "Go to slot" steps travel to these. -->
         <div class="space-y-1.5 border-t border-slate-700 pt-3" data-test="host-positions">
-          <p class="text-[11px] uppercase tracking-wider text-slate-500">
-            {{ t('profile.hostSwap.positionsTitle') }}
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            {{
+              isDock
+                ? t('profile.hostSwap.dockPositionsTitle')
+                : t('profile.hostSwap.positionsTitle')
+            }}
           </p>
-          <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.positionsHint') }}</p>
+          <p class="text-[11px] text-slate-500">
+            {{
+              isDock ? t('profile.hostSwap.dockPositionsHint') : t('profile.hostSwap.positionsHint')
+            }}
+          </p>
           <div
-            class="grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-2 text-[10px] text-slate-500"
+            class="grid grid-cols-[2rem_1fr_5rem_5rem_1.25rem] items-center gap-2 text-[10px] text-slate-500"
           >
             <span></span>
             <span>{{ t('profile.hostSwap.penLabel') }}</span>
             <span>X</span>
             <span>Y</span>
+            <span></span>
           </div>
           <div
             v-for="(pen, i) in penRows"
             :key="i"
-            class="grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-2"
+            class="grid grid-cols-[2rem_1fr_5rem_5rem_1.25rem] items-center gap-2"
             :data-test="`host-pos-row-${i}`"
           >
             <span class="text-center font-mono text-[11px] text-slate-500">#{{ i }}</span>
@@ -531,14 +632,40 @@ function setMode(mode: ColorMode): void {
               :data-test="`host-pos-y-${i}`"
               @change="(e) => setSlotPosition(i, 'y', (e.target as HTMLInputElement).value)"
             />
+            <span
+              class="text-center text-[11px]"
+              :class="{
+                'text-emerald-400': calState(pen) === 'ok',
+                'text-amber-400': calState(pen) === 'warn',
+                'text-slate-600': calState(pen) === 'off',
+              }"
+              :title="t(`profile.hostSwap.cal.${calState(pen)}`)"
+              :data-test="`host-pos-cal-${i}`"
+            >
+              {{ calState(pen) === 'ok' ? '✓' : calState(pen) === 'warn' ? '⚠' : '·' }}
+            </span>
           </div>
+
+          <p
+            v-if="uncalibratedCount > 0"
+            class="text-[11px] text-amber-300"
+            data-test="host-uncalibrated"
+          >
+            ⚠ {{ t('profile.hostSwap.uncalibrated', { n: uncalibratedCount }) }}
+          </p>
 
           <!-- Clearance: how far to back out of a slot before moving
                sideways, so the head doesn't hit the neighbouring pens.
                The slot position above is the engagement point; the
                approach point sits this far away along the chosen axis. -->
           <div class="mt-2 space-y-1 rounded border border-slate-800 bg-slate-950/40 p-2">
-            <p class="text-[11px] text-slate-400">{{ t('profile.hostSwap.clearanceHint') }}</p>
+            <p class="text-[11px] text-slate-400">
+              {{
+                isDock
+                  ? t('profile.hostSwap.dockClearanceHint')
+                  : t('profile.hostSwap.clearanceHint')
+              }}
+            </p>
             <div class="flex items-end gap-2">
               <label class="block text-[11px] text-slate-400"
                 >{{ t('profile.hostSwap.clearanceAxis') }}
@@ -563,7 +690,9 @@ function setMode(mode: ColorMode): void {
                 </select>
               </label>
               <label class="block text-[11px] text-slate-400"
-                >{{ t('profile.hostSwap.clearanceMm') }}
+                >{{
+                  isDock ? t('profile.hostSwap.dockEntryMm') : t('profile.hostSwap.clearanceMm')
+                }}
                 <input
                   type="number"
                   min="0"
@@ -578,124 +707,234 @@ function setMode(mode: ColorMode): void {
           </div>
         </div>
 
-        <!-- Magazine head height (servo): the rack often sits higher than
-             the paper, so the raise/lower servo angle differs from the
-             normal pen-up/-down. Blank → reuse the profile's pen-up/-down.
-             Disabled when a real Z axis is configured below. -->
-        <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-servo-heights">
-          <p class="text-[11px] uppercase tracking-wider text-slate-500">
-            {{ t('profile.hostSwap.servoHeightsTitle') }}
-          </p>
-          <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.servoHeightsHint') }}</p>
-          <div class="grid grid-cols-2 gap-2" :class="{ 'opacity-40': usesZAxis }">
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.headUpCommand') }}
-              <input
-                type="text"
-                :value="hostSwap.head_up_command ?? ''"
-                :placeholder="draft.pen_up_command"
-                :disabled="usesZAxis"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
-                data-test="host-head-up"
-                @change="
-                  (e) => setHeadCommand('head_up_command', (e.target as HTMLInputElement).value)
-                "
-              />
-            </label>
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.headDownCommand') }}
-              <input
-                type="text"
-                :value="hostSwap.head_down_command ?? ''"
-                :placeholder="draft.pen_down_command"
-                :disabled="usesZAxis"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
-                data-test="host-head-down"
-                @change="
-                  (e) => setHeadCommand('head_down_command', (e.target as HTMLInputElement).value)
-                "
-              />
-            </label>
+        <!-- Head heights — servo angle and/or a real Z axis, grouped and
+             collapsible. Most servo machines just reuse the profile pen-up/
+             -down, so this stays folded out of the way by default. -->
+        <details class="border-t border-slate-700 pt-3" data-test="host-heights-group">
+          <summary
+            class="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+          >
+            {{ t('profile.hostSwap.headHeightsTitle') }}
+          </summary>
+          <div class="mt-3 space-y-3">
+            <!-- Magazine head height (servo): the rack often sits higher
+                 than the paper, so the raise/lower servo angle differs from
+                 the normal pen-up/-down. Blank → reuse the profile's
+                 pen-up/-down. Disabled when a real Z axis is set below. -->
+            <div class="space-y-2" data-test="host-servo-heights">
+              <p class="text-[11px] uppercase tracking-wider text-slate-500">
+                {{ t('profile.hostSwap.servoHeightsTitle') }}
+              </p>
+              <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.servoHeightsHint') }}</p>
+              <div class="grid grid-cols-2 gap-2" :class="{ 'opacity-40': usesZAxis }">
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.headUpCommand') }}
+                  <input
+                    type="text"
+                    :value="hostSwap.head_up_command ?? ''"
+                    :placeholder="draft.pen_up_command"
+                    :disabled="usesZAxis"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
+                    data-test="host-head-up"
+                    @change="
+                      (e) => setHeadCommand('head_up_command', (e.target as HTMLInputElement).value)
+                    "
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.headDownCommand') }}
+                  <input
+                    type="text"
+                    :value="hostSwap.head_down_command ?? ''"
+                    :placeholder="draft.pen_down_command"
+                    :disabled="usesZAxis"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 disabled:opacity-60"
+                    data-test="host-head-down"
+                    @change="
+                      (e) =>
+                        setHeadCommand('head_down_command', (e.target as HTMLInputElement).value)
+                    "
+                  />
+                </label>
+              </div>
+              <p v-if="usesZAxis" class="text-[11px] text-slate-500">
+                {{ t('profile.hostSwap.zOverridesServo') }}
+              </p>
+            </div>
+
+            <!-- Z heights: travel (safe) + engage depth. Optional — only
+                 for machines with a real motorised Z axis. When set they
+                 take precedence over the servo commands above. -->
+            <div class="space-y-2 border-t border-slate-800 pt-3" data-test="host-heights">
+              <p class="text-[11px] uppercase tracking-wider text-slate-500">
+                {{ t('profile.hostSwap.heightsTitle') }}
+              </p>
+              <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.heightsHint') }}</p>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.safeZ') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="hostSwap.safe_z_mm ?? ''"
+                    placeholder="—"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="host-safe-z"
+                    @change="(e) => setZ('safe_z_mm', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.engageZ') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="hostSwap.engage_z_mm ?? ''"
+                    placeholder="—"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="host-engage-z"
+                    @change="(e) => setZ('engage_z_mm', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.zMin') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="hostSwap.z_min_mm ?? ''"
+                    placeholder="—"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="host-z-min"
+                    @change="(e) => setZ('z_min_mm', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('profile.hostSwap.zMax') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="hostSwap.z_max_mm ?? ''"
+                    placeholder="—"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="host-z-max"
+                    @change="(e) => setZ('z_max_mm', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+              </div>
+              <p v-if="zWarning" class="text-[11px] text-amber-300" data-test="host-z-warning">
+                ⚠ {{ t(`profile.hostSwap.${zWarning}`) }}
+              </p>
+            </div>
           </div>
-          <p v-if="usesZAxis" class="text-[11px] text-slate-500">
-            {{ t('profile.hostSwap.zOverridesServo') }}
+        </details>
+
+        <!-- Swap sequence (kept visible): generated from the magazine +
+             action above, then editable step by step for fine-tuning. -->
+        <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-sequence">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            {{ t('profile.hostSwap.sequenceTitle') }}
           </p>
+          <p class="text-[11px] text-slate-400">
+            {{ isDock ? t('profile.hostSwap.dockIntro') : t('profile.hostSwap.intro') }}
+          </p>
+
+          <ol class="space-y-1.5">
+            <li
+              v-for="(step, i) in hostSwap.steps"
+              :key="i"
+              class="flex items-center gap-2"
+              :data-test="`host-step-${i}`"
+            >
+              <span class="w-5 shrink-0 text-center font-mono text-[10px] text-slate-500">{{
+                i + 1
+              }}</span>
+              <select
+                v-model="step.kind"
+                class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                :data-test="`host-step-kind-${i}`"
+              >
+                <option v-for="k in STEP_KINDS" :key="k" :value="k">
+                  {{ stepLabel(k) }}
+                </option>
+              </select>
+              <input
+                v-if="step.kind === 'raw'"
+                v-model="step.send"
+                type="text"
+                placeholder="G4 P0.5"
+                class="w-32 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+                :data-test="`host-step-send-${i}`"
+              />
+              <label class="flex shrink-0 items-center gap-1 text-[10px] text-slate-500">
+                <input
+                  v-model.number="step.wait_ms"
+                  type="number"
+                  min="0"
+                  step="50"
+                  class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  :data-test="`host-step-wait-${i}`"
+                />
+                {{ t('profile.hostSwap.waitShort') }}
+              </label>
+              <button
+                type="button"
+                class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
+                :disabled="i === 0"
+                :title="t('profile.hostSwap.moveUp')"
+                @click="moveStep(i, -1)"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                class="rounded border border-slate-700 bg-slate-800 px-1 text-slate-300 hover:bg-slate-700 disabled:opacity-30"
+                :disabled="i === hostSwap.steps.length - 1"
+                :title="t('profile.hostSwap.moveDown')"
+                @click="moveStep(i, 1)"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                class="rounded border border-slate-700 bg-slate-800 px-1.5 text-slate-300 hover:bg-red-900/60 hover:text-red-200"
+                :title="t('profile.hostSwap.remove')"
+                :data-test="`host-step-remove-${i}`"
+                @click="removeStep(i)"
+              >
+                −
+              </button>
+            </li>
+          </ol>
+
+          <p
+            v-if="!hostSwap.steps.length"
+            class="text-[11px] text-amber-300"
+            data-test="host-swap-empty"
+          >
+            ⚠ {{ t('profile.hostSwap.empty') }}
+          </p>
+
+          <button
+            type="button"
+            class="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+            data-test="host-step-add"
+            @click="addStep"
+          >
+            + {{ t('profile.hostSwap.add') }}
+          </button>
         </div>
 
-        <!-- Z heights: travel (safe) + engage depth. Optional — only for
-             machines with a real motorised Z axis. When set they take
-             precedence over the servo magazine commands above. -->
-        <div class="space-y-2 border-t border-slate-700 pt-3" data-test="host-heights">
-          <p class="text-[11px] uppercase tracking-wider text-slate-500">
-            {{ t('profile.hostSwap.heightsTitle') }}
-          </p>
-          <p class="text-[11px] text-slate-500">{{ t('profile.hostSwap.heightsHint') }}</p>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.safeZ') }}
-              <input
-                type="number"
-                step="any"
-                :value="hostSwap.safe_z_mm ?? ''"
-                placeholder="—"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                data-test="host-safe-z"
-                @change="(e) => setZ('safe_z_mm', (e.target as HTMLInputElement).value)"
-              />
-            </label>
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.engageZ') }}
-              <input
-                type="number"
-                step="any"
-                :value="hostSwap.engage_z_mm ?? ''"
-                placeholder="—"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                data-test="host-engage-z"
-                @change="(e) => setZ('engage_z_mm', (e.target as HTMLInputElement).value)"
-              />
-            </label>
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.zMin') }}
-              <input
-                type="number"
-                step="any"
-                :value="hostSwap.z_min_mm ?? ''"
-                placeholder="—"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                data-test="host-z-min"
-                @change="(e) => setZ('z_min_mm', (e.target as HTMLInputElement).value)"
-              />
-            </label>
-            <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.zMax') }}
-              <input
-                type="number"
-                step="any"
-                :value="hostSwap.z_max_mm ?? ''"
-                placeholder="—"
-                class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                data-test="host-z-max"
-                @change="(e) => setZ('z_max_mm', (e.target as HTMLInputElement).value)"
-              />
-            </label>
-          </div>
-          <p v-if="zWarning" class="text-[11px] text-amber-300" data-test="host-z-warning">
-            ⚠ {{ t(`profile.hostSwap.${zWarning}`) }}
-          </p>
-        </div>
-
-        <!-- Advanced: the clamp / gripper primitive (the one place a
-             literal command is unavoidable). Sensible defaults provided. -->
-        <details class="rounded border border-slate-700 bg-slate-900/40">
+        <!-- Advanced: the clamp / gripper / latch primitive (the one place
+             a literal command is unavoidable). Hidden for a motion-locked
+             dock, where the coupling needs no command. -->
+        <details v-if="showsLatchCommands" class="rounded border border-slate-700 bg-slate-900/40">
           <summary
             class="cursor-pointer px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 hover:text-slate-300"
           >
-            {{ t('profile.hostSwap.advanced') }}
+            {{ isDock ? t('profile.hostSwap.lockAdvanced') : t('profile.hostSwap.advanced') }}
           </summary>
           <div class="grid grid-cols-2 gap-2 border-t border-slate-700 p-2">
             <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.grabCommand') }}
+              >{{ isDock ? t('profile.hostSwap.lockCommand') : t('profile.hostSwap.grabCommand') }}
               <input
                 v-model="hostSwap.grab_command"
                 type="text"
@@ -705,7 +944,9 @@ function setMode(mode: ColorMode): void {
               />
             </label>
             <label class="block text-[11px] text-slate-400"
-              >{{ t('profile.hostSwap.dropCommand') }}
+              >{{
+                isDock ? t('profile.hostSwap.unlockCommand') : t('profile.hostSwap.dropCommand')
+              }}
               <input
                 v-model="hostSwap.drop_command"
                 type="text"

@@ -159,13 +159,25 @@ class HostMacroStrategy(ToolChangeStrategy):
                 else:
                     send = self.profile.pen_down_command
             elif step.kind == "grab":
-                send = (
-                    _substitute(swap.grab_command, context) if swap.grab_command.strip() else None
-                )
+                # A motion lock (magnetic / kinematic hold) couples by the
+                # advance/retract motion alone — emit no latch command.
+                if swap.lock_mode == "motion":
+                    send = None
+                else:
+                    send = (
+                        _substitute(swap.grab_command, context)
+                        if swap.grab_command.strip()
+                        else None
+                    )
             elif step.kind == "release":
-                send = (
-                    _substitute(swap.drop_command, context) if swap.drop_command.strip() else None
-                )
+                if swap.lock_mode == "motion":
+                    send = None
+                else:
+                    send = (
+                        _substitute(swap.drop_command, context)
+                        if swap.drop_command.strip()
+                        else None
+                    )
             elif step.kind in ("move_to_old_slot", "move_to_new_slot"):
                 slot = (
                     context.from_slot_index

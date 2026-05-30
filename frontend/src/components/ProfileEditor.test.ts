@@ -287,6 +287,53 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(saveBtn().attributes('disabled')).toBeDefined()
   })
 
+  it('host mode offers the ① magazine + ② action card selectors', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    // ① magazine type.
+    expect(wrapper.find('[data-test="host-mechanism-rack"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-mechanism-dock"]').exists()).toBe(true)
+    // ② action type — shown for both mechanisms now.
+    expect(wrapper.find('[data-test="host-action"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-action-command"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-action-motion"]').exists()).toBe(true)
+    // Default rack action is 'command' → latch command fields present.
+    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(true)
+  })
+
+  it('a motion action hides the latch commands and keeps Save valid', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    // Switch the ② action to motion (friction / magnetic hold).
+    await wrapper.find('[data-test="host-action-motion"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(false)
+    // A motion grab needs no command → Save stays enabled despite the
+    // grab/release steps in the sequence.
+    const saveBtn = () => wrapper.findAll('button').find((b) => b.text() === 'Save')!
+    expect(saveBtn().attributes('disabled')).toBeUndefined()
+    // Back to 'command' reveals the latch command fields again.
+    await wrapper.find('[data-test="host-action-command"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(true)
+  })
+
+  it('switching to a dock defaults the action to motion (magnetic / kinematic)', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    await wrapper.find('[data-test="host-mechanism-dock"]').trigger('click')
+    await nextTick()
+    // Dock preset selects the motion action → latch commands hidden.
+    expect(wrapper.find('[data-test="host-action-motion"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('[data-test="host-grab-command"]').exists()).toBe(false)
+  })
+
   it('shows a per-slot position table and Z height fields in the host editor', async () => {
     const wrapper = mountEditor()
     await nextTick()
@@ -299,6 +346,38 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(wrapper.find('[data-test="host-heights"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="host-safe-z"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="host-engage-z"]').exists()).toBe(true)
+  })
+
+  it('flags uncalibrated installed slots in the host positions table', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    // Seeded 2-slot magazine with no positions → both rows flagged + summary.
+    expect(wrapper.find('[data-test="host-uncalibrated"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-pos-cal-0"]').text()).toBe('⚠')
+    // Calibrate both slots → the row turns ✓ and the summary clears.
+    for (const i of [0, 1]) {
+      const x = wrapper.find(`[data-test="host-pos-x-${i}"]`)
+      await x.setValue('10')
+      await x.trigger('change')
+    }
+    await nextTick()
+    expect(wrapper.find('[data-test="host-pos-cal-0"]').text()).toBe('✓')
+    expect(wrapper.find('[data-test="host-uncalibrated"]').exists()).toBe(false)
+  })
+
+  it('groups the head-height fields under a collapsible block', async () => {
+    const wrapper = mountEditor()
+    await nextTick()
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
+    await nextTick()
+    const group = wrapper.find('[data-test="host-heights-group"]')
+    expect(group.exists()).toBe(true)
+    expect(group.element.tagName.toLowerCase()).toBe('details')
+    // Both the servo and the Z fields live inside the group.
+    expect(group.find('[data-test="host-head-up"]').exists()).toBe(true)
+    expect(group.find('[data-test="host-safe-z"]').exists()).toBe(true)
   })
 
   it('shows magazine servo head-height fields, disabled once a Z axis is set', async () => {
