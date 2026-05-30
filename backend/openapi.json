@@ -4297,8 +4297,7 @@
             "type": "string",
             "enum": [
               "top_left",
-              "bottom_left",
-              "center"
+              "bottom_left"
             ],
             "title": "Origin"
           },

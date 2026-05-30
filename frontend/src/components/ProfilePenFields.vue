@@ -27,6 +27,11 @@ const props = defineProps<{
   draft: MachineProfile
 }>()
 
+// Hard ceiling on configurable slots: a typo like "999" would render
+// that many magazine rows and lock up the browser. No real plotter
+// carousel exceeds this.
+const MAX_PEN_SLOTS = 64
+
 type ColorMode = 'mono' | 'manual' | 'magazine'
 
 const colorMode = computed<ColorMode>(() => {
@@ -46,6 +51,11 @@ const modes: Array<{ id: ColorMode; method: ToolChangeMethod; icon: string }> = 
   { id: 'manual', method: 'manual_pause', icon: '✋' },
   { id: 'magazine', method: 'carousel', icon: '🎡' },
 ]
+
+function clampPenCount(): void {
+  const n = Math.floor(props.draft.pen_slot_count)
+  props.draft.pen_slot_count = Math.min(MAX_PEN_SLOTS, Math.max(2, Number.isFinite(n) ? n : 2))
+}
 
 function setMode(mode: ColorMode): void {
   const target = modes.find((m) => m.id === mode)
@@ -118,7 +128,9 @@ function setMode(mode: ColorMode): void {
             v-model.number="draft.pen_slot_count"
             type="number"
             min="2"
+            :max="MAX_PEN_SLOTS"
             class="mt-1 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            @change="clampPenCount"
           />
         </label>
         <p class="mt-1 text-[11px] text-slate-500">
@@ -131,44 +143,17 @@ function setMode(mode: ColorMode): void {
       </div>
       <p v-else class="text-[11px] text-slate-500">{{ t('profile.monoNote') }}</p>
 
-      <!-- Mechanical pen commands — machine config, not colour inventory. -->
-      <details class="rounded-lg border border-slate-700 bg-slate-900/40">
-        <summary
-          class="cursor-pointer px-3 py-2 text-[11px] uppercase tracking-wider text-slate-500 hover:text-slate-300"
-        >
-          {{ t('profile.penCommands') }}
-        </summary>
-        <div class="grid grid-cols-2 gap-2 border-t border-slate-700 p-3">
-          <label class="block text-slate-400"
-            >{{ t('profile.penUp') }}
-            <input
-              v-model="draft.pen_up_command"
-              type="text"
-              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-            />
-            <span class="mt-0.5 block text-[11px] text-slate-500">{{ t('profile.penUpHint') }}</span>
-          </label>
-          <label class="block text-slate-400"
-            >{{ t('profile.penDown') }}
-            <input
-              v-model="draft.pen_down_command"
-              type="text"
-              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-            />
-            <span class="mt-0.5 block text-[11px] text-slate-500">{{
-              t('profile.penDownHint')
-            }}</span>
-          </label>
-          <label v-if="colorMode === 'magazine'" class="col-span-2 block text-slate-400"
-            >{{ t('profile.toolChangeCommand') }}
-            <input
-              v-model="draft.tool_change_command"
-              type="text"
-              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-            />
-          </label>
-        </div>
-      </details>
+      <!-- Tool-change command — only the magazine mode triggers it. The
+           mechanical pen up/down commands moved to the Motion section
+           (they're shared machine config, not magazine-specific). -->
+      <label v-if="colorMode === 'magazine'" class="block text-slate-400">
+        {{ t('profile.toolChangeCommand') }}
+        <input
+          v-model="draft.tool_change_command"
+          type="text"
+          class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
+        />
+      </label>
     </div>
   </details>
 </template>

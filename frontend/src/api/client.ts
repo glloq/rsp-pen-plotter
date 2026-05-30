@@ -160,7 +160,7 @@ export interface PenSlot {
 }
 
 export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'
-export type Origin = 'top_left' | 'bottom_left' | 'center'
+export type Origin = 'top_left' | 'bottom_left'
 export type ToolChangeMethod = 'manual_pause' | 'carousel' | 'rack' | 'none'
 
 export interface MachineProfile {
@@ -1073,7 +1073,9 @@ export async function createAvailableColor(
 
 export async function patchAvailableColor(
   colorId: string,
-  patch: Partial<Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm' | 'odometer_mm'>>,
+  patch: Partial<
+    Pick<AvailableColor, 'hex' | 'name' | 'position' | 'stroke_width_mm' | 'odometer_mm'>
+  >,
 ): Promise<AvailableColor> {
   const response = await api.patch<AvailableColor>(
     `/available-colors/${encodeURIComponent(colorId)}`,

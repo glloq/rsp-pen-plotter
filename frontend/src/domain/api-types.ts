@@ -1932,7 +1932,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "top_left" | "bottom_left" | "center";
+            origin: "top_left" | "bottom_left";
             /**
              * Gcode Dialect
              * @enum {string}

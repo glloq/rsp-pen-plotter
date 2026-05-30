@@ -75,7 +75,7 @@ export function computePlacement(
   const bboxCy = (bounds.y_min + bounds.y_max) / 2
   const regionCx = (drawable.x_min + drawable.x_max) / 2
   const regionCy = (drawable.y_min + drawable.y_max) / 2
-  const yUp = profile.origin === 'bottom_left' || profile.origin === 'center'
+  const yUp = profile.origin === 'bottom_left'
 
   const transform = (x: number, y: number): [number, number] => [
     regionCx + (x - bboxCx) * scale,
