@@ -100,9 +100,7 @@ def test_manual_strategy_uses_template_with_substitution() -> None:
     profile = _profile(capabilities=caps.model_dump(mode="json"))
     orch = ToolChangeOrchestrator(profile)
     plan = orch.plan(
-        SwapContext(
-            slot_index=3, pen_label="Vermilion", pen_color="#e34234", layer_id="l1"
-        )
+        SwapContext(slot_index=3, pen_label="Vermilion", pen_color="#e34234", layer_id="l1")
     )
     assert plan.pause_kind is PauseKind.OPERATOR_CONFIRM
     assert plan.commands == []
@@ -132,9 +130,7 @@ def test_manual_strategy_carries_recovery_policy() -> None:
 
 
 def test_firmware_strategy_emits_legacy_tool_change_command_when_no_macro() -> None:
-    caps = _caps(
-        ToolingMode.FIRMWARE, source=CommandSource.MACHINE, macro=None, magazine=8
-    )
+    caps = _caps(ToolingMode.FIRMWARE, source=CommandSource.MACHINE, macro=None, magazine=8)
     profile = _profile(
         tool_change_method="carousel",
         tool_change_command="M6 T{slot}",
@@ -167,13 +163,9 @@ def test_host_macro_strategy_renders_all_lines_with_substitution() -> None:
         HostMacroStep(send="G53 G0 X0 Y0", wait_ms=300),
         HostMacroStep(send="; ready slot {slot}", wait_ms=0),
     ]
-    caps = _caps(
-        ToolingMode.HOST_MACRO, source=CommandSource.HOST, macro=macro, magazine=4
-    )
+    caps = _caps(ToolingMode.HOST_MACRO, source=CommandSource.HOST, macro=macro, magazine=4)
     profile = _profile(capabilities=caps.model_dump(mode="json"))
-    plan = ToolChangeOrchestrator(profile).plan(
-        SwapContext(slot_index=2, pen_label="Cyan")
-    )
+    plan = ToolChangeOrchestrator(profile).plan(SwapContext(slot_index=2, pen_label="Cyan"))
     assert plan.mode is ToolingMode.HOST_MACRO
     assert plan.pause_kind is PauseKind.HOST_TIMED
     assert [c.send for c in plan.commands] == [
@@ -254,7 +246,13 @@ def test_strategy_registry_covers_every_mode() -> None:
     from pen_plotter.domain.toolchange.strategies import _STRATEGIES
 
     assert set(_STRATEGIES) == set(ToolingMode)
-    assert all(issubclass(cls, type(FirmwareStrategy.__mro__[0])) is False for cls in _STRATEGIES.values()) or True  # smoke
+    assert (
+        all(
+            issubclass(cls, type(FirmwareStrategy.__mro__[0])) is False
+            for cls in _STRATEGIES.values()
+        )
+        or True
+    )  # smoke
     assert _STRATEGIES[ToolingMode.FIRMWARE] is FirmwareStrategy
     assert _STRATEGIES[ToolingMode.HOST_MACRO] is HostMacroStrategy
     assert _STRATEGIES[ToolingMode.MANUAL] is ManualStrategy

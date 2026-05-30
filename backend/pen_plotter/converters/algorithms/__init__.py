@@ -122,33 +122,33 @@ _KINDS: dict[str, AlgorithmKind] = {
 # latencies on a Pi-class device with the default detail tier; tweak
 # alongside any algorithm-internal changes that change runtime scaling.
 _COMPLEXITY: dict[str, AlgorithmComplexity] = {
-    "direct": "low",       # potrace on a small label mask
-    "halftone": "low",     # uniform dot grid
-    "stippling": "medium", # Poisson-disk sampling
+    "direct": "low",  # potrace on a small label mask
+    "halftone": "low",  # uniform dot grid
+    "stippling": "medium",  # Poisson-disk sampling
     "crosshatch": "medium",
     "contours": "low",
     "edges": "low",
     "centerline": "medium",  # thinning + path extraction
     "spiral": "medium",
     "scanlines": "low",
-    "tsp": "high",          # tour optimisation dominates
+    "tsp": "high",  # tour optimisation dominates
     "hilbert": "medium",
     "gosper": "medium",
     "eulerian_hatch": "medium",
     "concentric_offset": "medium",
-    "flowfield": "high",      # streamline integration over the field
-    "tsp_opt": "high",        # 2-opt sweep with kd-tree neighbours
+    "flowfield": "high",  # streamline integration over the field
+    "tsp_opt": "high",  # 2-opt sweep with kd-tree neighbours
     "voronoi_stipple": "high",  # Lloyd relaxation iterations
-    "squiggle": "medium",       # sub-pixel sampling per scan row
-    "lowpoly": "high",          # Delaunay triangulation over sampled points
-    "scribble": "medium",       # wobble polyline per scan run
-    "grid": "low",              # two clipped line sweeps
-    "brick": "low",             # course lines + staggered joints
-    "dashes": "medium",         # hatch sweep chopped into dashes
-    "truchet": "low",           # one diagonal per grid cell
-    "rings": "medium",          # circle sampling per radius
-    "sunburst": "medium",       # ray sampling per angle
-    "circle_pack": "high",      # dart-throwing with overlap checks
+    "squiggle": "medium",  # sub-pixel sampling per scan row
+    "lowpoly": "high",  # Delaunay triangulation over sampled points
+    "scribble": "medium",  # wobble polyline per scan run
+    "grid": "low",  # two clipped line sweeps
+    "brick": "low",  # course lines + staggered joints
+    "dashes": "medium",  # hatch sweep chopped into dashes
+    "truchet": "low",  # one diagonal per grid cell
+    "rings": "medium",  # circle sampling per radius
+    "sunburst": "medium",  # ray sampling per angle
+    "circle_pack": "high",  # dart-throwing with overlap checks
 }
 
 

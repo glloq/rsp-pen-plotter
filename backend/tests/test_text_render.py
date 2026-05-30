@@ -213,9 +213,7 @@ def test_rerender_text_svg_renders_plain_text_from_library(
     polyline / path elements, not a placeholder.
     """
     body = b"Hello\nWorld\n"
-    _seed_library_file(
-        monkeypatch, tmp_path, file_id="txt-1", data=body, suffix=".txt"
-    )
+    _seed_library_file(monkeypatch, tmp_path, file_id="txt-1", data=body, suffix=".txt")
     plan = _text_plan(
         library_file_id="txt-1",
         source_mime="text/plain",
@@ -240,9 +238,7 @@ def test_rerender_text_svg_uses_typography_font(
     face and produce a measurably different SVG payload.
     """
     body = b"Hello World\n"
-    _seed_library_file(
-        monkeypatch, tmp_path, file_id="txt-font", data=body, suffix=".txt"
-    )
+    _seed_library_file(monkeypatch, tmp_path, file_id="txt-font", data=body, suffix=".txt")
     plan_default = _text_plan(
         library_file_id="txt-font",
         source_mime="text/plain",
@@ -268,9 +264,7 @@ def test_plan_with_rerendered_svg_swaps_svg_on_success(
 ) -> None:
     """When the rerender succeeds, ``plan.svg`` is replaced."""
     body = b"Hello\n"
-    _seed_library_file(
-        monkeypatch, tmp_path, file_id="wrap-1", data=body, suffix=".txt"
-    )
+    _seed_library_file(monkeypatch, tmp_path, file_id="wrap-1", data=body, suffix=".txt")
     plan = _text_plan(
         library_file_id="wrap-1",
         source_mime="text/plain",

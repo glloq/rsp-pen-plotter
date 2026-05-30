@@ -89,21 +89,15 @@ describe('PipelineInspector', () => {
     const wrapper = mount(PipelineInspector, {
       props: { decision, sourceKind: 'bitmap_photo' },
     })
-    expect(wrapper.find('[data-test="pipeline-segmentation"]').text()).toBe(
-      'fixed_palette',
-    )
-    expect(wrapper.find('[data-test="pipeline-algorithm"]').text()).toBe(
-      'scanlines',
-    )
+    expect(wrapper.find('[data-test="pipeline-segmentation"]').text()).toBe('fixed_palette')
+    expect(wrapper.find('[data-test="pipeline-algorithm"]').text()).toBe('scanlines')
   })
 
   it('lists hard constraints with their constraint code', () => {
     const wrapper = mount(PipelineInspector, {
       props: { decision, sourceKind: 'bitmap_photo' },
     })
-    expect(
-      wrapper.find('[data-test="pipeline-constraint-sparse_palette"]').exists(),
-    ).toBe(true)
+    expect(wrapper.find('[data-test="pipeline-constraint-sparse_palette"]').exists()).toBe(true)
   })
 
   it('renders the fallback chain when present', () => {

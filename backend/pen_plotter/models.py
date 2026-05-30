@@ -146,17 +146,13 @@ class MachineProfile(BaseModel):
     def _populate_capabilities(self) -> MachineProfile:
         """Derive capabilities from legacy fields when not set explicitly."""
         if self.capabilities is None:
-            self.capabilities = derive_capabilities(
-                self.tool_change_method, self.pen_slot_count
-            )
+            self.capabilities = derive_capabilities(self.tool_change_method, self.pen_slot_count)
         return self
 
     def effective_capabilities(self) -> MachineCapabilities:
         """Return the resolved capability block (never ``None``)."""
         if self.capabilities is None:
-            self.capabilities = derive_capabilities(
-                self.tool_change_method, self.pen_slot_count
-            )
+            self.capabilities = derive_capabilities(self.tool_change_method, self.pen_slot_count)
         return self.capabilities
 
     def effective_pens(self) -> list[PenSlot]:

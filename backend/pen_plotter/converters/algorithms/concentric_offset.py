@@ -35,13 +35,7 @@ def _erode_disk(mask: NDArray[np.bool_], radius: int) -> NDArray[np.bool_]:
         out = mask.copy()
         for _ in range(radius):
             pad = np.pad(out, 1, mode="constant", constant_values=False)
-            out = (
-                out
-                & pad[:-2, 1:-1]
-                & pad[2:, 1:-1]
-                & pad[1:-1, :-2]
-                & pad[1:-1, 2:]
-            )
+            out = out & pad[:-2, 1:-1] & pad[2:, 1:-1] & pad[1:-1, :-2] & pad[1:-1, 2:]
         return out
     eroded = binary_erosion(mask, structure=disk(radius))
     return np.asarray(eroded, dtype=bool)

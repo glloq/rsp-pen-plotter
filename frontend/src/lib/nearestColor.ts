@@ -7,7 +7,13 @@
 
 function hexToRgb(hex: string): [number, number, number] {
   const body = hex.replace(/^#/, '').toLowerCase()
-  const expanded = body.length === 3 ? body.split('').map((c) => c + c).join('') : body
+  const expanded =
+    body.length === 3
+      ? body
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : body
   return [
     parseInt(expanded.slice(0, 2), 16),
     parseInt(expanded.slice(2, 4), 16),
@@ -57,10 +63,7 @@ function hexToLab(hex: string): [number, number, number] {
   return xyzToLab(srgbToXyz(hexToRgb(hex)))
 }
 
-function deltaE2000(
-  lab1: [number, number, number],
-  lab2: [number, number, number],
-): number {
+function deltaE2000(lab1: [number, number, number], lab2: [number, number, number]): number {
   // Faithful to the CIEDE2000 reference paper. Kept readable rather
   // than golfed; this is a one-shot per reset click so the cost is
   // a rounding error.
@@ -95,21 +98,15 @@ function deltaE2000(
     0.24 * Math.cos((2 * hbar * Math.PI) / 180) +
     0.32 * Math.cos(((3 * hbar + 6) * Math.PI) / 180) -
     0.2 * Math.cos(((4 * hbar - 63) * Math.PI) / 180)
-  const sL =
-    1 + (0.015 * (Lbar - 50) ** 2) / Math.sqrt(20 + (Lbar - 50) ** 2)
+  const sL = 1 + (0.015 * (Lbar - 50) ** 2) / Math.sqrt(20 + (Lbar - 50) ** 2)
   const sC = 1 + 0.045 * Cbarp
   const sH = 1 + 0.015 * Cbarp * T
   const rT =
     -2 *
     Math.sqrt(Cbarp ** 7 / (Cbarp ** 7 + 25 ** 7)) *
-    Math.sin(
-      ((60 * Math.exp(-(((hbar - 275) / 25) ** 2))) * Math.PI) / 180,
-    )
+    Math.sin((60 * Math.exp(-(((hbar - 275) / 25) ** 2)) * Math.PI) / 180)
   return Math.sqrt(
-    (dLp / sL) ** 2 +
-      (dCp / sC) ** 2 +
-      (dHp / sH) ** 2 +
-      rT * (dCp / sC) * (dHp / sH),
+    (dLp / sL) ** 2 + (dCp / sC) ** 2 + (dHp / sH) ** 2 + rT * (dCp / sC) * (dHp / sH),
   )
 }
 

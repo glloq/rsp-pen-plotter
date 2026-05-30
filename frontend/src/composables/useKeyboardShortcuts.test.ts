@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { SHORTCUTS, _resetShortcutsForTests, useKeyboardShortcuts } from './useKeyboardShortcuts'
 
-function press(key: string, opts: { meta?: boolean; ctrl?: boolean; target?: HTMLElement } = {}): void {
+function press(
+  key: string,
+  opts: { meta?: boolean; ctrl?: boolean; target?: HTMLElement } = {},
+): void {
   const event = new KeyboardEvent('keydown', {
     key,
     metaKey: opts.meta ?? false,
@@ -25,9 +28,7 @@ const Host = defineComponent({
     onPause: { type: Function, required: true },
   },
   setup(props) {
-    useKeyboardShortcuts([
-      { id: 'queue.pause', handler: () => (props.onPause as () => void)() },
-    ])
+    useKeyboardShortcuts([{ id: 'queue.pause', handler: () => (props.onPause as () => void)() }])
     return () => h('div')
   },
 })

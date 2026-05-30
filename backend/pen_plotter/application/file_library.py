@@ -203,9 +203,7 @@ class CacheEntry:
 _CACHE: OrderedDict[str, CacheEntry] = OrderedDict()
 
 
-def remember_job(
-    job_id: str, segmentation: SegmentationResult, options: BitmapOptions
-) -> None:
+def remember_job(job_id: str, segmentation: SegmentationResult, options: BitmapOptions) -> None:
     """Stash a bitmap job's segmentation result for later ``/rerender`` calls."""
     _CACHE[job_id] = CacheEntry(segmentation, options)
     _CACHE.move_to_end(job_id)
@@ -285,9 +283,7 @@ def try_rehydrate(job_id: str) -> tuple[CacheEntry | None, str]:
     try:
         options = BitmapOptions.model_validate(meta.bitmap_options)
     except Exception as exc:
-        _log.warning(
-            "Rerender rehydration: %s has invalid bitmap_options: %s", job_id, exc
-        )
+        _log.warning("Rerender rehydration: %s has invalid bitmap_options: %s", job_id, exc)
         return None, REHYDRATE_CORRUPT_OPTIONS
     try:
         data = original.read_bytes()
@@ -295,9 +291,7 @@ def try_rehydrate(job_id: str) -> tuple[CacheEntry | None, str]:
             data, options=meta.bitmap_options
         )
     except Exception as exc:
-        _log.warning(
-            "Rerender rehydration: %s segmentation failed: %s", job_id, exc
-        )
+        _log.warning("Rerender rehydration: %s segmentation failed: %s", job_id, exc)
         return None, REHYDRATE_SEGMENT_FAILED
     entry = CacheEntry(segmentation, options)
     remember_job(job_id, segmentation, options)
@@ -373,6 +367,4 @@ def integrity_scan() -> IntegrityReport:
                     reason="corrupt_bitmap_options",
                 )
             )
-    return IntegrityReport(
-        checked=len(records), rerenderable=rerenderable_count, issues=issues
-    )
+    return IntegrityReport(checked=len(records), rerenderable=rerenderable_count, issues=issues)

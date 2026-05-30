@@ -37,8 +37,7 @@ class SquiggleAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "squiggle"
     description: ClassVar[str] = (
-        "Wiggly horizontal lines with amplitude / frequency drift — "
-        "hand-drawn squiggle look."
+        "Wiggly horizontal lines with amplitude / frequency drift — " "hand-drawn squiggle look."
     )
 
     def render_layer(
@@ -120,9 +119,8 @@ class SquiggleAlgorithm(RasterAlgorithm):
                     # feel. The harmonic adds the dwn-up flick a hand
                     # makes between waves.
                     t = (xx - start) / local_period
-                    wiggle = (
-                        math.sin(2 * math.pi * t + phase)
-                        + 0.3 * math.sin(4 * math.pi * t + phase * 1.7)
+                    wiggle = math.sin(2 * math.pi * t + phase) + 0.3 * math.sin(
+                        4 * math.pi * t + phase * 1.7
                     )
                     points.append((xx, float(y) + eff_amp * wiggle * 0.7))
                     xx += sample_step
@@ -130,9 +128,7 @@ class SquiggleAlgorithm(RasterAlgorithm):
                     polylines.append(points)
 
         paths = "".join(
-            '<polyline points="'
-            + " ".join(f"{x:.2f},{yy:.2f}" for x, yy in poly)
-            + '"/>'
+            '<polyline points="' + " ".join(f"{x:.2f},{yy:.2f}" for x, yy in poly) + '"/>'
             for poly in polylines
         )
         return (

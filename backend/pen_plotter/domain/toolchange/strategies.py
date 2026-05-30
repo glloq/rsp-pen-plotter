@@ -148,8 +148,7 @@ def _substitute(template: str, context: SwapContext) -> str:
     """Substitute the swap-context placeholders into a single line."""
     slot = "" if context.slot_index is None else str(context.slot_index)
     return (
-        template
-        .replace("{slot}", slot)
+        template.replace("{slot}", slot)
         .replace("{color}", context.pen_color)
         .replace("{label}", context.pen_label or context.pen_color)
         .replace("{layer}", context.layer_id)

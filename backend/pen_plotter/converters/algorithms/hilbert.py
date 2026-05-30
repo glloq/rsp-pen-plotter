@@ -91,12 +91,7 @@ def _component_polylines(
         sy = pts[:, 1].astype(np.float64) * cell_w + y_min + cell_w / 2.0
         ix = np.round(sx).astype(np.intp)
         iy = np.round(sy).astype(np.intp)
-        inside = (
-            (ix >= 0)
-            & (ix < mask.shape[1])
-            & (iy >= 0)
-            & (iy < mask.shape[0])
-        )
+        inside = (ix >= 0) & (ix < mask.shape[1]) & (iy >= 0) & (iy < mask.shape[0])
         on_mask = np.zeros_like(inside)
         on_mask[inside] = mask[iy[inside], ix[inside]]
         run: list[tuple[float, float]] = []

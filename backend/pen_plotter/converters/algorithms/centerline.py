@@ -47,9 +47,14 @@ from numpy.typing import NDArray
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 _NEIGHBOURS_8 = (
-    (-1, -1), (-1, 0), (-1, 1),
-    (0, -1),           (0, 1),
-    (1, -1),  (1, 0),  (1, 1),
+    (-1, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, -1),
+    (0, 1),
+    (1, -1),
+    (1, 0),
+    (1, 1),
 )
 _KERNEL_8 = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=np.int8)
 # For each of the 8 neighbour offsets, the index of the opposite offset:
@@ -82,14 +87,13 @@ def _neighbour_count(skel: NDArray[np.bool_]) -> NDArray[np.int8]:
     """Count of skeleton-pixel neighbours (8-connectivity) for each pixel."""
     try:
         from scipy.ndimage import convolve
-        total = convolve(
-            skel.astype(np.int8), _KERNEL_8, mode="constant", cval=0
-        )
+
+        total = convolve(skel.astype(np.int8), _KERNEL_8, mode="constant", cval=0)
     except ImportError:
         padded = np.pad(skel, 1, mode="constant", constant_values=False).astype(np.int8)
         total = np.zeros_like(skel, dtype=np.int8)
         for dy, dx in _NEIGHBOURS_8:
-            total += padded[1 + dy:1 + dy + skel.shape[0], 1 + dx:1 + dx + skel.shape[1]]
+            total += padded[1 + dy : 1 + dy + skel.shape[0], 1 + dx : 1 + dx + skel.shape[1]]
     return total * skel.astype(np.int8)
 
 
@@ -106,16 +110,14 @@ def _direction_mask(skel: NDArray[np.bool_]) -> NDArray[np.uint8]:
     padded = np.pad(skel, 1, mode="constant", constant_values=False)
     mask = np.zeros(h * w, dtype=np.uint8)
     for di, (dy, dx) in enumerate(_NEIGHBOURS_8):
-        shifted = padded[1 + dy:1 + dy + h, 1 + dx:1 + dx + w]
+        shifted = padded[1 + dy : 1 + dy + h, 1 + dx : 1 + dx + w]
         pair = np.ascontiguousarray(skel & shifted).ravel().view(np.uint8)
         if pair.any():
             mask |= pair << di
     return mask
 
 
-def _trace_chains(
-    skel: NDArray[np.bool_], *, min_branch_px: int
-) -> list[NDArray[np.float64]]:
+def _trace_chains(skel: NDArray[np.bool_], *, min_branch_px: int) -> list[NDArray[np.float64]]:
     """Walk the skeleton into polylines between endpoints/junctions.
 
     A skeleton pixel is an *endpoint* if it has exactly one skeleton
@@ -148,9 +150,7 @@ def _trace_chains(
     opposite = _OPPOSITE_DIR
     chains_flat: list[list[int]] = []
 
-    seeds = np.flatnonzero(
-        (counts_np == 1) | (counts_np >= 3)
-    ).tolist()
+    seeds = np.flatnonzero((counts_np == 1) | (counts_np >= 3)).tolist()
     for s in seeds:
         s = int(s)
         # Walk every still-live edge out of s. Re-checking ``live[s]``
@@ -194,9 +194,7 @@ def _trace_chains(
             _ndi_label = None
         if _ndi_label is not None:
             cycle_mask = (live_np != 0).reshape(h, w)
-            labeled, n_comp = _ndi_label(
-                cycle_mask, structure=np.ones((3, 3), dtype=int)
-            )
+            labeled, n_comp = _ndi_label(cycle_mask, structure=np.ones((3, 3), dtype=int))
             if n_comp > 0:
                 # One representative pixel per component, iterating only
                 # the sparse "alive" pixels rather than the full canvas
@@ -207,9 +205,7 @@ def _trace_chains(
                 order = np.argsort(nz_labels, kind="stable")
                 sorted_labels = nz_labels[order]
                 sorted_indices = nz_indices[order]
-                first_positions = np.concatenate(
-                    ([0], np.flatnonzero(np.diff(sorted_labels)) + 1)
-                )
+                first_positions = np.concatenate(([0], np.flatnonzero(np.diff(sorted_labels)) + 1))
                 for s in sorted_indices[first_positions].tolist():
                     s = int(s)
                     if not live[s]:
@@ -289,7 +285,7 @@ def _format_chains_points(
     out: list[str] = []
     idx = 0
     for n in sizes:
-        out.append(" ".join(pairs[idx:idx + n]))
+        out.append(" ".join(pairs[idx : idx + n]))
         idx += n
     return out
 
@@ -322,9 +318,8 @@ class CenterlineAlgorithm(RasterAlgorithm):
         if skel is None:
             # scikit-image not installed — emit an outline instead of nothing.
             from pen_plotter.converters.algorithms.edges import EdgesAlgorithm
-            return EdgesAlgorithm().render_layer(
-                mask, color_hex, label, options=options
-            )
+
+            return EdgesAlgorithm().render_layer(mask, color_hex, label, options=options)
 
         chains = _trace_chains(skel, min_branch_px=min_branch_px)
         if smooth:
@@ -332,13 +327,9 @@ class CenterlineAlgorithm(RasterAlgorithm):
 
         drawable = [c for c in chains if len(c) >= 2]
         bodies = _format_chains_points(drawable)
-        paths = "".join(
-            '<polyline points="' + body + '"/>' for body in bodies
-        )
+        paths = "".join('<polyline points="' + body + '"/>' for body in bodies)
         return (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
             f'fill="none" stroke-width="{thickness}" stroke-linejoin="round" '
-            f'stroke-linecap="round">'
-            + paths
-            + "</g>"
+            f'stroke-linecap="round">' + paths + "</g>"
         )

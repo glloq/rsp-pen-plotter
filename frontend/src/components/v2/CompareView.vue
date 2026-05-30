@@ -63,7 +63,10 @@ const enabledOverlays = computed(() => new Set<OverlayKey>(props.overlays ?? [])
 function parseViewBox(svg: string): { x: number; y: number; w: number; h: number } | null {
   const m = svg.match(/viewBox\s*=\s*["']([^"']+)["']/)
   if (!m) return null
-  const parts = m[1]!.trim().split(/[\s,]+/).map(Number)
+  const parts = m[1]!
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number)
   if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null
   return { x: parts[0]!, y: parts[1]!, w: parts[2]!, h: parts[3]! }
 }
@@ -109,23 +112,15 @@ function diffNum(
 
 const diff = computed<DiffRow[]>(() => [
   diffNum('Temps estimé', props.a.metrics.est_time_s, props.b.metrics.est_time_s, fmtTime),
-  diffNum(
-    'Longueur tracé',
-    props.a.metrics.draw_length_mm,
-    props.b.metrics.draw_length_mm,
-    fmtMm,
-  ),
+  diffNum('Longueur tracé', props.a.metrics.draw_length_mm, props.b.metrics.draw_length_mm, fmtMm),
   diffNum(
     'Pen-up travel',
     props.a.metrics.pen_up_length_mm,
     props.b.metrics.pen_up_length_mm,
     fmtMm,
   ),
-  diffNum(
-    'Changements stylo',
-    props.a.metrics.swap_count,
-    props.b.metrics.swap_count,
-    (n) => (n === undefined ? '—' : String(n)),
+  diffNum('Changements stylo', props.a.metrics.swap_count, props.b.metrics.swap_count, (n) =>
+    n === undefined ? '—' : String(n),
   ),
 ])
 </script>
@@ -136,11 +131,7 @@ const diff = computed<DiffRow[]>(() => [
       <h3>Comparer A / B</h3>
       <fieldset class="overlay-row" data-test="compare-overlay-row">
         <legend>Overlays</legend>
-        <label
-          v-for="opt in overlayDefs"
-          :key="opt.key"
-          :data-test="`overlay-${opt.key}`"
-        >
+        <label v-for="opt in overlayDefs" :key="opt.key" :data-test="`overlay-${opt.key}`">
           <input
             type="checkbox"
             :checked="enabledOverlays.has(opt.key)"
@@ -196,20 +187,12 @@ const diff = computed<DiffRow[]>(() => [
           </svg>
 
           <ul v-if="enabledOverlays.size" class="overlay-stub">
-            <li
-              v-for="k in overlays"
-              :key="k"
-              :class="{ wired: k === 'bounds' }"
-            >
+            <li v-for="k in overlays" :key="k" :class="{ wired: k === 'bounds' }">
               {{ k }}{{ k === 'bounds' ? '' : ' (stub)' }}
             </li>
           </ul>
         </div>
-        <button
-          type="button"
-          :data-test="`pick-${cand.id}`"
-          @click="emit('pick-winner', cand.id)"
-        >
+        <button type="button" :data-test="`pick-${cand.id}`" @click="emit('pick-winner', cand.id)">
           Choisir
         </button>
       </article>

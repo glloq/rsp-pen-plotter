@@ -102,9 +102,7 @@ def extract_pdf_text_spans(data: bytes, page_index: int) -> list[PlacedSpan]:
     return spans
 
 
-def build_hershey_text_group(
-    data: bytes, page_index: int, opts: dict[str, Any]
-) -> str:
+def build_hershey_text_group(data: bytes, page_index: int, opts: dict[str, Any]) -> str:
     """Build the Hershey text replacement group for a PDF page.
 
     Returns the empty string when ``hershey_text`` is not enabled or

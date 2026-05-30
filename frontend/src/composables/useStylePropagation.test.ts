@@ -66,10 +66,7 @@ describe('applyMasterStyleToLayers', () => {
     // ``multicolorRecipeForCluster``: the resolver wins over the
     // registry's hardcoded recipe so the per-layer propagation matches
     // the live preview.
-    const { store, calls } = makeStore([
-      { layer_id: 'color-111111' },
-      { layer_id: 'color-cccccc' },
-    ])
+    const { store, calls } = makeStore([{ layer_id: 'color-111111' }, { layer_id: 'color-cccccc' }])
     await applyMasterStyleToLayers(store, {
       styleId: 'mono-crosshatch',
       penSlot: 0,

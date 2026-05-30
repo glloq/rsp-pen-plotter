@@ -22,9 +22,7 @@ class ScanlinesAlgorithm(RasterAlgorithm):
     """Renders a region as horizontal scan lines (optionally sinusoidal)."""
 
     name: ClassVar[str] = "scanlines"
-    description: ClassVar[str] = (
-        "Horizontal scan lines clipped to the mask — flat or sinusoidal."
-    )
+    description: ClassVar[str] = "Horizontal scan lines clipped to the mask — flat or sinusoidal."
 
     def render_layer(
         self,
@@ -51,9 +49,7 @@ class ScanlinesAlgorithm(RasterAlgorithm):
             for x in range(width):
                 if row[x]:
                     offset = (
-                        wave_amp * math.sin(2 * math.pi * x / wave_period)
-                        if wave_amp > 0
-                        else 0.0
+                        wave_amp * math.sin(2 * math.pi * x / wave_period) if wave_amp > 0 else 0.0
                     )
                     current.append((float(x), float(y) + offset))
                 elif current:
@@ -64,9 +60,7 @@ class ScanlinesAlgorithm(RasterAlgorithm):
                 polylines.append(current)
 
         paths = "".join(
-            '<polyline points="'
-            + " ".join(f"{x:.2f},{y:.2f}" for x, y in poly)
-            + '"/>'
+            '<polyline points="' + " ".join(f"{x:.2f},{y:.2f}" for x, y in poly) + '"/>'
             for poly in polylines
         )
         return (

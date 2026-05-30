@@ -97,9 +97,7 @@ _PAUSE_KIND_TO_ACTION: dict[PauseKind, str] = {
 }
 
 
-def guided_swap_actions(
-    gcode: str, profile: MachineProfile
-) -> dict[int, SwapAction]:
+def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAction]:
     """Map executable-line indices of tool-change boundaries to :class:`SwapAction`.
 
     Unified counterpart to :func:`guided_pause_points` that handles
@@ -137,8 +135,7 @@ def guided_swap_actions(
                     kind=_PAUSE_KIND_TO_ACTION[plan.pause_kind],  # type: ignore[arg-type]
                     prompt=plan.operator_prompt,
                     commands=[
-                        SwapCommandLine(send=c.send, wait_ms=c.wait_ms)
-                        for c in plan.commands
+                        SwapCommandLine(send=c.send, wait_ms=c.wait_ms) for c in plan.commands
                     ],
                 )
         if not code:

@@ -54,9 +54,7 @@ async def test_generate_routes_through_ir_when_flag_enabled(
         return original(*args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(gcode_mod, "generate_gcode_from_geometry", _spy)
-    monkeypatch.setattr(
-        generate_service, "generate_gcode_from_geometry", _spy, raising=False
-    )
+    monkeypatch.setattr(generate_service, "generate_gcode_from_geometry", _spy, raising=False)
 
     async with _client() as client:
         response = await client.post(
@@ -93,9 +91,7 @@ async def test_optimize_routes_through_ir_when_flag_enabled(
     async with _client() as client:
         response = await client.post("/optimize", json={"svg": SVG, "layers": []})
     assert response.status_code == 200
-    assert calls == ["ir"], (
-        f"expected IR path under OMNIPLOT_IR_ENABLED=1, got {calls!r}"
-    )
+    assert calls == ["ir"], f"expected IR path under OMNIPLOT_IR_ENABLED=1, got {calls!r}"
 
 
 @pytest.mark.asyncio

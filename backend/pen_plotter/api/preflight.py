@@ -46,9 +46,7 @@ async def preflight(request: PreflightRequest) -> PreflightReport:
     """
     profile = get_profile(request.profile_name)
     if profile is None:
-        raise HTTPException(
-            status_code=404, detail=f"Unknown profile: {request.profile_name!r}"
-        )
+        raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
     try:
         outcome = run_preflight(request, profile)
     except PlanResolutionError as exc:
@@ -77,9 +75,7 @@ async def preflight_svg(request: PreflightSvgRequest) -> PreflightReport:
     """
     profile = get_profile(request.profile_name)
     if profile is None:
-        raise HTTPException(
-            status_code=404, detail=f"Unknown profile: {request.profile_name!r}"
-        )
+        raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
     try:
         return preflight_report(request.svg, profile)
     except ValueError as exc:

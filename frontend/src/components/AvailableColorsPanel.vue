@@ -23,7 +23,10 @@ function canonicaliseHex(value: string): string {
   // ``#ABC`` and ``#aabbcc`` as the same entry.
   const trimmed = value.trim().replace(/^#/, '').toLowerCase()
   if (/^[0-9a-f]{3}$/.test(trimmed)) {
-    return `#${trimmed.split('').map((c) => c + c).join('')}`
+    return `#${trimmed
+      .split('')
+      .map((c) => c + c)
+      .join('')}`
   }
   if (/^[0-9a-f]{6}$/.test(trimmed)) return `#${trimmed}`
   return value
@@ -188,7 +191,8 @@ function displayLabel(name: string, hex: string): string {
         </button>
       </div>
       <p v-if="duplicate" class="text-[11px] text-amber-300">
-        ⚠ {{ t('availableColors.duplicate', { name: displayLabel(duplicate.name, duplicate.hex) }) }}
+        ⚠
+        {{ t('availableColors.duplicate', { name: displayLabel(duplicate.name, duplicate.hex) }) }}
       </p>
     </section>
 
@@ -201,16 +205,10 @@ function displayLabel(name: string, hex: string): string {
         <span class="text-[10px] text-slate-500">{{ ordered.length }}</span>
       </div>
 
-      <p
-        v-if="store.loading && !ordered.length"
-        class="text-xs text-slate-500"
-      >
+      <p v-if="store.loading && !ordered.length" class="text-xs text-slate-500">
         {{ t('availableColors.loading') }}
       </p>
-      <p
-        v-else-if="!ordered.length"
-        class="text-xs text-slate-500"
-      >
+      <p v-else-if="!ordered.length" class="text-xs text-slate-500">
         {{ t('availableColors.empty') }}
       </p>
 
@@ -285,9 +283,7 @@ function displayLabel(name: string, hex: string): string {
             <span
               class="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px]"
               :class="
-                color.odometer_mm > 0
-                  ? 'bg-emerald-950/60 text-emerald-300'
-                  : 'text-slate-600'
+                color.odometer_mm > 0 ? 'bg-emerald-950/60 text-emerald-300' : 'text-slate-600'
               "
               :title="t('availableColors.odometerTitle')"
             >

@@ -140,8 +140,10 @@ def _delta_e_2000(lab1: NDArray[np.float64], lab2: NDArray[np.float64]) -> NDArr
     sL = 1.0 + (0.015 * (L_bar - 50.0) ** 2) / np.sqrt(20.0 + (L_bar - 50.0) ** 2)
     sC = 1.0 + 0.045 * c_bar_p
     sH = 1.0 + 0.015 * c_bar_p * t
-    rT = -2.0 * np.sqrt(c_bar_p**7 / (c_bar_p**7 + 25.0**7)) * np.sin(
-        np.radians(60.0 * np.exp(-(((h_bar - 275.0) / 25.0) ** 2)))
+    rT = (
+        -2.0
+        * np.sqrt(c_bar_p**7 / (c_bar_p**7 + 25.0**7))
+        * np.sin(np.radians(60.0 * np.exp(-(((h_bar - 275.0) / 25.0) ** 2))))
     )
     return np.sqrt(  # type: ignore[no-any-return]
         (dLp / sL) ** 2 + (dCp / sC) ** 2 + (dHp / sH) ** 2 + rT * (dCp / sC) * (dHp / sH)
@@ -204,9 +206,7 @@ def auto_assign_layer_colors(
             # No pool to snap against → drop any stale auto value so the
             # downstream rendering uses ``source_color`` cleanly.
             out.append(
-                layer.model_copy(
-                    update={"assigned_color_hex": None, "color_assignment": "auto"}
-                )
+                layer.model_copy(update={"assigned_color_hex": None, "color_assignment": "auto"})
             )
             continue
         nearest = nearest_pool_hex(layer.source_color, pool)

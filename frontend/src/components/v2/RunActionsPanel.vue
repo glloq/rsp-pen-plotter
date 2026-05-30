@@ -83,20 +83,14 @@ function commitConfirm(): void {
       </button>
     </div>
 
-    <div
-      v-if="confirming"
-      class="confirm"
-      role="alertdialog"
-      data-test="confirm-dialog"
-    >
+    <div v-if="confirming" class="confirm" role="alertdialog" data-test="confirm-dialog">
       <p>
         Confirmer&nbsp;:
-        <strong>{{ confirming === 'pause' ? 'Mettre en pause' : 'Annuler le run' }}</strong>&nbsp;?
+        <strong>{{ confirming === 'pause' ? 'Mettre en pause' : 'Annuler le run' }}</strong
+        >&nbsp;?
       </p>
       <div>
-        <button type="button" data-test="confirm-cancel" @click="dismissConfirm">
-          Non
-        </button>
+        <button type="button" data-test="confirm-cancel" @click="dismissConfirm">Non</button>
         <button type="button" class="primary" data-test="confirm-ok" @click="commitConfirm">
           Oui
         </button>

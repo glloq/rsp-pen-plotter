@@ -44,9 +44,7 @@ def _profile(**overrides: object) -> MachineProfile:
 
 
 def test_effective_policy_falls_back_to_profile_when_no_override() -> None:
-    eff = effective_policy(
-        RecoveryPolicy.PAUSE_AND_PROMPT, None, FailureKind.SWAP_TIMEOUT
-    )
+    eff = effective_policy(RecoveryPolicy.PAUSE_AND_PROMPT, None, FailureKind.SWAP_TIMEOUT)
     assert eff is RecoveryPolicy.PAUSE_AND_PROMPT
 
 
@@ -156,10 +154,7 @@ def test_resolve_recovery_honours_job_override() -> None:
 
 def test_unknown_failure_always_aborts() -> None:
     for policy in RecoveryPolicy:
-        assert (
-            resolve_recovery(policy, None, FailureKind.UNKNOWN).directive
-            is Directive.ABORT_RUN
-        )
+        assert resolve_recovery(policy, None, FailureKind.UNKNOWN).directive is Directive.ABORT_RUN
 
 
 # ── End-to-end: pause -> swap -> resume preserves state ──────────────

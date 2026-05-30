@@ -197,15 +197,11 @@ def postprocess_dxf_svg(svg: str) -> str:
     transform = None
     if mm_scale is not None:
         sx, sy = mm_scale
-        transform = (
-            f"scale({sx})" if abs(sx - sy) < 1e-9 else f"scale({sx} {sy})"
-        )
+        transform = f"scale({sx})" if abs(sx - sy) < 1e-9 else f"scale({sx} {sy})"
     for cls in keys:
         color = class_map.get(cls, "#000000") if cls else "#000000"
         label = (
-            f"color-{color.lstrip('#')}"
-            if color.startswith("#")
-            else f"class-{cls or 'default'}"
+            f"color-{color.lstrip('#')}" if color.startswith("#") else f"class-{cls or 'default'}"
         )
         group = ET.Element(f"{{{_SVG_NS}}}g")
         group.set(_INKSCAPE_LABEL, label)

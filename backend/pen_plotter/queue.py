@@ -116,8 +116,7 @@ def enqueue(
     # SQLite JSON column expects string keys; pydantic-dump each
     # SwapAction so the storage round-trip is JSON-safe.
     swap_actions: dict[str, dict] = {
-        str(idx): action.model_dump(mode="json")
-        for idx, action in swap_actions_raw.items()
+        str(idx): action.model_dump(mode="json") for idx, action in swap_actions_raw.items()
     }
     run = PrintRun(
         id=str(uuid4()),
@@ -175,9 +174,7 @@ _LAYER_BOUNDARY_RE = re.compile(
 )
 
 
-def _next_layer_boundary(
-    gcode: str, start_exec_index: int
-) -> tuple[int, str] | None:
+def _next_layer_boundary(gcode: str, start_exec_index: int) -> tuple[int, str] | None:
     """Locate the next layer/tool-change boundary after ``start_exec_index``.
 
     Walks the executable lines of ``gcode`` (i.e. the same indexing the

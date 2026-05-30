@@ -29,9 +29,7 @@ class MissingPenSlotsError(RuntimeError):
     def __init__(self, slots: list[int]) -> None:
         """Store the deduplicated, sorted list of unsatisfied slot indices."""
         self.slots = sorted(set(slots))
-        super().__init__(
-            f"Pen slots not installed: {', '.join(str(s) for s in self.slots)}"
-        )
+        super().__init__(f"Pen slots not installed: {', '.join(str(s) for s in self.slots)}")
 
 
 @dataclass

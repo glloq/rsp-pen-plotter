@@ -43,9 +43,7 @@ _TEMPLATE_EXPECTED_VARS: dict[str, frozenset[str]] = {
     "footer.j2": frozenset({"profile", "home_x", "home_y", "travel_feed"}),
     "pen_up.j2": frozenset({"profile"}),
     "pen_down.j2": frozenset({"profile"}),
-    "tool_change.j2": frozenset(
-        {"profile", "slot", "pen_name", "slot_x", "slot_y", "travel_feed"}
-    ),
+    "tool_change.j2": frozenset({"profile", "slot", "pen_name", "slot_x", "slot_y", "travel_feed"}),
     "pen_color_change.j2": frozenset({"profile", "color", "label"}),
     "line.j2": frozenset({"x", "y", "feed"}),
     "travel.j2": frozenset({"x", "y", "feed"}),
@@ -331,8 +329,12 @@ def generate_gcode(
         scale_mode=scale_mode,
     ):
         return _generate_gcode_impl(
-            svg, profile, layers=layers, scale_mode=scale_mode,
-            margin_mm=margin_mm, placement=placement,
+            svg,
+            profile,
+            layers=layers,
+            scale_mode=scale_mode,
+            margin_mm=margin_mm,
+            placement=placement,
         )
 
 
@@ -414,9 +416,7 @@ def _generate_gcode_impl(
             )
             if decision.pause:
                 if decision.slot_changed:
-                    prompt_pen = (
-                        pens.get(effective_slot) if effective_slot is not None else None
-                    )
+                    prompt_pen = pens.get(effective_slot) if effective_slot is not None else None
                     if prompt_pen is None or not prompt_pen.installed:
                         out.append(
                             f"; WARNING: pen slot {effective_slot} is not installed in the magazine"
@@ -434,8 +434,7 @@ def _generate_gcode_impl(
                     # drawing transform.
                     slot_pos = (
                         prompt_pen.position
-                        if prompt_pen
-                        and profile.tool_change_method in ("carousel", "rack")
+                        if prompt_pen and profile.tool_change_method in ("carousel", "rack")
                         else None
                     )
                     out.append(
@@ -453,9 +452,7 @@ def _generate_gcode_impl(
                     # a colour-themed prompt so the streamer can guide the swap.
                     color = effective_color or "#000000"
                     label = color_label or color
-                    out.append(
-                        pen_color_change_t.render(profile=profile, color=color, label=label)
-                    )
+                    out.append(pen_color_change_t.render(profile=profile, color=color, label=label))
 
             if effective_slot is not None:
                 previous_slot = effective_slot
@@ -474,9 +471,7 @@ def _generate_gcode_impl(
             layer_color = effective_color or ""
             layer_label = (color_label or layer.label or "").replace('"', "'")
             layer_slot = "" if effective_slot is None else str(effective_slot)
-            out.append(
-                f'; LAYER label="{layer_label}" color={layer_color} slot={layer_slot}'
-            )
+            out.append(f'; LAYER label="{layer_label}" color={layer_color} slot={layer_slot}')
             slot = effective_slot
 
             speed = (setting.drawing_speed_mm_s if setting else None) or profile.drawing_speed_mm_s

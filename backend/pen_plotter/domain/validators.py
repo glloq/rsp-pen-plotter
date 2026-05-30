@@ -49,14 +49,10 @@ def validate_plan(plan: PrintPlan) -> None:
         PlanValidationError: If any invariant fails.
     """
     if plan.margin_mm < 0:
-        raise PlanValidationError(
-            f"margin_mm must be >= 0 (got {plan.margin_mm})."
-        )
+        raise PlanValidationError(f"margin_mm must be >= 0 (got {plan.margin_mm}).")
     seen: set[str] = set()
     for layer in plan.layers:
         if layer.layer_id in seen:
-            raise PlanValidationError(
-                f"Duplicate layer_id {layer.layer_id!r} in plan."
-            )
+            raise PlanValidationError(f"Duplicate layer_id {layer.layer_id!r} in plan.")
         seen.add(layer.layer_id)
         validate_layer(layer)

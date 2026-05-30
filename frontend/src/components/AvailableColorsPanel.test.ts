@@ -138,7 +138,9 @@ describe('AvailableColorsPanel', () => {
     // text shape input, then the name. happy-dom doesn't fire the
     // ``input`` event from setValue on type=color, so target the text
     // hex input instead.
-    const hexText = inputs.find((i) => i.element.type === 'text' && i.element.value.startsWith('#'))!
+    const hexText = inputs.find(
+      (i) => i.element.type === 'text' && i.element.value.startsWith('#'),
+    )!
     const nameInput = inputs.find(
       (i) => i.element.type === 'text' && !i.element.value.startsWith('#'),
     )!
@@ -168,7 +170,10 @@ describe('AvailableColorsPanel', () => {
     await nextTick()
 
     // Enter edit mode via the pencil button on the row.
-    await wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.attributes('title') === 'Edit')!
+      .trigger('click')
     await nextTick()
 
     // Scope to the row's width input (title='Width'); it's a text input
@@ -178,7 +183,10 @@ describe('AvailableColorsPanel', () => {
     const widthInput = row.findAll('input').find((i) => i.attributes('title') === 'Width')!
     await widthInput.setValue('1.2')
 
-    await row.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
+    await row
+      .findAll('button')
+      .find((b) => b.text() === '✓')!
+      .trigger('click')
     await nextTick()
 
     expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 1.2 }))
@@ -204,12 +212,18 @@ describe('AvailableColorsPanel', () => {
     const spy = vi.spyOn(store, 'rename')
     const wrapper = mountPanel()
     await nextTick()
-    await wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.attributes('title') === 'Edit')!
+      .trigger('click')
     await nextTick()
     const row = wrapper.find('li')
     const widthInput = row.findAll('input').find((i) => i.attributes('title') === 'Width')!
     await widthInput.setValue('0,8')
-    await row.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
+    await row
+      .findAll('button')
+      .find((b) => b.text() === '✓')!
+      .trigger('click')
     await nextTick()
     expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 0.8 }))
   })

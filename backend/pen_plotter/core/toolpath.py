@@ -163,9 +163,7 @@ def _geometry_ir_to_svg(geometry: Any) -> str:
         x, y, w, h = viewbox
         vb_attr = f' viewBox="{x} {y} {w} {h}"'
         size = f' width="{w}" height="{h}"'
-    parts = [
-        f'<svg xmlns="{_SVG_NS}" xmlns:inkscape="{_INKSCAPE_NS}"{size}{vb_attr}>'
-    ]
+    parts = [f'<svg xmlns="{_SVG_NS}" xmlns:inkscape="{_INKSCAPE_NS}"{size}{vb_attr}>']
     for layer in getattr(geometry, "layers", []) or []:
         label = getattr(layer, "label", "") or getattr(layer, "layer_id", "")
         color = getattr(layer, "color", "#000000") or "#000000"

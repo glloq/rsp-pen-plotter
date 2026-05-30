@@ -59,9 +59,7 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
     """
     profile = get_profile(request.profile_name)
     if profile is None:
-        raise HTTPException(
-            status_code=404, detail=f"Unknown profile: {request.profile_name!r}"
-        )
+        raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
     try:
         outcome = run_generate(
             request,

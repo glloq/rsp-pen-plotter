@@ -116,8 +116,14 @@ def test_rerender_with_multipass_stacks_algorithms(client: TestClient) -> None:
                 {
                     "layer_id": "color-000000",
                     "passes": [
-                        {"algorithm": "crosshatch", "algorithm_options": {"angle_deg": 0, "spacing_px": 2}},
-                        {"algorithm": "contours", "algorithm_options": {"spacing_px": 1, "max_rings": 3}},
+                        {
+                            "algorithm": "crosshatch",
+                            "algorithm_options": {"angle_deg": 0, "spacing_px": 2},
+                        },
+                        {
+                            "algorithm": "contours",
+                            "algorithm_options": {"spacing_px": 1, "max_rings": 3},
+                        },
                     ],
                 }
             ],
@@ -358,7 +364,11 @@ def test_reupload_with_changed_options_reprocesses_in_place(
     # First upload: scanlines → SVG should contain polylines.
     first = client.post(
         "/files",
-        data={"options": json.dumps({"algorithm": "scanlines", "num_colors": 2, "drop_background": False})},
+        data={
+            "options": json.dumps(
+                {"algorithm": "scanlines", "num_colors": 2, "drop_background": False}
+            )
+        },
         files={"file": ("dot.png", png_bytes, "image/png")},
     )
     assert first.status_code == 200, first.text
@@ -373,7 +383,11 @@ def test_reupload_with_changed_options_reprocesses_in_place(
     # to halftone.
     second = client.post(
         "/files",
-        data={"options": json.dumps({"algorithm": "halftone", "num_colors": 2, "drop_background": False})},
+        data={
+            "options": json.dumps(
+                {"algorithm": "halftone", "num_colors": 2, "drop_background": False}
+            )
+        },
         files={"file": ("dot.png", png_bytes, "image/png")},
     )
     assert second.status_code == 200, second.text
@@ -425,7 +439,11 @@ def test_reupload_without_options_keeps_dedup_silent(
 
     first = client.post(
         "/files",
-        data={"options": json.dumps({"algorithm": "scanlines", "num_colors": 2, "drop_background": False})},
+        data={
+            "options": json.dumps(
+                {"algorithm": "scanlines", "num_colors": 2, "drop_background": False}
+            )
+        },
         files={"file": ("dot.png", png_bytes, "image/png")},
     )
     detail1 = first.json()["file"]
@@ -487,9 +505,7 @@ def _seed_library_png(
     return detail["file_id"]
 
 
-def test_rerender_404_detail_is_structured(
-    client: TestClient, tmp_path, monkeypatch
-) -> None:
+def test_rerender_404_detail_is_structured(client: TestClient, tmp_path, monkeypatch) -> None:
     """The L4 contract: every 404 carries a machine-readable ``reason``.
 
     The frontend used to receive a free-text detail and could only show

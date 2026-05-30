@@ -99,12 +99,7 @@ def strip_text_glyphs(root: ET.Element) -> int:
     for use in list(root.iter()):
         if _local(use.tag) != "use":
             continue
-        href = (
-            use.get("href")
-            or use.get(_XLINK_HREF)
-            or use.get("xlink:href")
-            or ""
-        ).lstrip("#")
+        href = (use.get("href") or use.get(_XLINK_HREF) or use.get("xlink:href") or "").lstrip("#")
         # PyMuPDF tags every text-glyph reference with ``data-text``
         # and points it at an id starting with ``font_``. Either signal
         # is enough — accept both so a future PyMuPDF version that
@@ -221,20 +216,19 @@ def _inner_groups(svg_markup: str) -> list[ET.Element]:
         root = ET.fromstring(svg_markup)
     except ET.ParseError:
         return []
-    return [
-        child for child in root
-        if _local(child.tag) == "g" and child.get(_INKSCAPE_LABEL)
-    ]
+    return [child for child in root if _local(child.tag) == "g" and child.get(_INKSCAPE_LABEL)]
 
 
 def _image_geometry(image: ET.Element) -> tuple[float, float, float, float]:
     """Return ``(x, y, width, height)`` of an ``<image>`` element."""
+
     def _num(attr: str, default: float) -> float:
         value = image.get(attr)
         try:
             return float(value) if value is not None else default
         except ValueError:
             return default
+
     return _num("x", 0.0), _num("y", 0.0), _num("width", 1.0), _num("height", 1.0)
 
 
@@ -266,12 +260,7 @@ def vectorize_embedded_images(
         parent = parent_map.get(image)
         if parent is None:
             continue
-        href = (
-            image.get("href")
-            or image.get(_XLINK_HREF)
-            or image.get("xlink:href")
-            or ""
-        )
+        href = image.get("href") or image.get(_XLINK_HREF) or image.get("xlink:href") or ""
         decoded = _decode_image_data(href)
         if decoded is None:
             warnings.append(f"Image #{index}: skipped (unsupported or external href).")

@@ -50,10 +50,7 @@ export const useToastStore = defineStore('toasts', () => {
     const id = nextId++
     const persistent = options.persistent === true
     const effectiveTtl = persistent ? 0 : ttl
-    toasts.value = [
-      ...toasts.value,
-      { id, kind, message, ttl: effectiveTtl, action, persistent },
-    ]
+    toasts.value = [...toasts.value, { id, kind, message, ttl: effectiveTtl, action, persistent }]
     if (effectiveTtl > 0) {
       timers.set(
         id,

@@ -47,9 +47,7 @@ def test_parallel_output_matches_serial() -> None:
     seg = _build_synthetic_segmentation(n_layers=4)
     opts = BitmapOptions(algorithm="hilbert", num_colors=4, drop_background=False)
 
-    serial_svg, serial_warnings = BitmapConverter.render_from_segmentation(
-        seg, opts, n_workers=1
-    )
+    serial_svg, serial_warnings = BitmapConverter.render_from_segmentation(seg, opts, n_workers=1)
     parallel_svg, parallel_warnings = BitmapConverter.render_from_segmentation(
         seg, opts, n_workers=2
     )
@@ -64,9 +62,7 @@ def test_parallel_output_matches_serial() -> None:
 def test_parallel_handles_eulerian_hatch_layers() -> None:
     """All registered algorithms remain picklable from worker processes."""
     seg = _build_synthetic_segmentation(n_layers=3)
-    opts = BitmapOptions(
-        algorithm="eulerian_hatch", num_colors=3, drop_background=False
-    )
+    opts = BitmapOptions(algorithm="eulerian_hatch", num_colors=3, drop_background=False)
     svg, _ = BitmapConverter.render_from_segmentation(seg, opts, n_workers=2)
     assert svg.count("<polyline") >= 1
 

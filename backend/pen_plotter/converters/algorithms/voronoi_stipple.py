@@ -31,8 +31,7 @@ class VoronoiStippleAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "voronoi_stipple"
     description: ClassVar[str] = (
-        "Centroidal Voronoi stippling — evenly-spaced dots, optionally "
-        "weighted by darkness."
+        "Centroidal Voronoi stippling — evenly-spaced dots, optionally " "weighted by darkness."
     )
 
     def render_layer(
@@ -68,9 +67,7 @@ class VoronoiStippleAlgorithm(RasterAlgorithm):
 
         bool_mask = mask.astype(bool)
         ys, xs = np.nonzero(bool_mask)
-        group_open = (
-            f"<g inkscape:label={quoteattr(label)} fill={quoteattr(color_hex)}>"
-        )
+        group_open = f"<g inkscape:label={quoteattr(label)} fill={quoteattr(color_hex)}>"
         if ys.size == 0 or density <= 0.0:
             return group_open + "</g>"
 
@@ -118,7 +115,6 @@ class VoronoiStippleAlgorithm(RasterAlgorithm):
                 sites[nonzero, 1] = cy[nonzero] / wsum[nonzero]
 
         dots = [
-            f'<circle cx="{x + 0.5:.2f}" cy="{y + 0.5:.2f}" r="{radius:.2f}"/>'
-            for x, y in sites
+            f'<circle cx="{x + 0.5:.2f}" cy="{y + 0.5:.2f}" r="{radius:.2f}"/>' for x, y in sites
         ]
         return group_open + "".join(dots) + "</g>"

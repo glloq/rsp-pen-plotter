@@ -26,11 +26,7 @@ export type PaletteMode = z.infer<typeof PaletteModeSchema>
 export const QualityTierSchema = z.enum(['draft', 'standard', 'final'])
 export type QualityTier = z.infer<typeof QualityTierSchema>
 
-export const SegmentationMethodSchema = z.enum([
-  'fixed_palette',
-  'kmeans',
-  'none',
-])
+export const SegmentationMethodSchema = z.enum(['fixed_palette', 'kmeans', 'none'])
 export type SegmentationMethod = z.infer<typeof SegmentationMethodSchema>
 
 export const RuleHitSchema = z.object({

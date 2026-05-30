@@ -72,9 +72,7 @@ def _extract_dxf_text_entities(msp: Any) -> list[tuple[str, float, float, float,
             for i, line in enumerate(text.split("\n")):
                 if not line.strip():
                     continue
-                entries.append(
-                    (line, x0, y0 - i * height * 1.5, height, rotation)
-                )
+                entries.append((line, x0, y0 - i * height * 1.5, height, rotation))
     return entries
 
 
@@ -95,9 +93,7 @@ def _parse_svg_transform(svg: str) -> tuple[float, float, float, float, float] |
     return vw, vh, 0.0, 0.0, 0.0  # caller fills extents
 
 
-def _build_dxf_hershey_group(
-    doc: Any, msp: Any, raw_svg: str, opts: dict[str, Any]
-) -> str:
+def _build_dxf_hershey_group(doc: Any, msp: Any, raw_svg: str, opts: dict[str, Any]) -> str:
     """Build a Hershey ``<g>`` overlay for the DXF's TEXT / MTEXT entities.
 
     Coordinates are mapped from modelspace (Y up) into the ezdxf SVG's
@@ -162,8 +158,9 @@ def _build_dxf_hershey_group(
     # stroke width that scales with the drawing's scale so it stays
     # visible. The simulator overrides stroke width at render time anyway.
     stroke_width = max(scale * float(opts.get("stroke_width_mm", 0.3)), 1.0)
-    return render_placed_spans(spans, font=str(opts.get("font", "futural")),
-                               stroke_width=stroke_width)
+    return render_placed_spans(
+        spans, font=str(opts.get("font", "futural")), stroke_width=stroke_width
+    )
 
 
 def _strip_text_outlines_from_dxf_svg(svg: str) -> str:

@@ -155,7 +155,8 @@ export function useFileManager(t?: Translator) {
       // canvas reads as "couldn't reload the source" instead of a
       // mystery: without the File the live /preview can't run, so the
       // SVG would otherwise silently never update on a settings change.
-      edit.previewError.value = t?.('upload.sourceReloadFailed') ?? 'Could not reload the source file'
+      edit.previewError.value =
+        t?.('upload.sourceReloadFailed') ?? 'Could not reload the source file'
     }
   }
 

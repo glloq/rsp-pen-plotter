@@ -17,9 +17,7 @@ from pen_plotter.domain.policy.types import ConstraintHit, Goal, PolicyInput
 # Algorithms forbidden by the "heavy + non-quality input" rule (audit
 # #4 §4 first bullet). The matrix entry for the BALANCED bucket may
 # legitimately propose a heavy algorithm; we strip it down here.
-HEAVY_ALGORITHMS: frozenset[str] = frozenset(
-    {"tsp", "tsp_opt", "voronoi_stipple", "flowfield"}
-)
+HEAVY_ALGORITHMS: frozenset[str] = frozenset({"tsp", "tsp_opt", "voronoi_stipple", "flowfield"})
 
 # When the heavy rule fires the recommendation is forced into this
 # allowlist (ordered from most ink-economical to most line-economical).

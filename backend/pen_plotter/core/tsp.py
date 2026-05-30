@@ -45,9 +45,7 @@ def tour_length(points: NDArray[np.float64], tour: list[int]) -> float:
     return float(np.sqrt((diffs * diffs).sum(axis=1)).sum())
 
 
-def nearest_neighbour_tour(
-    points: NDArray[np.float64], *, start: int | None = None
-) -> list[int]:
+def nearest_neighbour_tour(points: NDArray[np.float64], *, start: int | None = None) -> list[int]:
     """Greedy nearest-neighbour tour starting at ``start`` (or top-left)."""
     n = len(points)
     if n == 0:
@@ -135,9 +133,7 @@ def two_opt_improve(
     return order
 
 
-def _two_opt_full(
-    points: NDArray[np.float64], tour: list[int], time_budget_s: float
-) -> list[int]:
+def _two_opt_full(points: NDArray[np.float64], tour: list[int], time_budget_s: float) -> list[int]:
     """O(n²) per-sweep fallback when scipy isn't importable."""
     n = len(tour)
     if n < 4:

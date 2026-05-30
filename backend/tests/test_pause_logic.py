@@ -60,9 +60,7 @@ def test_pause_when_policy_is_always_even_without_slot_change() -> None:
 def test_no_pause_when_tool_change_method_is_none() -> None:
     """Profiles that declare ``none`` cannot pause, regardless of the policy."""
     for policy in ("auto", "always", "never"):
-        decision = _decide(
-            slot=2, previous_slot=1, pause_before=policy, tool_change_method="none"
-        )
+        decision = _decide(slot=2, previous_slot=1, pause_before=policy, tool_change_method="none")
         assert decision.pause is False, policy
 
 
@@ -75,17 +73,13 @@ def test_mono_pen_first_pose_triggers_pause() -> None:
 
 
 def test_mono_pen_color_change_triggers_pause() -> None:
-    decision = _decide(
-        source_color="#0000ff", previous_color="#ff0000", mono_pen=True
-    )
+    decision = _decide(source_color="#0000ff", previous_color="#ff0000", mono_pen=True)
     assert decision.pause is True
     assert decision.color_changed is True
 
 
 def test_mono_pen_same_color_does_not_pause() -> None:
-    decision = _decide(
-        source_color="#ff0000", previous_color="#ff0000", mono_pen=True
-    )
+    decision = _decide(source_color="#ff0000", previous_color="#ff0000", mono_pen=True)
     assert decision.pause is False
     assert decision.color_changed is False
 
@@ -121,9 +115,7 @@ def test_decision_carries_individual_flags_for_caller_branching() -> None:
     assert decision.color_changed is True
 
 
-@pytest.mark.parametrize(
-    "policy,expected", [("auto", False), ("never", False), ("always", True)]
-)
+@pytest.mark.parametrize("policy,expected", [("auto", False), ("never", False), ("always", True)])
 def test_always_policy_pauses_even_when_nothing_changed(policy: str, expected: bool) -> None:
     decision = _decide(slot=1, previous_slot=1, pause_before=policy)
     assert decision.pause is expected
@@ -171,16 +163,12 @@ def test_ebb_same_color_does_not_pause_under_auto() -> None:
 
 
 def test_ebb_never_policy_overrides_color_change() -> None:
-    decision = _ebb(
-        source_color="#ff0000", previous_color="#000000", pause_before="never"
-    )
+    decision = _ebb(source_color="#ff0000", previous_color="#000000", pause_before="never")
     assert decision.pause is False
 
 
 def test_ebb_always_policy_pauses_on_repeat_colour() -> None:
-    decision = _ebb(
-        source_color="#000000", previous_color="#000000", pause_before="always"
-    )
+    decision = _ebb(source_color="#000000", previous_color="#000000", pause_before="always")
     assert decision.pause is True
 
 

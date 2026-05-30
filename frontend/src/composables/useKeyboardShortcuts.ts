@@ -24,8 +24,18 @@ export interface ShortcutBinding {
 
 export const SHORTCUTS: readonly ShortcutBinding[] = [
   { id: 'modal.next', key: 'enter', mod: 'ctrl_or_meta', description: 'Next step in the modal' },
-  { id: 'modal.previous', key: 'backspace', mod: 'ctrl_or_meta', description: 'Previous step in the modal' },
-  { id: 'mode.toggle', key: 'm', mod: 'ctrl_or_meta', description: 'Toggle assisted / expert mode' },
+  {
+    id: 'modal.previous',
+    key: 'backspace',
+    mod: 'ctrl_or_meta',
+    description: 'Previous step in the modal',
+  },
+  {
+    id: 'mode.toggle',
+    key: 'm',
+    mod: 'ctrl_or_meta',
+    description: 'Toggle assisted / expert mode',
+  },
   { id: 'perf.toggle', key: 'p', mod: 'ctrl_or_meta', description: 'Toggle perf overlay' },
   { id: 'queue.pause', key: 'k', mod: 'ctrl_or_meta', description: 'Pause active run' },
   { id: 'queue.resume', key: 'r', mod: 'ctrl_or_meta', description: 'Resume active run' },
@@ -67,9 +77,7 @@ function installListener(): void {
   })
 }
 
-export function useKeyboardShortcuts(
-  registrations: { id: string; handler: () => void }[],
-): void {
+export function useKeyboardShortcuts(registrations: { id: string; handler: () => void }[]): void {
   onMounted(() => {
     installListener()
     for (const r of registrations) handlers.set(r.id, r.handler)

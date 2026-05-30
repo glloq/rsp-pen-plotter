@@ -266,9 +266,7 @@ def test_pdf_hershey_text_layer_carries_continuous_strokes() -> None:
     )
     # The text layer's path d-string has more L commands than M commands
     # when strokes are continuous (M = pen down, L = line segment).
-    match = re.search(
-        r'inkscape:label="text"[^>]*>(.*?)</svg', res.svg, re.DOTALL
-    )
+    match = re.search(r'inkscape:label="text"[^>]*>(.*?)</svg', res.svg, re.DOTALL)
     assert match is not None
     body = match.group(1)
     m_count = body.count("M")
@@ -312,6 +310,7 @@ def _hershey_text_layer_strokes(svg: str) -> int:
 
 def test_txt_font_choice_changes_svg() -> None:
     from pen_plotter.converters.text import TextConverter
+
     conv = TextConverter()
     svg_a = conv.convert(b"Audit text", options={"font_size_mm": 10.0, "font": "futural"}).svg
     svg_b = conv.convert(b"Audit text", options={"font_size_mm": 10.0, "font": "timesr"}).svg
@@ -324,6 +323,7 @@ def test_txt_font_choice_changes_svg() -> None:
 
 def test_md_font_choice_changes_svg() -> None:
     from pen_plotter.converters.markdown import MarkdownConverter
+
     conv = MarkdownConverter()
     svg_a = conv.convert(b"# Audit text", options={"font_size_mm": 10.0, "font": "futural"}).svg
     svg_b = conv.convert(b"# Audit text", options={"font_size_mm": 10.0, "font": "timesib"}).svg

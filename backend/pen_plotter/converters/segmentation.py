@@ -100,7 +100,6 @@ def _nearest_palette_rgb(
     return flat
 
 
-
 def kmeans(
     image: Image.Image, *, num_colors: int, n_init: int = 10
 ) -> tuple[NDArray[np.intp], NDArray[np.uint8]]:
@@ -156,9 +155,7 @@ def thresholds(
     labels = np.digitize(grey, breakpoints).astype(np.intp)
     edges = [0.0, *breakpoints, 1.0]
     midpoints = [(edges[i] + edges[i + 1]) / 2 for i in range(len(edges) - 1)]
-    palette = np.array(
-        [[round(m * 255)] * 3 for m in midpoints], dtype=np.uint8
-    )
+    palette = np.array([[round(m * 255)] * 3 for m in midpoints], dtype=np.uint8)
     return labels, palette
 
 
@@ -291,9 +288,7 @@ def palette_dither(
 # ---------------------------------------------------------------- post-process
 
 
-def drop_small_regions(
-    labels: NDArray[np.intp], min_pixels: int
-) -> NDArray[np.intp]:
+def drop_small_regions(labels: NDArray[np.intp], min_pixels: int) -> NDArray[np.intp]:
     """Repaint connected components smaller than ``min_pixels`` over their neighbours.
 
     Each small component is reassigned to the most-frequent label among

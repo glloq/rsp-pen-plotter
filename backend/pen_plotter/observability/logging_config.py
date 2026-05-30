@@ -68,8 +68,10 @@ _REDACTED_PLACEHOLDER: Final[str] = "***"
 
 def _redact(value: Any) -> Any:
     if isinstance(value, dict):
-        return {k: (_REDACTED_PLACEHOLDER if k.lower() in _REDACT_KEYS else _redact(v))
-                for k, v in value.items()}
+        return {
+            k: (_REDACTED_PLACEHOLDER if k.lower() in _REDACT_KEYS else _redact(v))
+            for k, v in value.items()
+        }
     if isinstance(value, list):
         return [_redact(item) for item in value]
     return value
@@ -132,9 +134,7 @@ def configure_logging(*, force: bool = False) -> None:
     handler = logging.StreamHandler(stream=sys.stderr)
     handler._omniplot_handler = True  # type: ignore[attr-defined]
     if fmt == "text":
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     else:
         handler.setFormatter(JsonFormatter())
     root.addHandler(handler)

@@ -22,16 +22,14 @@ from pen_plotter.core.layers import extract_layers
 from pen_plotter.core.sanitize import sanitize_svg
 from pen_plotter.core.toolpath import optimize_svg
 
-needs_gs = pytest.mark.skipif(
-    shutil.which("gs") is None, reason="ghostscript not installed"
-)
+needs_gs = pytest.mark.skipif(shutil.which("gs") is None, reason="ghostscript not installed")
 
 
 def test_dxf_postprocess_strips_background_rect() -> None:
     """The ezdxf background <rect> would otherwise plot as a giant frame."""
     raw = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">'
-        '<defs><style>.C1 {stroke: #ff0000; fill: none;}</style></defs>'
+        "<defs><style>.C1 {stroke: #ff0000; fill: none;}</style></defs>"
         '<rect fill="#212830" x="0" y="0" width="1000" height="1000"/>'
         '<g><path class="C1" d="M0 0L100 0"/></g>'
         "</svg>"
@@ -44,7 +42,7 @@ def test_dxf_postprocess_strips_background_rect() -> None:
 def test_dxf_postprocess_groups_by_color_class() -> None:
     raw = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-        '<defs><style>'
+        "<defs><style>"
         ".C1 {stroke: #ff0000; fill: none;}"
         ".C2 {stroke: #00ff00; fill: none;}"
         "</style></defs>"
@@ -74,9 +72,7 @@ def test_dxf_converter_produces_labeled_layer() -> None:
     layers = extract_layers(clean)
     assert layers, "DXF must produce at least one labeled layer"
     for layer in layers:
-        assert layer.layer_id.startswith("color-"), (
-            f"layer {layer.layer_id} should be color-keyed"
-        )
+        assert layer.layer_id.startswith("color-"), f"layer {layer.layer_id} should be color-keyed"
         assert layer.path_count > 0, f"layer {layer.layer_id} is empty"
 
     optimized = optimize_svg(clean)
@@ -99,9 +95,7 @@ def test_dxf_postprocess_rebases_viewbox_to_mm() -> None:
     assert viewbox is not None
     parts = [float(v) for v in viewbox.group(1).split()]
     # Drawing is 50×50 mm; viewBox should match, not the 1 000 000-unit canvas.
-    assert parts[2] < 1000 and parts[3] < 1000, (
-        f"viewBox not rebased to mm: {viewbox.group(1)}"
-    )
+    assert parts[2] < 1000 and parts[3] < 1000, f"viewBox not rebased to mm: {viewbox.group(1)}"
 
     # Optimized polyline count must be modest, not thousands of points.
     from pen_plotter.core.sanitize import sanitize_svg

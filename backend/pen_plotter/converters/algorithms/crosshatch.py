@@ -57,12 +57,14 @@ def _line_segments(
             if v and run_start is None:
                 run_start = i
             elif not v and run_start is not None:
-                segments.append((float(xs[run_start]), float(ys[run_start]),
-                                 float(xs[i - 1]), float(ys[i - 1])))
+                segments.append(
+                    (float(xs[run_start]), float(ys[run_start]), float(xs[i - 1]), float(ys[i - 1]))
+                )
                 run_start = None
         if run_start is not None:
-            segments.append((float(xs[run_start]), float(ys[run_start]),
-                             float(xs[-1]), float(ys[-1])))
+            segments.append(
+                (float(xs[run_start]), float(ys[run_start]), float(xs[-1]), float(ys[-1]))
+            )
     return segments
 
 

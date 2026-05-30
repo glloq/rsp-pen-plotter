@@ -10,9 +10,7 @@ describe('CapabilityWizard', () => {
   it('opens on the mode picker with manual selected by default', () => {
     const wrapper = mount(CapabilityWizard)
     expect(wrapper.find('[data-test="cap-step-mode"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="cap-mode-manual"]').classes()).not.toContain(
-      'active',
-    )
+    expect(wrapper.find('[data-test="cap-mode-manual"]').classes()).not.toContain('active')
     // The active class is on the LI, not the button.
     const activeLi = wrapper.findAll('.modes li.active')
     expect(activeLi.length).toBeGreaterThan(0)
@@ -68,7 +66,10 @@ describe('CapabilityWizard', () => {
     await wrapper.find('[data-test="cap-confirm"]').trigger('click')
     const events = wrapper.emitted('confirm')
     expect(events).toBeTruthy()
-    const caps = events![0]![0] as { tool_change: { mode: string; command_source: string }; max_pens_in_magazine: number }
+    const caps = events![0]![0] as {
+      tool_change: { mode: string; command_source: string }
+      max_pens_in_magazine: number
+    }
     expect(caps.tool_change.mode).toBe('firmware')
     expect(caps.tool_change.command_source).toBe('machine')
     expect(caps.max_pens_in_magazine).toBe(8)
@@ -76,7 +77,10 @@ describe('CapabilityWizard', () => {
 
   it('emits cancel on the Annuler button', async () => {
     const wrapper = mount(CapabilityWizard)
-    await wrapper.findAll('button').find((b) => b.text() === 'Annuler')!.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Annuler')!
+      .trigger('click')
     expect(wrapper.emitted('cancel')).toBeTruthy()
   })
 })

@@ -46,9 +46,7 @@ def test_crosshatch_emits_injected_stroke_width() -> None:
     default_svg = algo.render_layer(mask, "#123456", "color-123456", options={})
     assert 'stroke-width="0.800"' in default_svg
 
-    wide = algo.render_layer(
-        mask, "#123456", "color-123456", options={"stroke_width": 3.0}
-    )
+    wide = algo.render_layer(mask, "#123456", "color-123456", options={"stroke_width": 3.0})
     assert 'stroke-width="3.000"' in wide
 
 

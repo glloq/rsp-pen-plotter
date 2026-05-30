@@ -125,10 +125,7 @@ def test_plan_hash_is_stable_across_metadata_timestamp() -> None:
     plan_a = _plan()
     plan_b = _plan()  # built fresh — metadata.created_at differs
     profile = _profile()
-    assert (
-        resolve_plan(plan_a, profile).plan_hash
-        == resolve_plan(plan_b, profile).plan_hash
-    )
+    assert resolve_plan(plan_a, profile).plan_hash == resolve_plan(plan_b, profile).plan_hash
 
 
 def test_resolver_applies_profile_default_speed() -> None:
@@ -171,18 +168,14 @@ def test_resolver_rejects_duplicate_layer_ids() -> None:
 
 
 def test_resolver_marks_missing_pen_slot() -> None:
-    plan = _plan().model_copy(
-        update={"layers": [LayerPlan(layer_id="red", target_pen_slot=99)]}
-    )
+    plan = _plan().model_copy(update={"layers": [LayerPlan(layer_id="red", target_pen_slot=99)]})
     resolved = resolve_plan(plan, _profile())
     assert resolved.layers[0].pen_slot_installed is False
 
 
 def test_resolver_propagates_optimize_and_simplify_defaults() -> None:
     """Defaults (optimize=True, simplify=0.05) survive the resolver."""
-    plan = _plan().model_copy(
-        update={"layers": [LayerPlan(layer_id="red")]}
-    )
+    plan = _plan().model_copy(update={"layers": [LayerPlan(layer_id="red")]})
     resolved = resolve_plan(plan, _profile())
     assert resolved.layers[0].optimize is True
     assert resolved.layers[0].simplify_tolerance_mm == pytest.approx(0.05)
@@ -246,9 +239,7 @@ def test_generate_refuses_missing_pen_slot_by_default() -> None:
     generate now blocks instead of silently emitting M0 for a phantom
     slot.
     """
-    plan = _plan().model_copy(
-        update={"layers": [LayerPlan(layer_id="red", target_pen_slot=99)]}
-    )
+    plan = _plan().model_copy(update={"layers": [LayerPlan(layer_id="red", target_pen_slot=99)]})
     with pytest.raises(MissingPenSlotsError) as info:
         run_generate(plan, _profile())
     assert info.value.slots == [99]
@@ -258,9 +249,7 @@ def test_generate_allows_missing_pen_slot_when_overridden() -> None:
     """The override is the deliberate path for operators who plan to
     swap pens manually at the firmware M0 pause.
     """
-    plan = _plan().model_copy(
-        update={"layers": [LayerPlan(layer_id="red", target_pen_slot=99)]}
-    )
+    plan = _plan().model_copy(update={"layers": [LayerPlan(layer_id="red", target_pen_slot=99)]})
     outcome = run_generate(plan, _profile(), allow_missing_slots=True)
     assert outcome.gcode  # non-empty
     assert outcome.resolved.layers[0].pen_slot_installed is False
@@ -383,9 +372,7 @@ def test_plan_hash_changes_when_library_file_id_or_source_mime_changes() -> None
     """
     plan = _plan()
     baseline = resolve_plan(plan, _profile()).plan_hash
-    with_file = plan.model_copy(
-        update={"library_file_id": "abc123", "source_mime": "text/plain"}
-    )
+    with_file = plan.model_copy(update={"library_file_id": "abc123", "source_mime": "text/plain"})
     assert resolve_plan(with_file, _profile()).plan_hash != baseline
     flipped_mime = with_file.model_copy(update={"source_mime": "text/markdown"})
     assert (
