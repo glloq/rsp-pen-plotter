@@ -1293,6 +1293,10 @@
   },
   "magazine": {
     "title": "Magazine",
+    "noMagazine": {
+      "mono": "Mono colour: a single pen, no magazine to configure.",
+      "manual": "Manual swap: pens are changed by hand, no magazine. Colours come from the drawing's layers."
+    },
     "hint": "Assign a colour to each magazine slot. Options come from the available colours above; click the swatch to set a free hex.",
     "slotCount": "Slot count",
     "noProfile": "No profile selected.",

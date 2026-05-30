@@ -83,6 +83,7 @@ const i18n = createI18n({
       magazine: {
         title: 'Magazine',
         noProfile: 'No profile',
+        noMagazine: { mono: 'mono — no magazine', manual: 'manual — no magazine' },
         hint: 'hint',
         slotCount: 'Slots',
         empty: 'empty',
@@ -113,6 +114,8 @@ describe('MagazineEditor', () => {
   })
 
   it('persists an assigned available colour onto the pen slot', async () => {
+    // A magazine mode is required for the slot editor to render.
+    useJobStore().profiles[0]!.tool_change_method = 'carousel'
     const colors = useAvailableColorsStore()
     colors.colors = [
       {
@@ -146,10 +149,23 @@ describe('MagazineEditor', () => {
     expect(swatch).toBeDefined()
   })
 
-  it('hides the calibration block for manual / mono machines', async () => {
+  it('hides the whole magazine for manual / mono machines, showing a note', async () => {
+    // Default profile is manual_pause → no physical magazine.
     const wrapper = mountEditor()
     await nextTick()
+    expect(wrapper.find('[data-test="magazine-none"]').exists()).toBe(true)
+    // No slot list (hence no per-slot colour select or calibration block).
+    expect(wrapper.findAll('select')).toHaveLength(0)
     expect(wrapper.find('[data-test="pen-calibration-0"]').exists()).toBe(false)
+  })
+
+  it('shows the magazine slot list for a host (rack) magazine', async () => {
+    useJobStore().profiles[0]!.tool_change_method = 'rack'
+    const wrapper = mountEditor()
+    await nextTick()
+    expect(wrapper.find('[data-test="magazine-none"]').exists()).toBe(false)
+    // Two slots → two colour selects.
+    expect(wrapper.findAll('select').length).toBeGreaterThanOrEqual(2)
   })
 
   it('exposes per-slot calibration for carousel machines and saves a position', async () => {

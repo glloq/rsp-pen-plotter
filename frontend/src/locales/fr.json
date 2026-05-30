@@ -1293,6 +1293,10 @@
   },
   "magazine": {
     "title": "Magasin",
+    "noMagazine": {
+      "mono": "Mono couleur : un seul stylo, pas de magasin à configurer.",
+      "manual": "Échange manuel : les stylos sont changés à la main, pas de magasin. Les couleurs proviennent des calques du dessin."
+    },
     "hint": "Affecte une couleur à chaque emplacement du magasin. Les options proviennent des couleurs disponibles ci-dessus ; clique sur la pastille pour saisir un hex libre.",
     "slotCount": "Nombre d'emplacements",
     "noProfile": "Aucun profil sélectionné.",
