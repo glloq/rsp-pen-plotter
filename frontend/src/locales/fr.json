@@ -578,6 +578,8 @@
     "size": "Taille",
     "scale": "Échelle",
     "estimate": "Estimé",
+    "estimatePending": "— générez pour estimer",
+    "estimatePendingHint": "Générez le G-code pour obtenir une estimation réaliste du temps (inclut les déplacements à vide et les changements d'outil).",
     "penChanges": "Changements"
   },
   "settings": {
@@ -1246,7 +1248,15 @@
     "forcedNotice": "Mise à jour forcée — les modifications locales ont été écrasées.",
     "notifications": "Notifications",
     "notifyOnStartup": "Notifier à l'ouverture si une mise à jour est disponible",
-    "notifyOnStartupHint": "Affiche un toast au chargement de la page lorsqu'un nouveau commit existe sur le dépôt."
+    "notifyOnStartupHint": "Affiche un toast au chargement de la page lorsqu'un nouveau commit existe sur le dépôt.",
+    "planPreview": "Aperçu du plan",
+    "planPreviewHint": "Ce que l'onglet Plan affiche pour chaque élément.",
+    "planPreviewAuto": "Adaptatif (recommandé)",
+    "planPreviewAutoHint": "Affiche l'aperçu du style choisi, mais bascule sur l'image d'origine pour les dessins lourds afin que le déplacement et le zoom restent fluides.",
+    "planPreviewSvg": "Aperçu du style",
+    "planPreviewSvgHint": "Affiche toujours le style choisi — un véritable aperçu de ce qui sera tracé. Peut être lent sur les dessins très denses.",
+    "planPreviewImage": "Image d'origine",
+    "planPreviewImageHint": "Affiche toujours l'image source d'origine. Le plus léger à afficher, mais ne reflète pas le style choisi."
   },
   "updateModal": {
     "titleRunning": "Mise à jour en cours",

@@ -23,6 +23,16 @@ import DOMPurify from 'dompurify'
 import { libraryFileOriginalUrl } from '../api/client'
 import type { MachineProfile } from '../api/client'
 import type { Placement } from '../stores/job'
+import type { PlanPreviewMode } from '../stores/ui'
+
+// In 'auto' mode a placement keeps its (cheap) raster preview once its
+// chosen-style SVG carries more than this many pen primitives — past
+// roughly this point an inline SVG inside a foreignObject starts to make
+// pan/zoom stutter on modest hardware (the appliance Pi), so we trade
+// the WYSIWYG vector for the flat bitmap. Tuned conservatively: simple
+// line/halftone styles stay well under it; only dense multi-pass hatching
+// trips the fallback.
+export const AUTO_SVG_PRIMITIVE_LIMIT = 5000
 
 export interface PreviewSheet {
   width_mm: number
@@ -36,6 +46,11 @@ export interface RenderedPlacement {
   footprint: { x_min: number; y_min: number; x_max: number; y_max: number }
   exceeds: boolean
   cleanSvg: string
+  /** Number of pen primitives (path / line / circle / polyline /
+   *  polygon) in ``cleanSvg``. Drives the 'auto' plan-preview heuristic
+   *  — a dense SVG keeps the cheap raster preview to protect pan/zoom
+   *  smoothness. 0 when there's no SVG yet. */
+  svgPrimitiveCount: number
   /** URL to the original uploaded bytes, only when the file is an
    *  image we can display directly in the browser (raster + SVG
    *  sources). Empty for PDFs / typography / other formats — those
@@ -64,12 +79,34 @@ export interface SheetGeometryInputs {
   profile: Ref<MachineProfile | null>
   placements: Ref<readonly Placement[]>
   previewSheet: Ref<PreviewSheet | null>
+  /** Plan-tab rendering preference (image / svg / auto). Optional so
+   *  callers that don't care (tests, future surfaces) default to the
+   *  adaptive 'auto' behaviour. */
+  planPreviewMode?: Ref<PlanPreviewMode>
   snapMm: Ref<number>
   /** The container ``<div>`` whose clientWidth drives ``pxPerMm``. */
   container: Ref<HTMLElement | null>
   /** The SVG element whose ``getScreenCTM()`` converts client coords
    *  into workspace mm. */
   svgEl: Ref<SVGSVGElement | null>
+}
+
+// Count the pen-stroke primitives in an SVG string. Mirrors the
+// diagnostics counter in EditPreviewPane: each <path>/<line>/<circle>/
+// <polyline>/<polygon> is roughly one stroke, and the sum is a good
+// proxy for how expensive the SVG is to paint.
+export function countSvgPrimitives(svg: string): number {
+  if (!svg) return 0
+  // The trailing ``[\s/>]`` class matches the delimiter after the tag
+  // name — a space (``<path d=``), a self-close (``<line/>``) or a plain
+  // close (``<circle>``) — so ``<pathological>`` never counts as a path.
+  return (
+    (svg.match(/<path[\s/>]/g)?.length ?? 0) +
+    (svg.match(/<line[\s/>]/g)?.length ?? 0) +
+    (svg.match(/<circle[\s/>]/g)?.length ?? 0) +
+    (svg.match(/<polyline[\s/>]/g)?.length ?? 0) +
+    (svg.match(/<polygon[\s/>]/g)?.length ?? 0)
+  )
 }
 
 function isDisplayableMime(mime: string): boolean {
@@ -87,7 +124,7 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
   // during drag, which chokes the tab. Cache by placement id + raw
   // svg so unchanged SVGs are reused across recomputations. Entries
   // are evicted for placements that disappear from the plan.
-  const sanitizedCache = new Map<string, { svg: string; clean: string }>()
+  const sanitizedCache = new Map<string, { svg: string; clean: string; count: number }>()
 
   // Per-library-file load status for the source-preview image.
   // ``reactive`` so onload / onerror on the SVG ``<image>`` re-trigger
@@ -130,15 +167,21 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
         x_max > w.ws.x_max + 0.01 ||
         y_max > w.ws.y_max + 0.01
       let cleanSvg = ''
+      let svgPrimitiveCount = 0
       if (p.svg) {
         const cached = sanitizedCache.get(p.id)
         if (cached && cached.svg === p.svg) {
           cleanSvg = cached.clean
+          svgPrimitiveCount = cached.count
         } else {
           cleanSvg = DOMPurify.sanitize(p.svg, {
             USE_PROFILES: { svg: true, svgFilters: true },
           })
-          sanitizedCache.set(p.id, { svg: p.svg, clean: cleanSvg })
+          // Count once at sanitize time and cache alongside the clean
+          // SVG — the 'auto' heuristic reads it on every pointer-move
+          // during drag, so it must not re-scan the string each frame.
+          svgPrimitiveCount = countSvgPrimitives(cleanSvg)
+          sanitizedCache.set(p.id, { svg: p.svg, clean: cleanSvg, count: svgPrimitiveCount })
         }
       } else {
         sanitizedCache.delete(p.id)
@@ -156,6 +199,7 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
         footprint: { x_min, y_min, x_max, y_max },
         exceeds,
         cleanSvg,
+        svgPrimitiveCount,
         previewUrl,
       }
     })
@@ -165,19 +209,38 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
     return out
   })
 
+  /** Should the chosen-style plotter SVG win over the raster source for
+   *  this placement? Only meaningful when both are actually available;
+   *  callers still guard on ``cleanSvg`` / ``previewUrl`` presence. */
+  function prefersStyleSvg(rp: RenderedPlacement): boolean {
+    if (!rp.cleanSvg) return false
+    const mode = inputs.planPreviewMode?.value ?? 'auto'
+    if (mode === 'image') return false
+    if (mode === 'svg') return true
+    // 'auto': WYSIWYG vector unless it's dense enough to risk laggy
+    // pan/zoom, in which case keep the cheap raster.
+    return rp.svgPrimitiveCount <= AUTO_SVG_PRIMITIVE_LIMIT
+  }
+
   /** Should tier 1 (source preview ``<image>``) actually be shown? */
   function showsPreviewImage(rp: RenderedPlacement): boolean {
     if (!rp.previewUrl) return false
     const status = previewStatus[rp.placement.library_file_id ?? '']
-    return status !== 'failed'
+    if (status === 'failed') return false
+    // The operator (or the auto heuristic) asked for the style SVG and
+    // we have one — don't paint the raster underneath it.
+    if (prefersStyleSvg(rp)) return false
+    return true
   }
 
-  /** Should tier 2 (inline plotter SVG) be shown? Hide it when
-   *  tier 1 has fully loaded so we don't double-paint the same
-   *  drawing. */
+  /** Should tier 2 (inline plotter SVG) be shown? When the raster is the
+   *  preferred layer we still paint the SVG until the image finishes
+   *  loading (so the footprint isn't blank), then hide it to avoid
+   *  double-painting. When the SVG is preferred it's shown outright. */
   function showsPlotterSvg(rp: RenderedPlacement): boolean {
     if (!rp.cleanSvg) return false
     if (!rp.previewUrl) return true
+    if (prefersStyleSvg(rp)) return true
     const status = previewStatus[rp.placement.library_file_id ?? '']
     return status !== 'loaded'
   }

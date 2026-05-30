@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useJobStore } from '../stores/job'
-import { computePlacement, unionBounds } from '../lib/placement'
+import { useJobStore, type Placement } from '../stores/job'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -13,29 +12,70 @@ function formatDuration(seconds: number): string {
   return `${mins}m ${secs.toString().padStart(2, '0')}s`
 }
 
-const placement = computed(() => {
-  const profile = store.selectedProfile
-  if (!profile || store.layers.length === 0) return null
-  const bounds = unionBounds(store.layers.map((l) => l.bbox))
-  if (!bounds) return null
-  return computePlacement(bounds, profile, store.scaleMode, store.marginMm)
+// The footer describes the file the operator is working with on the
+// plan: the selected placement when it's actually on the sheet,
+// otherwise the first visible placement that carries a drawing.
+const target = computed<Placement | null>(() => {
+  const sel = store.selectedPlacement
+  if (sel && !sel.is_library_draft && sel.layers.length) return sel
+  return store.visiblePlacements.find((p) => p.layers.length) ?? null
 })
 
-const scaleLabel = computed(() => {
-  if (!placement.value) return null
-  if (store.scaleMode === 'actual') return '1:1'
-  return `${(placement.value.scale * 100).toFixed(0)}%`
-})
-
+// Size = the placement's actual footprint on the plan (what the
+// operator dragged / resized), not a re-fit of the source bbox.
 const drawingDims = computed(() => {
-  const p = placement.value
+  const p = target.value
   if (!p) return null
-  return `${p.widthMm.toFixed(0)}×${p.heightMm.toFixed(0)} mm`
+  return `${p.width_mm.toFixed(0)}×${p.height_mm.toFixed(0)} mm`
 })
 
-const exceeds = computed(() => placement.value?.exceeds ?? false)
+// Scale = placed size relative to the source's natural rendered size
+// (the union of the layer bboxes, in mm). A 90°/270° rotation swaps
+// which source axis maps onto the placed width.
+const scaleLabel = computed(() => {
+  const p = target.value
+  if (!p) return null
+  const bw = p.source_bbox.x_max - p.source_bbox.x_min
+  const bh = p.source_bbox.y_max - p.source_bbox.y_min
+  const swap = Math.abs(Math.round(p.rotation / 90)) % 2 === 1
+  const naturalW = swap ? bh : bw
+  if (!(naturalW > 0)) return null
+  const ratio = p.width_mm / naturalW
+  if (!Number.isFinite(ratio) || ratio <= 0) return null
+  return `${(ratio * 100).toFixed(0)}%`
+})
+
+// Time estimate is only trustworthy once the plan has been resolved into
+// a toolpath: ``/preflight`` (and ``/generate``, which runs it) walk the
+// real ordered G-code including pen-up travel and tool changes. The
+// length÷speed sum we used before ignored travel and gave optimistic
+// numbers, so we now surface the preflight figure and show a pending
+// placeholder until that calculation has run. ``preflight`` is cleared
+// whenever the plan changes, so a stale estimate never lingers.
+const estimateSeconds = computed<number | null>(() => store.preflight?.estimated_seconds ?? null)
+
+// Out-of-bounds flag for the target placement: does its footprint spill
+// outside the machine workspace? Mirrors the geometry composable's
+// ``exceeds`` test so the footer warning matches the red bbox on the
+// sheet.
+const exceeds = computed(() => {
+  const p = target.value
+  const profile = store.selectedProfile
+  if (!p || !profile) return false
+  const ws = profile.workspace
+  const x_min = ws.x_min + p.x_mm
+  const y_min = ws.y_min + p.y_mm
+  const x_max = x_min + p.width_mm
+  const y_max = y_min + p.height_mm
+  return (
+    x_min < ws.x_min - 0.01 ||
+    y_min < ws.y_min - 0.01 ||
+    x_max > ws.x_max + 0.01 ||
+    y_max > ws.y_max + 0.01
+  )
+})
 const missing = computed(() => store.missingPenSlots)
-const hasJob = computed(() => store.layers.length > 0)
+const hasJob = computed(() => target.value !== null)
 </script>
 
 <template>
@@ -55,7 +95,17 @@ const hasJob = computed(() => store.layers.length > 0)
 
     <div class="flex items-baseline gap-1.5">
       <span class="text-slate-500">{{ t('footer.estimate') }}</span>
-      <span class="font-mono text-slate-200">{{ formatDuration(store.totalDurationSeconds) }}</span>
+      <span v-if="estimateSeconds !== null" class="font-mono text-slate-200">{{
+        formatDuration(estimateSeconds)
+      }}</span>
+      <span
+        v-else
+        class="font-mono text-slate-500"
+        :title="t('footer.estimatePendingHint')"
+        data-test="footer-estimate-pending"
+      >
+        {{ t('footer.estimatePending') }}
+      </span>
     </div>
 
     <div v-if="store.preflight" class="flex items-baseline gap-1.5">
