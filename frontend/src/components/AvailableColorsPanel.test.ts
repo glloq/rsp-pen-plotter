@@ -55,6 +55,11 @@ const i18n = createI18n({
         edit: 'Edit',
         delete: 'Delete',
         deleteConfirm: 'Remove?',
+        meters: '{value} m',
+        odometerTitle: 'Odometer',
+        resetOdometer: 'Reset',
+        strokeWidthTitle: 'Width',
+        mmUnit: 'mm',
         loadFailed: 'load failed',
         createFailed: 'create failed',
         updateFailed: 'update failed',
@@ -142,5 +147,74 @@ describe('AvailableColorsPanel', () => {
     const addBtn = wrapper.findAll('button').find((b) => b.text() === 'Add')!
     await addBtn.trigger('click')
     expect(spy).toHaveBeenCalledWith('#123456', 'Indigo', 0.5)
+  })
+
+  it('edits the stroke width of an existing colour and persists it', async () => {
+    const store = useAvailableColorsStore()
+    store.colors = [
+      {
+        color_id: 'a',
+        hex: '#ff0000',
+        name: 'Red',
+        position: 0,
+        stroke_width_mm: 0.5,
+        odometer_mm: 0,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    store.loaded = true
+    const spy = vi.spyOn(store, 'rename')
+    const wrapper = mountPanel()
+    await nextTick()
+
+    // Enter edit mode via the pencil button.
+    const editBtn = wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!
+    await editBtn.trigger('click')
+    await nextTick()
+
+    // The width input is the number input in the edit row.
+    const widthInput = wrapper.findAll('input').find((i) => i.element.type === 'number')!
+    await widthInput.setValue('1.2')
+
+    const saveBtn = wrapper.findAll('button').find((b) => b.text() === '✓')!
+    await saveBtn.trigger('click')
+    await nextTick()
+
+    expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 1.2 }))
+    // The badge reflects the saved width (reactive store update).
+    await nextTick()
+    expect(wrapper.find('li').text()).toContain('1.2')
+  })
+
+  it('still sends the width when the bound value is a string (locale / type)', async () => {
+    // Regression: a real browser can leave a raw string in a
+    // ``v-model.number`` ref (e.g. a French keyboard's ``0,8`` comma).
+    // A strict ``Number.isFinite`` guard would drop it from the PATCH —
+    // ``parseWidth`` must coerce so the diameter actually saves.
+    const store = useAvailableColorsStore()
+    store.colors = [
+      {
+        color_id: 'a',
+        hex: '#ff0000',
+        name: 'Red',
+        position: 0,
+        stroke_width_mm: 0.5,
+        odometer_mm: 0,
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    store.loaded = true
+    const spy = vi.spyOn(store, 'rename')
+    const wrapper = mountPanel()
+    await nextTick()
+    await wrapper.findAll('button').find((b) => b.attributes('title') === 'Edit')!.trigger('click')
+    await nextTick()
+    const widthInput = wrapper.findAll('input').find((i) => i.element.type === 'number')!
+    // Force a string value, mimicking the v-model.number escape hatch.
+    ;(widthInput.element as HTMLInputElement).value = '0,8'
+    await widthInput.trigger('input')
+    await wrapper.findAll('button').find((b) => b.text() === '✓')!.trigger('click')
+    await nextTick()
+    expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 0.8 }))
   })
 })

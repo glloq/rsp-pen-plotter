@@ -55,6 +55,18 @@ const editName = ref('')
 const editHex = ref('#000000')
 const editWidth = ref(0.5)
 
+// Coerce a width field into a positive number, or null when blank /
+// invalid. ``v-model.number`` *usually* hands us a number, but a real
+// browser can leave a raw string in the bound ref (e.g. a French
+// keyboard typing ``0,5`` with a comma decimal separator). A strict
+// ``Number.isFinite`` check would then silently drop the width from the
+// PATCH — the colour saves but the diameter never changes. Normalising
+// the separator + coercing here keeps the edit robust to locale + type.
+function parseWidth(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : Number(String(value).replace(',', '.').trim())
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 onMounted(() => {
   if (!store.loaded) void store.refresh()
 })
@@ -63,7 +75,7 @@ async function addColor(): Promise<void> {
   if (!newHex.value) return
   submitting.value = true
   try {
-    const width = newWidth.value > 0 ? newWidth.value : undefined
+    const width = parseWidth(newWidth.value) ?? undefined
     const created = await store.add(newHex.value, newName.value.trim(), width)
     if (created) {
       newHex.value = '#000000'
@@ -87,7 +99,7 @@ function cancelEdit(): void {
 }
 
 async function saveEdit(colorId: string): Promise<void> {
-  const w = Number.isFinite(editWidth.value) && editWidth.value > 0 ? editWidth.value : null
+  const w = parseWidth(editWidth.value)
   const result = await store.rename(colorId, {
     hex: editHex.value,
     name: editName.value.trim(),
