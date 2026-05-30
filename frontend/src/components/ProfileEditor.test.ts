@@ -243,45 +243,47 @@ describe('ProfileEditor with a profile seeded', () => {
     await wrapper.find('[data-test="color-mode-firmware"]').trigger('click')
     await nextTick()
     expect(wrapper.find('[data-test="firmware-command"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="host-macro-editor"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="host-swap-editor"]').exists()).toBe(false)
   })
 
-  it('CASE 2 — host mode exposes the macro editor seeded with one line', async () => {
+  it('CASE 2 — host mode exposes the visual swap builder seeded with steps', async () => {
     const wrapper = mountEditor()
     await nextTick()
     await wrapper.find('[data-test="color-mode-host"]').trigger('click')
     await nextTick()
-    const editor = wrapper.find('[data-test="host-macro-editor"]')
-    expect(editor.exists()).toBe(true)
-    // setMode seeds a starter line so the profile is immediately valid.
-    expect(wrapper.find('[data-test="host-macro-row-0"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-swap-editor"]').exists()).toBe(true)
+    // setMode seeds a sensible default sequence so it's immediately valid.
+    expect(wrapper.find('[data-test="host-step-0"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="firmware-command"]').exists()).toBe(false)
   })
 
-  it('can add and remove host-macro lines', async () => {
+  it('can add and remove host swap steps', async () => {
     const wrapper = mountEditor()
     await nextTick()
     await wrapper.find('[data-test="color-mode-host"]').trigger('click')
     await nextTick()
-    await wrapper.find('[data-test="host-macro-add"]').trigger('click')
+    // Default seeds 6 steps (indices 0..5).
+    expect(wrapper.find('[data-test="host-step-5"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="host-step-6"]').exists()).toBe(false)
+    await wrapper.find('[data-test="host-step-add"]').trigger('click')
     await nextTick()
-    expect(wrapper.find('[data-test="host-macro-row-1"]').exists()).toBe(true)
-    await wrapper.find('[data-test="host-macro-remove-1"]').trigger('click')
-    await wrapper.find('[data-test="host-macro-remove-0"]').trigger('click')
+    expect(wrapper.find('[data-test="host-step-6"]').exists()).toBe(true)
+    await wrapper.find('[data-test="host-step-remove-6"]').trigger('click')
     await nextTick()
-    expect(wrapper.find('[data-test="host-macro-row-0"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="host-step-6"]').exists()).toBe(false)
   })
 
-  it('blocks Save when a host magazine has no valid command', async () => {
+  it('blocks Save when a grab step has no take command', async () => {
     const wrapper = mountEditor()
     await nextTick()
     await wrapper.find('[data-test="color-mode-host"]').trigger('click')
     await nextTick()
-    // Remove the seeded line → empty sequence → invalid.
-    await wrapper.find('[data-test="host-macro-remove-0"]').trigger('click')
+    const saveBtn = () => wrapper.findAll('button').find((b) => b.text() === 'Save')!
+    // Default is valid (grab/release commands seeded) → Save enabled.
+    expect(saveBtn().attributes('disabled')).toBeUndefined()
+    // Clear the take command while a grab step exists → invalid.
+    await wrapper.find('[data-test="host-grab-command"]').setValue('')
     await nextTick()
-    expect(wrapper.find('[data-test="host-macro-empty"]').exists()).toBe(true)
-    const saveBtn = wrapper.findAll('button').find((b) => b.text() === 'Save')!
-    expect(saveBtn.attributes('disabled')).toBeDefined()
+    expect(saveBtn().attributes('disabled')).toBeDefined()
   })
 })
