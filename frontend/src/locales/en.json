@@ -1153,6 +1153,8 @@
     "hint": "Your global ink inventory, and the colour assignment for each magazine slot. Declare every Sharpie / fineliner you own once.",
     "meters": "{value} m",
     "metersUsedTitle": "Metres drawn with this colour for the current job.",
+    "strokeWidthTitle": "Pen tip / line width (mm).",
+    "mmUnit": "mm",
     "add": "Add a colour",
     "addAction": "Add",
     "hex": "Hex",

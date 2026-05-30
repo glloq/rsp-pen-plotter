@@ -35,6 +35,8 @@ const job = useJobStore()
 
 const newHex = ref('#000000')
 const newName = ref('')
+// Default to a common fineliner tip so a quick add lands on a sane width.
+const newWidth = ref(0.5)
 const submitting = ref(false)
 
 const ordered = computed(() => store.ordered)
@@ -53,6 +55,7 @@ const duplicate = computed(() => {
 const editingId = ref<string | null>(null)
 const editName = ref('')
 const editHex = ref('#000000')
+const editWidth = ref(0.5)
 
 onMounted(() => {
   if (!store.loaded) void store.refresh()
@@ -78,20 +81,23 @@ async function addColor(): Promise<void> {
   if (!newHex.value) return
   submitting.value = true
   try {
-    const created = await store.add(newHex.value, newName.value.trim())
+    const width = newWidth.value > 0 ? newWidth.value : undefined
+    const created = await store.add(newHex.value, newName.value.trim(), width)
     if (created) {
       newHex.value = '#000000'
       newName.value = ''
+      newWidth.value = 0.5
     }
   } finally {
     submitting.value = false
   }
 }
 
-function startEdit(colorId: string, hex: string, name: string): void {
+function startEdit(colorId: string, hex: string, name: string, width: number): void {
   editingId.value = colorId
   editHex.value = hex
   editName.value = name
+  editWidth.value = width
 }
 
 function cancelEdit(): void {
@@ -102,6 +108,7 @@ async function saveEdit(colorId: string): Promise<void> {
   await store.rename(colorId, {
     hex: editHex.value,
     name: editName.value.trim(),
+    ...(editWidth.value > 0 ? { stroke_width_mm: editWidth.value } : {}),
   })
   editingId.value = null
 }
@@ -171,6 +178,17 @@ function displayLabel(name: string, hex: string): string {
           class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100"
           :placeholder="t('availableColors.namePlaceholder')"
         />
+        <label class="flex shrink-0 items-center gap-1 text-[11px] text-slate-400">
+          <input
+            v-model.number="newWidth"
+            type="number"
+            min="0.05"
+            step="0.05"
+            class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-100"
+            :title="t('availableColors.strokeWidthTitle')"
+          />
+          {{ t('availableColors.mmUnit') }}
+        </label>
         <button
           type="button"
           class="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
@@ -231,6 +249,17 @@ function displayLabel(name: string, hex: string): string {
               class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
               :placeholder="t('availableColors.namePlaceholder')"
             />
+            <label class="flex shrink-0 items-center gap-1 text-[11px] text-slate-400">
+              <input
+                v-model.number="editWidth"
+                type="number"
+                min="0.05"
+                step="0.05"
+                class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                :title="t('availableColors.strokeWidthTitle')"
+              />
+              {{ t('availableColors.mmUnit') }}
+            </label>
             <button
               type="button"
               class="rounded bg-emerald-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-emerald-500"
@@ -256,6 +285,13 @@ function displayLabel(name: string, hex: string): string {
             <span class="font-mono text-[11px] text-slate-400">{{ color.hex }}</span>
             <span class="min-w-0 flex-1 truncate text-xs text-slate-200">
               {{ displayLabel(color.name, color.hex) }}
+            </span>
+
+            <span
+              class="shrink-0 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
+              :title="t('availableColors.strokeWidthTitle')"
+            >
+              Ø {{ color.stroke_width_mm }} {{ t('availableColors.mmUnit') }}
             </span>
 
             <span
@@ -292,7 +328,7 @@ function displayLabel(name: string, hex: string): string {
               type="button"
               class="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
               :title="t('availableColors.edit')"
-              @click="startEdit(color.color_id, color.hex, color.name)"
+              @click="startEdit(color.color_id, color.hex, color.name, color.stroke_width_mm)"
             >
               ✎
             </button>

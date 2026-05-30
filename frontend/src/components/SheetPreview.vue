@@ -27,12 +27,19 @@ import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import { useSheetGeometry } from '../composables/useSheetGeometry'
+import { useAvailableColorsStore } from '../stores/availableColors'
+import { strokeWidthMmByHex } from '../lib/penWidth'
 import SheetCanvas from './SheetCanvas.vue'
 import PlacementHandles from './PlacementHandles.vue'
 
 const { t } = useI18n()
 const store = useJobStore()
 const ui = useUiStore()
+const availableColors = useAvailableColorsStore()
+
+// Canonical-hex → pen tip width (mm). Drives the preview's physical
+// line-thickness rendering; recomputed when the inventory changes.
+const strokeWidthMm = computed(() => strokeWidthMmByHex(availableColors.ordered))
 
 const container = ref<HTMLDivElement | null>(null)
 const svgEl = ref<SVGSVGElement | null>(null)
@@ -85,6 +92,7 @@ const {
   snapMm,
   container,
   svgEl,
+  strokeWidthMm,
 })
 
 function resetView(): void {
@@ -377,6 +385,9 @@ function onKey(event: KeyboardEvent): void {
 
 onMounted(() => {
   window.addEventListener('keydown', onKey)
+  // Pull the pen-width inventory so the preview can render physical line
+  // thickness even when the operator never opened the Colours tab.
+  if (!availableColors.loaded) void availableColors.refresh()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)

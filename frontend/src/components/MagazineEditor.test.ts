@@ -108,7 +108,7 @@ describe('MagazineEditor', () => {
   it('persists an assigned available colour onto the pen slot', async () => {
     const colors = useAvailableColorsStore()
     colors.colors = [
-      { color_id: 'r', hex: '#ff0000', name: 'Red', position: 0, created_at: '2026-01-01T00:00:00Z' },
+      { color_id: 'r', hex: '#ff0000', name: 'Red', position: 0, stroke_width_mm: 0.5, created_at: '2026-01-01T00:00:00Z' },
     ]
     colors.loaded = true
 

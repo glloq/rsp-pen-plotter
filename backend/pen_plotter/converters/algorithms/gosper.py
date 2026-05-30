@@ -19,6 +19,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 _RULES = {
@@ -138,13 +139,13 @@ class GosperFillAlgorithm(RasterAlgorithm):
     ) -> str:
         opts = options or {}
         order = max(1, min(6, int(opts.get("order", 4))))
-        spacing = max(1.0, float(opts.get("spacing_px", 4.0)))
+        spacing = floored_spacing(max(1.0, float(opts.get("spacing_px", 4.0))), opts)
         rotation = float(opts.get("rotation_deg", 0.0))
         bool_mask = mask.astype(bool)
 
         group_open = (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
-            f'fill="none" stroke-width="0.8" stroke-linecap="round" '
+            f'fill="none" stroke-width="{stroke_attr_px(opts):.3f}" stroke-linecap="round" '
             f'stroke-linejoin="round">'
         )
         if not bool_mask.any():

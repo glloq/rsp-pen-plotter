@@ -28,6 +28,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 
@@ -65,7 +66,7 @@ class SquiggleAlgorithm(RasterAlgorithm):
             A single SVG ``<g>...</g>`` group containing the polylines.
         """
         opts = options or {}
-        spacing = max(1, int(opts.get("spacing_px", 4)))
+        spacing = int(floored_spacing(max(1, int(opts.get("spacing_px", 4))), opts))
         amp = max(0.1, float(opts.get("amp_px", 1.4)))
         period = max(2.0, float(opts.get("period_px", 8.0)))
         jitter = max(0.0, min(1.0, float(opts.get("jitter", 0.4))))
@@ -136,7 +137,7 @@ class SquiggleAlgorithm(RasterAlgorithm):
         )
         return (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
-            f'fill="none" stroke-width="0.8" stroke-linecap="round">'
+            f'fill="none" stroke-width="{stroke_attr_px(opts):.3f}" stroke-linecap="round">'
             + paths
             + "</g>"
         )

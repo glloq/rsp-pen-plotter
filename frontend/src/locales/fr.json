@@ -1153,6 +1153,8 @@
     "hint": "Inventaire global des feutres que tu possèdes, et attribution des couleurs aux emplacements du magasin. Déclare une fois chaque Sharpie / fineliner.",
     "meters": "{value} m",
     "metersUsedTitle": "Mètres tracés avec cette couleur pour le travail courant.",
+    "strokeWidthTitle": "Largeur du trait du feutre (mm).",
+    "mmUnit": "mm",
     "add": "Ajouter une couleur",
     "addAction": "Ajouter",
     "hex": "Hex",

@@ -23,6 +23,7 @@ import DOMPurify from 'dompurify'
 import { libraryFileOriginalUrl } from '../api/client'
 import type { MachineProfile } from '../api/client'
 import type { Placement } from '../stores/job'
+import { applyPhysicalStrokeWidth, mmPerViewBoxUnit } from '../lib/penWidth'
 import type { PlanPreviewMode } from '../stores/ui'
 
 // In 'auto' mode a placement keeps its (cheap) raster preview once its
@@ -89,6 +90,11 @@ export interface SheetGeometryInputs {
   /** The SVG element whose ``getScreenCTM()`` converts client coords
    *  into workspace mm. */
   svgEl: Ref<SVGSVGElement | null>
+  /** Canonical-hex → pen tip width (mm) from the available-colours
+   *  inventory. When provided, each coloured group in a placement's SVG
+   *  is re-stroked to its assigned pen's physical width at display time.
+   *  Optional so standalone callers / tests can omit it. */
+  strokeWidthMm?: Ref<Map<string, number>>
 }
 
 // Count the pen-stroke primitives in an SVG string. Mirrors the
@@ -151,9 +157,21 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
     return { profile, ws, wsW, wsH, pad }
   })
 
+  // Stroke-width restyle cache: keyed by raw svg + scale + inventory
+  // signature so resizing a placement (new scale) or editing a pen
+  // width (new signature) recomputes, but an unchanged frame reuses the
+  // parsed result instead of re-running DOMParser on every pointer-move.
+  const styledCache = new Map<string, { key: string; out: string }>()
+
   const renderedPlacements = computed<RenderedPlacement[]>(() => {
     const w = workspace.value
     if (!w) return []
+    const widthMap = inputs.strokeWidthMm?.value ?? null
+    // Compact signature of the inventory widths so the styled cache busts
+    // when the operator changes a pen tip width.
+    const mapSig = widthMap
+      ? [...widthMap.entries()].map(([h, mm]) => `${h}:${mm}`).join(',')
+      : ''
     const seen = new Set<string>()
     const out = inputs.placements.value.map((p) => {
       seen.add(p.id)
@@ -183,8 +201,25 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
           svgPrimitiveCount = countSvgPrimitives(cleanSvg)
           sanitizedCache.set(p.id, { svg: p.svg, clean: cleanSvg, count: svgPrimitiveCount })
         }
+        // Re-stroke each coloured group at its assigned pen's physical
+        // width. Applied to the sanitised SVG (post-DOMPurify) so the
+        // operator sees a true-to-life line thickness in the preview.
+        if (widthMap && widthMap.size) {
+          const mmPerUnit = mmPerViewBoxUnit(cleanSvg, p.width_mm, p.height_mm)
+          if (mmPerUnit) {
+            const key = `${mmPerUnit.toFixed(4)}|${mapSig}`
+            const cached = styledCache.get(p.id)
+            if (cached && cached.key === key) {
+              cleanSvg = cached.out
+            } else {
+              cleanSvg = applyPhysicalStrokeWidth(cleanSvg, widthMap, mmPerUnit)
+              styledCache.set(p.id, { key, out: cleanSvg })
+            }
+          }
+        }
       } else {
         sanitizedCache.delete(p.id)
+        styledCache.delete(p.id)
       }
       // Tier 1 source preview is only attempted when (a) we have a
       // library entry to read bytes from, and (b) the MIME is one
@@ -205,6 +240,9 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
     })
     for (const id of sanitizedCache.keys()) {
       if (!seen.has(id)) sanitizedCache.delete(id)
+    }
+    for (const id of styledCache.keys()) {
+      if (!seen.has(id)) styledCache.delete(id)
     }
     return out
   })

@@ -15,11 +15,12 @@ import { useAvailableColorsStore } from '../stores/availableColors'
 
 vi.mock('../api/client', () => ({
   listAvailableColors: vi.fn(async () => []),
-  createAvailableColor: vi.fn(async (hex: string, name: string) => ({
+  createAvailableColor: vi.fn(async (hex: string, name: string, strokeWidthMm?: number) => ({
     color_id: `stub-${hex}`,
     hex,
     name,
     position: 0,
+    stroke_width_mm: strokeWidthMm ?? 0.5,
     created_at: '2026-01-01T00:00:00Z',
   })),
   patchAvailableColor: vi.fn(async (colorId: string, patch: Record<string, unknown>) => ({
@@ -27,6 +28,7 @@ vi.mock('../api/client', () => ({
     hex: (patch.hex as string) ?? '#000000',
     name: (patch.name as string) ?? '',
     position: (patch.position as number) ?? 0,
+    stroke_width_mm: (patch.stroke_width_mm as number) ?? 0.5,
     created_at: '2026-01-01T00:00:00Z',
   })),
   deleteAvailableColor: vi.fn(async () => undefined),
@@ -85,6 +87,7 @@ describe('AvailableColorsPanel', () => {
         hex: '#ff0000',
         name: 'Red',
         position: 0,
+        stroke_width_mm: 0.5,
         created_at: '2026-01-01T00:00:00Z',
       },
       {
@@ -92,6 +95,7 @@ describe('AvailableColorsPanel', () => {
         hex: '#00ff00',
         name: '',
         position: 1,
+        stroke_width_mm: 0.5,
         created_at: '2026-01-02T00:00:00Z',
       },
     ]
@@ -114,6 +118,7 @@ describe('AvailableColorsPanel', () => {
       hex: '#123456',
       name: 'Indigo',
       position: 0,
+      stroke_width_mm: 0.5,
       created_at: '2026-01-01T00:00:00Z',
     })
     const wrapper = mountPanel()
@@ -131,6 +136,6 @@ describe('AvailableColorsPanel', () => {
     await nameInput.setValue('Indigo')
     const addBtn = wrapper.findAll('button').find((b) => b.text() === 'Add')!
     await addBtn.trigger('click')
-    expect(spy).toHaveBeenCalledWith('#123456', 'Indigo')
+    expect(spy).toHaveBeenCalledWith('#123456', 'Indigo', 0.5)
   })
 })

@@ -23,6 +23,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import floored_spacing
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 from pen_plotter.converters.algorithms.crosshatch import _line_segments
 
@@ -105,7 +106,7 @@ class ScribbleAlgorithm(RasterAlgorithm):
             A single SVG ``<g>...</g>`` group of ``<polyline>`` strokes.
         """
         opts = options or {}
-        spacing = max(1.0, float(opts.get("spacing_px", 4.0)))
+        spacing = floored_spacing(max(1.0, float(opts.get("spacing_px", 4.0))), opts)
         amp = max(0.0, float(opts.get("amp_px", 1.6)))
         overshoot = max(0.0, float(opts.get("overshoot_px", 3.0)))
         stroke_width = float(opts.get("stroke_width", 0.8))

@@ -28,6 +28,7 @@ import {
   type ToolpathMetrics,
 } from '../api/client'
 import { buildComposite } from '../lib/composite'
+import { layerStrokeWidthsPx, mmPerViewBoxUnit, strokeWidthMmByHex } from '../lib/penWidth'
 import { nearestPoolHex } from '../lib/nearestColor'
 import { resolveEffectivePalette } from '../lib/effectivePalette'
 import { usePaletteSourceStore } from './paletteSource'
@@ -468,6 +469,19 @@ export const useJobStore = defineStore('job', () => {
   const isMultiColor = computed<boolean>(() => (selectedProfile.value?.pen_slot_count ?? 1) > 1)
 
   // ====== /rerender ======================================================
+  // Per-layer pen tip width (viewBox units) for a placement, derived from
+  // each layer's assigned colour width and the placement's mm↔unit scale.
+  // Sent with /rerender so every layer's stroke matches the real pen and
+  // fill spacing is floored at one pen width.
+  function penWidthsFor(p: Placement): Record<string, number> {
+    if (!p.svg) return {}
+    const hexToMm = strokeWidthMmByHex(useAvailableColorsStore().ordered)
+    if (hexToMm.size === 0) return {}
+    const mmPerUnit = mmPerViewBoxUnit(p.svg, p.width_mm, p.height_mm)
+    if (!mmPerUnit) return {}
+    return layerStrokeWidthsPx(p.layers, hexToMm, mmPerUnit)
+  }
+
   let rerenderController: AbortController | null = null
   let rerenderTimer: ReturnType<typeof setTimeout> | null = null
   // Promise of the currently in-flight ``triggerRerender`` call. Used by
@@ -574,7 +588,12 @@ export const useJobStore = defineStore('job', () => {
       }
     })
     try {
-      const result = await rerenderJob(placement.job_id, layersPayload, signal)
+      const result = await rerenderJob(
+        placement.job_id,
+        layersPayload,
+        signal,
+        penWidthsFor(placement),
+      )
       return { svg: result.svg, warnings: result.warnings ?? [] }
     } catch (err) {
       if ((err as { name?: string }).name === 'CanceledError') return null
@@ -767,7 +786,12 @@ export const useJobStore = defineStore('job', () => {
           algorithm_options: spec.algorithm_options,
         }
       })
-      const result = await rerenderJob(p.job_id, layersPayload, controller.signal)
+      const result = await rerenderJob(
+        p.job_id,
+        layersPayload,
+        controller.signal,
+        penWidthsFor(p),
+      )
       if (controller.signal.aborted) return
       // patchPlacement already invalidates the cached outputs for the new SVG.
       patchPlacement(p.id, { svg: result.svg })
