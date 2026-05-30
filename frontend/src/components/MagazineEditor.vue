@@ -53,6 +53,33 @@ const pens = computed<PenSlot[]>(() => {
   )
 })
 
+// Resolve the tool-change mode the same way ProfilePenFields does
+// (capability model first, legacy field as fallback) to decide what this
+// tab should show.
+const colorMode = computed<'mono' | 'manual' | 'firmware' | 'host'>(() => {
+  const tooling = profile.value?.capabilities?.tool_change.mode
+  if (tooling === 'single_pen') return 'mono'
+  if (tooling === 'manual') return 'manual'
+  if (tooling === 'firmware') return 'firmware'
+  if (tooling === 'host_macro') return 'host'
+  switch (profile.value?.tool_change_method) {
+    case 'none':
+      return 'mono'
+    case 'carousel':
+      return 'firmware'
+    case 'rack':
+      return 'host'
+    default:
+      return 'manual'
+  }
+})
+
+// Mono (one pen) and manual (hand swap) have no physical magazine, so the
+// per-slot magazine editor is skipped for them — the colours come from the
+// single pen or the drawing's layers. Only firmware / host magazines show
+// the slot list.
+const hasMagazine = computed(() => colorMode.value === 'firmware' || colorMode.value === 'host')
+
 // Carousel / rack profiles physically fetch the pen from a fixed slot
 // position, so the calibration editor (position + per-pen up/down
 // overrides) is only meaningful for those. Mono / manual hide it.
@@ -178,144 +205,153 @@ onUnmounted(() => clearTimeout(savedTimer))
     <p v-if="!profile" class="text-xs text-slate-500">{{ t('magazine.noProfile') }}</p>
 
     <template v-else>
-      <p class="text-[11px] text-slate-500">{{ t('magazine.hint') }}</p>
+      <!-- No physical magazine for mono / manual: the colours come from the
+           single pen or the drawing's layers, so the per-slot editor is
+           skipped. Firmware / host magazines keep it. -->
+      <p v-if="!hasMagazine" class="text-xs text-slate-500" data-test="magazine-none">
+        {{ t(`magazine.noMagazine.${colorMode}`) }}
+      </p>
 
-      <ul v-if="pens.length" class="space-y-1.5">
-        <li
-          v-for="pen in pens"
-          :key="pen.index"
-          class="rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5"
-        >
-          <div class="flex items-center gap-2">
-            <span class="w-6 shrink-0 text-center font-mono text-[11px] text-slate-500">
-              #{{ pen.index }}
-            </span>
+      <template v-else>
+        <p class="text-[11px] text-slate-500">{{ t('magazine.hint') }}</p>
 
-            <ColorPicker
-              :model-value="pen.color"
-              :label="t('availableColors.pickColor')"
-              swatch-class="h-7 w-9"
-              :disabled="saving"
-              @update:model-value="(hex) => onCustomColor(pen.index, hex)"
-            />
-
-            <select
-              class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 disabled:opacity-60"
-              :value="matchAvailable(pen.color)"
-              :disabled="saving || !availableColors.ordered.length"
-              @change="(e) => onSelectColor(pen.index, (e.target as HTMLSelectElement).value)"
-            >
-              <option value="" disabled>
-                {{
-                  availableColors.ordered.length
-                    ? t('magazine.customColor', { hex: pen.color })
-                    : t('magazine.noAvailable')
-                }}
-              </option>
-              <option v-for="opt in availableColors.ordered" :key="opt.color_id" :value="opt.hex">
-                {{ displayLabel(opt.name, opt.hex) }}
-              </option>
-            </select>
-
-            <input
-              type="text"
-              :value="pen.name"
-              :placeholder="`Pen ${pen.index}`"
-              class="w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-              :disabled="saving"
-              @change="(e) => onName(pen.index, (e.target as HTMLInputElement).value)"
-            />
-
-            <label class="flex shrink-0 items-center gap-1 text-[11px] text-slate-400">
-              <input
-                type="checkbox"
-                :checked="pen.installed"
-                class="rounded border-slate-600 bg-slate-900"
-                :disabled="saving"
-                @change="(e) => onInstalled(pen.index, (e.target as HTMLInputElement).checked)"
-              />
-              {{ t('profile.installed') }}
-            </label>
-          </div>
-
-          <!-- Per-slot calibration: magazine position + pen-up/down
-               overrides. Only carousel / rack machines fetch pens from a
-               fixed position, so the block is hidden for mono / manual. -->
-          <details
-            v-if="showsCalibration"
-            class="mt-1.5 rounded border border-slate-800 bg-slate-950/40"
-            :data-test="`pen-calibration-${pen.index}`"
+        <ul v-if="pens.length" class="space-y-1.5">
+          <li
+            v-for="pen in pens"
+            :key="pen.index"
+            class="rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5"
           >
-            <summary
-              class="cursor-pointer px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 hover:text-slate-300"
-            >
-              {{ t('magazine.calibration') }}
-            </summary>
-            <div class="grid grid-cols-2 gap-2 border-t border-slate-800 p-2">
-              <label class="block text-[11px] text-slate-400"
-                >{{ t('magazine.posX') }}
+            <div class="flex items-center gap-2">
+              <span class="w-6 shrink-0 text-center font-mono text-[11px] text-slate-500">
+                #{{ pen.index }}
+              </span>
+
+              <ColorPicker
+                :model-value="pen.color"
+                :label="t('availableColors.pickColor')"
+                swatch-class="h-7 w-9"
+                :disabled="saving"
+                @update:model-value="(hex) => onCustomColor(pen.index, hex)"
+              />
+
+              <select
+                class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 disabled:opacity-60"
+                :value="matchAvailable(pen.color)"
+                :disabled="saving || !availableColors.ordered.length"
+                @change="(e) => onSelectColor(pen.index, (e.target as HTMLSelectElement).value)"
+              >
+                <option value="" disabled>
+                  {{
+                    availableColors.ordered.length
+                      ? t('magazine.customColor', { hex: pen.color })
+                      : t('magazine.noAvailable')
+                  }}
+                </option>
+                <option v-for="opt in availableColors.ordered" :key="opt.color_id" :value="opt.hex">
+                  {{ displayLabel(opt.name, opt.hex) }}
+                </option>
+              </select>
+
+              <input
+                type="text"
+                :value="pen.name"
+                :placeholder="`Pen ${pen.index}`"
+                class="w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                :disabled="saving"
+                @change="(e) => onName(pen.index, (e.target as HTMLInputElement).value)"
+              />
+
+              <label class="flex shrink-0 items-center gap-1 text-[11px] text-slate-400">
                 <input
-                  type="number"
-                  step="any"
-                  :value="pen.position?.x ?? ''"
+                  type="checkbox"
+                  :checked="pen.installed"
+                  class="rounded border-slate-600 bg-slate-900"
                   :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-                  @change="(e) => onPosition(pen, 'x', (e.target as HTMLInputElement).value)"
+                  @change="(e) => onInstalled(pen.index, (e.target as HTMLInputElement).checked)"
                 />
-              </label>
-              <label class="block text-[11px] text-slate-400"
-                >{{ t('magazine.posY') }}
-                <input
-                  type="number"
-                  step="any"
-                  :value="pen.position?.y ?? ''"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
-                  @change="(e) => onPosition(pen, 'y', (e.target as HTMLInputElement).value)"
-                />
-              </label>
-              <label class="block text-[11px] text-slate-400"
-                >{{ t('magazine.penUpOverride') }}
-                <input
-                  type="text"
-                  :value="pen.pen_up_command ?? ''"
-                  :placeholder="t('magazine.useProfileDefault')"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100"
-                  @change="
-                    (e) =>
-                      onPenCommand(
-                        pen.index,
-                        'pen_up_command',
-                        (e.target as HTMLInputElement).value,
-                      )
-                  "
-                />
-              </label>
-              <label class="block text-[11px] text-slate-400"
-                >{{ t('magazine.penDownOverride') }}
-                <input
-                  type="text"
-                  :value="pen.pen_down_command ?? ''"
-                  :placeholder="t('magazine.useProfileDefault')"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100"
-                  @change="
-                    (e) =>
-                      onPenCommand(
-                        pen.index,
-                        'pen_down_command',
-                        (e.target as HTMLInputElement).value,
-                      )
-                  "
-                />
+                {{ t('profile.installed') }}
               </label>
             </div>
-          </details>
-        </li>
-      </ul>
 
-      <p v-else class="text-xs text-slate-500">{{ t('magazine.empty') }}</p>
+            <!-- Per-slot calibration: magazine position + pen-up/down
+               overrides. Only carousel / rack machines fetch pens from a
+               fixed position, so the block is hidden for mono / manual. -->
+            <details
+              v-if="showsCalibration"
+              class="mt-1.5 rounded border border-slate-800 bg-slate-950/40"
+              :data-test="`pen-calibration-${pen.index}`"
+            >
+              <summary
+                class="cursor-pointer px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500 hover:text-slate-300"
+              >
+                {{ t('magazine.calibration') }}
+              </summary>
+              <div class="grid grid-cols-2 gap-2 border-t border-slate-800 p-2">
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('magazine.posX') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="pen.position?.x ?? ''"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                    @change="(e) => onPosition(pen, 'x', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('magazine.posY') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="pen.position?.y ?? ''"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                    @change="(e) => onPosition(pen, 'y', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('magazine.penUpOverride') }}
+                  <input
+                    type="text"
+                    :value="pen.pen_up_command ?? ''"
+                    :placeholder="t('magazine.useProfileDefault')"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100"
+                    @change="
+                      (e) =>
+                        onPenCommand(
+                          pen.index,
+                          'pen_up_command',
+                          (e.target as HTMLInputElement).value,
+                        )
+                    "
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('magazine.penDownOverride') }}
+                  <input
+                    type="text"
+                    :value="pen.pen_down_command ?? ''"
+                    :placeholder="t('magazine.useProfileDefault')"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-100"
+                    @change="
+                      (e) =>
+                        onPenCommand(
+                          pen.index,
+                          'pen_down_command',
+                          (e.target as HTMLInputElement).value,
+                        )
+                    "
+                  />
+                </label>
+              </div>
+            </details>
+          </li>
+        </ul>
+
+        <p v-else class="text-xs text-slate-500">{{ t('magazine.empty') }}</p>
+      </template>
 
       <p v-if="error" class="text-[11px] text-red-400">{{ error }}</p>
     </template>
