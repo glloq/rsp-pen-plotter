@@ -14,6 +14,7 @@ from xml.sax.saxutils import quoteattr
 
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 
@@ -34,7 +35,7 @@ class ScanlinesAlgorithm(RasterAlgorithm):
         options: dict[str, Any] | None = None,
     ) -> str:
         opts = options or {}
-        spacing = max(1, int(opts.get("spacing_px", 4)))
+        spacing = int(floored_spacing(max(1, int(opts.get("spacing_px", 4))), opts))
         wave_amp = max(0.0, float(opts.get("wave_amp_px", 0.0)))
         wave_period = max(1.0, float(opts.get("wave_period_px", 12.0)))
         bool_mask = mask.astype(bool)
@@ -70,7 +71,7 @@ class ScanlinesAlgorithm(RasterAlgorithm):
         )
         return (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
-            f'fill="none" stroke-width="0.8" stroke-linecap="round">'
+            f'fill="none" stroke-width="{stroke_attr_px(opts):.3f}" stroke-linecap="round">'
             + paths
             + "</g>"
         )

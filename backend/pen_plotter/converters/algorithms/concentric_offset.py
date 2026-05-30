@@ -20,6 +20,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 
@@ -117,14 +118,14 @@ class ConcentricOffsetAlgorithm(RasterAlgorithm):
         options: dict[str, Any] | None = None,
     ) -> str:
         opts = options or {}
-        spacing = max(1, int(opts.get("spacing_px", 3)))
+        spacing = int(floored_spacing(max(1, int(opts.get("spacing_px", 3))), opts))
         max_rings = max(1, int(opts.get("max_rings", 50)))
         bridge = bool(opts.get("bridge", True))
         bool_mask = mask.astype(bool)
 
         group_open = (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
-            f'fill="none" stroke-width="0.8" stroke-linecap="round" '
+            f'fill="none" stroke-width="{stroke_attr_px(opts):.3f}" stroke-linecap="round" '
             f'stroke-linejoin="round">'
         )
         if not bool_mask.any():

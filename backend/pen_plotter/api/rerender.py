@@ -78,6 +78,13 @@ class RerenderRequest(BaseModel):
 
     job_id: str
     layers: list[LayerAlgorithm] = Field(default_factory=list)
+    # Per-layer pen tip width in the layer's SVG user units (viewBox
+    # space), keyed by layer label (``color-{hex}``). Derived by the
+    # frontend from the assigned colour's ``stroke_width_mm`` and the
+    # placement scale; applied to every layer (default + override) so the
+    # rendered stroke matches the real pen and fill spacing is floored at
+    # one pen width. Omitted layers keep the historical 0.8 default.
+    layer_stroke_widths: dict[str, float] = Field(default_factory=dict)
 
 
 class RerenderResponse(BaseModel):
@@ -134,7 +141,10 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
             overrides[item.layer_id] = spec
     try:
         svg, warnings = BitmapConverter.render_from_segmentation(
-            entry.segmentation, entry.options, per_layer_overrides=overrides
+            entry.segmentation,
+            entry.options,
+            per_layer_overrides=overrides,
+            layer_stroke_widths=request.layer_stroke_widths,
         )
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

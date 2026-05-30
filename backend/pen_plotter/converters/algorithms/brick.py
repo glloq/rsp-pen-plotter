@@ -14,6 +14,7 @@ from xml.sax.saxutils import quoteattr
 
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 from pen_plotter.converters.algorithms.grid import _runs
 
@@ -36,8 +37,8 @@ class BrickAlgorithm(RasterAlgorithm):
         options: dict[str, Any] | None = None,
     ) -> str:
         opts = options or {}
-        brick_h = max(2, int(opts.get("brick_h_px", 8)))
-        brick_w = max(2, int(opts.get("brick_w_px", 16)))
+        brick_h = int(floored_spacing(max(2, int(opts.get("brick_h_px", 8))), opts))
+        brick_w = int(floored_spacing(max(2, int(opts.get("brick_w_px", 16))), opts))
         bool_mask = mask.astype(bool)
         height, width = bool_mask.shape
 
@@ -81,5 +82,7 @@ class BrickAlgorithm(RasterAlgorithm):
         )
         return (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
-            f'fill="none" stroke-width="0.8" stroke-linecap="round">' + paths + "</g>"
+            f'fill="none" stroke-width="{stroke_attr_px(opts):.3f}" stroke-linecap="round">'
+            + paths
+            + "</g>"
         )

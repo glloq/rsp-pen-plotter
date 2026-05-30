@@ -601,10 +601,18 @@ export async function rerenderJob(
   jobId: string,
   layers: LayerAlgorithmOverride[],
   signal?: AbortSignal,
+  layerStrokeWidths?: Record<string, number>,
 ): Promise<RerenderResponse> {
   const response = await api.post<RerenderResponse>(
     '/rerender',
-    { job_id: jobId, layers },
+    {
+      job_id: jobId,
+      layers,
+      // Per-layer pen tip width (viewBox units), so the backend renders
+      // each layer's stroke at the real pen and floors fill spacing at
+      // one pen width. Omitted when no inventory width is resolved.
+      ...(layerStrokeWidths ? { layer_stroke_widths: layerStrokeWidths } : {}),
+    },
     // No timeout: a heavy multi-pass stack on a high-res placement
     // can take a while. The caller passes ``signal`` so the operator
     // can cancel.

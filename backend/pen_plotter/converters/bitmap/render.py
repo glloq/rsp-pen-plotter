@@ -140,6 +140,7 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     drop_background: bool,
     background_luminance: float,
     per_layer_overrides: dict[str, dict[str, Any]] | None = None,
+    layer_stroke_widths: dict[str, float] | None = None,
     n_workers: int = 1,
     progress_callback: ProgressCallback | None = None,
 ) -> tuple[str, list[str]]:
@@ -159,6 +160,7 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     ``n_workers <= 1``.
     """
     overrides = per_layer_overrides or {}
+    stroke_widths = layer_stroke_widths or {}
     warnings: list[str] = []
     # (mask, color_hex, ink_hex, label, algo_name, algo_options, passes)
     # Local type alias; uppercase matches the convention for type
@@ -211,6 +213,27 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
                         },
                     }
                     if isinstance(p, dict) and p.get("algorithm") == "spiral"
+                    else p
+                    for p in passes
+                ]
+        # Physical pen width (viewBox units) for this layer, injected by
+        # the frontend from the assigned colour's ``stroke_width_mm``.
+        # Threading it into the options makes the rendered stroke match
+        # the real pen and floors the fill spacing at one pen width.
+        # Applies to default + override + multi-pass layers alike.
+        pen_sw = stroke_widths.get(label)
+        if pen_sw is not None and pen_sw > 0:
+            algo_options = {**algo_options, "stroke_width": pen_sw}
+            if passes:
+                passes = [
+                    {
+                        **p,
+                        "algorithm_options": {
+                            **(p.get("algorithm_options") or {}),
+                            "stroke_width": pen_sw,
+                        },
+                    }
+                    if isinstance(p, dict)
                     else p
                     for p in passes
                 ]

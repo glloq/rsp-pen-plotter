@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyPhysicalStrokeWidth,
   canonicalHex,
+  layerStrokeWidthsPx,
   mmPerViewBoxUnit,
   strokeWidthMmByHex,
 } from './penWidth'
@@ -62,5 +63,29 @@ describe('applyPhysicalStrokeWidth', () => {
     expect(applyPhysicalStrokeWidth(svg, empty, 0.5)).toBe(svg)
     const map = new Map<string, number>([['#ff0000', 1.0]])
     expect(applyPhysicalStrokeWidth(svg, map, 0)).toBe(svg)
+  })
+})
+
+describe('layerStrokeWidthsPx', () => {
+  const layers = [
+    { layer_id: 'color-ff0000', source_color: '#ff0000', assigned_color_hex: null },
+    { layer_id: 'color-00ff00', source_color: '#00ff00', assigned_color_hex: '#0000ff' },
+    { layer_id: 'color-undeclared', source_color: '#abcdef', assigned_color_hex: null },
+  ]
+
+  it('maps declared colours to mm / mmPerUnit, prefers assigned, skips others', () => {
+    const map = new Map<string, number>([
+      ['#ff0000', 1.0],
+      ['#0000ff', 2.0],
+    ])
+    // mmPerUnit 0.5 → red 1.0/0.5 = 2.0, assigned blue 2.0/0.5 = 4.0.
+    const out = layerStrokeWidthsPx(layers, map, 0.5)
+    expect(out).toEqual({ 'color-ff0000': 2.0, 'color-00ff00': 4.0 })
+    expect(out['color-undeclared']).toBeUndefined()
+  })
+
+  it('is empty when scale invalid or inventory empty', () => {
+    expect(layerStrokeWidthsPx(layers, new Map(), 0.5)).toEqual({})
+    expect(layerStrokeWidthsPx(layers, new Map([['#ff0000', 1]]), 0)).toEqual({})
   })
 })

@@ -18,6 +18,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 
@@ -155,7 +156,7 @@ class EulerianHatchAlgorithm(RasterAlgorithm):
         options: dict[str, Any] | None = None,
     ) -> str:
         opts = options or {}
-        spacing = max(1.0, float(opts.get("spacing_px", 4.0)))
+        spacing = floored_spacing(max(1.0, float(opts.get("spacing_px", 4.0))), opts)
         connect_threshold = float(opts.get("connect_threshold_px", 2.0 * spacing))
         raw_angles = opts.get("angles")
         if raw_angles is None:
@@ -167,7 +168,7 @@ class EulerianHatchAlgorithm(RasterAlgorithm):
 
         group_open = (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
-            f'fill="none" stroke-width="0.8" stroke-linecap="round" '
+            f'fill="none" stroke-width="{stroke_attr_px(opts):.3f}" stroke-linecap="round" '
             f'stroke-linejoin="round">'
         )
         if not bool_mask.any():

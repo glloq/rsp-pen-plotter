@@ -87,4 +87,32 @@ export function applyPhysicalStrokeWidth(
   return new XMLSerializer().serializeToString(doc.documentElement)
 }
 
+/**
+ * Build the per-layer pen width map (viewBox units) for ``/rerender``,
+ * keyed by layer id. Each layer's width comes from its assigned colour
+ * (falling back to its source colour) looked up in the inventory, then
+ * converted mm → viewBox units via ``mmPerUnit``. Layers whose colour
+ * isn't a declared pen are omitted so the backend keeps its default.
+ */
+export function layerStrokeWidthsPx(
+  layers: ReadonlyArray<{
+    layer_id: string
+    source_color: string
+    assigned_color_hex: string | null
+  }>,
+  hexToMm: Map<string, number>,
+  mmPerUnit: number,
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  if (!(mmPerUnit > 0) || hexToMm.size === 0) return out
+  for (const layer of layers) {
+    const hex = canonicalHex(layer.assigned_color_hex ?? layer.source_color)
+    const mm = hexToMm.get(hex)
+    if (mm === undefined) continue
+    const units = mm / mmPerUnit
+    if (units > 0 && Number.isFinite(units)) out[layer.layer_id] = units
+  }
+  return out
+}
+
 export { DEFAULT_STROKE_WIDTH_MM }

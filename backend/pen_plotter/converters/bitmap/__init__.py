@@ -318,6 +318,7 @@ class BitmapConverter(Converter):
         opts: BitmapOptions,
         *,
         per_layer_overrides: dict[str, dict[str, Any]] | None = None,
+        layer_stroke_widths: dict[str, float] | None = None,
         n_workers: int = 1,
         progress_callback: Any = None,
     ) -> tuple[str, list[str]]:
@@ -335,6 +336,7 @@ class BitmapConverter(Converter):
             drop_background=opts.drop_background,
             background_luminance=opts.background_luminance,
             per_layer_overrides=per_layer_overrides,
+            layer_stroke_widths=layer_stroke_widths,
             n_workers=n_workers,
             progress_callback=progress_callback,
         )

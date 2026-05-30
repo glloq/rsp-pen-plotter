@@ -15,6 +15,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 
@@ -35,7 +36,7 @@ class TruchetAlgorithm(RasterAlgorithm):
         options: dict[str, Any] | None = None,
     ) -> str:
         opts = options or {}
-        cell = max(2, int(opts.get("cell_px", 10)))
+        cell = int(floored_spacing(max(2, int(opts.get("cell_px", 10))), opts))
         seed = int(opts.get("seed", 0))
         bool_mask = mask.astype(bool)
         height, width = bool_mask.shape
@@ -64,5 +65,7 @@ class TruchetAlgorithm(RasterAlgorithm):
         )
         return (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
-            f'fill="none" stroke-width="0.8" stroke-linecap="round">' + paths + "</g>"
+            f'fill="none" stroke-width="{stroke_attr_px(opts):.3f}" stroke-linecap="round">'
+            + paths
+            + "</g>"
         )

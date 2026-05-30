@@ -13,6 +13,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 
@@ -80,7 +81,7 @@ class ContoursAlgorithm(RasterAlgorithm):
         options: dict[str, Any] | None = None,
     ) -> str:
         opts = options or {}
-        spacing = max(1, int(opts.get("spacing_px", 4)))
+        spacing = int(floored_spacing(max(1, int(opts.get("spacing_px", 4))), opts))
         max_rings = max(1, int(opts.get("max_rings", 20)))
         bool_mask = mask.astype(bool)
 
@@ -98,7 +99,7 @@ class ContoursAlgorithm(RasterAlgorithm):
 
         return (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "
-            f'fill="none" stroke-width="0.8" stroke-linejoin="round">'
+            f'fill="none" stroke-width="{stroke_attr_px(opts):.3f}" stroke-linejoin="round">'
             + "".join(paths)
             + "</g>"
         )
