@@ -227,4 +227,41 @@ describe('AvailableColorsPanel', () => {
     await nextTick()
     expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 0.8 }))
   })
+
+  it('heals a colour whose width is missing instead of showing "undefined"', async () => {
+    // The reported bug: a colour without ``stroke_width_mm`` opened the
+    // edit field on the literal string "undefined", which parsed back to
+    // null and was *omitted* from the patch — so the diameter never
+    // persisted and re-opening showed "undefined" again. The field must
+    // now default to a real number and the save must include it.
+    const store = useAvailableColorsStore()
+    store.colors = [
+      {
+        color_id: 'a',
+        hex: '#ff0000',
+        name: 'Red',
+        position: 0,
+        odometer_mm: 0,
+        created_at: '2026-01-01T00:00:00Z',
+      } as unknown as (typeof store.colors)[number],
+    ]
+    store.loaded = true
+    const spy = vi.spyOn(store, 'rename')
+    const wrapper = mountPanel()
+    await nextTick()
+    await wrapper
+      .findAll('button')
+      .find((b) => b.attributes('title') === 'Edit')!
+      .trigger('click')
+    await nextTick()
+    const row = wrapper.find('li')
+    const widthInput = row.findAll('input').find((i) => i.attributes('title') === 'Width')!
+    expect((widthInput.element as HTMLInputElement).value).toBe('0.5')
+    await row
+      .findAll('button')
+      .find((b) => b.text() === '✓')!
+      .trigger('click')
+    await nextTick()
+    expect(spy).toHaveBeenCalledWith('a', expect.objectContaining({ stroke_width_mm: 0.5 }))
+  })
 })
