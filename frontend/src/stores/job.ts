@@ -843,6 +843,30 @@ export const useJobStore = defineStore('job', () => {
     ),
   )
 
+  // Aggregate drawn length (mm) per assigned colour, keyed by canonical
+  // lowercase 6-digit hex so the available-colours inventory (which stores
+  // canonical hex) can surface "metres used" for each ink. A layer with no
+  // explicit ``assigned_color_hex`` falls back to its source colour, matching
+  // what actually gets drawn on the sheet.
+  const lengthMmByColor = computed<Record<string, number>>(() => {
+    const canon = (value: string): string => {
+      const trimmed = value.trim().replace(/^#/, '').toLowerCase()
+      if (/^[0-9a-f]{3}$/.test(trimmed)) {
+        return `#${trimmed.split('').map((c) => c + c).join('')}`
+      }
+      if (/^[0-9a-f]{6}$/.test(trimmed)) return `#${trimmed}`
+      return value
+    }
+    const totals: Record<string, number> = {}
+    for (const placement of visiblePlacements.value) {
+      for (const layer of placement.layers) {
+        const hex = canon(layer.assigned_color_hex ?? layer.source_color)
+        totals[hex] = (totals[hex] ?? 0) + layer.total_length_mm
+      }
+    }
+    return totals
+  })
+
   function setVisibility(layerId: string, visible: boolean): void {
     const p = selectedPlacement.value
     if (!p) return
@@ -1771,6 +1795,7 @@ export const useJobStore = defineStore('job', () => {
     clearJob,
     totalLengthMm,
     totalDurationSeconds,
+    lengthMmByColor,
     effectiveSpeed,
     layerDurationSeconds,
     setVisibility,

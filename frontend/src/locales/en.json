@@ -983,6 +983,23 @@
     "penSlotsHint": "How many distinct pens the magazine can hold.",
     "magazine": "Magazine",
     "magazineMovedHint": "Colour set in the Colours tab",
+    "colorManagement": "Colour management",
+    "colorManagementHint": "How this plotter handles colour. Assigning colours to pens happens in the Colours tab.",
+    "colorMode": {
+      "mono": "Single colour",
+      "manual": "Manual swap",
+      "magazine": "Automatic magazine"
+    },
+    "colorModeHint": {
+      "mono": "One pen only, no tool change.",
+      "manual": "Multiple colours: the plotter pauses so you swap the pen by hand.",
+      "magazine": "Motorised carousel / rack: the plotter swaps pens on its own."
+    },
+    "penCount": "Number of pens",
+    "penCountMagazineHint": "How many slots are available in the magazine.",
+    "penCountManualHint": "How many pens you alternate between by hand.",
+    "monoNote": "Single-colour mode: only one pen is used.",
+    "penCommands": "Pen machine commands",
     "installed": "Present",
     "pickupPosition": "Pickup position",
     "penUpOverride": "Pen-up override",
@@ -1131,7 +1148,9 @@
     "updateFailed": "Could not update the palette source setting."
   },
   "availableColors": {
-    "hint": "Your global ink inventory. Declare every Sharpie / fineliner you own once; layers pick from this list when the palette source is set to available colours.",
+    "hint": "Your global ink inventory, and the colour assignment for each magazine slot. Declare every Sharpie / fineliner you own once.",
+    "meters": "{value} m",
+    "metersUsedTitle": "Metres drawn with this colour for the current job.",
     "add": "Add a colour",
     "addAction": "Add",
     "hex": "Hex",

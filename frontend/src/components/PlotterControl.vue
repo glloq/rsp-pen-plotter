@@ -7,6 +7,7 @@ import { usePlotterStore } from '../stores/plotter'
 import { useUiStore } from '../stores/ui'
 import GcodePreview from './GcodePreview.vue'
 import JogControls from './JogControls.vue'
+import PrintQueuePanel from './PrintQueuePanel.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
@@ -71,6 +72,16 @@ const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length 
       </header>
 
       <p class="mb-3 text-xs text-slate-400">{{ t('plotter.manualHint') }}</p>
+
+      <!-- Print queue + live-run follow-up. Always visible so the operator
+           can enqueue a job while disconnected and watch progress once the
+           run starts. -->
+      <section class="mb-4 space-y-2">
+        <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
+          {{ t('queue.title') }}
+        </h4>
+        <PrintQueuePanel />
+      </section>
 
       <div
         v-if="!status.connected"

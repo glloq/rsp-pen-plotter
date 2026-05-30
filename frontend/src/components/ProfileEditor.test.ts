@@ -166,13 +166,29 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(xmax).toBeDefined()
   })
 
-  it('renders one pen card per seeded pen_slot_count', async () => {
-    // pen_slot_count = 2 → normalizePens populates draft.pens with two
-    // PenSlot entries → two name inputs in the magazine.
+  it('renders the colour-mode selector with the seeded mode active', async () => {
+    // Per-pen colour cards now live in the Colours tab; the profile tab
+    // only exposes the colour-management mode (mono / manual / magazine)
+    // and, for multicolour modes, the pen count. The seeded profile uses
+    // manual_pause → the "manual" card is active.
     const wrapper = mountEditor()
     await nextTick()
-    const penNames = wrapper.findAll('input[placeholder^="Pen "]')
-    expect(penNames.length).toBe(2)
+    expect(wrapper.find('[data-test="color-mode-mono"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="color-mode-manual"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="color-mode-magazine"]').exists()).toBe(true)
+    const manual = wrapper.find('[data-test="color-mode-manual"]')
+    expect(manual.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('shows the pen count for a multicolour profile', async () => {
+    // pen_slot_count = 2 with a non-mono mode → the magazine pen-count
+    // input is visible and reflects the seeded value.
+    const wrapper = mountEditor()
+    await nextTick()
+    const block = wrapper.find('[data-test="magazine-pen-count"]')
+    expect(block.exists()).toBe(true)
+    const input = block.find('input[type="number"]')
+    expect((input.element as HTMLInputElement).valueAsNumber).toBe(2)
   })
 
   it('shows the Save button enabled when a draft exists', async () => {
