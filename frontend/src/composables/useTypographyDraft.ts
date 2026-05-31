@@ -78,7 +78,13 @@ export function defaultTypography(): TypographyDraft {
     bold: false,
     italic: false,
     letter_spacing_mm: 0.0,
-    hershey_text: false,
+    // Default ON: pen plotters can only trace strokes, so the document's
+    // original TrueType glyph outlines paint as double-walled silhouettes
+    // that no longer resemble letters once vpype strips the SVG fill.
+    // Replaying each text span with single-stroke Hershey polylines is the
+    // only legible default for PDF / DOCX / HTML sources. Ignored on
+    // .txt / .md (TextConverter / MarkdownConverter always use Hershey).
+    hershey_text: true,
   }
 }
 
