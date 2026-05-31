@@ -986,6 +986,86 @@ def _path_is_outline_frame(path: ET.Element) -> bool:
     return d.count("M") + d.count("m") > 1
 
 
+def _collect_text_glyph_positions(
+    root: ET.Element,
+    parent_map: dict[ET.Element, ET.Element],
+) -> list[tuple[float, float]]:
+    """Return every text-glyph origin in document user-unit coords.
+
+    PyMuPDF emits each PDF text glyph as
+    ``<use data-text="X" xlink:href="#font_..." transform="matrix(a 0
+    0 d x y)"/>``, where ``(x, y)`` is the glyph baseline origin in
+    the local coordinate space. To compare against the AABBs the
+    hatchers compute (already composed up to root) we apply every
+    ancestor transform on the way back up. The returned points feed
+    :func:`_bbox_contains_text` so the hatch passes can leave any
+    shape that surrounds text alone — bbox-hatching such a shape
+    would paint hatch lines across the text glyphs and the operator
+    reads the result as "text barred".
+    """
+    import re
+
+    positions: list[tuple[float, float]] = []
+    for elem in root.iter():
+        if _local(elem.tag) != "use":
+            continue
+        href = (
+            elem.get("href")
+            or elem.get(_XLINK_HREF)
+            or elem.get("xlink:href")
+            or ""
+        ).lstrip("#")
+        is_text = elem.get("data-text") is not None or href.startswith("font_")
+        if not is_text:
+            continue
+        transform = elem.get("transform") or ""
+        # PyMuPDF only ever emits ``matrix(a b c d e f)`` for text
+        # glyphs; pull (e, f) directly. Fall back to translate(x, y)
+        # for safety in case a future version switches forms.
+        local_x = 0.0
+        local_y = 0.0
+        m = re.search(r"matrix\(([^)]+)\)", transform)
+        if m:
+            nums = [
+                float(v) for v in re.split(r"[\s,]+", m.group(1).strip()) if v
+            ]
+            if len(nums) == 6:
+                local_x, local_y = nums[4], nums[5]
+        else:
+            m = re.search(r"translate\(([^)]+)\)", transform)
+            if m:
+                nums = [
+                    float(v) for v in re.split(r"[\s,]+", m.group(1).strip()) if v
+                ]
+                if len(nums) >= 1:
+                    local_x = nums[0]
+                if len(nums) >= 2:
+                    local_y = nums[1]
+            else:
+                try:
+                    local_x = float(elem.get("x", "0"))
+                    local_y = float(elem.get("y", "0"))
+                except ValueError:
+                    pass
+        a, b, c, d, e, f = _ancestor_transform(elem, parent_map, root)
+        page_x = a * local_x + c * local_y + e
+        page_y = b * local_x + d * local_y + f
+        positions.append((page_x, page_y))
+    return positions
+
+
+def _bbox_contains_text(
+    bbox: tuple[float, float, float, float],
+    text_positions: list[tuple[float, float]],
+) -> bool:
+    """``True`` if any text glyph origin sits inside ``bbox``."""
+    x_min, y_min, x_max, y_max = bbox
+    for tx, ty in text_positions:
+        if x_min <= tx <= x_max and y_min <= ty <= y_max:
+            return True
+    return False
+
+
 def apply_grayscale_density_hatching(
     root: ET.Element,
     *,
@@ -1017,6 +1097,7 @@ def apply_grayscale_density_hatching(
     Returns the number of shapes replaced.
     """
     parent_map = {child: parent for parent in root.iter() for child in parent}
+    text_positions = _collect_text_glyph_positions(root, parent_map)
     candidates: list[tuple[ET.Element, int, tuple[float, float, float, float]]] = []
     for shape in list(root.iter()):
         local = _local(shape.tag)
@@ -1040,6 +1121,14 @@ def apply_grayscale_density_hatching(
             continue
         area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
         if area < min_area_pt2:
+            continue
+        if _bbox_contains_text(bbox, text_positions):
+            # The shape encloses text glyphs (e.g. a CSS-styled callout
+            # box with a paragraph inside, or any background that
+            # surrounds rendered text). Hatching its bbox paints
+            # parallel lines across the glyphs the operator wants
+            # readable — so leave the shape as-is and let it plot as
+            # its outline instead.
             continue
         candidates.append((shape, value, bbox))
 
@@ -1134,6 +1223,7 @@ def apply_color_density_hatching(
     Returns the number of shapes replaced.
     """
     parent_map = {child: parent for parent in root.iter() for child in parent}
+    text_positions = _collect_text_glyph_positions(root, parent_map)
     buckets: dict[str, list[tuple[ET.Element, tuple[float, float, float, float]]]] = {}
     for shape in list(root.iter()):
         local = _local(shape.tag)
@@ -1163,6 +1253,14 @@ def apply_color_density_hatching(
             continue
         area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
         if area < min_area_pt2:
+            continue
+        if _bbox_contains_text(bbox, text_positions):
+            # Skip any shape whose AABB encloses text — hatching it
+            # would paint parallel lines across the glyphs and the
+            # operator reads the result as "text barred". Leaves the
+            # shape as its outline instead, which on the typical
+            # styled-callout / button case is what the operator
+            # actually expects to see.
             continue
         buckets.setdefault(color, []).append((shape, bbox))
 
