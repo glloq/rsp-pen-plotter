@@ -310,7 +310,7 @@ export const useLibraryStore = defineStore('library', () => {
           }),
         )
       }
-      if (result.existing) {
+      if (result.existing && !options.silent) {
         toasts.info(i18n.global.t('library.dedupedToast', { name: result.file.source_file }))
       }
       return result

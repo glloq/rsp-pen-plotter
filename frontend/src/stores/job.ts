@@ -792,6 +792,13 @@ export const useJobStore = defineStore('job', () => {
   async function triggerRerender(): Promise<void> {
     const p = selectedPlacement.value
     if (!p || !p.job_id || !p.svg) return
+    // Vector sources (PDF / HTML / DOCX / SVG / DXF / EPS) have no
+    // segmentation cache for the backend's /rerender route — the
+    // editor's layer-algorithm tweaks land on the next full re-upload
+    // instead. Calling /rerender here would always 404 and surface the
+    // misleading "cache expiré" toast right after a successful
+    // Re-convertir.
+    if (!p.rerenderable) return
     if (rerenderController) rerenderController.abort()
     const controller = new AbortController()
     rerenderController = controller
