@@ -243,10 +243,14 @@ export function parseGcode(gcode: string, options: ParseOptions): SimResult {
 
     const tokens = line.split(/\s+/)
     const code = tokens[0]
-    if (code !== 'G0' && code !== 'G1' && code !== 'G00' && code !== 'G01') continue
+    const isLinear = code === 'G0' || code === 'G1' || code === 'G00' || code === 'G01'
+    const isArc = code === 'G2' || code === 'G3' || code === 'G02' || code === 'G03'
+    if (!isLinear && !isArc) continue
 
     let nx = x
     let ny = y
+    let iOff: number | null = null
+    let jOff: number | null = null
     for (const token of tokens.slice(1)) {
       if (token.startsWith('X')) {
         const v = parseCoord(token)
@@ -254,6 +258,12 @@ export function parseGcode(gcode: string, options: ParseOptions): SimResult {
       } else if (token.startsWith('Y')) {
         const v = parseCoord(token)
         if (v !== null) ny = v
+      } else if (token.startsWith('I')) {
+        const v = parseCoord(token)
+        if (v !== null) iOff = v
+      } else if (token.startsWith('J')) {
+        const v = parseCoord(token)
+        if (v !== null) jOff = v
       } else if (token.startsWith('F')) {
         const v = parseCoord(token)
         if (v !== null && v > 0) feedMmS = v / 60
@@ -262,43 +272,91 @@ export function parseGcode(gcode: string, options: ParseOptions): SimResult {
 
     const rapid = code === 'G0' || code === 'G00'
     const drawing = penDown && !rapid
-    const length = Math.hypot(nx - x, ny - y)
-    const speed = drawing ? feedMmS : options.travelSpeedMmS
-    const duration = speed > 0 ? length / speed : 0
 
-    segments.push({
-      x0: x,
-      y0: y,
-      x1: nx,
-      y1: ny,
-      drawing,
-      duration,
-      startTime: elapsed,
-      penSlot: currentPenSlot,
-      colorHex: currentColorHex,
-      colorLabel: currentColorLabel,
-    })
-    if (drawing) {
-      drawingTime += duration
-      include(x, y)
-      include(nx, ny)
-      // Track segments-per-colour so the filter UI can hide colours that
-      // never end up drawing anything.
-      const key = currentColorHex ?? '__nocolor__'
-      const existing = colorStats.get(key)
-      if (existing) {
-        existing.segmentCount += 1
+    // Tessellate G2/G3 arcs into line chords so the canvas renderer
+    // (which only knows ``moveTo``/``lineTo``) reproduces the curved
+    // Hershey strokes the backend emits for letters like e / a / c / o.
+    // Without this the simulator silently drops every arc — about a
+    // third of a typical text plot's moves — and the operator sees
+    // only the straight skeletons of each glyph.
+    //
+    // I / J are workspace-mm offsets from the current pen position to
+    // the arc centre (GRBL convention). G2 sweeps clockwise, G3
+    // counter-clockwise — measured in the source coordinate system the
+    // backend emitted, so the renderer's Y-flip applies uniformly to
+    // chords and base straight moves alike.
+    const chords: Array<[number, number, number, number]> = []
+    if (isArc && iOff !== null && jOff !== null) {
+      const cx = x + iOff
+      const cy = y + jOff
+      const r = Math.hypot(x - cx, y - cy)
+      const startAngle = Math.atan2(y - cy, x - cx)
+      const endAngle = Math.atan2(ny - cy, nx - cx)
+      const cw = code === 'G2' || code === 'G02'
+      let sweep = endAngle - startAngle
+      if (cw) {
+        if (sweep >= 0) sweep -= 2 * Math.PI
       } else {
-        colorStats.set(key, {
-          hex: currentColorHex ?? '',
-          label: currentColorLabel ?? currentColorHex ?? '',
-          segmentCount: 1,
-        })
+        if (sweep <= 0) sweep += 2 * Math.PI
+      }
+      // Half-mm chord target keeps the polyline indistinguishable from
+      // a true arc at any reasonable zoom; the 8-step floor catches
+      // tiny arcs that would otherwise collapse to a single segment and
+      // visibly cut the corner.
+      const steps = Math.max(8, Math.ceil((Math.abs(sweep) * r) / 0.5))
+      let px = x
+      let py = y
+      for (let i = 1; i <= steps; i++) {
+        const a = startAngle + (sweep * i) / steps
+        const qx = i === steps ? nx : cx + r * Math.cos(a)
+        const qy = i === steps ? ny : cy + r * Math.sin(a)
+        chords.push([px, py, qx, qy])
+        px = qx
+        py = qy
       }
     } else {
-      travelTime += duration
+      chords.push([x, y, nx, ny])
     }
-    elapsed += duration
+
+    for (const [cx0, cy0, cx1, cy1] of chords) {
+      const length = Math.hypot(cx1 - cx0, cy1 - cy0)
+      const speed = drawing ? feedMmS : options.travelSpeedMmS
+      const duration = speed > 0 ? length / speed : 0
+
+      segments.push({
+        x0: cx0,
+        y0: cy0,
+        x1: cx1,
+        y1: cy1,
+        drawing,
+        duration,
+        startTime: elapsed,
+        penSlot: currentPenSlot,
+        colorHex: currentColorHex,
+        colorLabel: currentColorLabel,
+      })
+      if (drawing) {
+        drawingTime += duration
+        include(cx0, cy0)
+        include(cx1, cy1)
+        // Track segments-per-colour so the filter UI can hide colours that
+        // never end up drawing anything.
+        const key = currentColorHex ?? '__nocolor__'
+        const existing = colorStats.get(key)
+        if (existing) {
+          existing.segmentCount += 1
+        } else {
+          colorStats.set(key, {
+            hex: currentColorHex ?? '',
+            label: currentColorLabel ?? currentColorHex ?? '',
+            segmentCount: 1,
+          })
+        }
+      } else {
+        travelTime += duration
+      }
+      elapsed += duration
+    }
     x = nx
     y = ny
   }
