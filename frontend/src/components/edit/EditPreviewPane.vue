@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import DOMPurify from 'dompurify'
 import { useI18n } from 'vue-i18n'
+import { sanitizeSvgCached } from '../../lib/sanitizeSvg'
 import { useJobStore } from '../../stores/job'
 import { useEditState } from '../../composables/useEditState'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
@@ -234,7 +234,7 @@ const activeVariantId = computed(() => store.selectedPlacement?.active_variant_i
 const placementSvg = computed(() => {
   const svg = store.svg
   if (!svg) return ''
-  const clean = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
+  const clean = sanitizeSvgCached(svg)
   return withPenWidths(clean)
 })
 

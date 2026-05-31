@@ -330,6 +330,13 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
         <FileListRow
           v-for="row in rows"
           :key="row.file.file_id"
+          v-memo="[
+            row.file.file_id,
+            row.file.source_file,
+            row.placementCount,
+            row.configured,
+            previewSvg(row.file.file_id) ?? '',
+          ]"
           :file="row.file"
           :placement-count="row.placementCount"
           :configured="row.configured"

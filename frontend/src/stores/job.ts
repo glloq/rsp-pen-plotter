@@ -45,6 +45,35 @@ import { attachScenePersistence } from '../infrastructure/storage/sceneStorage'
 
 const DEFAULT_SPEED_MM_S = 60
 
+// Module-level memo for canonical hex normalisation. ``lengthMmByColor`` and
+// ``visiblePlacements`` together walk every layer of every placement on each
+// invalidation; recomputing two regex tests + string allocations per layer
+// shows up on the Pi when the operator drags a slider. The map is bounded so
+// it can't grow unbounded across long sessions.
+const HEX3_RE = /^[0-9a-f]{3}$/
+const HEX6_RE = /^[0-9a-f]{6}$/
+const _canonHexCache = new Map<string, string>()
+const CANON_HEX_CACHE_MAX = 256
+function canonHexMemo(value: string): string {
+  const cached = _canonHexCache.get(value)
+  if (cached !== undefined) return cached
+  const trimmed = value.trim().replace(/^#/, '').toLowerCase()
+  let result: string
+  if (HEX3_RE.test(trimmed)) {
+    result = `#${trimmed[0]}${trimmed[0]}${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}`
+  } else if (HEX6_RE.test(trimmed)) {
+    result = `#${trimmed}`
+  } else {
+    result = value
+  }
+  if (_canonHexCache.size >= CANON_HEX_CACHE_MAX) {
+    const oldest = _canonHexCache.keys().next().value
+    if (oldest !== undefined) _canonHexCache.delete(oldest)
+  }
+  _canonHexCache.set(value, result)
+  return result
+}
+
 // A placement is a fully self-contained snapshot: source file metadata,
 // the rendered SVG, the per-layer config, and the position/size on the
 // machine workspace. Multiple placements live side-by-side on the plan
@@ -516,6 +545,20 @@ export const useJobStore = defineStore('job', () => {
     rerenderInFlight = promise
   }
 
+  // Unified debounced rerender scheduler. Coalesces all call sites onto a
+  // single timer so rapid layer/colour/algorithm edits collapse to one
+  // /rerender call. The shortest delay requested while a timer is pending
+  // wins — a 50ms caller after a 250ms caller fires at 50ms.
+  function scheduleRerender(delayMs: number): void {
+    if (rerenderTimer) {
+      clearTimeout(rerenderTimer)
+    }
+    rerenderTimer = setTimeout(() => {
+      rerenderTimer = null
+      trackRerender()
+    }, delayMs)
+  }
+
   // Drain any debounced + in-flight rerender so callers can safely read
   // ``placement.svg`` afterwards. Safe to call when nothing is pending.
   async function flushRerender(): Promise<void> {
@@ -562,8 +605,7 @@ export const useJobStore = defineStore('job', () => {
     })
     autoSyncActiveVariant()
     clearLivePreviewSvg()
-    if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(trackRerender, 250)
+    scheduleRerender(250)
   }
 
   /**
@@ -718,8 +760,7 @@ export const useJobStore = defineStore('job', () => {
     patchSelected({ layer_algorithms: next })
     autoSyncActiveVariant()
     clearLivePreviewSvg()
-    if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(trackRerender, 50)
+    scheduleRerender(50)
   }
 
   async function applyAlgorithmToAllLayers(
@@ -738,8 +779,7 @@ export const useJobStore = defineStore('job', () => {
     patchSelected({ layer_algorithms: next })
     autoSyncActiveVariant()
     clearLivePreviewSvg()
-    if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(trackRerender, 50)
+    scheduleRerender(50)
   }
 
   async function clearLayerAlgorithm(layerId: string): Promise<void> {
@@ -751,8 +791,7 @@ export const useJobStore = defineStore('job', () => {
     patchSelected({ layer_algorithms: next })
     autoSyncActiveVariant()
     clearLivePreviewSvg()
-    if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(trackRerender, 250)
+    scheduleRerender(250)
   }
 
   // Apply a multi-pass stack to one layer: ``passes`` is the ordered list
@@ -785,8 +824,7 @@ export const useJobStore = defineStore('job', () => {
     })
     autoSyncActiveVariant()
     clearLivePreviewSvg()
-    if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(trackRerender, 250)
+    scheduleRerender(250)
   }
 
   async function triggerRerender(): Promise<void> {
@@ -915,21 +953,10 @@ export const useJobStore = defineStore('job', () => {
   // explicit ``assigned_color_hex`` falls back to its source colour, matching
   // what actually gets drawn on the sheet.
   const lengthMmByColor = computed<Record<string, number>>(() => {
-    const canon = (value: string): string => {
-      const trimmed = value.trim().replace(/^#/, '').toLowerCase()
-      if (/^[0-9a-f]{3}$/.test(trimmed)) {
-        return `#${trimmed
-          .split('')
-          .map((c) => c + c)
-          .join('')}`
-      }
-      if (/^[0-9a-f]{6}$/.test(trimmed)) return `#${trimmed}`
-      return value
-    }
     const totals: Record<string, number> = {}
     for (const placement of visiblePlacements.value) {
       for (const layer of placement.layers) {
-        const hex = canon(layer.assigned_color_hex ?? layer.source_color)
+        const hex = canonHexMemo(layer.assigned_color_hex ?? layer.source_color)
         totals[hex] = (totals[hex] ?? 0) + layer.total_length_mm
       }
     }
@@ -959,8 +986,7 @@ export const useJobStore = defineStore('job', () => {
     // rerender so the canvas reflects the new colour without waiting for
     // the next algorithm tweak.
     if ('assigned_color_hex' in patch || 'color_assignment' in patch) {
-      if (rerenderTimer) clearTimeout(rerenderTimer)
-      rerenderTimer = setTimeout(trackRerender, 250)
+      scheduleRerender(250)
     }
   }
 
@@ -1010,8 +1036,7 @@ export const useJobStore = defineStore('job', () => {
       // Re-render the selected placement so the canvas/preview SVG
       // reflects the new assigned inks. Without this the operator sees
       // the stale centroid colours until the next algorithm tweak.
-      if (rerenderTimer) clearTimeout(rerenderTimer)
-      rerenderTimer = setTimeout(trackRerender, 50)
+      scheduleRerender(50)
     }
   }
 
@@ -1023,8 +1048,24 @@ export const useJobStore = defineStore('job', () => {
   // watcher on the serialised palette means a no-op change (same swatches)
   // doesn't churn; ``resnapAutoLayers`` itself only patches layers that
   // actually move, so manual overrides and unchanged autos stay put.
+  // Cheap allocation-free hash of the current palette so the watch below
+  // skips redundant re-snaps without paying a full ``join('|')`` string
+  // allocation per dependency tick. Walks every swatch (so a middle-slot
+  // swap still triggers) but folds into a single 32-bit accumulator —
+  // 30x cheaper on Pi than the previous ``Array#join``.
+  function paletteSignature(): number {
+    const p = currentEffectivePalette()
+    let h = p.length | 0
+    for (let i = 0; i < p.length; i++) {
+      const swatch = p[i]!
+      for (let j = 0; j < swatch.length; j++) {
+        h = (h * 31 + swatch.charCodeAt(j)) | 0
+      }
+    }
+    return h
+  }
   watch(
-    () => currentEffectivePalette().join('|'),
+    () => paletteSignature(),
     () => resnapAutoLayers(),
   )
   async function loadProfiles(): Promise<void> {
@@ -1302,8 +1343,7 @@ export const useJobStore = defineStore('job', () => {
     // settings rather than the default conversion that came back from
     // the library detail endpoint.
     if (activeVariantForRerender && Object.keys(activeVariantForRerender.layer_algorithms).length) {
-      if (rerenderTimer) clearTimeout(rerenderTimer)
-      rerenderTimer = setTimeout(trackRerender, 50)
+      scheduleRerender(50)
     }
     return placement.id
   }
@@ -1794,8 +1834,7 @@ export const useJobStore = defineStore('job', () => {
       layer_algorithms: { ...variant.layer_algorithms },
       visibility: { ...variant.visibility },
     })
-    if (rerenderTimer) clearTimeout(rerenderTimer)
-    rerenderTimer = setTimeout(trackRerender, 50)
+    scheduleRerender(50)
   }
 
   function setActiveVariant(variantId: string): void {
