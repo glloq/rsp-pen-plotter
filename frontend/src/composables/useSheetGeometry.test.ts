@@ -338,11 +338,9 @@ describe('useSheetGeometry plan-preview tier selection', () => {
         makeInputs({ profile: makeProfile(), placements, planPreviewMode: mode }),
       )
       for (const rp of g.renderedPlacements.value) {
-        const picks = [
-          g.showsPreviewImage(rp),
-          g.showsPlotterSvg(rp),
-          g.showsMimeBadge(rp),
-        ].filter(Boolean).length
+        const picks = [g.showsPreviewImage(rp), g.showsPlotterSvg(rp), g.showsMimeBadge(rp)].filter(
+          Boolean,
+        ).length
         expect(picks).toBe(1)
       }
     }

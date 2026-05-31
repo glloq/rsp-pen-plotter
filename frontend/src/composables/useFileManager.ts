@@ -108,8 +108,7 @@ export function useFileManager(t?: Translator) {
     // draft + the in-memory file), but with the modal closed the
     // preview SVG is never on screen — running it just wastes a
     // round-trip and surfaces a toast for nothing.
-    shouldRun: () =>
-      ui.editModalOpen && (kind.value === 'bitmap' || kind.value === 'typography'),
+    shouldRun: () => ui.editModalOpen && (kind.value === 'bitmap' || kind.value === 'typography'),
     modeGetter: () => (kind.value === 'typography' ? 'text' : 'bitmap'),
     qualityGetter: () => edit.previewQuality.value,
     failedMessage: t?.('upload.failed') ?? 'preview failed',

@@ -274,14 +274,9 @@ const sourceImgSrc = computed<string | null>(() => {
 // representation we can show on the left half of the compare slider".
 // Typography still has no raster source (the operator's plain text
 // drives the Hershey SVG directly), so it stays out.
-const canShowRaster = computed(
-  () => edit.kind.value === 'bitmap' || edit.kind.value === 'document',
-)
+const canShowRaster = computed(() => edit.kind.value === 'bitmap' || edit.kind.value === 'document')
 const sourceMode = computed(
-  () =>
-    edit.previewMode.value === 'source' &&
-    canShowRaster.value &&
-    Boolean(sourceImgSrc.value),
+  () => edit.previewMode.value === 'source' && canShowRaster.value && Boolean(sourceImgSrc.value),
 )
 // Split mode requires both halves to have content; if either is
 // missing we degrade to whichever single layer is available rather

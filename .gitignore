@@ -26,3 +26,4 @@ frontend/dist/
 .vscode/
 *.swp
 backend/.coverage
+backend/coverage.xml

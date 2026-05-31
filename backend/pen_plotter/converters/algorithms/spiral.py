@@ -128,6 +128,7 @@ class SpiralAlgorithm(RasterAlgorithm):
             # Keep ≥4 samples per wobble given the real (max) step.
             step = float(np.max(np.diff(cum))) if cum.size > 1 else wavelength
             eff_wavelength = max(wavelength, 4.0 * step)
+            amp: NDArray[np.float64] | float
             if tone is not None:
                 # Per-point amplitude from local darkness. Sample the tone
                 # map at each base point; off-canvas points read as white

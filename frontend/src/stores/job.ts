@@ -1337,8 +1337,7 @@ export const useJobStore = defineStore('job', () => {
       // for Hershey text, points for PyMuPDF) into millimetres. Clamp
       // down (but never up) if the inked content is larger than the
       // usable area.
-      const mmPerUnit =
-        mmPerViewBoxUnit(svg, intrinsicSize.width_mm, intrinsicSize.height_mm) ?? 1
+      const mmPerUnit = mmPerViewBoxUnit(svg, intrinsicSize.width_mm, intrinsicSize.height_mm) ?? 1
       const contentW = bboxW * mmPerUnit
       const contentH = bboxH * mmPerUnit
       const fit = Math.min(1, usableW / contentW, usableH / contentH)
