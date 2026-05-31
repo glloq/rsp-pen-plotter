@@ -78,15 +78,25 @@ describe('CompareView', () => {
     expect(wrapper.emitted('pick-winner')?.[0]).toEqual(['b'])
   })
 
-  it('emits toggle-overlay when a checkbox changes', async () => {
+  it('emits toggle-overlay only for wired overlays', async () => {
     const wrapper = mount(CompareView, {
       props: {
         a: candidate('a', {}),
         b: candidate('b', {}),
       },
     })
-    await wrapper.find('[data-test="overlay-penup_heatmap"] input').trigger('change')
-    expect(wrapper.emitted('toggle-overlay')?.[0]).toEqual(['penup_heatmap'])
+    // Unimplemented overlays are disabled so the checkbox cannot
+    // be toggled — guards operators from enabling something that
+    // would silently do nothing.
+    const heatmapInput = wrapper.find('[data-test="overlay-penup_heatmap"] input')
+      .element as HTMLInputElement
+    expect(heatmapInput.disabled).toBe(true)
+    // ``bounds`` is wired and remains interactive.
+    const boundsInput = wrapper.find('[data-test="overlay-bounds"] input')
+      .element as HTMLInputElement
+    expect(boundsInput.disabled).toBe(false)
+    await wrapper.find('[data-test="overlay-bounds"] input').trigger('change')
+    expect(wrapper.emitted('toggle-overlay')?.[0]).toEqual(['bounds'])
   })
 
   it('renders the overlay stub list when overlays are enabled', () => {

@@ -16,9 +16,14 @@
 
 ```bash
 cd backend
-uv sync                                    # install dependencies (incl. dev)
+uv sync --extra dev                        # install dependencies + dev extras (ruff, mypy, pytest)
 uv run uvicorn pen_plotter.main:app --reload
 ```
+
+CI runs `uv sync --extra dev` then calls every quality gate through
+`uv run …` to make sure the version from `.venv` is the one being
+exercised. Reproduce locally the same way (don't rely on globally
+installed `ruff`, `mypy`, or `pytest` shims).
 
 The API serves on `http://localhost:8000`. Check it with
 `curl http://localhost:8000/health`.
@@ -33,6 +38,10 @@ Environment variables:
 | `OMNIPLOT_OTEL_ENABLED` | unset | When `1`, installs the OpenTelemetry tracer provider and emits spans for `convert_file`, `segment_and_render`, `optimize_svg`, `generate_gcode`. Pair with `OMNIPLOT_OTEL_EXPORTER=console` to see them in stderr. |
 | `OMNIPLOT_SLO_EVAL_ENABLED` | unset | When `1` and the role serves HTTP, the lifespan starts the background SLO evaluator. It re-runs `evaluate_budgets` every `OMNIPLOT_SLO_EVAL_INTERVAL` seconds (default 60) on the accumulated samples and emits `slo_breach` log lines on breach. |
 | `OMNIPLOT_ROLE` | `monolith` | Deployment role: `monolith`, `api`, `render`, `executor`, or `telemetry`. The lifespan conditions which subsystems boot per role. See `docs/deployment.md`. |
+| `OMNIPLOT_API_KEY` | unset | When set, every router (except `/health`) requires the value on `X-API-Key` or `?token=`. Leave unset for single-machine development; set a 32+ char secret before exposing the appliance to a shared LAN. See `docs/deployment.md` § Production hardening. |
+| `OMNIPLOT_REQUIRE_AUTH` | unset | Truthy (`1`/`true`) makes the service refuse to start if `OMNIPLOT_API_KEY` is empty. Pair the two in production so an accidental restart cannot silently come up with the controls open. |
+| `OMNIPLOT_CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allow-list. `*` is rejected at startup because it cannot legally combine with credentialed requests. |
+| `OMNIPLOT_DISABLE_UPDATE` | unset | When `1`, removes the `POST /system/update` endpoint entirely. Use on appliances that should only be updated by hand on the host. |
 
 CORS is preconfigured to allow the Vite dev origin `http://localhost:5173`.
 
@@ -40,7 +49,8 @@ CORS is preconfigured to allow the Vite dev origin `http://localhost:5173`.
 
 ```bash
 cd frontend
-npm install
+nvm use                                    # respect the repo's .nvmrc (Node 20)
+npm ci                                     # exact dependencies from package-lock.json
 npm run dev
 ```
 
@@ -63,9 +73,19 @@ Frontend:
 
 ```bash
 cd frontend
+npm run lint            # eslint
+npm run format:check    # prettier --check
 npm run test            # vitest
 npm run build           # vue-tsc --noEmit type check + production build
+npm run e2e:install     # download Playwright's chromium (once per machine)
+npm run e2e             # playwright test (spawns the Vite dev server)
 ```
+
+CI runs the same scripts; reproducing a failure locally is a matter of
+matching the Node version in `.nvmrc` (`nvm use`) and running the
+command. Quality gates land as separate CI jobs (lint, format,
+type-check, unit, build, e2e), so a single failure tells you exactly
+where to look.
 
 ## Typical workflow
 
