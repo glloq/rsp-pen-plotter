@@ -23,7 +23,7 @@ import DOMPurify from 'dompurify'
 import { libraryFileOriginalUrl } from '../api/client'
 import type { MachineProfile } from '../api/client'
 import type { Placement } from '../stores/job'
-import { applyPhysicalStrokeWidth, mmPerViewBoxUnit } from '../lib/penWidth'
+import { applyPhysicalStrokeWidth, cropSvgViewBoxToBbox, mmPerViewBoxUnit } from '../lib/penWidth'
 import type { PlanPreviewMode } from '../stores/ui'
 
 // In 'auto' mode a placement keeps its (cheap) raster preview once its
@@ -214,6 +214,16 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
               styledCache.set(p.id, { key, out: cleanSvg })
             }
           }
+        }
+        // Crop the rendered SVG's viewBox to the actual inked content
+        // bbox. Text / PDF / HTML converters emit a page-sized viewBox
+        // with the content offset by the page margins; without this
+        // crop, those margins surface as empty space at the top-left of
+        // the on-sheet placement and any glyph past the placement's
+        // footprint is clipped on the bottom-right.
+        const bbox = p.source_bbox
+        if (bbox && bbox.x_max > bbox.x_min && bbox.y_max > bbox.y_min) {
+          cleanSvg = cropSvgViewBoxToBbox(cleanSvg, bbox)
         }
       } else {
         sanitizedCache.delete(p.id)

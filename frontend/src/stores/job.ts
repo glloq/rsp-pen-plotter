@@ -1151,6 +1151,7 @@ export const useJobStore = defineStore('job', () => {
         sourceBbox,
         targetId,
         intrinsicPageSize(detail.upload_metadata),
+        detail.svg,
       )
       patchPlacement(targetId, {
         library_file_id: detail.file_id,
@@ -1236,6 +1237,7 @@ export const useJobStore = defineStore('job', () => {
       sourceBbox,
       placement.id,
       intrinsicPageSize(detail.upload_metadata),
+      detail.svg,
     )
     // If this library entry has previously-saved variants, hydrate them
     // onto the new placement so the file renders with its last-used print
@@ -1310,6 +1312,7 @@ export const useJobStore = defineStore('job', () => {
     sourceBbox: BoundingBox,
     placementId: string,
     intrinsicSize?: { width_mm: number; height_mm: number } | null,
+    svg?: string,
   ): Partial<Placement> {
     const profile = selectedProfile.value
     if (!profile) return {}
@@ -1318,20 +1321,30 @@ export const useJobStore = defineStore('job', () => {
     const wsH = ws.y_max - ws.y_min
     const usableW = Math.max(wsW - 2 * marginMm.value, wsW * 0.5)
     const usableH = Math.max(wsH - 2 * marginMm.value, wsH * 0.5)
+    const bboxW = Math.max(sourceBbox.x_max - sourceBbox.x_min, 1e-6)
+    const bboxH = Math.max(sourceBbox.y_max - sourceBbox.y_min, 1e-6)
     let width: number
     let height: number
-    if (intrinsicSize && intrinsicSize.width_mm > 0 && intrinsicSize.height_mm > 0) {
-      // PDF / DOCX / HTML: the converter reports the source page
-      // dimensions in mm so an A4 doc lands at 210×297 mm on the
-      // workspace instead of being scaled to whatever fraction of the
-      // workspace the drawn content happened to cover. Clamp down (but
-      // never up) if the page is larger than the usable area.
-      const fit = Math.min(1, usableW / intrinsicSize.width_mm, usableH / intrinsicSize.height_mm)
-      width = intrinsicSize.width_mm * fit
-      height = intrinsicSize.height_mm * fit
+    if (intrinsicSize && intrinsicSize.width_mm > 0 && intrinsicSize.height_mm > 0 && svg) {
+      // PDF / DOCX / HTML / text: the converter emits a page-sized SVG
+      // (e.g. PyMuPDF viewBox in points, Hershey viewBox in mm) with
+      // the content offset from the page corner by its margins. We
+      // size the on-sheet placement to the *inked* bbox in mm — not to
+      // the full page — so the green resize rectangle wraps the
+      // content tightly instead of leaving the page margins as empty
+      // space at the top-left. ``mmPerViewBoxUnit`` reads the SVG's
+      // viewBox vs the reported page dimensions to bridge units (mm
+      // for Hershey text, points for PyMuPDF) into millimetres. Clamp
+      // down (but never up) if the inked content is larger than the
+      // usable area.
+      const mmPerUnit =
+        mmPerViewBoxUnit(svg, intrinsicSize.width_mm, intrinsicSize.height_mm) ?? 1
+      const contentW = bboxW * mmPerUnit
+      const contentH = bboxH * mmPerUnit
+      const fit = Math.min(1, usableW / contentW, usableH / contentH)
+      width = contentW * fit
+      height = contentH * fit
     } else {
-      const bboxW = Math.max(sourceBbox.x_max - sourceBbox.x_min, 1e-6)
-      const bboxH = Math.max(sourceBbox.y_max - sourceBbox.y_min, 1e-6)
       const scale = Math.min(usableW / bboxW, usableH / bboxH)
       width = bboxW * scale
       height = bboxH * scale
@@ -1421,7 +1434,7 @@ export const useJobStore = defineStore('job', () => {
       // prepare A4" — so we override ``wasFresh`` and always emit
       // ``x_mm`` / ``y_mm`` recentred on the new page.
       const intrinsic = intrinsicPageSize(result.metadata)
-      const layoutPatch = computeInitialLayout(sourceBbox, targetId, intrinsic)
+      const layoutPatch = computeInitialLayout(sourceBbox, targetId, intrinsic, result.svg)
       const profile = selectedProfile.value
       if (intrinsic && profile) {
         const ws = profile.workspace

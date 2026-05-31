@@ -89,6 +89,34 @@ export function mmPerViewBoxUnit(svg: string, widthMm: number, heightMm: number)
 }
 
 /**
+ * Rewrite the root ``<svg>``'s ``viewBox`` to the given bounding box (in
+ * SVG user units) so the displayed area is exactly the inked content
+ * instead of the full page. Without this, text / PDF / HTML SVGs render
+ * with their original page-sized viewBox: the content's margin offset
+ * shows up as empty space at the top-left of the placement and any
+ * content past the placement's footprint gets clipped on the bottom-right.
+ *
+ * The function leaves ``width`` / ``height`` attributes untouched —
+ * downstream callers force them via CSS to fit the placement. Returns
+ * the input unchanged when the bbox is degenerate or the SVG has no
+ * recognisable root tag.
+ */
+export function cropSvgViewBoxToBbox(
+  svg: string,
+  bbox: { x_min: number; y_min: number; x_max: number; y_max: number },
+): string {
+  const w = bbox.x_max - bbox.x_min
+  const h = bbox.y_max - bbox.y_min
+  if (!(w > 0) || !(h > 0)) return svg
+  if (!Number.isFinite(bbox.x_min) || !Number.isFinite(bbox.y_min)) return svg
+  const newViewBox = `${bbox.x_min} ${bbox.y_min} ${w} ${h}`
+  if (/viewBox\s*=\s*"[^"]*"/.test(svg)) {
+    return svg.replace(/viewBox\s*=\s*"[^"]*"/, `viewBox="${newViewBox}"`)
+  }
+  return svg.replace(/<svg\b/i, `<svg viewBox="${newViewBox}"`)
+}
+
+/**
  * Rewrite the ``stroke-width`` of every coloured group so it renders at
  * the assigned pen's physical width. Only colours present in
  * ``hexToMm`` (i.e. declared pens in the inventory) are touched; any
