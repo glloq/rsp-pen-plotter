@@ -24,7 +24,7 @@ from typing import Any, ClassVar
 import pymupdf
 
 from pen_plotter.converters.base import ConversionResult, Converter
-from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
+from pen_plotter.core.pdf_postprocess import extract_bitmap_options, postprocess_pdf_svg
 from pen_plotter.typography import PlacedSpan, render_placed_spans
 
 # PDF user-space units are points (1 pt = 1/72 inch).
@@ -148,18 +148,7 @@ class PdfConverter(Converter):
         """
         opts = options or {}
         page_index = int(opts.get("page", 0))
-        bitmap_options = {
-            key: opts[key]
-            for key in (
-                "algorithm",
-                "num_colors",
-                "max_dimension_px",
-                "drop_background",
-                "background_luminance",
-                "algorithm_options",
-            )
-            if key in opts
-        } or None
+        bitmap_options = extract_bitmap_options(opts)
 
         raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(data, page_index)
         hershey_group = build_hershey_text_group(data, page_index, opts)
