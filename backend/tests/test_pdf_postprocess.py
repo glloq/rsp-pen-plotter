@@ -668,3 +668,40 @@ def test_html_colored_boxes_become_per_color_density_hatching() -> None:
     # The hatched group's geometry length must dwarf an outline's
     # (~few hundred chars vs several thousand).
     assert _layer_d_total(svg, "color-#ff0000") > 1500
+
+
+def test_html_text_renders_on_top_of_hatched_backgrounds() -> None:
+    """A CSS ``background-color`` div with text inside used to plot the
+    colour-hatching ON TOP of the text glyphs (because the hatching
+    groups were appended at the end of the SVG and SVG draws later
+    siblings above earlier ones). The operator read the result as
+    "text struck through by hatch lines". The post-processor must put
+    background-style labelled layers (``color-#xxxxxx`` and
+    ``grayscale``) BEFORE the ``text`` layer in document order so text
+    glyphs paint last and stay legible."""
+    svg = _html_to_svg(
+        "<html><body>"
+        "<h1 style='background:#ffff00;padding:10px'>Title</h1>"
+        "<p style='background:#cccccc;padding:10px'>Para</p>"
+        "</body></html>"
+    )
+    root = ET.fromstring(svg)
+    labels: list[str] = []
+    for child in root:
+        if child.tag != f"{{{_SVG_NS}}}g":
+            continue
+        label = child.get(f"{{{_INKSCAPE_NS}}}label")
+        if label:
+            labels.append(label)
+    assert "text" in labels, f"missing text layer in {labels}"
+    text_idx = labels.index("text")
+    # Every background-style layer (gray or color-hex) must come BEFORE
+    # the text layer in document order, otherwise the hatching is drawn
+    # on top of the glyphs.
+    for i, label in enumerate(labels):
+        if label == "grayscale" or label.startswith("color-"):
+            assert i < text_idx, (
+                f"background layer {label!r} (index {i}) is drawn AFTER "
+                f"text (index {text_idx}); text would be struck through. "
+                f"Full order: {labels}"
+            )

@@ -1035,8 +1035,28 @@ def apply_grayscale_density_hatching(
         replaced += 1
 
     if replaced:
-        root.append(hatch_group)
+        _insert_background_layer(root, hatch_group)
     return replaced
+
+
+def _insert_background_layer(root: ET.Element, group: ET.Element) -> None:
+    """Insert ``group`` at the page-background z-position of ``root``.
+
+    PyMuPDF emits backgrounds before text in document order so that text
+    glyphs render on top of any coloured fill. Density-hatching layers
+    represent those backgrounds, so they need to inherit that bottom
+    z-position — otherwise the hatch lines paint over the text and the
+    operator reads the result as "text struck through". Insert after
+    any leading ``<defs>`` block (which is non-rendering anyway) but
+    before the first drawable child.
+    """
+    insert_at = 0
+    for i, child in enumerate(root):
+        if _local(child.tag) == "defs":
+            insert_at = i + 1
+            continue
+        break
+    root.insert(insert_at, group)
 
 
 def _luminance_0_1(hex_color: str) -> float:
@@ -1126,7 +1146,7 @@ def apply_color_density_hatching(
             if parent is not None:
                 parent.remove(shape)
             replaced += 1
-        root.append(hatch_group)
+        _insert_background_layer(root, hatch_group)
     return replaced
 
 
@@ -1505,15 +1525,32 @@ def split_loose_drawables_by_fill(root: ET.Element, default_label: str = "text")
         ):
             root.remove(child)
 
-    # Insert before any existing labeled layers (``image-N``, Hershey
-    # ``text``, …) so the document layering stays consistent: vector
-    # content drawn before bitmaps.
-    insert_at = 0
+    # Z-order: insert the new (mostly text-bearing) groups AFTER any
+    # background-style labelled layers — ``color-#rrggbb`` and
+    # ``grayscale`` come from the density-hatching passes which
+    # represent CSS-backgrounded boxes. In SVG, later siblings render
+    # on top, so the hatching for a coloured background must sit BELOW
+    # the text glyphs that ride over it (otherwise the user sees text
+    # "struck through" by hatch lines). Other labelled layers
+    # (``image-N``, Hershey ``text``, ``pattern-N``) keep their
+    # existing position relative to the text by being skipped over too.
+    insert_at = len(root)
+    background_labels = {"grayscale"}
     for i, child in enumerate(root):
-        if _local(child.tag) == "g" and child.get(_INKSCAPE_LABEL):
+        if _local(child.tag) != "g":
+            continue
+        label = child.get(_INKSCAPE_LABEL)
+        if label is None:
+            continue
+        if label in background_labels or label.startswith("color-"):
+            # Background-style: text goes after it.
+            insert_at = i + 1
+        else:
+            # Non-background labelled layer (image-N, hershey text, …)
+            # — keep the prior "insert before" semantics so e.g. a
+            # Hershey re-render still ends up adjacent to its peer.
             insert_at = i
             break
-        insert_at = i + 1
     for _, wrapper in new_groups:
         root.insert(insert_at, wrapper)
         insert_at += 1
