@@ -249,8 +249,14 @@ function onDragLeave(event: DragEvent): void {
 }
 
 async function onDrop(event: DragEvent): Promise<void> {
-  event.preventDefault()
   dragOver.value = false
+  // Only intercept in-app drags (library file id or in-plan placement id).
+  // OS file drops carry no in-app payload and must bubble to the window-level
+  // handler in App.vue, which imports them into the library — calling
+  // ``preventDefault`` here would make the window handler bail out on
+  // ``event.defaultPrevented`` and silently swallow the drop.
+  if (!hasDropPayload(event.dataTransfer?.types)) return
+  event.preventDefault()
   const w = workspace.value
   if (!w) return
   const local = clientToSvgMm(event.clientX, event.clientY)
