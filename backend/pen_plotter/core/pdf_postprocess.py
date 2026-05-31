@@ -434,6 +434,30 @@ def _ancestor_transform(
     return a, b, c, d, e, f
 
 
+def _ancestor_transforms_to_root(
+    start: ET.Element,
+    parent_map: dict[ET.Element, ET.Element],
+    root: ET.Element,
+) -> list[str]:
+    """Collect every ``transform`` attribute walking ``start`` up to ``root``.
+
+    Returned in outermost-first order so ``" ".join(...)`` produces the
+    SVG-correct composed transform string when applied to a wrapper
+    around the original leaf.
+    """
+    chain: list[ET.Element] = []
+    cursor: ET.Element | None = start
+    while cursor is not None and cursor is not root:
+        chain.append(cursor)
+        cursor = parent_map.get(cursor)
+    transforms: list[str] = []
+    for ancestor in reversed(chain):
+        value = ancestor.get("transform")
+        if value:
+            transforms.append(value)
+    return transforms
+
+
 def _apply_affine(
     matrix: tuple[float, float, float, float, float, float],
     points: list[tuple[float, float]],
@@ -1015,6 +1039,97 @@ def apply_grayscale_density_hatching(
     return replaced
 
 
+def _luminance_0_1(hex_color: str) -> float:
+    """ITU-R BT.601 luma for a ``#rrggbb`` string in 0..1 range."""
+    r = int(hex_color[1:3], 16)
+    g = int(hex_color[3:5], 16)
+    b = int(hex_color[5:7], 16)
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+
+
+def apply_color_density_hatching(
+    root: ET.Element,
+    *,
+    min_spacing_pt: float = 0.85,
+    max_spacing_pt: float = 8.5,
+    min_area_pt2: float = 50.0,
+    stroke_width_pt: float = 0.8,
+) -> int:
+    """Fold solid-colored filled shapes into per-colour density-hatched layers.
+
+    For every ``<rect>`` / ``<path>`` whose fill is a renderable solid
+    colour (non-black, non-grey, non-white, non-pattern), produce
+    crossed hatching (``+45°`` × ``-45°``) in the shape's own colour
+    and group every hatch line for that colour into a single
+    ``<g inkscape:label="color-#rrggbb" stroke="#rrggbb">``. Hatch
+    spacing scales inversely with the colour's luminance — a saturated
+    red hatches denser than a pale yellow — so the operator gets a
+    plotted-looking fill out of the box on a CMYKRGB HTML / PDF test
+    page instead of the bare potrace outline that
+    :func:`rasterize_solid_color_fills` produces by default. Greys are
+    handled by :func:`apply_grayscale_density_hatching` and pure black /
+    white are deliberately skipped (text ink, page background).
+
+    Returns the number of shapes replaced.
+    """
+    parent_map = {child: parent for parent in root.iter() for child in parent}
+    buckets: dict[str, list[tuple[ET.Element, tuple[float, float, float, float]]]] = {}
+    for shape in list(root.iter()):
+        local = _local(shape.tag)
+        if local not in {"rect", "path"}:
+            continue
+        fill = shape.get("fill") or ""
+        if not _is_renderable_solid_fill(fill):
+            continue
+        color = _normalize_fill(fill)
+        # _is_renderable_solid_fill already rejects greys / black / white /
+        # url() / "none" — but extra-guard the shape so an unexpected
+        # named colour (e.g. "red") doesn't slip in and break the hex
+        # parsing below.
+        if not (color.startswith("#") and len(color) == 7):
+            continue
+        if local == "rect":
+            bbox = _rect_bbox_user_units(shape, parent_map, root)
+        else:
+            bbox = _path_bbox_user_units(shape, parent_map, root)
+        if bbox is None:
+            continue
+        area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+        if area < min_area_pt2:
+            continue
+        buckets.setdefault(color, []).append((shape, bbox))
+
+    if not buckets:
+        return 0
+
+    import math
+
+    replaced = 0
+    for color in sorted(buckets):
+        items = buckets[color]
+        darkness = 1.0 - _luminance_0_1(color)
+        spacing = max_spacing_pt - darkness * (max_spacing_pt - min_spacing_pt)
+        hatch_group = ET.Element(f"{{{_SVG_NS}}}g")
+        hatch_group.set(_INKSCAPE_LABEL, f"color-{color}")
+        hatch_group.set("stroke", color)
+        hatch_group.set("fill", color)  # swatch source for layers._group_color
+        hatch_group.set("stroke-width", f"{stroke_width_pt:.3f}")
+        for shape, bbox in items:
+            for angle_deg in (45.0, -45.0):
+                for x1, y1, x2, y2 in _hatch_lines_for_bbox(
+                    bbox, math.radians(angle_deg), spacing
+                ):
+                    path_el = ET.Element(f"{{{_SVG_NS}}}path")
+                    path_el.set("d", f"M{x1:.3f} {y1:.3f}L{x2:.3f} {y2:.3f}")
+                    hatch_group.append(path_el)
+            parent = parent_map.get(shape)
+            if parent is not None:
+                parent.remove(shape)
+            replaced += 1
+        root.append(hatch_group)
+    return replaced
+
+
 def rasterize_solid_color_fills(
     root: ET.Element,
     *,
@@ -1358,8 +1473,25 @@ def split_loose_drawables_by_fill(root: ET.Element, default_label: str = "text")
             parent = parent_map.get(leaf)
             if parent is None:
                 continue
+            # PyMuPDF emits text glyphs as ``<g transform="matrix(font_size
+            # 0 0 -font_size x y)"><path d="M0..1 ..."/></g>`` — the
+            # path's d-string lives in 0..1 glyph-em units and only
+            # becomes the right size + position once the wrapper's
+            # transform is applied. Detaching the leaf without
+            # preserving that ancestor chain collapses every glyph to a
+            # 1-point dot at the origin (so text "vanishes" from the
+            # editor preview and from the gcode). Walk every ancestor
+            # transform between ``parent`` and ``root`` and replay them
+            # as a single composed wrapper around the moved leaf.
+            ancestor_transforms = _ancestor_transforms_to_root(parent, parent_map, root)
             parent.remove(leaf)
-            wrapper.append(leaf)
+            if ancestor_transforms:
+                transform_wrap = ET.Element(f"{{{_SVG_NS}}}g")
+                transform_wrap.set("transform", " ".join(ancestor_transforms))
+                transform_wrap.append(leaf)
+                wrapper.append(transform_wrap)
+            else:
+                wrapper.append(leaf)
         new_groups.append((label, wrapper))
 
     # Tidy up: remove any loose top-level <g> wrappers that are now
@@ -1477,21 +1609,31 @@ def postprocess_pdf_svg(
         # layers — the operator wants one pen for the whole ramp, with
         # hatching density doing the work of luminance.
         apply_grayscale_density_hatching(root)
-        # Then the colored CSS divs / swatches: rasterise every
-        # solid-fill rect so the operator's bitmap algorithm choice
-        # (crosshatch, halftone, stippling, …) renders the rectangle
-        # the same way it would render a PNG of the same area. Without
-        # this the operator picks a stunning halftone algorithm in the
-        # bitmap tab and the HTML's colored boxes plot as flat outlines
-        # — mismatched with what they saw applied to image regions of
-        # the same page.
-        _, solid_warnings = rasterize_solid_color_fills(
-            root,
-            pdf_bytes=pdf_bytes,
-            page_index=page_index,
-            bitmap_options=bitmap_options,
-        )
-        pattern_warnings.extend(solid_warnings)
+        # Then the colored CSS divs / swatches. Two code paths:
+        #
+        # * No operator-supplied bitmap options → density hatching per
+        #   colour (mirroring the grayscale path above). This produces
+        #   a plotted-looking fill out of the box: a red box becomes a
+        #   red crosshatch group, a blue box becomes a blue crosshatch
+        #   group, etc. Without this the BitmapConverter's default
+        #   ``direct`` algorithm only traces the rectangle's perimeter
+        #   via potrace, so the operator gets a bare outline instead of
+        #   a fill — the user's complaint on the print-test HTML.
+        # * Operator-supplied bitmap options → defer to
+        #   ``rasterize_solid_color_fills`` which crops the page and
+        #   runs each region through the chosen algorithm (crosshatch /
+        #   halftone / stippling / …). This keeps the existing path for
+        #   anyone explicitly picking a style.
+        if bitmap_options:
+            _, solid_warnings = rasterize_solid_color_fills(
+                root,
+                pdf_bytes=pdf_bytes,
+                page_index=page_index,
+                bitmap_options=bitmap_options,
+            )
+            pattern_warnings.extend(solid_warnings)
+        else:
+            apply_color_density_hatching(root)
     else:
         pattern_warnings = []
     expand_use_refs(root)
