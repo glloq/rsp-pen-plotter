@@ -580,3 +580,91 @@ def test_extract_bitmap_options_returns_none_for_empty_input() -> None:
     assert extract_bitmap_options({}) is None
     # Only unrelated keys → still ``None``.
     assert extract_bitmap_options({"page": 1, "hershey_text": True}) is None
+
+
+# -- Regressions for HTML-source artefacts ------------------------------
+
+
+def _html_to_svg(html_str: str) -> str:
+    """Run the full HTML → post-processed SVG pipeline for assertions."""
+    from pen_plotter.converters.html import HtmlConverter
+
+    converter = HtmlConverter()
+    result = converter.convert(html_str.encode("utf-8"), options={})
+    return sanitize_svg(result.svg)
+
+
+def _layer_d_total(svg: str, label: str) -> int:
+    """Return the summed length of every ``d=`` attribute in one labeled layer."""
+    root = ET.fromstring(svg)
+    for child in root:
+        if child.tag != f"{{{_SVG_NS}}}g":
+            continue
+        if child.get(f"{{{_INKSCAPE_NS}}}label") != label:
+            continue
+        return sum(len(p.get("d", "")) for p in child.iter() if p.tag == f"{{{_SVG_NS}}}path")
+    return 0
+
+
+def test_html_text_glyphs_keep_their_ancestor_transform() -> None:
+    """``split_loose_drawables_by_fill`` used to detach PyMuPDF glyph paths
+    from the ``<g transform="matrix(font_size 0 0 -font_size x y)">``
+    wrapper that ``expand_use_refs`` placed around them. Every glyph
+    then collapsed to a 1-point dot at the origin and the text
+    disappeared from both the editor preview and the gcode. The
+    composed ancestor transform must survive the move."""
+    svg = _html_to_svg(
+        "<html><body><h1 style='font-family: sans-serif'>HELLO</h1></body></html>"
+    )
+    root = ET.fromstring(svg)
+    text_group = next(
+        (
+            child
+            for child in root
+            if child.get(f"{{{_INKSCAPE_NS}}}label") == "text"
+        ),
+        None,
+    )
+    assert text_group is not None, "missing text layer"
+    # Every glyph path that lives in 0..1 glyph-em coords must sit
+    # inside a transform wrapper that scales it up.
+    glyph_paths = [
+        p for p in text_group.iter() if p.tag == f"{{{_SVG_NS}}}path" and p.get("d")
+    ]
+    assert glyph_paths, "expected glyph paths inside the text layer"
+    parent_map = {child: parent for parent in text_group.iter() for child in parent}
+    for path in glyph_paths:
+        ancestor = parent_map.get(path)
+        # Walk to text_group looking for any transform; text in 0..1
+        # space is meaningless without it.
+        found = False
+        while ancestor is not None and ancestor is not text_group:
+            if ancestor.get("transform"):
+                found = True
+                break
+            ancestor = parent_map.get(ancestor)
+        assert found, f"glyph path {path.get('d')[:40]!r} has no transform ancestor"
+
+
+def test_html_colored_boxes_become_per_color_density_hatching() -> None:
+    """A CSS ``background-color`` div used to plot as a bare potrace
+    outline (3-4 paths per box) because ``rasterize_solid_color_fills``
+    fell back to the default ``direct`` algorithm. With no operator
+    bitmap options, the post-processor now applies per-colour density
+    hatching so the box prints as a hatched rectangle."""
+    svg = _html_to_svg(
+        "<html><body>"
+        "<div style='background:#ff0000;width:200px;height:60px'></div>"
+        "<div style='background:#0000ff;width:200px;height:60px'></div>"
+        "</body></html>"
+    )
+    layers = {l.layer_id: l for l in extract_layers(svg)}
+    assert "color-#ff0000" in layers
+    assert "color-#0000ff" in layers
+    # Hatching produces many short parallel paths; a bare outline yields
+    # 3-4. Anything above ~10 means the fill rendered as hatching.
+    assert layers["color-#ff0000"].path_count > 10
+    assert layers["color-#0000ff"].path_count > 10
+    # The hatched group's geometry length must dwarf an outline's
+    # (~few hundred chars vs several thousand).
+    assert _layer_d_total(svg, "color-#ff0000") > 1500
