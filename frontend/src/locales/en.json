@@ -141,6 +141,7 @@
     "tabImage": "Image",
     "tabSvg": "SVG",
     "tabStyle": "Style",
+    "tabText": "Text",
     "tabLayers": "Layers",
     "tabOutput": "Layout & output",
     "tabShortcut": "Press {key} to jump to this tab",
@@ -178,6 +179,9 @@
   },
   "style": {
     "notApplicable": "This file type doesn't use the style controls."
+  },
+  "text": {
+    "notApplicable": "This file type doesn't carry text."
   },
   "preprocess": {
     "intro": "Prepare the source image before it's segmented into colour layers.",

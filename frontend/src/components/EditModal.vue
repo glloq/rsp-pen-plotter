@@ -16,6 +16,7 @@ import EmptyPlacementDropzone from './edit/EmptyPlacementDropzone.vue'
 import ImageTab from './edit/tabs/ImageTab.vue'
 import SvgTab from './edit/tabs/SvgTab.vue'
 import StyleTab from './edit/tabs/StyleTab.vue'
+import TextTab from './edit/tabs/TextTab.vue'
 import LayersTab from './edit/tabs/LayersTab.vue'
 
 const { t } = useI18n()
@@ -63,7 +64,13 @@ const activeTab = ref<EditTabId>(loadInitialTab())
 function loadInitialTab(): EditTabId {
   try {
     const stored = localStorage.getItem(TAB_KEY)
-    if (stored === 'image' || stored === 'svg' || stored === 'style' || stored === 'layers') {
+    if (
+      stored === 'image' ||
+      stored === 'svg' ||
+      stored === 'style' ||
+      stored === 'text' ||
+      stored === 'layers'
+    ) {
       return stored
     }
     // Legacy ids from earlier iterations migrate forward: the SVG tab
@@ -104,8 +111,17 @@ watch(activeTab, applyTabPreviewMode, { immediate: true })
 const layerCount = computed(() => store.layers.length)
 const variantCount = computed(() => store.selectedPlacement?.variants.length ?? 0)
 
-// Number keys 1-3 jump to tabs; Escape closes (handled below). Avoid
-// hijacking the shortcuts while the user is typing into an input.
+// Text tab is only meaningful when the source carries text: pure
+// typography (.txt / .md) or mixed text+image documents (PDF / DOCX
+// / HTML). Bitmap-only sources hide the tab to keep the strip short.
+const showTextTab = computed(
+  () => fm.kind.value === 'typography' || fm.kind.value === 'document',
+)
+
+// Number keys 1-5 jump to tabs; Escape closes (handled below). Avoid
+// hijacking the shortcuts while the user is typing into an input. The
+// Text tab slot (key 4) only exists for sources that carry text;
+// bitmap-only files keep the original 4-tab numbering with Layers on 4.
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   const tag = target.tagName
@@ -129,6 +145,9 @@ function onKey(event: KeyboardEvent): void {
     activeTab.value = 'style'
     event.preventDefault()
   } else if (event.key === '4') {
+    activeTab.value = showTextTab.value ? 'text' : 'layers'
+    event.preventDefault()
+  } else if (event.key === '5' && showTextTab.value) {
     activeTab.value = 'layers'
     event.preventDefault()
   }
@@ -197,23 +216,26 @@ function resetSplit(): void {
   }
 }
 
-// Typography sources only have meaningful controls under the Style and
-// Layers tabs — the Image (photo adjustments) and SVG (vectorisation
-// knobs) tabs render a "not applicable" message. Force the operator
-// onto Style when they open the modal on a .txt / .md file so the
-// font / size / bold / italic controls are actually visible. Without
-// this, the operator's last-used tab (typically Image, since that's
-// the default for bitmaps) silently hides every typography knob and
-// the modal looks like it has no font settings at all.
+// Typography and document sources have their text-specific controls
+// (font, size, Hershey toggle, block map) on the dedicated Text tab.
+// Force the operator onto Text when they open the modal on a
+// .txt / .md / PDF / DOCX / HTML file so those controls are visible —
+// otherwise the last-used tab (typically Image, since that's the
+// default for bitmaps) silently hides every text knob and the modal
+// looks like it has no font settings at all.
 //
-// Documents (PDF / DOCX / HTML) also need the jump because the
-// Hershey-text re-render toggle — the only way to plot legible text
-// from those sources — lives on the Style tab. The operator's first
-// reaction otherwise is "the modal has no font controls".
+// Conversely, if the operator returns to a bitmap-only source while
+// the Text tab is selected, bounce them back to Image since Text
+// would render its "not applicable" placeholder.
 function ensureTabAppliesToSource(): void {
-  if (fm.kind.value !== 'typography' && fm.kind.value !== 'document') return
-  if (activeTab.value === 'image' || activeTab.value === 'svg') {
-    activeTab.value = 'style'
+  if (fm.kind.value === 'typography' || fm.kind.value === 'document') {
+    if (activeTab.value === 'image' || activeTab.value === 'svg') {
+      activeTab.value = 'text'
+    }
+    return
+  }
+  if (activeTab.value === 'text') {
+    activeTab.value = 'image'
   }
 }
 
@@ -375,7 +397,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             <EmptyPlacementDropzone />
           </template>
           <template v-else>
-            <EditTabs v-model="activeTab" :layer-count="layerCount" :variant-count="variantCount" />
+            <EditTabs
+              v-model="activeTab"
+              :layer-count="layerCount"
+              :variant-count="variantCount"
+              :show-text="showTextTab"
+            />
             <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
               <!-- v-show keeps each tab's component mounted so internal
                    state (drafts, scroll, dropdown open/closed) isn't
@@ -388,6 +415,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               </div>
               <div v-show="activeTab === 'style'" class="space-y-3">
                 <StyleTab />
+              </div>
+              <div v-show="activeTab === 'text' && showTextTab" class="space-y-3">
+                <TextTab />
               </div>
               <div v-show="activeTab === 'layers'" class="space-y-3">
                 <LayersTab />
