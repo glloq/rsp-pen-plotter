@@ -81,7 +81,7 @@ describe('typography defaults', () => {
     expect(d.bold).toBe(false)
     expect(d.italic).toBe(false)
     expect(d.letter_spacing_mm).toBe(0)
-    expect(d.hershey_text).toBe(false)
+    expect(d.hershey_text).toBe(true)
   })
 })
 
@@ -180,7 +180,7 @@ describe('typography dirty tracking', () => {
       ['bold', true],
       ['italic', true],
       ['letter_spacing_mm', 1.5],
-      ['hershey_text', true],
+      ['hershey_text', false],
     ]
     const draft = useBitmapDraft()
     for (const [field, value] of samples) {
@@ -199,10 +199,9 @@ describe('typography fields in buildBitmapOptions', () => {
   })
 
   it('always ships font + stroke_width_mm so a later hershey toggle keeps the chosen face', () => {
-    // ``hershey_text`` defaults to OFF but ``font`` / ``stroke_width_mm``
-    // still travel with every /upload — round-tripping a placement
-    // must not silently reset the operator's font choice when the
-    // hershey switch is currently off.
+    // ``font`` / ``stroke_width_mm`` travel with every /upload — even
+    // when ``hershey_text`` is explicitly off, round-tripping a
+    // placement must not silently reset the operator's font choice.
     const draft = useBitmapDraft()
     draft.typo.value.font = 'rowmant'
     draft.typo.value.stroke_width_mm = 0.55
