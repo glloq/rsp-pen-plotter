@@ -778,3 +778,62 @@ def test_html_colored_box_with_text_inside_skips_hatching() -> None:
         "empty red box should still be hatched; "
         f"got only {layers['color-#ff0000'].path_count} paths"
     )
+
+
+def test_html_explicit_black_swatch_plots_as_solid_hatching() -> None:
+    """The dark end of the operator's grayscale ramp uses
+    ``background-color: rgb(0, 0, 0)``. WeasyPrint emits black as the
+    SVG default (no ``fill`` attribute) which the post-processor
+    can't tell apart from the dozens of auxiliary no-fill paths
+    WeasyPrint also emits, so the cell used to plot as a bare
+    outline. ``HtmlConverter`` now rewrites every explicit pure-black
+    background to ``#010101`` before WeasyPrint runs, which gives the
+    swatch an unambiguous ``fill="#010101"`` for the grayscale
+    density hatcher to pick up at min spacing."""
+    svg = _html_to_svg(
+        "<html><body>"
+        "<div style='background:rgb(0,0,0);width:200px;height:80px'></div>"
+        "<div style='background:#000;width:200px;height:80px'></div>"
+        "<div style='background-color:black;width:200px;height:80px'></div>"
+        "</body></html>"
+    )
+    layers = {l.layer_id: l for l in extract_layers(svg)}
+    assert "grayscale" in layers, (
+        "explicit-black swatches must land in the grayscale layer once "
+        "HtmlConverter has rewritten them to #010101"
+    )
+    # Three full-page-width black blocks @ ~200×80 produce a lot of
+    # hatch line geometry — well into the hundreds of paths.
+    assert layers["grayscale"].path_count > 60, (
+        f"grayscale layer has only {layers['grayscale'].path_count} paths; "
+        "the black swatches are plotting as outlines, not solid hatching"
+    )
+
+
+def test_path_bbox_handles_leading_dot_decimals() -> None:
+    """``_path_bbox_user_units`` parses every numeric token in a path
+    d-string. PyMuPDF emits glyph coords without a leading zero
+    (``.61035158``), so a regex that requires a digit before the
+    decimal point silently splits ``.61035158`` into ``61035158`` —
+    producing astronomical bboxes and bogging the hatcher down in
+    millions of phantom hatch lines (the print-test page never
+    finished converting). The fixed regex accepts both forms."""
+    from pen_plotter.core.pdf_postprocess import _path_bbox_user_units
+    from xml.etree import ElementTree as ET
+
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">'
+        '<path d="M.5151367 .15429688C.5151367 .1031901 .49422203 .063069667 .45239259 .033935548Z"/>'
+        "</svg>"
+    )
+    root = ET.fromstring(svg)
+    path = root[0]
+    parent_map = {path: root}
+    bbox = _path_bbox_user_units(path, parent_map, root)
+    assert bbox is not None
+    x_min, y_min, x_max, y_max = bbox
+    # Every coord in the d-string is between 0 and 1, so the bbox must
+    # stay in unit space — astronomical values mean the leading-dot
+    # numbers were silently expanded into 9-digit integers.
+    assert 0 <= x_min < 1 and 0 < x_max <= 1
+    assert 0 <= y_min < 1 and 0 < y_max <= 1
