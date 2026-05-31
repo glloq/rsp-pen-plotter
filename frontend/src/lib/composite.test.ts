@@ -212,4 +212,44 @@ describe('buildComposite', () => {
     // total_length scales by sqrt(sx*sy) = sqrt(2) ≈ 1.414
     expect(composedRed.total_length_mm).toBeCloseTo(100 * Math.SQRT2, 4)
   })
+
+  it('uses the inked source_bbox when the SVG viewBox is page-sized', () => {
+    // Regression for the text/PDF/HTML positioning bug: the converters
+    // emit a page-sized viewBox (e.g. A4 210×297) with the inked
+    // content offset by the document margins. ``computeInitialLayout``
+    // sizes the placement to the inked bbox in mm, and the display
+    // path crops the rendered viewBox to the same bbox. Without the
+    // matching crop here, the placement would scale the whole page
+    // into its small footprint and shift the inked area outside the
+    // machine limits.
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" ' +
+      'viewBox="0 0 210 297">' +
+      '<g inkscape:label="color-ff0000"><rect x="20" y="20" width="170" height="60" /></g>' +
+      '</svg>'
+    const snap: PlacementSnapshot = {
+      id: 'p1',
+      svg,
+      layers: [{ ...layer('color-ff0000'), bbox: { x_min: 20, y_min: 20, x_max: 190, y_max: 80 } }],
+      // Inked bbox: text occupies (20,20) to (190,80) inside the A4 page.
+      source_bbox: { x_min: 20, y_min: 20, x_max: 190, y_max: 80 },
+      visibility: { 'color-ff0000': true },
+      // Placement sized to the inked bbox (170 × 60 mm) at workspace (50, 50).
+      x_mm: 50,
+      y_mm: 50,
+      width_mm: 170,
+      height_mm: 60,
+    }
+    const result = buildComposite([snap], profile())
+    const composed = result.layers[0]!
+    // The inked content should fill the placement rectangle, not be
+    // shrunk into a fraction of it by the page-sized viewBox.
+    expect(composed.bbox.x_min).toBeCloseTo(50, 4)
+    expect(composed.bbox.y_min).toBeCloseTo(50, 4)
+    expect(composed.bbox.x_max).toBeCloseTo(220, 4)
+    expect(composed.bbox.y_max).toBeCloseTo(110, 4)
+    // And the emitted transform should map source_bbox → placement
+    // rect identically (scale 1, no margin offset).
+    expect(result.svg).toContain('translate(30 30) scale(1 1)')
+  })
 })
