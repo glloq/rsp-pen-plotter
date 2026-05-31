@@ -11,7 +11,7 @@ from weasyprint import HTML
 
 from pen_plotter.converters.base import ConversionResult, Converter
 from pen_plotter.converters.pdf import build_hershey_text_group, pdf_bytes_to_svg
-from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
+from pen_plotter.core.pdf_postprocess import extract_bitmap_options, postprocess_pdf_svg
 
 
 class HtmlConverter(Converter):
@@ -34,18 +34,7 @@ class HtmlConverter(Converter):
         """
         opts = options or {}
         page_index = int(opts.get("page", 0))
-        bitmap_options = {
-            key: opts[key]
-            for key in (
-                "algorithm",
-                "num_colors",
-                "max_dimension_px",
-                "drop_background",
-                "background_luminance",
-                "algorithm_options",
-            )
-            if key in opts
-        } or None
+        bitmap_options = extract_bitmap_options(opts)
         html = data.decode("utf-8", errors="replace")
         pdf_bytes = HTML(string=html).write_pdf()
         raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(pdf_bytes, page_index)

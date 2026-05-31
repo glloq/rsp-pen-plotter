@@ -37,6 +37,46 @@ _INKSCAPE_LABEL = f"{{{_INKSCAPE_NS}}}label"
 _XLINK_HREF = f"{{{_XLINK_NS}}}href"
 
 
+# Every key that ``BitmapOptions`` accepts and whose value materially
+# shapes the rendered output of an embedded raster (algorithm, palette,
+# segmentation, photo preprocess, mono-ink override, post-processing).
+# The five document-style converters (PDF, DOCX/ODT/RTF, HTML, EPS/PS/AI,
+# SVG) all hand embedded ``<image>`` regions to the bitmap converter; if
+# any of these are dropped on the floor the operator's Style/Image-tab
+# choices silently fail to apply to the image regions of a mixed
+# text+image source.
+_BITMAP_FORWARD_KEYS: tuple[str, ...] = (
+    "algorithm",
+    "num_colors",
+    "max_dimension_px",
+    "drop_background",
+    "background_luminance",
+    "algorithm_options",
+    "segmentation_method",
+    "segmentation_options",
+    "min_region_pixels",
+    "merge_delta_e",
+    "mono_ink_color",
+    "preprocess",
+)
+
+
+def extract_bitmap_options(opts: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Return the subset of ``opts`` that drives embedded-raster rendering.
+
+    Centralised so every document-style converter forwards the same
+    rendering-shaping fields (algorithm, palette, segmentation,
+    preprocess, mono-ink override, post-processing) to the bitmap
+    converter — anything missing from the returned dict silently
+    reverts to the bitmap converter's defaults for image regions in a
+    mixed text+image source.
+    """
+    if not opts:
+        return None
+    forwarded = {key: opts[key] for key in _BITMAP_FORWARD_KEYS if key in opts}
+    return forwarded or None
+
+
 def _local(tag: str) -> str:
     """Return an element's local name without its namespace."""
     return tag.rsplit("}", 1)[-1]

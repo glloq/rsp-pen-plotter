@@ -20,6 +20,7 @@ from pen_plotter.converters.pdf import PdfConverter
 from pen_plotter.core.layers import extract_layers
 from pen_plotter.core.pdf_postprocess import (
     expand_use_refs,
+    extract_bitmap_options,
     hoist_labeled_groups,
     postprocess_pdf_svg,
     vectorize_embedded_images,
@@ -352,3 +353,71 @@ def test_pdf_without_hershey_text_ignores_font_option() -> None:
     res_a = PdfConverter().convert(_bold_text_pdf(), options={"font": "futural"})
     res_b = PdfConverter().convert(_bold_text_pdf(), options={"font": "timesrb"})
     assert res_a.svg == res_b.svg
+
+
+def test_extract_bitmap_options_forwards_every_rendering_field() -> None:
+    """Guards against silently dropping a Style/Image-tab knob on the
+    way to the embedded-raster pipeline. The five document-style
+    converters (PDF/DOCX/HTML/EPS/SVG) share this helper so any field
+    missing here would fail to apply to image regions of a mixed
+    text+image source — the operator's custom palette, mono ink
+    colour, segmentation method or photo preprocess would silently
+    revert to defaults for those regions while text + vector content
+    rendered with the operator's choices.
+    """
+    palette = ["#112233", "#445566"]
+    preprocess = {"brightness": 1.2, "contrast": 0.9}
+    algo_opts = {"spacing": 0.4, "angle_deg": 30}
+    seg_opts = {"palette": palette}
+    opts = {
+        # Bitmap-rendering keys that MUST flow through.
+        "algorithm": "hatching",
+        "num_colors": 6,
+        "max_dimension_px": 1600,
+        "drop_background": False,
+        "background_luminance": 0.8,
+        "algorithm_options": algo_opts,
+        "segmentation_method": "fixed_palette",
+        "segmentation_options": seg_opts,
+        "min_region_pixels": 12,
+        "merge_delta_e": 2.5,
+        "mono_ink_color": "#abcdef",
+        "preprocess": preprocess,
+        # Unrelated top-level keys that MUST be filtered out (they belong
+        # to the surrounding document context, not the bitmap converter).
+        "page": 3,
+        "source_mime": "application/pdf",
+        "hershey_text": True,
+        "font": "futural",
+        "stroke_width_mm": 0.4,
+        # Frontend persistence extras the bitmap converter never reads.
+        "master_style_id": "pencil",
+        "curves": {"centerline_mode": False},
+    }
+    forwarded = extract_bitmap_options(opts)
+    assert forwarded is not None
+    assert forwarded == {
+        "algorithm": "hatching",
+        "num_colors": 6,
+        "max_dimension_px": 1600,
+        "drop_background": False,
+        "background_luminance": 0.8,
+        "algorithm_options": algo_opts,
+        "segmentation_method": "fixed_palette",
+        "segmentation_options": seg_opts,
+        "min_region_pixels": 12,
+        "merge_delta_e": 2.5,
+        "mono_ink_color": "#abcdef",
+        "preprocess": preprocess,
+    }
+
+
+def test_extract_bitmap_options_returns_none_for_empty_input() -> None:
+    """An empty opts dict (or no opts) collapses to ``None`` so the
+    downstream converter call keeps its default bitmap-converter
+    behaviour instead of being handed an empty dict that would
+    overwrite defaults with Pydantic's own zero-values."""
+    assert extract_bitmap_options(None) is None
+    assert extract_bitmap_options({}) is None
+    # Only unrelated keys → still ``None``.
+    assert extract_bitmap_options({"page": 1, "hershey_text": True}) is None

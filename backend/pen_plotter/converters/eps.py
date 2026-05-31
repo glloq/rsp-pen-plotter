@@ -18,7 +18,7 @@ from typing import Any, ClassVar
 
 from pen_plotter.converters.base import ConversionResult, Converter
 from pen_plotter.converters.pdf import build_hershey_text_group, pdf_bytes_to_svg
-from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
+from pen_plotter.core.pdf_postprocess import extract_bitmap_options, postprocess_pdf_svg
 
 
 def _eps_to_pdf(data: bytes) -> bytes:
@@ -79,18 +79,7 @@ class EpsConverter(Converter):
             and any per-image vectorization warnings.
         """
         opts = options or {}
-        bitmap_options = {
-            key: opts[key]
-            for key in (
-                "algorithm",
-                "num_colors",
-                "max_dimension_px",
-                "drop_background",
-                "background_luminance",
-                "algorithm_options",
-            )
-            if key in opts
-        } or None
+        bitmap_options = extract_bitmap_options(opts)
         pdf_bytes = _eps_to_pdf(data)
         raw_svg, *_ = pdf_bytes_to_svg(pdf_bytes, 0)
         hershey_group = build_hershey_text_group(pdf_bytes, 0, opts)

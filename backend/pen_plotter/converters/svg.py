@@ -20,7 +20,7 @@ from typing import Any, ClassVar
 from xml.etree import ElementTree as ET
 
 from pen_plotter.converters.base import ConversionResult, Converter
-from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
+from pen_plotter.core.pdf_postprocess import extract_bitmap_options, postprocess_pdf_svg
 from pen_plotter.core.svg_text_extract import (
     extract_svg_text_spans,
     strip_text_elements,
@@ -88,18 +88,7 @@ class SvgConverter(Converter):
             present (i.e. when ``hershey_text`` is disabled).
         """
         opts = options or {}
-        bitmap_options = {
-            key: opts[key]
-            for key in (
-                "algorithm",
-                "num_colors",
-                "max_dimension_px",
-                "drop_background",
-                "background_luminance",
-                "algorithm_options",
-            )
-            if key in opts
-        } or None
+        bitmap_options = extract_bitmap_options(opts)
         raw_svg = data.decode("utf-8")
         warnings: list[str] = []
         raw_svg, hershey_group = _hershey_text_group_from_svg(raw_svg, opts)

@@ -15,7 +15,7 @@ from typing import Any, ClassVar
 
 from pen_plotter.converters.base import ConversionResult, Converter
 from pen_plotter.converters.pdf import build_hershey_text_group, pdf_bytes_to_svg
-from pen_plotter.core.pdf_postprocess import postprocess_pdf_svg
+from pen_plotter.core.pdf_postprocess import extract_bitmap_options, postprocess_pdf_svg
 
 _EXTENSION_BY_MIME = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
@@ -91,18 +91,7 @@ class DocumentConverter(Converter):
         mime = str(opts.get("source_mime", ""))
         extension = _EXTENSION_BY_MIME.get(mime, "docx")
         page_index = int(opts.get("page", 0))
-        bitmap_options = {
-            key: opts[key]
-            for key in (
-                "algorithm",
-                "num_colors",
-                "max_dimension_px",
-                "drop_background",
-                "background_luminance",
-                "algorithm_options",
-            )
-            if key in opts
-        } or None
+        bitmap_options = extract_bitmap_options(opts)
         pdf_bytes = _office_to_pdf(data, extension)
         raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(pdf_bytes, page_index)
         hershey_group = build_hershey_text_group(pdf_bytes, page_index, opts)
