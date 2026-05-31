@@ -4,7 +4,104 @@
  */
 
 export interface paths {
-    "/upload": {
+    "/algorithms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Algorithms
+         * @description List the raster algorithms the bitmap converter can apply.
+         *
+         *     Returns:
+         *         One entry per registered algorithm, for the UI to offer as choices.
+         */
+        get: operations["list_algorithms_algorithms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit
+         * @description List recent sensitive actions, newest first.
+         */
+        get: operations["audit_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/available-colors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Colors
+         * @description Return every available-colour entry, ordered by position.
+         */
+        get: operations["list_colors_available_colors_get"];
+        put?: never;
+        /**
+         * Create Color
+         * @description Add an entry to the inventory.
+         *
+         *     Idempotent on the hex value: re-adding an existing colour returns
+         *     the existing record (its name may be updated if a non-empty name
+         *     is supplied in the request) instead of erroring with 409. This
+         *     matches the library / file dedup semantics — declaring the same
+         *     ink twice should be a no-op, not a failure.
+         */
+        post: operations["create_color_available_colors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/available-colors/{color_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Color
+         * @description Remove one entry. Returns ``{"deleted": true}`` on success.
+         */
+        delete: operations["delete_color_available_colors__color_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Patch Color
+         * @description Rewrite ``name`` / ``hex`` / ``position`` / ``stroke_width_mm`` on one entry.
+         */
+        patch: operations["patch_color_available_colors__color_id__patch"];
+        trace?: never;
+    };
+    "/document/analyze": {
         parameters: {
             query?: never;
             header?: never;
@@ -14,14 +111,21 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Upload
-         * @description Accept a file, normalize it to SVG, extract layers, and create a job.
+         * Analyze Document
+         * @description Extract text and image blocks for every page of a PDF.
+         *
+         *     Args:
+         *         file: A PDF upload; other MIME types are rejected with 415.
+         *
+         *     Returns:
+         *         A :class:`DocumentAnalysis` listing the blocks of each page.
          *
          *     Raises:
-         *         HTTPException: 400 for invalid options or input the converter rejects;
-         *             415 if the file's MIME type has no registered converter.
+         *         HTTPException: 415 when the upload is not a PDF; 413 if the
+         *             file exceeds the analysis size limit; 422 if PyMuPDF cannot
+         *             parse the document.
          */
-        post: operations["upload_upload_post"];
+        post: operations["analyze_document_document_analyze_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -62,7 +166,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/files/integrity": {
+    "/files/by-hash/{sha256}": {
         parameters: {
             query?: never;
             header?: never;
@@ -70,13 +174,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Files Integrity
-         * @description Return the integrity report for the file library.
+         * Get File By Hash
+         * @description Look up a library entry by its content SHA-256.
          *
-         *     Lets the UI surface a banner ("3 file(s) need re-upload to support
-         *     style editing") instead of failing on the next /rerender click.
+         *     Lets the uploader skip the upload + convert round-trip entirely when the
+         *     bytes are already in the library: the client hashes the file locally and
+         *     calls this first. Returns the same :class:`FileDetail` the upload endpoint
+         *     would, so the frontend can merge it as a dedup hit. 404 when unknown.
+         *
+         *     Declared before ``/files/{file_id}`` so the literal ``by-hash`` segment is
+         *     never swallowed by the file-id route.
          */
-        get: operations["files_integrity_files_integrity_get"];
+        get: operations["get_file_by_hash_files_by_hash__sha256__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -105,7 +214,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/files/by-hash/{sha256}": {
+    "/files/integrity": {
         parameters: {
             query?: never;
             header?: never;
@@ -113,18 +222,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get File By Hash
-         * @description Look up a library entry by its content SHA-256.
+         * Files Integrity
+         * @description Return the integrity report for the file library.
          *
-         *     Lets the uploader skip the upload + convert round-trip entirely when the
-         *     bytes are already in the library: the client hashes the file locally and
-         *     calls this first. Returns the same :class:`FileDetail` the upload endpoint
-         *     would, so the frontend can merge it as a dedup hit. 404 when unknown.
-         *
-         *     Declared before ``/files/{file_id}`` so the literal ``by-hash`` segment is
-         *     never swallowed by the file-id route.
+         *     Lets the UI surface a banner ("3 file(s) need re-upload to support
+         *     style editing") instead of failing on the next /rerender click.
          */
-        get: operations["get_file_by_hash_files_by_hash__sha256__get"];
+        get: operations["files_integrity_files_integrity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -181,7 +285,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/algorithms": {
+    "/files/{file_id}/preview-image": {
         parameters: {
             query?: never;
             header?: never;
@@ -189,13 +293,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Algorithms
-         * @description List the raster algorithms the bitmap converter can apply.
+         * File Preview Image
+         * @description Return a PNG raster of the original source for the editor preview.
          *
-         *     Returns:
-         *         One entry per registered algorithm, for the UI to offer as choices.
+         *     Image sources are streamed back as-is (no re-encode) so JPEG quality
+         *     survives. Vector / document sources (PDF, SVG, DOCX, ODT, RTF, HTML,
+         *     EPS, PS, AI) are rendered to PNG through PyMuPDF / LibreOffice /
+         *     Ghostscript — the "Original" and "Compare" modes in the editor
+         *     finally work for them instead of being hidden behind a bitmap-only
+         *     check. Formats with no useful raster representation (TXT, MD, DXF)
+         *     return 415 so the UI can fall back to the existing text / empty
+         *     placeholder instead of showing a broken ``<img>``.
          */
-        get: operations["list_algorithms_algorithms_get"];
+        get: operations["file_preview_image_files__file_id__preview_image_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -221,147 +331,6 @@ export interface paths {
         get: operations["list_fonts_fonts_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/profiles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Profiles
-         * @description List the configured machine profiles, sorted by name.
-         */
-        get: operations["list_profiles_profiles_get"];
-        put?: never;
-        /**
-         * Create Or Update
-         * @description Create or update a profile from a JSON body and persist it.
-         *
-         *     The profile is written to the writable user directory, overriding any
-         *     bundled profile with the same name. FastAPI returns 422 if the body fails
-         *     validation.
-         */
-        post: operations["create_or_update_profiles_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/profiles/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get One
-         * @description Return a single profile by name.
-         *
-         *     Raises:
-         *         HTTPException: 404 if no profile with the name exists.
-         */
-        get: operations["get_one_profiles__name__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete One
-         * @description Delete a user profile by name.
-         *
-         *     Raises:
-         *         HTTPException: 404 if no profile with the name exists; 400 if the
-         *             profile is bundled (read-only) and therefore cannot be deleted.
-         */
-        delete: operations["delete_one_profiles__name__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/profiles/{name}/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export One
-         * @description Export a profile as YAML.
-         *
-         *     Raises:
-         *         HTTPException: 404 if no profile with the name exists.
-         */
-        get: operations["export_one_profiles__name__export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/profiles/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Import One
-         * @description Validate and persist an imported YAML profile.
-         *
-         *     Raises:
-         *         HTTPException: 422 if the YAML is malformed or fails validation.
-         */
-        post: operations["import_one_profiles_import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/optimize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Optimize
-         * @description Optimize toolpaths to reduce pen-up travel.
-         *
-         *     When ``OMNIPLOT_IR_ENABLED=1`` and a matching :class:`GeometryIR`
-         *     artifact has been previously cached for this SVG, we route through
-         *     :func:`optimize_geometry_ir` so the IR path gets real traffic in
-         *     production. The SVG path stays the fallback when no cached IR is
-         *     available (typical fresh upload, no prior cache hit).
-         *
-         *     Args:
-         *         request: The SVG to optimize plus optional per-layer settings.
-         *
-         *     Returns:
-         *         An :class:`OptimizeResponse` with the optimized SVG, refreshed layer
-         *         descriptors, and before/after travel metrics.
-         *
-         *     Raises:
-         *         HTTPException: 400 if the SVG cannot be processed.
-         */
-        post: operations["optimize_optimize_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -396,451 +365,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/preflight": {
+    "/health": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Preflight
-         * @description Validate and estimate a placed drawing before generating it.
+         * Health
+         * @description Report that the API is reachable and which version is running.
          *
-         *     The response is a :class:`PreflightReport` with ``plan_hash`` set so
-         *     the frontend can verify it later matches the ``/generate`` hash.
-         *
-         *     Raises:
-         *         HTTPException: 404 if the profile is unknown; 400 if the SVG
-         *             cannot be parsed or the plan fails business validation.
+         *     Returns:
+         *         A payload with a fixed ``ok`` status and the package version.
          */
-        post: operations["preflight_preflight_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/preflight/svg": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Preflight Svg
-         * @description Estimate metrics for a standalone SVG against a profile.
-         *
-         *     Lightweight variant that skips plan resolution / TypographyPlan
-         *     re-rendering / placement composition. Returns the same
-         *     :class:`PreflightReport` shape as the full ``/preflight`` so
-         *     consumers (e.g. the Compare drawer) can read
-         *     ``drawing_length_mm``, ``travel_length_mm``,
-         *     ``estimated_seconds`` and ``pen_changes`` straight from the
-         *     report.
-         *
-         *     Raises:
-         *         HTTPException: 404 if the profile is unknown; 400 if the SVG
-         *             cannot be parsed.
-         */
-        post: operations["preflight_svg_preflight_svg_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plans/{plan_hash}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Plan
-         * @description Return the resolved plan archived under ``plan_hash``.
-         *
-         *     Raises:
-         *         HTTPException: 404 if no snapshot exists for that hash.
-         */
-        get: operations["get_plan_plans__plan_hash__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/policy/resolve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Resolve Policy
-         * @description Return the recommended algorithm + parameters for ``payload``.
-         *
-         *     Mirrors the matrix from audit #4 (see ``backend/pen_plotter/domain/policy``).
-         *     The reasoning trail in the response is what the modal V2 surfaces
-         *     next to the recommendation as "Pourquoi ce choix ?".
-         */
-        post: operations["resolve_policy_policy_resolve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Status
-         * @description Return the current connection and streaming status.
-         */
-        get: operations["status_plotter_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/connect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Connect
-         * @description Open a serial connection to the plotter.
-         *
-         *     Raises:
-         *         HTTPException: 400 if the serial port cannot be opened.
-         */
-        post: operations["connect_plotter_connect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/disconnect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Disconnect
-         * @description Disconnect from the plotter.
-         */
-        post: operations["disconnect_plotter_disconnect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/jog": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Jog
-         * @description Jog the head by a relative offset.
-         */
-        post: operations["jog_plotter_jog_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/goto": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Goto
-         * @description Move the head to an absolute workspace position.
-         */
-        post: operations["goto_plotter_goto_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/home": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Home
-         * @description Home the machine.
-         */
-        post: operations["home_plotter_home_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run
-         * @description Start streaming a G-code job.
-         */
-        post: operations["run_plotter_run_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/pause": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Pause
-         * @description Pause the running job.
-         */
-        post: operations["pause_plotter_pause_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/resume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Resume
-         * @description Resume a paused job.
-         */
-        post: operations["resume_plotter_resume_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plotter/abort": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Abort
-         * @description Abort the running job.
-         */
-        post: operations["abort_plotter_abort_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/queue": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Queue
-         * @description List print runs, active ones first.
-         *
-         *     Protected because ``PrintRun.pause_points`` carries operator-facing
-         *     prompts (e.g. "Insert pen slot 1: Red") that reveal the pen carousel
-         *     configuration when an API key is configured.
-         */
-        get: operations["list_queue_queue_get"];
-        put?: never;
-        /**
-         * Create
-         * @description Enqueue a G-code program for the plotter.
-         *
-         *     Supplying an ``Idempotency-Key`` header makes retries safe: if a run already
-         *     exists with that key, it is returned instead of creating a duplicate.
-         *
-         *     Raises:
-         *         HTTPException: 404 if the profile is unknown.
-         */
-        post: operations["create_queue_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/queue/{run_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get One
-         * @description Return a single print run.
-         *
-         *     Raises:
-         *         HTTPException: 404 if the run is unknown.
-         */
-        get: operations["get_one_queue__run_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Remove
-         * @description Delete a run from the queue.
-         *
-         *     Raises:
-         *         HTTPException: 404 if unknown; 409 if it is currently streaming.
-         */
-        delete: operations["remove_queue__run_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/queue/{run_id}/pause": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Pause
-         * @description Pause a run that is currently streaming.
-         */
-        post: operations["pause_queue__run_id__pause_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/queue/{run_id}/resume": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Resume
-         * @description Resume a paused run, continuing it or re-queuing from its checkpoint.
-         */
-        post: operations["resume_queue__run_id__resume_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/queue/{run_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Cancel
-         * @description Cancel a run, aborting it if it is currently streaming.
-         */
-        post: operations["cancel_queue__run_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/audit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Audit
-         * @description List recent sensitive actions, newest first.
-         */
-        get: operations["audit_audit_get"];
+        get: operations["health_health_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -884,26 +423,6 @@ export interface paths {
          *         HTTPException: 404 if no job with the id exists.
          */
         get: operations["job_jobs__job_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/presets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Presets
-         * @description List the available raster conversion presets.
-         */
-        get: operations["presets_presets_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -983,6 +502,419 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/manifests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Manifests
+         * @description List the manifest domains the backend serves.
+         *
+         *     Returns:
+         *         One entry per registered domain; the frontend uses this as a
+         *         capability probe before requesting a specific manifest.
+         */
+        get: operations["list_manifests_manifests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/manifests/{domain}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Manifest
+         * @description Return the manifest for ``domain``.
+         *
+         *     Raises:
+         *         ApiError: ``manifest.unknown_domain`` (404) when the domain is
+         *             not registered.
+         */
+        get: operations["read_manifest_manifests__domain__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/optimize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Optimize
+         * @description Optimize toolpaths to reduce pen-up travel.
+         *
+         *     When ``OMNIPLOT_IR_ENABLED=1`` and a matching :class:`GeometryIR`
+         *     artifact has been previously cached for this SVG, we route through
+         *     :func:`optimize_geometry_ir` so the IR path gets real traffic in
+         *     production. The SVG path stays the fallback when no cached IR is
+         *     available (typical fresh upload, no prior cache hit).
+         *
+         *     Args:
+         *         request: The SVG to optimize plus optional per-layer settings.
+         *
+         *     Returns:
+         *         An :class:`OptimizeResponse` with the optimized SVG, refreshed layer
+         *         descriptors, and before/after travel metrics.
+         *
+         *     Raises:
+         *         HTTPException: 400 if the SVG cannot be processed.
+         */
+        post: operations["optimize_optimize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plans/{plan_hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Plan
+         * @description Return the resolved plan archived under ``plan_hash``.
+         *
+         *     Raises:
+         *         HTTPException: 404 if no snapshot exists for that hash.
+         */
+        get: operations["get_plan_plans__plan_hash__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/abort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Abort
+         * @description Abort the running job.
+         */
+        post: operations["abort_plotter_abort_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Connect
+         * @description Open a serial connection to the plotter.
+         *
+         *     Raises:
+         *         HTTPException: 400 if the serial port cannot be opened.
+         */
+        post: operations["connect_plotter_connect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disconnect
+         * @description Disconnect from the plotter.
+         */
+        post: operations["disconnect_plotter_disconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/goto": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Goto
+         * @description Move the head to an absolute workspace position.
+         */
+        post: operations["goto_plotter_goto_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Home
+         * @description Home the machine.
+         */
+        post: operations["home_plotter_home_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/jog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Jog
+         * @description Jog the head by a relative offset.
+         */
+        post: operations["jog_plotter_jog_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause
+         * @description Pause the running job.
+         */
+        post: operations["pause_plotter_pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume
+         * @description Resume a paused job.
+         */
+        post: operations["resume_plotter_resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run
+         * @description Start streaming a G-code job.
+         */
+        post: operations["run_plotter_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status
+         * @description Return the current connection and streaming status.
+         */
+        get: operations["status_plotter_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/policy/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Policy
+         * @description Return the recommended algorithm + parameters for ``payload``.
+         *
+         *     Mirrors the matrix from audit #4 (see ``backend/pen_plotter/domain/policy``).
+         *     The reasoning trail in the response is what the modal V2 surfaces
+         *     next to the recommendation as "Pourquoi ce choix ?".
+         */
+        post: operations["resolve_policy_policy_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preflight
+         * @description Validate and estimate a placed drawing before generating it.
+         *
+         *     The response is a :class:`PreflightReport` with ``plan_hash`` set so
+         *     the frontend can verify it later matches the ``/generate`` hash.
+         *
+         *     Raises:
+         *         HTTPException: 404 if the profile is unknown; 400 if the SVG
+         *             cannot be parsed or the plan fails business validation.
+         */
+        post: operations["preflight_preflight_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/preflight/svg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preflight Svg
+         * @description Estimate metrics for a standalone SVG against a profile.
+         *
+         *     Lightweight variant that skips plan resolution / TypographyPlan
+         *     re-rendering / placement composition. Returns the same
+         *     :class:`PreflightReport` shape as the full ``/preflight`` so
+         *     consumers (e.g. the Compare drawer) can read
+         *     ``drawing_length_mm``, ``travel_length_mm``,
+         *     ``estimated_seconds`` and ``pen_changes`` straight from the
+         *     report.
+         *
+         *     Raises:
+         *         HTTPException: 404 if the profile is unknown; 400 if the SVG
+         *             cannot be parsed.
+         */
+        post: operations["preflight_svg_preflight_svg_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Presets
+         * @description List the available raster conversion presets.
+         */
+        get: operations["presets_presets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/preview": {
         parameters: {
             query?: never;
@@ -1013,30 +945,6 @@ export interface paths {
          *             400 if options can't be parsed or the quality tier is unknown.
          */
         post: operations["preview_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/preview/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Preview Stream
-         * @description Open a Server-Sent Events stream emitting progress events.
-         *
-         *     When ``file_id`` is set, runs the real pipeline against the
-         *     matching library entry; otherwise falls back to the synthetic
-         *     emitter (useful for tests and frontend smoke).
-         */
-        get: operations["preview_stream_preview_stream_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1080,6 +988,259 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/preview/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Stream
+         * @description Open a Server-Sent Events stream emitting progress events.
+         *
+         *     When ``file_id`` is set, runs the real pipeline against the
+         *     matching library entry; otherwise falls back to the synthetic
+         *     emitter (useful for tests and frontend smoke).
+         */
+        get: operations["preview_stream_preview_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Profiles
+         * @description List the configured machine profiles, sorted by name.
+         */
+        get: operations["list_profiles_profiles_get"];
+        put?: never;
+        /**
+         * Create Or Update
+         * @description Create or update a profile from a JSON body and persist it.
+         *
+         *     The profile is written to the writable user directory, overriding any
+         *     bundled profile with the same name. FastAPI returns 422 if the body fails
+         *     validation.
+         */
+        post: operations["create_or_update_profiles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/profiles/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import One
+         * @description Validate and persist an imported YAML profile.
+         *
+         *     Raises:
+         *         HTTPException: 422 if the YAML is malformed or fails validation.
+         */
+        post: operations["import_one_profiles_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/profiles/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get One
+         * @description Return a single profile by name.
+         *
+         *     Raises:
+         *         HTTPException: 404 if no profile with the name exists.
+         */
+        get: operations["get_one_profiles__name__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete One
+         * @description Delete a user profile by name.
+         *
+         *     Raises:
+         *         HTTPException: 404 if no profile with the name exists; 400 if the
+         *             profile is bundled (read-only) and therefore cannot be deleted.
+         */
+        delete: operations["delete_one_profiles__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/profiles/{name}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export One
+         * @description Export a profile as YAML.
+         *
+         *     Raises:
+         *         HTTPException: 404 if no profile with the name exists.
+         */
+        get: operations["export_one_profiles__name__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Queue
+         * @description List print runs, active ones first.
+         *
+         *     Protected because ``PrintRun.pause_points`` carries operator-facing
+         *     prompts (e.g. "Insert pen slot 1: Red") that reveal the pen carousel
+         *     configuration when an API key is configured.
+         */
+        get: operations["list_queue_queue_get"];
+        put?: never;
+        /**
+         * Create
+         * @description Enqueue a G-code program for the plotter.
+         *
+         *     Supplying an ``Idempotency-Key`` header makes retries safe: if a run already
+         *     exists with that key, it is returned instead of creating a duplicate.
+         *
+         *     Raises:
+         *         HTTPException: 404 if the profile is unknown.
+         */
+        post: operations["create_queue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queue/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get One
+         * @description Return a single print run.
+         *
+         *     Raises:
+         *         HTTPException: 404 if the run is unknown.
+         */
+        get: operations["get_one_queue__run_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove
+         * @description Delete a run from the queue.
+         *
+         *     Raises:
+         *         HTTPException: 404 if unknown; 409 if it is currently streaming.
+         */
+        delete: operations["remove_queue__run_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queue/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel
+         * @description Cancel a run, aborting it if it is currently streaming.
+         */
+        post: operations["cancel_queue__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queue/{run_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause
+         * @description Pause a run that is currently streaming.
+         */
+        post: operations["pause_queue__run_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queue/{run_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume
+         * @description Resume a paused run, continuing it or re-queuing from its checkpoint.
+         */
+        post: operations["resume_queue__run_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rerender": {
         parameters: {
             query?: never;
@@ -1112,7 +1273,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/system/version": {
+    "/settings/palette-source": {
         parameters: {
             query?: never;
             header?: never;
@@ -1120,12 +1281,65 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Version
-         * @description Report the package version and (if available) the git checkout state.
+         * Read Palette Source
+         * @description Return the active palette source the per-layer picker reads from.
          */
-        get: operations["get_version_system_version_get"];
+        get: operations["read_palette_source_settings_palette_source_get"];
+        /**
+         * Write Palette Source
+         * @description Persist the operator's palette-source choice.
+         */
+        put: operations["write_palette_source_settings_palette_source_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slo/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Budgets
+         * @description Return the configured SLO budget table.
+         *
+         *     Used by the frontend dashboard to render the threshold rows even
+         *     when there are no samples yet.
+         */
+        get: operations["list_budgets_slo_budgets_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slo/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Evaluate
+         * @description Evaluate the SLO budgets against ``request.samples``.
+         *
+         *     Also feeds the samples into the runtime accumulator so the
+         *     background evaluator (when enabled) sees the same data. A breach
+         *     on an ``alert_on_breach=True`` budget emits one structured log
+         *     line; the deployment is responsible for routing those to an
+         *     external alertmanager.
+         */
+        post: operations["evaluate_slo_evaluate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1185,7 +1399,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/document/analyze": {
+    "/system/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Version
+         * @description Report the package version and (if available) the git checkout state.
+         */
+        get: operations["get_version_system_version_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/upload": {
         parameters: {
             query?: never;
             header?: never;
@@ -1195,219 +1429,14 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Analyze Document
-         * @description Extract text and image blocks for every page of a PDF.
-         *
-         *     Args:
-         *         file: A PDF upload; other MIME types are rejected with 415.
-         *
-         *     Returns:
-         *         A :class:`DocumentAnalysis` listing the blocks of each page.
+         * Upload
+         * @description Accept a file, normalize it to SVG, extract layers, and create a job.
          *
          *     Raises:
-         *         HTTPException: 415 when the upload is not a PDF; 413 if the
-         *             file exceeds the analysis size limit; 422 if PyMuPDF cannot
-         *             parse the document.
+         *         HTTPException: 400 for invalid options or input the converter rejects;
+         *             415 if the file's MIME type has no registered converter.
          */
-        post: operations["analyze_document_document_analyze_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/available-colors": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Colors
-         * @description Return every available-colour entry, ordered by position.
-         */
-        get: operations["list_colors_available_colors_get"];
-        put?: never;
-        /**
-         * Create Color
-         * @description Add an entry to the inventory.
-         *
-         *     Idempotent on the hex value: re-adding an existing colour returns
-         *     the existing record (its name may be updated if a non-empty name
-         *     is supplied in the request) instead of erroring with 409. This
-         *     matches the library / file dedup semantics — declaring the same
-         *     ink twice should be a no-op, not a failure.
-         */
-        post: operations["create_color_available_colors_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/available-colors/{color_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Color
-         * @description Remove one entry. Returns ``{"deleted": true}`` on success.
-         */
-        delete: operations["delete_color_available_colors__color_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Patch Color
-         * @description Rewrite ``name`` / ``hex`` / ``position`` / ``stroke_width_mm`` on one entry.
-         */
-        patch: operations["patch_color_available_colors__color_id__patch"];
-        trace?: never;
-    };
-    "/settings/palette-source": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read Palette Source
-         * @description Return the active palette source the per-layer picker reads from.
-         */
-        get: operations["read_palette_source_settings_palette_source_get"];
-        /**
-         * Write Palette Source
-         * @description Persist the operator's palette-source choice.
-         */
-        put: operations["write_palette_source_settings_palette_source_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/manifests": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Manifests
-         * @description List the manifest domains the backend serves.
-         *
-         *     Returns:
-         *         One entry per registered domain; the frontend uses this as a
-         *         capability probe before requesting a specific manifest.
-         */
-        get: operations["list_manifests_manifests_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/manifests/{domain}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read Manifest
-         * @description Return the manifest for ``domain``.
-         *
-         *     Raises:
-         *         ApiError: ``manifest.unknown_domain`` (404) when the domain is
-         *             not registered.
-         */
-        get: operations["read_manifest_manifests__domain__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/slo/budgets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Budgets
-         * @description Return the configured SLO budget table.
-         *
-         *     Used by the frontend dashboard to render the threshold rows even
-         *     when there are no samples yet.
-         */
-        get: operations["list_budgets_slo_budgets_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/slo/evaluate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Evaluate
-         * @description Evaluate the SLO budgets against ``request.samples``.
-         *
-         *     Also feeds the samples into the runtime accumulator so the
-         *     background evaluator (when enabled) sees the same data. A breach
-         *     on an ``alert_on_breach=True`` budget emits one structured log
-         *     line; the deployment is responsible for routing those to an
-         *     external alertmanager.
-         */
-        post: operations["evaluate_slo_evaluate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Health
-         * @description Report that the API is reachable and which version is running.
-         *
-         *     Returns:
-         *         A payload with a fixed ``ok`` status and the package version.
-         */
-        get: operations["health_health_get"];
-        put?: never;
-        post?: never;
+        post: operations["upload_upload_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1423,8 +1452,12 @@ export interface components {
          * @description Metadata describing one raster algorithm choice.
          */
         AlgorithmInfo: {
-            /** Name */
-            name: string;
+            /**
+             * Complexity
+             * @default medium
+             * @enum {string}
+             */
+            complexity: "low" | "medium" | "high";
             /** Description */
             description: string;
             /**
@@ -1433,25 +1466,14 @@ export interface components {
              * @enum {string}
              */
             kind: "fill" | "lines" | "mono_stroke";
-            /**
-             * Complexity
-             * @default medium
-             * @enum {string}
-             */
-            complexity: "low" | "medium" | "high";
+            /** Name */
+            name: string;
         };
         /**
          * AuditEntry
          * @description One recorded sensitive action.
          */
         AuditEntry: {
-            /** Id */
-            id?: number | null;
-            /**
-             * Timestamp
-             * Format: date-time
-             */
-            timestamp?: string;
             /** Action */
             action: string;
             /**
@@ -1459,6 +1481,13 @@ export interface components {
              * @default
              */
             detail: string;
+            /** Id */
+            id?: number | null;
+            /**
+             * Timestamp
+             * Format: date-time
+             */
+            timestamp?: string;
         };
         /**
          * AvailableColorCreate
@@ -1485,21 +1514,21 @@ export interface components {
         AvailableColorOut: {
             /** Color Id */
             color_id: string;
-            /** Hex */
-            hex: string;
-            /** Name */
-            name: string;
-            /** Position */
-            position: number;
-            /** Stroke Width Mm */
-            stroke_width_mm: number;
-            /** Odometer Mm */
-            odometer_mm: number;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Hex */
+            hex: string;
+            /** Name */
+            name: string;
+            /** Odometer Mm */
+            odometer_mm: number;
+            /** Position */
+            position: number;
+            /** Stroke Width Mm */
+            stroke_width_mm: number;
         };
         /**
          * AvailableColorPatch
@@ -1510,12 +1539,12 @@ export interface components {
             hex?: string | null;
             /** Name */
             name?: string | null;
+            /** Odometer Mm */
+            odometer_mm?: number | null;
             /** Position */
             position?: number | null;
             /** Stroke Width Mm */
             stroke_width_mm?: number | null;
-            /** Odometer Mm */
-            odometer_mm?: number | null;
         };
         /**
          * Block
@@ -1529,6 +1558,10 @@ export interface components {
          *         char_count: Number of non-whitespace characters (text blocks only).
          */
         Block: {
+            /** Bbox */
+            bbox: number[];
+            /** Char Count */
+            char_count?: number | null;
             /** Id */
             id: string;
             /**
@@ -1536,12 +1569,8 @@ export interface components {
              * @enum {string}
              */
             kind: "text" | "image";
-            /** Bbox */
-            bbox: number[];
             /** Text Sample */
             text_sample?: string | null;
-            /** Char Count */
-            char_count?: number | null;
         };
         /** Body_analyze_document_document_analyze_post */
         Body_analyze_document_document_analyze_post: {
@@ -1550,13 +1579,13 @@ export interface components {
         };
         /** Body_preview_preview_post */
         Body_preview_preview_post: {
-            /** File */
-            file: string;
             /**
              * Algorithm
              * @default direct
              */
             algorithm: string;
+            /** File */
+            file: string;
             /** Options */
             options?: string | null;
             /**
@@ -1588,101 +1617,101 @@ export interface components {
         Body_upload_upload_post: {
             /** File */
             file: string;
-            /** Profile Name */
-            profile_name: string;
             /** Options */
             options?: string | null;
+            /** Profile Name */
+            profile_name: string;
         };
         /**
          * BoundingBox
          * @description Axis-aligned bounding box of a layer's geometry, in millimeters.
          */
         BoundingBox: {
-            /** X Min */
-            x_min: number;
-            /** Y Min */
-            y_min: number;
             /** X Max */
             x_max: number;
+            /** X Min */
+            x_min: number;
             /** Y Max */
             y_max: number;
+            /** Y Min */
+            y_min: number;
         };
         /**
          * Budget
          * @description One SLO row.
          */
         Budget: {
-            /** Metric */
-            metric: string;
-            /** Label */
-            label: string;
-            /** P95 Ms */
-            p95_ms: number;
-            /**
-             * Min Samples
-             * @default 10
-             */
-            min_samples: number;
-            /**
-             * Warn Breach Ratio
-             * @default 0.05
-             */
-            warn_breach_ratio: number;
             /**
              * Alert On Breach
              * @default true
              */
             alert_on_breach: boolean;
+            /** Label */
+            label: string;
+            /** Metric */
+            metric: string;
+            /**
+             * Min Samples
+             * @default 10
+             */
+            min_samples: number;
+            /** P95 Ms */
+            p95_ms: number;
+            /**
+             * Warn Breach Ratio
+             * @default 0.05
+             */
+            warn_breach_ratio: number;
         };
         /**
          * BudgetReport
          * @description The dashboard payload — all budgets + a roll-up severity.
          */
         BudgetReport: {
+            overall: components["schemas"]["Severity"];
             /** Statuses */
             statuses: components["schemas"]["BudgetStatus"][];
-            overall: components["schemas"]["Severity"];
         };
         /**
          * BudgetStatus
          * @description Result of evaluating one budget.
          */
         BudgetStatus: {
+            /**
+             * Breach Count
+             * @default 0
+             */
+            breach_count: number;
             budget: components["schemas"]["Budget"];
-            severity: components["schemas"]["Severity"];
             /**
              * Observed P95 Ms
              * @default 0
              */
             observed_p95_ms: number;
             /**
-             * Breach Count
-             * @default 0
-             */
-            breach_count: number;
-            /**
              * Sample Count
              * @default 0
              */
             sample_count: number;
+            severity: components["schemas"]["Severity"];
         };
         /**
          * CheckUpdateResponse
          * @description Result of ``GET /system/check-update``: is a newer commit available?
          */
         CheckUpdateResponse: {
-            /** Update Available */
-            update_available: boolean;
-            /** Current Commit */
-            current_commit: string | null;
-            /** Remote Commit */
-            remote_commit: string | null;
             /** Behind */
             behind: number;
             /** Branch */
             branch: string | null;
+            /** Current Commit */
+            current_commit: string | null;
             /** Error */
             error?: string | null;
+            /** Remote Commit */
+            remote_commit: string | null;
+            /** Update Available */
+            update_available: boolean;
         };
         /**
          * CommandSource
@@ -1695,13 +1724,13 @@ export interface components {
          * @description Serial connection parameters.
          */
         ConnectRequest: {
-            /** Port */
-            port: string;
             /**
              * Baudrate
              * @default 115200
              */
             baudrate: number;
+            /** Port */
+            port: string;
             /**
              * Terminator
              * @default lf
@@ -1730,6 +1759,8 @@ export interface components {
          *     keep supporting it until then.
          */
         Deprecation: {
+            /** Deprecated Since */
+            deprecated_since: number;
             /** Name */
             name: string;
             /**
@@ -1737,8 +1768,6 @@ export interface components {
              * @default
              */
             reason: string;
-            /** Deprecated Since */
-            deprecated_since: number;
             /** Remove After */
             remove_after: number;
         };
@@ -1759,17 +1788,12 @@ export interface components {
          */
         EbbConfig: {
             /**
-             * Steps Per Mm
-             * @description Motor steps per millimeter of Cartesian travel.
-             * @default 80
+             * Serial Terminator
+             * @description Line terminator the board expects; EiBotBoard uses CR.
+             * @default cr
+             * @enum {string}
              */
-            steps_per_mm: number;
-            /**
-             * Servo Up
-             * @description Servo pulse width for the pen-up position, in 83.3 ns units (EBB SP).
-             * @default 16000
-             */
-            servo_up: number;
+            serial_terminator: "cr" | "lf" | "crlf";
             /**
              * Servo Down
              * @description Servo pulse width for the pen-down position, in 83.3 ns units (EBB SP).
@@ -1783,73 +1807,78 @@ export interface components {
              */
             servo_rate: number;
             /**
-             * Serial Terminator
-             * @description Line terminator the board expects; EiBotBoard uses CR.
-             * @default cr
-             * @enum {string}
+             * Servo Up
+             * @description Servo pulse width for the pen-up position, in 83.3 ns units (EBB SP).
+             * @default 16000
              */
-            serial_terminator: "cr" | "lf" | "crlf";
+            servo_up: number;
+            /**
+             * Steps Per Mm
+             * @description Motor steps per millimeter of Cartesian travel.
+             * @default 80
+             */
+            steps_per_mm: number;
         };
         /**
          * EnqueueRequest
          * @description Body for adding a run to the print queue.
          */
         EnqueueRequest: {
-            /** Name */
-            name: string;
-            /** Profile Name */
-            profile_name: string;
             /** Gcode */
             gcode: string;
+            /** Name */
+            name: string;
             /**
              * Priority
              * @default 0
              */
             priority: number;
+            /** Profile Name */
+            profile_name: string;
         };
         /**
          * EvaluateRequest
          * @description Payload for ``POST /slo/evaluate`` — accepts a sample list.
          */
         EvaluateRequest: {
-            /** Samples */
-            samples: components["schemas"]["MetricSample"][];
             /** Budgets */
             budgets?: components["schemas"]["Budget"][] | null;
+            /** Samples */
+            samples: components["schemas"]["MetricSample"][];
         };
         /**
          * FileDetail
          * @description Library entry plus its converted SVG and per-file metadata.
          */
         FileDetail: {
-            /** File Id */
-            file_id: string;
-            /** Sha256 */
-            sha256: string;
-            /** Source File */
-            source_file: string;
-            /** Source Mime */
-            source_mime: string;
-            /** Size Bytes */
-            size_bytes: number;
-            /** Layer Count */
-            layer_count: number;
-            /** Folder */
-            folder: string;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
-            /** Svg */
-            svg: string;
+            /** File Id */
+            file_id: string;
+            /** Folder */
+            folder: string;
+            /** Layer Count */
+            layer_count: number;
             /** Layers */
             layers: unknown[];
             /**
-             * Warnings
-             * @default []
+             * Rerenderable
+             * @default false
              */
-            warnings: string[];
+            rerenderable: boolean;
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Source File */
+            source_file: string;
+            /** Source Mime */
+            source_mime: string;
+            /** Svg */
+            svg: string;
             /**
              * Upload Metadata
              * @default {}
@@ -1858,54 +1887,54 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
-             * Rerenderable
-             * @default false
+             * Warnings
+             * @default []
              */
-            rerenderable: boolean;
+            warnings: string[];
         };
         /**
          * FilePatch
          * @description In-place edit of a library entry — rename and/or move between folders.
          */
         FilePatch: {
-            /** Source File */
-            source_file?: string | null;
             /** Folder */
             folder?: string | null;
+            /** Source File */
+            source_file?: string | null;
         };
         /**
          * FileRecordOut
          * @description Public projection of a :class:`FileRecord`, ready for JSON.
          */
         FileRecordOut: {
-            /** File Id */
-            file_id: string;
-            /** Sha256 */
-            sha256: string;
-            /** Source File */
-            source_file: string;
-            /** Source Mime */
-            source_mime: string;
-            /** Size Bytes */
-            size_bytes: number;
-            /** Layer Count */
-            layer_count: number;
-            /** Folder */
-            folder: string;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** File Id */
+            file_id: string;
+            /** Folder */
+            folder: string;
+            /** Layer Count */
+            layer_count: number;
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Source File */
+            source_file: string;
+            /** Source Mime */
+            source_mime: string;
         };
         /**
          * FileUploadResponse
          * @description Result of uploading to the library; ``existing`` flags dedup hits.
          */
         FileUploadResponse: {
-            file: components["schemas"]["FileDetail"];
             /** Existing */
             existing: boolean;
+            file: components["schemas"]["FileDetail"];
         };
         /**
          * GenerateRequest
@@ -1918,35 +1947,35 @@ export interface components {
          *     domain type.
          */
         GenerateRequest: {
-            /** Svg */
-            svg: string;
-            /** Profile Name */
-            profile_name: string;
+            /**
+             * Allow Missing Slots
+             * @default false
+             */
+            allow_missing_slots: boolean;
             /** Layers */
             layers?: components["schemas"]["LayerPlan"][];
+            /** Library File Id */
+            library_file_id?: string | null;
+            /**
+             * Margin Mm
+             * @default 10
+             */
+            margin_mm: number;
+            metadata?: components["schemas"]["PlanMetadata"];
+            placement?: components["schemas"]["PlacementPlan"] | null;
+            /** Profile Name */
+            profile_name: string;
             /**
              * Scale Mode
              * @default fit
              * @enum {string}
              */
             scale_mode: "fit" | "actual";
-            /**
-             * Margin Mm
-             * @default 10
-             */
-            margin_mm: number;
-            placement?: components["schemas"]["PlacementPlan"] | null;
-            typography?: components["schemas"]["TypographyPlan"] | null;
-            /** Library File Id */
-            library_file_id?: string | null;
             /** Source Mime */
             source_mime?: string | null;
-            metadata?: components["schemas"]["PlanMetadata"];
-            /**
-             * Allow Missing Slots
-             * @default false
-             */
-            allow_missing_slots: boolean;
+            /** Svg */
+            svg: string;
+            typography?: components["schemas"]["TypographyPlan"] | null;
         };
         /**
          * GenerateResponse
@@ -1972,12 +2001,12 @@ export interface components {
          * @description Absolute move parameters.
          */
         GotoRequest: {
+            /** Profile Name */
+            profile_name: string;
             /** X Mm */
             x_mm: number;
             /** Y Mm */
             y_mm: number;
-            /** Profile Name */
-            profile_name: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2022,18 +2051,6 @@ export interface components {
          */
         HostSwapPlan: {
             /**
-             * Grab Command
-             * @default
-             */
-            grab_command: string;
-            /**
-             * Drop Command
-             * @default
-             */
-            drop_command: string;
-            /** Travel Speed Mm S */
-            travel_speed_mm_s?: number | null;
-            /**
              * Clearance Axis
              * @default y
              * @enum {string}
@@ -2050,20 +2067,44 @@ export interface components {
              * @default 0
              */
             clearance_mm: number;
-            /** Head Up Command */
-            head_up_command?: string | null;
-            /** Head Down Command */
-            head_down_command?: string | null;
-            /** Safe Z Mm */
-            safe_z_mm?: number | null;
+            /**
+             * Drop Command
+             * @default
+             */
+            drop_command: string;
             /** Engage Z Mm */
             engage_z_mm?: number | null;
-            /** Z Min Mm */
-            z_min_mm?: number | null;
-            /** Z Max Mm */
-            z_max_mm?: number | null;
+            /**
+             * Grab Command
+             * @default
+             */
+            grab_command: string;
+            /** Head Down Command */
+            head_down_command?: string | null;
+            /** Head Up Command */
+            head_up_command?: string | null;
+            /**
+             * Lock Mode
+             * @default command
+             * @enum {string}
+             */
+            lock_mode: "command" | "motion";
+            /**
+             * Mechanism
+             * @default rack
+             * @enum {string}
+             */
+            mechanism: "rack" | "dock";
+            /** Safe Z Mm */
+            safe_z_mm?: number | null;
             /** Steps */
             steps?: components["schemas"]["HostSwapStep"][];
+            /** Travel Speed Mm S */
+            travel_speed_mm_s?: number | null;
+            /** Z Max Mm */
+            z_max_mm?: number | null;
+            /** Z Min Mm */
+            z_min_mm?: number | null;
         };
         /**
          * HostSwapStep
@@ -2078,7 +2119,10 @@ export interface components {
          *     Kinds:
          *       - ``head_up`` / ``head_down``: emit the profile pen-up/-down command.
          *       - ``grab`` / ``release``: emit the plan's ``grab_command`` /
-         *         ``drop_command`` (the clamp / gripper primitive).
+         *         ``drop_command`` (the clamp / gripper primitive). On a ``dock``
+         *         mechanism these mean lock / unlock the coupling; with
+         *         ``lock_mode == "motion"`` they emit nothing (the advance/retract
+         *         motion is the lock).
          *       - ``move_to_old_slot`` / ``move_to_new_slot``: travel to the
          *         outgoing / incoming pen's *approach* point (the slot position
          *         offset by the clearance vector), safe for lateral motion.
@@ -2096,15 +2140,15 @@ export interface components {
              */
             kind: "head_up" | "head_down" | "grab" | "release" | "move_to_old_slot" | "move_to_new_slot" | "advance_to_slot" | "retract_from_slot" | "dwell" | "raw";
             /**
-             * Wait Ms
-             * @default 0
-             */
-            wait_ms: number;
-            /**
              * Send
              * @default
              */
             send: string;
+            /**
+             * Wait Ms
+             * @default 0
+             */
+            wait_ms: number;
         };
         /**
          * ImportRequest
@@ -2121,10 +2165,10 @@ export interface components {
         IntegrityIssue: {
             /** File Id */
             file_id: string;
-            /** Source File */
-            source_file: string;
             /** Reason */
             reason: string;
+            /** Source File */
+            source_file: string;
         };
         /**
          * IntegrityReport
@@ -2133,31 +2177,31 @@ export interface components {
         IntegrityReport: {
             /** Checked */
             checked: number;
-            /** Rerenderable */
-            rerenderable: number;
             /** Issues */
             issues: components["schemas"]["IntegrityIssue"][];
+            /** Rerenderable */
+            rerenderable: number;
         };
         /**
          * Job
          * @description Tracks a single file through the conversion-to-plot lifecycle.
          */
         Job: {
-            /** Job Id */
-            job_id?: string;
-            /** Source File */
-            source_file: string;
-            /** Source Mime */
-            source_mime: string;
-            /** Profile Name */
-            profile_name: string;
-            /** Layers */
-            layers?: components["schemas"]["LayerInfo"][];
             /**
              * Created At
              * Format: date-time
              */
             created_at?: string;
+            /** Job Id */
+            job_id?: string;
+            /** Layers */
+            layers?: components["schemas"]["LayerInfo"][];
+            /** Profile Name */
+            profile_name: string;
+            /** Source File */
+            source_file: string;
+            /** Source Mime */
+            source_mime: string;
             /**
              * Status
              * @default pending
@@ -2170,23 +2214,23 @@ export interface components {
          * @description A persisted summary of one processed job.
          */
         JobRecord: {
-            /** Job Id */
-            job_id: string;
-            /** Source File */
-            source_file: string;
-            /** Source Mime */
-            source_mime: string;
-            /** Profile Name */
-            profile_name: string;
-            /** Status */
-            status: string;
-            /** Layer Count */
-            layer_count: number;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Job Id */
+            job_id: string;
+            /** Layer Count */
+            layer_count: number;
+            /** Profile Name */
+            profile_name: string;
+            /** Source File */
+            source_file: string;
+            /** Source Mime */
+            source_mime: string;
+            /** Status */
+            status: string;
         };
         /**
          * JogRequest
@@ -2210,8 +2254,6 @@ export interface components {
          *     is rendered as the stack of passes in order.
          */
         LayerAlgorithm: {
-            /** Layer Id */
-            layer_id: string;
             /**
              * Algorithm
              * @default
@@ -2221,6 +2263,8 @@ export interface components {
             algorithm_options?: {
                 [key: string]: unknown;
             };
+            /** Layer Id */
+            layer_id: string;
             /** Passes */
             passes?: components["schemas"]["LayerPass"][];
         };
@@ -2229,47 +2273,47 @@ export interface components {
          * @description A single separated drawing layer and its plotting parameters.
          */
         LayerInfo: {
-            /** Layer Id */
-            layer_id: string;
-            /** Source Color */
-            source_color: string;
-            /** Target Pen Slot */
-            target_pen_slot: number | null;
-            /** Draw Order */
-            draw_order: number;
-            /** Total Length Mm */
-            total_length_mm: number;
-            /** Path Count */
-            path_count: number;
-            bbox: components["schemas"]["BoundingBox"];
-            /**
-             * Optimize
-             * @default true
-             */
-            optimize: boolean;
-            /**
-             * Simplify Tolerance Mm
-             * @default 0.05
-             */
-            simplify_tolerance_mm: number;
-            /** Drawing Speed Mm S */
-            drawing_speed_mm_s?: number | null;
-            /** Color Label */
-            color_label?: string | null;
-            /**
-             * Pause Before
-             * @default auto
-             * @enum {string}
-             */
-            pause_before: "auto" | "always" | "never";
             /** Assigned Color Hex */
             assigned_color_hex?: string | null;
+            bbox: components["schemas"]["BoundingBox"];
             /**
              * Color Assignment
              * @default auto
              * @enum {string}
              */
             color_assignment: "auto" | "manual";
+            /** Color Label */
+            color_label?: string | null;
+            /** Draw Order */
+            draw_order: number;
+            /** Drawing Speed Mm S */
+            drawing_speed_mm_s?: number | null;
+            /** Layer Id */
+            layer_id: string;
+            /**
+             * Optimize
+             * @default true
+             */
+            optimize: boolean;
+            /** Path Count */
+            path_count: number;
+            /**
+             * Pause Before
+             * @default auto
+             * @enum {string}
+             */
+            pause_before: "auto" | "always" | "never";
+            /**
+             * Simplify Tolerance Mm
+             * @default 0.05
+             */
+            simplify_tolerance_mm: number;
+            /** Source Color */
+            source_color: string;
+            /** Target Pen Slot */
+            target_pen_slot: number | null;
+            /** Total Length Mm */
+            total_length_mm: number;
         };
         /**
          * LayerOptimization
@@ -2326,38 +2370,37 @@ export interface components {
          *     services drive optimization directly from these fields.
          */
         LayerPlan: {
-            /** Layer Id */
-            layer_id: string;
-            /** Target Pen Slot */
-            target_pen_slot?: number | null;
-            /** Drawing Speed Mm S */
-            drawing_speed_mm_s?: number | null;
-            /** Source Color */
-            source_color?: string | null;
+            /** Assigned Color Hex */
+            assigned_color_hex?: string | null;
             /** Color Label */
             color_label?: string | null;
+            /** Drawing Speed Mm S */
+            drawing_speed_mm_s?: number | null;
+            /** Layer Id */
+            layer_id: string;
+            /**
+             * Optimize
+             * @default true
+             */
+            optimize: boolean;
             /**
              * Pause Before
              * @default auto
              * @enum {string}
              */
             pause_before: "auto" | "always" | "never";
-            /**
-             * Optimize
-             * @default true
-             */
-            optimize: boolean;
             /** Simplify Tolerance Mm */
             simplify_tolerance_mm?: number | null;
-            /** Assigned Color Hex */
-            assigned_color_hex?: string | null;
+            /** Source Color */
+            source_color?: string | null;
+            /** Target Pen Slot */
+            target_pen_slot?: number | null;
         };
         /**
          * MachineCapabilities
          * @description Top-level capability container exposed on :class:`MachineProfile`.
          */
         MachineCapabilities: {
-            tool_change?: components["schemas"]["ToolChangeStrategy"];
             /**
              * Has Pen Sensor
              * @default false
@@ -2373,6 +2416,7 @@ export interface components {
              * @default 1
              */
             max_pens_in_magazine: number;
+            tool_change?: components["schemas"]["ToolChangeStrategy"];
         };
         /**
          * MachineProfile
@@ -2383,72 +2427,72 @@ export interface components {
          *     YAML) without touching the application.
          */
         MachineProfile: {
+            /** Acceleration Mm S2 */
+            acceleration_mm_s2: number;
+            /**
+             * Arc Tolerance Mm
+             * @default 0.1
+             */
+            arc_tolerance_mm: number;
+            capabilities?: components["schemas"]["MachineCapabilities"] | null;
+            /** Drawing Speed Mm S */
+            drawing_speed_mm_s: number;
+            ebb?: components["schemas"]["EbbConfig"] | null;
+            /**
+             * Gcode Dialect
+             * @enum {string}
+             */
+            gcode_dialect: "grbl" | "marlin" | "klipper" | "ebb" | "custom";
             /** Name */
             name: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "top_left" | "bottom_left";
+            /** Pen Down Command */
+            pen_down_command: string;
+            /** Pen Slot Count */
+            pen_slot_count: number;
+            /** Pen Up Command */
+            pen_up_command: string;
+            /** Pens */
+            pens?: components["schemas"]["PenSlot"][] | null;
+            /**
+             * Supports Arcs
+             * @default false
+             */
+            supports_arcs: boolean;
+            /** Tool Change Command */
+            tool_change_command: string;
+            /**
+             * Tool Change Method
+             * @enum {string}
+             */
+            tool_change_method: "manual_pause" | "carousel" | "rack" | "none";
+            /** Travel Speed Mm S */
+            travel_speed_mm_s: number;
             /**
              * Units
              * @enum {string}
              */
             units: "mm" | "inch";
             workspace: components["schemas"]["WorkspaceBounds"];
-            /**
-             * Origin
-             * @enum {string}
-             */
-            origin: "top_left" | "bottom_left";
-            /**
-             * Gcode Dialect
-             * @enum {string}
-             */
-            gcode_dialect: "grbl" | "marlin" | "klipper" | "ebb" | "custom";
-            /** Pen Up Command */
-            pen_up_command: string;
-            /** Pen Down Command */
-            pen_down_command: string;
-            /**
-             * Tool Change Method
-             * @enum {string}
-             */
-            tool_change_method: "manual_pause" | "carousel" | "rack" | "none";
-            /** Tool Change Command */
-            tool_change_command: string;
-            /** Drawing Speed Mm S */
-            drawing_speed_mm_s: number;
-            /** Travel Speed Mm S */
-            travel_speed_mm_s: number;
-            /** Acceleration Mm S2 */
-            acceleration_mm_s2: number;
-            /** Pen Slot Count */
-            pen_slot_count: number;
-            /**
-             * Supports Arcs
-             * @default false
-             */
-            supports_arcs: boolean;
-            /**
-             * Arc Tolerance Mm
-             * @default 0.1
-             */
-            arc_tolerance_mm: number;
-            ebb?: components["schemas"]["EbbConfig"] | null;
-            /** Pens */
-            pens?: components["schemas"]["PenSlot"][] | null;
-            capabilities?: components["schemas"]["MachineCapabilities"] | null;
         };
         /**
          * Macro
          * @description A user-defined sequence of raw plotter commands triggerable as one action.
          */
         Macro: {
-            /** Name */
-            name: string;
+            /** Commands */
+            commands?: string[];
             /**
              * Description
              * @default
              */
             description: string;
-            /** Commands */
-            commands?: string[];
+            /** Name */
+            name: string;
         };
         /**
          * ManifestIndex
@@ -2463,8 +2507,19 @@ export interface components {
          * @description Envelope metadata shared by every manifest payload.
          */
         ManifestMeta: {
+            /** Deprecations */
+            deprecations?: components["schemas"]["Deprecation"][];
             /** Domain */
             domain: string;
+            /** Feature Flags */
+            feature_flags?: {
+                [key: string]: boolean;
+            };
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at?: string;
             /** Manifest Version */
             manifest_version: number;
             /**
@@ -2472,23 +2527,12 @@ export interface components {
              * @default 0.1.0
              */
             schema_semver: string;
-            /**
-             * Generated At
-             * Format: date-time
-             */
-            generated_at?: string;
-            /** Deprecations */
-            deprecations?: components["schemas"]["Deprecation"][];
-            /** Feature Flags */
-            feature_flags?: {
-                [key: string]: boolean;
-            };
         };
         /** Manifest[Any] */
         Manifest_Any_: {
-            meta: components["schemas"]["ManifestMeta"];
             /** Entries */
             entries?: unknown[];
+            meta: components["schemas"]["ManifestMeta"];
         };
         /**
          * ManualSwapPrompt
@@ -2509,21 +2553,21 @@ export interface components {
          */
         ManualSwapPrompt: {
             /**
-             * Title
-             * @default Change pen
-             */
-            title: string;
-            /**
              * Body
              * @default Insert pen {color} into the holder, then press Resume.
              */
             body: string;
-            /** Multipen Body */
-            multipen_body?: string | null;
             /** Monopen Body */
             monopen_body?: string | null;
+            /** Multipen Body */
+            multipen_body?: string | null;
             /** Timeout S */
             timeout_s?: number | null;
+            /**
+             * Title
+             * @default Change pen
+             */
+            title: string;
         };
         /**
          * MetricSample
@@ -2540,8 +2584,6 @@ export interface components {
          * @description Request body for toolpath optimization.
          */
         OptimizeRequest: {
-            /** Svg */
-            svg: string;
             /** Layers */
             layers?: components["schemas"]["LayerOptimization"][];
             /**
@@ -2549,31 +2591,33 @@ export interface components {
              * @default 0.1
              */
             merge_tolerance_mm: number;
+            /** Svg */
+            svg: string;
         };
         /**
          * OptimizeResponse
          * @description Optimized SVG, re-extracted layers, and travel metrics.
          */
         OptimizeResponse: {
-            /** Svg */
-            svg: string;
             /** Layers */
             layers: components["schemas"]["LayerInfo"][];
             metrics: components["schemas"]["ToolpathMetrics"];
+            /** Svg */
+            svg: string;
         };
         /**
          * PageBlocks
          * @description All detected blocks on one PDF page.
          */
         PageBlocks: {
+            /** Blocks */
+            blocks: components["schemas"]["Block"][];
+            /** Height Mm */
+            height_mm: number;
             /** Page Index */
             page_index: number;
             /** Width Mm */
             width_mm: number;
-            /** Height Mm */
-            height_mm: number;
-            /** Blocks */
-            blocks: components["schemas"]["Block"][];
         };
         /**
          * PaletteEntry
@@ -2618,28 +2662,28 @@ export interface components {
          * @description A physical pen position in the machine's magazine.
          */
         PenSlot: {
-            /** Index */
-            index: number;
-            /**
-             * Name
-             * @default
-             */
-            name: string;
             /**
              * Color
              * @default #000000
              */
             color: string;
+            /** Index */
+            index: number;
             /**
              * Installed
              * @default true
              */
             installed: boolean;
-            position?: components["schemas"]["Point"] | null;
-            /** Pen Up Command */
-            pen_up_command?: string | null;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
             /** Pen Down Command */
             pen_down_command?: string | null;
+            /** Pen Up Command */
+            pen_up_command?: string | null;
+            position?: components["schemas"]["Point"] | null;
         };
         /**
          * PlacementPlan
@@ -2650,10 +2694,6 @@ export interface components {
          *     types into the new package boundary.
          */
         PlacementPlan: {
-            /** Sheet Width Mm */
-            sheet_width_mm: number;
-            /** Sheet Height Mm */
-            sheet_height_mm: number;
             /**
              * Offset X Mm
              * @default 0
@@ -2664,6 +2704,10 @@ export interface components {
              * @default 0
              */
             offset_y_mm: number;
+            /** Sheet Height Mm */
+            sheet_height_mm: number;
+            /** Sheet Width Mm */
+            sheet_width_mm: number;
         };
         /**
          * PlanMetadata
@@ -2696,7 +2740,6 @@ export interface components {
          * @description The resolver's recommendation.
          */
         PolicyDecision: {
-            segmentation_method: components["schemas"]["SegmentationMethod"];
             /** Default Algorithm */
             default_algorithm: string;
             /** Default Options */
@@ -2707,105 +2750,106 @@ export interface components {
             default_passes?: {
                 [key: string]: unknown;
             }[];
-            quality_tier: components["schemas"]["QualityTier"];
             /** Fallback Chain */
             fallback_chain?: string[];
-            /** Reasoning */
-            reasoning?: components["schemas"]["RuleHit"][];
             /** Hard Constraints Applied */
             hard_constraints_applied?: components["schemas"]["ConstraintHit"][];
+            quality_tier: components["schemas"]["QualityTier"];
+            /** Reasoning */
+            reasoning?: components["schemas"]["RuleHit"][];
+            segmentation_method: components["schemas"]["SegmentationMethod"];
         };
         /**
          * PolicyInput
          * @description Everything the resolver needs to pick defaults.
          */
         PolicyInput: {
-            source_kind: components["schemas"]["SourceKind"];
-            /** @default fast */
-            goal: components["schemas"]["Goal"];
-            /** @default machine_only */
-            palette_mode: components["schemas"]["PaletteMode"];
             /**
              * Available Colors Count
              * @default 1
              */
             available_colors_count: number;
+            /** @default fast */
+            goal: components["schemas"]["Goal"];
             /** Image Megapixels */
             image_megapixels?: number | null;
-            /**
-             * Layer Count Estimate
-             * @default 1
-             */
-            layer_count_estimate: number;
             /**
              * Is Mono Pen Machine
              * @default false
              */
             is_mono_pen_machine: boolean;
+            /**
+             * Layer Count Estimate
+             * @default 1
+             */
+            layer_count_estimate: number;
+            /** @default machine_only */
+            palette_mode: components["schemas"]["PaletteMode"];
+            source_kind: components["schemas"]["SourceKind"];
         };
         /**
          * PreflightReport
          * @description Pre-run safety and estimation checks for a placed drawing.
          */
         PreflightReport: {
-            /** Ok */
-            ok: boolean;
-            /** Within Bounds */
-            within_bounds: boolean;
-            /** Width Mm */
-            width_mm: number;
-            /** Height Mm */
-            height_mm: number;
-            /** Scale */
-            scale: number;
             /** Drawing Length Mm */
             drawing_length_mm: number;
-            /** Travel Length Mm */
-            travel_length_mm: number;
             /** Estimated Seconds */
             estimated_seconds: number;
-            /** Pen Changes */
-            pen_changes: number;
+            /** Height Mm */
+            height_mm: number;
             /** Layer Count */
             layer_count: number;
-            /** Path Count */
-            path_count: number;
             /** Missing Pen Slots */
             missing_pen_slots?: number[];
-            /** Warnings */
-            warnings?: string[];
+            /** Ok */
+            ok: boolean;
+            /** Path Count */
+            path_count: number;
+            /** Pen Changes */
+            pen_changes: number;
             /** Plan Hash */
             plan_hash?: string | null;
+            /** Scale */
+            scale: number;
+            /** Travel Length Mm */
+            travel_length_mm: number;
+            /** Warnings */
+            warnings?: string[];
+            /** Width Mm */
+            width_mm: number;
+            /** Within Bounds */
+            within_bounds: boolean;
         };
         /**
          * PreflightRequest
          * @description Wire model for ``POST /preflight`` — same shape as a print plan.
          */
         PreflightRequest: {
-            /** Svg */
-            svg: string;
-            /** Profile Name */
-            profile_name: string;
             /** Layers */
             layers?: components["schemas"]["LayerPlan"][];
+            /** Library File Id */
+            library_file_id?: string | null;
+            /**
+             * Margin Mm
+             * @default 10
+             */
+            margin_mm: number;
+            metadata?: components["schemas"]["PlanMetadata"];
+            placement?: components["schemas"]["PlacementPlan"] | null;
+            /** Profile Name */
+            profile_name: string;
             /**
              * Scale Mode
              * @default fit
              * @enum {string}
              */
             scale_mode: "fit" | "actual";
-            /**
-             * Margin Mm
-             * @default 10
-             */
-            margin_mm: number;
-            placement?: components["schemas"]["PlacementPlan"] | null;
-            typography?: components["schemas"]["TypographyPlan"] | null;
-            /** Library File Id */
-            library_file_id?: string | null;
             /** Source Mime */
             source_mime?: string | null;
-            metadata?: components["schemas"]["PlanMetadata"];
+            /** Svg */
+            svg: string;
+            typography?: components["schemas"]["TypographyPlan"] | null;
         };
         /**
          * PreflightSvgRequest
@@ -2818,20 +2862,20 @@ export interface components {
          *     around each variant.
          */
         PreflightSvgRequest: {
-            /** Svg */
-            svg: string;
             /** Profile Name */
             profile_name: string;
+            /** Svg */
+            svg: string;
         };
         /**
          * Preset
          * @description A named bundle of converter options.
          */
         Preset: {
-            /** Name */
-            name: string;
             /** Description */
             description: string;
+            /** Name */
+            name: string;
             /** Options */
             options: {
                 [key: string]: unknown;
@@ -2842,22 +2886,22 @@ export interface components {
          * @description Fast-preview output for the UI.
          */
         PreviewResponse: {
-            /** Svg */
-            svg: string;
-            /** Elapsed Ms */
-            elapsed_ms: number;
-            /** Palette */
-            palette: components["schemas"]["PaletteEntry"][];
-            /**
-             * Warnings
-             * @default []
-             */
-            warnings: string[];
             /**
              * Cached
              * @default false
              */
             cached: boolean;
+            /** Elapsed Ms */
+            elapsed_ms: number;
+            /** Palette */
+            palette: components["schemas"]["PaletteEntry"][];
+            /** Svg */
+            svg: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /**
          * PrintPlan
@@ -2867,80 +2911,80 @@ export interface components {
          *     both endpoints provably operate on identical inputs.
          */
         PrintPlan: {
-            /** Svg */
-            svg: string;
-            /** Profile Name */
-            profile_name: string;
             /** Layers */
             layers?: components["schemas"]["LayerPlan"][];
+            /** Library File Id */
+            library_file_id?: string | null;
+            /**
+             * Margin Mm
+             * @default 10
+             */
+            margin_mm: number;
+            metadata?: components["schemas"]["PlanMetadata"];
+            placement?: components["schemas"]["PlacementPlan"] | null;
+            /** Profile Name */
+            profile_name: string;
             /**
              * Scale Mode
              * @default fit
              * @enum {string}
              */
             scale_mode: "fit" | "actual";
-            /**
-             * Margin Mm
-             * @default 10
-             */
-            margin_mm: number;
-            placement?: components["schemas"]["PlacementPlan"] | null;
-            typography?: components["schemas"]["TypographyPlan"] | null;
-            /** Library File Id */
-            library_file_id?: string | null;
             /** Source Mime */
             source_mime?: string | null;
-            metadata?: components["schemas"]["PlanMetadata"];
+            /** Svg */
+            svg: string;
+            typography?: components["schemas"]["TypographyPlan"] | null;
         };
         /**
          * PrintRun
          * @description A persisted print job in the production queue.
          */
         PrintRun: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Profile Name */
-            profile_name: string;
-            /** Gcode */
-            gcode: string;
-            /** Total Lines */
-            total_lines: number;
             /**
              * Acked Lines
              * @default 0
              */
             acked_lines: number;
             /**
-             * State
-             * @default queued
+             * Created At
+             * Format: date-time
              */
-            state: string;
+            created_at?: string;
+            /** Error */
+            error?: string | null;
+            /** Gcode */
+            gcode: string;
+            /** Id */
+            id: string;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /** Name */
+            name: string;
+            /** Pause Points */
+            pause_points?: {
+                [key: string]: unknown;
+            };
             /**
              * Priority
              * @default 0
              */
             priority: number;
-            /** Error */
-            error?: string | null;
-            /** Pause Points */
-            pause_points?: {
-                [key: string]: unknown;
-            };
+            /** Profile Name */
+            profile_name: string;
+            /** Skipped Layers */
+            skipped_layers?: unknown[];
+            /**
+             * State
+             * @default queued
+             */
+            state: string;
             /** Swap Actions */
             swap_actions?: {
                 [key: string]: unknown;
             };
-            /** Skipped Layers */
-            skipped_layers?: unknown[];
-            /** Idempotency Key */
-            idempotency_key?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at?: string;
+            /** Total Lines */
+            total_lines: number;
             /**
              * Updated At
              * Format: date-time
@@ -2966,12 +3010,16 @@ export interface components {
         RerenderRequest: {
             /** Job Id */
             job_id: string;
-            /** Layers */
-            layers?: components["schemas"]["LayerAlgorithm"][];
+            /** Layer Ink Colors */
+            layer_ink_colors?: {
+                [key: string]: string;
+            };
             /** Layer Stroke Widths */
             layer_stroke_widths?: {
                 [key: string]: number;
             };
+            /** Layers */
+            layers?: components["schemas"]["LayerAlgorithm"][];
         };
         /**
          * RerenderResponse
@@ -2993,16 +3041,14 @@ export interface components {
          *     (``"auto"`` / ``"always"`` / ``"never"``) for the engine to act on.
          */
         ResolvedLayer: {
-            /** Layer Id */
-            layer_id: string;
-            /** Target Pen Slot */
-            target_pen_slot: number | null;
-            /** Drawing Speed Mm S */
-            drawing_speed_mm_s: number;
-            /** Source Color */
-            source_color: string | null;
             /** Color Label */
             color_label: string | null;
+            /** Drawing Speed Mm S */
+            drawing_speed_mm_s: number;
+            /** Layer Id */
+            layer_id: string;
+            /** Optimize */
+            optimize: boolean;
             /**
              * Pause Before
              * @enum {string}
@@ -3010,10 +3056,12 @@ export interface components {
             pause_before: "auto" | "always" | "never";
             /** Pen Slot Installed */
             pen_slot_installed: boolean;
-            /** Optimize */
-            optimize: boolean;
             /** Simplify Tolerance Mm */
             simplify_tolerance_mm: number;
+            /** Source Color */
+            source_color: string | null;
+            /** Target Pen Slot */
+            target_pen_slot: number | null;
         };
         /**
          * ResolvedPlan
@@ -3025,27 +3073,27 @@ export interface components {
          *     instances of this model.
          */
         ResolvedPlan: {
-            plan: components["schemas"]["PrintPlan"];
             /** Layers */
             layers: components["schemas"]["ResolvedLayer"][];
-            /** Plan Hash */
-            plan_hash: string;
-            /** Profile Name */
-            profile_name: string;
-            /** Profile Drawing Speed Mm S */
-            profile_drawing_speed_mm_s: number;
             /** Mono Pen */
             mono_pen: boolean;
+            plan: components["schemas"]["PrintPlan"];
+            /** Plan Hash */
+            plan_hash: string;
+            /** Profile Drawing Speed Mm S */
+            profile_drawing_speed_mm_s: number;
+            /** Profile Name */
+            profile_name: string;
         };
         /**
          * RuleHit
          * @description One rule from the matrix that contributed to the decision.
          */
         RuleHit: {
-            /** Rule */
-            rule: string;
             /** Description */
             description: string;
+            /** Rule */
+            rule: string;
         };
         /**
          * RunRequest
@@ -3078,34 +3126,34 @@ export interface components {
          * @description Connection and streaming status.
          */
         StatusResponse: {
-            /** Connected */
-            connected: boolean;
-            /** Total */
-            total: number;
-            /** Sent */
-            sent: number;
             /** Acked */
             acked: number;
-            /** State */
-            state: string;
+            /** Connected */
+            connected: boolean;
             /** Message */
             message?: string | null;
+            /** Sent */
+            sent: number;
+            /** State */
+            state: string;
+            /** Total */
+            total: number;
         };
         /**
          * ToolChangeStrategy
          * @description Bundles the swap mode and its strategy-specific knobs.
          */
         ToolChangeStrategy: {
-            /** @default manual */
-            mode: components["schemas"]["ToolingMode"];
             /** @default operator */
             command_source: components["schemas"]["CommandSource"];
-            /** @default pause_and_prompt */
-            recovery_policy: components["schemas"]["RecoveryPolicy"];
-            manual_prompt?: components["schemas"]["ManualSwapPrompt"] | null;
             /** Host Macro */
             host_macro?: components["schemas"]["HostMacroStep"][];
             host_swap?: components["schemas"]["HostSwapPlan"] | null;
+            manual_prompt?: components["schemas"]["ManualSwapPrompt"] | null;
+            /** @default manual */
+            mode: components["schemas"]["ToolingMode"];
+            /** @default pause_and_prompt */
+            recovery_policy: components["schemas"]["RecoveryPolicy"];
         };
         /**
          * ToolingMode
@@ -3118,10 +3166,10 @@ export interface components {
          * @description Pen-up travel before and after optimization, in SVG user units.
          */
         ToolpathMetrics: {
-            /** Pen Up Before Mm */
-            pen_up_before_mm: number;
             /** Pen Up After Mm */
             pen_up_after_mm: number;
+            /** Pen Up Before Mm */
+            pen_up_before_mm: number;
             /** Reduction Pct */
             reduction_pct: number;
         };
@@ -3143,6 +3191,17 @@ export interface components {
          */
         TypographyPlan: {
             /**
+             * Alignment
+             * @default left
+             * @enum {string}
+             */
+            alignment: "left" | "center" | "right" | "justify";
+            /**
+             * Bold
+             * @default false
+             */
+            bold: boolean;
+            /**
              * Font
              * @default futural
              */
@@ -3153,42 +3212,6 @@ export interface components {
              */
             font_size_mm: number;
             /**
-             * Page Width Mm
-             * @default 210
-             */
-            page_width_mm: number;
-            /**
-             * Page Height Mm
-             * @default 297
-             */
-            page_height_mm: number;
-            /**
-             * Margin Mm
-             * @default 15
-             */
-            margin_mm: number;
-            /**
-             * Line Spacing
-             * @default 1.5
-             */
-            line_spacing: number;
-            /**
-             * Alignment
-             * @default left
-             * @enum {string}
-             */
-            alignment: "left" | "center" | "right" | "justify";
-            /**
-             * Stroke Width Mm
-             * @default 0.3
-             */
-            stroke_width_mm: number;
-            /**
-             * Bold
-             * @default false
-             */
-            bold: boolean;
-            /**
              * Italic
              * @default false
              */
@@ -3198,6 +3221,31 @@ export interface components {
              * @default 0
              */
             letter_spacing_mm: number;
+            /**
+             * Line Spacing
+             * @default 1.5
+             */
+            line_spacing: number;
+            /**
+             * Margin Mm
+             * @default 15
+             */
+            margin_mm: number;
+            /**
+             * Page Height Mm
+             * @default 297
+             */
+            page_height_mm: number;
+            /**
+             * Page Width Mm
+             * @default 210
+             */
+            page_width_mm: number;
+            /**
+             * Stroke Width Mm
+             * @default 0.3
+             */
+            stroke_width_mm: number;
         };
         /**
          * TypographyPreviewResponse
@@ -3228,23 +3276,23 @@ export interface components {
          * @description Result of a ``./update.sh`` invocation, suitable for the UI to render.
          */
         UpdateResponse: {
-            /** Ok */
-            ok: boolean;
-            /** Previous Commit */
-            previous_commit: string | null;
-            /** New Commit */
-            new_commit: string | null;
-            /** Updated */
-            updated: boolean;
-            /** Log */
-            log: string;
-            /** Needs Restart */
-            needs_restart: boolean;
             /**
              * Forced
              * @default false
              */
             forced: boolean;
+            /** Log */
+            log: string;
+            /** Needs Restart */
+            needs_restart: boolean;
+            /** New Commit */
+            new_commit: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Previous Commit */
+            previous_commit: string | null;
+            /** Updated */
+            updated: boolean;
         };
         /**
          * UploadResponse
@@ -3256,13 +3304,6 @@ export interface components {
          */
         UploadResponse: {
             job: components["schemas"]["Job"];
-            /** Svg */
-            svg: string;
-            /**
-             * Warnings
-             * @default []
-             */
-            warnings: string[];
             /**
              * Metadata
              * @default {}
@@ -3275,31 +3316,36 @@ export interface components {
              * @default false
              */
             rerenderable: boolean;
+            /** Svg */
+            svg: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
         };
         /**
          * VersionResponse
          * @description Currently-installed OmniPlot version and git state.
          */
         VersionResponse: {
-            /** Version */
-            version: string;
-            /** Commit */
-            commit: string | null;
             /** Branch */
             branch: string | null;
+            /** Commit */
+            commit: string | null;
             /** Dirty */
             dirty: boolean;
             /**
@@ -3307,20 +3353,22 @@ export interface components {
              * @default []
              */
             dirty_files: string[];
+            /** Version */
+            version: string;
         };
         /**
          * WorkspaceBounds
          * @description Rectangular drawable area of a machine, expressed in profile units.
          */
         WorkspaceBounds: {
-            /** X Min */
-            x_min: number;
-            /** Y Min */
-            y_min: number;
             /** X Max */
             x_max: number;
+            /** X Min */
+            x_min: number;
             /** Y Max */
             y_max: number;
+            /** Y Min */
+            y_min: number;
         };
     };
     responses: never;
@@ -3331,16 +3379,119 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    upload_upload_post: {
+    list_algorithms_algorithms_get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlgorithmInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_audit_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_colors_available_colors_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableColorOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_color_available_colors_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_upload_upload_post"];
+                "application/json": components["schemas"]["AvailableColorCreate"];
             };
         };
         responses: {
@@ -3350,7 +3501,120 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UploadResponse"];
+                    "application/json": components["schemas"]["AvailableColorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_color_available_colors__color_id__delete: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                color_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_color_available_colors__color_id__patch: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                color_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AvailableColorPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvailableColorOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_document_document_analyze_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_analyze_document_document_analyze_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentAnalysis"];
                 };
             };
             /** @description Validation Error */
@@ -3371,8 +3635,11 @@ export interface operations {
                 search?: string | null;
                 sort?: string;
                 order?: string;
+                token?: string | null;
             };
-            header?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3400,8 +3667,12 @@ export interface operations {
     };
     upload_to_library_files_post: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3431,50 +3702,14 @@ export interface operations {
             };
         };
     };
-    files_integrity_files_integrity_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IntegrityReport"];
-                };
-            };
-        };
-    };
-    list_folders_files_folders_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
-                };
-            };
-        };
-    };
     get_file_by_hash_files_by_hash__sha256__get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path: {
                 sha256: string;
             };
@@ -3502,10 +3737,80 @@ export interface operations {
             };
         };
     };
+    list_folders_files_folders_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    files_integrity_files_integrity_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrityReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_file_files__file_id__get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path: {
                 file_id: string;
             };
@@ -3535,8 +3840,12 @@ export interface operations {
     };
     delete_file_files__file_id__delete: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path: {
                 file_id: string;
             };
@@ -3568,8 +3877,12 @@ export interface operations {
     };
     patch_file_files__file_id__patch: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path: {
                 file_id: string;
             };
@@ -3603,8 +3916,12 @@ export interface operations {
     };
     download_original_files__file_id__original_get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path: {
                 file_id: string;
             };
@@ -3632,11 +3949,18 @@ export interface operations {
             };
         };
     };
-    list_algorithms_algorithms_get: {
+    file_preview_image_files__file_id__preview_image_get: {
         parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
+            query?: {
+                page?: number;
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                file_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3647,15 +3971,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AlgorithmInfo"][];
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     list_fonts_fonts_get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3668,211 +4005,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
-                };
-            };
-        };
-    };
-    list_profiles_profiles_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MachineProfile"][];
-                };
-            };
-        };
-    };
-    create_or_update_profiles_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MachineProfile"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MachineProfile"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_one_profiles__name__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MachineProfile"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_one_profiles__name__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_one_profiles__name__export_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/plain": string;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_one_profiles_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImportRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MachineProfile"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    optimize_optimize_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OptimizeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OptimizeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3888,8 +4020,12 @@ export interface operations {
     };
     generate_generate_post: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3919,18 +4055,14 @@ export interface operations {
             };
         };
     };
-    preflight_preflight_post: {
+    health_health_get: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PreflightRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -3938,7 +4070,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PreflightReport"];
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    jobs_jobs_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRecord"][];
                 };
             };
             /** @description Validation Error */
@@ -3952,16 +4108,88 @@ export interface operations {
             };
         };
     };
-    preflight_svg_preflight_svg_post: {
+    job_jobs__job_id__get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_macros_macros_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Macro"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_or_update_macros_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PreflightSvgRequest"];
+                "application/json": components["schemas"]["Macro"];
             };
         };
         responses: {
@@ -3971,7 +4199,186 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PreflightReport"];
+                    "application/json": components["schemas"]["Macro"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_one_macros__name__delete: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_one_macros__name__run_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_manifests_manifests_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManifestIndex"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_manifest_manifests__domain__get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Manifest_Any_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    optimize_optimize_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptimizeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptimizeResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3987,8 +4394,12 @@ export interface operations {
     };
     get_plan_plans__plan_hash__get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path: {
                 plan_hash: string;
             };
@@ -4016,40 +4427,7 @@ export interface operations {
             };
         };
     };
-    resolve_policy_policy_resolve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PolicyInput"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyDecision"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    status_plotter_status_get: {
+    abort_plotter_abort_post: {
         parameters: {
             query?: {
                 token?: string | null;
@@ -4152,43 +4530,6 @@ export interface operations {
             };
         };
     };
-    jog_plotter_jog_post: {
-        parameters: {
-            query?: {
-                token?: string | null;
-            };
-            header?: {
-                "x-api-key"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["JogRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     goto_plotter_goto_post: {
         parameters: {
             query?: {
@@ -4260,7 +4601,7 @@ export interface operations {
             };
         };
     };
-    run_plotter_run_post: {
+    jog_plotter_jog_post: {
         parameters: {
             query?: {
                 token?: string | null;
@@ -4273,7 +4614,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RunRequest"];
+                "application/json": components["schemas"]["JogRequest"];
             };
         };
         responses: {
@@ -4363,7 +4704,44 @@ export interface operations {
             };
         };
     };
-    abort_plotter_abort_post: {
+    run_plotter_run_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_plotter_status_get: {
         parameters: {
             query?: {
                 token?: string | null;
@@ -4383,6 +4761,473 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_policy_policy_resolve_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyDecision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preflight_preflight_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreflightRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreflightReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preflight_svg_preflight_svg_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreflightSvgRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreflightReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    presets_presets_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preset"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_preview_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_text_preview_text_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_text_preview_text_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TypographyPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_stream_preview_stream_get: {
+        parameters: {
+            query?: {
+                layer_count?: number;
+                file_id?: string | null;
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_profiles_profiles_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineProfile"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_or_update_profiles_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MachineProfile"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_one_profiles_import_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_one_profiles__name__get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_one_profiles__name__delete: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_one_profiles__name__export_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
             /** @description Validation Error */
@@ -4539,6 +5384,41 @@ export interface operations {
             };
         };
     };
+    cancel_queue__run_id__cancel_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrintRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     pause_queue__run_id__pause_post: {
         parameters: {
             query?: {
@@ -4609,357 +5489,14 @@ export interface operations {
             };
         };
     };
-    cancel_queue__run_id__cancel_post: {
-        parameters: {
-            query?: {
-                token?: string | null;
-            };
-            header?: {
-                "x-api-key"?: string | null;
-            };
-            path: {
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrintRun"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    audit_audit_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditEntry"][];
-                };
-            };
-        };
-    };
-    jobs_jobs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobRecord"][];
-                };
-            };
-        };
-    };
-    job_jobs__job_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobRecord"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    presets_presets_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Preset"][];
-                };
-            };
-        };
-    };
-    list_macros_macros_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Macro"][];
-                };
-            };
-        };
-    };
-    create_or_update_macros_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Macro"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Macro"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_one_macros__name__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    run_one_macros__name__run_post: {
-        parameters: {
-            query?: {
-                token?: string | null;
-            };
-            header?: {
-                "x-api-key"?: string | null;
-            };
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_preview_preview_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PreviewResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_stream_preview_stream_get: {
-        parameters: {
-            query?: {
-                layer_count?: number;
-                file_id?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_text_preview_text_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_preview_text_preview_text_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TypographyPreviewResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     rerender_rerender_post: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4989,7 +5526,7 @@ export interface operations {
             };
         };
     };
-    get_version_system_version_get: {
+    read_palette_source_settings_palette_source_get: {
         parameters: {
             query?: {
                 token?: string | null;
@@ -5008,7 +5545,114 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VersionResponse"];
+                    "application/json": components["schemas"]["PaletteSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_palette_source_settings_palette_source_put: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaletteSourceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaletteSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_budgets_slo_budgets_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    evaluate_slo_evaluate_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvaluateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetReport"];
                 };
             };
             /** @description Validation Error */
@@ -5092,16 +5736,53 @@ export interface operations {
             };
         };
     };
-    analyze_document_document_analyze_post: {
+    get_version_system_version_get: {
         parameters: {
-            query?: never;
-            header?: never;
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_upload_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_analyze_document_document_analyze_post"];
+                "multipart/form-data": components["schemas"]["Body_upload_upload_post"];
             };
         };
         responses: {
@@ -5111,7 +5792,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DocumentAnalysis"];
+                    "application/json": components["schemas"]["UploadResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5121,304 +5802,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_colors_available_colors_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AvailableColorOut"][];
-                };
-            };
-        };
-    };
-    create_color_available_colors_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AvailableColorCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AvailableColorOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_color_available_colors__color_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                color_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    patch_color_available_colors__color_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                color_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AvailableColorPatch"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AvailableColorOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    read_palette_source_settings_palette_source_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaletteSourceResponse"];
-                };
-            };
-        };
-    };
-    write_palette_source_settings_palette_source_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PaletteSourceUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaletteSourceResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_manifests_manifests_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ManifestIndex"];
-                };
-            };
-        };
-    };
-    read_manifest_manifests__domain__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                domain: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Manifest_Any_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_budgets_slo_budgets_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Budget"][];
-                };
-            };
-        };
-    };
-    evaluate_slo_evaluate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EvaluateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BudgetReport"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    health_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HealthResponse"];
                 };
             };
         };
