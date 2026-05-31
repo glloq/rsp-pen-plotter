@@ -265,6 +265,50 @@ def test_html_colored_divs_split_into_one_layer_per_color() -> None:
         assert by_label[label].path_count > 0
 
 
+def test_html_solid_color_fills_get_algorithm_rendering() -> None:
+    """A colored CSS ``background-color`` div must plot the same way a
+    PNG of the same area would: with the operator's chosen algorithm
+    (crosshatch / halftone / stippling / …) actually filling the
+    rectangle, not leaving a flat outline that runs the pen along the
+    border once and leaves the inside blank.
+
+    The vector path defaulted to one ``M…Z`` outline per rectangle in
+    the pre-fix pipeline. Asking for ``crosshatch`` must produce
+    enough strokes per swatch that the count alone proves the algo
+    actually ran on the rasterised crop.
+    """
+    from pen_plotter.converters.html import HtmlConverter
+
+    html = b"""<!doctype html><html><head><style>
+      .box { display:inline-block; width:30mm; height:20mm; }
+    </style></head><body>
+      <div class="box" style="background:#ff0000"></div>
+      <div class="box" style="background:#0000ff"></div>
+    </body></html>"""
+    outline_result = HtmlConverter().convert(html, options={"algorithm": "direct"})
+    outline_layers = {
+        layer.layer_id: layer for layer in extract_layers(sanitize_svg(outline_result.svg))
+    }
+    hatched_result = HtmlConverter().convert(html, options={"algorithm": "crosshatch"})
+    hatched_layers = {
+        layer.layer_id: layer for layer in extract_layers(sanitize_svg(hatched_result.svg))
+    }
+
+    for color in ("color-#ff0000", "color-#0000ff"):
+        assert color in outline_layers, f"missing color layer {color} in direct output"
+        assert color in hatched_layers, f"missing color layer {color} in crosshatch output"
+        # Crosshatch must put many parallel strokes inside each
+        # rectangle; the direct outline is essentially one stroke per
+        # corner. A 10× ratio is the safety floor that proves the
+        # crosshatch algorithm actually ran on the rasterised crop
+        # rather than the rectangle being left as a vector outline.
+        assert hatched_layers[color].path_count > 10 * outline_layers[color].path_count, (
+            f"{color}: crosshatch did not produce significantly more strokes than direct "
+            f"(direct={outline_layers[color].path_count}, "
+            f"crosshatch={hatched_layers[color].path_count})"
+        )
+
+
 def test_html_grayscale_gradient_rasterised_into_pattern_layer() -> None:
     """A CSS linear-gradient div arrives at PyMuPDF as an empty
     ``<pattern>`` reference; the post-processor must rasterise the
