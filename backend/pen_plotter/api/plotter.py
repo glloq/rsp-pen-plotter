@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import secrets
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -193,8 +194,8 @@ async def plotter_ws(websocket: WebSocket) -> None:
     """
     expected = os.environ.get(API_KEY_ENV)
     if expected:
-        token = websocket.query_params.get("token")
-        if token != expected:
+        token = websocket.query_params.get("token") or ""
+        if not secrets.compare_digest(expected, token):
             await websocket.close(code=1008, reason="Invalid or missing API key.")
             return
     await websocket.accept()

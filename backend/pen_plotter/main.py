@@ -43,7 +43,7 @@ from pen_plotter.api.slo import router as slo_router
 from pen_plotter.api.system import router as system_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.application.file_library import integrity_scan
-from pen_plotter.auth import require_api_key
+from pen_plotter.auth import require_api_key, verify_auth_configuration
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
 from pen_plotter.deployment import capabilities_for, resolve_role
@@ -65,6 +65,10 @@ from pen_plotter.queue import recover_interrupted
 
 configure_logging()
 _log = logging.getLogger(__name__)
+
+# Fail loud at startup if the operator asked for strict auth but didn't
+# configure a key — better than coming up silently with the controls open.
+verify_auth_configuration()
 
 
 def _log_library_integrity() -> None:
@@ -152,11 +156,46 @@ def _cors_origins() -> list[str]:
     var so browsers from other devices can reach the UI.
 
     Empty / unset env var ⇒ default (Vite dev server only).
+
+    Raises:
+        RuntimeError: If a wildcard origin is combined with credentialed
+            requests — browsers reject the combination, and accepting
+            it server-side hides the misconfiguration.
     """
     raw = os.environ.get("OMNIPLOT_CORS_ORIGINS", "").strip()
     if not raw:
         return ["http://localhost:5173"]
-    return [o.strip() for o in raw.split(",") if o.strip()]
+    origins = [o.strip() for o in raw.split(",") if o.strip()]
+    if "*" in origins:
+        raise RuntimeError(
+            "OMNIPLOT_CORS_ORIGINS=* is not allowed: the API is mounted with "
+            "allow_credentials=True, which browsers refuse to combine with a "
+            "wildcard origin. List the exact origins instead "
+            "(e.g. 'http://plotter.local,http://192.168.1.42:5173')."
+        )
+    return origins
+
+
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+@app.middleware("http")
+async def _add_security_headers(request, call_next):  # type: ignore[no-untyped-def]
+    """Attach defensive headers to every HTTP response.
+
+    Deliberately omits ``Content-Security-Policy``: the SPA renders
+    sanitized SVG via ``v-html`` and an over-restrictive CSP would
+    break previews. Operators who need CSP should terminate it at a
+    reverse proxy together with TLS — see docs/deployment.md.
+    """
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
 
 
 app.add_middleware(
@@ -168,33 +207,41 @@ app.add_middleware(
 )
 app.add_middleware(RequestContextMiddleware)
 
-app.include_router(upload_router)
-app.include_router(files_router)
-app.include_router(algorithms_router)
-app.include_router(fonts_router)
-app.include_router(profiles_router)
-app.include_router(optimize_router)
-app.include_router(generate_router)
-app.include_router(preflight_router)
-app.include_router(plans_router)
-app.include_router(policy_router)
-# Machine-control endpoints are guarded when OMNIPLOT_API_KEY is set.
-app.include_router(plotter_router, dependencies=[Depends(require_api_key)])
-app.include_router(queue_router)
-app.include_router(audit_router)
-app.include_router(jobs_router)
-app.include_router(presets_router)
-app.include_router(macros_router)
-app.include_router(preview_router)
-app.include_router(preview_stream_router)
-app.include_router(preview_text_router)
-app.include_router(rerender_router)
-app.include_router(system_router)
-app.include_router(analyze_router)
-app.include_router(available_colors_router)
-app.include_router(settings_router)
-app.include_router(manifests_router)
-app.include_router(slo_router)
+# Default-deny: every router carries the API-key dependency so a
+# locked-mode deployment (OMNIPLOT_API_KEY set) actually locks the
+# whole API surface — uploads, file downloads, profiles, macros, etc.
+# When the env var is unset, ``require_api_key`` is a no-op and the
+# single-machine workflow keeps working without configuration.
+# /health and the static SPA stay open so a browser can bootstrap and
+# the operator can land on a login screen.
+_GUARDED = [Depends(require_api_key)]
+
+app.include_router(upload_router, dependencies=_GUARDED)
+app.include_router(files_router, dependencies=_GUARDED)
+app.include_router(algorithms_router, dependencies=_GUARDED)
+app.include_router(fonts_router, dependencies=_GUARDED)
+app.include_router(profiles_router, dependencies=_GUARDED)
+app.include_router(optimize_router, dependencies=_GUARDED)
+app.include_router(generate_router, dependencies=_GUARDED)
+app.include_router(preflight_router, dependencies=_GUARDED)
+app.include_router(plans_router, dependencies=_GUARDED)
+app.include_router(policy_router, dependencies=_GUARDED)
+app.include_router(plotter_router, dependencies=_GUARDED)
+app.include_router(queue_router, dependencies=_GUARDED)
+app.include_router(audit_router, dependencies=_GUARDED)
+app.include_router(jobs_router, dependencies=_GUARDED)
+app.include_router(presets_router, dependencies=_GUARDED)
+app.include_router(macros_router, dependencies=_GUARDED)
+app.include_router(preview_router, dependencies=_GUARDED)
+app.include_router(preview_stream_router, dependencies=_GUARDED)
+app.include_router(preview_text_router, dependencies=_GUARDED)
+app.include_router(rerender_router, dependencies=_GUARDED)
+app.include_router(system_router, dependencies=_GUARDED)
+app.include_router(analyze_router, dependencies=_GUARDED)
+app.include_router(available_colors_router, dependencies=_GUARDED)
+app.include_router(settings_router, dependencies=_GUARDED)
+app.include_router(manifests_router, dependencies=_GUARDED)
+app.include_router(slo_router, dependencies=_GUARDED)
 
 
 class HealthResponse(BaseModel):
