@@ -265,6 +265,50 @@ def test_html_colored_divs_split_into_one_layer_per_color() -> None:
         assert by_label[label].path_count > 0
 
 
+def test_html_grayscale_swatches_fold_into_one_density_modulated_layer() -> None:
+    """A printer-test grayscale ramp (several greys at different lightness)
+    must produce a SINGLE black ``grayscale`` layer with hatching density
+    proportional to each swatch's darkness — not one ``color-#nnnnnn``
+    layer per shade. The whole ramp routes to one black pen out of the
+    box, and the operator doesn't have to dedupe a dozen near-identical
+    layers.
+    """
+    from pen_plotter.converters.html import HtmlConverter
+
+    html = b"""<!doctype html><html><head><style>
+      .bar { display:inline-block; width:20mm; height:15mm; }
+    </style></head><body>
+      <div class="bar" style="background:#1a1a1a"></div>
+      <div class="bar" style="background:#4d4d4d"></div>
+      <div class="bar" style="background:#808080"></div>
+      <div class="bar" style="background:#b3b3b3"></div>
+      <div class="bar" style="background:#e6e6e6"></div>
+    </body></html>"""
+    result = HtmlConverter().convert(html, options={"algorithm": "crosshatch"})
+    layers = {layer.layer_id: layer for layer in extract_layers(sanitize_svg(result.svg))}
+
+    # All grays collapse into one black layer.
+    assert "grayscale" in layers, f"expected a 'grayscale' layer; got {sorted(layers)}"
+    assert layers["grayscale"].source_color == "#000000"
+    # And no per-shade ``color-#nnnnnn`` layers survive on this page —
+    # otherwise the operator would be back to manually merging swatches.
+    leaked = [
+        label
+        for label in layers
+        if label.startswith("color-#")
+        and label[7:] not in {"ffffff", "000000"}
+        # ``label[7:]`` is the hex without the leading "color-#". Greys
+        # have R==G==B; non-greys (cyan, etc.) wouldn't be leaked even
+        # if grouping by colour kept them separate.
+        and label[7:9] == label[9:11] == label[11:13]
+    ]
+    assert not leaked, f"grayscale swatches leaked into per-shade layers: {leaked}"
+    # Hatching must actually cover the swatches — empty grayscale layer
+    # would mean the helper found candidates but emitted nothing.
+    assert layers["grayscale"].path_count > 20
+    assert layers["grayscale"].total_length_mm > 100
+
+
 def test_html_solid_color_fills_get_algorithm_rendering() -> None:
     """A colored CSS ``background-color`` div must plot the same way a
     PNG of the same area would: with the operator's chosen algorithm
