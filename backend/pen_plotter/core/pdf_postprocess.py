@@ -541,14 +541,21 @@ def _path_bbox_user_units(
     # about the coordinates each command consumes; the absolute /
     # relative distinction doesn't matter when the path is closed and
     # we just want the extreme points reached along it.
-    nums = [float(t) for t in re.findall(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", d)]
+    # SVG number grammar: optional sign, then EITHER ``digits[.digits]``
+    # OR ``.digits`` — PyMuPDF emits glyph d-strings with no leading
+    # zero (e.g. ``.61035158``), so a regex that requires a digit
+    # before the decimal point silently splits ``.61035158`` into
+    # nothing-then-``61035158``, producing astronomical bbox values
+    # and bogging the hatcher down in millions of phantom hatch lines.
+    _number_re = r"-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?"
+    nums = [float(t) for t in re.findall(_number_re, d)]
     if len(nums) < 2:
         return None
     # Walk through commands accumulating the current pen position so
     # that ``H``/``V`` (which only carry one number per step) produce
     # the right second coordinate.
     points: list[tuple[float, float]] = []
-    tokens = re.findall(r"[a-zA-Z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", d)
+    tokens = re.findall(rf"[a-zA-Z]|{_number_re}", d)
     cx = cy = 0.0
     i = 0
     cmd = ""
@@ -1107,8 +1114,17 @@ def apply_grayscale_density_hatching(
         is_gray, value = _parse_grayscale_hex(fill)
         if not is_gray:
             continue
-        if value <= 0 or value >= 255:
-            continue  # pure black / white handled elsewhere
+        if value >= 255:
+            continue  # pure white — page background, paints no ink anyway.
+        # Pure black (value == 0) is admitted here so the operator's
+        # rgb(0,0,0) swatch in the printer-test page plots as solid
+        # hatching at min spacing. ``HtmlConverter`` rewrites every
+        # explicit ``background-color:#000`` to ``#010101`` before
+        # WeasyPrint runs so the path actually carries a hex value
+        # (without that nudge WeasyPrint emits black as the SVG
+        # default and leaves the path with no ``fill`` attribute,
+        # indistinguishable from the many auxiliary no-fill paths it
+        # also emits for borders / clips / overlays).
         if local == "path" and _path_is_outline_frame(shape):
             # Border / frame path — bbox-hatching would paint inside
             # the ring and bar any text the border surrounds.
