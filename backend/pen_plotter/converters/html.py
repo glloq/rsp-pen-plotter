@@ -43,6 +43,8 @@ class HtmlConverter(Converter):
             raw_svg,
             bitmap_options=bitmap_options,
             hershey_text_group=hershey_group or None,
+            pdf_bytes=pdf_bytes,
+            page_index=page_index,
         )
         return ConversionResult(
             svg=svg,
