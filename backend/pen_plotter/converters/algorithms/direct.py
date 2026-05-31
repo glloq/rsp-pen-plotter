@@ -69,6 +69,7 @@ class DirectVectorizationAlgorithm(RasterAlgorithm):
                 ["potrace", "-b", "svg", "-o", str(svg_path), str(bmp_path)],
                 check=True,
                 capture_output=True,
+                timeout=120,
             )
             traced = svg_path.read_text()
 

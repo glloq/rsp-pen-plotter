@@ -48,11 +48,15 @@ const emit = defineEmits<{
   (e: 'toggle-overlay', key: OverlayKey): void
 }>()
 
-const overlayDefs: { key: OverlayKey; label: string }[] = [
-  { key: 'penup_heatmap', label: 'Pen-up heatmap' },
-  { key: 'path_density', label: 'Densité de trait' },
-  { key: 'bounds', label: 'Marges / bounds' },
-  { key: 'curvature', label: 'Stress de courbure' },
+// ``wired`` marks overlays the renderer can actually draw today. The
+// others need geometry the resolver doesn't expose yet (G.1 follow-up);
+// keep them in the row so operators discover the planned axes, but
+// disable the checkbox so a click can't silently do nothing.
+const overlayDefs: { key: OverlayKey; label: string; wired: boolean }[] = [
+  { key: 'penup_heatmap', label: 'Pen-up heatmap', wired: false },
+  { key: 'path_density', label: 'Densité de trait', wired: false },
+  { key: 'bounds', label: 'Marges / bounds', wired: true },
+  { key: 'curvature', label: 'Stress de courbure', wired: false },
 ]
 
 const enabledOverlays = computed(() => new Set<OverlayKey>(props.overlays ?? []))
@@ -131,13 +135,20 @@ const diff = computed<DiffRow[]>(() => [
       <h3>Comparer A / B</h3>
       <fieldset class="overlay-row" data-test="compare-overlay-row">
         <legend>Overlays</legend>
-        <label v-for="opt in overlayDefs" :key="opt.key" :data-test="`overlay-${opt.key}`">
+        <label
+          v-for="opt in overlayDefs"
+          :key="opt.key"
+          :data-test="`overlay-${opt.key}`"
+          :class="{ 'overlay-pending': !opt.wired }"
+          :title="opt.wired ? undefined : 'Pas encore implémenté'"
+        >
           <input
             type="checkbox"
             :checked="enabledOverlays.has(opt.key)"
+            :disabled="!opt.wired"
             @change="emit('toggle-overlay', opt.key)"
           />
-          {{ opt.label }}
+          {{ opt.label }}{{ opt.wired ? '' : ' (bientôt)' }}
         </label>
       </fieldset>
     </header>
@@ -261,6 +272,10 @@ h3 {
 .overlay-row legend {
   font-weight: 600;
   margin-right: 0.5rem;
+}
+.overlay-row label.overlay-pending {
+  color: #888;
+  cursor: not-allowed;
 }
 .grid {
   display: grid;
