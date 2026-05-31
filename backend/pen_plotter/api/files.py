@@ -17,7 +17,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from pen_plotter.application.color_assignment import auto_assign_layer_colors
@@ -34,6 +34,11 @@ from pen_plotter.application.file_library import (
     remember_job,
 )
 from pen_plotter.application.palette_pool import active_pool
+from pen_plotter.application.preview_raster import (
+    UnsupportedFormatError,
+    is_passthrough,
+    rasterize_source,
+)
 from pen_plotter.converters.pipeline import (
     convert_file,
     parse_options,
@@ -472,6 +477,42 @@ async def download_original(file_id: str) -> FileResponse:
         media_type=record.source_mime,
         filename=record.source_file,
     )
+
+
+@router.get("/files/{file_id}/preview-image")
+async def file_preview_image(
+    file_id: str,
+    page: int = Query(default=0, ge=0),
+) -> Response:
+    """Return a PNG raster of the original source for the editor preview.
+
+    Image sources are streamed back as-is (no re-encode) so JPEG quality
+    survives. Vector / document sources (PDF, SVG, DOCX, ODT, RTF, HTML,
+    EPS, PS, AI) are rendered to PNG through PyMuPDF / LibreOffice /
+    Ghostscript — the "Original" and "Compare" modes in the editor
+    finally work for them instead of being hidden behind a bitmap-only
+    check. Formats with no useful raster representation (TXT, MD, DXF)
+    return 415 so the UI can fall back to the existing text / empty
+    placeholder instead of showing a broken ``<img>``.
+    """
+    record = get_file_record(file_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Unknown file: {file_id!r}")
+    original = find_original(file_id)
+    if original is None:
+        raise HTTPException(status_code=410, detail="Original file is missing on disk")
+    ext = original.suffix.lower()
+    if is_passthrough(ext):
+        return FileResponse(path=original, media_type=record.source_mime)
+    try:
+        png_bytes = await run_in_threadpool(rasterize_source, original, page)
+    except UnsupportedFormatError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return Response(content=png_bytes, media_type="image/png")
 
 
 @router.patch("/files/{file_id}")
