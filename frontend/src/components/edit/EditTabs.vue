@@ -18,12 +18,13 @@ import { useI18n } from 'vue-i18n'
 // instead of a tab. Variants live in the persistent VariantsBar
 // mounted above this strip.
 
-export type EditTabId = 'image' | 'svg' | 'style' | 'layers'
+export type EditTabId = 'image' | 'svg' | 'style' | 'text' | 'layers'
 
 const props = defineProps<{
   modelValue: EditTabId
   layerCount: number
   variantCount: number
+  showText: boolean
 }>()
 
 const emit = defineEmits<{
@@ -42,41 +43,56 @@ interface TabSpec {
 }
 
 // Shortcut keys mirror the global handler in EditModal.vue (the digits
-// 1-4). The labelled <kbd> badge below makes them discoverable
+// 1-5). The labelled <kbd> badge below makes them discoverable
 // without forcing the operator to memorise an undocumented binding.
 // Each tab has a distinct active colour so operators recognise context
-// at a glance: Image=sky, SVG=amber, Style=violet, Layers=emerald.
-const tabs = computed<TabSpec[]>(() => [
-  {
-    id: 'image',
-    labelKey: 'editModal.tabImage',
-    shortcut: '1',
-    activeClass: 'border-sky-600 bg-sky-950/60 text-sky-200',
-    hoverClass: 'hover:border-sky-800 hover:text-sky-300',
-  },
-  {
-    id: 'svg',
-    labelKey: 'editModal.tabSvg',
-    shortcut: '2',
-    activeClass: 'border-amber-600 bg-amber-950/60 text-amber-200',
-    hoverClass: 'hover:border-amber-800 hover:text-amber-300',
-  },
-  {
-    id: 'style',
-    labelKey: 'editModal.tabStyle',
-    shortcut: '3',
-    activeClass: 'border-violet-600 bg-violet-950/60 text-violet-200',
-    hoverClass: 'hover:border-violet-800 hover:text-violet-300',
-  },
-  {
+// at a glance: Image=sky, SVG=amber, Style=violet, Text=rose,
+// Layers=emerald. The Text tab is only present when the source carries
+// text (typography or mixed text+image documents); bitmap-only sources
+// keep the original 4-tab layout.
+const tabs = computed<TabSpec[]>(() => {
+  const list: TabSpec[] = [
+    {
+      id: 'image',
+      labelKey: 'editModal.tabImage',
+      shortcut: '1',
+      activeClass: 'border-sky-600 bg-sky-950/60 text-sky-200',
+      hoverClass: 'hover:border-sky-800 hover:text-sky-300',
+    },
+    {
+      id: 'svg',
+      labelKey: 'editModal.tabSvg',
+      shortcut: '2',
+      activeClass: 'border-amber-600 bg-amber-950/60 text-amber-200',
+      hoverClass: 'hover:border-amber-800 hover:text-amber-300',
+    },
+    {
+      id: 'style',
+      labelKey: 'editModal.tabStyle',
+      shortcut: '3',
+      activeClass: 'border-violet-600 bg-violet-950/60 text-violet-200',
+      hoverClass: 'hover:border-violet-800 hover:text-violet-300',
+    },
+  ]
+  if (props.showText) {
+    list.push({
+      id: 'text',
+      labelKey: 'editModal.tabText',
+      shortcut: '4',
+      activeClass: 'border-rose-600 bg-rose-950/60 text-rose-200',
+      hoverClass: 'hover:border-rose-800 hover:text-rose-300',
+    })
+  }
+  list.push({
     id: 'layers',
     labelKey: 'editModal.tabLayers',
-    shortcut: '4',
+    shortcut: props.showText ? '5' : '4',
     count: props.layerCount,
     activeClass: 'border-emerald-600 bg-emerald-950/60 text-emerald-200',
     hoverClass: 'hover:border-emerald-800 hover:text-emerald-300',
-  },
-])
+  })
+  return list
+})
 
 function select(id: EditTabId): void {
   emit('update:modelValue', id)

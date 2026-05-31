@@ -141,6 +141,7 @@
     "tabImage": "Image",
     "tabSvg": "SVG",
     "tabStyle": "Style",
+    "tabText": "Texte",
     "tabLayers": "Calques",
     "tabOutput": "Mise en page & sortie",
     "tabShortcut": "Appuyer sur {key} pour ouvrir cet onglet",
@@ -178,6 +179,9 @@
   },
   "style": {
     "notApplicable": "Ce type de fichier n'utilise pas les contrôles de style."
+  },
+  "text": {
+    "notApplicable": "Ce type de fichier ne contient pas de texte."
   },
   "preprocess": {
     "intro": "Prépare l'image source avant son découpage en couches de couleur.",

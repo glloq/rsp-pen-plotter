@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getFonts } from '../../../api/client'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { useFileManager } from '../../../composables/useFileManager'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
@@ -9,7 +8,6 @@ import { resolveEffectivePalette } from '../../../lib/effectivePalette'
 import { useAvailableColorsStore } from '../../../stores/availableColors'
 import { useJobStore } from '../../../stores/job'
 import { usePaletteSourceStore } from '../../../stores/paletteSource'
-import BlockMapCard from '../BlockMapCard.vue'
 import ColorModeCard from '../colors/ColorModeCard.vue'
 import MasterStylePicker from '../render/MasterStylePicker.vue'
 import MasterStyleParams from '../render/MasterStyleParams.vue'
@@ -17,21 +15,18 @@ import MultiColorMasterStyleParams from '../render/MultiColorMasterStyleParams.v
 import PaletteCard from '../source/PaletteCard.vue'
 import PenSlotPicker from '../shared/PenSlotPicker.vue'
 import PostProcessCard from '../style/PostProcessCard.vue'
-import TypographyCard from '../source/TypographyCard.vue'
 
-// Style tab — merges the former "Colors" and "Render" tabs into one
-// surface focused on *what* the rendered output looks like:
+// Style tab — focused on *what* the rendered bitmap output looks like:
 //   - bitmap mono  → master style picker, per-style params, pen slot,
 //                    plus post-process filters
 //   - bitmap multi → color-mode toggle, palette (manual / follows pens),
 //                    plus post-process filters
-//   - typography   → TypographyCard (font, size, line spacing, page)
-//   - document/PDF → BlockMapCard on top of the bitmap controls (PDF
-//                    pages get rasterised so the bitmap controls still
-//                    apply to the raster portion)
 //
-// The image → SVG technical knobs (detail tier, centerline mode,
-// simplification, segmentation method) live on the sibling SVG tab.
+// Text-specific controls (font, Hershey toggle, block map for mixed
+// text + image documents) moved to the dedicated Text tab so the Style
+// surface stays focused on rendering knobs. The image → SVG technical
+// knobs (detail tier, centerline mode, simplification, segmentation
+// method) live on the sibling SVG tab.
 
 const { t } = useI18n()
 const draft = useBitmapDraft()
@@ -93,17 +88,6 @@ function setPaletteFollowsPens(value: boolean): void {
   draft.paletteFollowsPens.value = value
 }
 
-// Font catalogue for TypographyCard (.txt / .md sources). Local to
-// this tab rather than the singleton because no other tab needs it.
-const fonts = ref<string[]>([])
-onMounted(async () => {
-  try {
-    fonts.value = await getFonts()
-  } catch {
-    /* keep [] */
-  }
-})
-
 // Switching master style: rewrite the draft's segmentation + uniform
 // algorithm via the centralised helper. Changing the config in the
 // editor is a routine, fully-reversible action, so it no longer
@@ -152,27 +136,12 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
 </script>
 
 <template>
-  <!-- Typography source: dedicated card replaces the bitmap content. -->
-  <section v-if="fm.kind.value === 'typography'" class="space-y-3">
-    <TypographyCard :typo="draft.typo.value" :fonts="fonts" mode="typography" />
-  </section>
-
-  <!-- Bitmap or document (PDF). Document gets a BlockMapCard on top
-       of the standard bitmap controls because the PDF's raster
-       regions still go through the same segmentation pipeline. The
-       Hershey text re-render card sits at the very top of the
-       document case so the operator's first reflex on "I want to
-       plot this PDF" lands on the toggle that makes the text
-       legible. -->
-  <section v-else-if="fm.showsBitmapForm.value" class="space-y-3">
-    <TypographyCard
-      v-if="fm.kind.value === 'document'"
-      :typo="draft.typo.value"
-      :fonts="fonts"
-      mode="document"
-    />
-    <BlockMapCard v-if="fm.kind.value === 'document'" />
-
+  <!-- Bitmap or document (PDF). Document sources still expose every
+       bitmap rendering knob because the PDF/DOCX raster regions go
+       through the same segmentation pipeline; the text-specific cards
+       (Hershey toggle, font, block map) moved to the dedicated Text
+       tab so this surface stays focused on bitmap rendering. -->
+  <section v-if="fm.showsBitmapForm.value" class="space-y-3">
     <ColorModeCard :mode="printMode" @update:mode="(mode) => draft.setPrintMode(mode)" />
 
     <template v-if="printMode === 'monochrome'">
