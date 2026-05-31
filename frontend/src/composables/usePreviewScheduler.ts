@@ -21,8 +21,8 @@
 // up to any preview-driving form, not just the bitmap one.
 
 import { computed, ref } from 'vue'
-import DOMPurify from 'dompurify'
 import { previewBitmap, previewText, type PreviewResponse } from '../api/client'
+import { sanitizeSvgCached } from '../lib/sanitizeSvg'
 import { useToastStore } from '../stores/toasts'
 
 export interface PreviewSchedulerOptions {
@@ -147,9 +147,7 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
 
   const previewSvg = computed<string>(() => {
     if (!previewResult.value) return ''
-    return DOMPurify.sanitize(previewResult.value.svg, {
-      USE_PROFILES: { svg: true, svgFilters: true },
-    })
+    return sanitizeSvgCached(previewResult.value.svg)
   })
 
   async function run(): Promise<void> {

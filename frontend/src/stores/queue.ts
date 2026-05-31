@@ -19,14 +19,18 @@ const ACTIVE: PrintRun['state'][] = ['queued', 'running', 'paused']
 // loop on a Pi. The transition is one-way per tick: a poll that
 // returns an active run upgrades the interval immediately, an idle
 // poll downgrades to the slow cadence.
-const FAST_INTERVAL_MS = 2_000
+const FAST_INTERVAL_MS = 3_000
 const SLOW_INTERVAL_MS = 30_000
+// Exponential backoff cap when /queue keeps failing — protects the Pi from
+// reconnect storms during a flaky network or a backend restart.
+const MAX_BACKOFF_FACTOR = 4
 
 export const useQueueStore = defineStore('queue', () => {
   const runs = ref<PrintRun[]>([])
   const error = ref<string | null>(null)
   let timer: ReturnType<typeof setTimeout> | null = null
   let inflight: Promise<void> | null = null
+  let consecutiveErrors = 0
 
   const active = computed(() => runs.value.filter((r) => ACTIVE.includes(r.state)))
 
@@ -69,7 +73,9 @@ export const useQueueStore = defineStore('queue', () => {
         primedSkips = true
         runs.value = next
         error.value = null
+        consecutiveErrors = 0
       } catch (err) {
+        consecutiveErrors = Math.min(consecutiveErrors + 1, MAX_BACKOFF_FACTOR)
         error.value = errorDetail(err, i18n.global.t('queue.loadFailed'))
       }
     })()
@@ -114,7 +120,10 @@ export const useQueueStore = defineStore('queue', () => {
     // smooth progress), slow cadence when the queue is empty —
     // operators idle most of the time and don't need 2 s polling
     // for an empty queue.
-    const interval = active.value.length > 0 ? FAST_INTERVAL_MS : SLOW_INTERVAL_MS
+    const base = active.value.length > 0 ? FAST_INTERVAL_MS : SLOW_INTERVAL_MS
+    // Exponential backoff on repeated failures so a dropped backend doesn't
+    // pin the Pi's event loop with reconnect attempts every 3 s.
+    const interval = base * Math.pow(2, consecutiveErrors)
     timer = setTimeout(async () => {
       await load()
       if (timer !== null) _schedule()
