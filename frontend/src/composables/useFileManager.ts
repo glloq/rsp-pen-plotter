@@ -100,7 +100,16 @@ export function useFileManager(t?: Translator) {
     // too, served by ``/preview-text``. Document sources still fall
     // through to ``/upload`` (the bitmap-form preview only makes sense
     // when there's a raster to segment).
-    shouldRun: () => kind.value === 'bitmap' || kind.value === 'typography',
+    //
+    // The ``editModalOpen`` guard is what prevents the "Calcul de
+    // l'aperçu…" toast from firing when the operator deletes a
+    // placement or drops a library file onto the sheet: those flows
+    // mutate ``selectedPlacementId`` (and via the watcher below the
+    // draft + the in-memory file), but with the modal closed the
+    // preview SVG is never on screen — running it just wastes a
+    // round-trip and surfaces a toast for nothing.
+    shouldRun: () =>
+      ui.editModalOpen && (kind.value === 'bitmap' || kind.value === 'typography'),
     modeGetter: () => (kind.value === 'typography' ? 'text' : 'bitmap'),
     qualityGetter: () => edit.previewQuality.value,
     failedMessage: t?.('upload.failed') ?? 'preview failed',
