@@ -705,3 +705,42 @@ def test_html_text_renders_on_top_of_hatched_backgrounds() -> None:
                 f"text (index {text_idx}); text would be struck through. "
                 f"Full order: {labels}"
             )
+
+
+def test_html_thin_gray_border_around_text_does_not_hatch_through() -> None:
+    """A CSS ``border: 1px solid #ccc`` around a text line is emitted by
+    WeasyPrint as a single ``<path>`` with two nested rectangle
+    subpaths and ``fill-rule="evenodd"`` — the painted area is just
+    the thin ring, but the path's AABB covers the entire interior
+    including any text inside it. The grayscale density hatcher used
+    to bbox-hatch the whole interior so the small text glyph rendered
+    on top appeared "barred" by hatch lines. Frame-shaped paths
+    (evenodd fill rule or multiple subpaths) must be left alone."""
+    svg = _html_to_svg(
+        "<html><body>"
+        "<div style='border:1px solid #cccccc;padding:1mm;font-size:10px'>"
+        "The quick brown fox</div>"
+        "</body></html>"
+    )
+    root = ET.fromstring(svg)
+    grayscale_group = next(
+        (
+            child
+            for child in root
+            if child.get(f"{{{_INKSCAPE_NS}}}label") == "grayscale"
+        ),
+        None,
+    )
+    # Either no grayscale layer was produced at all, or it carries
+    # zero hatch lines — the only #ccc shape on the page is the
+    # text-line border, and that must stay as an outline.
+    if grayscale_group is not None:
+        hatch_paths = [
+            p
+            for p in grayscale_group.iter()
+            if p.tag == f"{{{_SVG_NS}}}path" and p.get("d")
+        ]
+        assert hatch_paths == [], (
+            f"grayscale layer hatched {len(hatch_paths)} lines across a "
+            "border-only path — text inside the border would be barred"
+        )

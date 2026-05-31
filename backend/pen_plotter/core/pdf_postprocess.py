@@ -949,6 +949,43 @@ def _hatch_lines_for_bbox(
     return lines
 
 
+def _path_is_outline_frame(path: ET.Element) -> bool:
+    """Return ``True`` if a ``<path>`` is a hollow frame, not a solid fill.
+
+    WeasyPrint emits a CSS ``border`` as a single path with two nested
+    rectangle subpaths and ``fill-rule="evenodd"`` — the painted area
+    is only the thin ring between them, but the AABB the hatcher
+    computes is the OUTER rectangle. Hatching that AABB then fills the
+    entire interior with hatch lines, which on a ``.text-line``
+    print-test row paints across the small text glyph sitting inside
+    the border and the operator sees the text "barred". We detect the
+    frame shape by either of two signals — both are cheap and PyMuPDF
+    / WeasyPrint set them consistently:
+
+    * ``fill-rule="evenodd"`` or ``clip-rule="evenodd"`` on the path
+      (the only reason to set this is to carve a hole out of the fill).
+    * More than one absolute ``M`` command in ``d`` (multiple
+      subpaths — typically the outer ring + inner ring of a border /
+      frame, or a glyph with a counter, neither of which we want to
+      bbox-hatch).
+
+    Frame paths fall back to plotting as their original outline (the
+    sanitized SVG keeps the path itself), which on a 1-pt border is
+    what the operator visually expects.
+    """
+    if (path.get("fill-rule") or "").strip().lower() == "evenodd":
+        return True
+    if (path.get("clip-rule") or "").strip().lower() == "evenodd":
+        return True
+    d = path.get("d") or ""
+    if not d:
+        return False
+    # Count absolute moveto commands. A single ``M`` opens the only
+    # subpath; two or more means the path closes one ring and opens
+    # another — the hallmark of a border / counter / compound shape.
+    return d.count("M") + d.count("m") > 1
+
+
 def apply_grayscale_density_hatching(
     root: ET.Element,
     *,
@@ -991,6 +1028,10 @@ def apply_grayscale_density_hatching(
             continue
         if value <= 0 or value >= 255:
             continue  # pure black / white handled elsewhere
+        if local == "path" and _path_is_outline_frame(shape):
+            # Border / frame path — bbox-hatching would paint inside
+            # the ring and bar any text the border surrounds.
+            continue
         if local == "rect":
             bbox = _rect_bbox_user_units(shape, parent_map, root)
         else:
@@ -1107,6 +1148,12 @@ def apply_color_density_hatching(
         # named colour (e.g. "red") doesn't slip in and break the hex
         # parsing below.
         if not (color.startswith("#") and len(color) == 7):
+            continue
+        if local == "path" and _path_is_outline_frame(shape):
+            # Same rationale as in apply_grayscale_density_hatching:
+            # CSS borders come through as hollow frame paths and the
+            # bbox covers the surrounded content (text, swatches, …).
+            # Leave the path alone so it plots as its outline.
             continue
         if local == "rect":
             bbox = _rect_bbox_user_units(shape, parent_map, root)
