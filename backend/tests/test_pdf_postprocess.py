@@ -228,6 +228,73 @@ def test_html_with_text_produces_text_layer() -> None:
     assert text_layer.total_length_mm > 0.0
 
 
+def test_html_colored_divs_split_into_one_layer_per_color() -> None:
+    """A print-test page with red / green / blue / yellow boxes plus
+    black text must produce one labeled layer per color, not collapse
+    every shape into a single ``text`` group with the first encountered
+    fill as its representative swatch.
+    """
+    from pen_plotter.converters.html import HtmlConverter
+
+    html = b"""<!doctype html><html><head><style>
+      .box { display:inline-block; width:30mm; height:20mm; }
+      .red { background:#ff0000; } .green { background:#00aa00; }
+      .blue { background:#0066ff; } .yellow { background:#ffd400; }
+    </style></head><body>
+      <h1>Title</h1>
+      <div class="box red"></div><div class="box green"></div>
+      <div class="box blue"></div><div class="box yellow"></div>
+    </body></html>"""
+    result = HtmlConverter().convert(html)
+    clean = sanitize_svg(result.svg)
+    layers = extract_layers(clean)
+    labels = {layer.layer_id for layer in layers}
+    # One label per box color, plus the black "text" group for the heading.
+    assert "color-#ff0000" in labels
+    assert "color-#00aa00" in labels
+    assert "color-#0066ff" in labels
+    assert "color-#ffd400" in labels
+    assert "text" in labels
+    # Each color layer must carry the matching swatch so the frontend
+    # doesn't show a default-black chip for a red layer.
+    by_label = {layer.layer_id: layer for layer in layers}
+    assert by_label["color-#ff0000"].source_color == "#ff0000"
+    assert by_label["color-#00aa00"].source_color == "#00aa00"
+    # Every color layer carries non-empty geometry.
+    for label in ("color-#ff0000", "color-#00aa00", "color-#0066ff", "color-#ffd400"):
+        assert by_label[label].path_count > 0
+
+
+def test_html_grayscale_gradient_rasterised_into_pattern_layer() -> None:
+    """A CSS linear-gradient div arrives at PyMuPDF as an empty
+    ``<pattern>`` reference; the post-processor must rasterise the
+    corresponding page crop and run it through the bitmap converter
+    so the gradient actually plots as halftoned strokes instead of
+    leaving an invisible silhouette.
+    """
+    from pen_plotter.converters.html import HtmlConverter
+
+    html = b"""<!doctype html><html><head><style>
+      .grad { width:120mm; height:15mm;
+              background: linear-gradient(to right, #000, #fff); }
+    </style></head><body>
+      <div class="grad"></div>
+    </body></html>"""
+    result = HtmlConverter().convert(html)
+    clean = sanitize_svg(result.svg)
+    layers = extract_layers(clean)
+    pattern_layers = [layer for layer in layers if layer.layer_id.startswith("pattern-")]
+    assert pattern_layers, (
+        "expected at least one ``pattern-N`` layer for the gradient; "
+        f"got {[layer.layer_id for layer in layers]}"
+    )
+    # The bitmap pipeline must actually have produced strokes — an
+    # empty pattern layer would mean the rasterisation silently
+    # dropped the gradient.
+    assert pattern_layers[0].path_count > 0
+    assert pattern_layers[0].total_length_mm > 0.0
+
+
 # Hershey re-render — when ``hershey_text=True``, the PDF converter
 # strips PyMuPDF's original glyph outlines and plays the text back as
 # single-stroke Hershey polylines at the same baseline positions. This
@@ -278,13 +345,17 @@ def test_pdf_hershey_text_layer_carries_continuous_strokes() -> None:
 
 def test_pdf_hershey_default_does_not_run() -> None:
     """No ``hershey_text`` option means no Hershey re-render — the
-    original PyMuPDF glyph outlines stay intact for backward compat."""
+    original PyMuPDF glyph outlines stay intact for backward compat.
+
+    The fixture also contains a red rectangle drawn with
+    ``page.draw_rect(..., color=(1, 0, 0))``; the fill-split path now
+    surfaces that as its own ``color-#ff0000`` layer so the operator
+    can route it to a red pen instead of having it ride along with
+    the body text.
+    """
     res = PdfConverter().convert(_bold_text_pdf())
-    # data-text disappears after expand_use_refs, but the inlined glyph
-    # paths remain — many M commands and a single "text" layer (no
-    # separate "drawings" layer because Hershey wasn't injected).
     labels = sorted(layer.layer_id for layer in extract_layers(sanitize_svg(res.svg)))
-    assert labels == ["text"]
+    assert labels == ["color-#ff0000", "text"]
 
 
 def test_pdf_hershey_font_choice_changes_output() -> None:

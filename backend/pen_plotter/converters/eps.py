@@ -87,5 +87,7 @@ class EpsConverter(Converter):
             raw_svg,
             bitmap_options=bitmap_options,
             hershey_text_group=hershey_group or None,
+            pdf_bytes=pdf_bytes,
+            page_index=0,
         )
         return ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings)

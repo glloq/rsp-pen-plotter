@@ -3,21 +3,29 @@
 PyMuPDF (and therefore every document route that funnels through it —
 ``PdfConverter``, ``DocumentConverter`` via LibreOffice, ``HtmlConverter`` via
 WeasyPrint) emits text as ``<defs>`` glyphs referenced by ``<use>`` and rasters
-as ``<image>`` elements. Two consequences for the plotter pipeline:
+as ``<image>`` elements. Three consequences for the plotter pipeline:
 
 * ``<use>`` is in :mod:`pen_plotter.core.sanitize`'s blocklist (security:
   external ``<use href="evil.svg">`` can pull arbitrary content), so the text
   silently disappears.
 * ``<image>`` elements are not strokes; ``vpype.read_multilayer_svg`` ignores
   them, so any embedded raster is silently dropped before G-code generation.
+* PDF shading patterns (CSS gradients, etc.) come out as ``fill="url(#…)"``
+  on a shape whose ``<pattern>`` definition PyMuPDF leaves empty — so the
+  shape plots as a flat silhouette with nothing inside.
 
-This module pre-expands every ``<use>`` reference into inline geometry, then
+This module pre-expands every ``<use>`` reference into inline geometry,
 hands each embedded raster to the bitmap converter so it becomes a vectorized
-labeled layer of its own. The remaining vector content (typically the text)
-is wrapped into a sibling ``text`` layer. After post-processing the SVG is
-self-contained (no ``<defs>``, no ``<use>``, no ``<image>``) and
-``extract_layers`` produces one entry per source kind so the user can assign
-text and each image to different pen slots.
+labeled layer of its own, and rasterises any pattern-filled shape from the
+original PDF page (when the source bytes are available) so its gradient is
+recovered as halftoned strokes. The remaining vector content is split by
+``fill`` color so that, for example, an HTML print-test page with red /
+green / blue / yellow boxes plus black text yields one labeled layer per
+color rather than collapsing all four boxes into a single "text" group.
+After post-processing the SVG is self-contained (no ``<defs>``, no
+``<use>``, no ``<image>``) and ``extract_layers`` produces one entry per
+detected color or source kind so the user can assign each to a different
+pen slot.
 """
 
 from __future__ import annotations
@@ -364,6 +372,290 @@ def vectorize_embedded_images(
     return produced, warnings
 
 
+def _parse_transform(value: str | None) -> tuple[float, float, float, float, float, float]:
+    """Parse an SVG ``transform`` attribute into a 2x3 affine matrix.
+
+    Supports the subset PyMuPDF actually emits: ``matrix(a b c d e f)``,
+    ``translate(tx[, ty])``, ``scale(sx[, sy])``. Unknown forms collapse
+    to identity rather than raise — we are computing a best-effort bbox
+    for rasterisation, not enforcing strict SVG semantics.
+    """
+    a, b, c, d, e, f = 1.0, 0.0, 0.0, 1.0, 0.0, 0.0  # identity
+    if not value:
+        return a, b, c, d, e, f
+    import re
+
+    for name, args in re.findall(r"(matrix|translate|scale)\s*\(([^)]*)\)", value):
+        nums = [float(x) for x in re.split(r"[\s,]+", args.strip()) if x]
+        if name == "matrix" and len(nums) == 6:
+            ma, mb, mc, md, me, mf = nums
+        elif name == "translate":
+            tx = nums[0] if nums else 0.0
+            ty = nums[1] if len(nums) > 1 else 0.0
+            ma, mb, mc, md, me, mf = 1.0, 0.0, 0.0, 1.0, tx, ty
+        elif name == "scale":
+            sx = nums[0] if nums else 1.0
+            sy = nums[1] if len(nums) > 1 else sx
+            ma, mb, mc, md, me, mf = sx, 0.0, 0.0, sy, 0.0, 0.0
+        else:
+            continue
+        # Compose: result = current ∘ new (SVG applies left-to-right)
+        a, b, c, d, e, f = (
+            a * ma + c * mb,
+            b * ma + d * mb,
+            a * mc + c * md,
+            b * mc + d * md,
+            a * me + c * mf + e,
+            b * me + d * mf + f,
+        )
+    return a, b, c, d, e, f
+
+
+def _ancestor_transform(
+    element: ET.Element, parent_map: dict[ET.Element, ET.Element], root: ET.Element
+) -> tuple[float, float, float, float, float, float]:
+    """Compose every ancestor's transform from root down to ``element``."""
+    chain: list[ET.Element] = []
+    cursor: ET.Element | None = parent_map.get(element)
+    while cursor is not None and cursor is not root:
+        chain.append(cursor)
+        cursor = parent_map.get(cursor)
+    a, b, c, d, e, f = 1.0, 0.0, 0.0, 1.0, 0.0, 0.0
+    for ancestor in reversed(chain):
+        ma, mb, mc, md, me, mf = _parse_transform(ancestor.get("transform"))
+        a, b, c, d, e, f = (
+            a * ma + c * mb,
+            b * ma + d * mb,
+            a * mc + c * md,
+            b * mc + d * md,
+            a * me + c * mf + e,
+            b * me + d * mf + f,
+        )
+    return a, b, c, d, e, f
+
+
+def _rect_bbox_user_units(
+    rect: ET.Element,
+    parent_map: dict[ET.Element, ET.Element],
+    root: ET.Element,
+) -> tuple[float, float, float, float] | None:
+    """Return the AABB of a ``<rect>`` in the SVG's user units.
+
+    Composes the rect's own ``transform`` with every ancestor transform
+    so the returned ``(x_min, y_min, x_max, y_max)`` is in the document
+    coordinate system — which, for PyMuPDF SVG, equals PDF points.
+    Returns ``None`` if the rect has degenerate dimensions.
+    """
+    try:
+        x = float(rect.get("x", "0"))
+        y = float(rect.get("y", "0"))
+        w = float(rect.get("width", "0"))
+        h = float(rect.get("height", "0"))
+    except ValueError:
+        return None
+    if w <= 0 or h <= 0:
+        return None
+    ancestor = _ancestor_transform(rect, parent_map, root)
+    own = _parse_transform(rect.get("transform"))
+    a1, b1, c1, d1, e1, f1 = ancestor
+    a2, b2, c2, d2, e2, f2 = own
+    # Compose ancestor ∘ own
+    a, b, c, d, e, f = (
+        a1 * a2 + c1 * b2,
+        b1 * a2 + d1 * b2,
+        a1 * c2 + c1 * d2,
+        b1 * c2 + d1 * d2,
+        a1 * e2 + c1 * f2 + e1,
+        b1 * e2 + d1 * f2 + f1,
+    )
+    corners = [(x, y), (x + w, y), (x, y + h), (x + w, y + h)]
+    xs = [a * px + c * py + e for px, py in corners]
+    ys = [b * px + d * py + f for px, py in corners]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _has_visible_content(subtree: ET.Element) -> bool:
+    """Return ``True`` if ``subtree`` has any drawable leaf outside a mask.
+
+    Paths buried inside a ``<clipPath>`` or ``<mask>`` define the mask
+    region itself — they do not paint pixels and so don't count as
+    "visible content". Same for anything still hiding in a ``<defs>``
+    block that was inlined as part of an ``<use>`` expansion.
+    """
+    masked = {f"{{{_SVG_NS}}}clipPath", f"{{{_SVG_NS}}}mask", f"{{{_SVG_NS}}}defs"}
+    # Walk with a small stack so we can prune entire mask subtrees.
+    stack: list[ET.Element] = [subtree]
+    while stack:
+        node = stack.pop()
+        if node.tag in masked:
+            continue
+        if node is not subtree and _local(node.tag) in _DRAWABLE_LEAVES:
+            return True
+        stack.extend(list(node))
+    return False
+
+
+def _pattern_is_empty(root: ET.Element, pattern_id: str) -> bool:
+    """Check whether the ``<pattern>`` def whose id is ``pattern_id`` is empty.
+
+    PyMuPDF emits PDF shading patterns (CSS gradients) as ``<pattern>``
+    elements that reference a ``pattern_tile_N`` group, but the tile
+    contents are dropped — the gradient never makes it into the SVG.
+    We detect this empty case so we know the pattern fill needs to be
+    rasterised back from the PDF; non-empty patterns are left alone
+    because they would render correctly in any viewer.
+
+    A pattern is "empty" when neither its own subtree nor any
+    ``<use>``-referenced tile contains a drawable leaf outside a
+    ``<clipPath>`` / ``<mask>`` / ``<defs>``. PyMuPDF's empty
+    gradients hit exactly that case: the only paths in the tile live
+    inside a ``<clipPath>`` whose clipped ``<g>`` is empty.
+    """
+    for elem in root.iter():
+        if _local(elem.tag) != "pattern":
+            continue
+        if elem.get("id") != pattern_id:
+            continue
+        if _has_visible_content(elem):
+            return False
+        for use in elem.iter():
+            if _local(use.tag) != "use":
+                continue
+            href = (use.get("href") or use.get(_XLINK_HREF) or "").lstrip("#")
+            if not href:
+                continue
+            for candidate in root.iter():
+                if candidate.get("id") != href:
+                    continue
+                if _has_visible_content(candidate):
+                    return False
+        return True
+    return False  # unknown pattern — leave the shape alone
+
+
+def rasterize_pattern_fills(
+    root: ET.Element,
+    *,
+    pdf_bytes: bytes,
+    page_index: int,
+    bitmap_options: dict[str, Any] | None = None,
+) -> tuple[int, list[str]]:
+    """Replace pattern-filled shapes with bitmap-vectorised regions.
+
+    PyMuPDF drops the contents of PDF shading patterns when it writes
+    SVG, so a CSS ``linear-gradient`` div (and any other shaded fill)
+    arrives as an empty ``url(#pattern_N)`` rectangle. This helper
+    finds those shapes, asks PyMuPDF to render the corresponding crop
+    of the original PDF page as a PNG, runs the PNG through the bitmap
+    converter (so the user's halftone / hatching / dithering pipeline
+    actually plots the gradient), and substitutes the result in place
+    of the empty rect.
+
+    Only ``<rect>`` shapes are handled — these cover the common case
+    of CSS-backgrounded boxes. Path-shaped pattern fills are left as
+    pattern-N layers for the operator to handle manually.
+
+    Returns ``(count, warnings)`` like :func:`vectorize_embedded_images`.
+    """
+    from pen_plotter.converters.bitmap import BitmapConverter
+
+    warnings: list[str] = []
+    parent_map = {child: parent for parent in root.iter() for child in parent}
+    # Snapshot — we mutate the tree as we go.
+    candidates = [
+        rect
+        for rect in root.iter()
+        if _local(rect.tag) == "rect"
+        and (rect.get("fill") or "").startswith("url(#")
+    ]
+    if not candidates:
+        return 0, warnings
+
+    try:
+        import pymupdf
+    except ImportError:
+        warnings.append("PyMuPDF unavailable — pattern fills left as-is.")
+        return 0, warnings
+
+    converter = BitmapConverter()
+    produced = 0
+    with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+        if not 0 <= page_index < doc.page_count:
+            warnings.append("Pattern rasterisation skipped: page index out of range.")
+            return 0, warnings
+        page = doc[page_index]
+
+        for index, rect in enumerate(candidates, start=1):
+            fill = rect.get("fill") or ""
+            # url(#pattern_3) → "pattern_3"
+            pattern_id = fill[fill.find("#") + 1 : fill.rfind(")")]
+            if not pattern_id:
+                continue
+            if not _pattern_is_empty(root, pattern_id):
+                continue  # the pattern has content; let the viewer render it
+            parent = parent_map.get(rect)
+            if parent is None:
+                continue
+            bbox = _rect_bbox_user_units(rect, parent_map, root)
+            if bbox is None:
+                continue
+            x_min, y_min, x_max, y_max = bbox
+            # PyMuPDF SVG user units == PDF points; clip the page to the
+            # bbox and render at a print-grade DPI so the bitmap pipeline
+            # has enough pixels to halftone the gradient cleanly.
+            try:
+                pix = page.get_pixmap(
+                    clip=pymupdf.Rect(x_min, y_min, x_max, y_max), dpi=300
+                )
+                png_bytes = pix.tobytes("png")
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"Pattern #{index}: page-crop render failed ({exc}).")
+                continue
+            try:
+                result: ConversionResult = converter.convert(
+                    png_bytes, options=bitmap_options
+                )
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"Pattern #{index}: vectorisation failed ({exc}).")
+                continue
+            groups = _inner_groups(result.svg)
+            if not groups:
+                warnings.append(
+                    f"Pattern #{index}: produced no drawable strokes (all-background?)."
+                )
+                # Remove the empty rect so the user isn't left with an
+                # invisible silhouette.
+                parent.remove(rect)
+                continue
+            try:
+                inner_root = ET.fromstring(result.svg)
+                vb = inner_root.get("viewBox", "")
+                _, _, src_w, src_h = (float(v) for v in vb.split())
+            except (ET.ParseError, ValueError):
+                warnings.append(f"Pattern #{index}: bitmap result missing viewBox.")
+                continue
+            dst_w = x_max - x_min
+            dst_h = y_max - y_min
+            sx = dst_w / max(src_w, 1e-9)
+            sy = dst_h / max(src_h, 1e-9)
+            wrapper = ET.Element(f"{{{_SVG_NS}}}g")
+            wrapper.set(_INKSCAPE_LABEL, f"pattern-{index}")
+            transform_parts = [f"translate({x_min} {y_min})", f"scale({sx} {sy})"]
+            wrapper.set("transform", " ".join(transform_parts))
+            for group in groups:
+                # Same rationale as in vectorize_embedded_images: we
+                # don't want the converter's internal per-color labels
+                # to show up as top-level layers.
+                group.attrib.pop(_INKSCAPE_LABEL, None)
+                wrapper.append(group)
+            position = list(parent).index(rect)
+            parent.remove(rect)
+            parent.insert(position, wrapper)
+            produced += 1
+
+    return produced, warnings
+
+
 def hoist_labeled_groups(root: ET.Element) -> int:
     """Lift any descendant ``<g inkscape:label>`` up to be a direct child of ``root``.
 
@@ -415,43 +707,189 @@ def hoist_labeled_groups(root: ET.Element) -> int:
         hoisted += 1
 
 
-def wrap_text_layer(root: ET.Element, label: str = "text") -> bool:
-    """Wrap top-level non-labeled drawables into a single labeled group.
+_DRAWABLE_LEAVES = {"path", "polyline", "polygon", "line", "circle", "rect", "ellipse"}
+_DRAWABLE_TAGS = _DRAWABLE_LEAVES | {"g"}
 
-    Returns ``True`` when a wrapping group was inserted. This makes the
-    text/vector content of a PyMuPDF document appear as a sibling layer
-    to the ``image-N`` groups produced by :func:`vectorize_embedded_images`.
+
+def _normalize_fill(value: str | None) -> str:
+    """Normalize a ``fill`` attribute to a hex key, ``"none"``, or ``""``.
+
+    * ``None`` or missing → ``""`` (means "inherit"; SVG default fill is
+      black, so the caller treats this as ``#000000``).
+    * ``"none"`` → ``"none"`` (no fill; the caller falls back to stroke).
+    * ``url(#...)`` → returned unchanged so pattern-filled shapes get
+      their own bucket separate from any solid color.
+    * ``#rgb`` / ``#rrggbb`` → expanded and lowercased to ``#rrggbb``.
+    * Anything else (named colors, ``rgb(…)``, …) → lowercased as-is.
     """
-    drawable_local = {"g", "path", "polyline", "polygon", "line", "circle", "rect", "ellipse"}
-    children = list(root)
-    loose: list[ET.Element] = []
-    for child in children:
+    if value is None:
+        return ""
+    value = value.strip()
+    if not value:
+        return ""
+    lowered = value.lower()
+    if lowered == "none":
+        return "none"
+    if lowered.startswith("url("):
+        return value  # preserve case so the IRI matches the def's id
+    if lowered.startswith("#") and len(lowered) == 4:
+        # #abc → #aabbcc
+        return f"#{lowered[1] * 2}{lowered[2] * 2}{lowered[3] * 2}"
+    return lowered
+
+
+def _effective_color_key(element: ET.Element) -> str:
+    """Return the color bucket key for a leaf drawable.
+
+    Strokes-only paths (``fill="none"`` with a ``stroke`` set) are
+    grouped by their stroke; everything else is grouped by its
+    (normalized) fill, with an absent fill counted as black so PyMuPDF
+    text glyphs (which inherit) land in the default bucket.
+    """
+    fill = _normalize_fill(element.get("fill"))
+    if fill == "none":
+        stroke = _normalize_fill(element.get("stroke"))
+        if stroke and stroke not in {"none", ""}:
+            return stroke
+        return "none"  # invisible; will be dropped
+    if fill == "":
+        return "#000000"
+    return fill
+
+
+def _leaf_color_buckets(root: ET.Element) -> dict[str, list[ET.Element]]:
+    """Bucket every loose leaf drawable under ``root`` by its color key.
+
+    Walks the loose top-level drawables (children that aren't already
+    labeled layers) and recurses into ``<g>`` wrappers to reach the
+    leaves. Returns a mapping ``{color_key → [leaf_element, …]}``.
+    Leaves with key ``"none"`` (no fill, no stroke) are skipped — they
+    would plot as nothing anyway.
+    """
+    buckets: dict[str, list[ET.Element]] = {}
+    for child in list(root):
         local = _local(child.tag)
-        if local not in drawable_local:
+        if local not in _DRAWABLE_TAGS:
             continue
-        # Already a labeled layer? Leave it alone.
+        # Already a labeled top-level layer — leave it alone.
         if local == "g" and child.get(_INKSCAPE_LABEL):
             continue
-        loose.append(child)
-    if not loose:
-        return False
-    wrapper = ET.Element(f"{{{_SVG_NS}}}g")
-    wrapper.set(_INKSCAPE_LABEL, label)
-    for element in loose:
-        list(root).index(element)
-        root.remove(element)
-        wrapper.append(element)
-    # Insert the text wrapper before any image-N groups so it lives at
-    # the same level and is rendered first (drawn before images, which
-    # mirrors typical document layering).
+        for leaf in child.iter() if local == "g" else (child,):
+            if _local(leaf.tag) not in _DRAWABLE_LEAVES:
+                continue
+            key = _effective_color_key(leaf)
+            if key == "none":
+                continue
+            buckets.setdefault(key, []).append(leaf)
+    return buckets
+
+
+def _label_for_color(key: str, default_label: str) -> str:
+    """Pick the inkscape:label for a color bucket.
+
+    Black / inherited fills get the operator-supplied default
+    (``"text"`` or ``"drawings"``) since those are the body content for
+    the typical PDF/HTML route. Pattern fills get ``pattern-N`` (the N
+    is assigned by the caller). Other solid colors get
+    ``color-#rrggbb`` so the frontend can show the swatch without
+    re-deriving it from the geometry.
+    """
+    if key == "#000000":
+        return default_label
+    if key.startswith("url("):
+        return key  # caller rewrites pattern-N before insertion
+    return f"color-{key}"
+
+
+def split_loose_drawables_by_fill(root: ET.Element, default_label: str = "text") -> int:
+    """Split top-level non-labeled drawables into one labeled group per fill.
+
+    With a single distinct fill, behaves like the original
+    ``wrap_text_layer``: everything goes into one ``<g
+    inkscape:label="text">`` (or ``"drawings"`` when Hershey owns the
+    ``text`` label). With multiple colors — the case the colored HTML
+    print-test page exercises — produces one labeled group per color
+    so the operator can route each one to its own pen.
+
+    Returns the number of labeled groups that were inserted. Operates
+    in place. Pattern fills (``url(#…)``) are bucketed separately and
+    end up as ``pattern-N`` layers so the operator can see them in the
+    layer list even if their content was not (yet) rasterised.
+    """
+    parent_map = {child: parent for parent in root.iter() for child in parent}
+    buckets = _leaf_color_buckets(root)
+    if not buckets:
+        return 0
+
+    # When everything is the same color, preserve the legacy single-layer
+    # behavior so existing pipelines and tests keep their "text" /
+    # "drawings" wrapper.
+    single_bucket = len(buckets) == 1
+
+    # Ordered by deterministic key sort so the layer order is stable
+    # across runs (lru_cache in _measure relies on identical SVG output
+    # for identical input).
+    pattern_index = 0
+    new_groups: list[tuple[str, ET.Element]] = []
+    for key in sorted(buckets):
+        leaves = buckets[key]
+        if single_bucket:
+            label = default_label
+        elif key.startswith("url("):
+            pattern_index += 1
+            label = f"pattern-{pattern_index}"
+        else:
+            label = _label_for_color(key, default_label)
+        wrapper = ET.Element(f"{{{_SVG_NS}}}g")
+        wrapper.set(_INKSCAPE_LABEL, label)
+        # Stamp a representative color on the wrapper itself so
+        # ``_group_color`` in :mod:`pen_plotter.core.layers` picks up a
+        # real hex (not the first url() reference) for the UI swatch.
+        if not key.startswith("url(") and key not in {"none", ""}:
+            wrapper.set("fill", key)
+        for leaf in leaves:
+            parent = parent_map.get(leaf)
+            if parent is None:
+                continue
+            parent.remove(leaf)
+            wrapper.append(leaf)
+        new_groups.append((label, wrapper))
+
+    # Tidy up: remove any loose top-level <g> wrappers that are now
+    # empty (their leaves were redistributed into per-color groups).
+    for child in list(root):
+        local = _local(child.tag)
+        if local != "g" or child.get(_INKSCAPE_LABEL):
+            continue
+        if not any(
+            _local(d.tag) in _DRAWABLE_LEAVES for d in child.iter() if d is not child
+        ):
+            root.remove(child)
+
+    # Insert before any existing labeled layers (``image-N``, Hershey
+    # ``text``, …) so the document layering stays consistent: vector
+    # content drawn before bitmaps.
     insert_at = 0
     for i, child in enumerate(root):
-        if _local(child.tag) == "g" and (child.get(_INKSCAPE_LABEL) or "").startswith("image-"):
+        if _local(child.tag) == "g" and child.get(_INKSCAPE_LABEL):
             insert_at = i
             break
         insert_at = i + 1
-    root.insert(insert_at, wrapper)
-    return True
+    for _, wrapper in new_groups:
+        root.insert(insert_at, wrapper)
+        insert_at += 1
+    return len(new_groups)
+
+
+def wrap_text_layer(root: ET.Element, label: str = "text") -> bool:
+    """Backward-compatible shim for :func:`split_loose_drawables_by_fill`.
+
+    Retained so external callers and tests that still import
+    ``wrap_text_layer`` keep working. The new function does the real
+    work — splitting by fill into per-color labeled groups when the
+    document carries more than one fill.
+    """
+    return split_loose_drawables_by_fill(root, default_label=label) > 0
 
 
 def postprocess_pdf_svg(
@@ -459,13 +897,18 @@ def postprocess_pdf_svg(
     *,
     bitmap_options: dict[str, Any] | None = None,
     hershey_text_group: str | None = None,
+    pdf_bytes: bytes | None = None,
+    page_index: int = 0,
 ) -> tuple[str, list[str]]:
     """Run the full PDF-SVG post-processing chain.
 
     Expands ``<use>`` references inline, vectorizes embedded raster
-    ``<image>`` elements into their own labeled layers, and wraps any
-    remaining vector content into a ``text`` layer. The output is a
-    self-contained pivot SVG ready for sanitize + extract_layers.
+    ``<image>`` elements into their own labeled layers, rasterises any
+    pattern-filled shapes (CSS gradients PyMuPDF emits as empty
+    ``<pattern>`` references) by cropping the original PDF page, and
+    splits the remaining vector content into one labeled group per
+    fill color. The output is a self-contained pivot SVG ready for
+    sanitize + extract_layers.
 
     When ``hershey_text_group`` is supplied, the function instead
     strips every PyMuPDF text glyph from the input (so the operator's
@@ -484,6 +927,14 @@ def postprocess_pdf_svg(
         hershey_text_group: Optional SVG ``<g>`` fragment to inject in
             place of the original PDF text. When provided the original
             text glyphs are removed first.
+        pdf_bytes: The original PDF bytes. When supplied (and a
+            pattern-filled shape is detected), the corresponding page
+            region is rendered by PyMuPDF and handed to the bitmap
+            converter so CSS gradients plot as halftoned strokes
+            instead of plotting as a flat silhouette.
+        page_index: Index of the PDF page that produced ``svg``; used
+            only when ``pdf_bytes`` is supplied to crop the right page
+            for pattern rasterisation.
 
     Returns:
         ``(svg, warnings)``: the post-processed SVG plus any per-image
@@ -499,8 +950,23 @@ def postprocess_pdf_svg(
         # the glyph paths get inlined and we can no longer tell them
         # apart from real drawings.
         strip_text_glyphs(root)
+    # Rasterise pattern fills BEFORE expanding <use>s — the latter
+    # nukes the <defs> block that holds the <pattern> definitions, so
+    # by the time it's done we can no longer tell whether a
+    # ``url(#pattern_N)`` reference pointed to an empty gradient
+    # (needs rasterisation) or a populated pattern (best left alone).
+    if pdf_bytes is not None:
+        _, pattern_warnings = rasterize_pattern_fills(
+            root,
+            pdf_bytes=pdf_bytes,
+            page_index=page_index,
+            bitmap_options=bitmap_options,
+        )
+    else:
+        pattern_warnings = []
     expand_use_refs(root)
     _, image_warnings = vectorize_embedded_images(root, bitmap_options=bitmap_options)
+    image_warnings.extend(pattern_warnings)
     hoist_labeled_groups(root)
     # When Hershey is taking over the "text" label, the catch-all
     # wrapper for the document's remaining vector content (rules,
@@ -508,7 +974,9 @@ def postprocess_pdf_svg(
     # operator ends up with two distinct "text" layers — one with the
     # Hershey strokes, one with the non-text drawings — and the
     # per-layer pen-slot UI can't tell them apart.
-    wrap_text_layer(root, label="drawings" if hershey_text_group else "text")
+    split_loose_drawables_by_fill(
+        root, default_label="drawings" if hershey_text_group else "text"
+    )
 
     if hershey_text_group:
         try:
