@@ -75,6 +75,22 @@ def _fits_arc(points: list[Point], start: int, end: int, tolerance: float) -> bo
         px, py = points[k]
         if abs(((px - cx) ** 2 + (py - cy) ** 2) ** 0.5 - radius) > tolerance:
             return False
+    # No consecutive chord may be longer than the fitted radius (i.e.
+    # subtend more than 60° of arc). Without this guard a *straight*
+    # segment whose endpoints happen to fall on the circle defined by
+    # the surrounding curved points gets absorbed into the fit: the
+    # endpoint-only check above can't tell whether the polyline follows
+    # the arc or jumps across it as a chord. Concretely, the horizontal
+    # bar of a small "e" lies on the circle its bowl traces, so without
+    # this check the bar gets emitted as a G2/G3 arc that bulges away
+    # from the straight stroke the operator drew. A genuine arc sampling
+    # uses many short steps (chord ≪ radius); a chord absorbed as if it
+    # were an arc has chord comparable to 2·radius.
+    for k in range(start, end):
+        dx = points[k + 1][0] - points[k][0]
+        dy = points[k + 1][1] - points[k][1]
+        if dx * dx + dy * dy > radius * radius:
+            return False
     sign = 0.0
     for k in range(start, end - 1):
         turn = _cross(points[k], points[k + 1], points[k + 2])

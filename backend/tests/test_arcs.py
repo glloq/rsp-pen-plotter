@@ -25,6 +25,35 @@ def test_straight_line_stays_lines() -> None:
     assert all(isinstance(s, LineTo) for s in segs)
 
 
+def test_long_chord_through_curved_points_stays_a_line() -> None:
+    # Regression: the horizontal bar of a Hershey "e" at default font
+    # size lies on the same circle as the bowl above it. The bar
+    # endpoints fall on the circle but the bar itself is a (near-)
+    # diameter chord that the firmware would have to detour around as
+    # a 180°+ arc. Without rejecting this, the emitted G2/G3 made the
+    # bar bulge into a curve in the simulator preview.
+    bowl_center = (150.0, 211.0)
+    r = 2.19
+    bar_y = 210.36
+    # Bar endpoints chosen to lie on the bowl circle (chord ≈ 2·radius).
+    import math
+    half = math.sqrt(r * r - (bowl_center[1] - bar_y) ** 2)
+    bar_left = (bowl_center[0] - half, bar_y)
+    bar_right = (bowl_center[0] + half, bar_y)
+    # A few bowl points above the bar, on the same circle.
+    bowl_points = [
+        (bowl_center[0] + r * math.cos(a), bowl_center[1] + r * math.sin(a))
+        for a in (math.radians(60), math.radians(80), math.radians(100), math.radians(120))
+    ]
+    pts = [bar_left, bar_right, *bowl_points]
+    segs = fit_arcs(pts, tolerance=0.1)
+    # The first segment (the bar) must be a straight LineTo — not the
+    # head of an absorbed arc.
+    assert isinstance(segs[0], LineTo)
+    assert abs(segs[0].x - bar_right[0]) < 1e-6
+    assert abs(segs[0].y - bar_right[1]) < 1e-6
+
+
 def test_circle_collapses_to_arcs_with_correct_center() -> None:
     pts = _circle_points(50.0, 50.0, 20.0, 64, clockwise=False)
     segs = fit_arcs(pts, tolerance=0.05)
