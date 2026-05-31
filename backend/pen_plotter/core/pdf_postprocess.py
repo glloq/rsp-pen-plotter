@@ -434,6 +434,40 @@ def _ancestor_transform(
     return a, b, c, d, e, f
 
 
+def _apply_affine(
+    matrix: tuple[float, float, float, float, float, float],
+    points: list[tuple[float, float]],
+) -> tuple[float, float, float, float] | None:
+    """Apply a 2x3 affine to ``points`` and return their AABB.
+
+    Returns ``None`` if ``points`` is empty.
+    """
+    if not points:
+        return None
+    a, b, c, d, e, f = matrix
+    xs = [a * px + c * py + e for px, py in points]
+    ys = [b * px + d * py + f for px, py in points]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _composed_transform(
+    element: ET.Element,
+    parent_map: dict[ET.Element, ET.Element],
+    root: ET.Element,
+) -> tuple[float, float, float, float, float, float]:
+    """Return ancestor transforms composed with the element's own."""
+    a1, b1, c1, d1, e1, f1 = _ancestor_transform(element, parent_map, root)
+    a2, b2, c2, d2, e2, f2 = _parse_transform(element.get("transform"))
+    return (
+        a1 * a2 + c1 * b2,
+        b1 * a2 + d1 * b2,
+        a1 * c2 + c1 * d2,
+        b1 * c2 + d1 * d2,
+        a1 * e2 + c1 * f2 + e1,
+        b1 * e2 + d1 * f2 + f1,
+    )
+
+
 def _rect_bbox_user_units(
     rect: ET.Element,
     parent_map: dict[ET.Element, ET.Element],
@@ -455,42 +489,135 @@ def _rect_bbox_user_units(
         return None
     if w <= 0 or h <= 0:
         return None
-    ancestor = _ancestor_transform(rect, parent_map, root)
-    own = _parse_transform(rect.get("transform"))
-    a1, b1, c1, d1, e1, f1 = ancestor
-    a2, b2, c2, d2, e2, f2 = own
-    # Compose ancestor ∘ own
-    a, b, c, d, e, f = (
-        a1 * a2 + c1 * b2,
-        b1 * a2 + d1 * b2,
-        a1 * c2 + c1 * d2,
-        b1 * c2 + d1 * d2,
-        a1 * e2 + c1 * f2 + e1,
-        b1 * e2 + d1 * f2 + f1,
-    )
     corners = [(x, y), (x + w, y), (x, y + h), (x + w, y + h)]
-    xs = [a * px + c * py + e for px, py in corners]
-    ys = [b * px + d * py + f for px, py in corners]
-    return min(xs), min(ys), max(xs), max(ys)
+    return _apply_affine(_composed_transform(rect, parent_map, root), corners)
+
+
+def _path_bbox_user_units(
+    path: ET.Element,
+    parent_map: dict[ET.Element, ET.Element],
+    root: ET.Element,
+) -> tuple[float, float, float, float] | None:
+    """Return the AABB of a ``<path>`` element in user units.
+
+    WeasyPrint emits CSS-styled boxes (``background-color`` divs,
+    color-bar swatches) as ``<path>`` elements whose ``d`` string is a
+    plain orthogonal rectangle ``M x y H x2 V y2 H x V y Z``. We parse
+    every numeric pair the path touches — that's a strict superset of
+    those corners and gives the right AABB even when WeasyPrint
+    inserts intermediate ``L`` segments for rounded-border decoration.
+    """
+    d = path.get("d") or ""
+    if not d:
+        return None
+    import re
+
+    # Pull every numeric literal out of the d-string. SVG paths use
+    # commands (M / L / H / V / C / Z …) but for an AABB we only care
+    # about the coordinates each command consumes; the absolute /
+    # relative distinction doesn't matter when the path is closed and
+    # we just want the extreme points reached along it.
+    nums = [float(t) for t in re.findall(r"-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", d)]
+    if len(nums) < 2:
+        return None
+    # Walk through commands accumulating the current pen position so
+    # that ``H``/``V`` (which only carry one number per step) produce
+    # the right second coordinate.
+    points: list[tuple[float, float]] = []
+    tokens = re.findall(r"[a-zA-Z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?", d)
+    cx = cy = 0.0
+    i = 0
+    cmd = ""
+    rel = False
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok.isalpha():
+            cmd = tok.upper()
+            rel = tok.islower()
+            i += 1
+            if cmd == "Z":
+                continue
+            continue
+        if not cmd:
+            i += 1
+            continue
+        try:
+            if cmd in {"M", "L", "T"}:
+                x, y = float(tokens[i]), float(tokens[i + 1])
+                cx, cy = (cx + x, cy + y) if rel else (x, y)
+                points.append((cx, cy))
+                i += 2
+                # subsequent pairs after M are L
+                if cmd == "M":
+                    cmd = "L"
+            elif cmd == "H":
+                x = float(tokens[i])
+                cx = cx + x if rel else x
+                points.append((cx, cy))
+                i += 1
+            elif cmd == "V":
+                y = float(tokens[i])
+                cy = cy + y if rel else y
+                points.append((cx, cy))
+                i += 1
+            elif cmd in {"C"}:
+                # Cubic — sample all three points (control1, control2, end).
+                for _ in range(3):
+                    x, y = float(tokens[i]), float(tokens[i + 1])
+                    px, py = (cx + x, cy + y) if rel else (x, y)
+                    points.append((px, py))
+                    i += 2
+                cx, cy = points[-1]
+            elif cmd in {"S", "Q"}:
+                for _ in range(2):
+                    x, y = float(tokens[i]), float(tokens[i + 1])
+                    px, py = (cx + x, cy + y) if rel else (x, y)
+                    points.append((px, py))
+                    i += 2
+                cx, cy = points[-1]
+            elif cmd == "A":
+                # Skip flags/rx/ry, take the endpoint.
+                i += 5  # rx, ry, x-axis-rot, large-arc-flag, sweep-flag
+                x, y = float(tokens[i]), float(tokens[i + 1])
+                cx, cy = (cx + x, cy + y) if rel else (x, y)
+                points.append((cx, cy))
+                i += 2
+            else:
+                i += 1
+        except (IndexError, ValueError):
+            return None
+    return _apply_affine(_composed_transform(path, parent_map, root), points)
 
 
 def _has_visible_content(subtree: ET.Element) -> bool:
-    """Return ``True`` if ``subtree`` has any drawable leaf outside a mask.
+    """Return ``True`` if ``subtree`` has any ink-bearing leaf outside a mask.
 
     Paths buried inside a ``<clipPath>`` or ``<mask>`` define the mask
     region itself — they do not paint pixels and so don't count as
     "visible content". Same for anything still hiding in a ``<defs>``
     block that was inlined as part of an ``<use>`` expansion.
+
+    Pure-white fills (PyMuPDF inserts a ``<rect fill="white">`` as the
+    background of every emitted shading pattern) don't count either:
+    they paint no visible ink on a white page and would otherwise mask
+    a CSS gradient / grid pattern that the operator expects to plot.
     """
     masked = {f"{{{_SVG_NS}}}clipPath", f"{{{_SVG_NS}}}mask", f"{{{_SVG_NS}}}defs"}
-    # Walk with a small stack so we can prune entire mask subtrees.
+    white_fills = {"white", "#fff", "#ffffff", "rgb(255,255,255)"}
     stack: list[ET.Element] = [subtree]
     while stack:
         node = stack.pop()
         if node.tag in masked:
             continue
         if node is not subtree and _local(node.tag) in _DRAWABLE_LEAVES:
-            return True
+            fill = (node.get("fill") or "").strip().lower()
+            stroke = (node.get("stroke") or "").strip().lower()
+            # Default SVG fill is black; only an explicit ``none`` /
+            # ``white`` suppresses ink. A non-white stroke also counts.
+            fill_paints = fill not in {"none", *white_fills} if fill else True
+            stroke_paints = bool(stroke) and stroke not in {"none", *white_fills}
+            if fill_paints or stroke_paints:
+                return True
         stack.extend(list(node))
     return False
 
@@ -651,6 +778,177 @@ def rasterize_pattern_fills(
             position = list(parent).index(rect)
             parent.remove(rect)
             parent.insert(position, wrapper)
+            produced += 1
+
+    return produced, warnings
+
+
+def _is_renderable_solid_fill(value: str) -> bool:
+    """Return ``True`` if ``fill`` is a solid color worth rasterising.
+
+    Skips ``none``, pattern references, the SVG default of black-without-
+    explicit-fill (we'd rasterise every glyph), and pure white (page
+    background that would produce no strokes after the BitmapConverter
+    drops it). Everything else — saturated colors and mid-greys alike —
+    counts so the operator's algorithm choice (crosshatch, halftone,
+    stippling, …) applies to colored CSS divs the same way it does to a
+    PNG of the same page.
+    """
+    if not value:
+        return False
+    v = value.strip().lower()
+    if v in {"none", "transparent", "white", "#fff", "#ffffff", "rgb(255,255,255)"}:
+        return False
+    if v.startswith("url("):
+        return False
+    if v in {"black", "#000", "#000000", "rgb(0,0,0)"}:
+        # Pure black is almost always text-ink, page-frame strokes, or
+        # alignment marks. Leaving them as vector outlines keeps glyphs
+        # legible and registration crosses crisp; rasterising them would
+        # turn every black box into a fully-hatched silhouette.
+        return False
+    return True
+
+
+def rasterize_solid_color_fills(
+    root: ET.Element,
+    *,
+    pdf_bytes: bytes,
+    page_index: int,
+    bitmap_options: dict[str, Any] | None = None,
+    min_area_pt2: float = 50.0,
+) -> tuple[int, list[str]]:
+    """Replace solid-colored rect fills with bitmap-rendered strokes.
+
+    For HTML / PDF sources, large solid-color rectangles (CSS
+    background-color divs, color-bar swatches, grayscale ramps) plot as
+    a flat outline by default because vpype only reads stroke geometry
+    from ``<rect>``. To match the bitmap-converter behavior the
+    operator gets on a PNG of the same page — where each color region
+    is hatched / halftoned / dithered per the selected algorithm — we
+    crop the original PDF at each rect's bbox, render it as PNG, run
+    it through the bitmap converter (which applies the operator's
+    algorithm choice) and substitute the result for the rect.
+
+    Same-color rects are merged into a single ``color-{hex}`` labeled
+    group so the operator's layer ↔ pen routing is unchanged from the
+    vector path; only the per-layer geometry swaps flat outline →
+    algorithm-rendered strokes. Pure-black and pure-white fills are
+    skipped (black is text/registration ink, white is page background)
+    and rects below ``min_area_pt2`` are skipped (typically border
+    slivers, text underlines).
+
+    Returns ``(count, warnings)`` like :func:`vectorize_embedded_images`.
+    """
+    from pen_plotter.converters.bitmap import BitmapConverter
+
+    warnings: list[str] = []
+    parent_map = {child: parent for parent in root.iter() for child in parent}
+    # WeasyPrint emits ``background-color`` divs as ``<path>`` (orthogonal
+    # rectangle d-strings) rather than ``<rect>``; PyMuPDF's PDF-to-SVG
+    # produces a mix. Accept both — the bbox helpers below handle each.
+    candidates = [
+        shape
+        for shape in root.iter()
+        if _local(shape.tag) in {"rect", "path"}
+        and _is_renderable_solid_fill(shape.get("fill") or "")
+    ]
+    if not candidates:
+        return 0, warnings
+
+    try:
+        import pymupdf
+    except ImportError:
+        warnings.append("PyMuPDF unavailable — solid color fills left as-is.")
+        return 0, warnings
+
+    converter = BitmapConverter()
+    produced = 0
+    # Reused per color so multiple rects of the same hue land in one
+    # labeled layer — keeps the layer count tractable on a CMYKRGB test
+    # page (one group per ink rather than one per swatch).
+    color_groups: dict[str, ET.Element] = {}
+
+    def _shape_bbox(shape: ET.Element) -> tuple[float, float, float, float] | None:
+        if _local(shape.tag) == "rect":
+            return _rect_bbox_user_units(shape, parent_map, root)
+        return _path_bbox_user_units(shape, parent_map, root)
+
+    with pymupdf.open(stream=pdf_bytes, filetype="pdf") as doc:
+        if not 0 <= page_index < doc.page_count:
+            warnings.append("Solid-fill rasterisation skipped: page index out of range.")
+            return 0, warnings
+        page = doc[page_index]
+
+        for index, rect in enumerate(candidates, start=1):
+            parent = parent_map.get(rect)
+            if parent is None:
+                continue
+            bbox = _shape_bbox(rect)
+            if bbox is None:
+                continue
+            x_min, y_min, x_max, y_max = bbox
+            area = (x_max - x_min) * (y_max - y_min)
+            if area < min_area_pt2:
+                # Tiny rect — almost always a border sliver or text-decoration
+                # line; cheaper and more readable to leave as a vector outline.
+                continue
+            color_key = _normalize_fill(rect.get("fill"))
+            try:
+                pix = page.get_pixmap(
+                    clip=pymupdf.Rect(x_min, y_min, x_max, y_max), dpi=300
+                )
+                png_bytes = pix.tobytes("png")
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"Solid-fill #{index}: page-crop render failed ({exc}).")
+                continue
+            try:
+                result: ConversionResult = converter.convert(
+                    png_bytes, options=bitmap_options
+                )
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"Solid-fill #{index}: vectorisation failed ({exc}).")
+                continue
+            groups = _inner_groups(result.svg)
+            if not groups:
+                # Drop the rect so the page doesn't carry an invisible
+                # silhouette where the operator expected hatching.
+                parent.remove(rect)
+                continue
+            try:
+                inner_root = ET.fromstring(result.svg)
+                vb = inner_root.get("viewBox", "")
+                _, _, src_w, src_h = (float(v) for v in vb.split())
+            except (ET.ParseError, ValueError):
+                warnings.append(f"Solid-fill #{index}: bitmap result missing viewBox.")
+                continue
+            dst_w = x_max - x_min
+            dst_h = y_max - y_min
+            sx = dst_w / max(src_w, 1e-9)
+            sy = dst_h / max(src_h, 1e-9)
+            # Each rect's bitmap output is positioned by an outer wrapper
+            # that translates+scales it back into the page. The wrappers
+            # live as siblings inside the per-color ``color-{hex}`` group
+            # so the operator still sees one layer per ink even when the
+            # page has many same-color swatches.
+            position_wrapper = ET.Element(f"{{{_SVG_NS}}}g")
+            position_wrapper.set("transform", f"translate({x_min} {y_min}) scale({sx} {sy})")
+            for group in groups:
+                # The bitmap converter's internal per-color labels would
+                # otherwise compete with our ``color-{hex}`` outer label.
+                group.attrib.pop(_INKSCAPE_LABEL, None)
+                position_wrapper.append(group)
+
+            outer = color_groups.get(color_key)
+            if outer is None:
+                outer = ET.Element(f"{{{_SVG_NS}}}g")
+                outer.set(_INKSCAPE_LABEL, f"color-{color_key}")
+                outer.set("fill", color_key)  # swatch source for layers.py
+                color_groups[color_key] = outer
+                root.append(outer)
+            outer.append(position_wrapper)
+
+            parent.remove(rect)
             produced += 1
 
     return produced, warnings
@@ -962,6 +1260,21 @@ def postprocess_pdf_svg(
             page_index=page_index,
             bitmap_options=bitmap_options,
         )
+        # Then the colored CSS divs / swatches: rasterise every
+        # solid-fill rect so the operator's bitmap algorithm choice
+        # (crosshatch, halftone, stippling, …) renders the rectangle
+        # the same way it would render a PNG of the same area. Without
+        # this the operator picks a stunning halftone algorithm in the
+        # bitmap tab and the HTML's colored boxes plot as flat outlines
+        # — mismatched with what they saw applied to image regions of
+        # the same page.
+        _, solid_warnings = rasterize_solid_color_fills(
+            root,
+            pdf_bytes=pdf_bytes,
+            page_index=page_index,
+            bitmap_options=bitmap_options,
+        )
+        pattern_warnings.extend(solid_warnings)
     else:
         pattern_warnings = []
     expand_use_refs(root)
