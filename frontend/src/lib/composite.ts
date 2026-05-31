@@ -135,15 +135,33 @@ function extractPlacementChunk(parser: DOMParser, p: PlacementSnapshot): Placeme
   const root = doc.documentElement
   if (!root) return null
 
-  // Resolve the placement's intrinsic viewBox. If it's absent we fall
-  // back to the layers' union bbox (passed in as ``source_bbox``).
+  // Resolve the placement's effective viewBox. We prefer the inked
+  // ``source_bbox`` (union of layer bboxes) over the SVG's own
+  // viewBox: the text / PDF / HTML / DOCX converters emit a page-sized
+  // viewBox with the content offset from the page corner by the
+  // document margins, while ``computeInitialLayout`` sizes the
+  // placement's ``width_mm``/``height_mm`` to the inked bbox and the
+  // display path crops the rendered viewBox to the same bbox (see
+  // ``cropSvgViewBoxToBbox`` in ``useSheetGeometry``). If we use the
+  // page-sized viewBox here, ``sx = width_mm / vbW`` underscales the
+  // content and the page margins surface as a workspace offset — the
+  // generated G-code lands shrunken and shifted, potentially outside
+  // the machine limits. Fall back to the SVG viewBox only when the
+  // source bbox is degenerate.
   const vbAttr = root.getAttribute('viewBox') ?? ''
   const vbParts = vbAttr.split(/\s+/).map(Number)
+  const sbW = p.source_bbox.x_max - p.source_bbox.x_min
+  const sbH = p.source_bbox.y_max - p.source_bbox.y_min
   let vbX = 0
   let vbY = 0
-  let vbW = p.source_bbox.x_max - p.source_bbox.x_min || 1
-  let vbH = p.source_bbox.y_max - p.source_bbox.y_min || 1
-  if (vbParts.length === 4 && vbParts.every(Number.isFinite)) {
+  let vbW = 1
+  let vbH = 1
+  if (sbW > 0 && sbH > 0) {
+    vbX = p.source_bbox.x_min
+    vbY = p.source_bbox.y_min
+    vbW = sbW
+    vbH = sbH
+  } else if (vbParts.length === 4 && vbParts.every(Number.isFinite)) {
     vbX = vbParts[0]!
     vbY = vbParts[1]!
     vbW = vbParts[2]!
