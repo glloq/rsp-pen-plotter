@@ -240,7 +240,7 @@ function onTogglePlayback(playing: boolean): void {
             ? 'border-slate-500 bg-slate-700 text-slate-100'
             : 'border-slate-700 bg-slate-900 text-slate-400'
         "
-        :title="t('simulator.colorClickHint')"
+        :title="`${c.label || c.hex || '—'} — ${t('simulator.colorClickHint')}`"
         @click="emit('toggleColor', c.hex)"
         @dblclick="emit('selectOnlyColor', c.hex)"
       >
@@ -249,8 +249,7 @@ function onTogglePlayback(playing: boolean): void {
           :style="{ backgroundColor: c.hex || '#94a3b8' }"
           aria-hidden="true"
         />
-        <span class="font-mono">{{ c.label || c.hex || '—' }}</span>
-        <span class="text-slate-500">({{ c.segmentCount }})</span>
+        <span class="text-slate-400">({{ c.segmentCount }})</span>
       </button>
     </div>
   </div>
