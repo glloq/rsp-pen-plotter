@@ -681,8 +681,9 @@ def test_html_text_renders_on_top_of_hatched_backgrounds() -> None:
     glyphs paint last and stay legible."""
     svg = _html_to_svg(
         "<html><body>"
-        "<h1 style='background:#ffff00;padding:10px'>Title</h1>"
-        "<p style='background:#cccccc;padding:10px'>Para</p>"
+        "<div style='background:#ffff00;width:200px;height:80px'></div>"
+        "<div style='background:#cccccc;width:200px;height:80px'></div>"
+        "<p>Plain text after coloured swatches.</p>"
         "</body></html>"
     )
     root = ET.fromstring(svg)
@@ -744,3 +745,36 @@ def test_html_thin_gray_border_around_text_does_not_hatch_through() -> None:
             f"grayscale layer hatched {len(hatch_paths)} lines across a "
             "border-only path — text inside the border would be barred"
         )
+
+
+def test_html_colored_box_with_text_inside_skips_hatching() -> None:
+    """Any solid-coloured shape whose bbox contains text glyphs must NOT
+    be density-hatched — bbox-hatching paints parallel lines across
+    the glyphs and the operator reads the result as "text barred".
+    A bordered-but-empty coloured div is still hatched (the original
+    fix) so the regression doesn't flip the other way. Compares the
+    two side by side: orange box with a heading inside vs a bare red
+    box → the orange box drops to outline only, the red box stays
+    fully hatched."""
+    svg = _html_to_svg(
+        "<html><body>"
+        "<div style='background:#ffaa00;padding:20px;width:400px'>"
+        "<p style='font-size:24px'>Heading on orange</p>"
+        "</div>"
+        "<div style='background:#ff0000;width:300px;height:80px'></div>"
+        "</body></html>"
+    )
+    layers = {l.layer_id: l for l in extract_layers(svg)}
+    # Orange box wraps text → no hatching, just the outline.
+    assert "color-#ffaa00" in layers
+    assert layers["color-#ffaa00"].path_count <= 3, (
+        "orange box with text inside should plot as outline only; "
+        f"got {layers['color-#ffaa00'].path_count} paths "
+        "(hatching is bleeding through the text)"
+    )
+    # Bare red box has no text → hatching still applies.
+    assert "color-#ff0000" in layers
+    assert layers["color-#ff0000"].path_count > 10, (
+        "empty red box should still be hatched; "
+        f"got only {layers['color-#ff0000'].path_count} paths"
+    )
