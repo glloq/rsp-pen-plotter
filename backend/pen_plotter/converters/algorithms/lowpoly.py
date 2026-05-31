@@ -72,7 +72,7 @@ class LowPolyAlgorithm(RasterAlgorithm):
             return group_open + "</g>"
 
         try:
-            from scipy.spatial import Delaunay  # type: ignore[import-untyped]
+            from scipy.spatial import Delaunay
         except ImportError:
             return group_open + "</g>"
 

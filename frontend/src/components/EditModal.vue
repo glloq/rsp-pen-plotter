@@ -114,9 +114,7 @@ const variantCount = computed(() => store.selectedPlacement?.variants.length ?? 
 // Text tab is only meaningful when the source carries text: pure
 // typography (.txt / .md) or mixed text+image documents (PDF / DOCX
 // / HTML). Bitmap-only sources hide the tab to keep the strip short.
-const showTextTab = computed(
-  () => fm.kind.value === 'typography' || fm.kind.value === 'document',
-)
+const showTextTab = computed(() => fm.kind.value === 'typography' || fm.kind.value === 'document')
 
 // Number keys 1-5 jump to tabs; Escape closes (handled below). Avoid
 // hijacking the shortcuts while the user is typing into an input. The
