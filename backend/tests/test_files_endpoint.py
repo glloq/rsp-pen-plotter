@@ -355,3 +355,66 @@ async def test_typography_reupload_with_identical_options_dedupes() -> None:
     assert first.json()["file"]["file_id"] == second.json()["file"]["file_id"]
     # Same content + same options → cache hit, identical SVG.
     assert first.json()["file"]["svg"] == second.json()["file"]["svg"]
+
+
+# /preview-image — the rasterised "Original" the editor's compare slider
+# loads on the left half. Used to be bitmap-only (the toggle was hidden
+# for every other format); these tests pin the new behaviour: an image
+# source passes through untouched, a vector source comes back as PNG,
+# unknown formats / ids surface clean error codes the UI can branch on.
+@pytest.mark.asyncio
+async def test_preview_image_for_svg_returns_png() -> None:
+    async with _client() as client:
+        uploaded = await client.post("/files", **_upload_form(SVG_A, "a.svg"))
+        file_id = uploaded.json()["file"]["file_id"]
+        response = await client.get(f"/files/{file_id}/preview-image")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")
+    # PNG magic byte signature.
+    assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
+@pytest.mark.asyncio
+async def test_preview_image_passes_through_raster_uploads() -> None:
+    # 1×1 transparent PNG: smallest valid raster we can ship in source.
+    png_bytes = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+        "890000000d49444154789c63000100000005000172e2c0e80000000049454e44"
+        "ae426082"
+    )
+    upload = {
+        "files": {"file": ("dot.png", png_bytes, "image/png")},
+        "data": {"folder": ""},
+    }
+    async with _client() as client:
+        uploaded = await client.post("/files", **upload)
+        file_id = uploaded.json()["file"]["file_id"]
+        response = await client.get(f"/files/{file_id}/preview-image")
+    assert response.status_code == 200
+    # Bytes match — no re-encode, so JPEG sources also keep their quality
+    # when the same endpoint serves them.
+    assert response.content == png_bytes
+
+
+@pytest.mark.asyncio
+async def test_preview_image_rejects_unsupported_format() -> None:
+    """``.txt`` has no useful raster preview — endpoint surfaces 415 so the
+    UI can fall back to its text-source pane instead of a broken ``<img>``."""
+    import json
+
+    upload = {
+        "files": {"file": ("hello.txt", b"Hello plotter", "text/plain")},
+        "data": {"folder": "", "options": json.dumps({"font_size_mm": 10.0})},
+    }
+    async with _client() as client:
+        uploaded = await client.post("/files", **upload)
+        file_id = uploaded.json()["file"]["file_id"]
+        response = await client.get(f"/files/{file_id}/preview-image")
+    assert response.status_code == 415
+
+
+@pytest.mark.asyncio
+async def test_preview_image_unknown_id_is_404() -> None:
+    async with _client() as client:
+        response = await client.get("/files/does-not-exist/preview-image")
+    assert response.status_code == 404

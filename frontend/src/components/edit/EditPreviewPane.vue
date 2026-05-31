@@ -9,7 +9,11 @@ import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimat
 import { useAlgorithmsStore } from '../../stores/algorithms'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { applyPhysicalStrokeWidth, mmPerViewBoxUnit, strokeWidthMmByHex } from '../../lib/penWidth'
-import { libraryFileOriginalUrl, type AlgorithmComplexity } from '../../api/client'
+import {
+  libraryFileOriginalUrl,
+  libraryFilePreviewImageUrl,
+  type AlgorithmComplexity,
+} from '../../api/client'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -248,22 +252,42 @@ const placementSvg = computed(() => {
 // a page reload or for library placements where the File bytes were
 // never re-downloaded — previously both cases left the Image tab and the
 // comparison view blank because they keyed solely off the object URL.
+//
+// For document sources (PDF/SVG/DOCX/ODT/RTF/HTML/EPS/PS/AI) the raw
+// bytes can't drop into ``<img>`` — browsers won't render a PDF or a
+// .docx that way — so we route through ``/files/{id}/preview-image``,
+// which rasterises the page to PNG server-side. This is what lets the
+// Original / Compare buttons in the toolbar work for every project
+// file instead of only for bitmap images. The page query parameter
+// follows the current document page so flipping pages on a multi-page
+// PDF also flips the raster the comparison shows.
 const sourceImgSrc = computed<string | null>(() => {
   if (edit.previewUrl.value) return edit.previewUrl.value
   const fid = store.selectedPlacement?.library_file_id
-  return fid ? libraryFileOriginalUrl(fid) : null
+  if (!fid) return null
+  if (edit.kind.value === 'document') {
+    return libraryFilePreviewImageUrl(fid, edit.currentPage.value)
+  }
+  return libraryFileOriginalUrl(fid)
 })
+// Bitmaps and rasterised documents both qualify as "has a raster
+// representation we can show on the left half of the compare slider".
+// Typography still has no raster source (the operator's plain text
+// drives the Hershey SVG directly), so it stays out.
+const canShowRaster = computed(
+  () => edit.kind.value === 'bitmap' || edit.kind.value === 'document',
+)
 const sourceMode = computed(
   () =>
     edit.previewMode.value === 'source' &&
-    edit.kind.value === 'bitmap' &&
+    canShowRaster.value &&
     Boolean(sourceImgSrc.value),
 )
 // Split mode requires both halves to have content; if either is
 // missing we degrade to whichever single layer is available rather
 // than showing an awkward half-empty pane.
 const hasLiveSvg = computed(() => Boolean(edit?.previewSvg.value))
-const hasRaster = computed(() => edit.kind.value === 'bitmap' && Boolean(sourceImgSrc.value))
+const hasRaster = computed(() => canShowRaster.value && Boolean(sourceImgSrc.value))
 const splitMode = computed(
   () =>
     edit.previewMode.value === 'split' &&
@@ -289,7 +313,7 @@ const showThumbnail = computed(
     !splitMode.value &&
     !showLivePreview.value &&
     !showPlacementSvg.value &&
-    edit?.kind.value === 'bitmap' &&
+    canShowRaster.value &&
     Boolean(sourceImgSrc.value),
 )
 const showTextPreview = computed(
@@ -319,9 +343,11 @@ const showEmptyHint = computed(
 // /preview (reflects unsaved edits) over the committed placement SVG.
 const splitSvg = computed<string>(() => edit.previewSvg.value || placementSvg.value)
 
-// Toolbar visibility: only meaningful when the source is a bitmap and
-// both raster + a vector representation could potentially be shown.
-const canToggleMode = computed(() => edit.kind.value === 'bitmap' && hasRaster.value)
+// Toolbar visibility: any source that exposes both a raster (bitmap
+// original or rasterised document page) and a vector representation
+// gets the Original / Compare toggles. Typography stays excluded —
+// it has no raster source to compare the Hershey SVG against.
+const canToggleMode = computed(() => canShowRaster.value && hasRaster.value)
 // Only two tiers are surfaced now: Draft (fast, responsive while
 // dragging) and Final (full fidelity). The historical middle tier
 // ``standard`` is migrated to ``draft`` in useEditState's loader.
@@ -344,6 +370,11 @@ const MODE_TOGGLES: Array<{ id: 'auto' | 'source' | 'split'; key: string }> = [
 // saturation, blur, invert, grayscale) and the geometric ones
 // (rotate, flip, crop) are exact.
 const sourceImageStyle = computed<Record<string, string>>(() => {
+  // The brightness / contrast / crop knobs only re-render the segmentation
+  // for true bitmap uploads — for a rasterised document preview they'd be
+  // a cosmetic CSS overlay that doesn't match the actual /preview SVG, so
+  // skip them and show the raw page render.
+  if (edit.kind.value !== 'bitmap') return {}
   const p = draft.bitmap.value.preprocess
   const filters: string[] = []
   if (p.brightness !== 0) filters.push(`brightness(${1 + p.brightness})`)
@@ -379,6 +410,9 @@ const sourceImageStyle = computed<Record<string, string>>(() => {
 // kept region obvious (dark mask outside, clear inside). Only emitted
 // when the operator actually enabled a crop.
 const cropOverlay = computed<{ x: string; y: string; w: string; h: string } | null>(() => {
+  // Crop is a bitmap-pipeline option; documents don't carry one, so the
+  // overlay should stay hidden when previewing a rasterised page.
+  if (edit.kind.value !== 'bitmap') return null
   const p = draft.bitmap.value.preprocess
   if (!p.crop) return null
   const [x, y, w, h] = p.crop

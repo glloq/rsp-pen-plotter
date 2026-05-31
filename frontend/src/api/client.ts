@@ -901,6 +901,16 @@ export function libraryFileOriginalUrl(fileId: string): string {
   return `${baseURL}/files/${encodeURIComponent(fileId)}/original`
 }
 
+// Absolute URL for ``/files/{id}/preview-image`` — a PNG rasterisation
+// of any supported source (image, PDF, SVG, DOCX, ODT, RTF, HTML, EPS,
+// PS, AI). The edit modal uses this for the "Original" and "Compare"
+// modes so they work for every project file, not just bitmap images.
+// ``page`` selects the page for multi-page documents (defaults to the
+// first page); single-page formats ignore it.
+export function libraryFilePreviewImageUrl(fileId: string, page = 0): string {
+  return `${baseURL}/files/${encodeURIComponent(fileId)}/preview-image?page=${page}`
+}
+
 export interface LibraryFileRecord {
   file_id: string
   sha256: string
