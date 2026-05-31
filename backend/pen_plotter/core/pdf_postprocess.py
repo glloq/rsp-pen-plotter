@@ -789,10 +789,11 @@ def _is_renderable_solid_fill(value: str) -> bool:
     Skips ``none``, pattern references, the SVG default of black-without-
     explicit-fill (we'd rasterise every glyph), and pure white (page
     background that would produce no strokes after the BitmapConverter
-    drops it). Everything else — saturated colors and mid-greys alike —
-    counts so the operator's algorithm choice (crosshatch, halftone,
-    stippling, …) applies to colored CSS divs the same way it does to a
-    PNG of the same page.
+    drops it). Greys are intentionally excluded too — they get a
+    cheaper density-modulated hatching pass in
+    :func:`apply_grayscale_density_hatching`, which folds every shade
+    into one black layer instead of producing one ``color-#nnnnnn``
+    layer per swatch on a printer-test grayscale ramp.
     """
     if not value:
         return False
@@ -807,7 +808,211 @@ def _is_renderable_solid_fill(value: str) -> bool:
         # legible and registration crosses crisp; rasterising them would
         # turn every black box into a fully-hatched silhouette.
         return False
+    # Skip the greys — they belong to the grayscale-density path.
+    is_gray, _ = _parse_grayscale_hex(v)
+    if is_gray:
+        return False
     return True
+
+
+def _parse_grayscale_hex(value: str) -> tuple[bool, int]:
+    """Parse a fill string as a grayscale hex; return ``(is_gray, channel)``.
+
+    ``channel`` is the 0..255 grey level when ``is_gray`` is true,
+    so the caller can compute darkness without re-parsing. Returns
+    ``(False, 0)`` for any non-grey color, ``url(…)``, named colors
+    other than ``black``/``white``/``gray``, or unparsable input.
+    """
+    v = value.strip().lower()
+    if not v:
+        return False, 0
+    if v == "black":
+        return True, 0
+    if v == "white":
+        return True, 255
+    if v == "gray" or v == "grey":
+        return True, 128
+    if v.startswith("rgb("):
+        try:
+            parts = [int(p.strip()) for p in v[4:-1].split(",")]
+        except ValueError:
+            return False, 0
+        if len(parts) == 3 and parts[0] == parts[1] == parts[2]:
+            return True, parts[0]
+        return False, 0
+    if not v.startswith("#"):
+        return False, 0
+    if len(v) == 4:  # #abc
+        r, g, b = v[1] * 2, v[2] * 2, v[3] * 2
+    elif len(v) == 7:  # #aabbcc
+        r, g, b = v[1:3], v[3:5], v[5:7]
+    else:
+        return False, 0
+    try:
+        ri, gi, bi = int(r, 16), int(g, 16), int(b, 16)
+    except ValueError:
+        return False, 0
+    if ri == gi == bi:
+        return True, ri
+    return False, 0
+
+
+def _hatch_lines_for_bbox(
+    bbox: tuple[float, float, float, float],
+    angle_rad: float,
+    spacing: float,
+) -> list[tuple[float, float, float, float]]:
+    """Return ``[(x1, y1, x2, y2), …]`` for hatch lines clipped to ``bbox``.
+
+    Lines run parallel to ``angle_rad`` and step ``spacing`` apart along
+    the perpendicular direction; both numbers are in the same units as
+    ``bbox``. Each returned tuple is the entry/exit point of one line
+    against the rectangle's edges so a downstream SVG writer can emit
+    one ``<path d="M x1 y1 L x2 y2"/>`` per tuple without further
+    clipping.
+    """
+    import math
+
+    x_min, y_min, x_max, y_max = bbox
+    if spacing <= 0 or x_max <= x_min or y_max <= y_min:
+        return []
+    dx, dy = math.cos(angle_rad), math.sin(angle_rad)
+    nx, ny = -dy, dx  # perpendicular
+    # Project the four corners onto the perpendicular axis so we know
+    # the range of distances ``d`` the hatching needs to cover.
+    corners = [(x_min, y_min), (x_max, y_min), (x_min, y_max), (x_max, y_max)]
+    projections = [px * nx + py * ny for px, py in corners]
+    d_min, d_max = min(projections), max(projections)
+    # Snap to a multiple of spacing for a stable phase across nearby
+    # rectangles (otherwise abutting swatches show a seam where the
+    # hatching shifts).
+    d_start = math.floor(d_min / spacing) * spacing
+
+    lines: list[tuple[float, float, float, float]] = []
+    eps = 1e-9
+    d = d_start
+    while d <= d_max + eps:
+        intersections: list[tuple[float, float]] = []
+        # Each rectangle edge: parameterise the infinite hatch line as
+        # P(t) = d * (nx, ny) + t * (dx, dy) and solve for the t that
+        # hits each edge.
+        if abs(dx) > eps:
+            for x_edge in (x_min, x_max):
+                t = (x_edge - d * nx) / dx
+                y = d * ny + t * dy
+                if y_min - eps <= y <= y_max + eps:
+                    intersections.append((x_edge, max(y_min, min(y_max, y))))
+        if abs(dy) > eps:
+            for y_edge in (y_min, y_max):
+                t = (y_edge - d * ny) / dy
+                x = d * nx + t * dx
+                if x_min - eps <= x <= x_max + eps:
+                    intersections.append((max(x_min, min(x_max, x)), y_edge))
+        if len(intersections) >= 2:
+            # Take the two most distant intersections — corners can show
+            # up twice when the line grazes a vertex.
+            best = (intersections[0], intersections[1])
+            best_d2 = (best[0][0] - best[1][0]) ** 2 + (best[0][1] - best[1][1]) ** 2
+            for i in range(len(intersections)):
+                for j in range(i + 1, len(intersections)):
+                    p, q = intersections[i], intersections[j]
+                    d2 = (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2
+                    if d2 > best_d2:
+                        best, best_d2 = (p, q), d2
+            if best_d2 > eps:
+                lines.append((best[0][0], best[0][1], best[1][0], best[1][1]))
+        d += spacing
+    return lines
+
+
+def apply_grayscale_density_hatching(
+    root: ET.Element,
+    *,
+    min_spacing_pt: float = 0.85,  # ~0.3 mm @ 72 dpi
+    max_spacing_pt: float = 8.5,  # ~3.0 mm
+    min_area_pt2: float = 50.0,
+    stroke_width_pt: float = 0.8,  # ~0.28 mm pen
+) -> int:
+    """Fold grayscale-filled shapes into one density-modulated black layer.
+
+    On a printer-test page with a grayscale ramp the per-color split
+    produces one ``color-#nnnnnn`` layer per grey shade — twelve
+    layers for a CMYKRGB + 11-bar grey ramp that the operator then
+    has to manually route onto a single black pen. This helper takes
+    every ``<rect>`` / ``<path>`` whose fill is grey (R==G==B, not
+    pure black or white) and replaces it with crossed hatching
+    (``+45°`` × ``-45°``) whose stroke spacing scales inversely with
+    the shade's darkness: ``#1a1a1a`` (90 % ink) gets dense hatching,
+    ``#e6e6e6`` (10 % ink) gets sparse hatching, ``#808080`` lands in
+    between. All hatches land in one ``<g inkscape:label="grayscale"
+    stroke="#000000">`` so the operator binds the whole grey ramp to
+    one pen with one click.
+
+    Pure black is left alone (handled as ``text`` ink elsewhere) and
+    shapes below ``min_area_pt2`` are skipped (border slivers, text
+    underlines) so the helper doesn't sprinkle hatching across decorative
+    rules.
+
+    Returns the number of shapes replaced.
+    """
+    parent_map = {child: parent for parent in root.iter() for child in parent}
+    candidates: list[tuple[ET.Element, int, tuple[float, float, float, float]]] = []
+    for shape in list(root.iter()):
+        local = _local(shape.tag)
+        if local not in {"rect", "path"}:
+            continue
+        fill = shape.get("fill") or ""
+        is_gray, value = _parse_grayscale_hex(fill)
+        if not is_gray:
+            continue
+        if value <= 0 or value >= 255:
+            continue  # pure black / white handled elsewhere
+        if local == "rect":
+            bbox = _rect_bbox_user_units(shape, parent_map, root)
+        else:
+            bbox = _path_bbox_user_units(shape, parent_map, root)
+        if bbox is None:
+            continue
+        area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+        if area < min_area_pt2:
+            continue
+        candidates.append((shape, value, bbox))
+
+    if not candidates:
+        return 0
+
+    import math
+
+    hatch_group = ET.Element(f"{{{_SVG_NS}}}g")
+    hatch_group.set(_INKSCAPE_LABEL, "grayscale")
+    hatch_group.set("stroke", "#000000")
+    hatch_group.set("fill", "none")
+    hatch_group.set("stroke-width", f"{stroke_width_pt:.3f}")
+
+    replaced = 0
+    for shape, value, bbox in candidates:
+        darkness = 1.0 - value / 255.0
+        # Inverse: darker → smaller spacing → denser mesh. A linear
+        # ramp matches the operator's intuition that swapping a swatch
+        # one notch darker should add roughly the same amount of ink
+        # at every shade — non-linear feels surprisingly dim at the
+        # midtones.
+        spacing = max_spacing_pt - darkness * (max_spacing_pt - min_spacing_pt)
+        for angle_deg in (45.0, -45.0):
+            for x1, y1, x2, y2 in _hatch_lines_for_bbox(
+                bbox, math.radians(angle_deg), spacing
+            ):
+                path_el = ET.Element(f"{{{_SVG_NS}}}path")
+                path_el.set("d", f"M{x1:.3f} {y1:.3f}L{x2:.3f} {y2:.3f}")
+                hatch_group.append(path_el)
+        parent = parent_map.get(shape)
+        if parent is not None:
+            parent.remove(shape)
+        replaced += 1
+
+    if replaced:
+        root.append(hatch_group)
+    return replaced
 
 
 def rasterize_solid_color_fills(
@@ -1062,8 +1267,12 @@ def _leaf_color_buckets(root: ET.Element) -> dict[str, list[ET.Element]]:
     labeled layers) and recurses into ``<g>`` wrappers to reach the
     leaves. Returns a mapping ``{color_key → [leaf_element, …]}``.
     Leaves with key ``"none"`` (no fill, no stroke) are skipped — they
-    would plot as nothing anyway.
+    would plot as nothing anyway, and so are pure-white fills (PyMuPDF
+    inserts ``<path fill="#ffffff">`` rectangles as the backdrop for
+    CSS-styled blocks and grid patterns; on a white page they paint
+    nothing the operator wants the pen to trace).
     """
+    invisible = {"none", "#ffffff"}
     buckets: dict[str, list[ET.Element]] = {}
     for child in list(root):
         local = _local(child.tag)
@@ -1076,7 +1285,7 @@ def _leaf_color_buckets(root: ET.Element) -> dict[str, list[ET.Element]]:
             if _local(leaf.tag) not in _DRAWABLE_LEAVES:
                 continue
             key = _effective_color_key(leaf)
-            if key == "none":
+            if key in invisible:
                 continue
             buckets.setdefault(key, []).append(leaf)
     return buckets
@@ -1260,6 +1469,14 @@ def postprocess_pdf_svg(
             page_index=page_index,
             bitmap_options=bitmap_options,
         )
+        # Greyscale swatches go FIRST: fold every R==G==B-filled shape
+        # into a single density-modulated black layer. This runs before
+        # ``rasterize_solid_color_fills`` (which deliberately skips
+        # greys) so a CMYKRGB + 11-bar grey-ramp test page produces one
+        # ``grayscale`` layer instead of eleven ``color-#nnnnnn``
+        # layers — the operator wants one pen for the whole ramp, with
+        # hatching density doing the work of luminance.
+        apply_grayscale_density_hatching(root)
         # Then the colored CSS divs / swatches: rasterise every
         # solid-fill rect so the operator's bitmap algorithm choice
         # (crosshatch, halftone, stippling, …) renders the rectangle
