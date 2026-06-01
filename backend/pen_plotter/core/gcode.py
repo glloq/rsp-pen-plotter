@@ -437,6 +437,8 @@ def _generate_gcode_impl(
             if decision.pause:
                 method = profile.tool_change_method
                 travel_feed = profile.travel_speed_mm_s * 60.0
+                park_x: float | None
+                park_y: float | None
                 if decision.slot_changed:
                     prompt_pen = pens.get(effective_slot) if effective_slot is not None else None
                     pen_name = (
@@ -465,8 +467,6 @@ def _generate_gcode_impl(
                             if prompt_pen and prompt_pen.name
                             else target_color
                         )
-                        park_x: float | None
-                        park_y: float | None
                         park_x, park_y = pen_change_point(profile)
                         out.append(
                             pen_load_t.render(

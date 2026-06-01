@@ -182,9 +182,7 @@ async function onStop(): Promise<void> {
         <span
           class="h-2 w-2 rounded-full"
           :class="plotterStatus.connected ? 'bg-emerald-400' : 'bg-slate-500'"
-          :aria-label="
-            plotterStatus.connected ? t('plotter.connected') : t('machine.disconnected')
-          "
+          :aria-label="plotterStatus.connected ? t('plotter.connected') : t('machine.disconnected')"
         />
         <svg
           xmlns="http://www.w3.org/2000/svg"

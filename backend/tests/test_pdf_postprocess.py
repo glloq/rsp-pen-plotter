@@ -658,7 +658,7 @@ def test_html_colored_boxes_become_per_color_density_hatching() -> None:
         "<div style='background:#0000ff;width:200px;height:60px'></div>"
         "</body></html>"
     )
-    layers = {lyr.layer_id: lyr for lyr in extract_layers(svg)}
+    layers = {layer.layer_id: layer for layer in extract_layers(svg)}
     assert "color-#ff0000" in layers
     assert "color-#0000ff" in layers
     # Hatching produces many short parallel paths; a bare outline yields
@@ -764,7 +764,7 @@ def test_html_colored_box_with_text_inside_skips_hatching() -> None:
         "<div style='background:#ff0000;width:300px;height:80px'></div>"
         "</body></html>"
     )
-    layers = {lyr.layer_id: lyr for lyr in extract_layers(svg)}
+    layers = {layer.layer_id: layer for layer in extract_layers(svg)}
     # Orange box wraps text → no hatching, just the outline.
     assert "color-#ffaa00" in layers
     assert layers["color-#ffaa00"].path_count <= 3, (
@@ -797,7 +797,7 @@ def test_html_explicit_black_swatch_plots_as_solid_hatching() -> None:
         "<div style='background-color:black;width:200px;height:80px'></div>"
         "</body></html>"
     )
-    layers = {lyr.layer_id: lyr for lyr in extract_layers(svg)}
+    layers = {layer.layer_id: layer for layer in extract_layers(svg)}
     assert "grayscale" in layers, (
         "explicit-black swatches must land in the grayscale layer once "
         "HtmlConverter has rewritten them to #010101"

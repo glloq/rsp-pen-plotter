@@ -24,9 +24,7 @@ const queue = useQueueStore()
 // Show only when the live run is paused *for a swap* (a plain operator
 // pause carries no ``swap_prompt`` and must not pop this modal).
 const run = computed(() => queue.active[0] ?? null)
-const visible = computed(
-  () => run.value?.state === 'paused' && Boolean(run.value?.swap_prompt),
-)
+const visible = computed(() => run.value?.state === 'paused' && Boolean(run.value?.swap_prompt))
 
 async function resume(): Promise<void> {
   if (run.value) await queue.act(run.value.id, 'resume')
@@ -49,13 +47,18 @@ async function cancel(): Promise<void> {
     <div
       class="w-full max-w-md rounded-xl border border-amber-600/60 bg-slate-900 p-6 text-center shadow-2xl"
     >
-      <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20 text-2xl">
+      <div
+        class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/20 text-2xl"
+      >
         ✋
       </div>
       <h2 class="text-lg font-semibold text-amber-200">{{ t('swap.title') }}</h2>
       <p class="mt-1 text-xs uppercase tracking-wider text-slate-500">{{ run.name }}</p>
 
-      <p class="mt-4 rounded-lg bg-slate-800 px-4 py-3 text-sm text-slate-100" data-test="swap-prompt-text">
+      <p
+        class="mt-4 rounded-lg bg-slate-800 px-4 py-3 text-sm text-slate-100"
+        data-test="swap-prompt-text"
+      >
         {{ run.swap_prompt }}
       </p>
 
