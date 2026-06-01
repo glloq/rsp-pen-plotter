@@ -1630,6 +1630,13 @@ export const useJobStore = defineStore('job', () => {
   }
 
   async function generate(): Promise<void> {
+    // Disable re-entry synchronously: flushRerender + plan-build run for
+    // several seconds before the progress modal appears, and the Generate
+    // button's :disabled binding watches this flag — without the early
+    // flip the operator can fire several pipelines in parallel.
+    if (generating.value) return
+    generating.value = true
+
     // Wait for any pending /rerender to land first — otherwise the
     // composite would bake in the previous variant's SVG, and the
     // operator would be confused why their just-picked print style
@@ -1637,9 +1644,11 @@ export const useJobStore = defineStore('job', () => {
     await flushRerender()
 
     const ready = placements.value.some((p) => p.svg && p.layers.length)
-    if (!ready) return
+    if (!ready) {
+      generating.value = false
+      return
+    }
 
-    generating.value = true
     optimizing.value = true
     error.value = null
     errorScope.value = null
