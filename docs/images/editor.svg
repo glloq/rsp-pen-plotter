@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="sheet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fafaf9"/>
+      <stop offset="1" stop-color="#f5f5f4"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#334155"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <radialGradient id="dot">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#0f172a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="720" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="720" fill="#020617" opacity="0.6"/>
+
+  <!-- Modal -->
+  <rect x="60" y="40" width="1080" height="640" rx="14" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Modal header -->
+  <text x="90" y="76" fill="#f8fafc" font-size="20" font-weight="700">Edit  ·  portrait.png</text>
+  <text x="90" y="98" fill="#94a3b8" font-size="12">bitmap photo  ·  2 480 × 3 508 px  ·  draft #3</text>
+  <g transform="translate(1080,56)">
+    <text x="0" y="0" fill="#94a3b8" font-size="20" text-anchor="end">✕</text>
+  </g>
+
+  <!-- Steps rail -->
+  <g transform="translate(90,124)" font-size="12">
+    <g>
+      <circle cx="12" cy="12" r="12" fill="#22c55e"/>
+      <text x="12" y="16" text-anchor="middle" fill="#052e16" font-weight="700">1</text>
+      <text x="32" y="16" fill="#f1f5f9" font-weight="600">Source</text>
+    </g>
+    <line x1="24" y1="12" x2="100" y2="12" stroke="#22c55e" stroke-width="2"/>
+    <g transform="translate(108,0)">
+      <circle cx="12" cy="12" r="12" fill="#22c55e"/>
+      <text x="12" y="16" text-anchor="middle" fill="#052e16" font-weight="700">2</text>
+      <text x="32" y="16" fill="#f1f5f9" font-weight="600">Goal</text>
+    </g>
+    <line x1="132" y1="12" x2="208" y2="12" stroke="#0ea5e9" stroke-width="2"/>
+    <g transform="translate(216,0)">
+      <circle cx="12" cy="12" r="12" fill="#0ea5e9"/>
+      <text x="12" y="16" text-anchor="middle" fill="#082f49" font-weight="700">3</text>
+      <text x="32" y="16" fill="#f1f5f9" font-weight="600">Render</text>
+    </g>
+    <line x1="240" y1="12" x2="320" y2="12" stroke="#334155" stroke-width="2"/>
+    <g transform="translate(328,0)">
+      <circle cx="12" cy="12" r="12" fill="#1e293b" stroke="#475569"/>
+      <text x="12" y="16" text-anchor="middle" fill="#94a3b8" font-weight="700">4</text>
+      <text x="32" y="16" fill="#94a3b8">Colors</text>
+    </g>
+    <line x1="352" y1="12" x2="432" y2="12" stroke="#334155" stroke-width="2"/>
+    <g transform="translate(440,0)">
+      <circle cx="12" cy="12" r="12" fill="#1e293b" stroke="#475569"/>
+      <text x="12" y="16" text-anchor="middle" fill="#94a3b8" font-weight="700">5</text>
+      <text x="32" y="16" fill="#94a3b8">Layers</text>
+    </g>
+    <line x1="464" y1="12" x2="544" y2="12" stroke="#334155" stroke-width="2"/>
+    <g transform="translate(552,0)">
+      <circle cx="12" cy="12" r="12" fill="#1e293b" stroke="#475569"/>
+      <text x="12" y="16" text-anchor="middle" fill="#94a3b8" font-weight="700">6</text>
+      <text x="32" y="16" fill="#94a3b8">Review</text>
+    </g>
+  </g>
+
+  <!-- Left: controls -->
+  <rect x="90" y="170" width="430" height="464" rx="10" fill="#0b1220" stroke="#1e293b"/>
+  <text x="108" y="200" fill="#f8fafc" font-size="15" font-weight="700">Step 3 — Render</text>
+  <text x="108" y="220" fill="#94a3b8" font-size="11">Pick how the photo becomes pen strokes.</text>
+
+  <!-- Algorithm cards -->
+  <g transform="translate(108,236)">
+    <rect width="394" height="84" rx="10" fill="#052e16" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="16" y="26" fill="#bbf7d0" font-size="13" font-weight="700">▣  Stippling</text>
+    <text x="16" y="46" fill="#86efac" font-size="11">Dot density follows tonality. Great for portraits.</text>
+    <text x="16" y="68" fill="#86efac" font-size="10">density 70 %  ·  min dist 0.6 mm  ·  ~ 12 800 dots  ·  est 14 min</text>
+    <text x="380" y="26" text-anchor="end" fill="#22c55e" font-size="11" font-weight="600">SELECTED</text>
+  </g>
+
+  <g transform="translate(108,332)">
+    <rect width="394" height="56" rx="10" fill="url(#card)" stroke="#475569"/>
+    <text x="16" y="24" fill="#f1f5f9" font-size="13" font-weight="600">≋  Cross-hatching</text>
+    <text x="16" y="42" fill="#94a3b8" font-size="11">Parallel strokes per tonal band. Editorial feel.</text>
+  </g>
+
+  <g transform="translate(108,400)">
+    <rect width="394" height="56" rx="10" fill="url(#card)" stroke="#475569"/>
+    <text x="16" y="24" fill="#f1f5f9" font-size="13" font-weight="600">◐  Halftone</text>
+    <text x="16" y="42" fill="#94a3b8" font-size="11">Variable-radius circles on a grid. Print-press look.</text>
+  </g>
+
+  <g transform="translate(108,468)">
+    <rect width="394" height="56" rx="10" fill="url(#card)" stroke="#475569"/>
+    <text x="16" y="24" fill="#f1f5f9" font-size="13" font-weight="600">⤬  Flow imager</text>
+    <text x="16" y="42" fill="#94a3b8" font-size="11">Strokes follow image gradients. Sketchy organic lines.</text>
+  </g>
+
+  <g transform="translate(108,536)">
+    <rect width="394" height="56" rx="10" fill="url(#card)" stroke="#475569"/>
+    <text x="16" y="24" fill="#f1f5f9" font-size="13" font-weight="600">⤴  Vectorize (potrace)</text>
+    <text x="16" y="42" fill="#94a3b8" font-size="11">Black/white outlines. Best for logos &amp; line art.</text>
+  </g>
+
+  <!-- Right: live preview (stippled portrait) -->
+  <rect x="540" y="170" width="600" height="464" rx="10" fill="#0b1220" stroke="#1e293b"/>
+  <text x="558" y="200" fill="#f8fafc" font-size="15" font-weight="700">Live preview</text>
+  <text x="1122" y="200" fill="#94a3b8" font-size="11" text-anchor="end">re-renders as you tweak</text>
+
+  <rect x="560" y="220" width="560" height="394" rx="6" fill="url(#sheet)"/>
+
+  <!-- stylised stippled portrait silhouette -->
+  <g transform="translate(840,420)" fill="#0f172a">
+    <!-- head silhouette via concentric dot rings -->
+    <g opacity="0.92">
+      <!-- generate dots in a programmatic-ish manual pattern -->
+      <g>
+        <circle cx="0" cy="-160" r="0.9"/><circle cx="-12" cy="-156" r="1"/><circle cx="14" cy="-158" r="0.9"/>
+        <circle cx="-26" cy="-150" r="1"/><circle cx="24" cy="-148" r="1.1"/>
+        <circle cx="-40" cy="-140" r="1"/><circle cx="38" cy="-138" r="1"/>
+        <circle cx="-56" cy="-122" r="1.2"/><circle cx="52" cy="-120" r="1.1"/>
+        <circle cx="-70" cy="-100" r="1.2"/><circle cx="64" cy="-100" r="1.1"/>
+        <circle cx="-78" cy="-72" r="1.3"/><circle cx="74" cy="-70" r="1.3"/>
+        <circle cx="-82" cy="-40" r="1.4"/><circle cx="80" cy="-40" r="1.3"/>
+        <circle cx="-78" cy="-8" r="1.6"/><circle cx="76" cy="-10" r="1.5"/>
+        <circle cx="-70" cy="22" r="1.8"/><circle cx="70" cy="20" r="1.7"/>
+        <circle cx="-58" cy="50" r="1.6"/><circle cx="58" cy="50" r="1.7"/>
+        <circle cx="-42" cy="74" r="1.5"/><circle cx="42" cy="74" r="1.6"/>
+        <circle cx="-22" cy="88" r="1.4"/><circle cx="22" cy="88" r="1.4"/>
+        <circle cx="0" cy="92" r="1.3"/>
+      </g>
+      <!-- denser shading -->
+      <g opacity="0.85">
+        <circle cx="-30" cy="-80" r="2.2"/><circle cx="-22" cy="-76" r="1.6"/><circle cx="-36" cy="-72" r="1.4"/>
+        <circle cx="32" cy="-78" r="2"/><circle cx="40" cy="-72" r="1.5"/><circle cx="26" cy="-72" r="1.3"/>
+        <circle cx="-44" cy="-50" r="1.4"/><circle cx="44" cy="-50" r="1.4"/>
+        <circle cx="-32" cy="-30" r="1.6"/><circle cx="32" cy="-30" r="1.6"/>
+        <circle cx="-20" cy="-22" r="1.4"/><circle cx="20" cy="-22" r="1.4"/>
+        <circle cx="0" cy="-18" r="1.7"/><circle cx="-8" cy="-10" r="1.4"/><circle cx="8" cy="-10" r="1.4"/>
+        <circle cx="-22" cy="14" r="2"/><circle cx="22" cy="14" r="2"/>
+        <circle cx="-12" cy="22" r="1.6"/><circle cx="12" cy="22" r="1.6"/>
+        <circle cx="0" cy="28" r="1.5"/>
+        <circle cx="-30" cy="42" r="2.2"/><circle cx="30" cy="42" r="2.1"/>
+        <circle cx="-46" cy="34" r="1.6"/><circle cx="46" cy="34" r="1.7"/>
+      </g>
+      <!-- random shading dots for depth -->
+      <g opacity="0.7">
+        <circle cx="-60" cy="-30" r="0.9"/><circle cx="-55" cy="-10" r="0.8"/><circle cx="-65" cy="10" r="0.9"/>
+        <circle cx="60" cy="-30" r="0.9"/><circle cx="55" cy="-10" r="0.8"/><circle cx="65" cy="10" r="0.9"/>
+        <circle cx="-50" cy="60" r="1"/><circle cx="50" cy="60" r="1"/>
+        <circle cx="0" cy="-130" r="0.8"/><circle cx="-18" cy="-128" r="0.8"/><circle cx="20" cy="-128" r="0.8"/>
+        <circle cx="-32" cy="-110" r="0.9"/><circle cx="34" cy="-110" r="0.9"/>
+        <circle cx="0" cy="-94" r="1"/><circle cx="-14" cy="-90" r="0.9"/><circle cx="14" cy="-90" r="0.9"/>
+        <circle cx="-26" cy="-58" r="0.9"/><circle cx="28" cy="-58" r="0.9"/>
+        <circle cx="-14" cy="-42" r="1"/><circle cx="16" cy="-42" r="1"/>
+        <circle cx="-44" cy="6" r="0.9"/><circle cx="44" cy="6" r="0.9"/>
+        <circle cx="-36" cy="30" r="0.9"/><circle cx="36" cy="30" r="0.9"/>
+        <circle cx="-18" cy="48" r="0.8"/><circle cx="18" cy="48" r="0.8"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- preview metrics -->
+  <g transform="translate(560,580)" font-size="11" fill="#475569">
+    <text>est. 14 min</text>
+    <text x="120">12 845 dots</text>
+    <text x="240">density 70 %</text>
+    <text x="380">tone curve · linear</text>
+  </g>
+
+  <!-- footer actions -->
+  <g transform="translate(90,650)">
+    <rect width="120" height="32" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="60" y="20" text-anchor="middle" fill="#cbd5e1" font-size="12">← Back</text>
+  </g>
+  <g transform="translate(820,650)">
+    <rect width="160" height="32" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="80" y="20" text-anchor="middle" fill="#cbd5e1" font-size="12">Switch to Expert mode</text>
+  </g>
+  <g transform="translate(990,650)">
+    <rect width="150" height="32" rx="6" fill="#22c55e"/>
+    <text x="75" y="20" text-anchor="middle" fill="#052e16" font-size="12" font-weight="700">Next: Colors →</text>
+  </g>
+</svg>
