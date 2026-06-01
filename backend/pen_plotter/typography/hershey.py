@@ -35,6 +35,15 @@ _ITALIC_SLANT_DEG = 12.0
 # on a pen plotter and does not actually broaden the drawn strokes.
 _BOLD_OFFSET_RATIO = 0.06
 
+# Minimum horizontal scale before the renderer falls back to breaking a
+# token at character boundaries. When a line is wider than the page's
+# usable width we squeeze it horizontally — the inter-letter and
+# inter-word spacing tightens proportionally — so the whole word stays
+# intact instead of being cut in the middle. Below ~60 % scale the
+# single-stroke glyphs start to overlap each other and the line stops
+# being readable, so any token still too wide at that point is split.
+_MIN_LINE_SCALE = 0.6
+
 # Pre-substitution table for code points that have no Hershey glyph but
 # read identically (or close enough) as one or more printable ASCII
 # characters. The upstream ``HersheyFonts`` library silently drops any
@@ -529,27 +538,33 @@ class HersheyRenderer:
     def _wrap(self, paragraph: str, usable_w: float) -> list[str]:
         """Greedily word-wrap a paragraph to the usable width.
 
-        Tokens wider than ``usable_w`` are hard-broken at character
-        boundaries before the greedy fit so they cannot overflow the
-        right margin. Without this step the renderer would emit a single
-        long word intact at the left margin and let it run past the
-        page edge — clipped both in the SVG viewBox and in the generated
-        G-code, which the operator perceives as "letters missing on the
-        right" and "the document is not fully printed".
+        Lines that don't fit naturally are kept whole and later squeezed
+        horizontally in :meth:`_render_line` (tightening the inter-letter
+        and inter-word spacing) so the word stays intact — operators
+        prefer slightly cramped text over a word broken in the middle.
+        Only tokens still too wide at the maximum compression
+        (``_MIN_LINE_SCALE``) are hard-broken at character boundaries
+        as a last resort, since below that scale single-stroke glyphs
+        collide and the line stops being legible.
         """
         words = paragraph.split()
         if not words:
             return [""]
+        max_natural_w = usable_w / _MIN_LINE_SCALE
         pieces: list[str] = []
         for word in words:
-            if self._measure(word) > usable_w:
-                pieces.extend(self._break_long_word(word, usable_w))
+            if self._measure(word) > max_natural_w:
+                pieces.extend(self._break_long_word(word, max_natural_w))
             else:
                 pieces.append(word)
         lines: list[str] = []
         current = pieces[0]
         for piece in pieces[1:]:
             candidate = f"{current} {piece}"
+            # Stay at the natural usable width as long as we can — only
+            # admit overflow when the next token wouldn't otherwise fit
+            # on a line of its own. The renderer then compresses the
+            # resulting line back into ``usable_w``.
             if self._measure(candidate) <= usable_w:
                 current = candidate
             else:
@@ -561,12 +576,12 @@ class HersheyRenderer:
     def _break_long_word(self, word: str, usable_w: float) -> list[str]:
         """Split ``word`` into chunks each fitting inside ``usable_w``.
 
-        Used as a last-resort hyphenation when a single token is wider
-        than the page's wrappable area — typical with large font sizes,
-        wide margins, or unbroken strings like long URLs and chemical
-        names. The split is purely greedy at character boundaries; a
-        chunk reduced to a single character is kept as-is even if that
-        character alone overflows, since we cannot split further.
+        Last-resort hyphenation for tokens so wide that even maximum
+        horizontal compression couldn't squeeze them onto a single line
+        — long URLs, chemical names, or huge font sizes. The split is
+        purely greedy at character boundaries; a chunk reduced to a
+        single character is kept as-is even if that character alone
+        overflows, since we cannot split further.
         """
         pieces: list[str] = []
         current = ""
@@ -582,15 +597,24 @@ class HersheyRenderer:
         return pieces or [word]
 
     def _transform(
-        self, x: float, y: float, x_offset: float, baseline_y: float
+        self,
+        x: float,
+        y: float,
+        x_offset: float,
+        baseline_y: float,
+        x_scale: float = 1.0,
     ) -> tuple[float, float]:
         """Convert a font-space point to page-space, applying italic shear.
 
         Font coordinates are y-up with the baseline at ``y=0``. We flip y
-        against ``baseline_y`` to map into the SVG y-down system and then
-        apply the italic shear in page space so the slant follows the
-        upright character height.
+        against ``baseline_y`` to map into the SVG y-down system. The
+        per-line ``x_scale`` is applied in font space (before the italic
+        shear) so a compressed line keeps the italic angle of an upright
+        line — only the horizontal extent of the glyphs and the gaps
+        between them tighten.
         """
+        if x_scale != 1.0:
+            x = x * x_scale
         if self.opts.italic:
             shear = math.tan(math.radians(_ITALIC_SLANT_DEG))
             x = x + y * shear
@@ -601,11 +625,12 @@ class HersheyRenderer:
         stroke: list[tuple[float, float]],
         x_offset: float,
         baseline_y: float,
+        x_scale: float = 1.0,
     ) -> str:
         """Serialize one polyline as a single ``M ... L ...`` sub-path."""
         if len(stroke) < 2:
             return ""
-        points = [self._transform(x, y, x_offset, baseline_y) for x, y in stroke]
+        points = [self._transform(x, y, x_offset, baseline_y, x_scale) for x, y in stroke]
         head = f"M{points[0][0]:.2f} {points[0][1]:.2f}"
         tail = " ".join(f"L{px:.2f} {py:.2f}" for px, py in points[1:])
         return f"{head} {tail}"
@@ -615,12 +640,22 @@ class HersheyRenderer:
         if not line.strip():
             return ""
         baseline_y = top_y + size_mm
-        x_offset = self.opts.margin_mm + self._align_shift(self._measure(line), usable_w)
+        natural_w = self._measure(line)
+        # Squeeze lines that overflow horizontally so the word stays
+        # intact instead of being cut on the right. ``_wrap`` already
+        # guarantees the natural width never exceeds the corresponding
+        # bound (``usable_w / _MIN_LINE_SCALE``), so the resulting scale
+        # is always ``>= _MIN_LINE_SCALE`` and the glyphs remain legible.
+        x_scale = 1.0
+        if natural_w > usable_w and natural_w > 0:
+            x_scale = usable_w / natural_w
+        line_width = natural_w * x_scale
+        x_offset = self.opts.margin_mm + self._align_shift(line_width, usable_w)
 
         strokes = self._strokes(line)
         subpaths: list[str] = []
         for stroke in strokes:
-            sub = self._stroke_to_path(stroke, x_offset, baseline_y)
+            sub = self._stroke_to_path(stroke, x_offset, baseline_y, x_scale)
             if sub:
                 subpaths.append(sub)
 
@@ -631,7 +666,7 @@ class HersheyRenderer:
             offset = size_mm * _BOLD_OFFSET_RATIO
             for stroke in strokes:
                 shifted = [(x + offset, y) for x, y in stroke]
-                sub = self._stroke_to_path(shifted, x_offset, baseline_y)
+                sub = self._stroke_to_path(shifted, x_offset, baseline_y, x_scale)
                 if sub:
                     subpaths.append(sub)
 
