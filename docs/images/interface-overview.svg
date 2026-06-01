@@ -1,0 +1,238 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#334155"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="sheet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fafaf9"/>
+      <stop offset="1" stop-color="#e7e5e4"/>
+    </linearGradient>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M20 0H0V20" fill="none" stroke="#cbd5e1" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="720" fill="url(#bg)"/>
+
+  <!-- Header bar -->
+  <rect x="0" y="0" width="1200" height="48" fill="#0b1220"/>
+  <circle cx="24" cy="24" r="9" fill="#22c55e"/>
+  <path d="M18 24 l5 5 l9 -10" stroke="#0b1220" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="44" y="30" fill="#f8fafc" font-size="17" font-weight="600">OmniPlot</text>
+  <text x="148" y="30" fill="#94a3b8" font-size="12">CoreXY-A3 · /dev/ttyUSB0 · 9 600 baud</text>
+
+  <g transform="translate(620,12)">
+    <rect width="140" height="24" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="12" y="16" fill="#cbd5e1" font-size="11">Assistant ⇆ Expert</text>
+  </g>
+  <g transform="translate(770,12)">
+    <rect width="90" height="24" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="12" y="16" fill="#cbd5e1" font-size="11">Workshop</text>
+  </g>
+  <g transform="translate(870,12)">
+    <rect width="90" height="24" rx="6" fill="#1e293b" stroke="#334155"/>
+    <text x="12" y="16" fill="#cbd5e1" font-size="11">Macros</text>
+  </g>
+  <g transform="translate(1080,12)">
+    <rect width="96" height="24" rx="6" fill="#22c55e"/>
+    <text x="18" y="16" fill="#052e16" font-size="11" font-weight="600">⚙ Settings</text>
+  </g>
+
+  <!-- Left: Files pane -->
+  <rect x="16" y="64" width="300" height="608" rx="10" fill="url(#panel)" stroke="#334155"/>
+  <text x="32" y="92" fill="#f8fafc" font-size="14" font-weight="600">Files</text>
+  <rect x="232" y="76" width="68" height="24" rx="6" fill="#22c55e"/>
+  <text x="246" y="92" fill="#052e16" font-size="11" font-weight="600">+ Import</text>
+
+  <!-- search & filter -->
+  <rect x="32" y="108" width="268" height="28" rx="6" fill="#0f172a" stroke="#334155"/>
+  <text x="44" y="127" fill="#64748b" font-size="11">🔍  Search…</text>
+
+  <!-- file rows -->
+  <g font-size="12" fill="#e2e8f0">
+    <g transform="translate(32,148)">
+      <rect width="268" height="56" rx="8" fill="url(#card)" stroke="#475569"/>
+      <rect x="8" y="8" width="40" height="40" rx="4" fill="#1e3a8a"/>
+      <text x="16" y="33" font-size="14" fill="#bfdbfe" font-weight="700">SVG</text>
+      <text x="58" y="26">city-map.svg</text>
+      <text x="58" y="42" fill="#94a3b8" font-size="10">vector · 12 layers · 1 placement</text>
+      <circle cx="252" cy="20" r="4" fill="#22c55e"/>
+    </g>
+    <g transform="translate(32,212)">
+      <rect width="268" height="56" rx="8" fill="url(#card)" stroke="#475569"/>
+      <rect x="8" y="8" width="40" height="40" rx="4" fill="#7c2d12"/>
+      <text x="16" y="33" font-size="14" fill="#fed7aa" font-weight="700">PNG</text>
+      <text x="58" y="26">portrait.png</text>
+      <text x="58" y="42" fill="#94a3b8" font-size="10">bitmap · 2 480 × 3 508 px</text>
+    </g>
+    <g transform="translate(32,276)">
+      <rect width="268" height="56" rx="8" fill="url(#card)" stroke="#475569"/>
+      <rect x="8" y="8" width="40" height="40" rx="4" fill="#581c87"/>
+      <text x="16" y="33" font-size="14" fill="#e9d5ff" font-weight="700">PDF</text>
+      <text x="58" y="26">poster.pdf</text>
+      <text x="58" y="42" fill="#94a3b8" font-size="10">document · 3 pages</text>
+    </g>
+    <g transform="translate(32,340)">
+      <rect width="268" height="56" rx="8" fill="url(#card)" stroke="#475569"/>
+      <rect x="8" y="8" width="40" height="40" rx="4" fill="#064e3b"/>
+      <text x="16" y="33" font-size="14" fill="#bbf7d0" font-weight="700">DXF</text>
+      <text x="58" y="26">part-drawing.dxf</text>
+      <text x="58" y="42" fill="#94a3b8" font-size="10">CAD · 4 layers</text>
+    </g>
+    <g transform="translate(32,404)">
+      <rect width="268" height="56" rx="8" fill="url(#card)" stroke="#475569"/>
+      <rect x="8" y="8" width="40" height="40" rx="4" fill="#831843"/>
+      <text x="16" y="33" font-size="14" fill="#fbcfe8" font-weight="700">MD</text>
+      <text x="58" y="26">notes.md</text>
+      <text x="58" y="42" fill="#94a3b8" font-size="10">text · Hershey font</text>
+    </g>
+    <g transform="translate(32,468)">
+      <rect width="268" height="56" rx="8" fill="url(#card)" stroke="#475569"/>
+      <rect x="8" y="8" width="40" height="40" rx="4" fill="#1f2937"/>
+      <text x="14" y="33" font-size="12" fill="#cbd5e1" font-weight="700">DOCX</text>
+      <text x="58" y="26">report.docx</text>
+      <text x="58" y="42" fill="#94a3b8" font-size="10">office · LibreOffice</text>
+    </g>
+  </g>
+  <text x="32" y="560" fill="#64748b" font-size="11">Drop files anywhere to import →</text>
+  <rect x="32" y="572" width="268" height="80" rx="10" fill="none" stroke="#475569" stroke-dasharray="6 4"/>
+  <text x="100" y="618" fill="#64748b" font-size="12">⤵  PNG · SVG · PDF · DXF · …</text>
+
+  <!-- Right: Canvas -->
+  <rect x="332" y="64" width="852" height="608" rx="10" fill="url(#panel)" stroke="#334155"/>
+
+  <!-- Tabs -->
+  <g transform="translate(348,80)" font-size="12">
+    <g>
+      <rect width="92" height="28" rx="6" fill="#334155"/>
+      <text x="14" y="18" fill="#f8fafc" font-weight="600">Sheet</text>
+    </g>
+    <g transform="translate(102,0)">
+      <rect width="92" height="28" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="10" y="18" fill="#cbd5e1">Simulator</text>
+    </g>
+    <g transform="translate(204,0)">
+      <rect width="92" height="28" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="22" y="18" fill="#cbd5e1">Plotter</text>
+    </g>
+    <g transform="translate(660,0)">
+      <rect width="160" height="28" rx="6" fill="#16a34a"/>
+      <text x="20" y="18" fill="#052e16" font-weight="600">▶ Generate G-code</text>
+    </g>
+  </g>
+
+  <!-- Sheet (A3 landscape) -->
+  <g transform="translate(360,128)">
+    <rect width="600" height="420" rx="6" fill="url(#sheet)"/>
+    <rect width="600" height="420" rx="6" fill="url(#grid)"/>
+    <!-- margin frame -->
+    <rect x="20" y="20" width="560" height="380" fill="none" stroke="#94a3b8" stroke-dasharray="4 4"/>
+    <!-- placed artwork: stylised plotted lines -->
+    <g transform="translate(70,60)" stroke="#0f172a" stroke-width="1" fill="none">
+      <path d="M0 130 C 60 0, 180 0, 240 130 S 420 260, 480 130"/>
+      <path d="M0 160 C 60 30, 180 30, 240 160 S 420 290, 480 160" stroke="#1d4ed8"/>
+      <path d="M0 190 C 60 60, 180 60, 240 190 S 420 320, 480 190" stroke="#b91c1c"/>
+      <circle cx="120" cy="80" r="36" stroke="#0f172a"/>
+      <circle cx="360" cy="220" r="48" stroke="#1d4ed8"/>
+      <rect x="20" y="240" width="120" height="80" stroke="#b91c1c"/>
+      <path d="M180 60 l40 40 l-40 40 l-40 -40z" stroke="#15803d"/>
+    </g>
+    <!-- selection handles -->
+    <g stroke="#16a34a" stroke-width="1.5" fill="#22c55e">
+      <rect x="68" y="58" width="486" height="270" fill="none"/>
+      <rect x="62" y="52" width="10" height="10"/>
+      <rect x="548" y="52" width="10" height="10"/>
+      <rect x="62" y="322" width="10" height="10"/>
+      <rect x="548" y="322" width="10" height="10"/>
+    </g>
+    <text x="22" y="14" fill="#475569" font-size="11">A3  ·  420 × 297 mm</text>
+    <text x="488" y="414" fill="#475569" font-size="11">scale 92 %  ·  fits ✓</text>
+  </g>
+
+  <!-- Right side rail: Plan / preflight -->
+  <g transform="translate(984,128)">
+    <rect width="186" height="420" rx="8" fill="#0f172a" stroke="#334155"/>
+    <text x="14" y="22" fill="#f8fafc" font-size="13" font-weight="600">Plan</text>
+    <g font-size="10" fill="#cbd5e1">
+      <g transform="translate(10,38)">
+        <rect width="166" height="48" rx="6" fill="#1e293b" stroke="#334155"/>
+        <rect x="6" y="6" width="6" height="36" fill="#0ea5e9"/>
+        <text x="20" y="22" fill="#f1f5f9" font-weight="600">city-map.svg</text>
+        <text x="20" y="38" fill="#94a3b8">12 layers · pen 1–4</text>
+      </g>
+      <g transform="translate(10,94)">
+        <rect width="166" height="48" rx="6" fill="#1e293b" stroke="#334155"/>
+        <rect x="6" y="6" width="6" height="36" fill="#a855f7"/>
+        <text x="20" y="22" fill="#f1f5f9" font-weight="600">notes.md</text>
+        <text x="20" y="38" fill="#94a3b8">Hershey · pen 2</text>
+      </g>
+    </g>
+
+    <text x="14" y="170" fill="#f8fafc" font-size="13" font-weight="600">Pre-flight</text>
+    <g font-size="10" fill="#cbd5e1">
+      <text x="14" y="192">Drawing</text>     <text x="170" y="192" text-anchor="end" fill="#f1f5f9">38.2 m</text>
+      <text x="14" y="210">Travel</text>      <text x="170" y="210" text-anchor="end" fill="#f1f5f9">7.4 m</text>
+      <text x="14" y="228">Pen-up moves</text><text x="170" y="228" text-anchor="end" fill="#f1f5f9">412</text>
+      <text x="14" y="246">Pen changes</text> <text x="170" y="246" text-anchor="end" fill="#f1f5f9">3</text>
+      <text x="14" y="264">Est. time</text>   <text x="170" y="264" text-anchor="end" fill="#22c55e" font-weight="600">26 min</text>
+      <text x="14" y="282">Bounds</text>      <text x="170" y="282" text-anchor="end" fill="#22c55e" font-weight="600">OK ✓</text>
+    </g>
+
+    <text x="14" y="320" fill="#f8fafc" font-size="13" font-weight="600">Queue</text>
+    <g font-size="10" fill="#cbd5e1" transform="translate(10,330)">
+      <rect width="166" height="32" rx="6" fill="#052e16" stroke="#16a34a"/>
+      <text x="10" y="14" fill="#bbf7d0">▶ running</text>
+      <text x="10" y="26" fill="#86efac">job #18 · 42 %</text>
+      <rect x="80" y="20" width="76" height="4" rx="2" fill="#064e3b"/>
+      <rect x="80" y="20" width="32" height="4" rx="2" fill="#22c55e"/>
+    </g>
+    <g font-size="10" fill="#cbd5e1" transform="translate(10,368)">
+      <rect width="166" height="20" rx="4" fill="#1e293b" stroke="#334155"/>
+      <text x="10" y="14">⏸ job #19 (paused)</text>
+    </g>
+    <g font-size="10" fill="#cbd5e1" transform="translate(10,392)">
+      <rect width="166" height="20" rx="4" fill="#1e293b" stroke="#334155"/>
+      <text x="10" y="14">⌛ job #20 queued</text>
+    </g>
+  </g>
+
+  <!-- Footer -->
+  <g transform="translate(348,572)" font-size="11" fill="#94a3b8">
+    <rect x="-2" y="-12" width="820" height="86" rx="8" fill="#0b1220" stroke="#1e293b"/>
+    <text x="14" y="8" fill="#f1f5f9" font-weight="600">Layers</text>
+    <g transform="translate(0,18)">
+      <rect width="200" height="44" rx="6" fill="#1e293b" stroke="#334155"/>
+      <rect x="6" y="6" width="32" height="32" rx="4" fill="#0f172a" stroke="#0ea5e9"/>
+      <text x="14" y="27" fill="#7dd3fc" font-size="11" font-weight="700">P1</text>
+      <text x="46" y="22" fill="#f1f5f9">roads</text>
+      <text x="46" y="36" fill="#94a3b8" font-size="10">vector · 1 800 mm · ✓</text>
+    </g>
+    <g transform="translate(210,18)">
+      <rect width="200" height="44" rx="6" fill="#1e293b" stroke="#334155"/>
+      <rect x="6" y="6" width="32" height="32" rx="4" fill="#0f172a" stroke="#ef4444"/>
+      <text x="14" y="27" fill="#fca5a5" font-size="11" font-weight="700">P2</text>
+      <text x="46" y="22" fill="#f1f5f9">water</text>
+      <text x="46" y="36" fill="#94a3b8" font-size="10">stippling · 6 800 dots</text>
+    </g>
+    <g transform="translate(420,18)">
+      <rect width="200" height="44" rx="6" fill="#1e293b" stroke="#334155"/>
+      <rect x="6" y="6" width="32" height="32" rx="4" fill="#0f172a" stroke="#22c55e"/>
+      <text x="14" y="27" fill="#86efac" font-size="11" font-weight="700">P3</text>
+      <text x="46" y="22" fill="#f1f5f9">labels</text>
+      <text x="46" y="36" fill="#94a3b8" font-size="10">Hershey · 22 strings</text>
+    </g>
+    <g transform="translate(630,18)">
+      <rect width="180" height="44" rx="6" fill="#0f172a" stroke="#334155" stroke-dasharray="3 3"/>
+      <text x="48" y="30" fill="#64748b">+ add a layer</text>
+    </g>
+  </g>
+</svg>

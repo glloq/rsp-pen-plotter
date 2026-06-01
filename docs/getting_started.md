@@ -1,16 +1,69 @@
-# Getting Started
+# Getting started
 
-## Prerequisites
+There are two ways to run OmniPlot: the **appliance** path (recommended for a
+Raspberry Pi running the plotter) and the **dev** path (hot-reload backend +
+Vite frontend on a workstation).
+
+## Quick appliance install (Raspberry Pi / Debian / Ubuntu)
+
+One command. Clones the repo, installs every system package, Node.js, the
+Python toolchain (`uv`), builds the frontend and — with `--service` — enables
+a `systemd` unit that survives reboots:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/glloq/rsp-pen-plotter/main/bootstrap.sh) --service
+```
+
+Then open `http://<pi-ip>:8000` from any device on the LAN.
+
+Without `--service` the installer stops short of `systemd`; launch manually
+with `./start.sh`. If you already cloned the repo, `./install.sh --service`
+does the same thing locally.
+
+### What the installer does
+
+Idempotent — every step is skipped when already satisfied.
+
+1. installs `potrace`, `ghostscript`, `libreoffice-writer` via apt
+   (needed by the bitmap, EPS and DOCX converters)
+2. installs Node.js 20 via NodeSource if missing
+3. installs `uv` (the Python toolchain) into `~/.local/bin` if missing
+4. `uv sync` for the backend deps
+5. `npm ci && npm run build` for the frontend
+6. on `--service`: writes the systemd unit, adds the user to `dialout`
+   (for `/dev/ttyUSB*` access), enables and starts `omniplot.service`
+
+Flags: `--service` (install + enable the systemd unit), `--no-system-deps`
+(skip the apt steps for custom Python / Node setups).
+
+### Managing the service
+
+```bash
+sudo systemctl status omniplot      # check state
+sudo journalctl -u omniplot -f      # follow logs
+sudo systemctl restart omniplot     # after editing .env.service
+```
+
+`./install-service.sh` writes a `.env.service` (mode 600) — edit it to
+override `HOST`, `PORT`, `OMNIPLOT_API_KEY`, `OMNIPLOT_DB`,
+`OMNIPLOT_CORS_ORIGINS`, etc. Full list of variables in the section below.
+
+---
+
+## Dev install (workstation, hot reload)
+
+### Prerequisites
 
 - Python 3.12+
-- Node.js 20+
+- Node.js 20+ (the repo's `.nvmrc` pins it — `nvm use` honours that)
 - [`uv`](https://github.com/astral-sh/uv) for Python dependency management
-- System tools used by some converters (optional, only for those formats):
-  - `potrace` — bitmap vectorization
-  - `ghostscript` — EPS/AI rasterization
-  - `libreoffice` — DOCX/ODT/RTF conversion
-- A pen plotter for the hardware features (a DIY CoreXY or an AxiDraw); the full
-  software chain runs and is validated in the simulator without any hardware.
+- System tools used by some converters (only when you exercise those formats):
+  - `potrace` — bitmap vectorisation
+  - `ghostscript` — EPS / AI rasterisation
+  - `libreoffice` — DOCX / ODT / RTF conversion
+- A pen plotter for the hardware features (a DIY CoreXY or an AxiDraw); the
+  full software chain runs and is validated in the simulator without any
+  hardware.
 
 ## Backend
 

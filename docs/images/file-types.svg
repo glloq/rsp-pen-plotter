@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="520" fill="url(#bg)"/>
+
+  <text x="600" y="50" text-anchor="middle" fill="#f8fafc" font-size="22" font-weight="700">Drop it in. We'll plot it.</text>
+  <text x="600" y="74" text-anchor="middle" fill="#94a3b8" font-size="13">Every input is normalised to a single SVG pivot, then turned into G-code for your machine.</text>
+
+  <!-- Category: Bitmaps -->
+  <g transform="translate(60,110)">
+    <rect width="260" height="370" rx="12" fill="#0b1220" stroke="#1e293b"/>
+    <rect x="0" y="0" width="260" height="48" rx="12" fill="#7c2d12"/>
+    <text x="20" y="30" fill="#fed7aa" font-size="15" font-weight="700">Bitmaps</text>
+    <text x="246" y="30" fill="#fed7aa" font-size="11" text-anchor="end" opacity="0.8">→ vectorised</text>
+
+    <g font-size="12" fill="#e2e8f0" transform="translate(20,76)">
+      <text font-weight="700">PNG</text>           <text x="60" fill="#94a3b8">image/png</text>
+      <g transform="translate(0,22)"><text font-weight="700">JPG / JPEG</text> <text x="80" fill="#94a3b8">image/jpeg</text></g>
+      <g transform="translate(0,44)"><text font-weight="700">TIFF</text>       <text x="80" fill="#94a3b8">image/tiff</text></g>
+      <g transform="translate(0,66)"><text font-weight="700">WebP</text>       <text x="80" fill="#94a3b8">image/webp</text></g>
+      <g transform="translate(0,88)"><text font-weight="700">HEIC / HEIF</text><text x="80" fill="#94a3b8">image/heic</text></g>
+    </g>
+
+    <text x="20" y="216" fill="#fed7aa" font-size="11" font-weight="600">Algorithms</text>
+    <g font-size="11" fill="#cbd5e1" transform="translate(20,236)">
+      <text>• Direct vectorise (potrace)</text>
+      <text y="18">• Stippling — tonal dots</text>
+      <text y="36">• Cross-hatching</text>
+      <text y="54">• Halftone — variable circles</text>
+      <text y="72">• Flow imager — gradient strokes</text>
+      <text y="90">• K-means colour separation</text>
+    </g>
+  </g>
+
+  <!-- Category: Vectors -->
+  <g transform="translate(340,110)">
+    <rect width="260" height="370" rx="12" fill="#0b1220" stroke="#1e293b"/>
+    <rect x="0" y="0" width="260" height="48" rx="12" fill="#1e3a8a"/>
+    <text x="20" y="30" fill="#bfdbfe" font-size="15" font-weight="700">Vectors &amp; CAD</text>
+    <text x="246" y="30" fill="#bfdbfe" font-size="11" text-anchor="end" opacity="0.8">→ pass-through</text>
+
+    <g font-size="12" fill="#e2e8f0" transform="translate(20,76)">
+      <text font-weight="700">SVG</text>          <text x="60" fill="#94a3b8">image/svg+xml</text>
+      <g transform="translate(0,22)"><text font-weight="700">PDF</text>           <text x="60" fill="#94a3b8">application/pdf</text></g>
+      <g transform="translate(0,44)"><text font-weight="700">EPS / PS / AI</text></g>
+      <g transform="translate(0,62)"><text x="0" fill="#94a3b8" font-size="11">application/postscript</text></g>
+      <g transform="translate(0,86)"><text font-weight="700">DXF</text>           <text x="60" fill="#94a3b8">image/vnd.dxf</text></g>
+    </g>
+
+    <text x="20" y="216" fill="#bfdbfe" font-size="11" font-weight="600">What survives</text>
+    <g font-size="11" fill="#cbd5e1" transform="translate(20,236)">
+      <text>• SVG layers → pen slots</text>
+      <text y="18">• Colour attributes preserved</text>
+      <text y="36">• PDF: all pages, vector + raster</text>
+      <text y="54">• EPS/AI rasters re-vectorised</text>
+      <text y="72">• DXF: TEXT → Hershey strokes</text>
+      <text y="90">• Curves → polylines (vpype)</text>
+    </g>
+  </g>
+
+  <!-- Category: Documents -->
+  <g transform="translate(620,110)">
+    <rect width="260" height="370" rx="12" fill="#0b1220" stroke="#1e293b"/>
+    <rect x="0" y="0" width="260" height="48" rx="12" fill="#581c87"/>
+    <text x="20" y="30" fill="#e9d5ff" font-size="15" font-weight="700">Documents</text>
+    <text x="246" y="30" fill="#e9d5ff" font-size="11" text-anchor="end" opacity="0.8">→ PDF then SVG</text>
+
+    <g font-size="12" fill="#e2e8f0" transform="translate(20,76)">
+      <text font-weight="700">DOCX</text>     <text x="80" fill="#94a3b8">Word / Office</text>
+      <g transform="translate(0,22)"><text font-weight="700">ODT</text>       <text x="80" fill="#94a3b8">LibreOffice</text></g>
+      <g transform="translate(0,44)"><text font-weight="700">RTF</text>       <text x="80" fill="#94a3b8">rich text</text></g>
+      <g transform="translate(0,66)"><text font-weight="700">HTML</text>      <text x="80" fill="#94a3b8">WeasyPrint</text></g>
+    </g>
+
+    <text x="20" y="200" fill="#e9d5ff" font-size="11" font-weight="600">Pipeline</text>
+    <g font-size="11" fill="#cbd5e1" transform="translate(20,220)">
+      <text>• Office → PDF via LibreOffice</text>
+      <text y="18">• HTML → PDF via WeasyPrint</text>
+      <text y="36">• Per-page rasterise or extract</text>
+      <text y="54">• Pick page in the editor</text>
+      <text y="72">• Embedded images vectorised</text>
+      <text y="90">• Inline text kept as glyphs</text>
+    </g>
+  </g>
+
+  <!-- Category: Text + G-code -->
+  <g transform="translate(900,110)">
+    <rect width="240" height="370" rx="12" fill="#0b1220" stroke="#1e293b"/>
+    <rect x="0" y="0" width="240" height="48" rx="12" fill="#831843"/>
+    <text x="20" y="30" fill="#fbcfe8" font-size="15" font-weight="700">Text &amp; G-code</text>
+
+    <g font-size="12" fill="#e2e8f0" transform="translate(20,76)">
+      <text font-weight="700">TXT</text>          <text x="80" fill="#94a3b8">text/plain</text>
+      <g transform="translate(0,22)"><text font-weight="700">MD</text>     <text x="80" fill="#94a3b8">Markdown</text></g>
+      <g transform="translate(0,44)"><text font-weight="700">.gcode / .nc</text></g>
+      <g transform="translate(0,62)"><text fill="#94a3b8" font-size="11">raw G-code direct send</text></g>
+    </g>
+
+    <text x="20" y="190" fill="#fbcfe8" font-size="11" font-weight="600">Rendering</text>
+    <g font-size="11" fill="#cbd5e1" transform="translate(20,210)">
+      <text>• Hershey single-stroke fonts</text>
+      <text y="18">• Wrap, justify, line height</text>
+      <text y="36">• Markdown headings → sizes</text>
+      <text y="54">• Bold / italic font swaps</text>
+      <text y="72">• Raw G-code → queue directly</text>
+      <text y="90">• Multi-dialect aware</text>
+    </g>
+  </g>
+</svg>
