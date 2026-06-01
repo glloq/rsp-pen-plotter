@@ -161,8 +161,25 @@ def plan_with_rerendered_svg(plan: PrintPlan) -> PrintPlan:
     before handing the plan to the engines. When no rerender is
     available the input is returned unchanged (so callers don't have
     to branch on the return shape).
+
+    The frontend's composite SVG bakes the placement transform (scale +
+    translate from page mm → workspace mm) into the geometry, so the
+    legacy ``scale_mode='actual'`` path renders 1:1 from the composite
+    and lands inside the placement rectangle. The rerender path
+    *replaces* that composite with a raw page-mm SVG that has no
+    placement transform — at ``scale='actual'`` the text would draw at
+    its native page size centred on the placement region, overflowing
+    the rectangle (and the workspace) whenever the original content
+    was larger than the operator's placement. Switching to
+    ``scale_mode='fit'`` with no margin reads the freshly-rendered
+    bbox and scales it into the placement rectangle the operator drew
+    on the plan, restoring the on-plan size and position.
     """
     fresh_svg = rerender_text_svg(plan)
     if fresh_svg is None:
         return plan
-    return plan.model_copy(update={"svg": fresh_svg})
+    updates: dict[str, Any] = {"svg": fresh_svg}
+    if plan.placement is not None:
+        updates["scale_mode"] = "fit"
+        updates["margin_mm"] = 0.0
+    return plan.model_copy(update=updates)

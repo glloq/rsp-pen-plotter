@@ -23,7 +23,7 @@ from pen_plotter.application.text_render import (
     rerender_text_svg,
     typography_to_options,
 )
-from pen_plotter.domain.print_plan import PrintPlan, TypographyPlan
+from pen_plotter.domain.print_plan import PlacementPlan, PrintPlan, TypographyPlan
 
 
 def _seed_library_file(
@@ -47,6 +47,9 @@ def _text_plan(
     source_mime: str | None,
     typography: TypographyPlan | None,
     svg: str = "<svg/>",
+    placement: PlacementPlan | None = None,
+    scale_mode: str = "actual",
+    margin_mm: float = 0.0,
 ) -> PrintPlan:
     """Build a PrintPlan with just the fields the rerender path reads."""
     return PrintPlan(
@@ -55,6 +58,9 @@ def _text_plan(
         typography=typography,
         library_file_id=library_file_id,
         source_mime=source_mime,
+        placement=placement,
+        scale_mode=scale_mode,
+        margin_mm=margin_mm,
     )
 
 
@@ -277,6 +283,72 @@ def test_plan_with_rerendered_svg_swaps_svg_on_success(
     # keep using ``out.layers`` / ``out.profile_name`` as before.
     assert out.profile_name == plan.profile_name
     assert out.library_file_id == plan.library_file_id
+
+
+def test_plan_with_rerendered_svg_forces_fit_when_placement_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Rerender with a placement → scale_mode='fit', margin=0.
+
+    The frontend's composite SVG bakes the placement transform into the
+    geometry, so the plan ships ``scale_mode='actual'`` (paths are
+    already in workspace mm). When the rerender swaps the composite for
+    a raw page-mm SVG, the placement transform is lost — leaving
+    ``scale_mode='actual'`` would draw the text at its native page size
+    centred on the placement region, overflowing the rectangle and the
+    workspace whenever the operator shrank the placement (e.g. to fit a
+    multi-page-tall body of text on the bed). Switching to fit-mode
+    scales the rendered bbox into the placement rectangle the operator
+    drew on the plan.
+    """
+    body = b"Hello\n"
+    _seed_library_file(monkeypatch, tmp_path, file_id="placed-1", data=body, suffix=".txt")
+    plan = _text_plan(
+        library_file_id="placed-1",
+        source_mime="text/plain",
+        typography=TypographyPlan(),
+        svg="<svg>STALE</svg>",
+        placement=PlacementPlan(
+            sheet_width_mm=100.0,
+            sheet_height_mm=80.0,
+            offset_x_mm=20.0,
+            offset_y_mm=15.0,
+        ),
+        scale_mode="actual",
+        margin_mm=0.0,
+    )
+    out = plan_with_rerendered_svg(plan)
+    assert out.scale_mode == "fit"
+    assert out.margin_mm == 0.0
+    # The placement itself is preserved verbatim — only the scaling
+    # mode flipped so the rendered text fits inside the same rectangle.
+    assert out.placement == plan.placement
+
+
+def test_plan_with_rerendered_svg_keeps_scale_mode_without_placement(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """No placement → leave scale_mode / margin alone.
+
+    Single-source plans without a placement render against the whole
+    workspace; the existing ``scale_mode`` (typically 'fit' with the
+    operator's margin) already produces the right footprint, so the
+    rerender path must not silently flip it.
+    """
+    body = b"Hello\n"
+    _seed_library_file(monkeypatch, tmp_path, file_id="unplaced-1", data=body, suffix=".txt")
+    plan = _text_plan(
+        library_file_id="unplaced-1",
+        source_mime="text/plain",
+        typography=TypographyPlan(),
+        svg="<svg>STALE</svg>",
+        placement=None,
+        scale_mode="fit",
+        margin_mm=12.5,
+    )
+    out = plan_with_rerendered_svg(plan)
+    assert out.scale_mode == "fit"
+    assert out.margin_mm == 12.5
 
 
 def test_plan_with_rerendered_svg_returns_input_unchanged_on_fallback() -> None:

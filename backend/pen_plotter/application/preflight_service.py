@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from pen_plotter.application.generate_service import _placement_for_engine
 from pen_plotter.application.plan_resolver import resolve_plan
-from pen_plotter.application.text_render import rerender_text_svg
+from pen_plotter.application.text_render import plan_with_rerendered_svg
 from pen_plotter.core.preflight import preflight_report
 from pen_plotter.domain.print_plan import PrintPlan, ResolvedPlan
 from pen_plotter.models import MachineProfile, PreflightReport
@@ -46,15 +46,18 @@ def run_preflight(plan: PrintPlan, profile: MachineProfile) -> PreflightOutcome:
     # + library_file_id + source_mime, re-render the text source so
     # the preflight metrics (path length, drawing time, bounds) reflect
     # the operator's latest typography edits — not the SVG that was
-    # rendered at upload time. The rerender is opt-in + safe-fallback;
-    # see ``application/text_render.py`` for the gating rules.
-    svg = rerender_text_svg(resolved.plan) or resolved.plan.svg
+    # rendered at upload time. The wrapper also forces fit-to-placement
+    # scaling when it swaps the SVG so the preflight report sees the
+    # same geometry the gcode generator will draw (the rerender drops
+    # the composite's placement transform — fit-mode re-scales the raw
+    # page-mm output to the placement rectangle the operator drew).
+    rendered_plan = plan_with_rerendered_svg(resolved.plan)
     report = preflight_report(
-        svg,
+        rendered_plan.svg,
         profile,
         layers=resolved.plan.layers,
-        scale_mode=resolved.plan.scale_mode,
-        margin_mm=resolved.plan.margin_mm,
+        scale_mode=rendered_plan.scale_mode,
+        margin_mm=rendered_plan.margin_mm,
         placement=_placement_for_engine(resolved),
     )
     return PreflightOutcome(report=report, resolved=resolved)
