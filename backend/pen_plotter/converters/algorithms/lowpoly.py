@@ -22,6 +22,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 
@@ -58,7 +59,7 @@ class LowPolyAlgorithm(RasterAlgorithm):
         opts = options or {}
         density = max(0.0, float(opts.get("density", 0.01)))
         seed = int(opts.get("seed", 0))
-        stroke_width = float(opts.get("stroke_width", 0.8))
+        stroke_width = stroke_attr_px(opts)
 
         bool_mask = mask.astype(bool)
         ys, xs = np.nonzero(bool_mask)

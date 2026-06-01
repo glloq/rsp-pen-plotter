@@ -13,13 +13,13 @@ milliseconds, well below the network round-trip cost.
 from __future__ import annotations
 
 import json
-import mimetypes
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ValidationError
 
 from pen_plotter.converters.markdown import _blocks_from_markdown
+from pen_plotter.converters.pipeline import resolve_mime
 from pen_plotter.typography import HersheyRenderer, TypographyOptions
 
 router = APIRouter()
@@ -34,16 +34,6 @@ class TypographyPreviewResponse(BaseModel):
     svg: str
     truncated: bool = False
 
-
-def _resolve_mime(upload: UploadFile) -> str | None:
-    """Mirror the ``/preview`` MIME detection: header → filename guess."""
-    content_type = upload.content_type
-    if content_type and content_type != "application/octet-stream":
-        return content_type
-    if upload.filename:
-        guessed, _ = mimetypes.guess_type(upload.filename)
-        return guessed
-    return None
 
 
 @router.post("/preview-text", response_model=TypographyPreviewResponse)
@@ -70,7 +60,7 @@ async def preview_text(
             options can't be parsed or the font name is unknown; 413 if
             the upload is empty.
     """
-    mime = _resolve_mime(file)
+    mime = resolve_mime(file)
     if mime is None or mime not in _ACCEPTED_MIMES:
         raise HTTPException(
             status_code=415,

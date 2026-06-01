@@ -23,7 +23,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._style import floored_spacing
+from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 from pen_plotter.converters.algorithms.crosshatch import _line_segments
 
@@ -109,7 +109,7 @@ class ScribbleAlgorithm(RasterAlgorithm):
         spacing = floored_spacing(max(1.0, float(opts.get("spacing_px", 4.0))), opts)
         amp = max(0.0, float(opts.get("amp_px", 1.6)))
         overshoot = max(0.0, float(opts.get("overshoot_px", 3.0)))
-        stroke_width = float(opts.get("stroke_width", 0.8))
+        stroke_width = stroke_attr_px(opts)
         seed = int(opts.get("seed", 0))
         bool_mask = mask.astype(bool)
 

@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import base64
 import copy
+import math
+import re
 from typing import Any
 from xml.etree import ElementTree as ET
 
@@ -222,14 +224,9 @@ def expand_use_refs(root: ET.Element) -> int:
         # Best-effort: PyMuPDF emits <defs> solely to hold glyphs that <use>
         # consumed, so they can be safely removed once empty of referenced
         # content. We keep them only if a non-<use> reference remains.
-        keep = False
-        for child in defs:
-            child_id = child.get("id")
-            if not child_id:
-                keep = True
-                break
-            if child_id in targets and child_id not in [t for t in targets if t]:
-                pass
+        # Keep the block only if a child lacks an ``id`` (we cannot prove it was
+        # a consumed glyph, so we err on the side of preserving it).
+        keep = any(not child.get("id") for child in defs)
         if not keep:
             parent = next((p for p in root.iter() if defs in list(p)), None)
             if parent is not None:
@@ -383,7 +380,6 @@ def _parse_transform(value: str | None) -> tuple[float, float, float, float, flo
     a, b, c, d, e, f = 1.0, 0.0, 0.0, 1.0, 0.0, 0.0  # identity
     if not value:
         return a, b, c, d, e, f
-    import re
 
     for name, args in re.findall(r"(matrix|translate|scale)\s*\(([^)]*)\)", value):
         nums = [float(x) for x in re.split(r"[\s,]+", args.strip()) if x]
@@ -534,7 +530,6 @@ def _path_bbox_user_units(
     d = path.get("d") or ""
     if not d:
         return None
-    import re
 
     # Pull every numeric literal out of the d-string. SVG paths use
     # commands (M / L / H / V / C / Z …) but for an AABB we only care
@@ -902,8 +897,6 @@ def _hatch_lines_for_bbox(
     one ``<path d="M x1 y1 L x2 y2"/>`` per tuple without further
     clipping.
     """
-    import math
-
     x_min, y_min, x_max, y_max = bbox
     if spacing <= 0 or x_max <= x_min or y_max <= y_min:
         return []
@@ -1010,8 +1003,6 @@ def _collect_text_glyph_positions(
     would paint hatch lines across the text glyphs and the operator
     reads the result as "text barred".
     """
-    import re
-
     positions: list[tuple[float, float]] = []
     for elem in root.iter():
         if _local(elem.tag) != "use":
@@ -1151,7 +1142,6 @@ def apply_grayscale_density_hatching(
     if not candidates:
         return 0
 
-    import math
 
     hatch_group = ET.Element(f"{{{_SVG_NS}}}g")
     hatch_group.set(_INKSCAPE_LABEL, "grayscale")
@@ -1283,7 +1273,6 @@ def apply_color_density_hatching(
     if not buckets:
         return 0
 
-    import math
 
     replaced = 0
     for color in sorted(buckets):
