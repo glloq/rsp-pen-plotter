@@ -226,12 +226,18 @@ def test_placed_span_compresses_to_source_width() -> None:
 
 def test_placed_span_floors_compression_for_legibility() -> None:
     """If the source width is absurdly small, compression clamps so
-    single-stroke glyphs don't collide into an unreadable blob."""
+    single-stroke glyphs don't collide into an unreadable blob.
+
+    The placed-span floor (40 %) is more aggressive than the
+    plain-text wrap floor (60 %) because PDF / DOCX spans have no
+    word-wrap fallback — they must fit the source layout at any cost,
+    so we trade some letter-crowding for layout fidelity.
+    """
     natural = render_placed_spans(
         [PlacedSpan(text="text", x=0.0, baseline_y=20.0, size=10.0)]
     )
     natural_x_max = _max_x(natural)
-    # Ask for 10% of natural — far below the 60% legibility floor.
+    # Ask for 10 % of natural — far below the placed-span floor.
     crushed = render_placed_spans(
         [
             PlacedSpan(
@@ -243,10 +249,10 @@ def test_placed_span_floors_compression_for_legibility() -> None:
             )
         ]
     )
-    # Final extent stays around the 60% floor, not the requested 10%.
     crushed_x_max = _max_x(crushed)
-    assert crushed_x_max >= natural_x_max * 0.55
-    assert crushed_x_max <= natural_x_max * 0.65
+    # Final extent stays around the 40 % floor, not the requested 10 %.
+    assert crushed_x_max >= natural_x_max * 0.35
+    assert crushed_x_max <= natural_x_max * 0.45
 
 
 def test_placed_span_no_compression_when_fits_natively() -> None:

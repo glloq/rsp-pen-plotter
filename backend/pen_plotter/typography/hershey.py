@@ -44,6 +44,16 @@ _BOLD_OFFSET_RATIO = 0.06
 # being readable, so any token still too wide at that point is split.
 _MIN_LINE_SCALE = 0.6
 
+# Minimum horizontal scale for the placed-span path (PDF / DOCX / SVG
+# re-render). Placed spans must fit their source layout exactly — there
+# is no word-wrap fallback like the plain-text flow has — so we accept
+# more aggressive compression than ``_MIN_LINE_SCALE`` to keep the
+# operator's document layout intact. Single-stroke glyphs at 40 %
+# scale stay distinguishable even when they crowd together, which the
+# operator reads as "tight text" rather than "lines running off the
+# page".
+_MIN_PLACED_SPAN_SCALE = 0.4
+
 # Pre-substitution table for code points that have no Hershey glyph but
 # read identically (or close enough) as one or more printable ASCII
 # characters. The upstream ``HersheyFonts`` library silently drops any
@@ -398,7 +408,7 @@ def _placed_span_path(hf: HersheyFonts, span: PlacedSpan, text: str) -> str:
         # is squeezed enough to fit including its widening pass.
         natural_w = (x_max if x_max != -math.inf else 0.0) + bold_offset
         if natural_w > span.source_width:
-            x_scale = max(_MIN_LINE_SCALE, span.source_width / natural_w)
+            x_scale = max(_MIN_PLACED_SPAN_SCALE, span.source_width / natural_w)
 
     subpaths: list[str] = []
     for offset_x in passes:
