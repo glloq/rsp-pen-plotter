@@ -148,7 +148,7 @@ _FALLBACK_CHAR = "?"
 
 
 def _sanitize_for_font(text: str, supported: frozenset[str]) -> str:
-    """Map ``text`` to characters the loaded Hershey font can render.
+    r"""Map ``text`` to characters the loaded Hershey font can render.
 
     Pipeline, applied per code point:
 
@@ -519,7 +519,7 @@ class HersheyRenderer:
         scalex = self._font.render_options["scalex"]
         # ``scalex`` is positive after ``normalize_rendering``; guard for
         # the (unused) case where the operator has flipped the axis.
-        return glyph.char_width * abs(scalex)
+        return float(glyph.char_width * abs(scalex))
 
     def _measure(self, line: str) -> float:
         """Return the rendered width of a line in millimeters."""
