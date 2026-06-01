@@ -225,6 +225,12 @@ export function useFileManager(t?: Translator) {
       await applyMasterStyleToLayers(store, {
         styleId: draft.monoMasterStyleId.value,
         penSlot: draft.monoPenSlot.value,
+        // Honour the live mono knobs (spacing range, angle step, …) so
+        // the persisted layer_algorithms reflect the Style-tab sliders
+        // rather than the registry defaults. Without this, /rerender
+        // (which only reads layer_algorithms) ships factory values
+        // while /preview correctly uses band_recipes from the knobs.
+        recipeResolver: (index, total) => draft.monoRecipeForBand(index, total),
       })
     } else {
       // Multicolour styles don't pin every layer to one slot — each
@@ -234,6 +240,12 @@ export function useFileManager(t?: Translator) {
       await applyMasterStyleToLayers(store, {
         styleId: draft.multicolorMasterStyleId.value,
         penSlot: null,
+        // Same fix as the mono branch: feed the operator's multicolour
+        // knobs (crossed, angle_step, spacing range, …) into the per-
+        // cluster recipe so gcode generation via /rerender matches the
+        // live /preview instead of falling back to registry defaults.
+        recipeResolver: (index, total, hex) =>
+          draft.multicolorRecipeForCluster(index, total, hex),
       })
     }
     // Refresh the live preview so the canvas reflects the per-band /
