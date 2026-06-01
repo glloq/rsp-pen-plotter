@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveMulticolorStyle } from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
+import { useJobStore } from '../../../stores/job'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 import DualRangeSlider from './DualRangeSlider.vue'
 
@@ -27,6 +29,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const draft = useBitmapDraft()
+const store = useJobStore()
 
 const style = computed(() => resolveMulticolorStyle(props.styleId))
 
@@ -34,6 +37,21 @@ const knobs = computed(() => draft.getMulticolorStyleKnobs(props.styleId))
 
 function setKnob<K extends string>(key: K, value: unknown): void {
   ;(draft.setMulticolorKnob as any)(props.styleId, key, value)
+  // Push the updated knobs onto existing layers so /rerender (gcode
+  // generation) reflects the slider change. /preview ships
+  // ``band_recipes`` computed fresh from knobs and works without this,
+  // but the persisted ``layer_algorithms`` would otherwise stay on the
+  // values captured at upload time — the editor preview and the gcode
+  // output would diverge as soon as the operator tweaks any knob
+  // (crossed, angle_step, spacing range, …).
+  if (store.layers.length > 0) {
+    void applyMasterStyleToLayers(store, {
+      styleId: props.styleId,
+      penSlot: null,
+      recipeResolver: (index, total, hex) =>
+        draft.multicolorRecipeForCluster(index, total, hex),
+    })
+  }
 }
 
 // Cluster count surfaced at the top so the operator gets the same

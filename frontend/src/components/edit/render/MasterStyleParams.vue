@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveMasterStyle, type SegmentationMethod } from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
+import { useJobStore } from '../../../stores/job'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 import DualRangeSlider from './DualRangeSlider.vue'
 
@@ -36,6 +38,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const draft = useBitmapDraft()
+const store = useJobStore()
 
 const style = computed(() => resolveMasterStyle(props.styleId))
 const usesBands = computed(() => style.value.segmentation?.method === 'luminance_bands')
@@ -80,6 +83,17 @@ function setKnob<K extends string>(key: K, value: unknown): void {
   // already knows the field name + type from its <input> binding.
 
   ;(draft.setMonoKnob as any)(props.styleId, key, value)
+  // Re-propagate the updated knobs onto existing layers so /rerender
+  // (gcode generation) matches the live /preview. /preview rebuilds
+  // ``band_recipes`` from current knobs on every call; ``layer_algorithms``
+  // would otherwise stay frozen on the values captured at upload time.
+  if (store.layers.length > 0) {
+    void applyMasterStyleToLayers(store, {
+      styleId: props.styleId,
+      penSlot: draft.monoPenSlot.value,
+      recipeResolver: (index, total) => draft.monoRecipeForBand(index, total),
+    })
+  }
 }
 
 // ---- Pencil angle chips ----
