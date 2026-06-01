@@ -527,21 +527,59 @@ class HersheyRenderer:
         return x_max - min(x_min, 0.0)
 
     def _wrap(self, paragraph: str, usable_w: float) -> list[str]:
-        """Greedily word-wrap a paragraph to the usable width."""
+        """Greedily word-wrap a paragraph to the usable width.
+
+        Tokens wider than ``usable_w`` are hard-broken at character
+        boundaries before the greedy fit so they cannot overflow the
+        right margin. Without this step the renderer would emit a single
+        long word intact at the left margin and let it run past the
+        page edge — clipped both in the SVG viewBox and in the generated
+        G-code, which the operator perceives as "letters missing on the
+        right" and "the document is not fully printed".
+        """
         words = paragraph.split()
         if not words:
             return [""]
+        pieces: list[str] = []
+        for word in words:
+            if self._measure(word) > usable_w:
+                pieces.extend(self._break_long_word(word, usable_w))
+            else:
+                pieces.append(word)
         lines: list[str] = []
-        current = words[0]
-        for word in words[1:]:
-            candidate = f"{current} {word}"
+        current = pieces[0]
+        for piece in pieces[1:]:
+            candidate = f"{current} {piece}"
             if self._measure(candidate) <= usable_w:
                 current = candidate
             else:
                 lines.append(current)
-                current = word
+                current = piece
         lines.append(current)
         return lines
+
+    def _break_long_word(self, word: str, usable_w: float) -> list[str]:
+        """Split ``word`` into chunks each fitting inside ``usable_w``.
+
+        Used as a last-resort hyphenation when a single token is wider
+        than the page's wrappable area — typical with large font sizes,
+        wide margins, or unbroken strings like long URLs and chemical
+        names. The split is purely greedy at character boundaries; a
+        chunk reduced to a single character is kept as-is even if that
+        character alone overflows, since we cannot split further.
+        """
+        pieces: list[str] = []
+        current = ""
+        for ch in word:
+            candidate = current + ch
+            if current and self._measure(candidate) > usable_w:
+                pieces.append(current)
+                current = ch
+            else:
+                current = candidate
+        if current:
+            pieces.append(current)
+        return pieces or [word]
 
     def _transform(
         self, x: float, y: float, x_offset: float, baseline_y: float

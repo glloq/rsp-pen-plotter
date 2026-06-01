@@ -37,3 +37,33 @@ def test_viewbox_matches_page_height_after_overflow() -> None:
     vb = re.search(r'viewBox="0 0 ([0-9.]+) ([0-9.]+)"', svg)
     assert vb
     assert float(vb.group(2)) == height
+
+
+def _path_x_extents(svg: str) -> tuple[float, float]:
+    xs = [float(m) for m in re.findall(r"[ML]\s*(-?\d+(?:\.\d+)?)\s", svg)]
+    assert xs, "expected at least one path coordinate"
+    return min(xs), max(xs)
+
+
+def test_long_word_is_broken_to_fit_page_width() -> None:
+    # A single 40-character word at 10 mm font size measures well past
+    # 60 mm of usable width (80 mm page – 2×10 mm margins). It must be
+    # hard-broken so every glyph stays inside the viewBox.
+    opts = TypographyOptions(font_size_mm=10, page_width_mm=80, margin_mm=10)
+    svg = HersheyRenderer(opts).render_text("A" * 40)
+    _, x_max = _path_x_extents(svg)
+    # Allow a tiny epsilon for the final stroke's right side-bearing.
+    assert x_max <= 80.0 + 0.5, f"glyph at x={x_max} overflows the 80 mm page"
+
+
+def test_long_word_renders_every_character() -> None:
+    # All 40 letters must end up drawn somewhere — the previous
+    # implementation kept the word intact and let trailing glyphs run
+    # past the right edge, where the SVG viewBox (and the G-code
+    # generator) silently dropped them.
+    opts = TypographyOptions(font_size_mm=10, page_width_mm=80, margin_mm=10)
+    svg = HersheyRenderer(opts).render_text("A" * 40)
+    # "A" is two strokes per glyph in the default Hershey font; 40 glyphs
+    # therefore yield clearly more sub-paths than a single "A".
+    one = HersheyRenderer(opts).render_text("A")
+    assert svg.count("M") >= 40 * one.count("M")
