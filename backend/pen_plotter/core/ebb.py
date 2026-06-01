@@ -17,6 +17,7 @@ from pen_plotter.core.gcode import (
     _bounds_of,
     _make_transform,
     _read_layers,
+    pen_change_point,
 )
 from pen_plotter.core.pause_logic import should_pause_ebb
 from pen_plotter.domain.print_plan import LayerPlan, ScaleMode
@@ -118,6 +119,15 @@ def generate_ebb(
             if decision.pause:
                 label = color_label or source_color or "#000000"
                 color = source_color or "#000000"
+                # Park the head at the pen-change position (defaults to the
+                # workspace home corner) before prompting, so the operator
+                # swaps the pen clear of the drawing. The streamer skips the
+                # tool-change command itself in favour of the guided pause.
+                px, py = pen_change_point(profile)
+                out.append(profile.pen_up_command)
+                park = move(px, py, profile.travel_speed_mm_s)
+                if park:
+                    out.append(park)
                 out.append(f"; Change pen: {label} ({color})")
                 out.append(profile.tool_change_command)
             if source_color is not None:

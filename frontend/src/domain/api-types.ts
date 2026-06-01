@@ -2450,6 +2450,7 @@ export interface components {
              * @enum {string}
              */
             origin: "top_left" | "bottom_left";
+            pen_change_position?: components["schemas"]["Point"] | null;
             /** Pen Down Command */
             pen_down_command: string;
             /** Pen Slot Count */
@@ -2983,6 +2984,8 @@ export interface components {
             swap_actions?: {
                 [key: string]: unknown;
             };
+            /** Swap Prompt */
+            swap_prompt?: string | null;
             /** Total Lines */
             total_lines: number;
             /**

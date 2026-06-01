@@ -106,6 +106,7 @@ async function activeCancel(): Promise<void> {
       <RunTimeline :run="activeRun" />
       <RunActionsPanel
         :run="activeRun"
+        :next-action-hint="activeRun.swap_prompt ?? null"
         @pause="activePause"
         @resume="activeResume"
         @cancel="activeCancel"

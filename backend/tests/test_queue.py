@@ -107,6 +107,38 @@ def test_resume_requeues_paused_run() -> None:
     assert get_run(run.id, engine).state == RunState.QUEUED
 
 
+@pytest.mark.asyncio
+async def test_swap_pause_surfaces_as_paused_with_prompt() -> None:
+    """A guided operator-confirm swap parks the streamer in WAITING; the
+    queue must mirror that as a durable ``paused`` run carrying the prompt
+    so the cockpit can show it and offer Resume."""
+    import asyncio
+
+    engine = _engine()
+    gcode = "G21\nG90\n; Change to pen slot 1 (Red)\nM0\nG1 X2 Y3 F600\n"
+    run = enqueue("job", PROFILE, gcode, target=engine)
+    queue, transport = _queue(engine)
+
+    task = asyncio.create_task(queue.run_next())
+    # Wait until the streamer parks for the swap and the queue reflects it.
+    for _ in range(50):
+        await asyncio.sleep(0)
+        current = get_run(run.id, engine)
+        if current.state == RunState.PAUSED and current.swap_prompt:
+            break
+    paused = get_run(run.id, engine)
+    assert paused.state == RunState.PAUSED
+    assert paused.swap_prompt == "Insert pen slot 1: Red"
+
+    # Resuming routes back through the controller and lets streaming finish;
+    # the prompt is cleared once the run completes.
+    queue.resume(run.id)
+    await asyncio.wait_for(task, timeout=2.0)
+    done = get_run(run.id, engine)
+    assert done.state == RunState.COMPLETED
+    assert done.swap_prompt is None
+
+
 def test_enqueue_computes_guided_pause_points() -> None:
     engine = _engine()
     # A program with a tool-change comment + M0 yields one guided pause.

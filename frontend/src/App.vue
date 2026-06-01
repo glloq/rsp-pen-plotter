@@ -9,6 +9,7 @@ import EditModal from './components/EditModal.vue'
 import FilesPane from './components/FilesPane.vue'
 import PlotterSettingsModal from './components/PlotterSettingsModal.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
+import SwapPromptModal from './components/SwapPromptModal.vue'
 import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
 import GenerateProgressModal from './components/GenerateProgressModal.vue'
@@ -438,11 +439,13 @@ onBeforeUnmount(() => {
     <UpdateProgressModal />
     <GenerateProgressModal />
     <UploadProgressModal />
+    <SwapPromptModal />
     <Toasts />
     <PerfOverlay v-if="perfEnabled" />
     <WorkshopMode
       v-if="workshopEnabled"
       :run="activeRun"
+      :next-action-hint="activeRun?.swap_prompt ?? null"
       @exit="closeWorkshop"
       @pause="workshopPause"
       @resume="workshopResume"

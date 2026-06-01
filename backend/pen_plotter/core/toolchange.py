@@ -33,6 +33,11 @@ from pen_plotter.models import MachineProfile
 _CHANGE_RE = re.compile(r"Change to pen slot (\d+) \((.*)\)\s*$")
 # Mono-pen colour-change format emitted by ``pen_color_change.j2``.
 _COLOR_RE = re.compile(r"Change pen:\s*(.+?)\s*\((#[0-9a-fA-F]{3,8})\)\s*$")
+# Magazine-load format emitted by ``pen_load.j2`` when a required colour
+# isn't loaded in the magazine. Always an operator-confirm pause (the
+# operator loads the ink from the inventory) regardless of the profile's
+# tool-change mode, so it's parsed and handled ahead of the orchestrator.
+_LOAD_RE = re.compile(r"Load pen slot (\d+) \((.*)\) into magazine\s*$")
 
 
 def _context_from_comment(comment: str) -> SwapContext | None:
@@ -132,19 +137,33 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
         comment = raw.split(";", 1)[1].strip() if ";" in raw else ""
         code = raw.split(";", 1)[0].strip()
         if comment and pending is None:
-            context = _context_from_comment(comment)
-            if context is not None:
-                if context.slot_index is not None:
-                    context = context.model_copy(update={"from_slot_index": last_slot})
-                    last_slot = context.slot_index
-                plan = orchestrator.plan(context)
+            load = _LOAD_RE.search(comment)
+            if load:
+                # A magazine-load boundary is always an operator-confirm
+                # pause: the operator loads the missing ink into the slot,
+                # then resumes. Bypass the orchestrator so a host/firmware
+                # magazine still halts here instead of firing an automated
+                # swap for a pen that isn't physically present yet.
+                slot_index, label = int(load.group(1)), load.group(2)
+                last_slot = slot_index
                 pending = SwapAction(
-                    kind=_PAUSE_KIND_TO_ACTION[plan.pause_kind],  # type: ignore[arg-type]
-                    prompt=plan.operator_prompt,
-                    commands=[
-                        SwapCommandLine(send=c.send, wait_ms=c.wait_ms) for c in plan.commands
-                    ],
+                    kind="operator_confirm",
+                    prompt=f"Load {label} into magazine slot {slot_index}, then press Resume.",
                 )
+            else:
+                context = _context_from_comment(comment)
+                if context is not None:
+                    if context.slot_index is not None:
+                        context = context.model_copy(update={"from_slot_index": last_slot})
+                        last_slot = context.slot_index
+                    plan = orchestrator.plan(context)
+                    pending = SwapAction(
+                        kind=_PAUSE_KIND_TO_ACTION[plan.pause_kind],  # type: ignore[arg-type]
+                        prompt=plan.operator_prompt,
+                        commands=[
+                            SwapCommandLine(send=c.send, wait_ms=c.wait_ms) for c in plan.commands
+                        ],
+                    )
         if not code:
             continue
         if pending is not None:

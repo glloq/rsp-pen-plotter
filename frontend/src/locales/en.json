@@ -1116,6 +1116,8 @@
     "penCount": "Number of pens",
     "penCountMagazineHint": "How many slots are available in the magazine.",
     "penCountManualHint": "How many pens you alternate between by hand.",
+    "penChangePosition": "Pen-change position",
+    "penChangePositionHint": "Where the head parks (machine coordinates) before a manual swap so you can reach the pen. Leave blank to park at the workspace home corner.",
     "monoNote": "Single-colour mode: only one pen is used.",
     "penCommands": "Pen machine commands",
     "installed": "Present",
@@ -1328,6 +1330,12 @@
     "commands": "One command per line",
     "save": "Save macro",
     "clear": "Clear"
+  },
+  "swap": {
+    "title": "Pen change required",
+    "parkedHint": "The head has parked at the pen-change position. Swap the pen, then resume.",
+    "resume": "I changed the pen — Resume",
+    "cancel": "Cancel run"
   },
   "queue": {
     "title": "Print queue",

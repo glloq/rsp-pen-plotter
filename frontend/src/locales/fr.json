@@ -1116,6 +1116,8 @@
     "penCount": "Nombre de stylos",
     "penCountMagazineHint": "Nombre d'emplacements disponibles dans le magasin.",
     "penCountManualHint": "Nombre de stylos entre lesquels tu alternes manuellement.",
+    "penChangePosition": "Position de changement de stylo",
+    "penChangePositionHint": "Où la tête se gare (coordonnées machine) avant un changement manuel, pour accéder au stylo. Laisser vide pour se garer au coin home de l'espace de travail.",
     "monoNote": "Mode mono couleur : un seul stylo est utilisé.",
     "penCommands": "Commandes machine du stylo",
     "installed": "Présent",
@@ -1328,6 +1330,12 @@
     "commands": "Une commande par ligne",
     "save": "Enregistrer la macro",
     "clear": "Effacer"
+  },
+  "swap": {
+    "title": "Changement de stylo requis",
+    "parkedHint": "La tête s'est garée à la position de changement. Change le stylo, puis reprends.",
+    "resume": "J'ai changé le stylo — Reprendre",
+    "cancel": "Annuler le run"
   },
   "queue": {
     "title": "File d'impression",

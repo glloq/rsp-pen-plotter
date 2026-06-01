@@ -4,6 +4,8 @@ G21
 G90
 M204 S500.0
 M280 P0 S40
+M280 P0 S40
+G0 X0.000 Y0.000 F7200.0
 ; Change to pen slot 0 (Black 0.3)
 M0
 ; LAYER label="black" color=#000000 slot=0

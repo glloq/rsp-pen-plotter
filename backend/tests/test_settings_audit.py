@@ -81,14 +81,16 @@ def test_carousel_routes_to_slot_position_before_change() -> None:
     lines = gcode.splitlines()
 
     # The change to slot 1 (Blue) parks the head at its calibrated
-    # position before the swap command, in machine coordinates.
+    # position *before* the change comment + swap command, in machine
+    # coordinates, so the boundary line that the streamer replaces is the
+    # swap trigger itself.
     change_idx = next(i for i, ln in enumerate(lines) if ln.startswith("; Change to pen slot 1"))
-    block = lines[change_idx : change_idx + 4]
+    block = lines[change_idx - 2 : change_idx + 2]
     assert any(ln == "M280 P0 S40" for ln in block)  # pen up before travelling
     assert any(ln.startswith("G0 X40.000 Y200.000") for ln in block), block
-    # The raw swap command follows the goto (``{slot}`` is substituted by
-    # the streamer at run time, not during generation).
-    assert any(ln == "T{slot}" for ln in block)
+    # The raw swap command follows the comment (``{slot}`` is substituted
+    # by the streamer at run time, not during generation).
+    assert lines[change_idx + 1] == "T{slot}"
 
 
 def test_no_position_routing_when_uncalibrated() -> None:
@@ -105,6 +107,62 @@ def test_manual_pause_never_routes_to_position() -> None:
     manual = profile.model_copy(update={"tool_change_method": "manual_pause"})
     gcode = generate_gcode(TWO_LAYERS, manual, layers=_layers())
     assert "Y200.000" not in gcode
+
+
+def test_manual_pause_parks_at_pen_change_position() -> None:
+    """A ``manual_pause`` swap parks the head at the configured pen-change
+    position (pen up + travel) before the pause command, so the operator
+    swaps clear of the drawing."""
+    profile = _carousel_profile(positions=False).model_copy(
+        update={
+            "tool_change_method": "manual_pause",
+            "pen_change_position": Point(x=5.0, y=415.0),
+        }
+    )
+    gcode = generate_gcode(TWO_LAYERS, profile, layers=_layers())
+    lines = gcode.splitlines()
+    change_idx = next(i for i, ln in enumerate(lines) if ln.startswith("; Change to pen slot 1"))
+    # Pen up + travel to the change position sit right before the comment;
+    # the swap command (M0) is the line the streamer later replaces.
+    assert lines[change_idx - 1].startswith("G0 X5.000 Y415.000")
+    assert lines[change_idx - 2] == "M280 P0 S40"
+    # The swap command (this profile's tool_change_command) is the line the
+    # streamer later replaces with the guided pause.
+    assert lines[change_idx + 1] == "T{slot}"
+
+
+def test_manual_pause_park_defaults_to_workspace_home() -> None:
+    """Without an explicit pen-change position the head parks at the
+    workspace home corner instead of being left over the drawing."""
+    profile = _carousel_profile(positions=False).model_copy(
+        update={"tool_change_method": "manual_pause", "pen_change_position": None}
+    )
+    gcode = generate_gcode(TWO_LAYERS, profile, layers=_layers())
+    # Workspace home is (x_min, y_min) = (0, 0).
+    assert "G0 X0.000 Y0.000" in gcode
+
+
+def test_magazine_missing_colour_emits_operator_load_pause() -> None:
+    """Rack/carousel magazines that lack the required colour fall back to
+    an operator *load* pause: a ``Load pen slot`` boundary that resolves to
+    an operator-confirm SwapAction regardless of the magazine mode."""
+    from pen_plotter.core.toolchange import guided_swap_actions
+
+    # Slot 1 (Blue) is not installed in the magazine.
+    pens = [
+        PenSlot(index=0, name="Red", color="#ff0000", installed=True),
+        PenSlot(index=1, name="Blue", color="#0000ff", installed=False),
+    ]
+    profile = _carousel_profile(positions=False).model_copy(
+        update={"tool_change_method": "rack", "tool_change_command": "", "pens": pens}
+    )
+    gcode = generate_gcode(TWO_LAYERS, profile, layers=_layers())
+    assert "; Load pen slot 1 (Blue #0000ff) into magazine" in gcode
+    # The boundary resolves to an operator-confirm pause (not a host macro).
+    actions = guided_swap_actions(gcode, profile)
+    load_actions = [a for a in actions.values() if a.kind == "operator_confirm"]
+    assert load_actions, actions
+    assert any("Blue" in (a.prompt or "") and "slot 1" in (a.prompt or "") for a in load_actions)
 
 
 def test_move_seconds_trapezoid_vs_constant() -> None:

@@ -1913,6 +1913,16 @@
             "title": "Origin",
             "type": "string"
           },
+          "pen_change_position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "pen_down_command": {
             "title": "Pen Down Command",
             "type": "string"
@@ -2976,6 +2986,17 @@
             "additionalProperties": true,
             "title": "Swap Actions",
             "type": "object"
+          },
+          "swap_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swap Prompt"
           },
           "total_lines": {
             "title": "Total Lines",

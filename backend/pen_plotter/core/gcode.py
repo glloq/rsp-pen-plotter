@@ -43,8 +43,11 @@ _TEMPLATE_EXPECTED_VARS: dict[str, frozenset[str]] = {
     "footer.j2": frozenset({"profile", "home_x", "home_y", "travel_feed"}),
     "pen_up.j2": frozenset({"profile"}),
     "pen_down.j2": frozenset({"profile"}),
-    "tool_change.j2": frozenset({"profile", "slot", "pen_name", "slot_x", "slot_y", "travel_feed"}),
-    "pen_color_change.j2": frozenset({"profile", "color", "label"}),
+    "tool_change.j2": frozenset({"profile", "slot", "pen_name", "park_x", "park_y", "travel_feed"}),
+    "pen_load.j2": frozenset({"profile", "slot", "pen_name", "park_x", "park_y", "travel_feed"}),
+    "pen_color_change.j2": frozenset(
+        {"profile", "color", "label", "park_x", "park_y", "travel_feed"}
+    ),
     "line.j2": frozenset({"x", "y", "feed"}),
     "travel.j2": frozenset({"x", "y", "feed"}),
     "arc.j2": frozenset({"x", "y", "i", "j", "clockwise", "feed"}),
@@ -62,7 +65,23 @@ _LINE_T = _env.get_template("line.j2")
 _TRAVEL_T = _env.get_template("travel.j2")
 _ARC_T = _env.get_template("arc.j2")
 _TOOL_CHANGE_T = _env.get_template("tool_change.j2")
+_PEN_LOAD_T = _env.get_template("pen_load.j2")
 _PEN_COLOR_CHANGE_T = _env.get_template("pen_color_change.j2")
+
+
+def pen_change_point(profile: MachineProfile) -> tuple[float, float]:
+    """Return the ``(x, y)`` the head should park at before a manual swap.
+
+    Uses the profile's explicit ``pen_change_position`` when set, else
+    falls back to the workspace home corner so a manual swap always parks
+    the head at a known, reachable spot instead of leaving it over the
+    drawing. Coordinates are machine units (they bypass the drawing
+    transform).
+    """
+    pos = profile.pen_change_position
+    if pos is not None:
+        return pos.x, pos.y
+    return profile.workspace.x_min, profile.workspace.y_min
 
 
 def _verify_template_contract() -> None:
@@ -361,6 +380,7 @@ def _generate_gcode_impl(
     travel_t = _TRAVEL_T
     arc_t = _ARC_T
     tool_change_t = _TOOL_CHANGE_T
+    pen_load_t = _PEN_LOAD_T
     pen_color_change_t = _PEN_COLOR_CHANGE_T
 
     pens = {pen.index: pen for pen in profile.effective_pens()}
@@ -415,44 +435,96 @@ def _generate_gcode_impl(
                 tool_change_method=profile.tool_change_method,
             )
             if decision.pause:
+                method = profile.tool_change_method
+                travel_feed = profile.travel_speed_mm_s * 60.0
                 if decision.slot_changed:
                     prompt_pen = pens.get(effective_slot) if effective_slot is not None else None
-                    if prompt_pen is None or not prompt_pen.installed:
-                        out.append(
-                            f"; WARNING: pen slot {effective_slot} is not installed in the magazine"
-                        )
                     pen_name = (
                         prompt_pen.name
                         if prompt_pen and prompt_pen.name
                         else f"Pen {effective_slot}"
                     )
-                    # Firmware carousels swap on a single command, so we
-                    # park the head at the calibrated slot first. Host /
-                    # rack magazines drive their own travel through the
-                    # host_swap step sequence (move_to_*_slot), so we don't
-                    # pre-move here. Positions are machine coordinates and
-                    # bypass the drawing transform.
-                    slot_pos = (
-                        prompt_pen.position
-                        if prompt_pen and profile.tool_change_method == "carousel"
-                        else None
-                    )
-                    out.append(
-                        tool_change_t.render(
-                            profile=profile,
-                            slot=effective_slot,
-                            pen_name=pen_name,
-                            slot_x=slot_pos.x if slot_pos else None,
-                            slot_y=slot_pos.y if slot_pos else None,
-                            travel_feed=profile.travel_speed_mm_s * 60.0,
+                    magazine_mode = method in ("carousel", "rack")
+                    pen_missing = prompt_pen is None or not prompt_pen.installed
+                    if magazine_mode and pen_missing:
+                        # The colour this layer needs isn't loaded in the
+                        # magazine. An automated carousel/rack swap can't
+                        # fetch a pen that isn't physically there, so fall
+                        # back to an operator *load* pause: park the head
+                        # clear of the drawing and prompt the operator to
+                        # load the ink (which lives in the available-colours
+                        # inventory) into this slot before resuming. The
+                        # boundary is a plain M0 so a downloaded program also
+                        # halts on any sender. Positions are machine
+                        # coordinates and bypass the drawing transform.
+                        target_color = (
+                            prompt_pen.color if prompt_pen and prompt_pen.color else effective_color
+                        ) or "#000000"
+                        load_label = (
+                            f"{prompt_pen.name} {target_color}"
+                            if prompt_pen and prompt_pen.name
+                            else target_color
                         )
-                    )
+                        park_x, park_y = pen_change_point(profile)
+                        out.append(
+                            pen_load_t.render(
+                                profile=profile,
+                                slot=effective_slot,
+                                pen_name=load_label,
+                                park_x=park_x,
+                                park_y=park_y,
+                                travel_feed=travel_feed,
+                            )
+                        )
+                    else:
+                        if pen_missing:
+                            out.append(
+                                f"; WARNING: pen slot {effective_slot} "
+                                "is not installed in the magazine"
+                            )
+                        # Carousel parks at the calibrated slot before its
+                        # single-command swap; manual_pause parks at the
+                        # pen-change position so the operator can reach the
+                        # holder; rack/host drive their own travel via the
+                        # host_swap step sequence, so we don't pre-move.
+                        if method == "carousel":
+                            slot_pos = prompt_pen.position if prompt_pen else None
+                            park_x = slot_pos.x if slot_pos else None
+                            park_y = slot_pos.y if slot_pos else None
+                        elif method == "manual_pause":
+                            park_x, park_y = pen_change_point(profile)
+                        else:  # rack / host_macro
+                            park_x = park_y = None
+                        out.append(
+                            tool_change_t.render(
+                                profile=profile,
+                                slot=effective_slot,
+                                pen_name=pen_name,
+                                park_x=park_x,
+                                park_y=park_y,
+                                travel_feed=travel_feed,
+                            )
+                        )
                 else:
                     # Mono-pen path (or "always"/initial pause without slot): emit
                     # a colour-themed prompt so the streamer can guide the swap.
+                    # Manual mono machines park at the pen-change position first.
                     color = effective_color or "#000000"
                     label = color_label or color
-                    out.append(pen_color_change_t.render(profile=profile, color=color, label=label))
+                    if method == "manual_pause":
+                        park_x, park_y = pen_change_point(profile)
+                    else:
+                        park_x = park_y = None
+                    out.append(
+                        pen_color_change_t.render(
+                            profile=profile,
+                            color=color,
+                            label=label,
+                            park_x=park_x,
+                            park_y=park_y,
+                            travel_feed=travel_feed,
+                        )
+                    )
 
             if effective_slot is not None:
                 previous_slot = effective_slot

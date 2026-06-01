@@ -2,5 +2,5 @@
 {{ profile.pen_up_command }}
 G0 X{{ "%.3f"|format(park_x) }} Y{{ "%.3f"|format(park_y) }} F{{ "%.1f"|format(travel_feed) }}
 {% endif -%}
-; Change pen: {{ label }} ({{ color }})
-{{ profile.tool_change_command }}
+; Load pen slot {{ slot }} ({{ pen_name }}) into magazine
+M0
