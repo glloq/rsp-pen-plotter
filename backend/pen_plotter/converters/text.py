@@ -44,6 +44,7 @@ class TextConverter(Converter):
             ValueError: If typography options are invalid.
         """
         text = data.decode("utf-8", errors="replace")
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
         renderer = HersheyRenderer(TypographyOptions.model_validate(options or {}))
         svg = renderer.render_text(text)
         metadata: dict[str, Any] = {}

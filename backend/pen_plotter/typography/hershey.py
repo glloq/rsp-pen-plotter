@@ -186,6 +186,7 @@ def _sanitize_for_font(text: str, supported: frozenset[str]) -> str:
     """
     if not text:
         return text
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     out: list[str] = []
     for ch in text:
         if ch in supported or ch == "\n" or ch == "\t":
