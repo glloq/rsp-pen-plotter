@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pen_plotter.application.plan_resolver import resolve_plan
-from pen_plotter.application.text_render import rerender_text_svg
+from pen_plotter.application.text_render import plan_with_rerendered_svg
 from pen_plotter.core.ebb import generate_ebb
 from pen_plotter.core.gcode import generate_gcode
 from pen_plotter.domain.print_plan import PrintPlan, ResolvedPlan
@@ -105,8 +105,14 @@ def run_generate(
     # see ``application/text_render.py`` for the gating rules. The
     # rerender doesn't alter ``resolved`` (the plan_hash is computed
     # from typography fields, not from the SVG payload) so /preflight
-    # + /generate keep agreeing on the same hash.
-    svg = rerender_text_svg(resolved.plan) or resolved.plan.svg
+    # + /generate keep agreeing on the same hash. The wrapper also
+    # forces scale_mode='fit' / margin=0 when it swaps the SVG so the
+    # rendered text lands inside the placement rectangle the operator
+    # drew on the plan (the rerender drops the composite's placement
+    # transform, so without this the text would draw at its native
+    # page size and overflow the workspace).
+    rendered_plan = plan_with_rerendered_svg(resolved.plan)
+    svg = rendered_plan.svg
 
     # IR routing: when ``OMNIPLOT_IR_ENABLED=1`` AND the dialect isn't
     # EBB (which has its own native emitter), route through
@@ -120,8 +126,8 @@ def run_generate(
             svg,
             profile,
             layers=resolved.plan.layers,
-            scale_mode=resolved.plan.scale_mode,
-            margin_mm=resolved.plan.margin_mm,
+            scale_mode=rendered_plan.scale_mode,
+            margin_mm=rendered_plan.margin_mm,
             placement=_placement_for_engine(resolved),
         )
     elif is_ir_enabled():
@@ -133,8 +139,8 @@ def run_generate(
             geometry,
             profile,
             layers=resolved.plan.layers,
-            scale_mode=resolved.plan.scale_mode,
-            margin_mm=resolved.plan.margin_mm,
+            scale_mode=rendered_plan.scale_mode,
+            margin_mm=rendered_plan.margin_mm,
             placement=_placement_for_engine(resolved),
         )
     else:
@@ -142,8 +148,8 @@ def run_generate(
             svg,
             profile,
             layers=resolved.plan.layers,
-            scale_mode=resolved.plan.scale_mode,
-            margin_mm=resolved.plan.margin_mm,
+            scale_mode=rendered_plan.scale_mode,
+            margin_mm=rendered_plan.margin_mm,
             placement=_placement_for_engine(resolved),
         )
     return GenerateOutcome(
