@@ -110,7 +110,7 @@
     "rename": "Renommer",
     "placements": "{count} sur le plan",
     "deleteTitle": "Supprimer le fichier",
-    "deleteConfirm": "Supprimer « {name} » de la bibliothèque ? Les instances déjà placées sur le plan conserveront leur contenu.",
+    "deleteConfirm": "Supprimer « {name} » de la bibliothèque ? Les instances déjà placées sur le plan seront également retirées.",
     "dropToImport": "Déposer pour ajouter à la bibliothèque",
     "uploadInProgress": "Un envoi est déjà en cours."
   },
