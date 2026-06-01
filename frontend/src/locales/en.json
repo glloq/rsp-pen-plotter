@@ -109,6 +109,7 @@
     "moveTo": "Move to folder",
     "rename": "Rename",
     "placements": "{count} on plan",
+    "deleteTitle": "Delete file",
     "deleteConfirm": "Delete \"{name}\" from the library? Placements on the plan will keep their content.",
     "dropToImport": "Drop to add to the library",
     "uploadInProgress": "An upload is already in progress."

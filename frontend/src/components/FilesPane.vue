@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
+import { confirmAction } from '../composables/confirm'
 import { FILE_ACCEPT } from '../composables/useFileManager'
 import { useJobStore } from '../stores/job'
 import { useLibraryStore } from '../stores/library'
@@ -244,7 +245,14 @@ async function moveFile(file: LibraryFileRecord): Promise<void> {
 }
 
 async function removeFile(file: LibraryFileRecord): Promise<void> {
-  if (!window.confirm(t('files.deleteConfirm', { name: file.source_file }))) return
+  const confirmed = await confirmAction({
+    title: t('files.deleteTitle'),
+    message: t('files.deleteConfirm', { name: file.source_file }),
+    confirmLabel: t('files.remove'),
+    cancelLabel: t('confirm.cancel'),
+    danger: true,
+  })
+  if (!confirmed) return
   await library.remove(file.file_id)
   // Drop any placement (visible or "Edit from library" draft) backed by the
   // deleted file so it can't linger on the plan and leak into a later

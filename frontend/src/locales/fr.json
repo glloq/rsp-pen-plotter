@@ -109,6 +109,7 @@
     "moveTo": "Déplacer vers le dossier",
     "rename": "Renommer",
     "placements": "{count} sur le plan",
+    "deleteTitle": "Supprimer le fichier",
     "deleteConfirm": "Supprimer « {name} » de la bibliothèque ? Les instances déjà placées sur le plan conserveront leur contenu.",
     "dropToImport": "Déposer pour ajouter à la bibliothèque",
     "uploadInProgress": "Un envoi est déjà en cours."
