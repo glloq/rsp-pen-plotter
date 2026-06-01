@@ -110,7 +110,7 @@
     "rename": "Rename",
     "placements": "{count} on plan",
     "deleteTitle": "Delete file",
-    "deleteConfirm": "Delete \"{name}\" from the library? Placements on the plan will keep their content.",
+    "deleteConfirm": "Delete \"{name}\" from the library? Placements on the plan will also be removed.",
     "dropToImport": "Drop to add to the library",
     "uploadInProgress": "An upload is already in progress."
   },
