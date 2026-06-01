@@ -46,12 +46,11 @@ def run_preflight(plan: PrintPlan, profile: MachineProfile) -> PreflightOutcome:
     # + library_file_id + source_mime, re-render the text source so
     # the preflight metrics (path length, drawing time, bounds) reflect
     # the operator's latest typography edits — not the SVG that was
-    # rendered at upload time. The wrapper also forces fit-to-placement
-    # scaling when it swaps the SVG so the preflight report sees the
-    # same geometry the gcode generator will draw (the rerender drops
-    # the composite's placement transform — fit-mode re-scales the raw
-    # page-mm output to the placement rectangle the operator drew).
-    rendered_plan = plan_with_rerendered_svg(resolved.plan)
+    # rendered at upload time. Passing the profile also bakes the
+    # placement transform onto the rerendered SVG so the preflight
+    # report sees geometry already positioned in workspace mm — the
+    # same geometry the generator will subsequently render.
+    rendered_plan = plan_with_rerendered_svg(resolved.plan, profile)
     report = preflight_report(
         rendered_plan.svg,
         profile,

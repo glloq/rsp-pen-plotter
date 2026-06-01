@@ -24,6 +24,7 @@ from pen_plotter.application.text_render import (
     typography_to_options,
 )
 from pen_plotter.domain.print_plan import PlacementPlan, PrintPlan, TypographyPlan
+from pen_plotter.models import MachineProfile, WorkspaceBounds
 
 
 def _seed_library_file(
@@ -285,70 +286,143 @@ def test_plan_with_rerendered_svg_swaps_svg_on_success(
     assert out.library_file_id == plan.library_file_id
 
 
-def test_plan_with_rerendered_svg_forces_fit_when_placement_set(
+def _profile(x_max: float = 297.0, y_max: float = 210.0) -> MachineProfile:
+    """Minimal MachineProfile for placement-bake tests."""
+    return MachineProfile(
+        name="Test A4",
+        units="mm",
+        workspace=WorkspaceBounds(x_min=0.0, y_min=0.0, x_max=x_max, y_max=y_max),
+        origin="top_left",
+        gcode_dialect="grbl",
+        pen_up_command="M280 P0 S40",
+        pen_down_command="M280 P0 S90",
+        tool_change_method="manual_pause",
+        tool_change_command="M0",
+        drawing_speed_mm_s=30.0,
+        travel_speed_mm_s=120.0,
+        acceleration_mm_s2=500.0,
+        pen_slot_count=1,
+        supports_arcs=False,
+        arc_tolerance_mm=0.1,
+        ebb=None,
+        pens=[],
+    )
+
+
+def test_plan_with_rerendered_svg_bakes_placement_transform(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Rerender with a placement → scale_mode='fit', margin=0.
+    """Rerender with profile + placement → SVG carries the placement transform.
 
-    The frontend's composite SVG bakes the placement transform into the
-    geometry, so the plan ships ``scale_mode='actual'`` (paths are
-    already in workspace mm). When the rerender swaps the composite for
-    a raw page-mm SVG, the placement transform is lost — leaving
-    ``scale_mode='actual'`` would draw the text at its native page size
-    centred on the placement region, overflowing the rectangle and the
-    workspace whenever the operator shrank the placement (e.g. to fit a
-    multi-page-tall body of text on the bed). Switching to fit-mode
-    scales the rendered bbox into the placement rectangle the operator
-    drew on the plan.
+    The frontend's composite SVG bakes the placement transform onto
+    every placement (independent x / y scales + translate to workspace
+    mm), so a plain ``scale_mode='actual'`` render lands at the right
+    spot. The rerender drops that transform; without re-applying it
+    the rendered text either overflows the workspace at native page
+    mm or letterboxes inside the placement rect at uniform fit-scale.
+    Baking the transform onto the rerendered SVG restores the exact
+    composite behaviour: the inked content lands at the placement
+    rectangle's position in workspace mm, with independent x / y
+    scales so a non-proportional resize stretches the text the same
+    way the plan tab shows.
     """
     body = b"Hello\n"
     _seed_library_file(monkeypatch, tmp_path, file_id="placed-1", data=body, suffix=".txt")
+    placement = PlacementPlan(
+        sheet_width_mm=100.0,
+        sheet_height_mm=80.0,
+        offset_x_mm=20.0,
+        offset_y_mm=15.0,
+    )
     plan = _text_plan(
         library_file_id="placed-1",
         source_mime="text/plain",
         typography=TypographyPlan(),
         svg="<svg>STALE</svg>",
-        placement=PlacementPlan(
-            sheet_width_mm=100.0,
-            sheet_height_mm=80.0,
-            offset_x_mm=20.0,
-            offset_y_mm=15.0,
-        ),
-        scale_mode="actual",
-        margin_mm=0.0,
+        placement=placement,
     )
-    out = plan_with_rerendered_svg(plan)
-    assert out.scale_mode == "fit"
-    assert out.margin_mm == 0.0
-    # The placement itself is preserved verbatim — only the scaling
-    # mode flipped so the rendered text fits inside the same rectangle.
-    assert out.placement == plan.placement
+    out = plan_with_rerendered_svg(plan, _profile())
+    # The SVG was swapped (no longer the placeholder) and a transform
+    # was applied so the rendered geometry lives in workspace mm.
+    assert "STALE" not in out.svg
+    assert "matrix(" in out.svg
+    # The viewBox was rewritten to the workspace bounds so downstream
+    # svgelements reads coordinates in workspace mm.
+    assert 'viewBox="0.0 0.0 297.0 210.0"' in out.svg or 'viewBox="0 0 297' in out.svg
+    # ``scale_mode`` / ``margin_mm`` are NOT mutated — the baked SVG
+    # already lives at the placement rect, so the plan's existing
+    # actual-mode flow yields identity in ``_make_transform``.
+    assert out.scale_mode == plan.scale_mode
+    assert out.margin_mm == plan.margin_mm
 
 
-def test_plan_with_rerendered_svg_keeps_scale_mode_without_placement(
+def test_plan_with_rerendered_svg_bake_matches_placement_rect(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """No placement → leave scale_mode / margin alone.
+    """The baked geometry's bbox matches the placement rectangle exactly.
 
-    Single-source plans without a placement render against the whole
-    workspace; the existing ``scale_mode`` (typically 'fit' with the
-    operator's margin) already produces the right footprint, so the
-    rerender path must not silently flip it.
+    The point of baking the transform is that the generator can pass
+    the SVG through verbatim and land at the right size. Measure the
+    rerendered SVG with svgelements after the bake and confirm its
+    bbox in workspace mm matches the operator's placement rectangle —
+    independent of the page-mm size the typography defaulted to.
     """
-    body = b"Hello\n"
-    _seed_library_file(monkeypatch, tmp_path, file_id="unplaced-1", data=body, suffix=".txt")
+    from pen_plotter.core.layers import _measure as _measure_svg
+
+    body = b"Hello world\nSecond line\n"
+    _seed_library_file(monkeypatch, tmp_path, file_id="placed-2", data=body, suffix=".txt")
+    placement = PlacementPlan(
+        sheet_width_mm=60.0,
+        sheet_height_mm=40.0,
+        offset_x_mm=25.0,
+        offset_y_mm=30.0,
+    )
     plan = _text_plan(
-        library_file_id="unplaced-1",
+        library_file_id="placed-2",
         source_mime="text/plain",
         typography=TypographyPlan(),
         svg="<svg>STALE</svg>",
-        placement=None,
-        scale_mode="fit",
-        margin_mm=12.5,
+        placement=placement,
+    )
+    out = plan_with_rerendered_svg(plan, _profile())
+    _, bbox = _measure_svg(out.svg)
+    # Each axis matches the placement rectangle to within tight
+    # tolerance — the baked transform is the affine that maps the
+    # inked content bbox onto the placement rect.
+    assert bbox.x_min == pytest.approx(placement.offset_x_mm, abs=0.05)
+    assert bbox.y_min == pytest.approx(placement.offset_y_mm, abs=0.05)
+    assert bbox.x_max == pytest.approx(
+        placement.offset_x_mm + placement.sheet_width_mm, abs=0.05
+    )
+    assert bbox.y_max == pytest.approx(
+        placement.offset_y_mm + placement.sheet_height_mm, abs=0.05
+    )
+
+
+def test_plan_with_rerendered_svg_skips_bake_without_profile(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """No profile passed → SVG is swapped but no transform is applied.
+
+    Older test fixtures (and legacy callers) that don't have a profile
+    handy still get the SVG swap, just without the placement-bake. The
+    G-code generator then falls back to centring the raw page-mm bbox
+    on the placement region — slightly off-size but no crash.
+    """
+    body = b"Hello\n"
+    _seed_library_file(monkeypatch, tmp_path, file_id="placed-3", data=body, suffix=".txt")
+    plan = _text_plan(
+        library_file_id="placed-3",
+        source_mime="text/plain",
+        typography=TypographyPlan(),
+        svg="<svg>STALE</svg>",
+        placement=PlacementPlan(
+            sheet_width_mm=50.0, sheet_height_mm=50.0, offset_x_mm=0.0, offset_y_mm=0.0
+        ),
     )
     out = plan_with_rerendered_svg(plan)
-    assert out.scale_mode == "fit"
-    assert out.margin_mm == 12.5
+    assert "STALE" not in out.svg
+    assert "matrix(" not in out.svg
 
 
 def test_plan_with_rerendered_svg_returns_input_unchanged_on_fallback() -> None:
