@@ -180,6 +180,101 @@ def test_render_text_keeps_smart_punctuation() -> None:
     assert smart.count("M") == plain.count("M")
 
 
+def _max_x(svg: str) -> float:
+    import re
+
+    xs = [float(m) for m in re.findall(r"[ML]\s*(-?\d+(?:\.\d+)?)\s", svg)]
+    return max(xs) if xs else 0.0
+
+
+def test_placed_span_compresses_to_source_width() -> None:
+    """PDF/DOCX text spans must fit their source layout width.
+
+    PyMuPDF reports each span's ``bbox`` so we know what horizontal
+    extent the source document expected. Hershey glyphs are wider than
+    a typical TrueType face, so plotting at native width would push the
+    span past the right edge of the source line — the operator sees
+    "lines too long" / "running off the page". The renderer compresses
+    each span horizontally to fit the source width.
+    """
+    natural = render_placed_spans(
+        [PlacedSpan(text="Hello world", x=0.0, baseline_y=20.0, size=10.0)]
+    )
+    natural_x_max = _max_x(natural)
+    # Squeeze to 75 % — well above the 60 % legibility floor so the
+    # exact target is reachable.
+    target = natural_x_max * 0.75
+    squeezed = render_placed_spans(
+        [
+            PlacedSpan(
+                text="Hello world",
+                x=0.0,
+                baseline_y=20.0,
+                size=10.0,
+                source_width=target,
+            )
+        ]
+    )
+    squeezed_x_max = _max_x(squeezed)
+    # Compression brings the span back within the source extent (allow
+    # a tiny epsilon for float rounding in the SVG coords).
+    assert squeezed_x_max <= target + 0.5
+    # And every glyph is still drawn — same number of strokes as the
+    # uncompressed reference.
+    assert squeezed.count("M") == natural.count("M")
+
+
+def test_placed_span_floors_compression_for_legibility() -> None:
+    """If the source width is absurdly small, compression clamps so
+    single-stroke glyphs don't collide into an unreadable blob.
+
+    The placed-span floor (40 %) is more aggressive than the
+    plain-text wrap floor (60 %) because PDF / DOCX spans have no
+    word-wrap fallback — they must fit the source layout at any cost,
+    so we trade some letter-crowding for layout fidelity.
+    """
+    natural = render_placed_spans(
+        [PlacedSpan(text="text", x=0.0, baseline_y=20.0, size=10.0)]
+    )
+    natural_x_max = _max_x(natural)
+    # Ask for 10 % of natural — far below the placed-span floor.
+    crushed = render_placed_spans(
+        [
+            PlacedSpan(
+                text="text",
+                x=0.0,
+                baseline_y=20.0,
+                size=10.0,
+                source_width=natural_x_max * 0.1,
+            )
+        ]
+    )
+    crushed_x_max = _max_x(crushed)
+    # Final extent stays around the 40 % floor, not the requested 10 %.
+    assert crushed_x_max >= natural_x_max * 0.35
+    assert crushed_x_max <= natural_x_max * 0.45
+
+
+def test_placed_span_no_compression_when_fits_natively() -> None:
+    """A source_width larger than the natural Hershey extent leaves
+    the span unchanged — we never stretch."""
+    baseline = render_placed_spans(
+        [PlacedSpan(text="ok", x=0.0, baseline_y=20.0, size=10.0)]
+    )
+    roomy = render_placed_spans(
+        [
+            PlacedSpan(
+                text="ok",
+                x=0.0,
+                baseline_y=20.0,
+                size=10.0,
+                source_width=10_000.0,
+            )
+        ]
+    )
+    assert baseline == roomy
+
+
 def test_render_placed_spans_keeps_accented_letters() -> None:
     """The PDF/DXF placed-span path also sanitizes Unicode.
 

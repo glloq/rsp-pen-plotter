@@ -44,6 +44,16 @@ _BOLD_OFFSET_RATIO = 0.06
 # being readable, so any token still too wide at that point is split.
 _MIN_LINE_SCALE = 0.6
 
+# Minimum horizontal scale for the placed-span path (PDF / DOCX / SVG
+# re-render). Placed spans must fit their source layout exactly — there
+# is no word-wrap fallback like the plain-text flow has — so we accept
+# more aggressive compression than ``_MIN_LINE_SCALE`` to keep the
+# operator's document layout intact. Single-stroke glyphs at 40 %
+# scale stay distinguishable even when they crowd together, which the
+# operator reads as "tight text" rather than "lines running off the
+# page".
+_MIN_PLACED_SPAN_SCALE = 0.4
+
 # Pre-substitution table for code points that have no Hershey glyph but
 # read identically (or close enough) as one or more printable ASCII
 # characters. The upstream ``HersheyFonts`` library silently drops any
@@ -274,6 +284,15 @@ class PlacedSpan:
     same units; the renderer normalizes Hershey output so a capital
     letter is ~70 % of that height, matching the cap-height convention
     of TrueType faces.
+
+    ``source_width`` is the source document's intended visual width of
+    this span (typically the PyMuPDF ``bbox`` width). When set and the
+    Hershey rendering is wider — which is common because single-stroke
+    Hershey glyphs are typically broader than the source TrueType face
+    at the same point size — the renderer compresses the span's x
+    coordinates so its inter-letter and inter-word spacing tightens to
+    fit the source extent, instead of overflowing past the right edge
+    of the line in the source document's layout.
     """
 
     text: str
@@ -282,6 +301,7 @@ class PlacedSpan:
     size: float
     bold: bool = False
     italic: bool = False
+    source_width: float | None = None
 
 
 def render_placed_spans(
@@ -360,23 +380,47 @@ def _placed_span_path(hf: HersheyFonts, span: PlacedSpan, text: str) -> str:
     ``text`` is the font-sanitized string to draw; ``span.text`` is the
     caller's original (pre-sanitization) source, kept so any future
     diagnostics can show the raw input.
+
+    When ``span.source_width`` is set and the natural Hershey extent of
+    ``text`` is wider, the glyphs are compressed horizontally (down to
+    ``_MIN_LINE_SCALE``) so the span fits the source document's
+    intended layout — otherwise PDF / DOCX text drifts rightward and
+    overflows the line because Hershey glyphs are wider than the
+    document's original TrueType face at the same point size.
     """
     italic_shear = math.tan(math.radians(_ITALIC_SLANT_DEG)) if span.italic else 0.0
     bold_offset = span.size * _BOLD_OFFSET_RATIO if span.bold else 0.0
     passes = (0.0, bold_offset) if span.bold else (0.0,)
 
+    # Snapshot strokes once: ``strokes_for_text`` advances internal
+    # state and we re-walk the polylines for both the measurement and
+    # the (possibly doubled) draw passes.
+    strokes = [list(stroke) for stroke in hf.strokes_for_text(text)]
+
+    x_scale = 1.0
+    if span.source_width is not None and span.source_width > 0:
+        x_max = -math.inf
+        for stroke in strokes:
+            for x, _ in stroke:
+                if x > x_max:
+                    x_max = x
+        # Account for the bold pass's right-side offset so a bold span
+        # is squeezed enough to fit including its widening pass.
+        natural_w = (x_max if x_max != -math.inf else 0.0) + bold_offset
+        if natural_w > span.source_width:
+            x_scale = max(_MIN_PLACED_SPAN_SCALE, span.source_width / natural_w)
+
     subpaths: list[str] = []
     for offset_x in passes:
-        for stroke in hf.strokes_for_text(text):
-            pts = list(stroke)
-            if len(pts) < 2:
+        for stroke in strokes:
+            if len(stroke) < 2:
                 continue
             placed = [
                 (
-                    span.x + offset_x + x + y * italic_shear,
+                    span.x + (offset_x + x) * x_scale + y * italic_shear,
                     span.baseline_y - y,
                 )
-                for x, y in pts
+                for x, y in stroke
             ]
             head = f"M{placed[0][0]:.2f} {placed[0][1]:.2f}"
             tail = " ".join(f"L{px:.2f} {py:.2f}" for px, py in placed[1:])

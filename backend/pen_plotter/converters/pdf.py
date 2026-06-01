@@ -89,6 +89,23 @@ def extract_pdf_text_spans(data: bytes, page_index: int) -> list[PlacedSpan]:
                         continue
                     origin = span.get("origin") or (0.0, 0.0)
                     flags = int(span.get("flags", 0))
+                    # The PDF's span ``bbox`` gives the source layout's
+                    # intended horizontal extent. We forward the distance
+                    # from the span's text origin to the right edge of
+                    # its bbox so the Hershey renderer can squeeze its
+                    # (typically wider) single-stroke glyphs back to
+                    # fit — preserving the document's line layout
+                    # instead of drifting past the right edge of the
+                    # page. Measuring from ``origin.x`` (not
+                    # ``bbox.x0``) keeps the target accurate when the
+                    # first glyph has a left side bearing that pulls
+                    # the bbox past the actual text start.
+                    bbox = span.get("bbox")
+                    source_width: float | None = None
+                    if bbox and len(bbox) >= 4:
+                        width = float(bbox[2]) - float(origin[0])
+                        if width > 0:
+                            source_width = width
                     spans.append(
                         PlacedSpan(
                             text=text,
@@ -97,6 +114,7 @@ def extract_pdf_text_spans(data: bytes, page_index: int) -> list[PlacedSpan]:
                             size=float(span.get("size", 10.0)),
                             bold=bool(flags & _FLAG_BOLD),
                             italic=bool(flags & _FLAG_ITALIC),
+                            source_width=source_width,
                         )
                     )
     return spans
