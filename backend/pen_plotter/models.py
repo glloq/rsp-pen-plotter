@@ -123,6 +123,13 @@ class MachineProfile(BaseModel):
     arc_tolerance_mm: float = 0.1
     ebb: EbbConfig | None = None
     pens: list[PenSlot] | None = None
+    # Machine-coordinate point the head parks at before a *manual* pen swap
+    # (``manual_pause`` mode) or a magazine load pause, so the operator can
+    # reach the holder without the head sitting over the drawing. ``None``
+    # falls back to the workspace home corner (``x_min`` / ``y_min``).
+    # Carousel / rack profiles ignore this — they travel to the calibrated
+    # slot position (carousel) or drive their own swap macro (rack) instead.
+    pen_change_position: Point | None = None
     # v0.2 Capability Model (roadmap A.5). Optional in YAML — when
     # absent we derive a default from ``tool_change_method`` so legacy
     # profiles load unchanged. When set, the explicit block wins and

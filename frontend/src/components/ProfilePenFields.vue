@@ -524,6 +524,23 @@ function setMode(mode: ColorMode): void {
   }
   tc.host_macro = []
 }
+
+// Pen-change park position (manual swaps). Edited as two optional axes;
+// clearing both drops back to ``null`` so the backend parks at the
+// workspace home corner. A single populated axis defaults the other to 0.
+function onChangePos(axis: 'x' | 'y', raw: string): void {
+  const thisVal = raw.trim() === '' ? null : Number(raw)
+  const current = props.draft.pen_change_position ?? null
+  const otherVal = axis === 'x' ? (current?.y ?? null) : (current?.x ?? null)
+  if (thisVal === null && otherVal === null) {
+    props.draft.pen_change_position = null
+    return
+  }
+  props.draft.pen_change_position = {
+    x: axis === 'x' ? (thisVal ?? 0) : (current?.x ?? 0),
+    y: axis === 'y' ? (thisVal ?? 0) : (current?.y ?? 0),
+  }
+}
 </script>
 
 <template>
@@ -598,6 +615,44 @@ function setMode(mode: ColorMode): void {
         </p>
       </div>
       <p v-else class="text-[11px] text-slate-500">{{ t('profile.monoNote') }}</p>
+
+      <!-- Manual swap: where the head parks before prompting the operator,
+           so the pen can be reached clear of the drawing. Blank = workspace
+           home corner. -->
+      <div
+        v-if="colorMode === 'manual'"
+        class="rounded-lg border border-slate-700 bg-slate-900/50 p-3"
+        data-test="pen-change-position"
+      >
+        <p class="text-[11px] uppercase tracking-wider text-slate-400">
+          {{ t('profile.penChangePosition') }}
+        </p>
+        <p class="mt-0.5 text-[11px] text-slate-500">{{ t('profile.penChangePositionHint') }}</p>
+        <div class="mt-2 grid grid-cols-2 gap-2">
+          <label class="block text-[11px] text-slate-400"
+            >{{ t('magazine.posX') }}
+            <input
+              type="number"
+              step="any"
+              :value="draft.pen_change_position?.x ?? ''"
+              :placeholder="String(draft.workspace.x_min)"
+              class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              @change="(e) => onChangePos('x', (e.target as HTMLInputElement).value)"
+            />
+          </label>
+          <label class="block text-[11px] text-slate-400"
+            >{{ t('magazine.posY') }}
+            <input
+              type="number"
+              step="any"
+              :value="draft.pen_change_position?.y ?? ''"
+              :placeholder="String(draft.workspace.y_min)"
+              class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              @change="(e) => onChangePos('y', (e.target as HTMLInputElement).value)"
+            />
+          </label>
+        </div>
+      </div>
 
       <!-- CASE 1 — firmware magazine: a single G-code command the
            controller interprets to swap the pen itself. -->

@@ -79,6 +79,14 @@ class PrintRun(SQLModel, table=True):
     # Streamer consumes this when available and falls back to
     # ``pause_points`` for runs queued before the column existed.
     swap_actions: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    # Operator-facing prompt for the swap the run is currently halted on
+    # (e.g. "Change pen to Red (#ff0000)" or "Load Red into magazine slot
+    # 2"). Set while the streamer sits in its ``WAITING`` state for an
+    # operator-confirm tool change and the run is surfaced as ``paused``;
+    # cleared the moment streaming resumes. Lets the cockpit show *what*
+    # to do and bridge the gap between the controller's transient WAITING
+    # state and the durable run state the UI drives off of.
+    swap_prompt: str | None = None
     # Layers that were skipped at runtime under a ``skip_layer`` recovery
     # policy. Populated when the streamer raises ``StreamError`` and the
     # active policy says "skip and continue" — see ``_skip_to_next_layer``.
@@ -169,7 +177,8 @@ def _update(run_id: str, target: Engine, **fields: object) -> PrintRun | None:
 
 
 _LAYER_BOUNDARY_RE = re.compile(
-    r"^\s*;\s*(?:Change\s+to\s+pen\s+slot\s+(\d+)\s*\((.*?)\)|Change\s+pen[:\s]+(.+)|layer[-_\s](\S+))",
+    r"^\s*;\s*(?:Change\s+to\s+pen\s+slot\s+(\d+)\s*\((.*?)\)|Load\s+pen\s+slot\s+(\d+)\s*\((.*?)\)"
+    r"|Change\s+pen[:\s]+(.+)|layer[-_\s](\S+))",
     re.IGNORECASE,
 )
 
@@ -354,10 +363,32 @@ class PrintQueue:
         self._cancel_requested = False
         _update(run.id, self._engine, state=RunState.RUNNING, error=None)
 
+        # Tracks the swap state we last mirrored into the DB so we only
+        # write a row when it actually flips (the streamer emits progress
+        # on every acked line; we don't want a redundant UPDATE each time).
+        swap_state = {"waiting": False}
+
         async def checkpoint(progress: object) -> None:
             acked = getattr(progress, "acked", 0)
             absolute = min(start_checkpoint + max(0, acked - preamble_len), run.total_lines)
-            _update(run.id, self._engine, acked_lines=absolute)
+            fields: dict[str, object] = {"acked_lines": absolute}
+            state = getattr(progress, "state", None)
+            if state == StreamState.WAITING:
+                # The streamer parked for an operator-confirm swap. Surface
+                # it as a durable ``paused`` run carrying the prompt so the
+                # cockpit/header/atelier can show what to do + offer Resume
+                # (which routes back through ``controller.resume()``).
+                if not swap_state["waiting"]:
+                    swap_state["waiting"] = True
+                    fields["state"] = RunState.PAUSED
+                    fields["swap_prompt"] = getattr(progress, "message", None)
+            elif state == StreamState.RUNNING and swap_state["waiting"]:
+                # Streaming resumed past the swap — clear the prompt and
+                # restore the running state.
+                swap_state["waiting"] = False
+                fields["state"] = RunState.RUNNING
+                fields["swap_prompt"] = None
+            _update(run.id, self._engine, **fields)
 
         try:
             final = await self._controller.stream(
@@ -421,10 +452,20 @@ class PrintQueue:
             self._current_id = None
 
         if final.state == StreamState.DONE:
-            _update(run.id, self._engine, state=RunState.COMPLETED, acked_lines=run.total_lines)
+            _update(
+                run.id,
+                self._engine,
+                state=RunState.COMPLETED,
+                acked_lines=run.total_lines,
+                swap_prompt=None,
+            )
         elif final.state == StreamState.ABORTED:
             state = RunState.CANCELED if self._cancel_requested else RunState.PAUSED
-            _update(run.id, self._engine, state=state)
+            # Keep the swap prompt when the abort left the run paused
+            # mid-swap (so the cockpit still shows what to do on resume);
+            # clear it on an outright cancel.
+            clear = {"swap_prompt": None} if state == RunState.CANCELED else {}
+            _update(run.id, self._engine, state=state, **clear)
         return True
 
     def pause(self, run_id: str) -> PrintRun | None:

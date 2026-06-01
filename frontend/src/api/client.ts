@@ -182,6 +182,10 @@ export interface MachineProfile {
   arc_tolerance_mm: number
   ebb: EbbConfig | null
   pens: PenSlot[] | null
+  // Machine-coordinate point the head parks at before a *manual* pen swap
+  // (or a magazine load pause) so the operator can reach the holder. Null
+  // falls back to the workspace home corner. Carousel/rack ignore it.
+  pen_change_position?: Point | null
   // v0.2 capability model — the runtime source of truth for *how* a
   // tool change executes (firmware trigger vs host macro vs manual
   // prompt). When set the backend persists it verbatim; when null it
@@ -403,6 +407,12 @@ export interface PrintRun {
   state: RunState
   priority: number
   error: string | null
+  /** Operator-facing prompt for the swap the run is currently halted on
+   *  (e.g. "Change pen to Red (#ff0000)" or "Load Red into magazine slot
+   *  2"). Set while the run is ``paused`` for an operator-confirm tool
+   *  change; null otherwise. Drives the swap modal + the "Action requise"
+   *  hint, and lets the cockpit tell a swap pause from a plain pause. */
+  swap_prompt?: string | null
   /** Layers skipped at runtime under a ``skip_layer`` recovery
    *  policy. Populated by the backend when ``StreamError`` triggers
    *  the skip-and-continue path; empty otherwise. The UI surfaces it
