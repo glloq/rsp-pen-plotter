@@ -12,6 +12,7 @@ pen-down pass instead of lifting the pen between every line segment.
 from __future__ import annotations
 
 import math
+import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal
@@ -33,6 +34,173 @@ _ITALIC_SLANT_DEG = 12.0
 # paints a thicker line — the SVG ``stroke-width`` attribute is cosmetic
 # on a pen plotter and does not actually broaden the drawn strokes.
 _BOLD_OFFSET_RATIO = 0.06
+
+# Pre-substitution table for code points that have no Hershey glyph but
+# read identically (or close enough) as one or more printable ASCII
+# characters. The upstream ``HersheyFonts`` library silently drops any
+# character that is not in its glyph dict — and the bundled fonts only
+# carry printable ASCII (codes 32–127). Without this table, ``café``
+# ends up plotted as ``caf``, smart-quoted text loses its quotes, and
+# every em dash vanishes; worse, the dropped characters contribute zero
+# advance, so the surrounding word collapses into a tighter run that the
+# operator reads as a typo. The mapping is intentionally conservative —
+# only characters whose ASCII rendering would not surprise a francophone
+# / anglophone reader. Anything else falls through to NFKD decomposition
+# (which strips combining accents from Latin code points) and finally to
+# :data:`_FALLBACK_CHAR` so the missing glyph is visible rather than
+# silently dropped.
+_TYPOGRAPHIC_REPLACEMENTS = {
+    # Whitespace variants — collapse to ordinary space so word wrap works.
+    " ": " ",  # NBSP
+    " ": " ",  # ogham space mark
+    " ": " ",  # en space
+    " ": " ",  # em space
+    " ": " ",  # three-per-em space
+    " ": " ",  # four-per-em space
+    " ": " ",  # six-per-em space
+    " ": " ",  # figure space
+    " ": " ",  # punctuation space
+    " ": " ",  # thin space
+    " ": " ",  # hair space
+    " ": " ",  # narrow no-break space
+    " ": " ",  # medium mathematical space
+    "　": " ",  # ideographic space
+    # Zero-width chars — drop entirely so they don't ghost as fallback "?".
+    "​": "",   # zero-width space
+    "‌": "",   # zero-width non-joiner
+    "‍": "",   # zero-width joiner
+    "⁠": "",   # word joiner
+    "﻿": "",   # BOM / zero-width no-break space
+    # Smart quotes and guillemets.
+    "‘": "'",
+    "’": "'",
+    "‚": ",",
+    "‛": "'",
+    "“": '"',
+    "”": '"',
+    "„": '"',
+    "‟": '"',
+    "«": '"',  # «
+    "»": '"',  # »
+    "‹": "<",  # ‹
+    "›": ">",  # ›
+    # Dashes — all collapse to hyphen-minus.
+    "‐": "-",
+    "‑": "-",
+    "‒": "-",
+    "–": "-",
+    "—": "-",
+    "―": "-",
+    "−": "-",
+    # Ellipsis and other punctuation.
+    "…": "...",
+    "·": ".",   # middle dot
+    "•": "*",   # bullet
+    "‣": "*",
+    "◦": "o",
+    # Math operators that have an obvious ASCII fallback.
+    "×": "x",   # ×
+    "÷": "/",   # ÷
+    "≠": "!=",
+    "≤": "<=",
+    "≥": ">=",
+    "±": "+/-",
+    # Ligatures.
+    "ﬀ": "ff",
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
+    "œ": "oe",  # œ
+    "Œ": "OE",  # Œ
+    "æ": "ae",  # æ
+    "Æ": "AE",  # Æ
+    "ß": "ss",  # ß
+    # Currency symbols — keep short so they don't stretch the line.
+    "€": "EUR",
+    "£": "GBP",
+    "¥": "YEN",
+    "¢": "c",   # cent
+    # Common typographic marks that have no ASCII equivalent — keep the
+    # fallback explicit so changes to ``_FALLBACK_CHAR`` propagate.
+    "°": "deg",  # degree sign
+    "©": "(c)",
+    "®": "(R)",
+    "™": "(TM)",
+    "§": "S",   # section sign
+    "¶": "P",   # pilcrow
+}
+
+# Visible placeholder for code points that survive substitution + NFKD
+# decomposition but still aren't in the font. A printed "?" beats a
+# silently shortened word — the operator immediately sees that an input
+# character could not be drawn.
+_FALLBACK_CHAR = "?"
+
+
+def _sanitize_for_font(text: str, supported: frozenset[str]) -> str:
+    """Map ``text`` to characters the loaded Hershey font can render.
+
+    Pipeline, applied per code point:
+
+    1. Pass through anything already in ``supported`` (plus ``\\n`` and
+       ``\\t`` — the layout splits paragraphs on newlines and the input
+       may contain tabs).
+    2. Look up :data:`_TYPOGRAPHIC_REPLACEMENTS` for known typographic
+       variants (smart quotes, dashes, NBSP, ligatures, …) and emit the
+       ASCII replacement (zero, one, or several characters).
+    3. NFKD-decompose the code point and keep the base characters that
+       are supported, dropping Unicode combining marks. This turns
+       Latin diacritics — ``é``, ``ñ``, ``ç`` — into plain Romanizations
+       since the bundled Hershey fonts carry no accented forms.
+    4. Replace anything still unmapped with :data:`_FALLBACK_CHAR` so
+       missing glyphs are visible rather than silently dropped.
+
+    Args:
+        text: Source text from the operator's file (any Unicode).
+        supported: Glyph keys of the currently loaded Hershey font.
+
+    Returns:
+        A string in which every character (other than ``\\n`` / ``\\t``)
+        is either in ``supported`` or equal to :data:`_FALLBACK_CHAR`.
+    """
+    if not text:
+        return text
+    out: list[str] = []
+    for ch in text:
+        if ch in supported or ch == "\n" or ch == "\t":
+            out.append(ch)
+            continue
+        replacement = _TYPOGRAPHIC_REPLACEMENTS.get(ch)
+        if replacement is not None:
+            for r in replacement:
+                out.append(r if r in supported else _FALLBACK_CHAR)
+            continue
+        kept: list[str] = []
+        for c in unicodedata.normalize("NFKD", ch):
+            if unicodedata.combining(c):
+                continue
+            if c in supported:
+                kept.append(c)
+        if kept:
+            out.extend(kept)
+        else:
+            out.append(_FALLBACK_CHAR)
+    return "".join(out)
+
+
+@lru_cache(maxsize=8)
+def _supported_chars(font_name: str) -> frozenset[str]:
+    """Return the glyph keys for a bundled Hershey font.
+
+    Cached because :class:`HersheyFonts` re-decodes the bundled font
+    table from a base64 blob on every ``load_default_font`` call —
+    fine when rendering, wasteful when we only need to know which
+    characters the font carries.
+    """
+    hf = HersheyFonts()
+    hf.load_default_font(font_name)
+    return frozenset(hf.all_glyphs.keys())
 
 
 @lru_cache(maxsize=1)
@@ -137,16 +305,25 @@ def render_placed_spans(
         font = "futural"
     hf = HersheyFonts()
     hf.load_default_font(font)
+    supported = _supported_chars(font)
 
     current_size = 0.0
     paths: list[str] = []
     for span in spans:
         if span.size <= 0 or not span.text.strip():
             continue
+        # Substitute Unicode characters the font cannot render BEFORE
+        # measuring or drawing. Without this, accented Latin letters and
+        # smart-quote punctuation extracted from a PDF/DXF are dropped
+        # by ``strokes_for_text`` and the placed glyphs lose their
+        # surrounding context.
+        sanitized = _sanitize_for_font(span.text, supported)
+        if not sanitized.strip():
+            continue
         if span.size != current_size:
             hf.normalize_rendering(span.size)
             current_size = span.size
-        path_d = _placed_span_path(hf, span)
+        path_d = _placed_span_path(hf, span, sanitized)
         if path_d:
             paths.append(f'<path d="{path_d}"/>')
 
@@ -165,12 +342,15 @@ def render_placed_spans(
     )
 
 
-def _placed_span_path(hf: HersheyFonts, span: PlacedSpan) -> str:
+def _placed_span_path(hf: HersheyFonts, span: PlacedSpan, text: str) -> str:
     """Serialize one placed span's strokes to an SVG path ``d`` value.
 
     Handles the same synthetic style transforms as :class:`HersheyRenderer`
     (bold = double-pass with a small x offset; italic = ~12° x-shear)
     so the placed flow and the laid-out flow paint identical glyphs.
+    ``text`` is the font-sanitized string to draw; ``span.text`` is the
+    caller's original (pre-sanitization) source, kept so any future
+    diagnostics can show the raw input.
     """
     italic_shear = math.tan(math.radians(_ITALIC_SLANT_DEG)) if span.italic else 0.0
     bold_offset = span.size * _BOLD_OFFSET_RATIO if span.bold else 0.0
@@ -178,7 +358,7 @@ def _placed_span_path(hf: HersheyFonts, span: PlacedSpan) -> str:
 
     subpaths: list[str] = []
     for offset_x in passes:
-        for stroke in hf.strokes_for_text(span.text):
+        for stroke in hf.strokes_for_text(text):
             pts = list(stroke)
             if len(pts) < 2:
                 continue
@@ -213,6 +393,13 @@ class HersheyRenderer:
         self._font = HersheyFonts()
         self._font.load_default_font(options.font)
         self._current_size = 0.0
+        # Snapshot of the glyph keys the font carries. Used by
+        # :func:`_sanitize_for_font` to map operator-supplied Unicode to
+        # characters the font can actually draw — without this the
+        # upstream library silently drops anything outside printable
+        # ASCII (accents, smart quotes, em dashes, NBSP, …), which the
+        # operator perceives as "letters going missing".
+        self._supported = frozenset(self._font.all_glyphs.keys())
 
     def render_text(self, text: str) -> str:
         """Render plain text (paragraphs separated by newlines) to SVG.
@@ -248,7 +435,15 @@ class HersheyRenderer:
         for block in blocks:
             self._set_size(block.size_mm)
             line_height = block.size_mm * self.opts.line_spacing
-            for paragraph in block.text.split("\n"):
+            # Sanitize the block's text ONCE at the entry boundary so
+            # every downstream measurement, word-wrap split, and stroke
+            # lookup operates on the same string. Doing it later — e.g.
+            # inside ``_strokes`` only — would desync ``_measure`` (which
+            # would still see the un-sanitized text) and the wrap would
+            # break in the middle of a multi-character replacement like
+            # ``…`` → ``...``.
+            sanitized = _sanitize_for_font(block.text, self._supported)
+            for paragraph in sanitized.split("\n"):
                 for line in self._wrap(paragraph, usable_w):
                     paths.append(self._render_line(line, block.size_mm, cursor_y, usable_w))
                     cursor_y += line_height
@@ -296,17 +491,26 @@ class HersheyRenderer:
         return strokes
 
     def _char_advance(self, ch: str) -> float:
-        """Approximate the advance width of ``ch`` in current font units."""
-        max_x = 0.0
-        for stroke in self._font.strokes_for_text(ch):
-            for x, _ in stroke:
-                if x > max_x:
-                    max_x = x
-        # Spaces have no strokes; fall back to half the cap height so we
-        # still advance the cursor on whitespace.
-        if max_x == 0.0:
-            return self._current_size * 0.4
-        return max_x
+        """Return the typographic advance of ``ch`` in millimeters.
+
+        Uses the glyph's ``char_width`` (right_side − left_side in raw
+        font units) scaled by the active render scale, which matches
+        what :func:`HersheyFonts.strokes_for_text` itself uses to space
+        characters. The earlier implementation read the stroke
+        bounding-box max-x — which omits the right side-bearing and so
+        consistently underestimated the advance, packing letters too
+        tightly in the ``letter_spacing != 0`` path. It also returned a
+        constant fudge for whitespace (spaces have no strokes), giving
+        spaces a different visible width depending on whether
+        ``letter_spacing`` was set.
+        """
+        glyph = self._font.all_glyphs.get(ch)
+        if glyph is None:
+            return 0.0
+        scalex = self._font.render_options["scalex"]
+        # ``scalex`` is positive after ``normalize_rendering``; guard for
+        # the (unused) case where the operator has flipped the axis.
+        return glyph.char_width * abs(scalex)
 
     def _measure(self, line: str) -> float:
         """Return the rendered width of a line in millimeters."""
