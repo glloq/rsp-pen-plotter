@@ -365,11 +365,24 @@ const MODE_TOGGLES: Array<{ id: 'auto' | 'source' | 'split'; key: string }> = [
 // saturation, blur, invert, grayscale) and the geometric ones
 // (rotate, flip, crop) are exact.
 const sourceImageStyle = computed<Record<string, string>>(() => {
+  // Both halves of the source ↔ vector preview need identical sizing
+  // so toggling between Original and Result (or sliding the compare
+  // handle) keeps the page at the same on-screen position and scale.
+  // The SVG half is shrunk to fit via ``[&_svg]:max-h-full
+  // [&_svg]:max-w-full``, so the raster ``<img>`` MUST mirror those
+  // constraints — otherwise it displays at its natural pixel size
+  // (typically the backend's preview-image render is larger than the
+  // pane) and the two views drift apart.
+  const style: Record<string, string> = {
+    maxHeight: '100%',
+    maxWidth: '100%',
+    objectFit: 'contain',
+  }
   // The brightness / contrast / crop knobs only re-render the segmentation
   // for true bitmap uploads — for a rasterised document preview they'd be
   // a cosmetic CSS overlay that doesn't match the actual /preview SVG, so
   // skip them and show the raw page render.
-  if (edit.kind.value !== 'bitmap') return {}
+  if (edit.kind.value !== 'bitmap') return style
   const p = draft.bitmap.value.preprocess
   const filters: string[] = []
   if (p.brightness !== 0) filters.push(`brightness(${1 + p.brightness})`)
@@ -383,11 +396,6 @@ const sourceImageStyle = computed<Record<string, string>>(() => {
   const sx = p.flip_h ? -1 : 1
   const sy = p.flip_v ? -1 : 1
   if (sx !== 1 || sy !== 1) transforms.push(`scale(${sx}, ${sy})`)
-  const style: Record<string, string> = {
-    maxHeight: '100%',
-    maxWidth: '100%',
-    objectFit: 'contain',
-  }
   if (filters.length) style.filter = filters.join(' ')
   if (transforms.length) style.transform = transforms.join(' ')
   if (p.crop) {
@@ -771,9 +779,15 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
           </div>
           <!-- Right band: full vectorisation. v-html is sanitised
                upstream (placementSvg + previewSvg both run through
-               DOMPurify). -->
+               DOMPurify). Match the source half's sizing exactly:
+               ``max-h-full max-w-full`` + ``block`` mirror the
+               raster's ``maxHeight 100% maxWidth 100% objectFit
+               contain`` so dragging the compare slider keeps the page
+               at the same on-screen position and scale (inline-display
+               SVGs leave a baseline gap that pushes them down a few
+               pixels relative to the raster). -->
           <div
-            class="absolute inset-0 flex items-center justify-center overflow-hidden [&_svg]:max-h-full [&_svg]:max-w-full"
+            class="absolute inset-0 flex items-center justify-center overflow-hidden [&_svg]:block [&_svg]:max-h-full [&_svg]:max-w-full"
             :style="{ clipPath: `inset(0 0 0 ${compareSplit * 100}%)` }"
             v-html="splitSvg"
           />
@@ -811,17 +825,22 @@ const svgStats = computed<{ width: number; height: number; paths: number } | nul
           >
         </div>
         <!-- Vectorised placement SVG: the post-upload state, updated by
-             /rerender when layer algorithms change. -->
+             /rerender when layer algorithms change. ``[&_svg]:block``
+             matches the raster source's ``display: block`` so the two
+             modes land at the same on-screen position when the
+             operator toggles between Original and Result — without
+             it, the inline SVG sits a baseline-gap below where the
+             raster sits. -->
         <div
           v-else-if="showPlacementSvg"
-          class="flex h-full w-full items-center justify-center [&_svg]:max-h-full [&_svg]:max-w-full"
+          class="flex h-full w-full items-center justify-center [&_svg]:block [&_svg]:max-h-full [&_svg]:max-w-full"
           v-html="placementSvg"
         />
         <!-- Live /preview SVG: pre-upload state, fed by the draft
              settings on the right pane. -->
         <div
           v-else-if="showLivePreview"
-          class="flex h-full w-full items-center justify-center [&_svg]:max-h-full [&_svg]:max-w-full"
+          class="flex h-full w-full items-center justify-center [&_svg]:block [&_svg]:max-h-full [&_svg]:max-w-full"
           v-html="edit!.previewSvg.value"
         />
         <!-- Local raster thumbnail: lowest-cost fallback for images
