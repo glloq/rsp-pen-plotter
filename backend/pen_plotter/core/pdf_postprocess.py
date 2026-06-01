@@ -1700,10 +1700,10 @@ def split_loose_drawables_by_fill(root: ET.Element, default_label: str = "text")
     for i, child in enumerate(root):
         if _local(child.tag) != "g":
             continue
-        label = child.get(_INKSCAPE_LABEL)
-        if label is None:
+        child_label = child.get(_INKSCAPE_LABEL)
+        if child_label is None:
             continue
-        if label in background_labels or label.startswith("color-"):
+        if child_label in background_labels or child_label.startswith("color-"):
             # Background-style: text goes after it.
             insert_at = i + 1
         else:

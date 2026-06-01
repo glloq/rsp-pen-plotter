@@ -437,6 +437,8 @@ def _generate_gcode_impl(
             if decision.pause:
                 method = profile.tool_change_method
                 travel_feed = profile.travel_speed_mm_s * 60.0
+                park_x: float | None
+                park_y: float | None
                 if decision.slot_changed:
                     prompt_pen = pens.get(effective_slot) if effective_slot is not None else None
                     pen_name = (
