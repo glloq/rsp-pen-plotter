@@ -536,16 +536,21 @@ class HersheyRenderer:
         return x_max - min(x_min, 0.0)
 
     def _wrap(self, paragraph: str, usable_w: float) -> list[str]:
-        """Greedily word-wrap a paragraph to the usable width.
+        """Greedily word-wrap a paragraph to the maximum compressible width.
 
-        Lines that don't fit naturally are kept whole and later squeezed
-        horizontally in :meth:`_render_line` (tightening the inter-letter
-        and inter-word spacing) so the word stays intact — operators
-        prefer slightly cramped text over a word broken in the middle.
-        Only tokens still too wide at the maximum compression
-        (``_MIN_LINE_SCALE``) are hard-broken at character boundaries
-        as a last resort, since below that scale single-stroke glyphs
-        collide and the line stops being legible.
+        Wrapping is performed at ``max_natural_w = usable_w / _MIN_LINE_SCALE``
+        rather than at ``usable_w``: any line whose natural width fits
+        within that bound can be squeezed back to ``usable_w`` by
+        :meth:`_render_line`. Aiming for the compressible bound means a
+        paragraph that overflows the usable area by a moderate amount
+        stays on a single output line (slightly compressed) instead of
+        being re-flowed into two natural-width lines — preserving the
+        source document's line layout and avoiding the vertical
+        overflow that an aggressive re-wrap would cause.
+
+        Tokens still too wide at maximum compression are hard-broken at
+        character boundaries: below ``_MIN_LINE_SCALE`` single-stroke
+        glyphs collide and the line stops being legible.
         """
         words = paragraph.split()
         if not words:
@@ -561,11 +566,7 @@ class HersheyRenderer:
         current = pieces[0]
         for piece in pieces[1:]:
             candidate = f"{current} {piece}"
-            # Stay at the natural usable width as long as we can — only
-            # admit overflow when the next token wouldn't otherwise fit
-            # on a line of its own. The renderer then compresses the
-            # resulting line back into ``usable_w``.
-            if self._measure(candidate) <= usable_w:
+            if self._measure(candidate) <= max_natural_w:
                 current = candidate
             else:
                 lines.append(current)
