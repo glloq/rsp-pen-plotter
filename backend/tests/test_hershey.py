@@ -2,9 +2,12 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
+from pen_plotter.typography import PlacedSpan, render_placed_spans
 from pen_plotter.typography.hershey import (
     HersheyRenderer,
     TypographyOptions,
+    _sanitize_for_font,
+    _supported_chars,
     available_fonts,
 )
 
@@ -103,3 +106,93 @@ def test_letter_spacing_widens_line() -> None:
     base_last = float(base.rsplit("M", 1)[1].split(" ")[0])
     spaced_last = float(spaced.rsplit("M", 1)[1].split(" ")[0])
     assert spaced_last > base_last + 3.0
+
+
+# ---- Unicode sanitization --------------------------------------------------
+#
+# Regression coverage for the "letters going missing" class of bug. The
+# bundled Hershey fonts only carry printable ASCII; without preprocessing,
+# the upstream ``HersheyFonts`` library silently drops every other code
+# point AND lets the dropped character contribute zero advance — so
+# ``café`` plots as ``caf`` with no width for the missing ``é``, and the
+# operator reads it as a typo. The renderer pre-sanitizes every text
+# entry point so accented Latin chars decompose to ASCII, smart quotes
+# and dashes collapse to their typewriter equivalents, NBSPs become
+# spaces, and anything still unsupported renders as a visible ``?``
+# placeholder rather than a hole in the word.
+
+
+def test_sanitize_strips_combining_accents() -> None:
+    """Latin accents decompose to base ASCII letters."""
+    supported = _supported_chars("futural")
+    assert _sanitize_for_font("café", supported) == "cafe"
+    assert _sanitize_for_font("naïveté", supported) == "naivete"
+    assert _sanitize_for_font("Ångström", supported) == "Angstrom"
+
+
+def test_sanitize_maps_smart_quotes_and_dashes() -> None:
+    """Typographic punctuation collapses to ASCII equivalents."""
+    supported = _supported_chars("futural")
+    assert _sanitize_for_font("“Hello”", supported) == '"Hello"'
+    assert _sanitize_for_font("l’\xe9t\xe9", supported) == "l'ete"
+    assert _sanitize_for_font("a—b", supported) == "a-b"
+    assert _sanitize_for_font("a…b", supported) == "a...b"
+    assert _sanitize_for_font("a b", supported) == "a b"
+
+
+def test_sanitize_replaces_unsupported_with_fallback() -> None:
+    """Anything still unsupported after decomposition renders as ``?``.
+
+    A visible placeholder lets the operator see that an input character
+    could not be drawn, instead of the upstream library's silent drop
+    that just shrinks the surrounding word.
+    """
+    supported = _supported_chars("futural")
+    # CJK / emoji aren't in the bundled fonts and don't decompose to Latin.
+    assert "?" in _sanitize_for_font("漢字", supported)
+    assert "?" in _sanitize_for_font("a🙂b", supported)
+
+
+def test_render_text_keeps_accented_letters() -> None:
+    """``café`` renders the same number of strokes as ``cafe``.
+
+    Pre-fix the ``é`` was silently dropped and the SVG was identical to
+    ``caf`` — operators saw the last letter of a French word disappear
+    when moving from file → preparation → print.
+    """
+    accented = HersheyRenderer(TypographyOptions(font_size_mm=10.0)).render_text("café")
+    ascii_ref = HersheyRenderer(TypographyOptions(font_size_mm=10.0)).render_text("cafe")
+    truncated = HersheyRenderer(TypographyOptions(font_size_mm=10.0)).render_text("caf")
+    assert accented.count("M") == ascii_ref.count("M")
+    assert accented.count("M") > truncated.count("M")
+
+
+def test_render_text_keeps_smart_punctuation() -> None:
+    """Smart quotes / em dash / ellipsis all draw, not silently dropped."""
+    smart = HersheyRenderer(TypographyOptions(font_size_mm=10.0)).render_text(
+        "“Hello—world…”"
+    )
+    plain = HersheyRenderer(TypographyOptions(font_size_mm=10.0)).render_text(
+        '"Hello-world..."'
+    )
+    # Same Hershey output: the smart-punctuation form has been mapped
+    # onto the plain ASCII glyph sequence one character at a time.
+    assert smart.count("M") == plain.count("M")
+
+
+def test_render_placed_spans_keeps_accented_letters() -> None:
+    """The PDF/DXF placed-span path also sanitizes Unicode.
+
+    Same pre-fix bug: a PDF page containing ``Économie`` was extracted
+    as the literal Unicode string but Hershey dropped the ``É``, so the
+    word came out missing its capital. Verify the placed flow now
+    matches the equivalent ASCII baseline.
+    """
+    accented = render_placed_spans(
+        [PlacedSpan(text="café", x=0.0, baseline_y=20.0, size=10.0)]
+    )
+    ascii_ref = render_placed_spans(
+        [PlacedSpan(text="cafe", x=0.0, baseline_y=20.0, size=10.0)]
+    )
+    assert accented.count("M") == ascii_ref.count("M")
+    assert accented.count("M") > 0
