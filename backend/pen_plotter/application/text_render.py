@@ -25,11 +25,15 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from xml.etree import ElementTree as ET
 
 from pen_plotter.application.file_library import read_original_bytes
 from pen_plotter.converters.base import UnsupportedFormatError
 from pen_plotter.converters.pipeline import convert_file
-from pen_plotter.domain.print_plan import PrintPlan, TypographyPlan
+from pen_plotter.core.layers import _measure
+from pen_plotter.core.svg_ns import svg_tostring
+from pen_plotter.domain.print_plan import PlacementPlan, PrintPlan, TypographyPlan
+from pen_plotter.models import MachineProfile
 
 _log = logging.getLogger(__name__)
 
@@ -154,7 +158,94 @@ def rerender_text_svg(plan: PrintPlan) -> str | None:
     return converted.svg
 
 
-def plan_with_rerendered_svg(plan: PrintPlan) -> PrintPlan:
+def _bake_placement_transform(
+    svg: str, placement: PlacementPlan, profile: MachineProfile
+) -> str:
+    """Wrap the rerendered SVG's content in the placement transform.
+
+    The frontend's composite SVG bakes a placement transform onto each
+    placement that maps the source's intrinsic coordinates to workspace
+    millimetres — scaling each axis *independently* (so a non-uniform
+    resize on the plan stretches the content) and translating to the
+    operator's chosen position. The rerender replaces that composite
+    with a raw page-mm SVG and loses the transform completely; without
+    a re-application the text either overflows the workspace (at
+    ``scale='actual'``) or renders uniformly-scaled with a letterbox
+    gap (at ``scale='fit'``) — neither matches what the plan tab shows.
+
+    This helper re-applies the equivalent transform: it measures the
+    rerendered SVG's inked bbox, computes the affine that maps that
+    bbox onto the placement rectangle (in workspace mm) with
+    independent x / y scales, and prepends it as a ``transform``
+    attribute on every top-level labeled group. The viewBox is
+    rewritten to the workspace bounds so downstream svgelements reads
+    every stroke in workspace mm. The G-code generator then sees
+    geometry that already lives at the right place and size: at
+    ``scale_mode='actual'`` with the same placement attached, the
+    transform inside ``_make_transform`` collapses to identity and the
+    output matches the plan-tab preview exactly — including any
+    non-proportional resize the operator applied.
+
+    Returns the input unchanged if the SVG can't be parsed or has no
+    measurable geometry (the caller falls back to the unbaked SVG).
+    """
+    _, bbox = _measure(svg)
+    bw = bbox.x_max - bbox.x_min
+    bh = bbox.y_max - bbox.y_min
+    if bw <= 0 or bh <= 0:
+        return svg
+
+    ws = profile.workspace
+    target_x = ws.x_min + placement.offset_x_mm
+    target_y = ws.y_min + placement.offset_y_mm
+    sx = placement.sheet_width_mm / bw
+    sy = placement.sheet_height_mm / bh
+    bbox_cx = (bbox.x_min + bbox.x_max) / 2.0
+    bbox_cy = (bbox.y_min + bbox.y_max) / 2.0
+    target_cx = target_x + placement.sheet_width_mm / 2.0
+    target_cy = target_y + placement.sheet_height_mm / 2.0
+    tx = target_cx - sx * bbox_cx
+    ty = target_cy - sy * bbox_cy
+    matrix = f"matrix({sx:.6f} 0 0 {sy:.6f} {tx:.6f} {ty:.6f})"
+
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return svg
+
+    ws_w = ws.x_max - ws.x_min
+    ws_h = ws.y_max - ws.y_min
+    root.set("viewBox", f"{ws.x_min} {ws.y_min} {ws_w} {ws_h}")
+    if "width" in root.attrib:
+        root.set("width", f"{ws_w}mm")
+    if "height" in root.attrib:
+        root.set("height", f"{ws_h}mm")
+
+    # Apply the matrix to each direct child element — typically the
+    # single labeled group emitted by ``HersheyRenderer``. Prepending
+    # to any existing transform preserves SVG's right-to-left
+    # composition order (placement wraps around child transforms).
+    # The labeled groups have to stay top-level for
+    # ``labeled_group_fragments`` to find them — wrapping in an extra
+    # ``<g>`` would hide them from the layer extractor and collapse
+    # every layer into a single ``layer-1`` fallback.
+    touched = False
+    for child in list(root):
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag in {"defs", "metadata", "title", "desc"}:
+            continue
+        existing = child.get("transform")
+        child.set("transform", f"{matrix} {existing}" if existing else matrix)
+        touched = True
+    if not touched:
+        return svg
+
+    return svg_tostring(root)
+
+
+def plan_with_rerendered_svg(
+    plan: PrintPlan, profile: MachineProfile | None = None
+) -> PrintPlan:
     """Return ``plan`` with a freshly-rendered SVG if the typography path applies.
 
     Convenience wrapper that the application services call right
@@ -162,24 +253,19 @@ def plan_with_rerendered_svg(plan: PrintPlan) -> PrintPlan:
     available the input is returned unchanged (so callers don't have
     to branch on the return shape).
 
-    The frontend's composite SVG bakes the placement transform (scale +
-    translate from page mm → workspace mm) into the geometry, so the
-    legacy ``scale_mode='actual'`` path renders 1:1 from the composite
-    and lands inside the placement rectangle. The rerender path
-    *replaces* that composite with a raw page-mm SVG that has no
-    placement transform — at ``scale='actual'`` the text would draw at
-    its native page size centred on the placement region, overflowing
-    the rectangle (and the workspace) whenever the original content
-    was larger than the operator's placement. Switching to
-    ``scale_mode='fit'`` with no margin reads the freshly-rendered
-    bbox and scales it into the placement rectangle the operator drew
-    on the plan, restoring the on-plan size and position.
+    When the rerender swaps the SVG **and** the plan carries a
+    placement **and** a profile was supplied, the helper also bakes the
+    placement transform into the new SVG so the generated geometry
+    lands exactly where the plan tab shows it — same position, same
+    size, same independent-axis stretch the operator applied with a
+    non-proportional resize. Callers that don't pass a profile (older
+    test fixtures) get the legacy behaviour: the SVG is swapped but
+    no transform is applied, leaving the generator to centre the raw
+    page-mm bbox on the placement region.
     """
     fresh_svg = rerender_text_svg(plan)
     if fresh_svg is None:
         return plan
-    updates: dict[str, Any] = {"svg": fresh_svg}
-    if plan.placement is not None:
-        updates["scale_mode"] = "fit"
-        updates["margin_mm"] = 0.0
-    return plan.model_copy(update=updates)
+    if plan.placement is not None and profile is not None:
+        fresh_svg = _bake_placement_transform(fresh_svg, plan.placement, profile)
+    return plan.model_copy(update={"svg": fresh_svg})

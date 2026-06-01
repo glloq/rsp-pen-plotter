@@ -105,13 +105,12 @@ def run_generate(
     # see ``application/text_render.py`` for the gating rules. The
     # rerender doesn't alter ``resolved`` (the plan_hash is computed
     # from typography fields, not from the SVG payload) so /preflight
-    # + /generate keep agreeing on the same hash. The wrapper also
-    # forces scale_mode='fit' / margin=0 when it swaps the SVG so the
-    # rendered text lands inside the placement rectangle the operator
-    # drew on the plan (the rerender drops the composite's placement
-    # transform, so without this the text would draw at its native
-    # page size and overflow the workspace).
-    rendered_plan = plan_with_rerendered_svg(resolved.plan)
+    # + /generate keep agreeing on the same hash. Passing the profile
+    # also bakes the placement transform onto the rerendered SVG so
+    # the rendered text lands at the operator's plan-tab position and
+    # size — including any non-proportional resize that the composite
+    # would have applied via independent x / y scales.
+    rendered_plan = plan_with_rerendered_svg(resolved.plan, profile)
     svg = rendered_plan.svg
 
     # IR routing: when ``OMNIPLOT_IR_ENABLED=1`` AND the dialect isn't
