@@ -177,6 +177,11 @@ export interface MachineProfile {
   drawing_speed_mm_s: number
   travel_speed_mm_s: number
   acceleration_mm_s2: number
+  // Time (ms) for one pen lift or one pen drop. Two transitions
+  // happen per drawn polyline, so on a drawing with many short
+  // strokes this dominates wall-clock time and is critical to the
+  // preflight estimate. 0 = instant; SG90/EBB servos sit at 150–250.
+  pen_lift_time_ms: number
   pen_slot_count: number
   supports_arcs: boolean
   arc_tolerance_mm: number

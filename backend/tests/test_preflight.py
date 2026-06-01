@@ -58,3 +58,17 @@ def test_flags_missing_pen_slot() -> None:
 def test_actual_scale_is_one_to_one() -> None:
     report = preflight_report(TWO_LAYERS, _profile(), scale_mode="actual")
     assert abs(report.scale - 1.0) < 1e-6
+
+
+def test_pen_lift_time_added_to_estimate() -> None:
+    # Two strokes → 2 lifts + 2 drops = 4 transitions. With 0 ms the
+    # estimate matches the motion-only baseline; setting 500 ms must
+    # add exactly 4 * 0.5 = 2.0 s.
+    base_profile = _profile().model_copy(update={"pen_lift_time_ms": 0.0})
+    lifted_profile = _profile().model_copy(update={"pen_lift_time_ms": 500.0})
+
+    base = preflight_report(TWO_LAYERS, base_profile)
+    lifted = preflight_report(TWO_LAYERS, lifted_profile)
+
+    assert base.path_count == 2
+    assert abs((lifted.estimated_seconds - base.estimated_seconds) - 2.0) < 1e-6

@@ -379,6 +379,20 @@ async function remove(): Promise<void> {
                 >⚠ {{ t('profile.accelerationNotOnWire') }}</span
               >
             </label>
+            <label class="col-span-2 block text-slate-400"
+              >{{ t('profile.penLiftTime') }}
+              <input
+                v-model.number="draft.pen_lift_time_ms"
+                type="number"
+                min="0"
+                step="any"
+                data-test="pen-lift-time"
+                class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+              />
+              <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                t('profile.penLiftTimeHint')
+              }}</span>
+            </label>
           </div>
 
           <!-- Mechanical pen commands — machine motion config (the raw

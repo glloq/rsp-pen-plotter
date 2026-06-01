@@ -2453,6 +2453,11 @@ export interface components {
             pen_change_position?: components["schemas"]["Point"] | null;
             /** Pen Down Command */
             pen_down_command: string;
+            /**
+             * Pen Lift Time Ms
+             * @default 0
+             */
+            pen_lift_time_ms: number;
             /** Pen Slot Count */
             pen_slot_count: number;
             /** Pen Up Command */
