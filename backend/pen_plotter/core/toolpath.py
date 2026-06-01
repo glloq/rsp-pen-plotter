@@ -27,6 +27,7 @@ from pen_plotter.core.layers import (
     _local,
     strip_root_size,
 )
+from pen_plotter.observability import traced_span
 
 _QUANTIZATION = 0.5
 
@@ -109,8 +110,6 @@ def optimize_svg(
     Raises:
         ValueError: If the SVG cannot be parsed.
     """
-    from pen_plotter.observability import traced_span
-
     with traced_span(
         "pipeline.optimize_svg",
         svg_bytes=len(svg),
@@ -138,8 +137,6 @@ def optimize_geometry_ir(
     by passing the cached ``GeometryIR`` instead of an SVG string,
     even though the inner loop hasn't been rewritten yet.
     """
-    from pen_plotter.observability import traced_span
-
     with traced_span(
         "pipeline.optimize_geometry_ir",
         layer_count=len(getattr(geometry, "layers", []) or []),

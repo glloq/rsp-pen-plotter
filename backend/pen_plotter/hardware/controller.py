@@ -228,8 +228,13 @@ class PlotterController:
         self._subscribers.discard(queue)
 
     async def _broadcast(self, progress: StreamProgress) -> None:
-        """Push a progress snapshot to all subscribers."""
-        for queue in self._subscribers:
+        """Push a progress snapshot to all subscribers.
+
+        Iterate over a snapshot of the subscriber set: ``put`` awaits, and a
+        concurrent ``subscribe``/``unsubscribe`` during that await would
+        otherwise mutate the set mid-iteration (``RuntimeError``).
+        """
+        for queue in list(self._subscribers):
             await queue.put(progress)
 
 

@@ -19,11 +19,9 @@
     "e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
-    "@types/dompurify": "^3.0.5",
     "axios": "^1.7.7",
     "dompurify": "^3.4.5",
     "pinia": "^3.0.4",
-    "svg-pan-zoom": "^3.6.2",
     "vue": "^3.5.12",
     "vue-i18n": "^11.1.0",
     "vuedraggable": "^4.1.0",

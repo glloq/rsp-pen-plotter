@@ -465,6 +465,8 @@ def _generate_gcode_impl(
                             if prompt_pen and prompt_pen.name
                             else target_color
                         )
+                        park_x: float | None
+                        park_y: float | None
                         park_x, park_y = pen_change_point(profile)
                         out.append(
                             pen_load_t.render(

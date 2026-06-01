@@ -20,7 +20,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import mimetypes
 import os
 import time
 from collections import OrderedDict
@@ -30,6 +29,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from pen_plotter.converters.bitmap import BitmapConverter
+from pen_plotter.converters.pipeline import resolve_mime
 
 router = APIRouter()
 
@@ -98,16 +98,6 @@ class PreviewResponse(BaseModel):
     palette: list[PaletteEntry]
     warnings: list[str] = []
     cached: bool = False
-
-
-def _resolve_mime(upload: UploadFile) -> str | None:
-    content_type = upload.content_type
-    if content_type and content_type != "application/octet-stream":
-        return content_type
-    if upload.filename:
-        guessed, _ = mimetypes.guess_type(upload.filename)
-        return guessed
-    return None
 
 
 def _canonicalise(value: Any) -> Any:
@@ -190,7 +180,7 @@ async def preview(
             413 if the upload exceeds ``MAX_PREVIEW_BYTES``;
             400 if options can't be parsed or the quality tier is unknown.
     """
-    mime = _resolve_mime(file)
+    mime = resolve_mime(file)
     if mime is None or mime not in _ACCEPTED_MIMES:
         raise HTTPException(
             status_code=415,

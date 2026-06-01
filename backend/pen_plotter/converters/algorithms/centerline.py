@@ -44,6 +44,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import stroke_attr_px
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 
 _NEIGHBOURS_8 = (
@@ -309,7 +310,7 @@ class CenterlineAlgorithm(RasterAlgorithm):
         options: dict[str, Any] | None = None,
     ) -> str:
         opts = options or {}
-        thickness = float(opts.get("stroke_width", 0.8))
+        thickness = stroke_attr_px(opts)
         smooth = bool(opts.get("smooth", True))
         min_branch_px = int(opts.get("min_branch_px", 3))
 

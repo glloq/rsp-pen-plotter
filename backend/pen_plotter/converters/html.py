@@ -14,7 +14,6 @@ from pen_plotter.converters.base import ConversionResult, Converter
 from pen_plotter.converters.pdf import build_hershey_text_group, pdf_bytes_to_svg
 from pen_plotter.core.pdf_postprocess import extract_bitmap_options, postprocess_pdf_svg
 
-
 # Matches a CSS ``background[-color]`` declaration whose value is one of
 # the pure-black aliases. We intentionally do NOT match ``color:`` (so
 # text ink stays black) or ``border[-…]:`` (so registration borders /
