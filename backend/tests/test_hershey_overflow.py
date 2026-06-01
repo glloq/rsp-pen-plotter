@@ -69,6 +69,29 @@ def test_overflowing_line_renders_every_character() -> None:
     assert svg.count("M") >= 40 * one.count("M")
 
 
+def test_overflowing_paragraph_stays_on_one_compressed_line() -> None:
+    # A multi-word paragraph that naturally exceeds the usable width
+    # but fits within the maximum compression bound must stay on a
+    # single rendered line — wrapping it into multiple natural lines
+    # would inflate the page vertically and drift away from the source
+    # document's layout. We pick a paragraph whose natural width sits
+    # in the (usable_w, usable_w / _MIN_LINE_SCALE) band; the renderer
+    # then squeezes it back to fit horizontally.
+    opts = TypographyOptions(font_size_mm=10, page_width_mm=60, margin_mm=10)
+    renderer = HersheyRenderer(opts)
+    usable_w = 60.0 - 2 * 10.0
+    max_natural_w = usable_w / 0.6
+    text = "a"
+    while renderer._measure(text + " a") <= max_natural_w:
+        text = text + " a"
+    assert renderer._measure(text) > usable_w, "fixture failed to overflow"
+    svg = renderer.render_text(text)
+    # Single <path> element ⇒ a single rendered line.
+    assert svg.count("<path") == 1
+    _, x_max = _path_x_extents(svg)
+    assert x_max <= 60.0 + 0.5
+
+
 def test_overlong_word_is_compressed_not_broken() -> None:
     # A 10-letter word at 10 mm font has a natural width around 100 mm,
     # over the 60 mm usable area but well within the 100 mm a 60 %
