@@ -6,20 +6,15 @@ import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useQueueStore } from '../stores/queue'
-import { useUiModeStore } from '../stores/uiMode'
 import { useUiStore } from '../stores/ui'
 import AssistantModeToggle from './AssistantModeToggle.vue'
-import MachineStatusPill from './MachineStatusPill.vue'
 
 const { t } = useI18n()
 const ui = useUiStore()
-const uiMode = useUiModeStore()
 const plotter = usePlotterStore()
 const queue = useQueueStore()
 const job = useJobStore()
 const { status: plotterStatus } = storeToRefs(plotter)
-
-const workshopOn = computed(() => uiMode.isFlagEnabled('workshopMode'))
 
 // Header transport controls: prefer the queued active run when one is
 // live so the buttons drive the canonical queue lifecycle. Fall back
@@ -91,26 +86,29 @@ async function onStop(): Promise<void> {
     await plotter.abort()
   }
 }
-
-function toggleWorkshop(): void {
-  uiMode.setFlag('workshopMode', !workshopOn.value)
-}
-
-// The legacy ``Modal V2 (beta)`` header toggle is gone: the
-// ``AssistantModeToggle`` (Assisté / Expert) is now the single
-// editor selector. Assisted opens the wizard, Expert opens the
-// rich editor. See App.vue ``editorIsWizard`` for the wiring.
 </script>
 
 <template>
   <header
     class="grid grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-slate-800 bg-slate-900/95 px-4 py-2 backdrop-blur"
   >
-    <!-- LEFT zone: transport controls (play / pause / stop). Drive the
+    <!-- LEFT zone: app brand. -->
+    <div class="flex items-baseline justify-self-start gap-2">
+      <h1 class="text-lg font-bold tracking-tight">OmniPlot</h1>
+      <span
+        class="rounded bg-sky-900/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-300"
+        data-test="header-version-badge"
+        title="v0.2 wired"
+      >
+        v0.2
+      </span>
+    </div>
+
+    <!-- CENTER zone: transport controls (play / pause / stop). Drive the
          active queued run when one is live, otherwise send the currently
          loaded gcode directly. Always visible — the play button is greyed
          out until a plotter is connected and a job is loaded. -->
-    <div class="flex items-center justify-self-start">
+    <div class="flex items-center justify-self-center">
       <div
         class="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 p-0.5"
         data-test="header-transport"
@@ -157,20 +155,7 @@ function toggleWorkshop(): void {
       </div>
     </div>
 
-    <!-- CENTER zone: brand title, centred between the transport (left)
-         and the control cluster (right). -->
-    <div class="flex items-baseline justify-self-center gap-2">
-      <h1 class="text-lg font-bold tracking-tight">OmniPlot</h1>
-      <span
-        class="rounded bg-sky-900/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-300"
-        data-test="header-version-badge"
-        title="v0.2 wired"
-      >
-        v0.2
-      </span>
-    </div>
-
-    <!-- RIGHT zone: mode toggle + machine + workshop + settings. -->
+    <!-- RIGHT zone: mode toggle + plotter settings + app settings. -->
     <div class="flex items-center justify-self-end gap-3">
       <!-- AssistantModeToggle is the single mode selector (Assisté /
            Expert). The legacy ``Débutant / Pro`` workspace switcher
@@ -181,20 +166,26 @@ function toggleWorkshop(): void {
            has a UI surface. -->
       <AssistantModeToggle data-test="header-assistant-mode-toggle" />
 
+      <!-- Plotter access: opens the plotter settings modal (connection,
+           profile, colours, macros, queue). The coloured dot mirrors the
+           connection state — green when the traceur is linked, grey
+           otherwise — so the entry point doubles as a status indicator
+           without hiding what the button actually does. -->
       <button
         type="button"
-        class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition"
-        :class="
-          workshopOn
-            ? 'border-amber-700 bg-amber-950/40 text-amber-200 hover:bg-amber-900/40'
-            : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
-        "
-        :title="t('header.workshop')"
-        :aria-label="t('header.workshop')"
-        :aria-pressed="workshopOn"
-        data-test="header-workshop-toggle"
-        @click="toggleWorkshop"
+        class="flex items-center gap-2 rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700"
+        :title="t('plotter.settingsTitle')"
+        :aria-label="t('plotter.settingsTitle')"
+        data-test="header-plotter"
+        @click="ui.openPlotterSettings()"
       >
+        <span
+          class="h-2 w-2 rounded-full"
+          :class="plotterStatus.connected ? 'bg-emerald-400' : 'bg-slate-500'"
+          :aria-label="
+            plotterStatus.connected ? t('plotter.connected') : t('machine.disconnected')
+          "
+        />
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
@@ -205,26 +196,11 @@ function toggleWorkshop(): void {
           stroke-linejoin="round"
           class="h-4 w-4"
         >
-          <polyline points="15 3 21 3 21 9" />
-          <polyline points="9 21 3 21 3 15" />
-          <line x1="21" y1="3" x2="14" y2="10" />
-          <line x1="3" y1="21" x2="10" y2="14" />
+          <path
+            d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l6-6a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-2.5z"
+          />
         </svg>
-        <span class="hidden sm:inline">{{ t('header.workshop') }}</span>
-      </button>
-
-      <!-- Plotter access: the status pill opens the independent plotter
-           settings modal (connection, profile, colours, macros, queue).
-           Manual control lives in its own main-page canvas tab. -->
-      <button
-        type="button"
-        class="rounded transition hover:opacity-80"
-        :title="t('plotter.settingsTitle')"
-        :aria-label="t('plotter.settingsTitle')"
-        data-test="header-plotter"
-        @click="ui.openPlotterSettings()"
-      >
-        <MachineStatusPill />
+        <span class="hidden sm:inline">{{ t('plotter.settingsTitle') }}</span>
       </button>
 
       <button
