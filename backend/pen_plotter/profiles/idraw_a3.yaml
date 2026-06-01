@@ -20,6 +20,8 @@ tool_change_command: "M0"
 drawing_speed_mm_s: 50.0
 travel_speed_mm_s: 100.0
 acceleration_mm_s2: 800.0
+# M03 S-driven hobby servo, ~150 ms settling per lift/drop.
+pen_lift_time_ms: 150.0
 pen_slot_count: 1
 supports_arcs: true
 arc_tolerance_mm: 0.1

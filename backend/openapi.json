@@ -1927,6 +1927,12 @@
             "title": "Pen Down Command",
             "type": "string"
           },
+          "pen_lift_time_ms": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Pen Lift Time Ms",
+            "type": "number"
+          },
           "pen_slot_count": {
             "title": "Pen Slot Count",
             "type": "integer"

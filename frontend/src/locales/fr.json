@@ -977,6 +977,8 @@
     "acceleration": "Accélération (mm/s²)",
     "accelerationHint": "Plus haut = coins plus nets mais plus de vibrations. Essaie 500–2000.",
     "accelerationNotOnWire": "Ce dialecte ne reçoit pas de commande d'accélération (M204) — la valeur sert toujours à estimer le temps mais n'est pas envoyée à la machine.",
+    "penLiftTime": "Temps lever/baisser stylo (ms)",
+    "penLiftTimeHint": "Temps que met le servo (ou le solénoïde) à se stabiliser à chaque lever ou baisser. Compté deux fois par tracé — domine l'estimation de temps quand le dessin contient beaucoup de petits traits. Servos hobby typiques : 100–250 ms ; axe Z instantané : 0.",
     "pen": "Stylo & outil",
     "penUp": "Commande lever stylo",
     "penUpHint": "G-code envoyé pour lever le stylo (ex. M5, SE,0).",

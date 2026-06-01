@@ -118,6 +118,15 @@ class MachineProfile(BaseModel):
     drawing_speed_mm_s: float
     travel_speed_mm_s: float
     acceleration_mm_s2: float
+    # Time (ms) for one pen lift or one pen drop — i.e. how long the
+    # servo / solenoid takes to physically settle after the up/down
+    # command is sent. Two transitions happen per drawn polyline
+    # (down at start, up at end), and on a drawing with many short
+    # strokes this dominates the wall-clock time: ignoring it makes
+    # the preflight estimate optimistic by several minutes.
+    # 0 = instant (steppered Z-axis, solenoid that lands during
+    # the next move). Typical SG90/EBB servos sit around 150–250 ms.
+    pen_lift_time_ms: float = Field(default=0.0, ge=0.0)
     pen_slot_count: int
     supports_arcs: bool = False
     arc_tolerance_mm: float = 0.1

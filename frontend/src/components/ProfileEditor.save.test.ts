@@ -51,6 +51,7 @@ function makeProfile(): MachineProfile {
     drawing_speed_mm_s: 30,
     travel_speed_mm_s: 80,
     acceleration_mm_s2: 500,
+    pen_lift_time_ms: 0,
     pen_slot_count: 2,
     supports_arcs: false,
     arc_tolerance_mm: 0.1,

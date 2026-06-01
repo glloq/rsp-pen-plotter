@@ -20,6 +20,8 @@ tool_change_command: "M0"
 drawing_speed_mm_s: 70.0
 travel_speed_mm_s: 200.0
 acceleration_mm_s2: 1500.0
+# NextDraw EBB servo, ~250 ms per lift/drop at servo_rate 400.
+pen_lift_time_ms: 250.0
 pen_slot_count: 1
 ebb:
   steps_per_mm: 80.0

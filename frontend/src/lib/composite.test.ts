@@ -18,6 +18,7 @@ function profile(overrides: Partial<MachineProfile> = {}): MachineProfile {
     drawing_speed_mm_s: 60,
     travel_speed_mm_s: 120,
     acceleration_mm_s2: 1000,
+    pen_lift_time_ms: 0,
     pen_slot_count: 1,
     supports_arcs: false,
     arc_tolerance_mm: 0.1,

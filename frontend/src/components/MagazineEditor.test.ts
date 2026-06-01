@@ -37,6 +37,7 @@ vi.mock('../stores/job', async () => {
         drawing_speed_mm_s: 50,
         travel_speed_mm_s: 100,
         acceleration_mm_s2: 1000,
+        pen_lift_time_ms: 0,
         pen_slot_count: 2,
         supports_arcs: false,
         arc_tolerance_mm: 0.1,

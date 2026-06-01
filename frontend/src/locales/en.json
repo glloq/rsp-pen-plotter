@@ -977,6 +977,8 @@
     "acceleration": "Acceleration (mm/s²)",
     "accelerationHint": "Higher = sharper corners but more vibration. Try 500–2000.",
     "accelerationNotOnWire": "This dialect doesn't receive an acceleration command (M204) — the value still informs the time estimate but isn't sent to the machine.",
+    "penLiftTime": "Pen lift/drop time (ms)",
+    "penLiftTimeHint": "How long the servo (or solenoid) takes to settle on each lift or drop. Counted twice per stroke — drives the time estimate when the drawing has many short paths. Typical hobby servos: 100–250 ms; instant Z-axis: 0.",
     "pen": "Pen & tool",
     "penUp": "Pen-up command",
     "penUpHint": "G-code or shorthand sent to lift the pen (e.g. M5, SE,0).",

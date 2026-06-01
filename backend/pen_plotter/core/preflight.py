@@ -90,8 +90,10 @@ def preflight_report(
     travel_length = 0.0
     drawing_time = 0.0
     travel_time = 0.0
+    pen_lift_time = 0.0
     pen_changes = 0
     path_count = 0
+    pen_lift_seconds = max(profile.pen_lift_time_ms, 0.0) / 1000.0
     missing: list[int] = []
     previous_slot: int | None = None
     previous_color: str | None = None
@@ -139,6 +141,11 @@ def preflight_report(
                 hop = math.dist(previous_end, machine_points[0])
                 travel_length += hop
                 travel_time += _move_seconds(hop, travel_speed, accel)
+            # One pen-down before the stroke + one pen-up after it.
+            # On drawings dominated by short paths the servo settling
+            # time outweighs the motion time, so it has to be in the
+            # estimate even though it's not a "move".
+            pen_lift_time += 2.0 * pen_lift_seconds
             length = _polyline_length(machine_points)
             drawing_length += length
             drawing_time += _move_seconds(length, speed, accel)
@@ -171,7 +178,7 @@ def preflight_report(
         scale=scale,
         drawing_length_mm=drawing_length,
         travel_length_mm=travel_length,
-        estimated_seconds=drawing_time + travel_time,
+        estimated_seconds=drawing_time + travel_time + pen_lift_time,
         pen_changes=pen_changes,
         layer_count=len(geometry),
         path_count=path_count,
