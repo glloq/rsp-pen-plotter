@@ -45,14 +45,15 @@ _BOLD_OFFSET_RATIO = 0.06
 _MIN_LINE_SCALE = 0.6
 
 # Minimum horizontal scale for the placed-span path (PDF / DOCX / SVG
-# re-render). Placed spans must fit their source layout exactly — there
-# is no word-wrap fallback like the plain-text flow has — so we accept
-# more aggressive compression than ``_MIN_LINE_SCALE`` to keep the
-# operator's document layout intact. Single-stroke glyphs at 40 %
-# scale stay distinguishable even when they crowd together, which the
-# operator reads as "tight text" rather than "lines running off the
-# page".
-_MIN_PLACED_SPAN_SCALE = 0.4
+# re-render). Placed spans must fit their source layout — there is no
+# word-wrap fallback like the plain-text flow has — so we accept any
+# compression that mathematically brings the Hershey extent back to
+# the source bbox width. The operator's document layout wins over
+# readability: rendering at, say, 30 % horizontal scale produces
+# cramped but recognizable strokes, whereas leaving the line wider
+# than the source pushes the right end past the page edge — the
+# defect the operator originally reported.
+_MIN_PLACED_SPAN_SCALE = 0.0
 
 # Pre-substitution table for code points that have no Hershey glyph but
 # read identically (or close enough) as one or more printable ASCII

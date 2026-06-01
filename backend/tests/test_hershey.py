@@ -224,20 +224,20 @@ def test_placed_span_compresses_to_source_width() -> None:
     assert squeezed.count("M") == natural.count("M")
 
 
-def test_placed_span_floors_compression_for_legibility() -> None:
-    """If the source width is absurdly small, compression clamps so
-    single-stroke glyphs don't collide into an unreadable blob.
+def test_placed_span_compresses_without_floor() -> None:
+    """The placed-span path has no compression floor.
 
-    The placed-span floor (40 %) is more aggressive than the
-    plain-text wrap floor (60 %) because PDF / DOCX spans have no
-    word-wrap fallback — they must fit the source layout at any cost,
-    so we trade some letter-crowding for layout fidelity.
+    PDF / DOCX layouts must be honored exactly: leaving a line wider
+    than the source bbox pushes the right end past the page edge, the
+    very defect the typography fix targets. Even extreme compression
+    is preferred over overflow because the operator's downstream
+    pipeline (G-code, sheet placement) trusts the source layout.
     """
     natural = render_placed_spans(
         [PlacedSpan(text="text", x=0.0, baseline_y=20.0, size=10.0)]
     )
     natural_x_max = _max_x(natural)
-    # Ask for 10 % of natural — far below the placed-span floor.
+    target = natural_x_max * 0.2
     crushed = render_placed_spans(
         [
             PlacedSpan(
@@ -245,14 +245,13 @@ def test_placed_span_floors_compression_for_legibility() -> None:
                 x=0.0,
                 baseline_y=20.0,
                 size=10.0,
-                source_width=natural_x_max * 0.1,
+                source_width=target,
             )
         ]
     )
     crushed_x_max = _max_x(crushed)
-    # Final extent stays around the 40 % floor, not the requested 10 %.
-    assert crushed_x_max >= natural_x_max * 0.35
-    assert crushed_x_max <= natural_x_max * 0.45
+    # Renders within the requested source width — no legibility floor.
+    assert crushed_x_max <= target + 0.5
 
 
 def test_placed_span_no_compression_when_fits_natively() -> None:
