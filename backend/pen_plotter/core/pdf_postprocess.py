@@ -1499,6 +1499,41 @@ _DRAWABLE_LEAVES = {"path", "polyline", "polygon", "line", "circle", "rect", "el
 _DRAWABLE_TAGS = _DRAWABLE_LEAVES | {"g"}
 
 
+def _style_property(style: str | None, prop: str) -> str | None:
+    """Read a single property out of an SVG ``style`` attribute.
+
+    Returns the trimmed value, or ``None`` if ``prop`` isn't set. Tolerates
+    arbitrary whitespace around ``:`` and ``;`` and is case-insensitive on
+    the property name (CSS treats property names case-insensitively).
+    """
+    if not style:
+        return None
+    for declaration in style.split(";"):
+        if ":" not in declaration:
+            continue
+        name, _, value = declaration.partition(":")
+        if name.strip().lower() == prop:
+            value = value.strip()
+            return value or None
+    return None
+
+
+def paint_value(element: ET.Element, prop: str) -> str | None:
+    """Resolve the effective value of a paint property on ``element``.
+
+    SVG accepts both presentation attributes (``fill="red"``) and CSS in the
+    ``style`` attribute (``style="fill:red"``); per the SVG cascading rules,
+    ``style`` outranks the presentation attribute. Most editors (Inkscape,
+    every browser-driven export, KiCad's SVG writer, …) emit the CSS form, so
+    code that only reads ``element.get("fill")`` silently misses the colour
+    on the typical line-drawing input.
+    """
+    styled = _style_property(element.get("style"), prop)
+    if styled is not None:
+        return styled
+    return element.get(prop)
+
+
 def _normalize_fill(value: str | None) -> str:
     """Normalize a ``fill`` attribute to a hex key, ``"none"``, or ``""``.
 
@@ -1529,18 +1564,33 @@ def _normalize_fill(value: str | None) -> str:
 def _effective_color_key(element: ET.Element) -> str:
     """Return the color bucket key for a leaf drawable.
 
-    Strokes-only paths (``fill="none"`` with a ``stroke`` set) are
-    grouped by their stroke; everything else is grouped by its
-    (normalized) fill, with an absent fill counted as black so PyMuPDF
-    text glyphs (which inherit) land in the default bucket.
+    Strokes-only paths (``fill="none"`` with a ``stroke`` set, or no
+    ``fill`` attribute at all with an explicit ``stroke``) are grouped by
+    their stroke colour; everything else is grouped by its (normalized)
+    fill, with an absent fill *and* an absent stroke counted as black so
+    PyMuPDF text glyphs (which inherit) still land in the default bucket.
+
+    Both ``fill`` and ``stroke`` are resolved through :func:`paint_value`,
+    so CSS-style declarations (``style="fill:none;stroke:red"`` — what
+    every modern SVG editor emits for line drawings) are honoured the
+    same as direct presentation attributes.
     """
-    fill = _normalize_fill(element.get("fill"))
+    fill = _normalize_fill(paint_value(element, "fill"))
     if fill == "none":
-        stroke = _normalize_fill(element.get("stroke"))
+        stroke = _normalize_fill(paint_value(element, "stroke"))
         if stroke and stroke not in {"none", ""}:
             return stroke
         return "none"  # invisible; will be dropped
     if fill == "":
+        # No fill attribute. For stroke-only line art (the schematic /
+        # KiCad / Inkscape line-drawing case) route by the stroke colour
+        # so multi-colour drawings keep their per-pen separation instead
+        # of collapsing into a single black layer. Elements with neither
+        # fill nor stroke (PyMuPDF text glyphs) still fall through to
+        # the SVG default of black.
+        stroke = _normalize_fill(paint_value(element, "stroke"))
+        if stroke and stroke not in {"none", ""}:
+            return stroke
         return "#000000"
     return fill
 
