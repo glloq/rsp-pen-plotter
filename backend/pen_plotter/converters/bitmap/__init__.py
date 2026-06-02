@@ -214,6 +214,25 @@ class BitmapConverter(Converter):
         # the backend would honour it at /upload — confusing.
         max_dim = opts.max_dimension_px
         n_init = 1 if fast else 10
+        # Auto-pick Otsu binary segmentation when the operator combines a
+        # **line-extraction algorithm** (centerline / edges) with the
+        # **monochrome ink mode** and hasn't explicitly chosen a
+        # non-default segmentation. K-means with k = num_colors scatters
+        # the anti-aliased fringe of every thin stroke across 3 grey
+        # clusters — each cluster's mask is sparse, so the skeletoniser
+        # finds a fragmented medial axis and the trace loses most of the
+        # fine detail in a mechanical drawing / schematic scan. Otsu
+        # collapses every "dark enough" pixel into one solid mask, so the
+        # centerline trace runs on a faithful binary image of the ink.
+        effective_method: SegmentationMethod = opts.segmentation_method
+        line_art_algorithms = {"centerline", "edges", "contours"}
+        if (
+            opts.algorithm in line_art_algorithms
+            and opts.mono_ink_color is not None
+            and opts.segmentation_method == "kmeans"
+            and not opts.segmentation_options
+        ):
+            effective_method = "otsu"
         with traced_span(
             "pipeline.bitmap.load",
             size_bytes=len(data),
@@ -226,13 +245,13 @@ class BitmapConverter(Converter):
             image = fit_within(image, max_dim)
         with traced_span(
             "pipeline.bitmap.segment",
-            method=opts.segmentation_method,
+            method=effective_method,
             num_colors=opts.num_colors,
             n_init=n_init,
         ):
             labels, palette = segment_image(
                 image,
-                method=opts.segmentation_method,
+                method=effective_method,
                 options=opts.segmentation_options,
                 num_colors=opts.num_colors,
                 drop_background=opts.drop_background,

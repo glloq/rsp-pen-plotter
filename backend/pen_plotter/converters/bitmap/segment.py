@@ -35,6 +35,7 @@ SegmentationMethod = Literal[
     "thresholds",
     "fixed_palette",
     "palette_dither",
+    "otsu",
 ]
 
 # Rec.709 luminance weighting used by every "is this layer / palette
@@ -123,4 +124,6 @@ def segment_image(
         return segmentation.fixed_palette(image, palette_hex=palette_hex)
     if method == "kmeans_lab":
         return segmentation.kmeans_lab(image, num_colors=num_colors, n_init=n_init)
+    if method == "otsu":
+        return segmentation.otsu(image)
     return segmentation.kmeans(image, num_colors=num_colors, n_init=n_init)

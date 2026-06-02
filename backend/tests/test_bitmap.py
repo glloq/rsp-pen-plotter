@@ -245,3 +245,136 @@ def test_fixed_palette_chunked_handles_large_image() -> None:
     labels, palette = fixed_palette(big, palette_hex=["#000000", "#ffffff"])
     assert labels.shape == (5000, 5000)
     assert palette.shape == (2, 3)
+
+
+def test_otsu_produces_binary_dark_light_segmentation() -> None:
+    """Otsu must return exactly two clusters ordered (dark, light) and
+    cover the actual ink content of a thin-line drawing.
+    """
+    from PIL import ImageDraw
+
+    from pen_plotter.converters.segmentation import otsu
+
+    scale = 4
+    w, h = 400, 300
+    img4 = Image.new("RGB", (w * scale, h * scale), (250, 248, 244))
+    d = ImageDraw.Draw(img4)
+    for i in range(20):
+        x = (40 + i * 15) * scale
+        d.line((x, 30 * scale, x, (h - 30) * scale), fill=(35, 38, 45), width=scale)
+    img = img4.resize((w, h), Image.Resampling.LANCZOS)
+    labels, palette = otsu(img)
+    # Two clusters: dark + light, dark first.
+    assert palette.shape == (2, 3)
+    rec709 = np.array([0.2126, 0.7152, 0.0722])
+    lum = palette.astype(float) @ rec709 / 255.0
+    assert lum[0] < lum[1], "otsu must return (dark, light) ordering"
+    # Ink mask covers the 20 thin lines (~1 px × ~240 px each) — ~4800 px
+    # of actual ink content. Anti-aliased fringe stays out of the ink
+    # cluster on purpose (we don't want the pen tracing the halo around
+    # every stroke).
+    ink_count = int((labels == 0).sum())
+    assert 3000 <= ink_count <= 8000, (
+        f"otsu ink mask sparsity is off: {ink_count} px "
+        f"(expected ~5k for the 20-line test image)"
+    )
+    # The background cluster should be the rest of the canvas.
+    assert int((labels == 1).sum()) == w * h - ink_count
+
+
+def test_centerline_monochrome_auto_switches_to_otsu() -> None:
+    """The user's reported regression: ``centerline`` + monochrome on a
+    scanned line drawing dropped most of the detail because k-means
+    scattered the anti-aliased ink pixels across 3 mid-grey clusters,
+    each producing its own noisy skeleton — the pen ended up drawing
+    every line two or three times along the anti-aliased halos around
+    the real ink. With the auto-switch the bitmap converter picks Otsu
+    when these options line up, so the centerline trace runs on a
+    single faithful binary mask of the ink and the pen draws each line
+    exactly once.
+
+    The right quality signal isn't raw point count — k-means produces
+    *more* points by tracing both sides of every anti-aliased halo —
+    but **layer count** and **redundant overlap**: a clean centerline
+    of a monochrome drawing should land in a single layer.
+    """
+    import re
+
+    from PIL import ImageDraw
+
+    scale = 4
+    w, h = 600, 400
+    img4 = Image.new("RGB", (w * scale, h * scale), (250, 248, 244))
+    d = ImageDraw.Draw(img4)
+    d.rectangle((30 * scale, 30 * scale, (w - 30) * scale, (h - 30) * scale),
+                outline=(35, 38, 45), width=scale)
+    for i in range(15):
+        x = (60 + i * 30) * scale
+        d.line((x, 60 * scale, x, (h - 60) * scale), fill=(35, 38, 45), width=scale)
+    img = img4.resize((w, h), Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=70)
+    jpg = buf.getvalue()
+
+    common = {
+        "algorithm": "centerline",
+        "mono_ink_color": "#000000",
+        "max_dimension_px": 400,
+    }
+    # Force the pre-fix path (kmeans_lab side-steps the auto-switch).
+    before = BitmapConverter().convert(jpg, options={**common, "segmentation_method": "kmeans_lab"})
+    # Default path with auto-switch enabled.
+    after = BitmapConverter().convert(jpg, options=common)
+
+    def layer_count(svg: str) -> int:
+        return len(re.findall(r'<g\s+inkscape:label', svg))
+
+    # Auto-switch must produce a SINGLE layer (clean), pre-fix had
+    # multiple (one per fringe cluster).
+    assert layer_count(after.svg) == 1, (
+        f"otsu auto-switch must collapse to 1 layer, got {layer_count(after.svg)}"
+    )
+    assert layer_count(before.svg) >= 2, (
+        f"kmeans_lab control should produce ≥2 layers on this anti-aliased "
+        f"input, got {layer_count(before.svg)}"
+    )
+
+
+def test_centerline_explicit_segmentation_is_respected() -> None:
+    """An operator who explicitly picks ``luminance_bands`` or any
+    non-default segmentation must keep that choice — the auto-switch
+    only fires when the bitmap options carry the default ``kmeans``.
+    """
+    import re
+
+    from PIL import ImageDraw
+
+    scale = 4
+    img4 = Image.new("RGB", (200 * scale, 200 * scale), (250, 248, 244))
+    d = ImageDraw.Draw(img4)
+    d.rectangle((20 * scale, 20 * scale, 180 * scale, 180 * scale),
+                outline=(35, 38, 45), width=scale)
+    img = img4.resize((200, 200), Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=70)
+    jpg = buf.getvalue()
+
+    # luminance_bands w/ num_colors=3 → at least 2 layers kept (light
+    # band dropped as background, dark + mid bands kept).
+    result = BitmapConverter().convert(
+        jpg,
+        options={
+            "algorithm": "centerline",
+            "mono_ink_color": "#000000",
+            "max_dimension_px": 200,
+            "segmentation_method": "luminance_bands",
+            "num_colors": 3,
+        },
+    )
+    layers = re.findall(r'<g\s+inkscape:label', result.svg)
+    # Otsu would collapse to 1 layer — the explicit method must override
+    # the auto-switch and produce 2+ luminance bands.
+    assert len(layers) >= 2, (
+        f"explicit luminance_bands must not be overridden by the otsu auto-switch; "
+        f"got {len(layers)} layer(s)"
+    )
