@@ -295,8 +295,8 @@ def test_centerline_monochrome_auto_switches_to_otsu() -> None:
 
     The right quality signal isn't raw point count — k-means produces
     *more* points by tracing both sides of every anti-aliased halo —
-    but **layer count** and **redundant overlap**: a clean centerline
-    of a monochrome drawing should land in a single layer.
+    but **layer count**: a clean centerline of a monochrome drawing
+    should land in a single layer.
     """
     import re
 
@@ -316,34 +316,93 @@ def test_centerline_monochrome_auto_switches_to_otsu() -> None:
     img.save(buf, format="JPEG", quality=70)
     jpg = buf.getvalue()
 
-    common = {
+    # Default path with auto-switch enabled.
+    after = BitmapConverter().convert(jpg, options={
         "algorithm": "centerline",
         "mono_ink_color": "#000000",
         "max_dimension_px": 400,
-    }
-    # Force the pre-fix path (kmeans_lab side-steps the auto-switch).
-    before = BitmapConverter().convert(jpg, options={**common, "segmentation_method": "kmeans_lab"})
-    # Default path with auto-switch enabled.
-    after = BitmapConverter().convert(jpg, options=common)
+    })
 
     def layer_count(svg: str) -> int:
-        return len(re.findall(r'<g\s+inkscape:label', svg))
+        return len(re.findall(r"<g\s+inkscape:label", svg))
 
-    # Auto-switch must produce a SINGLE layer (clean), pre-fix had
-    # multiple (one per fringe cluster).
+    # Auto-switch must produce a SINGLE clean layer — Otsu's binary
+    # segmentation collapses every "dark enough" pixel into one mask,
+    # so the centerline trace lands in one labelled group instead of
+    # being scattered across 2-3 grey fringe layers.
     assert layer_count(after.svg) == 1, (
         f"otsu auto-switch must collapse to 1 layer, got {layer_count(after.svg)}"
     )
-    assert layer_count(before.svg) >= 2, (
-        f"kmeans_lab control should produce ≥2 layers on this anti-aliased "
-        f"input, got {layer_count(before.svg)}"
+    polylines = len(re.findall(r"<polyline", after.svg))
+    assert polylines >= 10, (
+        f"otsu centerline should trace the rectangle outline + 15 vertical "
+        f"bars; got only {polylines} polylines"
     )
 
 
-def test_centerline_explicit_segmentation_is_respected() -> None:
-    """An operator who explicitly picks ``luminance_bands`` or any
-    non-default segmentation must keep that choice — the auto-switch
-    only fires when the bitmap options carry the default ``kmeans``.
+def test_centerline_monochrome_handles_real_frontend_luminance_bands_flow() -> None:
+    """The actual user flow that the auto-switch must cover: the
+    monochrome master styles in the frontend default to
+    ``segmentation_method='luminance_bands'`` with ``num_bands=1`` (NOT
+    ``kmeans``). With that setting every pixel ends up in a single
+    cluster, and the centerline of an all-pixels mask is a degenerate
+    trace through the canvas centre (~1 polyline, a few hundred points).
+    The auto-switch has to override luminance_bands too, otherwise the
+    real-world user gets a useless result regardless of how good the
+    underlying segmentation methods are.
+    """
+    import re
+
+    from PIL import ImageDraw
+
+    scale = 4
+    w, h = 600, 400
+    img4 = Image.new("RGB", (w * scale, h * scale), (252, 250, 245))
+    d = ImageDraw.Draw(img4)
+    d.rectangle((30 * scale, 30 * scale, (w - 30) * scale, (h - 30) * scale),
+                outline=(35, 38, 45), width=scale)
+    for i in range(15):
+        x = (60 + i * 30) * scale
+        d.line((x, 60 * scale, x, (h - 60) * scale), fill=(35, 38, 45), width=scale)
+    img = img4.resize((w, h), Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=70)
+    jpg = buf.getvalue()
+
+    # Mirror the payload ``useBitmapDraft.buildBitmapOptions()`` actually
+    # ships when the operator enables monochrome + the centerline checkbox.
+    result = BitmapConverter().convert(
+        jpg,
+        options={
+            "algorithm": "centerline",
+            "mono_ink_color": "#000000",
+            "max_dimension_px": 400,
+            "segmentation_method": "luminance_bands",
+            "segmentation_options": {"num_bands": 1},
+            "algorithm_options": {"stroke_width": 0.8, "smooth": True, "min_branch_px": 3},
+        },
+    )
+    polylines = re.findall(r"<polyline", result.svg)
+    total_pts = sum(
+        len(m.group(1).split()) for m in re.finditer(r'points="([^"]+)"', result.svg)
+    )
+    # Without the auto-switch this would be ~1 polyline / a few hundred
+    # points (the centerline of the fully-filled mask). With Otsu kicking
+    # in the trace covers every drawn line — should be ≥ 10 polylines
+    # tracing the frame + 15 vertical bars.
+    assert len(polylines) >= 10, (
+        f"luminance_bands centerline auto-switch failed: only {len(polylines)} polylines"
+    )
+    assert total_pts >= 5000, (
+        f"luminance_bands centerline auto-switch failed: only {total_pts} traced points"
+    )
+
+
+def test_centerline_palette_segmentation_is_respected() -> None:
+    """An operator who explicitly picks ``fixed_palette``, ``palette_dither``
+    or ``thresholds`` is encoding a deliberate tuning choice we mustn't
+    second-guess — the auto-switch only overrides the default-ish methods
+    (``kmeans`` / ``kmeans_lab`` / ``luminance_bands``).
     """
     import re
 
@@ -359,22 +418,21 @@ def test_centerline_explicit_segmentation_is_respected() -> None:
     img.save(buf, format="JPEG", quality=70)
     jpg = buf.getvalue()
 
-    # luminance_bands w/ num_colors=3 → at least 2 layers kept (light
-    # band dropped as background, dark + mid bands kept).
+    # An explicit ``thresholds`` choice with two cutoffs → three luminance
+    # bands. Auto-switch must NOT override it: the operator is deliberately
+    # asking for that segmentation.
     result = BitmapConverter().convert(
         jpg,
         options={
             "algorithm": "centerline",
             "mono_ink_color": "#000000",
             "max_dimension_px": 200,
-            "segmentation_method": "luminance_bands",
-            "num_colors": 3,
+            "segmentation_method": "thresholds",
+            "segmentation_options": {"levels": [0.3, 0.7]},
         },
     )
-    layers = re.findall(r'<g\s+inkscape:label', result.svg)
-    # Otsu would collapse to 1 layer — the explicit method must override
-    # the auto-switch and produce 2+ luminance bands.
+    layers = re.findall(r"<g\s+inkscape:label", result.svg)
     assert len(layers) >= 2, (
-        f"explicit luminance_bands must not be overridden by the otsu auto-switch; "
+        f"explicit thresholds must not be overridden by the otsu auto-switch; "
         f"got {len(layers)} layer(s)"
     )

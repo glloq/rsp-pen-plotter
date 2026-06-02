@@ -216,21 +216,24 @@ class BitmapConverter(Converter):
         n_init = 1 if fast else 10
         # Auto-pick Otsu binary segmentation when the operator combines a
         # **line-extraction algorithm** (centerline / edges) with the
-        # **monochrome ink mode** and hasn't explicitly chosen a
-        # non-default segmentation. K-means with k = num_colors scatters
-        # the anti-aliased fringe of every thin stroke across 3 grey
-        # clusters — each cluster's mask is sparse, so the skeletoniser
-        # finds a fragmented medial axis and the trace loses most of the
-        # fine detail in a mechanical drawing / schematic scan. Otsu
-        # collapses every "dark enough" pixel into one solid mask, so the
-        # centerline trace runs on a faithful binary image of the ink.
+        # **monochrome ink mode**. The frontend's monochrome master styles
+        # default to ``luminance_bands`` with ``num_bands=1`` — every pixel
+        # ends up in a single mid-grey cluster, the centerline of which is
+        # a degenerate trace through the canvas centre (~1 polyline of a
+        # few hundred points, nowhere near the actual ink). K-means
+        # scatters anti-aliased fringes across 3 grey clusters and gets
+        # nothing better. Otsu collapses every "dark enough" pixel into
+        # one solid mask of the actual ink so the centerline trace runs
+        # on a faithful binary image and the pen draws every stroke
+        # exactly once. We respect ``otsu`` / ``fixed_palette`` /
+        # ``palette_dither`` / ``thresholds`` explicit picks — those
+        # encode an intentional tuning we shouldn't second-guess.
         effective_method: SegmentationMethod = opts.segmentation_method
-        line_art_algorithms = {"centerline", "edges", "contours"}
         if (
-            opts.algorithm in line_art_algorithms
+            opts.algorithm in {"centerline", "edges"}
             and opts.mono_ink_color is not None
-            and opts.segmentation_method == "kmeans"
-            and not opts.segmentation_options
+            and opts.segmentation_method
+            not in {"otsu", "fixed_palette", "palette_dither", "thresholds"}
         ):
             effective_method = "otsu"
         with traced_span(
