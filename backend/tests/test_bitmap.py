@@ -248,8 +248,9 @@ def test_fixed_palette_chunked_handles_large_image() -> None:
 
 
 def test_otsu_produces_binary_dark_light_segmentation() -> None:
-    """Otsu must return exactly two clusters ordered (dark, light) and
-    cover the actual ink content of a thin-line drawing.
+    """Otsu must return exactly two clusters ordered (dark=ink, light=paper)
+    with the ink as the minority cluster, and cover the actual ink
+    content of a thin-line drawing.
     """
     from PIL import ImageDraw
 
@@ -264,22 +265,61 @@ def test_otsu_produces_binary_dark_light_segmentation() -> None:
         d.line((x, 30 * scale, x, (h - 30) * scale), fill=(35, 38, 45), width=scale)
     img = img4.resize((w, h), Image.Resampling.LANCZOS)
     labels, palette = otsu(img)
-    # Two clusters: dark + light, dark first.
+    # Two clusters with the synthesised black/white palette so
+    # drop_background works regardless of source polarity.
     assert palette.shape == (2, 3)
-    rec709 = np.array([0.2126, 0.7152, 0.0722])
-    lum = palette.astype(float) @ rec709 / 255.0
-    assert lum[0] < lum[1], "otsu must return (dark, light) ordering"
-    # Ink mask covers the 20 thin lines (~1 px × ~240 px each) — ~4800 px
-    # of actual ink content. Anti-aliased fringe stays out of the ink
-    # cluster on purpose (we don't want the pen tracing the halo around
-    # every stroke).
+    assert palette[0].tolist() == [0, 0, 0], "ink palette entry must be black"
+    assert palette[1].tolist() == [255, 255, 255], "paper palette entry must be white"
+    # Ink (label 0) is the minority cluster — the actual line content.
     ink_count = int((labels == 0).sum())
+    bg_count = int((labels == 1).sum())
+    assert ink_count < bg_count, "ink should be the minority cluster"
     assert 3000 <= ink_count <= 8000, (
         f"otsu ink mask sparsity is off: {ink_count} px "
         f"(expected ~5k for the 20-line test image)"
     )
-    # The background cluster should be the rest of the canvas.
-    assert int((labels == 1).sum()) == w * h - ink_count
+    assert ink_count + bg_count == w * h
+
+
+def test_otsu_returns_two_clusters_on_uniform_input() -> None:
+    """A degenerate single-tone image (blank scan, solid colour mask) must
+    still return the documented two-cluster contract so downstream code
+    that iterates ``range(palette.shape[0])`` behaves identically on the
+    edge case.
+    """
+    from pen_plotter.converters.segmentation import otsu
+
+    labels, palette = otsu(Image.new("RGB", (32, 32), (255, 255, 255)))
+    assert palette.shape == (2, 3), "uniform input must still produce a 2-row palette"
+    assert labels.shape == (32, 32)
+
+
+def test_otsu_handles_light_on_dark_inputs() -> None:
+    """A white-on-black scan (dark-mode CAD/PCB export, chalkboard photo)
+    must put the actual ink in cluster 0 so the drop_background filter
+    drops the paper, not the ink. Otsu always emits the synthesised
+    ``[(0,0,0),(255,255,255)]`` palette so cluster 0 reads as 'dark'
+    even when the source ink was bright.
+    """
+    from pen_plotter.converters.segmentation import otsu
+
+    # 64x64 black canvas with a 24x24 white square in the middle.
+    img = Image.new("RGB", (64, 64), (0, 0, 0))
+    for y in range(20, 44):
+        for x in range(20, 44):
+            img.putpixel((x, y), (255, 255, 255))
+    labels, palette = otsu(img)
+    assert palette.shape == (2, 3)
+    # Ink (the white square) is the minority → cluster 0.
+    ink_count = int((labels == 0).sum())
+    bg_count = int((labels == 1).sum())
+    assert ink_count == 24 * 24, f"expected 576 ink pixels, got {ink_count}"
+    assert bg_count == 64 * 64 - 24 * 24
+    # Palette is synthesised so drop_background drops the paper side.
+    rec709 = np.array([0.2126, 0.7152, 0.0722])
+    lum = palette.astype(float) @ rec709 / 255.0
+    assert lum[1] >= 0.92, "paper cluster must read as background-luminance"
+    assert lum[0] < 0.92, "ink cluster must NOT read as background"
 
 
 def test_centerline_monochrome_auto_switches_to_otsu() -> None:
@@ -396,6 +436,31 @@ def test_centerline_monochrome_handles_real_frontend_luminance_bands_flow() -> N
     assert total_pts >= 5000, (
         f"luminance_bands centerline auto-switch failed: only {total_pts} traced points"
     )
+
+
+def test_auto_switch_covers_full_lines_algorithm_family() -> None:
+    """Every member of the ``_KINDS['lines']`` family (centerline, edges,
+    contours, lowpoly, grid, brick, truchet) suffers the same
+    anti-aliased-fringe pathology on monochrome line art — the
+    auto-switch must fire for the whole family, not just centerline +
+    edges.
+    """
+    from pen_plotter.converters.bitmap import pick_effective_segmentation
+
+    for algo in ("centerline", "edges", "contours", "lowpoly", "grid", "brick", "truchet"):
+        assert pick_effective_segmentation(
+            algorithm=algo,
+            mono_ink_color="#000000",
+            segmentation_method="luminance_bands",
+        ) == "otsu", f"line-art {algo!r} must auto-switch to Otsu in monochrome mode"
+    # Fill-family algorithms keep the operator's choice — they read the
+    # segmentation as a tonal ramp, not a binary ink/paper split.
+    for algo in ("halftone", "stippling", "crosshatch"):
+        assert pick_effective_segmentation(
+            algorithm=algo,
+            mono_ink_color="#000000",
+            segmentation_method="luminance_bands",
+        ) == "luminance_bands", f"fill-family {algo!r} must not auto-switch"
 
 
 def test_centerline_palette_segmentation_is_respected() -> None:
