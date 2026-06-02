@@ -50,6 +50,7 @@ from .segment import _REC709, SegmentationMethod, segment_image
 __all__ = [
     "BitmapConverter",
     "BitmapOptions",
+    "LINE_ART_MIN_DIMENSION_PX",
     "PreprocessOptions",
     "Rotation",
     "SegmentationMethod",
@@ -67,6 +68,16 @@ __all__ = [
 _EXPLICIT_SEGMENTATION_METHODS: frozenset[str] = frozenset(
     {"otsu", "fixed_palette", "palette_dither", "thresholds"}
 )
+
+
+# Minimum segmentation-canvas size when the line-art auto-switch fires.
+# Matches the editor's "High" detail tier — empirically the threshold
+# where 1-2 px lines on a 3000-wide technical drawing JPG stop being
+# smoothed away by the downscale, and Otsu / skeletonisation stay fast
+# enough on a Pi-class device. Operators who want even more fidelity
+# can pick Max (4800) / Ultra (8192) in the SVG tab; the floor only
+# raises, never lowers.
+LINE_ART_MIN_DIMENSION_PX = 2400
 
 
 def pick_effective_segmentation(
@@ -275,6 +286,25 @@ class BitmapConverter(Converter):
             mono_ink_color=opts.mono_ink_color,
             segmentation_method=opts.segmentation_method,
         )
+        # When the line-art auto-switch fires, the operator's intent is
+        # "faithfully reproduce every stroke" — and the biggest detail
+        # killer is the default 800 px segmentation canvas, which forces
+        # a 3000-wide technical-drawing JPG down to ~26 % scale before
+        # any pixel sees Otsu. Lift the floor to the High tier (2400 px)
+        # — measured ~3× more traced points on a typical mechanical
+        # drawing without crossing the threshold where Otsu /
+        # skeletonisation get expensive on a Pi. Only raises, so an
+        # operator who explicitly picked Max (4800) / Ultra (8192) is
+        # respected. Surfaced as a warning so the editor knows the
+        # canvas was bumped.
+        line_art_warnings: list[str] = []
+        if effective_method == "otsu" and max_dim < LINE_ART_MIN_DIMENSION_PX:
+            line_art_warnings.append(
+                f"Detail tier lifted to {LINE_ART_MIN_DIMENSION_PX} px "
+                f"(was {max_dim}) to preserve fine line work — pick a "
+                "higher tier in the SVG tab for even more fidelity."
+            )
+            max_dim = LINE_ART_MIN_DIMENSION_PX
         with traced_span(
             "pipeline.bitmap.load",
             size_bytes=len(data),
@@ -368,7 +398,11 @@ class BitmapConverter(Converter):
             progress_callback=progress_callback,
         )
         return (
-            ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings),
+            ConversionResult(
+                svg=svg,
+                source_mime="image/svg+xml",
+                warnings=[*line_art_warnings, *warnings],
+            ),
             seg,
         )
 

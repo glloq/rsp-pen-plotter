@@ -438,6 +438,80 @@ def test_centerline_monochrome_handles_real_frontend_luminance_bands_flow() -> N
     )
 
 
+def test_line_art_mode_lifts_max_dimension_px_floor() -> None:
+    """When the line-art auto-switch fires, the segmentation canvas
+    must be at least the High tier (2400 px) — the editor's default
+    of 800 downscales a 3000-wide technical drawing JPG to ~26 % of
+    its native resolution, smoothing every 1-2 px line away before
+    Otsu / centerline can see them. Floor only raises; an operator
+    who picked Max (4800) keeps their choice.
+    """
+    import re
+
+    from PIL import ImageDraw
+
+    from pen_plotter.converters.bitmap import LINE_ART_MIN_DIMENSION_PX
+
+    # 1800 px input — chosen so the floor will actually downscale to
+    # 2400 (i.e. the floor is what's exercised, not the fit_within
+    # no-op path).
+    scale = 4
+    w, h = 1800, 1200
+    img4 = Image.new("RGB", (w * scale, h * scale), (250, 248, 244))
+    d = ImageDraw.Draw(img4)
+    d.rectangle((30 * scale, 30 * scale, (w - 30) * scale, (h - 30) * scale),
+                outline=(35, 38, 45), width=scale)
+    for i in range(40):
+        x = (60 + i * 30) * scale
+        d.line((x, 60 * scale, x, (h - 60) * scale), fill=(35, 38, 45), width=scale)
+    img = img4.resize((w, h), Image.Resampling.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=80)
+    jpg = buf.getvalue()
+
+    # User keeps the default low tier.
+    low = BitmapConverter().convert(jpg, options={
+        "algorithm": "centerline",
+        "mono_ink_color": "#000000",
+        "max_dimension_px": 800,
+        "segmentation_method": "luminance_bands",
+        "segmentation_options": {"num_bands": 1},
+    })
+    # The convert() warnings must carry the floor-lift notice so the
+    # editor can surface it instead of silently changing behaviour.
+    assert any("Detail tier lifted" in w for w in low.warnings), (
+        f"floor-lift warning must be surfaced, got: {low.warnings}"
+    )
+
+    # Operator explicitly picks an even higher tier — the floor must
+    # not lower it.
+    high = BitmapConverter().convert(jpg, options={
+        "algorithm": "centerline",
+        "mono_ink_color": "#000000",
+        "max_dimension_px": 4800,
+        "segmentation_method": "luminance_bands",
+        "segmentation_options": {"num_bands": 1},
+    })
+    assert all("Detail tier lifted" not in w for w in high.warnings), (
+        f"explicit high tier must not trigger floor-lift, got: {high.warnings}"
+    )
+
+    # Detail recovery: the test image is 40 vertical bars + 1 frame.
+    # Without the floor lift, several of the vertical bars get smoothed
+    # into the page background (1 px line × 800 / 1800 scale ≈ 0.44 px
+    # effective — below Otsu's signal floor). With the floor every bar
+    # survives.
+    def n_polylines(svg: str) -> int:
+        return len(re.findall(r"<polyline", svg))
+
+    assert n_polylines(low.svg) >= 40, (
+        f"floor-lifted result should preserve every vertical bar; got "
+        f"{n_polylines(low.svg)} polylines for a 40-bar test image"
+    )
+    # Sanity check the constant matches the warning message.
+    assert LINE_ART_MIN_DIMENSION_PX == 2400
+
+
 def test_auto_switch_covers_full_lines_algorithm_family() -> None:
     """Every member of the ``_KINDS['lines']`` family (centerline, edges,
     contours, lowpoly, grid, brick, truchet) suffers the same

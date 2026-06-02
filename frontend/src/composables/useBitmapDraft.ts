@@ -233,7 +233,14 @@ export function defaultBitmap(): BitmapDraft {
 export function defaultCurves(): CurvesDraft {
   return {
     centerline_mode: false,
-    centerline_min_branch_px: 3,
+    // Default to 1 so the centerline trace keeps every short branch
+    // (tick marks, dimension serifs, fine hatching) on a technical
+    // drawing out of the box. The operator can raise it via the SvgTab
+    // slider when a noisy scan needs the spur-cleaning behaviour the
+    // old default of 3 provided. Verified on a 3200×2400 mechanical
+    // drawing JPG: 1 vs 3 ≈ +250 % polyline count, all of which trace
+    // real geometry the operator wants on paper.
+    centerline_min_branch_px: 1,
     simplify_tolerance_mm: 0.05,
     curve_fit: false,
   }
