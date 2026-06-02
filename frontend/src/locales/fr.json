@@ -170,6 +170,8 @@
     "pathTitle": "Traitements des tracés",
     "centerline": "Mode trait (centerline)",
     "centerlineDesc": "Trace le squelette médian au lieu des contours fermés. Idéal pour les schémas et dessins au trait. Les zones remplies épaisses sont réduites à un seul trait au centre, c'est voulu.",
+    "minBranch": "Détails fins (longueur min. de branche)",
+    "minBranchDesc": "Branches du squelette plus courtes que ce seuil (en pixels du canvas de segmentation) sont ignorées. Baisse à 1-2 px pour conserver les graduations, traits de cote et hachures fines d'un plan technique ; remonte à 4-5 px si le scan est bruité.",
     "simplify": "Tolérance Douglas-Peucker",
     "simplifyDesc": "Plus la valeur est haute, plus le /optimize supprime de sommets intermédiaires. S'applique à tous les calques du placement courant.",
     "curveFit": "Lissage en courbes de Bézier",

@@ -72,6 +72,33 @@ function onSimplifyChange(event: Event): void {
           </span>
         </label>
 
+        <!-- Centerline fine-detail threshold (min branch length in px).
+             Lower = preserve tick marks / dimension serifs / hatching ;
+             higher = drop short spurs that are mostly skeletonisation
+             noise. Only meaningful when centerline_mode is on. -->
+        <div v-if="curves.centerline_mode" class="space-y-1 pl-6">
+          <div class="flex items-center justify-between text-slate-300">
+            <label for="svg-min-branch" class="font-medium">
+              {{ t('svg.minBranch') }}
+            </label>
+            <span class="font-mono text-[10px] text-slate-400">
+              {{ curves.centerline_min_branch_px }} px
+            </span>
+          </div>
+          <input
+            id="svg-min-branch"
+            v-model.number="curves.centerline_min_branch_px"
+            type="range"
+            min="1"
+            max="10"
+            step="1"
+            class="w-full accent-emerald-500"
+          />
+          <p class="text-[10px] leading-snug text-slate-500">
+            {{ t('svg.minBranchDesc') }}
+          </p>
+        </div>
+
         <!-- Douglas-Peucker simplification -->
         <div class="space-y-1">
           <div class="flex items-center justify-between text-slate-300">

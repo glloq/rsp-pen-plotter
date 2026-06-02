@@ -170,6 +170,8 @@
     "pathTitle": "Path treatments",
     "centerline": "Line-tracing mode (centerline)",
     "centerlineDesc": "Trace the medial skeleton instead of region outlines. Best for schematics and line art. Thick filled areas collapse to a single line at the centre, which is intentional.",
+    "minBranch": "Fine-detail floor (min branch length)",
+    "minBranchDesc": "Skeleton branches shorter than this many segmentation-canvas pixels are dropped. Lower to 1-2 px to keep tick marks, dimension serifs and hatching on a technical drawing; raise to 4-5 px for noisier scans.",
     "simplify": "Douglas-Peucker tolerance",
     "simplifyDesc": "Higher values remove more intermediate vertices when /optimize runs. Applies to every layer in the current placement.",
     "curveFit": "Smooth into Bézier curves",
