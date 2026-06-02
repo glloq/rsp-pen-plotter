@@ -941,7 +941,13 @@ function colorRecipeFromKnobs(
         algorithm_options: {
           stroke_width: knobs.stroke_width ?? 0.8,
           smooth: true,
-          min_branch_px: knobs.min_branch_px ?? 3,
+          // Prefer the operator-visible SvgTab slider over the legacy
+          // per-style knob so the "Détails fins" control behaves
+          // consistently across mono and multicolor centerline paths.
+          // ``_curves.value.centerline_min_branch_px`` defaults to 3 so
+          // existing rehydrated drafts keep their behaviour.
+          min_branch_px:
+            _curves.value.centerline_min_branch_px ?? knobs.min_branch_px ?? 3,
         },
       }
     }

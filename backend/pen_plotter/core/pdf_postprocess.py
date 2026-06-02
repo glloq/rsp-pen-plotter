@@ -636,8 +636,8 @@ def _has_visible_content(subtree: ET.Element) -> bool:
         if node.tag in masked:
             continue
         if node is not subtree and _local(node.tag) in _DRAWABLE_LEAVES:
-            fill = (node.get("fill") or "").strip().lower()
-            stroke = (node.get("stroke") or "").strip().lower()
+            fill = (paint_value(node, "fill") or "").strip().lower()
+            stroke = (paint_value(node, "stroke") or "").strip().lower()
             # Default SVG fill is black; only an explicit ``none`` /
             # ``white`` suppresses ink. A non-white stroke also counts.
             fill_paints = fill not in {"none", *white_fills} if fill else True
@@ -719,7 +719,7 @@ def rasterize_pattern_fills(
         rect
         for rect in root.iter()
         if _local(rect.tag) == "rect"
-        and (rect.get("fill") or "").startswith("url(#")
+        and (paint_value(rect, "fill") or "").startswith("url(#")
     ]
     if not candidates:
         return 0, warnings
@@ -739,7 +739,7 @@ def rasterize_pattern_fills(
         page = doc[page_index]
 
         for index, rect in enumerate(candidates, start=1):
-            fill = rect.get("fill") or ""
+            fill = paint_value(rect, "fill") or ""
             # url(#pattern_3) → "pattern_3"
             pattern_id = fill[fill.find("#") + 1 : fill.rfind(")")]
             if not pattern_id:
@@ -1101,7 +1101,7 @@ def apply_grayscale_density_hatching(
         local = _local(shape.tag)
         if local not in {"rect", "path"}:
             continue
-        fill = shape.get("fill") or ""
+        fill = paint_value(shape, "fill") or ""
         is_gray, value = _parse_grayscale_hex(fill)
         if not is_gray:
             continue
@@ -1235,7 +1235,7 @@ def apply_color_density_hatching(
         local = _local(shape.tag)
         if local not in {"rect", "path"}:
             continue
-        fill = shape.get("fill") or ""
+        fill = paint_value(shape, "fill") or ""
         if not _is_renderable_solid_fill(fill):
             continue
         color = _normalize_fill(fill)
@@ -1341,7 +1341,7 @@ def rasterize_solid_color_fills(
         shape
         for shape in root.iter()
         if _local(shape.tag) in {"rect", "path"}
-        and _is_renderable_solid_fill(shape.get("fill") or "")
+        and _is_renderable_solid_fill(paint_value(shape, "fill") or "")
     ]
     if not candidates:
         return 0, warnings
@@ -1383,7 +1383,7 @@ def rasterize_solid_color_fills(
                 # Tiny rect — almost always a border sliver or text-decoration
                 # line; cheaper and more readable to leave as a vector outline.
                 continue
-            color_key = _normalize_fill(rect.get("fill"))
+            color_key = _normalize_fill(paint_value(rect, "fill"))
             try:
                 pix = page.get_pixmap(
                     clip=pymupdf.Rect(x_min, y_min, x_max, y_max), dpi=300
@@ -1499,22 +1499,74 @@ _DRAWABLE_LEAVES = {"path", "polyline", "polygon", "line", "circle", "rect", "el
 _DRAWABLE_TAGS = _DRAWABLE_LEAVES | {"g"}
 
 
+def _split_css_declarations(style: str) -> list[str]:
+    """Split a ``style`` attribute on top-level ``;`` only.
+
+    CSS values can legitimately contain ``;`` inside ``url(...)`` (a
+    data-URL with ``;base64``, or an IRI with a query separator), inside
+    parentheses, or inside quoted strings. A naive ``style.split(';')``
+    truncates such values and silently drops the rest of the
+    declaration list. Walk the string once and only break on a ``;``
+    that is at depth 0 and outside quotes.
+    """
+    out: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    quote: str | None = None
+    for ch in style:
+        if quote is not None:
+            buf.append(ch)
+            if ch == quote:
+                quote = None
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            buf.append(ch)
+            continue
+        if ch == "(":
+            depth += 1
+            buf.append(ch)
+            continue
+        if ch == ")":
+            if depth > 0:
+                depth -= 1
+            buf.append(ch)
+            continue
+        if ch == ";" and depth == 0:
+            out.append("".join(buf))
+            buf = []
+            continue
+        buf.append(ch)
+    if buf:
+        out.append("".join(buf))
+    return out
+
+
 def _style_property(style: str | None, prop: str) -> str | None:
     """Read a single property out of an SVG ``style`` attribute.
 
-    Returns the trimmed value, or ``None`` if ``prop`` isn't set. Tolerates
-    arbitrary whitespace around ``:`` and ``;`` and is case-insensitive on
-    the property name (CSS treats property names case-insensitively).
+    Returns the trimmed value with any trailing ``!important`` token
+    stripped, or ``None`` if ``prop`` isn't set. Tolerates arbitrary
+    whitespace around ``:`` and ``;`` and is case-insensitive on the
+    property name (CSS treats property names case-insensitively).
+    Skips ``;`` inside ``url(...)`` / quoted strings via
+    :func:`_split_css_declarations` so data-URL values aren't truncated.
     """
     if not style:
         return None
-    for declaration in style.split(";"):
+    for declaration in _split_css_declarations(style):
         if ":" not in declaration:
             continue
         name, _, value = declaration.partition(":")
-        if name.strip().lower() == prop:
-            value = value.strip()
-            return value or None
+        if name.strip().lower() != prop:
+            continue
+        value = value.strip()
+        # CSS ``!important`` token — strip so callers compare against the
+        # raw paint value and don't bucket ``#ff0000 !important`` as a
+        # different colour from ``#ff0000``.
+        if value.lower().endswith("!important"):
+            value = value[: -len("!important")].rstrip().rstrip(" ;").rstrip()
+        return value or None
     return None
 
 
@@ -1534,6 +1586,60 @@ def paint_value(element: ET.Element, prop: str) -> str | None:
     return element.get(prop)
 
 
+_CSS_NAMED_COLORS = {
+    "aliceblue": "#f0f8ff", "antiquewhite": "#faebd7", "aqua": "#00ffff",
+    "aquamarine": "#7fffd4", "azure": "#f0ffff", "beige": "#f5f5dc",
+    "bisque": "#ffe4c4", "black": "#000000", "blanchedalmond": "#ffebcd",
+    "blue": "#0000ff", "blueviolet": "#8a2be2", "brown": "#a52a2a",
+    "burlywood": "#deb887", "cadetblue": "#5f9ea0", "chartreuse": "#7fff00",
+    "chocolate": "#d2691e", "coral": "#ff7f50", "cornflowerblue": "#6495ed",
+    "cornsilk": "#fff8dc", "crimson": "#dc143c", "cyan": "#00ffff",
+    "darkblue": "#00008b", "darkcyan": "#008b8b", "darkgoldenrod": "#b8860b",
+    "darkgray": "#a9a9a9", "darkgreen": "#006400", "darkgrey": "#a9a9a9",
+    "darkkhaki": "#bdb76b", "darkmagenta": "#8b008b", "darkolivegreen": "#556b2f",
+    "darkorange": "#ff8c00", "darkorchid": "#9932cc", "darkred": "#8b0000",
+    "darksalmon": "#e9967a", "darkseagreen": "#8fbc8f", "darkslateblue": "#483d8b",
+    "darkslategray": "#2f4f4f", "darkslategrey": "#2f4f4f", "darkturquoise": "#00ced1",
+    "darkviolet": "#9400d3", "deeppink": "#ff1493", "deepskyblue": "#00bfff",
+    "dimgray": "#696969", "dimgrey": "#696969", "dodgerblue": "#1e90ff",
+    "firebrick": "#b22222", "floralwhite": "#fffaf0", "forestgreen": "#228b22",
+    "fuchsia": "#ff00ff", "gainsboro": "#dcdcdc", "ghostwhite": "#f8f8ff",
+    "gold": "#ffd700", "goldenrod": "#daa520", "gray": "#808080",
+    "green": "#008000", "greenyellow": "#adff2f", "grey": "#808080",
+    "honeydew": "#f0fff0", "hotpink": "#ff69b4", "indianred": "#cd5c5c",
+    "indigo": "#4b0082", "ivory": "#fffff0", "khaki": "#f0e68c",
+    "lavender": "#e6e6fa", "lavenderblush": "#fff0f5", "lawngreen": "#7cfc00",
+    "lemonchiffon": "#fffacd", "lightblue": "#add8e6", "lightcoral": "#f08080",
+    "lightcyan": "#e0ffff", "lightgoldenrodyellow": "#fafad2", "lightgray": "#d3d3d3",
+    "lightgreen": "#90ee90", "lightgrey": "#d3d3d3", "lightpink": "#ffb6c1",
+    "lightsalmon": "#ffa07a", "lightseagreen": "#20b2aa", "lightskyblue": "#87cefa",
+    "lightslategray": "#778899", "lightslategrey": "#778899", "lightsteelblue": "#b0c4de",
+    "lightyellow": "#ffffe0", "lime": "#00ff00", "limegreen": "#32cd32",
+    "linen": "#faf0e6", "magenta": "#ff00ff", "maroon": "#800000",
+    "mediumaquamarine": "#66cdaa", "mediumblue": "#0000cd", "mediumorchid": "#ba55d3",
+    "mediumpurple": "#9370db", "mediumseagreen": "#3cb371", "mediumslateblue": "#7b68ee",
+    "mediumspringgreen": "#00fa9a", "mediumturquoise": "#48d1cc",
+    "mediumvioletred": "#c71585", "midnightblue": "#191970", "mintcream": "#f5fffa",
+    "mistyrose": "#ffe4e1", "moccasin": "#ffe4b5", "navajowhite": "#ffdead",
+    "navy": "#000080", "oldlace": "#fdf5e6", "olive": "#808000",
+    "olivedrab": "#6b8e23", "orange": "#ffa500", "orangered": "#ff4500",
+    "orchid": "#da70d6", "palegoldenrod": "#eee8aa", "palegreen": "#98fb98",
+    "paleturquoise": "#afeeee", "palevioletred": "#db7093", "papayawhip": "#ffefd5",
+    "peachpuff": "#ffdab9", "peru": "#cd853f", "pink": "#ffc0cb",
+    "plum": "#dda0dd", "powderblue": "#b0e0e6", "purple": "#800080",
+    "rebeccapurple": "#663399", "red": "#ff0000", "rosybrown": "#bc8f8f",
+    "royalblue": "#4169e1", "saddlebrown": "#8b4513", "salmon": "#fa8072",
+    "sandybrown": "#f4a460", "seagreen": "#2e8b57", "seashell": "#fff5ee",
+    "sienna": "#a0522d", "silver": "#c0c0c0", "skyblue": "#87ceeb",
+    "slateblue": "#6a5acd", "slategray": "#708090", "slategrey": "#708090",
+    "snow": "#fffafa", "springgreen": "#00ff7f", "steelblue": "#4682b4",
+    "tan": "#d2b48c", "teal": "#008080", "thistle": "#d8bfd8",
+    "tomato": "#ff6347", "turquoise": "#40e0d0", "violet": "#ee82ee",
+    "wheat": "#f5deb3", "white": "#ffffff", "whitesmoke": "#f5f5f5",
+    "yellow": "#ffff00", "yellowgreen": "#9acd32",
+}
+
+
 def _normalize_fill(value: str | None) -> str:
     """Normalize a ``fill`` attribute to a hex key, ``"none"``, or ``""``.
 
@@ -1543,7 +1649,11 @@ def _normalize_fill(value: str | None) -> str:
     * ``url(#...)`` → returned unchanged so pattern-filled shapes get
       their own bucket separate from any solid color.
     * ``#rgb`` / ``#rrggbb`` → expanded and lowercased to ``#rrggbb``.
-    * Anything else (named colors, ``rgb(…)``, …) → lowercased as-is.
+    * CSS named colour (``red``, ``blue``, …) → canonicalised to the
+      matching ``#rrggbb`` so the bucket key matches the hex form and
+      the downstream ``color-…`` layer label is hex-shaped (the frontend
+      swatch / pen-routing pickers expect hex).
+    * Anything else (``rgb(…)``, ``hsl(…)`` etc.) → lowercased as-is.
     """
     if value is None:
         return ""
@@ -1558,6 +1668,9 @@ def _normalize_fill(value: str | None) -> str:
     if lowered.startswith("#") and len(lowered) == 4:
         # #abc → #aabbcc
         return f"#{lowered[1] * 2}{lowered[2] * 2}{lowered[3] * 2}"
+    named = _CSS_NAMED_COLORS.get(lowered)
+    if named is not None:
+        return named
     return lowered
 
 

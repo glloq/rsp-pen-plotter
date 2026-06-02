@@ -469,6 +469,7 @@ export type SegmentationMethod =
   | 'thresholds'
   | 'fixed_palette'
   | 'palette_dither'
+  | 'otsu'
 // Master styles split by print mode: ``monochrome`` styles drive the
 // mono master pipeline (luminance_bands / thresholds + bandRecipe).
 // ``multicolor`` styles drive the multicolour pipeline (kmeans /

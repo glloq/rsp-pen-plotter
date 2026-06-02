@@ -54,7 +54,63 @@ __all__ = [
     "Rotation",
     "SegmentationMethod",
     "SegmentationResult",
+    "pick_effective_segmentation",
 ]
+
+
+# Segmentation methods the operator has clearly tuned by hand — they
+# encode intentional choices (a specific palette, manually-picked
+# luminance breakpoints, an explicit binary threshold), so the
+# auto-switch leaves them alone. Everything else (``kmeans``,
+# ``kmeans_lab``, ``luminance_bands``) is treated as default-ish and
+# eligible for the line-art override.
+_EXPLICIT_SEGMENTATION_METHODS: frozenset[str] = frozenset(
+    {"otsu", "fixed_palette", "palette_dither", "thresholds"}
+)
+
+
+def pick_effective_segmentation(
+    *,
+    algorithm: str,
+    mono_ink_color: str | None,
+    segmentation_method: SegmentationMethod,
+) -> SegmentationMethod:
+    """Resolve the effective segmentation for a given option set.
+
+    Auto-picks Otsu binary segmentation when the operator combines a
+    **line-extraction algorithm** (every member of the
+    ``algorithms._KINDS['lines']`` family — centerline, edges,
+    contours, lowpoly, grid, brick, truchet) with **monochrome ink
+    mode**. The frontend's monochrome master styles default to
+    ``luminance_bands`` with ``num_bands=1`` — every pixel ends up in
+    a single mid-grey cluster, the centerline of which is a degenerate
+    trace through the canvas centre. K-means scatters anti-aliased
+    fringes across 3 grey clusters and gets nothing better. Otsu
+    collapses every "dark enough" pixel into one solid mask of the
+    actual ink so the line trace runs on a faithful binary image and
+    the pen draws every stroke exactly once.
+
+    Explicit picks of ``otsu`` / ``fixed_palette`` / ``palette_dither``
+    / ``thresholds`` encode an intentional tuning we shouldn't
+    second-guess and are returned unchanged.
+
+    Shared between the upload path (``segment_and_render``) and the
+    /rerender path (``api.rerender``) so per-layer algorithm overrides
+    that change a layer to a line-extraction algorithm trigger the
+    same fix instead of silently re-using a stale kmeans segmentation.
+    """
+    # Late import to keep the algorithms module off this file's
+    # top-level import graph (the algorithm modules import from
+    # ``converters.algorithms.base`` which has its own dependencies).
+    from pen_plotter.converters.algorithms import _KINDS  # noqa: PLC0415
+
+    if mono_ink_color is None:
+        return segmentation_method
+    if segmentation_method in _EXPLICIT_SEGMENTATION_METHODS:
+        return segmentation_method
+    if _KINDS.get(algorithm) != "lines":
+        return segmentation_method
+    return "otsu"
 
 
 class BitmapOptions(BaseModel):
@@ -214,28 +270,11 @@ class BitmapConverter(Converter):
         # the backend would honour it at /upload — confusing.
         max_dim = opts.max_dimension_px
         n_init = 1 if fast else 10
-        # Auto-pick Otsu binary segmentation when the operator combines a
-        # **line-extraction algorithm** (centerline / edges) with the
-        # **monochrome ink mode**. The frontend's monochrome master styles
-        # default to ``luminance_bands`` with ``num_bands=1`` — every pixel
-        # ends up in a single mid-grey cluster, the centerline of which is
-        # a degenerate trace through the canvas centre (~1 polyline of a
-        # few hundred points, nowhere near the actual ink). K-means
-        # scatters anti-aliased fringes across 3 grey clusters and gets
-        # nothing better. Otsu collapses every "dark enough" pixel into
-        # one solid mask of the actual ink so the centerline trace runs
-        # on a faithful binary image and the pen draws every stroke
-        # exactly once. We respect ``otsu`` / ``fixed_palette`` /
-        # ``palette_dither`` / ``thresholds`` explicit picks — those
-        # encode an intentional tuning we shouldn't second-guess.
-        effective_method: SegmentationMethod = opts.segmentation_method
-        if (
-            opts.algorithm in {"centerline", "edges"}
-            and opts.mono_ink_color is not None
-            and opts.segmentation_method
-            not in {"otsu", "fixed_palette", "palette_dither", "thresholds"}
-        ):
-            effective_method = "otsu"
+        effective_method = pick_effective_segmentation(
+            algorithm=opts.algorithm,
+            mono_ink_color=opts.mono_ink_color,
+            segmentation_method=opts.segmentation_method,
+        )
         with traced_span(
             "pipeline.bitmap.load",
             size_bytes=len(data),

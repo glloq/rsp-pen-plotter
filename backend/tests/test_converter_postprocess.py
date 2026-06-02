@@ -221,8 +221,55 @@ def test_svg_line_drawing_routes_bare_stroke_only_lines() -> None:
     )
     result = SvgConverter().convert(svg)
     layers = {layer.layer_id: layer for layer in extract_layers(sanitize_svg(result.svg))}
-    assert "color-red" in layers
-    assert "color-blue" in layers
+    # CSS named colours are canonicalised to ``#rrggbb`` so the bucket
+    # key matches sibling elements that wrote the hex form directly and
+    # the frontend swatch parser can resolve them.
+    assert "color-#ff0000" in layers
+    assert "color-#0000ff" in layers
+
+
+def test_svg_style_property_preserves_url_data_url_semicolons() -> None:
+    """``_style_property`` must not truncate ``url(data:image/png;base64,...)``
+    values at the inner ``;`` — that semicolon is part of the value,
+    not a declaration separator.
+    """
+    from pen_plotter.core.pdf_postprocess import _style_property
+
+    style = "fill:url(data:image/png;base64,AAAA);stroke:#0000ff"
+    assert _style_property(style, "fill") == "url(data:image/png;base64,AAAA)"
+    assert _style_property(style, "stroke") == "#0000ff"
+
+
+def test_svg_style_property_strips_css_important_token() -> None:
+    """``fill:#ff0000 !important`` and ``fill:#ff0000`` must hit the
+    same bucket — otherwise the operator sees duplicate colour layers
+    for the same hex and per-pen routing fragments. The token sometimes
+    appears unspaced (``#ff0000!important``) too.
+    """
+    from pen_plotter.core.pdf_postprocess import _style_property
+
+    assert _style_property("fill:#ff0000 !important;stroke:none", "fill") == "#ff0000"
+    assert _style_property("fill:#ff0000!important", "fill") == "#ff0000"
+    assert _style_property("fill:red !important", "fill") == "red"
+
+
+def test_svg_named_colours_canonicalised_to_hex() -> None:
+    """``<line stroke='red'/>`` must produce ``color-#ff0000`` layer
+    ids, not ``color-red`` — the frontend swatch / pen-routing pickers
+    parse the suffix as a hex.
+    """
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+        b'<line x1="10" y1="10" x2="100" y2="10" stroke="red"/>'
+        b'<line x1="10" y1="30" x2="100" y2="30" stroke="blue"/>'
+        b'<line x1="10" y1="50" x2="100" y2="50" stroke="forestgreen"/>'
+        b"</svg>"
+    )
+    result = SvgConverter().convert(svg)
+    layers = {layer.layer_id: layer for layer in extract_layers(sanitize_svg(result.svg))}
+    assert "color-#ff0000" in layers
+    assert "color-#0000ff" in layers
+    assert "color-#228b22" in layers
 
 
 def test_svg_line_drawing_optimized_geometry_round_trips() -> None:

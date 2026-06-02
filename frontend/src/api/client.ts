@@ -57,6 +57,7 @@ export type SegmentationMethod =
   | 'thresholds'
   | 'fixed_palette'
   | 'palette_dither'
+  | 'otsu'
 
 export async function getAlgorithms(): Promise<AlgorithmInfo[]> {
   const response = await api.get<AlgorithmInfo[]>('/algorithms')
