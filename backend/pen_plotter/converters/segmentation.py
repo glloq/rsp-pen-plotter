@@ -100,6 +100,81 @@ def _nearest_palette_rgb(
     return flat
 
 
+def otsu(
+    image: Image.Image,
+) -> tuple[NDArray[np.intp], NDArray[np.uint8]]:
+    """Binary segmentation via Otsu's method on the luminance histogram.
+
+    Returns exactly two clusters: ``0`` = dark pixels (ink), ``1`` = light
+    pixels (paper). The threshold is chosen automatically so the
+    between-class variance is maximised — no operator tuning, robust
+    against scan exposure, JPEG noise and slight paper tint.
+
+    This is the right segmentation for **monochrome line art**
+    (mechanical drawings, schematics, hand-traced sketches) — k-means with
+    4 colours scatters the anti-aliased edge pixels of every thin stroke
+    across 3 grey clusters, so each cluster's mask is sparse and the
+    centerline / edges algorithms run on a broken skeleton, dropping
+    detail. Otsu's binary mask groups every ink pixel together (line
+    cores + anti-aliased fringes), giving the medial-axis trace a solid
+    region to work with.
+
+    Implementation: prefer scikit-image's ``threshold_otsu`` (the
+    one-pass histogram implementation is already vectorised in C and
+    matches what the literature describes). If the optional dep is
+    missing at import time the pure-numpy fallback below produces an
+    identical result.
+    """
+    grey = _greyscale(image)
+    arr = np.asarray(image, dtype=np.float64)
+    if grey.size == 0 or grey.min() == grey.max():
+        # Degenerate single-tone image — nothing to threshold. Return a
+        # single cluster so downstream code keeps working.
+        labels = np.zeros(grey.shape, dtype=np.intp)
+        mean = arr.reshape(-1, 3).mean(axis=0).round().clip(0, 255).astype(np.uint8)
+        palette = np.array([mean], dtype=np.uint8)
+        return labels, palette
+
+    try:
+        from skimage.filters import threshold_otsu as _skotsu
+
+        threshold = float(_skotsu(grey))
+    except ImportError:
+        # Pure-numpy fallback — 256-bin histogram Otsu. Same algorithm,
+        # just no C kernel; cost is negligible at typical image sizes.
+        hist, edges = np.histogram(grey, bins=256, range=(0.0, 1.0))
+        centres = (edges[:-1] + edges[1:]) / 2.0
+        weights = hist.astype(np.float64)
+        total = weights.sum()
+        if total <= 0:
+            threshold = 0.5
+        else:
+            cum_w = np.cumsum(weights)
+            cum_m = np.cumsum(weights * centres)
+            mean_total = cum_m[-1] / total
+            # Variance between classes for every candidate split.
+            denom = cum_w * (total - cum_w)
+            safe = denom > 0
+            num = (mean_total * cum_w - cum_m) ** 2
+            var_between = np.where(safe, num / np.where(safe, denom, 1.0), 0.0)
+            threshold = float(centres[int(var_between.argmax())])
+
+    labels = (grey >= threshold).astype(np.intp)  # 0 = dark, 1 = light
+    palette = np.zeros((2, 3), dtype=np.uint8)
+    for cluster in (0, 1):
+        mask = labels == cluster
+        if mask.any():
+            palette[cluster] = (
+                np.clip(arr[mask].mean(axis=0).round(), 0, 255).astype(np.uint8)
+            )
+        else:
+            # Image is entirely on one side of the threshold (degenerate
+            # but possible). Pick a sensible default for the empty side so
+            # the palette stays well-formed for downstream layer ordering.
+            palette[cluster] = np.array([0, 0, 0] if cluster == 0 else [255, 255, 255])
+    return labels, palette
+
+
 def kmeans(
     image: Image.Image, *, num_colors: int, n_init: int = 10
 ) -> tuple[NDArray[np.intp], NDArray[np.uint8]]:
