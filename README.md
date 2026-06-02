@@ -9,7 +9,7 @@
 ![backend](https://img.shields.io/badge/backend-FastAPI-009688)
 
 <p align="center">
-  <img src="docs/images/interface-overview.svg" alt="OmniPlot main interface — Files pane on the left, sheet preview with placed artwork in the centre, pre-flight and queue on the right" width="900"/>
+  <img src="docs/images/screenshot-main-interface.png" alt="OmniPlot main interface — Files pane on the left with the library, sheet (Plan) tab in the centre with an A4 workspace, layout controls on the right" width="900"/>
 </p>
 
 ---
@@ -79,15 +79,15 @@ YAML profile, no code changes needed. See
 ## The editor
 
 Two surfaces share the same model — flip between them at any time from the
-header toggle.
+*Assisté / Expert* toggle in the header.
 
 <p align="center">
-  <img src="docs/images/editor.svg" alt="Editor wizard — six-step assistant on the left, live re-rendering preview on the right" width="900"/>
+  <img src="docs/images/screenshot-editor.png" alt="Editor in Assistant mode — live preview of city-map.svg with its four layers (roads, water, parks, labels), pen palette, fast/balanced/quality preset, machine magazine vs free palette" width="900"/>
 </p>
 
-- **Assistant** (above): six-step wizard — source → goal → render → colours →
-  layers → review. Picks sensible defaults for each algorithm. Newcomers
-  ship their first plot without reading docs.
+- **Assistant** (above): a wizard that asks what matters — *fast*,
+  *balanced* or *quality* — then picks the algorithm, density and colour
+  separation for you. Newcomers ship their first plot without reading docs.
 - **Expert**: rich per-layer panel — algorithm per layer, simplification
   tolerance, pen-up/pen-down speeds, pen-slot assignment, multi-pass
   stacks, and the optimisation toggle.
@@ -99,6 +99,10 @@ header toggle.
 ---
 
 ## Pre-flight & operate
+
+<p align="center">
+  <img src="docs/images/screenshot-plotter-tab.png" alt="Plotter tab — manual control panel, print queue, connect button and generated G-code drawer" width="900"/>
+</p>
 
 Catch problems before the pen touches paper:
 

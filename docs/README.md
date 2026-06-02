@@ -60,12 +60,26 @@ recipes live in the [`wiki/`](../wiki/Home.md) folder instead.
 
 ### Assets
 
+Live UI screenshots (captured via the Playwright harness in
+`frontend/scripts/screenshot.mjs`):
+
 | Path | Purpose |
 | --- | --- |
-| [images/interface-overview.svg](images/interface-overview.svg) | Main UI illustration (used in the top-level README) |
-| [images/editor.svg](images/editor.svg) | Editor wizard illustration |
-| [images/file-types.svg](images/file-types.svg) | Supported formats overview |
+| [images/screenshot-main-interface.png](images/screenshot-main-interface.png) | Main UI — Files pane + Sheet (Plan) tab |
+| [images/screenshot-editor.png](images/screenshot-editor.png) | Edit modal in Assistant mode, live preview |
+| [images/screenshot-plotter-tab.png](images/screenshot-plotter-tab.png) | Plotter tab — manual control + queue |
+| [images/screenshot-settings-drawer.png](images/screenshot-settings-drawer.png) | Settings drawer — Système panel |
+| [images/screenshot-files-pane.png](images/screenshot-files-pane.png) | Files pane close-up |
+
+Hand-drawn illustrations (used where a schematic communicates better than
+a screenshot):
+
+| Path | Purpose |
+| --- | --- |
 | [images/workflow.svg](images/workflow.svg) | Five-step workflow diagram |
+| [images/file-types.svg](images/file-types.svg) | Supported formats overview |
+| [images/interface-overview.svg](images/interface-overview.svg) | Annotated UI layout |
+| [images/editor.svg](images/editor.svg) | Editor wizard schematic |
 
 ## Quick links
 
