@@ -19,6 +19,7 @@ from xml.etree import ElementTree as ET
 
 from svgelements import SVG, Shape
 
+from pen_plotter.core.pdf_postprocess import paint_value
 from pen_plotter.core.svg_ns import INKSCAPE_NS as _INKSCAPE_NS
 from pen_plotter.core.svg_ns import SVG_NS as _SVG_NS
 from pen_plotter.core.svg_ns import svg_tostring
@@ -65,14 +66,20 @@ def _count_drawables(element: ET.Element) -> int:
 
 
 def _group_color(group: ET.Element) -> str:
-    """Resolve a representative color for a group from its fill or stroke."""
+    """Resolve a representative color for a group from its fill or stroke.
+
+    Both the presentation attribute and the ``style`` declaration are
+    inspected, so an Inkscape-style ``style="fill:none;stroke:#ff0000"``
+    on the wrapping group (or any of its drawable children) is recognised
+    instead of falling back to black.
+    """
     for attr in ("fill", "stroke"):
-        value = group.get(attr)
+        value = paint_value(group, attr)
         if value and value != "none":
             return value
     for child in group.iter():
         for attr in ("fill", "stroke"):
-            value = child.get(attr)
+            value = paint_value(child, attr)
             if value and value != "none":
                 return value
     return "#000000"

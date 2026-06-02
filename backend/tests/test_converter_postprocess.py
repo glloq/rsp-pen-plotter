@@ -184,6 +184,69 @@ def test_svg_converter_vectorizes_embedded_image() -> None:
     assert any(layer.layer_id.startswith("image-") for layer in layers)
 
 
+def test_svg_line_drawing_routes_style_strokes_per_colour() -> None:
+    """Schematic / line-art SVGs from every modern editor (Inkscape,
+    browsers, KiCad) write colours in the CSS ``style`` attribute, not
+    as presentation attributes. The post-processor used to read only
+    ``element.get("fill")``, so every coloured stroke collapsed into a
+    single black ``text`` layer and per-pen routing was impossible. The
+    bucketer must now honour ``style="fill:none;stroke:#xxx"`` and emit
+    one ``color-#xxxxxx`` layer per distinct stroke colour."""
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+        b'<path d="M10 10 L100 10" style="fill:none;stroke:#ff0000"/>'
+        b'<path d="M10 20 L100 20" style="fill:none;stroke:#0000ff"/>'
+        b'<path d="M10 30 L100 30" style="fill:none;stroke:#00aa00"/>'
+        b"</svg>"
+    )
+    result = SvgConverter().convert(svg)
+    layers = {layer.layer_id: layer for layer in extract_layers(sanitize_svg(result.svg))}
+    assert "color-#ff0000" in layers
+    assert "color-#0000ff" in layers
+    assert "color-#00aa00" in layers
+    assert layers["color-#ff0000"].source_color.lower() in {"#ff0000", "ff0000"}
+
+
+def test_svg_line_drawing_routes_bare_stroke_only_lines() -> None:
+    """An element with an explicit ``stroke`` and no ``fill`` attribute
+    (the form a hand-written or KiCad-style ``<line stroke="red"/>``
+    takes) used to be bucketed as black because "no fill" defaulted to
+    ``#000000``. Stroke-only line art now picks up its stroke colour as
+    the routing key."""
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+        b'<line x1="10" y1="10" x2="100" y2="10" stroke="red"/>'
+        b'<line x1="10" y1="30" x2="100" y2="30" stroke="blue"/>'
+        b"</svg>"
+    )
+    result = SvgConverter().convert(svg)
+    layers = {layer.layer_id: layer for layer in extract_layers(sanitize_svg(result.svg))}
+    assert "color-red" in layers
+    assert "color-blue" in layers
+
+
+def test_svg_line_drawing_optimized_geometry_round_trips() -> None:
+    """The geometry of a multi-colour line drawing must survive the
+    full upload → sanitize → extract → optimize round-trip. Regression
+    against the colour-routing fix: optimization shouldn't drop or
+    duplicate strokes when per-colour layers are present."""
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+        b'<path d="M10 10 L100 10 L100 100" style="fill:none;stroke:#ff0000"/>'
+        b'<circle cx="150" cy="50" r="20" style="fill:none;stroke:#0000ff"/>'
+        b"</svg>"
+    )
+    result = SvgConverter().convert(svg)
+    clean = sanitize_svg(result.svg)
+    layers = {layer.layer_id: layer for layer in extract_layers(clean)}
+    assert "color-#ff0000" in layers
+    assert "color-#0000ff" in layers
+    # Round-trip through the optimizer.
+    optimized = optimize_svg(clean)
+    assert 'stroke="#ff0000"' in optimized.svg or 'stroke="#FF0000"' in optimized.svg
+    assert 'stroke="#0000ff"' in optimized.svg or 'stroke="#0000FF"' in optimized.svg
+
+
 @needs_gs
 def test_eps_converter_preserves_text_after_postprocess() -> None:
     """EPS used to share the PDF bug — text wiped by sanitize, image dropped
