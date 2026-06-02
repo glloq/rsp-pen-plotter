@@ -142,6 +142,13 @@ export type BitmapDraft = {
 // shipped as a ``coming soon`` toggle so the field is reserved.
 export type CurvesDraft = {
   centerline_mode: boolean
+  // Minimum spur length (in segmentation-canvas pixels) the centerline
+  // tracer keeps. Lower = more fine detail preserved (tick marks,
+  // dimension serifs, hatching), higher = noisier skeletons get
+  // cleaned up. The algorithm's hard-coded default was 3; exposing it
+  // here lets the operator dial it down for technical drawings where
+  // every dimension tick matters.
+  centerline_min_branch_px: number
   simplify_tolerance_mm: number
   curve_fit: boolean
 }
@@ -226,6 +233,7 @@ export function defaultBitmap(): BitmapDraft {
 export function defaultCurves(): CurvesDraft {
   return {
     centerline_mode: false,
+    centerline_min_branch_px: 3,
     simplify_tolerance_mm: 0.05,
     curve_fit: false,
   }
@@ -1102,7 +1110,7 @@ export function buildBitmapOptions(): Record<string, unknown> {
   // a single global flag rather than a per-band concern.
   const algo = c.centerline_mode ? 'centerline' : b.algorithm
   const algoOpts = c.centerline_mode
-    ? { stroke_width: 0.8, smooth: true, min_branch_px: 3 }
+    ? { stroke_width: 0.8, smooth: true, min_branch_px: c.centerline_min_branch_px }
     : buildAlgorithmOptions()
   // ``fixed_palette`` with an empty palette is a configuration gap: the
   // operator picked the mode but has neither installed pens
