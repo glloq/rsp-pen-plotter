@@ -2225,6 +2225,11 @@ export interface components {
             layer_count: number;
             /** Profile Name */
             profile_name: string;
+            /**
+             * Schema Version
+             * @default 0
+             */
+            schema_version: number;
             /** Source File */
             source_file: string;
             /** Source Mime */
@@ -2969,7 +2974,7 @@ export interface components {
             name: string;
             /** Pause Points */
             pause_points?: {
-                [key: string]: unknown;
+                [key: string]: string;
             };
             /**
              * Priority
@@ -2979,7 +2984,7 @@ export interface components {
             /** Profile Name */
             profile_name: string;
             /** Skipped Layers */
-            skipped_layers?: unknown[];
+            skipped_layers?: string[];
             /**
              * State
              * @default queued
@@ -2987,7 +2992,9 @@ export interface components {
             state: string;
             /** Swap Actions */
             swap_actions?: {
-                [key: string]: unknown;
+                [key: string]: {
+                    [key: string]: unknown;
+                };
             };
             /** Swap Prompt */
             swap_prompt?: string | null;
