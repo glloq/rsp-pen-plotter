@@ -178,10 +178,12 @@ describe('EditModalV2 (beginner single-screen)', () => {
     expect(wrapper.emitted('cancel')).toBeTruthy()
   })
 
-  it('emits open-v1 when the operator opens the full editor', async () => {
+  it('no longer exposes the legacy "open V1 editor" escape hatch', () => {
+    // V1 editor was removed in the v0.2 migration; the wizard is now
+    // the only editor surface, so the escape-hatch button must not
+    // render anymore.
     const wrapper = mountModal(PLACEMENT_PROPS)
-    await wrapper.find('[data-test="modal-v2-open-v1"]').trigger('click')
-    expect(wrapper.emitted('open-v1')).toBeTruthy()
+    expect(wrapper.find('[data-test="modal-v2-open-v1"]').exists()).toBe(false)
   })
 
   it('backdrop click emits cancel', async () => {
