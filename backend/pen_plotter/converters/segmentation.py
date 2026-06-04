@@ -28,6 +28,7 @@ Post-processing
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -50,7 +51,7 @@ def _hex_to_rgb(value: str) -> tuple[int, int, int]:
 def _greyscale(image: Image.Image) -> NDArray[np.float64]:
     """Return a (H, W) float array in 0..1 from an RGB image."""
     arr = np.asarray(image, dtype=np.float64) / 255.0
-    return arr @ _REC709
+    return cast(NDArray[np.float64], arr @ _REC709)
 
 
 # 8×8 recursive Bayer ordered-dither matrix, normalised to roughly

@@ -20,13 +20,13 @@ from pydantic import BaseModel
 
 from pen_plotter.core.layers import (
     _INKSCAPE_LABEL,
-    _INKSCAPE_NS,
-    _SVG_NS,
     _group_color,
     _group_to_svg,
     _local,
     strip_root_size,
 )
+from pen_plotter.core.svg_ns import INKSCAPE_NS as _INKSCAPE_NS
+from pen_plotter.core.svg_ns import SVG_NS as _SVG_NS
 from pen_plotter.observability import traced_span
 
 _QUANTIZATION = 0.5

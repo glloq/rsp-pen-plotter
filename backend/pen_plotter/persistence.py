@@ -11,6 +11,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 from sqlalchemy import Engine, inspect, text
 from sqlmodel import Field, Session, SQLModel, create_engine, desc, select
@@ -308,8 +309,14 @@ def list_file_records(
         if folder is not None:
             statement = statement.where(FileRecord.folder == folder)
         if search:
-            statement = statement.where(FileRecord.source_file.ilike(f"%{search}%"))
-        column = {
+            # ``source_file`` is a SQLAlchemy column at class-attribute
+            # access; the descriptor exposes ``ilike`` but mypy reads the
+            # field's declared ``str`` type. The cast keeps the call site
+            # honest about the dual nature.
+            statement = statement.where(
+                cast(Any, FileRecord.source_file).ilike(f"%{search}%")
+            )
+        column: Any = {
             "name": FileRecord.source_file,
             "date": FileRecord.created_at,
             "type": FileRecord.source_mime,
@@ -397,8 +404,8 @@ def list_available_colors(target: Engine = engine) -> list[AvailableColorRecord]
     """
     with Session(target) as session:
         statement = select(AvailableColorRecord).order_by(
-            AvailableColorRecord.position,
-            AvailableColorRecord.created_at,
+            cast(Any, AvailableColorRecord.position),
+            cast(Any, AvailableColorRecord.created_at),
         )
         return list(session.exec(statement).all())
 

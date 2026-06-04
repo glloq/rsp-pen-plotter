@@ -16,6 +16,7 @@ import logging
 import re
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import JSON, Column, Engine
@@ -72,13 +73,15 @@ class PrintRun(SQLModel, table=True):
     # that predate ``swap_actions``. New runs populate both fields so
     # an older worker version still produces the right operator-confirm
     # behaviour even if it can't act on the richer plan.
-    pause_points: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    pause_points: dict[str, str] = Field(default_factory=dict, sa_column=Column(JSON))
     # {executable_line_index: {kind, prompt, commands}} — richer than
     # ``pause_points``, supports firmware / host_timed / none plans
     # produced by the ``ToolChangeOrchestrator`` (roadmap 2.3 wire).
     # Streamer consumes this when available and falls back to
     # ``pause_points`` for runs queued before the column existed.
-    swap_actions: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    swap_actions: dict[str, dict[str, Any]] = Field(
+        default_factory=dict, sa_column=Column(JSON)
+    )
     # Operator-facing prompt for the swap the run is currently halted on
     # (e.g. "Change pen to Red (#ff0000)" or "Load Red into magazine slot
     # 2"). Set while the streamer sits in its ``WAITING`` state for an
@@ -90,7 +93,7 @@ class PrintRun(SQLModel, table=True):
     # Layers that were skipped at runtime under a ``skip_layer`` recovery
     # policy. Populated when the streamer raises ``StreamError`` and the
     # active policy says "skip and continue" — see ``_skip_to_next_layer``.
-    skipped_layers: list = Field(default_factory=list, sa_column=Column(JSON))
+    skipped_layers: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     # Optional client-supplied key to make enqueue idempotent across retries.
     idempotency_key: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -123,7 +126,7 @@ def enqueue(
     swap_actions_raw = guided_swap_actions(gcode, profile) if profile else {}
     # SQLite JSON column expects string keys; pydantic-dump each
     # SwapAction so the storage round-trip is JSON-safe.
-    swap_actions: dict[str, dict] = {
+    swap_actions: dict[str, dict[str, Any]] = {
         str(idx): action.model_dump(mode="json") for idx, action in swap_actions_raw.items()
     }
     run = PrintRun(

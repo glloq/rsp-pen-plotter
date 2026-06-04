@@ -90,14 +90,14 @@ class VoronoiStippleAlgorithm(RasterAlgorithm):
             weights = np.clip(w[ys, xs], 1e-3, None)
 
         try:
-            from scipy.spatial import cKDTree  # type: ignore[import-untyped]
+            from scipy.spatial import cKDTree
         except ImportError:
             iterations = 0  # No KDTree -> skip relaxation, emit seed dots.
 
         if iterations > 0:
             points = np.column_stack([xs, ys]).astype(np.float64)
             for _ in range(iterations):
-                tree = cKDTree(sites)  # type: ignore[possibly-undefined]
+                tree = cKDTree(sites)
                 _, assign = tree.query(points, k=1)
                 # Weighted centroid per site. ``np.bincount`` handles
                 # the summation in C; one pass per coordinate axis.
