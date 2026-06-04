@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 
 from pen_plotter.hardware.commands import goto_command, home_command, jog_command
 from pen_plotter.hardware.streamer import (
@@ -19,8 +20,19 @@ from pen_plotter.hardware.streamer import (
     StreamState,
     SwapAction,
 )
-from pen_plotter.hardware.transport import SerialTransport, Transport
+from pen_plotter.hardware.transport import MockTransport, SerialTransport, Transport
 from pen_plotter.models import MachineProfile
+
+
+def _fake_hardware_enabled() -> bool:
+    """Return True when OMNIPLOT_FAKE_HARDWARE asks for in-process mocking.
+
+    Lets E2E tests drive the full operator workflow without a serial
+    device — every ``open_serial`` call attaches a :class:`MockTransport`
+    that echoes ``ok`` instead of opening ``/dev/ttyUSB*``.
+    """
+    raw = os.environ.get("OMNIPLOT_FAKE_HARDWARE", "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 class PlotterController:
@@ -52,12 +64,21 @@ class PlotterController:
     async def open_serial(self, port: str, baudrate: int = 115200, terminator: str = "\n") -> None:
         """Open and attach a real serial transport.
 
+        When ``OMNIPLOT_FAKE_HARDWARE=1`` is set, attaches a
+        :class:`MockTransport` instead — the call signature stays
+        identical so the API endpoint and the SPA don't notice. Used by
+        Playwright E2E tests to drive the full operator parcours
+        (connect → queue → plot → resume) without a serial device.
+
         Args:
             port: Serial device path.
             baudrate: Connection baud rate.
             terminator: Line terminator (line feed for GRBL/Marlin, carriage
                 return for EBB).
         """
+        if _fake_hardware_enabled():
+            self.attach(MockTransport())
+            return
         self.attach(await SerialTransport.open(port, baudrate, terminator))
 
     async def disconnect(self) -> None:
