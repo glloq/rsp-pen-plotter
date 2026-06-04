@@ -339,14 +339,26 @@ export interface MissingPenSlotsDetail {
 export function asMissingPenSlots(err: unknown): MissingPenSlotsDetail | null {
   const status = (err as { response?: { status?: number } })?.response?.status
   if (status !== 409) return null
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  // Post-P1 envelope: ``{ code, message, details: { reason, slots, ... } }``.
+  // ``details.reason`` and the hoisted ``message`` replace the legacy
+  // ``detail`` field; we still read the latter as a fallback so a
+  // server pinned to an older backend keeps working.
+  const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data
+  if (!data) return null
+  const details = (data.details ?? data.detail) as Record<string, unknown> | undefined
   if (
-    detail &&
-    typeof detail === 'object' &&
-    (detail as { reason?: unknown }).reason === 'missing_pen_slots' &&
-    Array.isArray((detail as { slots?: unknown }).slots)
+    details &&
+    typeof details === 'object' &&
+    details.reason === 'missing_pen_slots' &&
+    Array.isArray(details.slots)
   ) {
-    return detail as MissingPenSlotsDetail
+    return {
+      reason: 'missing_pen_slots',
+      slots: details.slots as number[],
+      message:
+        (typeof details.message === 'string' && details.message) ||
+        (typeof data.message === 'string' ? data.message : ''),
+    }
   }
   return null
 }
@@ -741,13 +753,23 @@ export interface RerenderUnavailableDetail {
 export function asRerenderUnavailable(err: unknown): RerenderUnavailableDetail | null {
   const status = (err as { response?: { status?: number } })?.response?.status
   if (status !== 404) return null
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  // Post-P1 envelope (see ``asMissingPenSlots`` above).
+  const data = (err as { response?: { data?: Record<string, unknown> } })?.response?.data
+  if (!data) return null
+  const details = (data.details ?? data.detail) as Record<string, unknown> | undefined
   if (
-    detail &&
-    typeof detail === 'object' &&
-    typeof (detail as { reason?: unknown }).reason === 'string'
+    details &&
+    typeof details === 'object' &&
+    typeof details.reason === 'string' &&
+    typeof details.job_id === 'string'
   ) {
-    return detail as RerenderUnavailableDetail
+    return {
+      reason: details.reason as RerenderUnavailableReason,
+      job_id: details.job_id,
+      message:
+        (typeof details.message === 'string' && details.message) ||
+        (typeof data.message === 'string' ? data.message : ''),
+    }
   }
   return null
 }

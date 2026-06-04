@@ -5,7 +5,6 @@ import { getHealth, systemCheckUpdate } from './api/client'
 import AppHeader from './components/AppHeader.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
-import EditModal from './components/EditModal.vue'
 import FilesPane from './components/FilesPane.vue'
 import PlotterSettingsModal from './components/PlotterSettingsModal.vue'
 import SettingsDrawer from './components/SettingsDrawer.vue'
@@ -55,18 +54,12 @@ const uploads = useUploadsStore()
 const dragDepth = ref(0)
 const dropping = ref(false)
 
-// Feature-flagged v2 surfaces. Each is opt-in: ?flag.modalV2=1 enables
-// the six-step modal alongside v1, ?flag.workshopMode=1 (or the header
+// Feature-flagged v2 surfaces. ``?flag.workshopMode=1`` (or the header
 // button below) opens the full-screen run cockpit. The perf overlay
 // mounts inconditionally — it auto-hides when its own flag is off.
-// The Edit modal is selected by the operator's UX mode:
-//   Assisted → Modal V2 (six-step wizard, simple defaults)
-//   Expert   → Modal V1 (rich per-layer controls, full editor)
-// No separate ``modalV2`` flag in the header anymore — the two
-// concepts (skill level vs which editor) collapsed into one to
-// avoid the duplicate selector confusion operators reported in
-// the wiring audit.
-const editorIsWizard = computed(() => uiMode.isAssisted)
+// The Edit modal is always the V2 wizard since the v0.2 migration; the
+// Assisted/Expert UX mode now only controls per-section disclosure
+// inside the wizard, not which editor is shown.
 const workshopEnabled = useFeatureFlag('workshopMode')
 const perfEnabled = useFeatureFlag('perf')
 const activeRun = computed(() => queue.active[0] ?? null)
@@ -195,14 +188,6 @@ async function onEditV2Confirm(
   }
   ui.closeEditModal()
 }
-function onEditV2OpenV1(): void {
-  // Escape hatch from the wizard into the rich editor. Switching to
-  // Expert mode swaps the open modal in place (the v1 modal opens
-  // immediately for the current placement) since ``editorIsWizard``
-  // is driven by the UX mode.
-  uiMode.setMode('expert')
-}
-
 // Map the placement's MIME to a ``SourceKind`` so the V2 wizard pre-
 // selects the right value. Falls back to ``bitmap_photo`` (the most
 // common upload) when the placement isn't selected yet.
@@ -409,21 +394,12 @@ onBeforeUnmount(() => {
 
     <SettingsDrawer />
     <PlotterSettingsModal />
-    <!-- Edit modal: the UX mode picks the surface.
-         Assisted → wizard (Modal V2), Expert → rich editor (Modal V1).
-         Both modals share the same ``ui.editModalOpen`` state so an
-         operator clicks Edit, gets the right surface for their current
-         mode, and the header toggle swaps the experience mid-session
-         without losing the open state. -->
-    <EditModal v-if="!editorIsWizard" />
-    <!-- ``:key`` re-mounts the wizard when the operator switches to
-         another file while the modal is open, so the local state
-         (sourceKind, goal, decision, …) is reset to defaults derived
-         from the new placement. Without the key the props update
-         reactively but the wizard would keep the previous file's
-         decision in memory. -->
+    <!-- Edit modal — V2 wizard is the only surface (v0.2 migration).
+         ``:key`` re-mounts when the operator switches files so local
+         state (sourceKind, goal, decision, …) resets to defaults
+         derived from the new placement. -->
     <EditModalV2
-      v-else-if="ui.editModalOpen"
+      v-if="ui.editModalOpen"
       :key="store.selectedPlacement?.id ?? 'no-placement'"
       :initial-source-kind="v2SourceKind"
       :available-colors-count="v2AvailableColorsCount"
@@ -433,7 +409,6 @@ onBeforeUnmount(() => {
       :preview-svg="store.selectedPlacement?.svg"
       @cancel="onEditV2Cancel"
       @confirm="onEditV2Confirm"
-      @open-v1="onEditV2OpenV1"
     />
     <ConfirmDialog />
     <UpdateProgressModal />

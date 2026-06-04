@@ -46,6 +46,7 @@ from pen_plotter.converters.pipeline import (
     resolve_mime,
 )
 from pen_plotter.persistence import (
+    PERSISTENCE_SCHEMA_VERSION,
     FileRecord,
     delete_file_record,
     get_file_record,
@@ -57,7 +58,25 @@ from pen_plotter.persistence import (
 
 router = APIRouter()
 
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+def _max_upload_bytes() -> int:
+    """Return the per-request body cap, configurable via env var.
+
+    ``OMNIPLOT_MAX_UPLOAD_MB`` (positive integer) overrides the default
+    50 MB.
+    """
+    raw = os.environ.get("OMNIPLOT_MAX_UPLOAD_MB", "").strip()
+    if raw:
+        try:
+            mb = int(raw)
+            if mb > 0:
+                return mb * 1024 * 1024
+        except ValueError:
+            pass
+    return 50 * 1024 * 1024
+
+
+MAX_UPLOAD_BYTES = _max_upload_bytes()
 
 # Folder is a free-form label stored in the FileRecord row, never
 # joined onto a filesystem path on disk (the file_id — a UUID — is the
@@ -269,6 +288,7 @@ def _reprocess_existing(
         layer_count=len(converted.layers),
         folder=record.folder,
         created_at=record.created_at,
+        schema_version=PERSISTENCE_SCHEMA_VERSION,
     )
     save_file_record(updated)
 
@@ -327,7 +347,7 @@ async def upload_to_library(
         raise HTTPException(status_code=415, detail="Could not determine file type")
 
     folder = _sanitize_folder(folder)
-    data = await read_upload_safely(file, MAX_UPLOAD_BYTES)
+    data = await read_upload_safely(file, _max_upload_bytes())
     parsed_options = parse_options(options)
 
     digest = hashlib.sha256(data).hexdigest()
@@ -393,6 +413,7 @@ async def upload_to_library(
         layer_count=len(converted.layers),
         folder=folder,
         created_at=datetime.now(UTC),
+        schema_version=PERSISTENCE_SCHEMA_VERSION,
     )
     save_file_record(record)
 

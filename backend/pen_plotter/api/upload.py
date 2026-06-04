@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -19,7 +20,26 @@ from pen_plotter.persistence import save_job
 
 router = APIRouter()
 
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+def _max_upload_bytes() -> int:
+    """Return the per-request body cap, configurable via env var.
+
+    ``OMNIPLOT_MAX_UPLOAD_MB`` (positive integer) overrides the default
+    50 MB. Resolved at call time so tests can monkeypatch the env var
+    without re-importing the module.
+    """
+    raw = os.environ.get("OMNIPLOT_MAX_UPLOAD_MB", "").strip()
+    if raw:
+        try:
+            mb = int(raw)
+            if mb > 0:
+                return mb * 1024 * 1024
+        except ValueError:
+            pass
+    return 50 * 1024 * 1024
+
+
+MAX_UPLOAD_BYTES = _max_upload_bytes()
 
 
 class UploadResponse(BaseModel):
@@ -57,7 +77,7 @@ async def upload(
 
     # Stream-read with a cumulative size cap so a malicious / accidental
     # giant body never gets fully buffered into RAM before the size check.
-    data = await read_upload_safely(file, MAX_UPLOAD_BYTES)
+    data = await read_upload_safely(file, _max_upload_bytes())
 
     parsed_options = parse_options(options)
     converted = convert_file(data, file.filename, mime, parsed_options)

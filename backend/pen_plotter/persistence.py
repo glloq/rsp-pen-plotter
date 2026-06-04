@@ -11,6 +11,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 from sqlalchemy import Engine, inspect, text
 from sqlmodel import Field, Session, SQLModel, create_engine, desc, select
@@ -23,6 +24,13 @@ _log = logging.getLogger(__name__)
 _DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "omniplot.db"
 _DB_PATH = Path(os.environ.get("OMNIPLOT_DB", _DEFAULT_DB))
 
+# Bumped whenever a persisted row's JSON-serialized shape changes in a
+# way that requires a migration. Stored on every new row so a future
+# upgrade can detect old shapes and adapt instead of crashing in the
+# deserializer. Read the contract here:
+# docs/contract_architecture.md#persistence-schema-version
+PERSISTENCE_SCHEMA_VERSION = 1
+
 
 class JobRecord(SQLModel, table=True):
     """A persisted summary of one processed job."""
@@ -34,6 +42,10 @@ class JobRecord(SQLModel, table=True):
     status: str
     layer_count: int
     created_at: datetime
+    # Schema version stamped at write time. Older rows back-filled to 0
+    # by ``_add_missing_columns`` so a future migration can detect
+    # ``schema_version < N`` and reshape on read.
+    schema_version: int = Field(default=0)
 
 
 class PlanSnapshotRecord(SQLModel, table=True):
@@ -51,6 +63,7 @@ class PlanSnapshotRecord(SQLModel, table=True):
     layer_count: int
     created_at: datetime
     plan_json: str
+    schema_version: int = Field(default=0)
 
 
 class FileRecord(SQLModel, table=True):
@@ -69,6 +82,7 @@ class FileRecord(SQLModel, table=True):
     layer_count: int
     folder: str = Field(default="", index=True)
     created_at: datetime
+    schema_version: int = Field(default=0)
 
 
 class AppSettingRecord(SQLModel, table=True):
@@ -230,6 +244,7 @@ def save_job(job: Job, target: Engine = engine) -> JobRecord:
         status=job.status,
         layer_count=len(job.layers),
         created_at=job.created_at,
+        schema_version=PERSISTENCE_SCHEMA_VERSION,
     )
     with Session(target) as session:
         session.merge(record)
@@ -294,8 +309,14 @@ def list_file_records(
         if folder is not None:
             statement = statement.where(FileRecord.folder == folder)
         if search:
-            statement = statement.where(FileRecord.source_file.ilike(f"%{search}%"))
-        column = {
+            # ``source_file`` is a SQLAlchemy column at class-attribute
+            # access; the descriptor exposes ``ilike`` but mypy reads the
+            # field's declared ``str`` type. The cast keeps the call site
+            # honest about the dual nature.
+            statement = statement.where(
+                cast(Any, FileRecord.source_file).ilike(f"%{search}%")
+            )
+        column: Any = {
             "name": FileRecord.source_file,
             "date": FileRecord.created_at,
             "type": FileRecord.source_mime,
@@ -335,6 +356,7 @@ def save_plan_snapshot(resolved: ResolvedPlan, target: Engine = engine) -> PlanS
         layer_count=len(resolved.layers),
         created_at=datetime.now(UTC),
         plan_json=resolved.model_dump_json(),
+        schema_version=PERSISTENCE_SCHEMA_VERSION,
     )
     try:
         with Session(target) as session:
@@ -382,8 +404,8 @@ def list_available_colors(target: Engine = engine) -> list[AvailableColorRecord]
     """
     with Session(target) as session:
         statement = select(AvailableColorRecord).order_by(
-            AvailableColorRecord.position,
-            AvailableColorRecord.created_at,
+            cast(Any, AvailableColorRecord.position),
+            cast(Any, AvailableColorRecord.created_at),
         )
         return list(session.exec(statement).all())
 

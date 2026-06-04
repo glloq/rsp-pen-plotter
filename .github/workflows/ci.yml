@@ -133,15 +133,31 @@ jobs:
         run: npm run build
 
   e2e:
-    name: E2E — Playwright (modal V2 smoke)
+    name: E2E — Playwright (modal V2 + operator parcours)
     runs-on: ubuntu-latest
     needs: [backend, frontend]
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: frontend
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system deps for backend converters
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            potrace ghostscript libpango-1.0-0 libpangoft2-1.0-0 \
+            libharfbuzz0b libcairo2 libffi-dev shared-mime-info
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync backend deps
+        working-directory: backend
+        run: uv sync --extra dev
 
       - uses: actions/setup-node@v4
         with:
@@ -149,7 +165,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install
+      - name: Install frontend deps
+        working-directory: frontend
         run: npm ci
 
       - name: Cache Playwright browsers
@@ -159,13 +176,51 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
 
       - name: Install Playwright browsers (chromium only)
+        working-directory: frontend
         run: npx playwright install --with-deps chromium
 
+      - name: Start backend with fake hardware (P7)
+        # OMNIPLOT_FAKE_HARDWARE=1 swaps the serial transport for the
+        # in-process MockTransport so the operator parcours runs end
+        # to end without ``/dev/ttyUSB*``. Rate limit relaxed because
+        # the parcours bursts during the boot pre-checks.
+        working-directory: backend
+        env:
+          OMNIPLOT_FAKE_HARDWARE: '1'
+          OMNIPLOT_RATE_LIMIT_RPM: '6000'
+          OMNIPLOT_RATE_LIMIT_BURST: '600'
+        run: |
+          nohup uv run uvicorn pen_plotter.main:app --host 127.0.0.1 --port 8000 \
+            > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
+          for i in {1..30}; do
+            if curl -sf http://127.0.0.1:8000/health > /dev/null; then
+              echo "backend up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "backend failed to start"; cat /tmp/backend.log; exit 1
+
       - name: Run Playwright tests
-        # Suite only covers the modal V2 smoke today; expanding to the
-        # full operator parcours (import/edit/preflight/generate/queue)
-        # is tracked separately and needs a fake-hardware backend mode.
+        working-directory: frontend
+        env:
+          E2E_BACKEND_RUNNING: '1'
         run: npm run e2e
+
+      - name: Stop background backend
+        # Always run so a flaky test doesn't leave a uvicorn process
+        # squatting the port (and a stale rate-limit dict) for the next
+        # job in the same runner.
+        if: always()
+        run: |
+          if [ -f /tmp/backend.pid ]; then
+            kill "$(cat /tmp/backend.pid)" 2>/dev/null || true
+          fi
+          pkill -f "uvicorn pen_plotter.main:app" 2>/dev/null || true
+
+      - name: Backend logs on failure
+        if: failure()
+        run: cat /tmp/backend.log || true
 
       - name: Upload Playwright report on failure
         if: failure()

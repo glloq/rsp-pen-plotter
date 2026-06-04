@@ -234,7 +234,7 @@ async def test_patch_hex_to_existing_value_409s() -> None:
             json={"hex": b.json()["hex"]},
         )
         assert conflict.status_code == 409
-        assert "already used" in conflict.json()["detail"].lower()
+        assert "already used" in conflict.json()["message"].lower()
 
 
 @pytest.mark.asyncio

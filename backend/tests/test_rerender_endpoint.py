@@ -544,11 +544,13 @@ def test_rerender_404_detail_is_structured(client: TestClient, tmp_path, monkeyp
     """
     response = client.post("/rerender", json={"job_id": "no-such-job", "layers": []})
     assert response.status_code == 404
-    detail = response.json()["detail"]
-    assert isinstance(detail, dict)
-    assert detail["reason"] == "unknown_job"
-    assert detail["job_id"] == "no-such-job"
-    assert "message" in detail
+    body = response.json()
+    # P1: HTTPException(detail={"reason": ..., "job_id": ..., "message": ...})
+    # flattens into the unified envelope: ``message`` is hoisted out and the
+    # remaining keys live under ``details``.
+    assert body["details"]["reason"] == "unknown_job"
+    assert body["details"]["job_id"] == "no-such-job"
+    assert body["message"]
 
 
 def test_rerender_404_when_original_bytes_disappeared(
@@ -572,7 +574,7 @@ def test_rerender_404_when_original_bytes_disappeared(
         },
     )
     assert response.status_code == 404
-    assert response.json()["detail"]["reason"] == "missing_original_bytes"
+    assert response.json()["details"]["reason"] == "missing_original_bytes"
 
 
 def test_rerender_404_when_bitmap_options_corrupted(
@@ -598,7 +600,7 @@ def test_rerender_404_when_bitmap_options_corrupted(
         },
     )
     assert response.status_code == 404
-    assert response.json()["detail"]["reason"] == "missing_bitmap_options"
+    assert response.json()["details"]["reason"] == "missing_bitmap_options"
 
 
 def test_files_integrity_endpoint_lists_broken_entries(

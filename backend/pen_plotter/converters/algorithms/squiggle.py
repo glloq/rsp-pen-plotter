@@ -22,7 +22,7 @@ for scanlines.
 from __future__ import annotations
 
 import math
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 from xml.sax.saxutils import quoteattr
 
 import numpy as np
@@ -82,8 +82,14 @@ class SquiggleAlgorithm(RasterAlgorithm):
         # Per-row phase / period perturbation so neighbouring rows don't
         # ride exactly in sync, which is what makes scan-mode look
         # robotic. Range ±jitter on both phase and frequency.
-        row_phases = rng.uniform(0.0, 2.0 * math.pi, size=height)
-        row_period_mul = 1.0 + jitter * rng.uniform(-0.5, 0.5, size=height)
+        # ``rng.uniform(..., size=N)`` returns a 1-D ndarray; ``cast`` keeps
+        # the indexing below well-typed since numpy's stubs widen to scalar.
+        row_phases: NDArray[np.float64] = cast(
+            NDArray[np.float64], rng.uniform(0.0, 2.0 * math.pi, size=height)
+        )
+        row_period_mul: NDArray[np.float64] = cast(
+            NDArray[np.float64], 1.0 + jitter * rng.uniform(-0.5, 0.5, size=height)
+        )
 
         polylines: list[list[tuple[float, float]]] = []
         for y in range(0, height, spacing):

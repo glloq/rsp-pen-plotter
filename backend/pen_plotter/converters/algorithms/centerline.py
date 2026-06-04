@@ -38,7 +38,7 @@ keep the Python overhead per step small we:
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 from xml.sax.saxutils import quoteattr
 
 import numpy as np
@@ -81,7 +81,7 @@ def _skeletonize(mask: NDArray[np.bool_]) -> NDArray[np.bool_] | None:
         from skimage.morphology import skeletonize as _sk
     except ImportError:
         return None
-    return _sk(mask).astype(bool)
+    return cast(NDArray[np.bool_], _sk(mask).astype(bool))
 
 
 def _neighbour_count(skel: NDArray[np.bool_]) -> NDArray[np.int8]:
@@ -95,7 +95,7 @@ def _neighbour_count(skel: NDArray[np.bool_]) -> NDArray[np.int8]:
         total = np.zeros_like(skel, dtype=np.int8)
         for dy, dx in _NEIGHBOURS_8:
             total += padded[1 + dy : 1 + dy + skel.shape[0], 1 + dx : 1 + dx + skel.shape[1]]
-    return total * skel.astype(np.int8)
+    return cast(NDArray[np.int8], total * skel.astype(np.int8))
 
 
 def _direction_mask(skel: NDArray[np.bool_]) -> NDArray[np.uint8]:

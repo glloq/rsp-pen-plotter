@@ -46,7 +46,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'confirm', decision: PolicyDecision): void
-  (e: 'open-v1'): void
 }>()
 
 const { t } = useI18n()
@@ -379,15 +378,6 @@ watch(
           @click="ui.openCompare()"
         >
           ⇄ {{ t('compare.open') }}
-        </button>
-        <button
-          type="button"
-          class="ghost-btn"
-          :title="t('v2.modal.openV1')"
-          data-test="modal-v2-open-v1"
-          @click="emit('open-v1')"
-        >
-          {{ t('v2.modal.openV1') }}
         </button>
         <button
           type="button"

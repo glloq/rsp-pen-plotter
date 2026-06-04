@@ -238,7 +238,7 @@ async def test_upload_rejects_empty_file() -> None:
             files={"file": ("empty.svg", b"", "image/svg+xml")},
         )
     assert response.status_code == 400
-    assert "empty" in response.json()["detail"].lower()
+    assert "empty" in response.json()["message"].lower()
 
 
 @pytest.mark.asyncio

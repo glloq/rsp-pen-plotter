@@ -129,10 +129,13 @@ async def test_generate_refuses_missing_pen_slot_by_default() -> None:
             },
         )
     assert response.status_code == 409
-    detail = response.json()["detail"]
-    assert detail["reason"] == "missing_pen_slots"
-    assert detail["slots"] == [99]
-    assert "99" in detail["message"]
+    body = response.json()
+    # Envelope (P1): legacy ``HTTPException(detail={...})`` flattens
+    # into ``details`` while ``message`` carries the human string.
+    details = body["details"]
+    assert details["reason"] == "missing_pen_slots"
+    assert details["slots"] == [99]
+    assert "99" in body["message"]
 
 
 @pytest.mark.asyncio

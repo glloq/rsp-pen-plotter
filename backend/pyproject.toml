@@ -105,20 +105,6 @@ module = [
 disallow_untyped_calls = false
 warn_unused_ignores = false
 
-[[tool.mypy.overrides]]
-# Pre-existing baseline debt — modules where numpy / SQLModel / private-attr
-# imports trigger errors that pre-date the strict typing rollout. CI still
-# enforces strict typing everywhere else; tracked as part of the L0 lot.
-module = [
-    "pen_plotter.core.toolpath",
-    "pen_plotter.converters.algorithms.centerline",
-    "pen_plotter.converters.algorithms.squiggle",
-    "pen_plotter.converters.algorithms.voronoi_stipple",
-    "pen_plotter.converters.segmentation",
-    "pen_plotter.persistence",
-    "pen_plotter.queue",
-]
-ignore_errors = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

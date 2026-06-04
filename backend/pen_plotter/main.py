@@ -62,6 +62,7 @@ from pen_plotter.observability import (
 )
 from pen_plotter.persistence import init_db
 from pen_plotter.queue import recover_interrupted
+from pen_plotter.rate_limit import install_rate_limit
 
 configure_logging()
 _log = logging.getLogger(__name__)
@@ -206,6 +207,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(RequestContextMiddleware)
+install_rate_limit(app)
 
 # Default-deny: every router carries the API-key dependency so a
 # locked-mode deployment (OMNIPLOT_API_KEY set) actually locks the
