@@ -144,4 +144,6 @@ def test_validation_error_is_pydantic_422(client: TestClient) -> None:
     )
     assert response.status_code == 422
     body = response.json()
-    assert "detail" in body
+    # P1: validation errors render the unified envelope.
+    assert body["code"] == "validation_error"
+    assert isinstance(body["details"]["errors"], list)

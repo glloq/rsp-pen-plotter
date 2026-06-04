@@ -95,6 +95,11 @@ Environment variables:
 | `OMNIPLOT_REQUIRE_AUTH` | unset | Truthy (`1`/`true`) makes the service refuse to start if `OMNIPLOT_API_KEY` is empty. Pair the two in production so an accidental restart cannot silently come up with the controls open. |
 | `OMNIPLOT_CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allow-list. `*` is rejected at startup because it cannot legally combine with credentialed requests. |
 | `OMNIPLOT_DISABLE_UPDATE` | unset | When `1`, removes the `POST /system/update` endpoint entirely. Use on appliances that should only be updated by hand on the host. |
+| `OMNIPLOT_MAX_UPLOAD_MB` | `50` | Per-request body cap for uploads (POST `/upload`, POST `/files`). Streams reject the request before the body is fully buffered. |
+| `OMNIPLOT_RATE_LIMIT_ENABLED` | `1` | Toggle the in-process token-bucket rate limiter. Set to `0` for load tests. |
+| `OMNIPLOT_RATE_LIMIT_RPM` | `600` | Steady-state requests per minute, per client IP (≈10 req/s). |
+| `OMNIPLOT_RATE_LIMIT_BURST` | `60` | Extra tokens the bucket can hold for short bursts (e.g. wizard click-through). |
+| `OMNIPLOT_FAKE_HARDWARE` | unset | When `1`, the plotter controller uses an in-process mock transport instead of opening a serial port. Lets E2E tests drive the full operator workflow without hardware. |
 
 CORS is preconfigured to allow the Vite dev origin `http://localhost:5173`.
 

@@ -127,4 +127,4 @@ async def test_generate_rejects_invalid_speed_with_400() -> None:
             },
         )
     assert response.status_code == 400
-    assert "drawing_speed_mm_s" in response.json()["detail"]
+    assert "drawing_speed_mm_s" in response.json()["message"]
