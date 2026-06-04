@@ -1478,7 +1478,6 @@
       "why": "Pourquoi ce choix ?",
       "resolving": "Calcul de la recommandation…",
       "resolverError": "Erreur resolver : {message}. Les défauts statiques seront utilisés.",
-      "openV1": "Ouvrir l'éditeur complet",
       "layerCount": "{count} couche | {count} couches",
       "noPlacement": "Ouvre un fichier depuis le panneau Fichiers puis clique Éditer. Sans placement, Générer n'a rien sur quoi s'appliquer.",
       "noPlacementTitle": "Aucun placement actif",

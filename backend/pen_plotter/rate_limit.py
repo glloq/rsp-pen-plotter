@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import os
 import time
-from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from threading import Lock
@@ -60,28 +59,56 @@ class _Bucket:
     lock: Lock = field(default_factory=Lock)
 
 
+# Drop buckets idle longer than this. A bucket idle past its full-refill
+# window is indistinguishable from a fresh one: tokens would have refilled
+# to capacity. Dropping it reclaims the dict entry on a long-running
+# appliance where transient clients (port scans, CI runners, …) would
+# otherwise accumulate forever.
+_BUCKET_TTL_SEC = 600.0
+# Run the sweep at most every ``_SWEEP_INTERVAL_SEC`` seconds — cheap so
+# the steady-state ``allow`` path stays a single dict lookup.
+_SWEEP_INTERVAL_SEC = 60.0
+
+
 class RateLimiter:
     """Token-bucket limiter keyed by client IP.
 
     ``capacity`` is the bucket size (burst), ``refill_per_sec`` is the
     steady-state rate. A request consumes one token; when the bucket is
     empty the request is rejected with 429.
+
+    Buckets idle longer than ``_BUCKET_TTL_SEC`` are swept on the next
+    ``allow`` call so the dict can't grow without bound on a long-running
+    appliance (transient client IPs).
     """
 
     def __init__(self, *, capacity: int, refill_per_sec: float) -> None:
         """Store the bucket size and refill rate; buckets are created lazily."""
         self.capacity = float(capacity)
         self.refill_per_sec = refill_per_sec
-        self._buckets: dict[str, _Bucket] = defaultdict(
-            lambda: _Bucket(tokens=self.capacity, updated_at=time.monotonic())
-        )
+        self._buckets: dict[str, _Bucket] = {}
         self._buckets_lock = Lock()
+        self._last_sweep_at = time.monotonic()
+
+    def _maybe_sweep(self, now: float) -> None:
+        """Drop buckets idle longer than the TTL. Caller must hold the dict lock."""
+        if now - self._last_sweep_at < _SWEEP_INTERVAL_SEC:
+            return
+        self._last_sweep_at = now
+        cutoff = now - _BUCKET_TTL_SEC
+        stale = [key for key, bucket in self._buckets.items() if bucket.updated_at < cutoff]
+        for key in stale:
+            del self._buckets[key]
 
     def allow(self, key: str) -> bool:
         """Try to consume one token for ``key``. Return ``True`` if allowed."""
-        with self._buckets_lock:
-            bucket = self._buckets[key]
         now = time.monotonic()
+        with self._buckets_lock:
+            self._maybe_sweep(now)
+            bucket = self._buckets.get(key)
+            if bucket is None:
+                bucket = _Bucket(tokens=self.capacity, updated_at=now)
+                self._buckets[key] = bucket
         with bucket.lock:
             elapsed = now - bucket.updated_at
             bucket.tokens = min(self.capacity, bucket.tokens + elapsed * self.refill_per_sec)

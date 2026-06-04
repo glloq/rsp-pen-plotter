@@ -1478,7 +1478,6 @@
       "why": "Why this choice?",
       "resolving": "Computing recommendation…",
       "resolverError": "Resolver error: {message}. Falling back to static defaults.",
-      "openV1": "Open full editor",
       "layerCount": "{count} layer | {count} layers",
       "noPlacement": "Open a file from the Files panel and click Edit on it. Without a placement, Generate has nothing to apply to.",
       "noPlacementTitle": "No active placement",

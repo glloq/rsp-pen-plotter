@@ -192,6 +192,7 @@ jobs:
         run: |
           nohup uv run uvicorn pen_plotter.main:app --host 127.0.0.1 --port 8000 \
             > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
           for i in {1..30}; do
             if curl -sf http://127.0.0.1:8000/health > /dev/null; then
               echo "backend up"; exit 0
@@ -205,6 +206,17 @@ jobs:
         env:
           E2E_BACKEND_RUNNING: '1'
         run: npm run e2e
+
+      - name: Stop background backend
+        # Always run so a flaky test doesn't leave a uvicorn process
+        # squatting the port (and a stale rate-limit dict) for the next
+        # job in the same runner.
+        if: always()
+        run: |
+          if [ -f /tmp/backend.pid ]; then
+            kill "$(cat /tmp/backend.pid)" 2>/dev/null || true
+          fi
+          pkill -f "uvicorn pen_plotter.main:app" 2>/dev/null || true
 
       - name: Backend logs on failure
         if: failure()

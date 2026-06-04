@@ -24,7 +24,6 @@ const i18n = createI18n({
           title: "Préparer l'impression",
           generate: 'Générer',
           resolverError: 'Erreur resolver : {message}. Les défauts statiques seront utilisés.',
-          openV1: "Ouvrir l'éditeur complet",
           layerCount: '{count} couche | {count} couches',
           noPlacement: 'Aucun placement actif',
           noPlacementTitle: 'Aucun placement actif',
