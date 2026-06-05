@@ -683,6 +683,7 @@
     "default": "default",
     "simplify": "Simplify (mm)",
     "optimize": "Optimize",
+    "opacity": "Opacity (preview)",
     "paths": "paths",
     "kindText": "Text layer",
     "kindImage": "Image layer (vectorized raster)",
@@ -772,6 +773,22 @@
     "sendJobMsg": "Send the generated G-code to the plotter and start drawing?",
     "homeTitle": "Home axes",
     "homeMsg": "Move the plotter to its home position?"
+  },
+  "presets": {
+    "title": "Presets",
+    "hint": "Reuse the settings of a previous placement.",
+    "namePlaceholder": "Preset name",
+    "descPlaceholder": "Description (optional)",
+    "save": "Save",
+    "saving": "Saving…",
+    "savedToast": "Preset saved",
+    "deletedToast": "Preset \"{name}\" deleted",
+    "appliedToast": "Preset \"{name}\" selected — applied on next upload",
+    "builtin": "Built-in",
+    "user": "Your presets",
+    "delete": "Delete this preset",
+    "deleteFor": "Delete preset {name}",
+    "empty": "No presets available."
   },
   "preflight": {
     "button": "Preflight check",

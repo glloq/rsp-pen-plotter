@@ -222,6 +222,14 @@ class LayerInfo(BaseModel):
     # auto step is idempotent: it skips layers the operator pinned and
     # only refreshes ``"auto"`` rows.
     color_assignment: Literal["auto", "manual"] = "auto"
+    # Visual opacity applied at render time (0 = invisible, 100 = solid).
+    # Distinct from ``visible``: opacity-50 still plots but with the SVG
+    # ``stroke-opacity`` attribute halved, so the preview previews the
+    # lighter density a future watercolor / dilute-ink pass would
+    # produce. The G-code generator doesn't consume this — opacity is a
+    # *preview* hint, not a hardware parameter. Defaults to 100 so
+    # legacy placements deserialize without the field.
+    opacity_percent: int = Field(default=100, ge=0, le=100)
 
 
 class PreflightReport(BaseModel):

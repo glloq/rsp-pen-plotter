@@ -1,9 +1,11 @@
 # The editor
 
-OmniPlot has **two** editors that share the same underlying model. You
-choose between them from the header toggle — *Assistant* (six-step wizard)
-or *Expert* (rich per-layer panel). The switch is mid-session safe: the
-draft survives, only the surface changes.
+OmniPlot has **two** editor surfaces that share the same underlying
+model. You choose between them from the header toggle (or the
+"Ouvrir l'éditeur complet" button in the assisted footer) — *Assistant*
+(single-screen wizard, three clicks max) or *Expert* (rich per-layer
+panel + preset save/load). The switch is mid-session safe: the draft
+survives, only the surface changes.
 
 > **Why two?** Beginners get lost in a 30-control panel; experts get
 > annoyed by a wizard that hides knobs. Sharing the model means an expert
@@ -59,7 +61,7 @@ The Expert panel surfaces:
 - the full algorithm grid grouped by family (*fill* / *lines* /
   *mono_stroke*), with the per-algorithm option schema in a flyout
 - per-layer pen slot, drawing speed, simplification tolerance, optimise
-  toggle, opacity, visibility
+  toggle, opacity slider (preview-only), visibility
 - multi-pass stack editor: build a chain of `(algorithm, options)` that
   apply to the same layer in order, sharing the same pen
 - the *Compare* drawer: pick two variants and view them side-by-side with

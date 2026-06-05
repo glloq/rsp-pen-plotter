@@ -69,15 +69,37 @@ export async function getFonts(): Promise<string[]> {
   return response.data
 }
 
+export type PresetKind = 'builtin' | 'user'
+
 export interface Preset {
   name: string
   description: string
   options: Record<string, unknown>
+  // ``builtin`` rows ship with the app and can't be edited / deleted.
+  // ``user`` rows live in the operator JSON store and are mutable.
+  // Defaults to ``builtin`` for backwards compatibility with old
+  // responses that didn't include the field.
+  kind?: PresetKind
 }
 
 export async function getPresets(): Promise<Preset[]> {
   const response = await api.get<Preset[]>('/presets')
   return response.data
+}
+
+/** Persist a new operator-defined preset (or overwrite an existing user one). */
+export async function saveUserPreset(
+  name: string,
+  description: string,
+  options: Record<string, unknown>,
+): Promise<Preset> {
+  const response = await api.post<Preset>('/presets', { name, description, options })
+  return response.data
+}
+
+/** Delete an operator-defined preset by name. Built-in names are server-rejected. */
+export async function deleteUserPreset(name: string): Promise<void> {
+  await api.delete(`/presets/${encodeURIComponent(name)}`)
 }
 
 export interface Macro {
@@ -254,6 +276,13 @@ export interface LayerInfo {
   // step or from a manual override. ``"auto"`` rows refresh on
   // pool changes; ``"manual"`` rows stay pinned.
   color_assignment: ColorAssignment
+  // Visual opacity (0-100) applied to this layer's stroke in the
+  // preview SVG. 100 = solid (default), lower values fade the layer
+  // so the operator can preview dilute-ink / watercolor passes. The
+  // G-code generator ignores this field — it's a preview hint, not a
+  // hardware parameter. Optional in the wire shape so legacy payloads
+  // (and unit-test fixtures that predate the field) round-trip cleanly.
+  opacity_percent?: number
 }
 
 export interface Job {
@@ -1167,3 +1196,4 @@ export async function setPaletteSource(source: PaletteSource): Promise<PaletteSo
   })
   return response.data.source
 }
+

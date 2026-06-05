@@ -904,12 +904,36 @@ export interface paths {
         };
         /**
          * Presets
-         * @description List the available raster conversion presets.
+         * @description List the available raster conversion presets (builtin + user).
          */
         get: operations["presets_presets_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Preset
+         * @description Persist an operator-defined preset, replacing any same-name entry.
+         */
+        post: operations["create_preset_presets_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/presets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Preset
+         * @description Delete an operator-defined preset. Built-ins are read-only.
+         */
+        delete: operations["remove_preset_presets__name__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2296,6 +2320,11 @@ export interface components {
             /** Layer Id */
             layer_id: string;
             /**
+             * Opacity Percent
+             * @default 100
+             */
+            opacity_percent: number;
+            /**
              * Optimize
              * @default true
              */
@@ -2884,6 +2913,28 @@ export interface components {
          */
         Preset: {
             /** Description */
+            description: string;
+            /**
+             * Kind
+             * @default builtin
+             */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Options */
+            options: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * PresetCreate
+         * @description Payload for creating / overwriting an operator preset.
+         */
+        PresetCreate: {
+            /**
+             * Description
+             * @default
+             */
             description: string;
             /** Name */
             name: string;
@@ -4921,6 +4972,76 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Preset"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_preset_presets_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresetCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Preset"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_preset_presets__name__delete: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

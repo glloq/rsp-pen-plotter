@@ -9,8 +9,9 @@
 // adapted-render SVG, the original placement SVG, loading / error
 // flags, and the sheet geometry, and just hands them down.
 
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useProgressiveStream } from '../../composables/useProgressiveStream'
 
 export interface SheetOutlineShape {
   widthPct: number
@@ -33,6 +34,13 @@ const props = defineProps<{
   error: boolean
   /** Active sheet outline geometry, or null if no sheet is selected. */
   sheet: SheetOutlineShape | null
+  /** Library file id of the active placement. When set AND a heavy
+   *  preview is in flight, the pane opens an SSE connection to
+   *  ``/preview/stream`` and surfaces layer-by-layer progress so the
+   *  operator sees the pipeline advancing instead of an opaque spinner.
+   *  Optional — when omitted, the pane falls back to the plain
+   *  spinner. */
+  streamFileId?: string | null
 }>()
 
 const { t } = useI18n()
@@ -110,6 +118,60 @@ function resetView(): void {
   panX.value = 0
   panY.value = 0
 }
+
+// =========================================================================
+// Progressive preview stream (roadmap C.7 wiring).
+// Opens an EventSource on /preview/stream while a heavy preview is in
+// flight, and surfaces a percent + last-layer label inside the loading
+// overlay. The composable cleans itself up onUnmounted and on
+// done/error events, so the only thing the pane has to manage is the
+// open/close lifecycle in response to the parent's loading flag.
+
+const stream = useProgressiveStream()
+const SLOW_PREVIEW_MS = 350
+let openTimer: number | null = null
+
+function shouldStream(): boolean {
+  // Only open when we actually have a file id to stream from. Without
+  // one the endpoint falls back to its synthetic emitter — not useful
+  // here.
+  return Boolean(props.streamFileId)
+}
+
+function clearOpenTimer(): void {
+  if (openTimer !== null) {
+    window.clearTimeout(openTimer)
+    openTimer = null
+  }
+}
+
+watch(
+  () => props.loading,
+  (loading) => {
+    if (loading && shouldStream()) {
+      // Don't fire the SSE for previews that resolve in < 350 ms —
+      // opening + closing a connection for a fast render is wasted
+      // work and the overlay flicker is annoying. The plain spinner
+      // is fine for sub-second loads.
+      clearOpenTimer()
+      openTimer = window.setTimeout(() => {
+        const url = `/preview/stream?file_id=${encodeURIComponent(props.streamFileId!)}`
+        stream.open(url)
+      }, SLOW_PREVIEW_MS)
+    } else {
+      clearOpenTimer()
+      stream.close()
+    }
+  },
+)
+
+const streamLabel = computed<string>(() => {
+  const payload = stream.lastProgress.value?.payload
+  if (payload && typeof payload.layer_label === 'string') return payload.layer_label
+  return ''
+})
+const streamPercent = computed<number>(() => stream.percent.value ?? 0)
+const streamActive = computed<boolean>(() => Boolean(stream.active.value))
 </script>
 
 <template>
@@ -211,7 +273,27 @@ function resetView(): void {
         data-test="modal-v2-preview-loading"
       >
         <span class="spinner" aria-hidden="true" />
-        {{ t('v2.modal.previewLoading') }}
+        <span class="preview-overlay__label">
+          {{ t('v2.modal.previewLoading') }}
+          <span v-if="streamActive && streamLabel" class="preview-overlay__layer">
+            · {{ streamLabel }}
+          </span>
+        </span>
+        <!-- SSE progress bar: only shown when the stream is actually
+             active. The percent comes straight from the backend
+             ``progress`` events, so it tracks real pipeline state, not
+             a fake loading animation. -->
+        <div
+          v-if="streamActive"
+          class="preview-overlay__bar"
+          role="progressbar"
+          :aria-valuenow="streamPercent"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          data-test="modal-v2-preview-progress"
+        >
+          <div class="preview-overlay__bar-fill" :style="{ width: `${streamPercent}%` }" />
+        </div>
       </div>
       <p v-if="error" class="preview-error" data-test="modal-v2-preview-error">
         {{ t('v2.modal.previewError') }}
@@ -266,13 +348,37 @@ function resetView(): void {
   position: absolute;
   inset: auto 0 0 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.4rem;
-  background: rgba(255, 255, 255, 0.85);
+  gap: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.92);
   font-size: 0.8rem;
   color: #475569;
+}
+.preview-overlay__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.preview-overlay__layer {
+  color: #1f6feb;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.72rem;
+}
+.preview-overlay__bar {
+  width: min(100%, 240px);
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.preview-overlay__bar-fill {
+  height: 100%;
+  background: #1f6feb;
+  border-radius: 999px;
+  transition: width 0.15s ease;
 }
 .preview-error {
   position: absolute;

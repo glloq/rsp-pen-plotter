@@ -67,6 +67,7 @@ const {
   onSpeed,
   onSimplify,
   onOptimize,
+  onOpacity,
   onColorLabel,
   setPause,
   onPickStyle,
@@ -256,6 +257,28 @@ function onColorReset(payload: { hex: string | null }): void {
           @change="onOptimize"
         />
         {{ t('layers.optimize') }}
+      </label>
+      <!-- Opacity slider (preview only): 100 = solid, lower fades the
+           layer to preview dilute-ink / watercolor passes. Persists on
+           the placement via ``updateLayer`` but the G-code generator
+           ignores it — it's a visual cue, not a hardware setting. -->
+      <label class="col-span-2 text-slate-400">
+        <span class="flex items-center gap-1">
+          {{ t('layers.opacity') }}
+          <span class="font-mono text-[10px] text-slate-500"
+            >{{ layer.opacity_percent ?? 100 }}%</span
+          >
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          :value="layer.opacity_percent ?? 100"
+          class="mt-0.5 w-full accent-emerald-500"
+          :data-test="`layer-opacity-${layer.layer_id}`"
+          @input="onOpacity"
+        />
       </label>
     </div>
 
