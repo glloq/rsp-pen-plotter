@@ -1563,7 +1563,10 @@
       "sheetCaptionLabel": "Sheet",
       "sheetPickerLabel": "Sheet format",
       "sheetPortrait": "Portrait",
-      "sheetLandscape": "Landscape"
+      "sheetLandscape": "Landscape",
+      "applyExpert": "Apply",
+      "applyExpertHint": "Re-convert the file with the settings from the Image / SVG / Style / Text tabs.",
+      "applyExpertClean": "No changes to apply."
     },
     "style": {
       "crosshatch": "Crosshatch",
