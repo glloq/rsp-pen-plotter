@@ -57,6 +57,10 @@ function mountModal(props?: Record<string, unknown>) {
 const PLACEMENT_PROPS = {
   sourceName: 'photo.jpg',
   previewSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+  // Existing assertions target buttons that the welcome tour overlay
+  // would cover on first run; opt out so the modal behaves like a
+  // returning operator. The tour itself is covered by its own tests.
+  skipOnboarding: true,
 }
 
 const validDecision = {
