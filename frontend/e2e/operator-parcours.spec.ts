@@ -24,7 +24,11 @@ test.describe('Operator parcours (fake hardware)', () => {
     // The shell must render fully — banner, header, files pane —
     // without any "API unreachable" / "device lost" toast firing on
     // boot. Those toasts are the canaries for backend reachability.
-    await expect(page.locator('header')).toBeVisible()
+    // The version badge is the AppHeader's stable identifier: three
+    // ``<header>`` elements live on the page (AppHeader, FilesPane,
+    // PlotterControl), so a bare ``header`` selector trips Playwright's
+    // strict mode.
+    await expect(page.locator('[data-test="header-version-badge"]')).toBeVisible()
     await expect(
       page.locator('[data-test="toast-critical"]', { hasText: /unreachable|lost/i }),
     ).toHaveCount(0)
