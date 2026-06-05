@@ -1527,7 +1527,27 @@
       "preflightMachine": "Machine",
       "preflightSheet": "Sheet",
       "preflightInks": "Inks",
-      "preflightFix": "Open the panel to fix"
+      "preflightFix": "Open the panel to fix",
+      "styleCustom": "Customise the style",
+      "styleHint": "Optional — pick up to {max} styles to stack. Order = pass order.",
+      "styleMax": "Maximum {max} styles reached",
+      "styleStackLabel": "Selected styles",
+      "styleRemove": "Remove this style",
+      "styleClear": "Clear my choices"
+    },
+    "style": {
+      "crosshatch": "Crosshatch",
+      "scanlines": "Scanlines",
+      "stippling": "Stippling",
+      "voronoiStipple": "Even stippling",
+      "halftone": "Halftone",
+      "grid": "Grid",
+      "spiral": "Spiral",
+      "rings": "Rings",
+      "sunburst": "Sunburst",
+      "circlePack": "Bubbles",
+      "scribble": "Scribble",
+      "squiggle": "Squiggle"
     },
     "intent": {
       "fast": "Fast",

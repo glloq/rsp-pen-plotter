@@ -19,7 +19,7 @@ import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
-import type { Goal, PaletteMode, PolicyDecision, SourceKind } from '../../domain/policy/schemas'
+import type { Goal, PaletteMode, PolicyDecision, PolicyPass, SourceKind } from '../../domain/policy/schemas'
 import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
@@ -28,6 +28,8 @@ import { useUiModeStore } from '../../stores/uiMode'
 import { useJobStore } from '../../stores/job'
 import { usePlotterStore } from '../../stores/plotter'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
+import { BEGINNER_STYLES, MAX_BEGINNER_STYLES, type BeginnerStyle } from './beginnerStyles'
+import type { AlgorithmId } from '../../data/printRegistry'
 
 const ONBOARDING_KEY = 'omniplot.onboarding.editorV2.v1'
 const TOUR_STEPS = 3
@@ -97,6 +99,77 @@ const INTENTS: readonly Goal[] = ['fast', 'balanced', 'quality'] as const
 // True when there's an active placement to apply the decision to.
 const hasPlacement = computed(() => Boolean(props.previewSvg || props.sourceName))
 
+// ============================ CUSTOM STYLE STACK =======================
+// Optional escape hatch from the resolver's automatic algorithm pick:
+// the operator can opt in to a manual stack of up to four "styles" from
+// the curated beginner catalogue. Empty stack = resolver wins (default
+// experience). Non-empty stack = the modal overrides decision.default_*
+// at render time so the preview and Generate both use the user's
+// choices. The catalogue lives in ./beginnerStyles.ts.
+interface CustomStyleSelection {
+  id: AlgorithmId
+  /** Live value of the style's single primary knob. Other algorithm
+   *  options keep their backend defaults. */
+  knobValue: number
+}
+const customStyles = ref<CustomStyleSelection[]>([])
+const stylePanelOpen = ref<boolean>(false)
+const customStylesActive = computed<boolean>(() => customStyles.value.length > 0)
+
+// Custom styles really only make sense for bitmap sources — vectors and
+// PDFs route through dedicated pipelines (vector_passthrough,
+// pdf_text_*) that ignore raster algorithms. We expose the panel
+// regardless but disable the chips for non-bitmap kinds with a tooltip
+// explaining why, so the affordance is discoverable without producing
+// confusing results.
+const canCustomizeStyles = computed<boolean>(
+  () => sourceKind.value === 'bitmap_photo' || sourceKind.value === 'bitmap_illustration',
+)
+
+function findStyle(id: AlgorithmId): BeginnerStyle | undefined {
+  return BEGINNER_STYLES.find((s) => s.id === id)
+}
+function isStyleSelected(id: AlgorithmId): boolean {
+  return customStyles.value.some((s) => s.id === id)
+}
+function selectedIndexOf(id: AlgorithmId): number {
+  return customStyles.value.findIndex((s) => s.id === id)
+}
+function toggleStyle(id: AlgorithmId): void {
+  const idx = selectedIndexOf(id)
+  if (idx >= 0) {
+    customStyles.value = customStyles.value.filter((_, i) => i !== idx)
+    return
+  }
+  if (customStyles.value.length >= MAX_BEGINNER_STYLES) return
+  const style = findStyle(id)
+  if (!style) return
+  customStyles.value = [...customStyles.value, { id, knobValue: style.primaryKnob.default }]
+}
+function setStyleKnob(idx: number, value: number): void {
+  if (idx < 0 || idx >= customStyles.value.length) return
+  const next = [...customStyles.value]
+  next[idx] = { ...next[idx]!, knobValue: value }
+  customStyles.value = next
+}
+function clearStyles(): void {
+  customStyles.value = []
+}
+
+// Build the PolicyPass[] the user's stack expresses. The full algorithm
+// option set keeps its registry defaults (see printRegistry.ts) and we
+// only override the primary knob's key — that's the entire contract of
+// the "1 simple knob per style" decision.
+const customPasses = computed<PolicyPass[]>(() =>
+  customStyles.value.map((sel) => {
+    const style = findStyle(sel.id)!
+    return {
+      algorithm: sel.id,
+      algorithm_options: { [style.primaryKnob.optionKey]: sel.knobValue },
+    }
+  }),
+)
+
 /**
  * Resolve the algorithm for the current intent, then render the real
  * result across every layer. Aborts any in-flight preview so rapid
@@ -134,11 +207,23 @@ async function resolveAndPreview(): Promise<void> {
 
   // Now render the adapted result. Keep the previous render visible
   // until the new one lands to avoid a flash back to the original.
-  // QUALITY recommendations carry a multi-pass stack — render that
-  // exactly as "Generate" would; otherwise render the single algorithm.
+  await renderAdaptedPreview(controller)
+}
+
+/**
+ * Render-only path used both by ``resolveAndPreview`` (after the policy
+ * lands) and by ``customStyles`` mutations (where the resolver result
+ * hasn't changed but the operator's stack has). Picks between custom
+ * passes, resolver multi-pass, and single-algorithm depending on what's
+ * active. Errors leave the previous render in place.
+ */
+async function renderAdaptedPreview(controller: AbortController): Promise<void> {
+  if (!decision.value) return
   previewLoading.value = true
   try {
-    const passes = decision.value.default_passes ?? []
+    const passes: PolicyPass[] = customStylesActive.value
+      ? customPasses.value
+      : (decision.value.default_passes ?? [])
     const result = passes.length
       ? await job.previewPassesOnAllLayers(passes, controller.signal)
       : await job.previewAlgorithmOnAllLayers(
@@ -156,6 +241,25 @@ async function resolveAndPreview(): Promise<void> {
     if (!controller.signal.aborted) previewLoading.value = false
   }
 }
+
+/** Re-render without re-resolving — used when only the custom-style
+ *  stack changes (the resolver inputs are unchanged, so its answer
+ *  would be identical). Aborts any in-flight render. */
+async function rerenderOnly(): Promise<void> {
+  if (!hasPlacement.value || !decision.value) return
+  previewController?.abort()
+  const controller = new AbortController()
+  previewController = controller
+  previewError.value = false
+  await renderAdaptedPreview(controller)
+}
+
+// Operator mutated the custom-style stack (added, removed, or tweaked a
+// slider). Re-render through the cheaper path that skips the policy
+// resolver. The deep watch fires on knob drags too; the AbortController
+// in ``rerenderOnly`` cancels stale renders so slider scrubbing stays
+// responsive.
+watch(customStyles, () => void rerenderOnly(), { deep: true })
 
 function selectGoal(g: Goal): void {
   if (goal.value === g && decision.value) return
@@ -249,6 +353,22 @@ function resetView(): void {
 
 function confirm(): void {
   if (!hasPlacement.value || !decision.value) return
+  if (customStylesActive.value) {
+    // Override the resolver's algorithm pick with the operator's manual
+    // stack while keeping every other field the resolver decided
+    // (segmentation method, quality tier, fallback chain, …). First
+    // pass mirrors ``default_algorithm`` / ``default_options`` per the
+    // PolicyDecision contract (see schemas.ts ``default_passes`` doc).
+    const passes = customPasses.value
+    const first = passes[0]!
+    emit('confirm', {
+      ...decision.value,
+      default_algorithm: first.algorithm,
+      default_options: first.algorithm_options,
+      default_passes: passes,
+    })
+    return
+  }
   emit('confirm', decision.value)
 }
 
@@ -982,6 +1102,133 @@ watch(
             </button>
           </div>
         </fieldset>
+
+        <!-- Optional "stack your own styles" panel. Collapsed by default
+             so a beginner who never expands it gets the resolver's auto
+             pick; expanded, they can pick up to 4 styles and tweak one
+             primary knob per style. Bitmap-only — vector and PDF
+             pipelines bypass raster algorithms entirely so the panel
+             would mislead. -->
+        <div
+          v-if="canCustomizeStyles"
+          class="modal-v2__styles"
+          data-test="modal-v2-styles"
+        >
+          <button
+            type="button"
+            class="modal-v2__styles-toggle"
+            :aria-expanded="stylePanelOpen"
+            data-test="modal-v2-styles-toggle"
+            @click="stylePanelOpen = !stylePanelOpen"
+          >
+            <span aria-hidden="true" class="modal-v2__styles-caret">{{
+              stylePanelOpen ? '▾' : '▸'
+            }}</span>
+            <span>{{ t('v2.modal.styleCustom') }}</span>
+            <span
+              v-if="customStylesActive"
+              class="modal-v2__styles-count"
+              data-test="modal-v2-styles-count"
+            >{{ customStyles.length }}</span>
+          </button>
+
+          <div v-if="stylePanelOpen" class="modal-v2__styles-body">
+            <p class="modal-v2__styles-hint">
+              {{ t('v2.modal.styleHint', { max: MAX_BEGINNER_STYLES }) }}
+            </p>
+
+            <ul class="modal-v2__style-grid" :aria-label="t('v2.modal.styleCustom')">
+              <li v-for="style in BEGINNER_STYLES" :key="style.id">
+                <button
+                  type="button"
+                  class="modal-v2__style-chip"
+                  :class="{ 'is-selected': isStyleSelected(style.id) }"
+                  :disabled="
+                    !isStyleSelected(style.id) &&
+                    customStyles.length >= MAX_BEGINNER_STYLES
+                  "
+                  :title="
+                    !isStyleSelected(style.id) &&
+                    customStyles.length >= MAX_BEGINNER_STYLES
+                      ? t('v2.modal.styleMax', { max: MAX_BEGINNER_STYLES })
+                      : t(style.labelKey)
+                  "
+                  :aria-pressed="isStyleSelected(style.id)"
+                  :data-test="`modal-v2-style-${style.id}`"
+                  @click="toggleStyle(style.id)"
+                >
+                  <span aria-hidden="true" class="modal-v2__style-icon">{{ style.icon }}</span>
+                  <span class="modal-v2__style-name">{{ t(style.labelKey) }}</span>
+                  <span
+                    v-if="isStyleSelected(style.id)"
+                    class="modal-v2__style-step"
+                    aria-hidden="true"
+                  >{{ selectedIndexOf(style.id) + 1 }}</span>
+                </button>
+              </li>
+            </ul>
+
+            <ol
+              v-if="customStyles.length"
+              class="modal-v2__style-stack"
+              :aria-label="t('v2.modal.styleStackLabel')"
+            >
+              <li
+                v-for="(sel, idx) in customStyles"
+                :key="`stack-${sel.id}`"
+                class="modal-v2__style-row"
+                :data-test="`modal-v2-style-row-${sel.id}`"
+              >
+                <span class="modal-v2__style-row-step" aria-hidden="true">{{ idx + 1 }}</span>
+                <span class="modal-v2__style-row-name">
+                  <span aria-hidden="true">{{ findStyle(sel.id)?.icon }}</span>
+                  {{ t(findStyle(sel.id)!.labelKey) }}
+                </span>
+                <label class="modal-v2__style-knob">
+                  <span class="modal-v2__style-knob-label">{{
+                    t(findStyle(sel.id)!.primaryKnob.labelKey)
+                  }}</span>
+                  <input
+                    type="range"
+                    :min="findStyle(sel.id)!.primaryKnob.min"
+                    :max="findStyle(sel.id)!.primaryKnob.max"
+                    :step="findStyle(sel.id)!.primaryKnob.step"
+                    :value="sel.knobValue"
+                    :aria-label="t(findStyle(sel.id)!.primaryKnob.labelKey)"
+                    :data-test="`modal-v2-style-knob-${sel.id}`"
+                    @input="setStyleKnob(idx, +($event.target as HTMLInputElement).value)"
+                  />
+                  <span class="modal-v2__style-knob-value">
+                    {{ sel.knobValue }}
+                    <span v-if="findStyle(sel.id)!.primaryKnob.unit">
+                      {{ findStyle(sel.id)!.primaryKnob.unit }}
+                    </span>
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  class="modal-v2__style-remove"
+                  :title="t('v2.modal.styleRemove')"
+                  :aria-label="t('v2.modal.styleRemove')"
+                  :data-test="`modal-v2-style-remove-${sel.id}`"
+                  @click="toggleStyle(sel.id)"
+                >
+                  ×
+                </button>
+              </li>
+            </ol>
+
+            <button
+              v-if="customStyles.length"
+              type="button"
+              class="modal-v2__style-clear"
+              data-test="modal-v2-style-clear"
+              @click="clearStyles"
+            >
+              {{ t('v2.modal.styleClear') }}
+            </button>
+          </div>
+        </div>
 
         <p v-if="resolveError" class="error" data-test="modal-v2-resolve-error">
           {{ t('v2.modal.resolverError', { message: resolveError }) }}
@@ -1786,6 +2033,235 @@ watch(
 .modal-v2__preflight-chip.is-actionable:focus-visible {
   outline: 2px solid #1f6feb;
   outline-offset: 1px;
+}
+
+/* "Customise the style" expandable panel.
+   Collapsed by default so the modal stays single-glance for the 80%
+   case; expanded, reveals a curated chip grid + per-style slider. */
+.modal-v2__styles {
+  margin: 0.75rem 0 0;
+}
+.modal-v2__styles-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.modal-v2__styles-toggle:hover {
+  background: #e2e8f0;
+}
+.modal-v2__styles-toggle:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 1px;
+}
+.modal-v2__styles-caret {
+  font-size: 0.7rem;
+  width: 0.6rem;
+  display: inline-block;
+  text-align: center;
+}
+.modal-v2__styles-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: #1f6feb;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.modal-v2__styles-body {
+  margin-top: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fafbff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.modal-v2__styles-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* Curated chip grid: 4 columns on the modal's standard 640px width. */
+.modal-v2__style-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.modal-v2__style-chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0.3rem;
+  border: 1px solid #d0d0d0;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: #334155;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+  width: 100%;
+}
+.modal-v2__style-chip:hover:not(:disabled):not(.is-selected) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+.modal-v2__style-chip.is-selected {
+  border-color: #1f6feb;
+  background: #eef4ff;
+  box-shadow: inset 0 0 0 1px #1f6feb;
+  color: #1f6feb;
+  font-weight: 600;
+}
+.modal-v2__style-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.modal-v2__style-chip:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
+}
+.modal-v2__style-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.modal-v2__style-name {
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.modal-v2__style-step {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: #1f6feb;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Selected-styles stack: numbered rows with the primary knob inline. */
+.modal-v2__style-stack {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.modal-v2__style-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+.modal-v2__style-row-step {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 999px;
+  background: #1f6feb;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.modal-v2__style-row-name {
+  font-weight: 600;
+  color: #1e293b;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.modal-v2__style-knob {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: #64748b;
+  min-width: 0;
+}
+.modal-v2__style-knob-label {
+  white-space: nowrap;
+}
+.modal-v2__style-knob input[type='range'] {
+  flex: 1;
+  min-width: 4rem;
+  accent-color: #1f6feb;
+}
+.modal-v2__style-knob-value {
+  min-width: 3.2rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+}
+.modal-v2__style-remove {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+.modal-v2__style-remove:hover {
+  background: #fee2e2;
+  color: #b71c1c;
+}
+.modal-v2__style-remove:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 1px;
+}
+.modal-v2__style-clear {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+.modal-v2__style-clear:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+  text-decoration: underline;
 }
 
 /* Onboarding tour overlay. Anchored to the modal so the preview

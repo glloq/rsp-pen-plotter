@@ -1527,7 +1527,27 @@
       "preflightMachine": "Machine",
       "preflightSheet": "Feuille",
       "preflightInks": "Encres",
-      "preflightFix": "Ouvrir le panneau pour corriger"
+      "preflightFix": "Ouvrir le panneau pour corriger",
+      "styleCustom": "Personnaliser le style",
+      "styleHint": "Optionnel — choisis jusqu'à {max} styles à superposer. L'ordre = ordre des passes.",
+      "styleMax": "Maximum {max} styles atteint",
+      "styleStackLabel": "Styles choisis",
+      "styleRemove": "Retirer ce style",
+      "styleClear": "Effacer mes choix"
+    },
+    "style": {
+      "crosshatch": "Hachures",
+      "scanlines": "Lignes",
+      "stippling": "Pointillé",
+      "voronoiStipple": "Pointillé régulier",
+      "halftone": "Trame",
+      "grid": "Quadrillage",
+      "spiral": "Spirale",
+      "rings": "Anneaux",
+      "sunburst": "Rayons",
+      "circlePack": "Bulles",
+      "scribble": "Croquis",
+      "squiggle": "Squiggle"
     },
     "intent": {
       "fast": "Rapide",
