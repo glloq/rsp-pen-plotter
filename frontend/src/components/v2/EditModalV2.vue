@@ -27,8 +27,14 @@ import { useUiStore } from '../../stores/ui'
 import { useUiModeStore } from '../../stores/uiMode'
 import { useJobStore } from '../../stores/job'
 import { usePlotterStore } from '../../stores/plotter'
+import { useFileManager } from '../../composables/useFileManager'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayersSection from '../LayersSection.vue'
+import EditTabs, { type EditTabId } from '../edit/EditTabs.vue'
+import ImageTab from '../edit/tabs/ImageTab.vue'
+import SvgTab from '../edit/tabs/SvgTab.vue'
+import StyleTab from '../edit/tabs/StyleTab.vue'
+import TextTab from '../edit/tabs/TextTab.vue'
 import PresetPanel from './PresetPanel.vue'
 import { BEGINNER_STYLES, type CustomStyleSelection } from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
@@ -529,6 +535,38 @@ function openExpertEditor(): void {
   uiMode.setMode('expert')
 }
 
+// =========================================================================
+// Expert mode tab state.
+// Expert mode reveals the V1 source / SVG / style / text / layers tabs
+// (restored after the operator audit). ``fileManager`` already knows
+// the file kind, so we use it to gate the Text tab (only when the
+// source carries typography) and to default the active tab to the
+// most useful starting point for the current source.
+const fileManager = useFileManager(t)
+const showTextTab = computed<boolean>(() => fileManager.kind.value === 'typography')
+const defaultExpertTab = computed<EditTabId>(() => {
+  if (fileManager.kind.value === 'typography') return 'text'
+  if (fileManager.showsBitmapForm.value) return 'image'
+  return 'layers'
+})
+const activeExpertTab = ref<EditTabId>('layers')
+// Reset the tab whenever the source file kind changes so the operator
+// doesn't land on an "Image" tab for a vector file. The :key in App.vue
+// also remounts on placement switch; this watcher is the safety net
+// for in-place file changes.
+watch(
+  defaultExpertTab,
+  (next) => {
+    activeExpertTab.value = next
+  },
+  { immediate: true },
+)
+// Ctrl/Cmd + digit shortcut: cycle through the visible tabs. Mirrors
+// the V1 binding the EditTabs <kbd> badges advertise.
+function selectExpertTab(id: EditTabId): void {
+  activeExpertTab.value = id
+}
+
 // ============================ ONBOARDING TOUR ==========================
 // Three-step welcome shown the first time the modal opens. Persists a
 // "seen" flag in localStorage so it never reappears. ``skipOnboarding``
@@ -913,12 +951,27 @@ watch(
           </ul>
         </div>
 
-        <!-- Expert surface: full per-layer panel + bulk operations.
-             Mounted when the operator flips to expert mode (header
-             toggle or "Ouvrir l'éditeur complet" button). Shares the
-             preview / preflight / inks rows above. -->
+        <!-- Expert surface: V1-style tab strip (Image / SVG / Style /
+             Text / Layers) restored from the audit. Each tab carries
+             the source-level cards (brightness/contrast, segmentation
+             method, master style, typography) the V1→V2 migration
+             dropped. The preview pane above stays mounted in both
+             modes so the operator never loses sight of the result. -->
         <section v-if="uiMode.isExpert" class="modal-v2__expert" data-test="modal-v2-expert-panel">
-          <LayersSection />
+          <EditTabs
+            :model-value="activeExpertTab"
+            :layer-count="props.layers?.length ?? 0"
+            :variant-count="job.selectedPlacement?.variants?.length ?? 0"
+            :show-text="showTextTab"
+            @update:model-value="selectExpertTab"
+          />
+          <div class="modal-v2__expert-body">
+            <ImageTab v-if="activeExpertTab === 'image'" />
+            <SvgTab v-else-if="activeExpertTab === 'svg'" />
+            <StyleTab v-else-if="activeExpertTab === 'style'" />
+            <TextTab v-else-if="activeExpertTab === 'text'" />
+            <LayersSection v-else-if="activeExpertTab === 'layers'" />
+          </div>
           <PresetPanel />
         </section>
 
@@ -1096,19 +1149,26 @@ watch(
   font-family: system-ui, sans-serif;
   color: #1e293b;
 }
-/* Expert panel: wider so the per-layer cards aren't cramped, and
-   uses the dark slate palette LayersSection inherits from its
-   stand-alone shell. */
+/* Expert mode widens the modal so the per-layer cards aren't
+   cramped, but we keep the light shell so the preview pane stays
+   visually dominant (the LayersSection / PresetPanel embed below
+   carry their own dark surface). */
 .modal-v2:has(.modal-v2__expert) {
-  width: min(96vw, 920px);
-  background: #0f172a;
-  color: #e2e8f0;
+  width: min(96vw, 980px);
 }
 .modal-v2__expert {
   margin-top: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  /* Embedded dark surface: LayersSection + PresetPanel were designed
+     for the stand-alone slate background. We frame them in their own
+     card so they read as a distinct "controls drawer" beneath the
+     preview, rather than swallowing the whole modal. */
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 0.85rem;
 }
 .modal-v2__header {
   display: flex;
