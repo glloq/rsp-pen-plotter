@@ -1518,7 +1518,16 @@
       "tourNext": "Next",
       "tourDone": "Let's go!",
       "tourSkip": "Skip tour",
-      "tourProgress": "{current} / {total}"
+      "tourProgress": "{current} / {total}",
+      "cancel": "Cancel",
+      "viewOriginal": "View original",
+      "viewPlot": "View plot",
+      "preflightLabel": "Ready to plot?",
+      "preflightFile": "File",
+      "preflightMachine": "Machine",
+      "preflightSheet": "Sheet",
+      "preflightInks": "Inks",
+      "preflightFix": "Open the panel to fix"
     },
     "intent": {
       "fast": "Fast",

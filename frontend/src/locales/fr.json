@@ -1518,7 +1518,16 @@
       "tourNext": "Suivant",
       "tourDone": "C'est parti !",
       "tourSkip": "Passer le tour",
-      "tourProgress": "{current} / {total}"
+      "tourProgress": "{current} / {total}",
+      "cancel": "Annuler",
+      "viewOriginal": "Voir l'original",
+      "viewPlot": "Voir le tracé",
+      "preflightLabel": "Prêt à imprimer ?",
+      "preflightFile": "Fichier",
+      "preflightMachine": "Machine",
+      "preflightSheet": "Feuille",
+      "preflightInks": "Encres",
+      "preflightFix": "Ouvrir le panneau pour corriger"
     },
     "intent": {
       "fast": "Rapide",
