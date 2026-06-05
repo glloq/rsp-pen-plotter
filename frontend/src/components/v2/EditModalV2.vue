@@ -36,6 +36,7 @@ import SvgTab from '../edit/tabs/SvgTab.vue'
 import StyleTab from '../edit/tabs/StyleTab.vue'
 import TextTab from '../edit/tabs/TextTab.vue'
 import PresetPanel from './PresetPanel.vue'
+import SheetPicker from './SheetPicker.vue'
 import { BEGINNER_STYLES, type CustomStyleSelection } from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
@@ -473,8 +474,12 @@ const allPreflightOk = computed<boolean>(() => preflightItems.value.every((i) =>
 // plan view. Sized to fit the preview pane with a margin; null when no
 // sheet is selected so the template skips the overlay entirely.
 interface SheetOutline {
-  widthPct: number
-  heightPct: number
+  // Real aspect ratio (w/h). The pane uses CSS ``aspect-ratio`` to
+  // render the rectangle, so percentage sizing of width vs. height
+  // doesn't distort the shape when the pane itself isn't square. The
+  // outline shrinks to ``max-width: 92%; max-height: 92%`` of the
+  // pane, whichever bound hits first.
+  aspectRatio: number
   labelW: number
   labelH: number
   isPortrait: boolean
@@ -485,25 +490,11 @@ const sheetOutline = computed<SheetOutline | null>(() => {
   const w = sheet.width_mm
   const h = sheet.height_mm
   if (!w || !h) return null
-  // Fit the larger dimension to 90% of the pane, the smaller scales
-  // proportionally — gives portrait/landscape orientations a visibly
-  // different footprint.
-  const ratio = w / h
-  let widthPct: number
-  let heightPct: number
-  if (ratio >= 1) {
-    widthPct = 90
-    heightPct = 90 / ratio
-  } else {
-    heightPct = 90
-    widthPct = 90 * ratio
-  }
   return {
-    widthPct,
-    heightPct,
+    aspectRatio: w / h,
     labelW: Math.round(w),
     labelH: Math.round(h),
-    isPortrait: ratio < 1,
+    isPortrait: w / h < 1,
   }
 })
 
@@ -787,6 +778,20 @@ watch(
           </button>
         </div>
 
+        <!-- Two-column layout in expert mode: preview pinned left,
+             controls scroll on the right. Assisted mode stays as a
+             single column so the wizard reads top-to-bottom. -->
+        <div
+          class="modal-v2__layout"
+          :class="{ 'is-split': uiMode.isExpert }"
+          data-test="modal-v2-layout"
+        >
+          <!-- LEFT column: preview pane + everything that describes
+               what the operator is about to plot (sheet format, file
+               name, cost, preflight, inks). Stays sticky in expert
+               mode so it remains visible while the operator scrolls
+               through tabs on the right. -->
+          <div class="modal-v2__left">
         <!-- Live preview pane (zoom, pan, sheet outline, view toggle,
              gesture hint). Extracted to a subcomponent so this modal
              stays focused on decision-making. -->
@@ -798,6 +803,12 @@ watch(
           :sheet="sheetOutline"
           :stream-file-id="job.selectedPlacement?.library_file_id ?? null"
         />
+
+        <!-- Sheet picker: A6/A5/A4/A3/A2/Letter + portrait/landscape.
+             Lives right under the preview so the operator can size the
+             page-guide without leaving the modal. Mutations go through
+             ``ui.setPreviewSheet`` so the plan view stays in sync. -->
+        <SheetPicker />
 
         <!-- File caption. -->
         <p v-if="props.sourceName" class="modal-v2__caption" data-test="modal-v2-context">
@@ -951,12 +962,21 @@ watch(
           </ul>
         </div>
 
+          </div>
+          <!-- end LEFT column -->
+
+          <!-- RIGHT column: settings / controls. Single-pane in
+               assisted (intent + palette + custom-style stack),
+               tab-stripped in expert (Image / SVG / Style / Text /
+               Layers + PresetPanel). -->
+          <div class="modal-v2__right">
         <!-- Expert surface: V1-style tab strip (Image / SVG / Style /
              Text / Layers) restored from the audit. Each tab carries
              the source-level cards (brightness/contrast, segmentation
              method, master style, typography) the V1→V2 migration
-             dropped. The preview pane above stays mounted in both
-             modes so the operator never loses sight of the result. -->
+             dropped. The preview pane on the left stays mounted in
+             both modes so the operator never loses sight of the
+             result. -->
         <section v-if="uiMode.isExpert" class="modal-v2__expert" data-test="modal-v2-expert-panel">
           <EditTabs
             :model-value="activeExpertTab"
@@ -1037,6 +1057,10 @@ watch(
         <p v-if="resolveError" class="error" data-test="modal-v2-resolve-error">
           {{ t('v2.modal.resolverError', { message: resolveError }) }}
         </p>
+          </div>
+          <!-- end RIGHT column -->
+        </div>
+        <!-- end .modal-v2__layout -->
       </template>
 
       <footer class="modal-v2__footer">
@@ -1149,26 +1173,72 @@ watch(
   font-family: system-ui, sans-serif;
   color: #1e293b;
 }
-/* Expert mode widens the modal so the per-layer cards aren't
-   cramped, but we keep the light shell so the preview pane stays
-   visually dominant (the LayersSection / PresetPanel embed below
-   carry their own dark surface). */
+/* Expert mode widens the modal so the side-by-side layout has room
+   for both preview (left) and controls (right). The light shell
+   keeps the preview visually dominant; LayersSection / PresetPanel
+   carry their own dark surface inside the right column. */
 .modal-v2:has(.modal-v2__expert) {
-  width: min(96vw, 980px);
+  width: min(98vw, 1280px);
 }
+
+/* Layout split: stacked (assisted) vs. two-column (expert).
+   Assisted stays single-column so the wizard reads top-to-bottom.
+   Expert pins the preview on the left and lets the operator scroll
+   through tabs on the right without losing sight of the result. */
+.modal-v2__layout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.modal-v2__layout.is-split {
+  display: grid;
+  grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.modal-v2__left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.modal-v2__layout.is-split .modal-v2__left {
+  position: sticky;
+  top: 0.5rem;
+  /* Keep the preview + sheet + estimate visible while scrolling the
+     right column. ``max-height: calc(92vh - 6rem)`` reserves space
+     for the modal header + footer. */
+  max-height: calc(92vh - 6rem);
+  overflow-y: auto;
+}
+.modal-v2__right {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* The expert-mode controls drawer inside the RIGHT column. */
 .modal-v2__expert {
-  margin-top: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  /* Embedded dark surface: LayersSection + PresetPanel were designed
-     for the stand-alone slate background. We frame them in their own
-     card so they read as a distinct "controls drawer" beneath the
-     preview, rather than swallowing the whole modal. */
   background: #0f172a;
   color: #e2e8f0;
   border-radius: 8px;
   padding: 0.85rem;
+}
+
+/* Narrow viewports fall back to single column so the operator can
+   still reach the controls on a tablet held in portrait. */
+@media (max-width: 900px) {
+  .modal-v2__layout.is-split {
+    grid-template-columns: 1fr;
+  }
+  .modal-v2__layout.is-split .modal-v2__left {
+    position: static;
+    max-height: none;
+  }
 }
 .modal-v2__header {
   display: flex;

@@ -9,14 +9,17 @@
 // adapted-render SVG, the original placement SVG, loading / error
 // flags, and the sheet geometry, and just hands them down.
 
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useProgressiveStream } from '../../composables/useProgressiveStream'
 import { useJobStore } from '../../stores/job'
 
 export interface SheetOutlineShape {
-  widthPct: number
-  heightPct: number
+  // Real aspect ratio (w/h) — fed straight to CSS ``aspect-ratio`` so
+  // the rectangle keeps its shape regardless of how wide vs. tall the
+  // preview pane is. Percent-of-axis sizing distorted the shape on
+  // non-square panes; that bug is what this interface fixes.
+  aspectRatio: number
   labelW: number
   labelH: number
   isPortrait: boolean
@@ -119,6 +122,62 @@ function resetView(): void {
   panX.value = 0
   panY.value = 0
 }
+
+// =========================================================================
+// Sheet outline sizing.
+// CSS ``aspect-ratio`` alone won't fit a rectangle into a non-square
+// pane without distortion — when both axes are constrained, the
+// browser picks one and the aspect breaks. We track the pane's real
+// pixel size with ResizeObserver, then derive the sheet's width/height
+// in pixels so it's *guaranteed* to honour the requested aspect ratio
+// AND fit inside 92 % of the pane on whichever axis is tighter.
+const paneEl = ref<HTMLElement | null>(null)
+const paneWidth = ref(0)
+const paneHeight = ref(0)
+let paneObserver: ResizeObserver | null = null
+
+const sheetStyle = computed<{ width: string; height: string } | null>(() => {
+  const s = props.sheet
+  if (!s) return null
+  const ratio = s.aspectRatio
+  if (!Number.isFinite(ratio) || ratio <= 0) return null
+  const pw = paneWidth.value
+  const ph = paneHeight.value
+  if (pw <= 0 || ph <= 0) return null
+  const maxW = pw * 0.92
+  const maxH = ph * 0.92
+  // Anchor on whichever axis caps the rectangle first. ``maxW / ratio``
+  // is the height the rectangle would take if it filled maxW; if that
+  // exceeds maxH, the sheet is taller than it is wide and we anchor
+  // on height instead.
+  let w: number
+  let h: number
+  if (maxW / ratio <= maxH) {
+    w = maxW
+    h = maxW / ratio
+  } else {
+    h = maxH
+    w = maxH * ratio
+  }
+  return { width: `${Math.round(w)}px`, height: `${Math.round(h)}px` }
+})
+
+onMounted(() => {
+  if (!paneEl.value || typeof ResizeObserver === 'undefined') return
+  paneObserver = new ResizeObserver((entries) => {
+    const entry = entries[0]
+    if (!entry) return
+    const rect = entry.contentRect
+    paneWidth.value = rect.width
+    paneHeight.value = rect.height
+  })
+  paneObserver.observe(paneEl.value)
+})
+
+onBeforeUnmount(() => {
+  paneObserver?.disconnect()
+  paneObserver = null
+})
 
 // =========================================================================
 // Progressive preview stream (roadmap C.7 wiring).
@@ -251,6 +310,7 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
 <template>
   <div>
     <div
+      ref="paneEl"
       class="preview"
       data-test="modal-v2-preview"
       :style="{ cursor: panning ? 'grabbing' : 'grab', touchAction: 'none' }"
@@ -262,12 +322,9 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
       @dblclick="resetView"
     >
       <div
-        v-if="sheet"
+        v-if="sheet && sheetStyle"
         class="sheet-outline"
-        :style="{
-          width: `${sheet.widthPct}%`,
-          height: `${sheet.heightPct}%`,
-        }"
+        :style="sheetStyle"
         aria-hidden="true"
         data-test="modal-v2-sheet-outline"
       >
@@ -523,6 +580,9 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  /* Width/height come from the script setup's ``sheetStyle`` computed,
+     which derives them from the ResizeObserver-tracked pane size so
+     the rectangle stays at the operator's chosen aspect ratio. */
   border: 1px dashed #94a3b8;
   background: rgba(255, 255, 255, 0.4);
   border-radius: 2px;

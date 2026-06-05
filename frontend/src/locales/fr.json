@@ -1560,7 +1560,10 @@
       "styleClear": "Effacer mes choix",
       "preamble": "Voici ce que ta machine va tracer. Choisis comment tu veux le rendu en dessous, puis clique sur Générer.",
       "preambleDismiss": "Compris, ne plus afficher",
-      "sheetCaptionLabel": "Feuille"
+      "sheetCaptionLabel": "Feuille",
+      "sheetPickerLabel": "Format de feuille",
+      "sheetPortrait": "Portrait",
+      "sheetLandscape": "Paysage"
     },
     "style": {
       "crosshatch": "Hachures",

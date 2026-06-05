@@ -1560,7 +1560,10 @@
       "styleClear": "Clear my choices",
       "preamble": "This is what your machine will draw. Pick how you want it rendered below, then click Generate.",
       "preambleDismiss": "Got it, don't show again",
-      "sheetCaptionLabel": "Sheet"
+      "sheetCaptionLabel": "Sheet",
+      "sheetPickerLabel": "Sheet format",
+      "sheetPortrait": "Portrait",
+      "sheetLandscape": "Landscape"
     },
     "style": {
       "crosshatch": "Crosshatch",
