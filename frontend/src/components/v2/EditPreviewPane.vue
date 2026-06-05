@@ -229,7 +229,7 @@ function resetView(): void {
   position: relative;
   height: clamp(220px, 42vh, 360px);
   background: repeating-conic-gradient(#f1f5f9 0% 25%, white 0% 50%) 0 / 20px 20px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   display: flex;
   align-items: center;

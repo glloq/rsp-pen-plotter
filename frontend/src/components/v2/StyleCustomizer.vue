@@ -248,7 +248,7 @@ function clearAll(): void {
 .styles-body {
   margin-top: 0.5rem;
   padding: 0.65rem 0.75rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #fafbff;
   display: flex;
@@ -349,7 +349,7 @@ function clearAll(): void {
   align-items: center;
   padding: 0.35rem 0.5rem;
   background: white;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   font-size: 0.75rem;
 }
