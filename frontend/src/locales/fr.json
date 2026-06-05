@@ -1563,7 +1563,10 @@
       "sheetCaptionLabel": "Feuille",
       "sheetPickerLabel": "Format de feuille",
       "sheetPortrait": "Portrait",
-      "sheetLandscape": "Paysage"
+      "sheetLandscape": "Paysage",
+      "applyExpert": "Appliquer",
+      "applyExpertHint": "Reconvertit le fichier avec les réglages des onglets Image / SVG / Style / Texte.",
+      "applyExpertClean": "Aucun changement à appliquer."
     },
     "style": {
       "crosshatch": "Hachures",

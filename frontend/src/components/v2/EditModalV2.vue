@@ -27,6 +27,7 @@ import { useUiStore } from '../../stores/ui'
 import { useUiModeStore } from '../../stores/uiMode'
 import { useJobStore } from '../../stores/job'
 import { usePlotterStore } from '../../stores/plotter'
+import { useBitmapDraft } from '../../composables/useBitmapDraft'
 import { useFileManager } from '../../composables/useFileManager'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayersSection from '../LayersSection.vue'
@@ -252,7 +253,32 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
   void resolveAndPreview()
 }
 
+async function applyExpertDraft(): Promise<void> {
+  // Commit the V1 draft mutations (image preprocess, segmentation
+  // method, master style, typography) back to the placement by
+  // re-running /upload with the freshly built options bundle. The
+  // ``useFileManager.uploadSelected`` path is what the V1 modal's
+  // "Apply" button drove; we reuse it verbatim so the existing
+  // confirmation modal (overwrite warning, multi-pass reupload
+  // warning) shows up in the same shape the operator already knows.
+  // No-op when nothing is dirty so a stray click can't trigger a
+  // pointless re-upload.
+  if (!bitmapDraft.isDirty.value) return
+  await fileManager.uploadSelected()
+}
+
 function confirm(): void {
+  // In expert mode, an operator who tweaked the image / SVG / style
+  // cards expects their changes to land in the final G-code. Commit
+  // any pending draft mutations through the V1 ``uploadSelected``
+  // path *before* the V2 confirm fires so the placement the parent
+  // receives is the freshly-converted one. Fire-and-forget: the
+  // upload schedules its own progress toast, and the parent's
+  // confirm handler can run against the (already-rehydrated)
+  // placement state once /upload returns.
+  if (uiMode.isExpert) {
+    void applyExpertDraft()
+  }
   if (!hasPlacement.value || !decision.value) return
   if (customStylesActive.value) {
     // Override the resolver's algorithm pick with the operator's manual
@@ -534,6 +560,11 @@ function openExpertEditor(): void {
 // source carries typography) and to default the active tab to the
 // most useful starting point for the current source.
 const fileManager = useFileManager(t)
+// Direct access to the V1 singleton draft so we can read ``isDirty``
+// for the expert-mode "Appliquer" affordance. The cards inside the
+// expert tabs already mutate this singleton via their own imports;
+// reading it here is a no-op for the wiring.
+const bitmapDraft = useBitmapDraft()
 const showTextTab = computed<boolean>(() => fileManager.kind.value === 'typography')
 const defaultExpertTab = computed<EditTabId>(() => {
   if (fileManager.kind.value === 'typography') return 'text'
@@ -541,6 +572,37 @@ const defaultExpertTab = computed<EditTabId>(() => {
   return 'layers'
 })
 const activeExpertTab = ref<EditTabId>('layers')
+
+// =========================================================================
+// V1 expert-tab → preview wiring.
+// The restored Image / SVG / Style / Text cards mutate a singleton
+// ``useBitmapDraft`` whose deep watcher fires ``/preview`` via the
+// ``useFileManager`` scheduler. That endpoint returns the freshly
+// preprocessed + segmented + rendered SVG — which the assisted-mode
+// ``previewAlgorithmOnAllLayers`` path *doesn't* hit. Without forwarding
+// the scheduler's result, the operator would change brightness or
+// segmentation method and see nothing happen on screen.
+//
+// We forward the scheduler's SVG to ``EditPreviewPane`` only when the
+// operator is in expert mode AND the scheduler has actually produced a
+// result for this session. Outside those conditions we fall back to the
+// resolver-driven ``renderedSvg`` so the assisted wizard keeps its own
+// preview pipeline untouched.
+const expertPreviewSvg = computed<string | null>(() => {
+  if (!uiMode.isExpert) return null
+  const svg = fileManager.previewSvg.value
+  return svg && svg.length > 0 ? svg : null
+})
+const expertPreviewLoading = computed<boolean>(() => {
+  if (!uiMode.isExpert) return false
+  return Boolean(fileManager.previewLoading.value)
+})
+const effectivePreviewSvg = computed<string | null>(
+  () => expertPreviewSvg.value ?? renderedSvg.value,
+)
+const effectivePreviewLoading = computed<boolean>(
+  () => expertPreviewLoading.value || previewLoading.value,
+)
 // Reset the tab whenever the source file kind changes so the operator
 // doesn't land on an "Image" tab for a vector file. The :key in App.vue
 // also remounts on placement switch; this watcher is the safety net
@@ -796,9 +858,9 @@ watch(
              gesture hint). Extracted to a subcomponent so this modal
              stays focused on decision-making. -->
         <EditPreviewPane
-          :plot-svg="renderedSvg"
+          :plot-svg="effectivePreviewSvg"
           :original-svg="props.previewSvg ?? null"
-          :loading="previewLoading"
+          :loading="effectivePreviewLoading"
           :error="previewError"
           :sheet="sheetOutline"
           :stream-file-id="job.selectedPlacement?.library_file_id ?? null"
@@ -1082,6 +1144,28 @@ watch(
             @click="openExpertEditor"
           >
             {{ t('v2.modal.openExpert') }}
+          </button>
+          <!-- Expert "Appliquer" button: commits the V1 draft mutations
+               (image preprocess, segmentation, master style, typography)
+               back to the placement via /upload. Disabled when the draft
+               is clean so a stray click can't trigger a pointless
+               re-conversion. The dirty hint after the label tells the
+               operator the button is meaningful right now. -->
+          <button
+            v-if="uiMode.isExpert"
+            type="button"
+            class="modal-v2__apply-btn"
+            :disabled="!bitmapDraft.isDirty || !hasPlacement"
+            :title="
+              bitmapDraft.isDirty
+                ? t('v2.modal.applyExpertHint')
+                : t('v2.modal.applyExpertClean')
+            "
+            data-test="modal-v2-apply-expert"
+            @click="applyExpertDraft"
+          >
+            {{ t('v2.modal.applyExpert') }}
+            <span v-if="bitmapDraft.isDirty" aria-hidden="true" class="dirty-dot">●</span>
           </button>
           <button
             type="button"
@@ -1657,6 +1741,37 @@ watch(
 .modal-v2__cancel:focus-visible {
   outline: 2px solid #1f6feb;
   outline-offset: 2px;
+}
+.modal-v2__apply-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid #10b981;
+  background: #ecfdf5;
+  color: #065f46;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    opacity 0.12s ease;
+}
+.modal-v2__apply-btn:hover:not(:disabled) {
+  background: #d1fae5;
+}
+.modal-v2__apply-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.modal-v2__apply-btn:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+.modal-v2__apply-btn .dirty-dot {
+  font-size: 0.7rem;
+  color: #f59e0b;
 }
 .modal-v2__expert-link {
   border: none;
