@@ -23,6 +23,25 @@ from pen_plotter.hardware.streamer import (
 from pen_plotter.hardware.transport import MockTransport, SerialTransport, Transport
 from pen_plotter.models import MachineProfile
 
+# Per-dialect emergency-stop payload. GRBL processes ``0x18`` (Ctrl-X) as
+# a soft reset at interrupt level — it bypasses the planner queue, so it
+# stops a long G1 move that an ``ok``-ack flow cannot interrupt. Marlin
+# and Klipper accept ``M112`` as an immediate halt. EBB exposes ``ES``
+# (emergency stop) over its CR-terminated protocol.
+_EMERGENCY_BYTES: dict[str, bytes] = {
+    "grbl": b"\x18",
+    "marlin": b"M112\n",
+    "klipper": b"M112\n",
+    "ebb": b"ES\r",
+}
+
+# Capacity of each per-subscriber progress queue. The streamer emits one
+# event per acked line, so a slow consumer (sluggish browser tab) can
+# fall behind quickly. A bounded queue with drop-oldest semantics keeps
+# memory finite while still surfacing the latest snapshot — progress is
+# idempotent (sent/acked/state) so dropping intermediates is safe.
+_SUBSCRIBER_QUEUE_MAXSIZE = 256
+
 
 def _fake_hardware_enabled() -> bool:
     """Return True when OMNIPLOT_FAKE_HARDWARE asks for in-process mocking.
@@ -44,6 +63,10 @@ class PlotterController:
         self._streamer: GcodeStreamer | None = None
         self._task: asyncio.Task[StreamProgress] | None = None
         self._subscribers: set[asyncio.Queue[StreamProgress]] = set()
+        # Serialises manual commands (jog / goto / home / send_commands)
+        # so two concurrent HTTP requests cannot interleave their bytes
+        # on the serial line or steal each other's ``ok`` response.
+        self._send_lock = asyncio.Lock()
 
     @property
     def connected(self) -> bool:
@@ -79,16 +102,30 @@ class PlotterController:
         if _fake_hardware_enabled():
             self.attach(MockTransport())
             return
-        self.attach(await SerialTransport.open(port, baudrate, terminator))
+        transport = await SerialTransport.open(port, baudrate, terminator)
+        # Consume the startup banner GRBL/Marlin emit on reset so the
+        # first ``_wait_ok`` doesn't swallow it and shift the ack count.
+        with contextlib.suppress(Exception):
+            await transport.drain_input(idle_timeout_s=0.2)
+        self.attach(transport)
 
     async def disconnect(self) -> None:
-        """Abort any running job and close the transport."""
+        """Abort any running job and close the transport.
+
+        Cancels the streaming task instead of merely awaiting it: if the
+        firmware is mute, the streamer is blocked in ``_wait_ok`` for up
+        to ``ack_timeout_s`` (30 s) and ``abort()`` alone won't unblock
+        it. Disconnect is operator intent — drop the link now, the
+        machine's state on the other end of a cut cable is irrelevant.
+        """
         self.abort()
-        if self._task is not None:
-            with contextlib.suppress(Exception):
-                await self._task
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            with contextlib.suppress(BaseException):
+                await asyncio.wait_for(self._task, timeout=2.0)
         if self._transport is not None:
-            await self._transport.close()
+            with contextlib.suppress(Exception):
+                await self._transport.close()
         self._transport = None
         self._streamer = None
         self._task = None
@@ -110,19 +147,26 @@ class PlotterController:
             raise RuntimeError("A job is running; pause or abort it before sending commands.")
 
     async def _send_immediate(self, lines: list[str], timeout_s: float = 30.0) -> None:
-        """Send control lines, waiting for an ``ok`` after each."""
+        """Send control lines, waiting for an ``ok`` after each.
+
+        Holds ``_send_lock`` for the duration so two concurrent manual
+        commands cannot interleave bytes on the serial line.
+        """
         transport = self._require_transport()
-        for line in lines:
-            await transport.write_line(line)
-            while True:
-                try:
-                    response = (await asyncio.wait_for(transport.read_line(), timeout_s)).lower()
-                except TimeoutError as exc:
-                    raise RuntimeError("Controller did not acknowledge in time.") from exc
-                if response.startswith("ok"):
-                    break
-                if response.startswith(("error", "alarm", "!!")):
-                    raise RuntimeError(f"Controller error: {response}")
+        async with self._send_lock:
+            for line in lines:
+                await transport.write_line(line)
+                while True:
+                    try:
+                        response = (
+                            await asyncio.wait_for(transport.read_line(), timeout_s)
+                        ).lower()
+                    except TimeoutError as exc:
+                        raise RuntimeError("Controller did not acknowledge in time.") from exc
+                    if response.startswith("ok"):
+                        break
+                    if response.startswith(("error", "alarm", "!!")):
+                        raise RuntimeError(f"Controller error: {response}")
 
     async def jog(self, dx_mm: float, dy_mm: float, profile: MachineProfile) -> None:
         """Jog the head by a relative offset."""
@@ -148,21 +192,48 @@ class PlotterController:
         self._require_idle()
         await self._send_immediate(lines)
 
-    async def run(self, gcode: str) -> None:
+    async def run(
+        self,
+        gcode: str,
+        profile: MachineProfile | None = None,
+    ) -> None:
         """Start streaming a G-code program in the background.
+
+        When ``profile`` is supplied, guided tool-change swap actions are
+        computed from the program (same logic the print queue uses) so a
+        direct ``POST /plotter/run`` honours operator-confirm pauses on a
+        multi-pen profile instead of blindly sending firmware-pause
+        commands. Without a profile the behaviour is unchanged — every
+        line is streamed as-is.
 
         Args:
             gcode: The G-code program to stream.
+            profile: Optional machine profile used to derive ``swap_actions``.
 
         Raises:
             RuntimeError: If disconnected or a job is already running.
         """
         transport = self._require_transport()
-        if self._job_active:
-            raise RuntimeError("A job is already running.")
-        self._streamer = GcodeStreamer(transport, on_progress=self._broadcast)
-        self._task = asyncio.create_task(self._streamer.run(gcode))
-        self._task.add_done_callback(self._on_task_done)
+        swap_actions: dict[int, SwapAction] | None = None
+        if profile is not None:
+            # Local import keeps ``hardware`` decoupled from ``core``.
+            from pen_plotter.core.toolchange import guided_swap_actions  # noqa: PLC0415
+
+            swap_actions = guided_swap_actions(gcode, profile) or None
+        # Acquire ``_send_lock`` so a manual command in flight finishes
+        # before we install the streamer task — otherwise its bytes can
+        # interleave with the streamer's first write (TOCTOU between
+        # ``_require_idle`` and the eventual write).
+        async with self._send_lock:
+            if self._job_active:
+                raise RuntimeError("A job is already running.")
+            self._streamer = GcodeStreamer(
+                transport,
+                on_progress=self._broadcast,
+                swap_actions=swap_actions,
+            )
+            self._task = asyncio.create_task(self._streamer.run(gcode))
+            self._task.add_done_callback(self._on_task_done)
 
     async def stream(
         self,
@@ -197,27 +268,52 @@ class PlotterController:
             StreamError: If the controller reports an error during streaming.
         """
         transport = self._require_transport()
-        if self._job_active:
-            raise RuntimeError("A job is already running.")
 
         async def _combined(progress: StreamProgress) -> None:
             await self._broadcast(progress)
             if on_progress is not None:
                 await on_progress(progress)
 
-        self._streamer = GcodeStreamer(
-            transport,
-            on_progress=_combined,
-            pause_points=pause_points,
-            swap_actions=swap_actions,
-        )
-        self._task = asyncio.create_task(self._streamer.run(gcode))
-        self._task.add_done_callback(self._on_task_done)
-        return await self._task
+        # Same lock as :meth:`run` — block out any racing manual command
+        # so the streamer owns the transport from its very first write.
+        async with self._send_lock:
+            if self._job_active:
+                raise RuntimeError("A job is already running.")
+            streamer = GcodeStreamer(
+                transport,
+                on_progress=_combined,
+                pause_points=pause_points,
+                swap_actions=swap_actions,
+            )
+            task = asyncio.create_task(streamer.run(gcode))
+            task.add_done_callback(self._on_task_done)
+            self._streamer = streamer
+            self._task = task
+        try:
+            return await task
+        except asyncio.CancelledError:
+            # The streaming task was cancelled — typically by
+            # ``emergency_stop`` or ``disconnect``. Distinguish that from
+            # an *outer* cancellation (queue worker being shut down): if
+            # the task itself is cancelled, surface a clean ABORTED final
+            # progress so callers like the print queue's ``run_next``
+            # don't have a ``CancelledError`` (BaseException) escape past
+            # their ``except Exception`` clause and kill the worker loop.
+            # If the task is NOT cancelled, the cancel came from our own
+            # caller — propagate it.
+            if not task.cancelled():
+                raise
+            streamer.progress.state = StreamState.ABORTED
+            return streamer.progress
 
     def _on_task_done(self, task: asyncio.Task[StreamProgress]) -> None:
         """Retrieve the streaming task's result so exceptions aren't lost."""
         if task.cancelled():
+            # Reflect the cancellation in the streamer's progress so
+            # ``/plotter/status`` doesn't return a stale RUNNING for a
+            # job that was emergency-stopped or disconnected mid-flight.
+            if self._streamer is not None:
+                self._streamer.progress.state = StreamState.ABORTED
             return
         exc = task.exception()
         if exc is not None:
@@ -238,9 +334,47 @@ class PlotterController:
         if self._streamer is not None:
             self._streamer.abort()
 
+    async def emergency_stop(self, profile: MachineProfile | None = None) -> None:
+        """Send an immediate real-time stop to the controller.
+
+        The ``ok``-ack handshake cannot interrupt a long G1 move that
+        the firmware is already executing — ``abort()`` only takes effect
+        on the *next* iteration of the streamer's send loop. This sends
+        the dialect-appropriate real-time payload (GRBL ``0x18`` soft
+        reset, Marlin/Klipper ``M112``, EBB ``ES``) straight to the
+        transport, bypassing the line queue, and cancels the streaming
+        task so any in-flight ``_wait_ok`` unblocks promptly.
+
+        Args:
+            profile: Optional profile — its ``gcode_dialect`` selects
+                the payload. Falls back to GRBL's soft reset when None.
+        """
+        # Mark abort first so a racing send loop sees the flag the next
+        # time it gets the GIL, even if the cancel below arrives later.
+        if self._streamer is not None:
+            self._streamer.abort()
+        transport = self._transport
+        if transport is not None:
+            dialect = profile.gcode_dialect if profile is not None else "grbl"
+            payload = _EMERGENCY_BYTES.get(dialect, _EMERGENCY_BYTES["grbl"])
+            with contextlib.suppress(Exception):
+                await transport.write_raw(payload)
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            with contextlib.suppress(Exception, asyncio.CancelledError):
+                await self._task
+
     def subscribe(self) -> asyncio.Queue[StreamProgress]:
-        """Register a progress subscriber queue."""
-        queue: asyncio.Queue[StreamProgress] = asyncio.Queue()
+        """Register a bounded progress subscriber queue.
+
+        The queue is sized to absorb a normal burst of progress events;
+        a slow consumer that fills it past capacity loses the oldest
+        snapshot first (see :meth:`_broadcast`) rather than blocking the
+        streamer or growing memory without bound.
+        """
+        queue: asyncio.Queue[StreamProgress] = asyncio.Queue(
+            maxsize=_SUBSCRIBER_QUEUE_MAXSIZE
+        )
         self._subscribers.add(queue)
         return queue
 
@@ -249,14 +383,23 @@ class PlotterController:
         self._subscribers.discard(queue)
 
     async def _broadcast(self, progress: StreamProgress) -> None:
-        """Push a progress snapshot to all subscribers.
+        """Push a progress snapshot to all subscribers without blocking.
 
-        Iterate over a snapshot of the subscriber set: ``put`` awaits, and a
-        concurrent ``subscribe``/``unsubscribe`` during that await would
-        otherwise mutate the set mid-iteration (``RuntimeError``).
+        Iterate over a snapshot of the subscriber set so a concurrent
+        ``subscribe``/``unsubscribe`` can't mutate the set mid-iteration.
+        Uses non-blocking ``put_nowait`` with drop-oldest on overflow so
+        the streamer is never stalled by a lagging WebSocket client —
+        progress is idempotent (sent/acked/state), dropping intermediate
+        snapshots is safe.
         """
         for queue in list(self._subscribers):
-            await queue.put(progress)
+            try:
+                queue.put_nowait(progress)
+            except asyncio.QueueFull:
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
+                with contextlib.suppress(asyncio.QueueFull):
+                    queue.put_nowait(progress)
 
 
 controller = PlotterController()

@@ -35,6 +35,67 @@ def _queue(engine) -> tuple[PrintQueue, MockTransport]:
     return PrintQueue(controller, engine), transport
 
 
+class _StuckTransport:
+    """Acks ``ok_budget`` lines then goes silent, simulating a wedged firmware."""
+
+    def __init__(self, ok_budget: int = 2) -> None:
+        self.written: list[str] = []
+        self.raw: list[bytes] = []
+        self._budget = ok_budget
+
+    async def write_line(self, line: str) -> None:
+        self.written.append(line)
+
+    async def read_line(self) -> str:
+        if self._budget > 0:
+            self._budget -= 1
+            return "ok"
+        import asyncio as _asyncio
+
+        await _asyncio.sleep(3600)
+        return "ok"
+
+    async def write_raw(self, data: bytes) -> None:
+        self.raw.append(data)
+
+    async def drain_input(self, idle_timeout_s: float = 0.2) -> None:
+        return
+
+    async def close(self) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_emergency_stop_during_queued_run_does_not_kill_worker() -> None:
+    """Regression: ``emergency_stop`` cancels the streaming task; the
+    cancel must NOT propagate as ``CancelledError`` (a BaseException)
+    through ``controller.stream`` and kill the queue worker — its
+    ``except Exception`` would not catch it."""
+    import asyncio
+
+    engine = _engine()
+    controller = PlotterController()
+    transport = _StuckTransport(ok_budget=2)
+    controller.attach(transport)
+    queue = PrintQueue(controller, engine)
+
+    gcode = "\n".join(f"G1 X{i}" for i in range(100))
+    enqueue("job", PROFILE, gcode, target=engine)
+
+    queue.start()
+    # Let the queue pick up the run and get stuck on the 3rd line.
+    await asyncio.sleep(0.1)
+    assert queue._current_id is not None
+
+    await controller.emergency_stop(get_profile(PROFILE))
+    await asyncio.sleep(0.1)
+
+    assert queue._loop_task is not None
+    assert not queue._loop_task.done(), "Queue worker died after emergency_stop"
+    assert transport.raw == [b"\x18"]
+    await queue.stop()
+
+
 def test_enqueue_records_total_lines() -> None:
     engine = _engine()
     run = enqueue("job", PROFILE, GCODE, target=engine)

@@ -47,9 +47,17 @@ class GotoRequest(BaseModel):
 
 
 class RunRequest(BaseModel):
-    """G-code job to stream."""
+    """G-code job to stream.
+
+    ``profile_name`` is optional for backward compatibility, but supplying
+    it lets the controller compute guided tool-change pauses (matching
+    the print queue's behaviour) so a manual run on a multi-pen profile
+    still halts at swap boundaries instead of blindly executing the
+    firmware pause.
+    """
 
     gcode: str
+    profile_name: str | None = None
 
 
 class StatusResponse(BaseModel):
@@ -151,8 +159,9 @@ async def home(profile_name: str) -> StatusResponse:
 @router.post("/plotter/run")
 async def run(request: RunRequest) -> StatusResponse:
     """Start streaming a G-code job."""
+    profile = _profile_or_404(request.profile_name) if request.profile_name else None
     try:
-        await controller.run(request.gcode)
+        await controller.run(request.gcode, profile=profile)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     record("plotter.run", f"{request.gcode.count(chr(10)) + 1} lines")
@@ -180,6 +189,22 @@ async def abort() -> StatusResponse:
     """Abort the running job."""
     controller.abort()
     record("plotter.abort")
+    return _status()
+
+
+@router.post("/plotter/emergency_stop")
+async def emergency_stop(profile_name: str | None = None) -> StatusResponse:
+    """Send a real-time stop to the controller, preempting any in-flight move.
+
+    Unlike ``/abort`` which waits for the current ``ok``, this writes the
+    dialect-appropriate emergency payload (GRBL ``0x18``, Marlin ``M112``,
+    EBB ``ES``) straight to the serial line and cancels the streaming
+    task. Pass ``profile_name`` to pick the right dialect — defaults to
+    GRBL when omitted.
+    """
+    profile = _profile_or_404(profile_name) if profile_name else None
+    await controller.emergency_stop(profile)
+    record("plotter.emergency_stop", profile_name or "grbl")
     return _status()
 
 

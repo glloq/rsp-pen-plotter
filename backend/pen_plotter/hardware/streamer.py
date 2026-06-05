@@ -140,11 +140,25 @@ class GcodeStreamer:
         self._swap_actions = swap_actions or {}
         self._resume = asyncio.Event()
         self._resume.set()
-        self._aborted = False
+        # ``_abort`` is an Event (not a plain bool) so the inline-swap
+        # ``wait_ms`` sleep can be preempted via ``wait_for``.
+        self._abort = asyncio.Event()
         self.progress = StreamProgress(total=0, sent=0, acked=0, state=StreamState.IDLE)
 
+    @property
+    def _aborted(self) -> bool:
+        """Whether ``abort`` was called (kept as a property for readability)."""
+        return self._abort.is_set()
+
     def pause(self) -> None:
-        """Pause after the current line is acknowledged."""
+        """Pause after the current line / swap step is acknowledged.
+
+        Clears ``_resume`` unconditionally so a pause issued while the
+        streamer is parked in a swap (WAITING) still takes effect for the
+        next inline command in the swap sequence. The state is flipped
+        to PAUSED only when leaving RUNNING — WAITING already surfaces
+        as a paused run to the cockpit.
+        """
         self._resume.clear()
         if self.progress.state == StreamState.RUNNING:
             self.progress.state = StreamState.PAUSED
@@ -156,8 +170,13 @@ class GcodeStreamer:
         self._resume.set()
 
     def abort(self) -> None:
-        """Abort the stream as soon as possible."""
-        self._aborted = True
+        """Abort the stream as soon as possible.
+
+        Sets the abort event so any ``wait_ms`` sleep in an inline swap
+        is preempted, and unblocks ``_resume`` so a stream parked on a
+        pause / swap-confirm exits its wait promptly.
+        """
+        self._abort.set()
         self._resume.set()
 
     async def _emit(self) -> None:
@@ -275,6 +294,9 @@ class GcodeStreamer:
             self.progress.message = f"swap ({action.kind})"
             await self._emit()
             for cmd in action.commands:
+                # Honour a pause() issued mid-swap: block here until
+                # resume() (or abort()) sets the event again.
+                await self._resume.wait()
                 if self._aborted:
                     return True
                 await self._transport.write_line(cmd.send)
@@ -285,7 +307,16 @@ class GcodeStreamer:
                     await self._emit()
                     raise
                 if cmd.wait_ms > 0:
-                    await asyncio.sleep(cmd.wait_ms / 1000.0)
+                    # Preemptable sleep — abort cuts the dwell short
+                    # rather than waiting up to ``wait_ms`` for the next
+                    # iteration's abort check.
+                    try:
+                        await asyncio.wait_for(
+                            self._abort.wait(), cmd.wait_ms / 1000.0
+                        )
+                        return True
+                    except TimeoutError:
+                        pass
             self.progress.state = StreamState.RUNNING
             self.progress.message = None
             await self._emit()
