@@ -279,19 +279,41 @@ class PlotterController:
         async with self._send_lock:
             if self._job_active:
                 raise RuntimeError("A job is already running.")
-            self._streamer = GcodeStreamer(
+            streamer = GcodeStreamer(
                 transport,
                 on_progress=_combined,
                 pause_points=pause_points,
                 swap_actions=swap_actions,
             )
-            self._task = asyncio.create_task(self._streamer.run(gcode))
-            self._task.add_done_callback(self._on_task_done)
-        return await self._task
+            task = asyncio.create_task(streamer.run(gcode))
+            task.add_done_callback(self._on_task_done)
+            self._streamer = streamer
+            self._task = task
+        try:
+            return await task
+        except asyncio.CancelledError:
+            # The streaming task was cancelled — typically by
+            # ``emergency_stop`` or ``disconnect``. Distinguish that from
+            # an *outer* cancellation (queue worker being shut down): if
+            # the task itself is cancelled, surface a clean ABORTED final
+            # progress so callers like the print queue's ``run_next``
+            # don't have a ``CancelledError`` (BaseException) escape past
+            # their ``except Exception`` clause and kill the worker loop.
+            # If the task is NOT cancelled, the cancel came from our own
+            # caller — propagate it.
+            if not task.cancelled():
+                raise
+            streamer.progress.state = StreamState.ABORTED
+            return streamer.progress
 
     def _on_task_done(self, task: asyncio.Task[StreamProgress]) -> None:
         """Retrieve the streaming task's result so exceptions aren't lost."""
         if task.cancelled():
+            # Reflect the cancellation in the streamer's progress so
+            # ``/plotter/status`` doesn't return a stale RUNNING for a
+            # job that was emergency-stopped or disconnected mid-flight.
+            if self._streamer is not None:
+                self._streamer.progress.state = StreamState.ABORTED
             return
         exc = task.exception()
         if exc is not None:
