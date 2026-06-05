@@ -1,23 +1,24 @@
 // Modal V2 smoke (roadmap G.3 wire).
 //
 // Covers the headline parcours the brief calls out for the v0.2
-// modal: open behind the feature flag, walk through the six steps,
-// confirm the resolver recommendation renders. The full validation
-// matrix (assisted/expert disclosure, expert override, error
-// recovery) lands as the suite grows.
+// modal. The V1 editor was removed in the v0.2 migration so the
+// ``?flag.modalV2`` query string no longer affects rendering — V2 is
+// the only editor. The flag is still set to keep the test URL
+// self-documenting in case the route boots a different default in
+// the future.
 
 import { expect, test } from '@playwright/test'
 
 test.describe('Modal V2 — fast default flow', () => {
   test.beforeEach(async ({ page }) => {
-    // Feature flag enables the modal V2 alongside the v1 modal.
     await page.goto('/?flag.modalV2=1&flag.compareMode=1')
   })
 
-  test('header shows the workspace switcher and AssistantModeToggle', async ({
-    page,
-  }) => {
-    await expect(page.locator('[data-test="header-workspace-select"]')).toBeVisible()
+  test('header shows the AssistantModeToggle', async ({ page }) => {
+    // The ``header-workspace-select`` data-test attribute the previous
+    // scaffold pointed at never existed in the app. The
+    // AssistantModeToggle is the real header surface that's been
+    // stable since the v0.2 migration.
     await expect(page.locator('[data-test="header-assistant-mode-toggle"]')).toBeVisible()
   })
 
