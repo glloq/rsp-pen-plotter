@@ -285,6 +285,56 @@ async def test_run_with_profile_inserts_swap_actions() -> None:
 
 
 @pytest.mark.asyncio
+async def test_disconnect_does_not_block_on_unresponsive_firmware() -> None:
+    """``disconnect`` must not wait for the streamer's ack timeout when
+    the firmware never replies — it cancels the task instead."""
+    controller = PlotterController()
+    controller.attach(_SilentTransport())
+    await controller.run("G1 X1\n")
+    await asyncio.sleep(0.01)
+    t0 = asyncio.get_event_loop().time()
+    await controller.disconnect()
+    # Well under the 30s ack_timeout_s.
+    assert asyncio.get_event_loop().time() - t0 < 2.0
+    assert controller.connected is False
+
+
+@pytest.mark.asyncio
+async def test_run_holds_send_lock_so_jog_cannot_race() -> None:
+    """A ``run`` arriving while a jog is mid-flight must wait for the jog
+    to finish before installing the streamer task — closes the TOCTOU
+    between ``_require_idle`` and the first write."""
+    from pen_plotter.hardware.transport import MockTransport
+
+    controller = PlotterController()
+    transport = MockTransport()
+    controller.attach(transport)
+    profile = _profile()
+
+    # Issue a jog and a run together. The jog produces 3 lines; the run
+    # adds 1 line. Order: jog's three (G91, G1, G90) MUST appear as a
+    # contiguous block before the run's "G0 X9" — or after, but never
+    # interleaved.
+    await asyncio.gather(
+        controller.jog(7.0, 0.0, profile),
+        controller.run("G0 X9\n"),
+    )
+    # Wait for the streamer to drain.
+    for _ in range(100):
+        await asyncio.sleep(0)
+        if controller.progress.state == StreamState.DONE:
+            break
+    assert "G0 X9" in transport.written
+    # Find the indices of the jog's bookends and the streamer line.
+    g91 = transport.written.index("G91")
+    g90 = transport.written.index("G90")
+    g0 = transport.written.index("G0 X9")
+    # The jog triple is contiguous AND does not bracket the G0 X9 line.
+    assert g91 + 2 == g90
+    assert not (g91 < g0 < g90)
+
+
+@pytest.mark.asyncio
 async def test_broadcast_drops_oldest_when_subscriber_is_slow() -> None:
     """An overflowing subscriber queue must drop the oldest snapshot
     rather than blocking ``_broadcast``."""

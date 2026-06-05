@@ -12,6 +12,11 @@ import asyncio
 import contextlib
 from typing import Protocol, runtime_checkable
 
+# Upper bound on banner lines ``SerialTransport.drain_input`` will consume
+# before giving up. GRBL emits ~2 lines on reset, Marlin ~10; 64 is a
+# safe ceiling that still terminates promptly on a runaway firmware.
+_DRAIN_MAX_LINES = 64
+
 
 @runtime_checkable
 class Transport(Protocol):
@@ -57,6 +62,7 @@ class MockTransport:
     def __init__(self) -> None:
         """Create a mock transport with empty history."""
         self.written: list[str] = []
+        self.raw: list[bytes] = []
         self._responses: asyncio.Queue[str] = asyncio.Queue()
         self.closed = False
 
@@ -70,8 +76,13 @@ class MockTransport:
         return await self._responses.get()
 
     async def write_raw(self, data: bytes) -> None:
-        """Record the raw byte payload without queueing a response."""
-        self.written.append(f"<raw:{data!r}>")
+        """Record the raw byte payload on a separate channel.
+
+        Kept out of ``written`` so existing assertions like
+        ``transport.written == expected_lines`` keep working even after
+        an ``emergency_stop`` has run during the test.
+        """
+        self.raw.append(data)
 
     async def drain_input(self, idle_timeout_s: float = 0.2) -> None:
         """No-op: the mock has no asynchronous controller emitting banners."""
@@ -143,8 +154,12 @@ class SerialTransport:
         await self._writer.drain()
 
     async def drain_input(self, idle_timeout_s: float = 0.2) -> None:
-        """Read and discard pending bytes until the line is quiet for ``idle_timeout_s``."""
-        while True:
+        """Read and discard pending bytes until the line is quiet for ``idle_timeout_s``.
+
+        Bounded by ``_DRAIN_MAX_LINES`` so a misbehaving firmware that
+        chatters faster than the idle window cannot wedge connect.
+        """
+        for _ in range(_DRAIN_MAX_LINES):
             try:
                 await asyncio.wait_for(self._reader.readline(), idle_timeout_s)
             except TimeoutError:

@@ -110,13 +110,22 @@ class PlotterController:
         self.attach(transport)
 
     async def disconnect(self) -> None:
-        """Abort any running job and close the transport."""
+        """Abort any running job and close the transport.
+
+        Cancels the streaming task instead of merely awaiting it: if the
+        firmware is mute, the streamer is blocked in ``_wait_ok`` for up
+        to ``ack_timeout_s`` (30 s) and ``abort()`` alone won't unblock
+        it. Disconnect is operator intent — drop the link now, the
+        machine's state on the other end of a cut cable is irrelevant.
+        """
         self.abort()
-        if self._task is not None:
-            with contextlib.suppress(Exception):
-                await self._task
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            with contextlib.suppress(BaseException):
+                await asyncio.wait_for(self._task, timeout=2.0)
         if self._transport is not None:
-            await self._transport.close()
+            with contextlib.suppress(Exception):
+                await self._transport.close()
         self._transport = None
         self._streamer = None
         self._task = None
@@ -205,21 +214,26 @@ class PlotterController:
             RuntimeError: If disconnected or a job is already running.
         """
         transport = self._require_transport()
-        if self._job_active:
-            raise RuntimeError("A job is already running.")
         swap_actions: dict[int, SwapAction] | None = None
         if profile is not None:
             # Local import keeps ``hardware`` decoupled from ``core``.
             from pen_plotter.core.toolchange import guided_swap_actions  # noqa: PLC0415
 
             swap_actions = guided_swap_actions(gcode, profile) or None
-        self._streamer = GcodeStreamer(
-            transport,
-            on_progress=self._broadcast,
-            swap_actions=swap_actions,
-        )
-        self._task = asyncio.create_task(self._streamer.run(gcode))
-        self._task.add_done_callback(self._on_task_done)
+        # Acquire ``_send_lock`` so a manual command in flight finishes
+        # before we install the streamer task — otherwise its bytes can
+        # interleave with the streamer's first write (TOCTOU between
+        # ``_require_idle`` and the eventual write).
+        async with self._send_lock:
+            if self._job_active:
+                raise RuntimeError("A job is already running.")
+            self._streamer = GcodeStreamer(
+                transport,
+                on_progress=self._broadcast,
+                swap_actions=swap_actions,
+            )
+            self._task = asyncio.create_task(self._streamer.run(gcode))
+            self._task.add_done_callback(self._on_task_done)
 
     async def stream(
         self,
@@ -254,22 +268,25 @@ class PlotterController:
             StreamError: If the controller reports an error during streaming.
         """
         transport = self._require_transport()
-        if self._job_active:
-            raise RuntimeError("A job is already running.")
 
         async def _combined(progress: StreamProgress) -> None:
             await self._broadcast(progress)
             if on_progress is not None:
                 await on_progress(progress)
 
-        self._streamer = GcodeStreamer(
-            transport,
-            on_progress=_combined,
-            pause_points=pause_points,
-            swap_actions=swap_actions,
-        )
-        self._task = asyncio.create_task(self._streamer.run(gcode))
-        self._task.add_done_callback(self._on_task_done)
+        # Same lock as :meth:`run` — block out any racing manual command
+        # so the streamer owns the transport from its very first write.
+        async with self._send_lock:
+            if self._job_active:
+                raise RuntimeError("A job is already running.")
+            self._streamer = GcodeStreamer(
+                transport,
+                on_progress=_combined,
+                pause_points=pause_points,
+                swap_actions=swap_actions,
+            )
+            self._task = asyncio.create_task(self._streamer.run(gcode))
+            self._task.add_done_callback(self._on_task_done)
         return await self._task
 
     def _on_task_done(self, task: asyncio.Task[StreamProgress]) -> None:
