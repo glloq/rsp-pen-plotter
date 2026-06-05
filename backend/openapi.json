@@ -1499,6 +1499,11 @@
             "title": "Profile Name",
             "type": "string"
           },
+          "schema_version": {
+            "default": 0,
+            "title": "Schema Version",
+            "type": "integer"
+          },
           "source_file": {
             "title": "Source File",
             "type": "string"
@@ -2965,7 +2970,9 @@
             "type": "string"
           },
           "pause_points": {
-            "additionalProperties": true,
+            "additionalProperties": {
+              "type": "string"
+            },
             "title": "Pause Points",
             "type": "object"
           },
@@ -2979,7 +2986,9 @@
             "type": "string"
           },
           "skipped_layers": {
-            "items": {},
+            "items": {
+              "type": "string"
+            },
             "title": "Skipped Layers",
             "type": "array"
           },
@@ -2989,7 +2998,10 @@
             "type": "string"
           },
           "swap_actions": {
-            "additionalProperties": true,
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
             "title": "Swap Actions",
             "type": "object"
           },

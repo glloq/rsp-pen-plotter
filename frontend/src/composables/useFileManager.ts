@@ -244,8 +244,7 @@ export function useFileManager(t?: Translator) {
         // knobs (crossed, angle_step, spacing range, …) into the per-
         // cluster recipe so gcode generation via /rerender matches the
         // live /preview instead of falling back to registry defaults.
-        recipeResolver: (index, total, hex) =>
-          draft.multicolorRecipeForCluster(index, total, hex),
+        recipeResolver: (index, total, hex) => draft.multicolorRecipeForCluster(index, total, hex),
       })
     }
     // Refresh the live preview so the canvas reflects the per-band /

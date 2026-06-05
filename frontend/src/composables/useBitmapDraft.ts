@@ -953,8 +953,7 @@ function colorRecipeFromKnobs(
           // consistently across mono and multicolor centerline paths.
           // ``_curves.value.centerline_min_branch_px`` defaults to 3 so
           // existing rehydrated drafts keep their behaviour.
-          min_branch_px:
-            _curves.value.centerline_min_branch_px ?? knobs.min_branch_px ?? 3,
+          min_branch_px: _curves.value.centerline_min_branch_px ?? knobs.min_branch_px ?? 3,
         },
       }
     }
