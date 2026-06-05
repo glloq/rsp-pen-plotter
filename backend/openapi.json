@@ -3253,11 +3253,22 @@
         "type": "object"
       },
       "RunRequest": {
-        "description": "G-code job to stream.",
+        "description": "G-code job to stream.\n\n``profile_name`` is optional for backward compatibility, but supplying\nit lets the controller compute guided tool-change pauses (matching\nthe print queue's behaviour) so a manual run on a multi-pen profile\nstill halts at swap boundaries instead of blindly executing the\nfirmware pause.",
         "properties": {
           "gcode": {
             "title": "Gcode",
             "type": "string"
+          },
+          "profile_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Name"
           }
         },
         "required": [
@@ -6090,6 +6101,85 @@
           }
         },
         "summary": "Disconnect"
+      }
+    },
+    "/plotter/emergency_stop": {
+      "post": {
+        "description": "Send a real-time stop to the controller, preempting any in-flight move.\n\nUnlike ``/abort`` which waits for the current ``ok``, this writes the\ndialect-appropriate emergency payload (GRBL ``0x18``, Marlin ``M112``,\nEBB ``ES``) straight to the serial line and cancels the streaming\ntask. Pass ``profile_name`` to pick the right dialect \u2014 defaults to\nGRBL when omitted.",
+        "operationId": "emergency_stop_plotter_emergency_stop_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "profile_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Profile Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Emergency Stop"
       }
     },
     "/plotter/goto": {

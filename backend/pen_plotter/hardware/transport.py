@@ -25,6 +25,23 @@ class Transport(Protocol):
         """Read one response line from the controller, stripped of whitespace."""
         ...
 
+    async def write_raw(self, data: bytes) -> None:
+        """Write raw bytes immediately, bypassing the line terminator.
+
+        Used for real-time / emergency commands such as GRBL ``0x18`` soft
+        reset or Marlin ``M112`` which must not wait for the next ``ok``.
+        """
+        ...
+
+    async def drain_input(self, idle_timeout_s: float = 0.2) -> None:
+        """Consume any pending response lines until the buffer is idle.
+
+        Useful after opening a serial port (GRBL emits a startup banner)
+        so the next ``_wait_ok`` doesn't consume a stale line and offset
+        the acknowledgment count.
+        """
+        ...
+
     async def close(self) -> None:
         """Close the underlying connection."""
         ...
@@ -51,6 +68,14 @@ class MockTransport:
     async def read_line(self) -> str:
         """Return the next queued response."""
         return await self._responses.get()
+
+    async def write_raw(self, data: bytes) -> None:
+        """Record the raw byte payload without queueing a response."""
+        self.written.append(f"<raw:{data!r}>")
+
+    async def drain_input(self, idle_timeout_s: float = 0.2) -> None:
+        """No-op: the mock has no asynchronous controller emitting banners."""
+        return
 
     async def close(self) -> None:
         """Mark the transport closed."""
@@ -98,14 +123,32 @@ class SerialTransport:
         return cls(reader, writer, terminator)
 
     async def write_line(self, line: str) -> None:
-        """Write a line terminated per the configured terminator and flush."""
-        self._writer.write((line + self._terminator).encode("ascii"))
+        """Write a line terminated per the configured terminator and flush.
+
+        Non-ASCII characters are replaced rather than raising — comments
+        are stripped by the streamer, but a stray glyph that slips through
+        must not crash the worker.
+        """
+        self._writer.write((line + self._terminator).encode("ascii", errors="replace"))
         await self._writer.drain()
 
     async def read_line(self) -> str:
         """Read one newline-terminated response and strip it."""
         data = await self._reader.readline()
         return data.decode("ascii", errors="replace").strip()
+
+    async def write_raw(self, data: bytes) -> None:
+        """Write raw bytes for real-time / emergency commands and flush."""
+        self._writer.write(data)
+        await self._writer.drain()
+
+    async def drain_input(self, idle_timeout_s: float = 0.2) -> None:
+        """Read and discard pending bytes until the line is quiet for ``idle_timeout_s``."""
+        while True:
+            try:
+                await asyncio.wait_for(self._reader.readline(), idle_timeout_s)
+            except TimeoutError:
+                return
 
     async def close(self) -> None:
         """Close the serial writer and wait for the transport to drain."""

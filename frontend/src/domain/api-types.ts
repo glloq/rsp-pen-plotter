@@ -672,6 +672,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plotter/emergency_stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Emergency Stop
+         * @description Send a real-time stop to the controller, preempting any in-flight move.
+         *
+         *     Unlike ``/abort`` which waits for the current ``ok``, this writes the
+         *     dialect-appropriate emergency payload (GRBL ``0x18``, Marlin ``M112``,
+         *     EBB ``ES``) straight to the serial line and cancels the streaming
+         *     task. Pass ``profile_name`` to pick the right dialect — defaults to
+         *     GRBL when omitted.
+         */
+        post: operations["emergency_stop_plotter_emergency_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plotter/goto": {
         parameters: {
             query?: never;
@@ -3113,10 +3139,18 @@ export interface components {
         /**
          * RunRequest
          * @description G-code job to stream.
+         *
+         *     ``profile_name`` is optional for backward compatibility, but supplying
+         *     it lets the controller compute guided tool-change pauses (matching
+         *     the print queue's behaviour) so a manual run on a multi-pen profile
+         *     still halts at swap boundaries instead of blindly executing the
+         *     firmware pause.
          */
         RunRequest: {
             /** Gcode */
             gcode: string;
+            /** Profile Name */
+            profile_name?: string | null;
         };
         /**
          * SegmentationMethod
@@ -4515,6 +4549,40 @@ export interface operations {
     disconnect_plotter_disconnect_post: {
         parameters: {
             query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    emergency_stop_plotter_emergency_stop_post: {
+        parameters: {
+            query?: {
+                profile_name?: string | null;
                 token?: string | null;
             };
             header?: {
