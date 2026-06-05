@@ -195,6 +195,12 @@ export function useLayerCardState(layer: Ref<LayerInfo>) {
     })
   }
 
+  function onOpacity(event: Event): void {
+    const raw = Number((event.target as HTMLInputElement).value)
+    const clamped = Math.max(0, Math.min(100, Math.round(raw)))
+    store.updateLayer(layer.value.layer_id, { opacity_percent: clamped })
+  }
+
   function onColorLabel(event: Event): void {
     const raw = (event.target as HTMLInputElement).value.trim()
     store.updateLayer(layer.value.layer_id, { color_label: raw || null })
@@ -290,6 +296,7 @@ export function useLayerCardState(layer: Ref<LayerInfo>) {
     onSpeed,
     onSimplify,
     onOptimize,
+    onOpacity,
     onColorLabel,
     setPause,
     onPickStyle,

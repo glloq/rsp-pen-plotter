@@ -28,6 +28,8 @@ import { useUiModeStore } from '../../stores/uiMode'
 import { useJobStore } from '../../stores/job'
 import { usePlotterStore } from '../../stores/plotter'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
+import LayersSection from '../LayersSection.vue'
+import PresetPanel from './PresetPanel.vue'
 import { BEGINNER_STYLES, type CustomStyleSelection } from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
@@ -756,6 +758,7 @@ watch(
           :loading="previewLoading"
           :error="previewError"
           :sheet="sheetOutline"
+          :stream-file-id="job.selectedPlacement?.library_file_id ?? null"
         />
 
         <!-- File caption. -->
@@ -910,8 +913,18 @@ watch(
           </ul>
         </div>
 
-        <!-- The single decision: intent. Équilibré pre-selected. -->
-        <fieldset class="modal-v2__intent">
+        <!-- Expert surface: full per-layer panel + bulk operations.
+             Mounted when the operator flips to expert mode (header
+             toggle or "Ouvrir l'éditeur complet" button). Shares the
+             preview / preflight / inks rows above. -->
+        <section v-if="uiMode.isExpert" class="modal-v2__expert" data-test="modal-v2-expert-panel">
+          <LayersSection />
+          <PresetPanel />
+        </section>
+
+        <!-- Assisted surface: intent + palette + custom-style stack.
+             Single-screen, three clicks max to a usable Generate. -->
+        <fieldset v-else class="modal-v2__intent">
           <legend>{{ t('v2.modal.chooseIntent') }}</legend>
           <div class="intent-grid">
             <button
@@ -933,7 +946,7 @@ watch(
              magazine is the safe default (only pens actually loaded);
              "free" lets the resolver pick from the full palette for
              operators who'll swap pens by hand. -->
-        <fieldset class="modal-v2__palette">
+        <fieldset v-if="uiMode.isAssisted" class="modal-v2__palette">
           <legend>{{ t('v2.modal.paletteLabel') }}</legend>
           <div class="palette-toggle">
             <button
@@ -964,7 +977,7 @@ watch(
              selection state via v-model. Bitmap-only — vector and PDF
              pipelines bypass raster algorithms entirely. -->
         <StyleCustomizer
-          v-if="canCustomizeStyles"
+          v-if="uiMode.isAssisted && canCustomizeStyles"
           v-model="customStyles"
         />
 
@@ -1082,6 +1095,20 @@ watch(
   overflow-y: auto;
   font-family: system-ui, sans-serif;
   color: #1e293b;
+}
+/* Expert panel: wider so the per-layer cards aren't cramped, and
+   uses the dark slate palette LayersSection inherits from its
+   stand-alone shell. */
+.modal-v2:has(.modal-v2__expert) {
+  width: min(96vw, 920px);
+  background: #0f172a;
+  color: #e2e8f0;
+}
+.modal-v2__expert {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
 }
 .modal-v2__header {
   display: flex;

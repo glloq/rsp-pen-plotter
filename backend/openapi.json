@@ -1640,6 +1640,13 @@
             "title": "Layer Id",
             "type": "string"
           },
+          "opacity_percent": {
+            "default": 100,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Opacity Percent",
+            "type": "integer"
+          },
           "optimize": {
             "default": true,
             "title": "Optimize",
@@ -2779,6 +2786,11 @@
             "title": "Description",
             "type": "string"
           },
+          "kind": {
+            "default": "builtin",
+            "title": "Kind",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -2795,6 +2807,31 @@
           "options"
         ],
         "title": "Preset",
+        "type": "object"
+      },
+      "PresetCreate": {
+        "description": "Payload for creating / overwriting an operator preset.",
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": true,
+            "title": "Options",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "options"
+        ],
+        "title": "PresetCreate",
         "type": "object"
       },
       "PreviewResponse": {
@@ -6883,7 +6920,7 @@
     },
     "/presets": {
       "get": {
-        "description": "List the available raster conversion presets.",
+        "description": "List the available raster conversion presets (builtin + user).",
         "operationId": "presets_presets_get",
         "parameters": [
           {
@@ -6946,6 +6983,142 @@
           }
         },
         "summary": "Presets"
+      },
+      "post": {
+        "description": "Persist an operator-defined preset, replacing any same-name entry.",
+        "operationId": "create_preset_presets_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preset"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Preset"
+      }
+    },
+    "/presets/{name}": {
+      "delete": {
+        "description": "Delete an operator-defined preset. Built-ins are read-only.",
+        "operationId": "remove_preset_presets__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Preset"
       }
     },
     "/preview": {

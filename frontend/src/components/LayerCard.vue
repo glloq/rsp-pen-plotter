@@ -18,7 +18,7 @@
 
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { ColorAssignment, LayerInfo } from '../api/client'
+import type { AlgorithmInfo, AlgorithmKind, ColorAssignment, LayerInfo } from '../api/client'
 import { resolveEffectivePalette } from '../lib/effectivePalette'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { useJobStore } from '../stores/job'
@@ -67,6 +67,7 @@ const {
   onSpeed,
   onSimplify,
   onOptimize,
+  onOpacity,
   onColorLabel,
   setPause,
   onPickStyle,
@@ -110,6 +111,34 @@ function onColorReset(payload: { hex: string | null }): void {
     color_assignment: 'auto',
   })
 }
+
+// Group the flat algorithm list by family (fill / lines / mono_stroke)
+// so the advanced dropdown surfaces an organised picker the wiki
+// promises ("full algorithm grid grouped by family"). Each kind maps
+// to one ``<optgroup>``; unknown kinds fall into "other" so a future
+// backend addition doesn't disappear.
+const ALGORITHM_KIND_ORDER: AlgorithmKind[] = ['fill', 'lines', 'mono_stroke']
+const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }>>(() => {
+  const buckets = new Map<string, AlgorithmInfo[]>()
+  for (const algo of algorithms.value) {
+    const key = (algo.kind as string) ?? 'other'
+    const list = buckets.get(key) ?? []
+    list.push(algo)
+    buckets.set(key, list)
+  }
+  const ordered: Array<{ kind: string; algos: AlgorithmInfo[] }> = ALGORITHM_KIND_ORDER.filter(
+    (k) => buckets.has(k),
+  ).map((k) => ({
+    kind: k as string,
+    algos: buckets.get(k)!.sort((a, b) => a.name.localeCompare(b.name)),
+  }))
+  for (const [k, list] of buckets) {
+    if (!ALGORITHM_KIND_ORDER.includes(k as AlgorithmKind)) {
+      ordered.push({ kind: k, algos: list.sort((a, b) => a.name.localeCompare(b.name)) })
+    }
+  }
+  return ordered
+})
 </script>
 
 <template>
@@ -257,6 +286,28 @@ function onColorReset(payload: { hex: string | null }): void {
         />
         {{ t('layers.optimize') }}
       </label>
+      <!-- Opacity slider (preview only): 100 = solid, lower fades the
+           layer to preview dilute-ink / watercolor passes. Persists on
+           the placement via ``updateLayer`` but the G-code generator
+           ignores it — it's a visual cue, not a hardware setting. -->
+      <label class="col-span-2 text-slate-400">
+        <span class="flex items-center gap-1">
+          {{ t('layers.opacity') }}
+          <span class="font-mono text-[10px] text-slate-500"
+            >{{ layer.opacity_percent ?? 100 }}%</span
+          >
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          :value="layer.opacity_percent ?? 100"
+          class="mt-0.5 w-full accent-emerald-500"
+          :data-test="`layer-opacity-${layer.layer_id}`"
+          @input="onOpacity"
+        />
+      </label>
     </div>
 
     <!-- Per-layer colour assignment: shows the snapped ink + lets the
@@ -326,7 +377,11 @@ function onColorReset(payload: { hex: string | null }): void {
       class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-500"
     >
       <!-- Power-user algorithm dropdown stays available for non-bitmap
-           layers (no print-style picker) and behind "Advanced" otherwise. -->
+           layers (no print-style picker) and behind "Advanced" otherwise.
+           Grouped by family (fill / lines / mono_stroke) per the wiki
+           contract: an operator scanning for "another hatching style"
+           lands in the right ``<optgroup>`` instead of paging through 20
+           flat entries. -->
       <label v-if="isBitmapLayer && showAdvanced" class="flex items-center gap-1.5">
         <span>{{ t('layers.renderAlgorithm') }}</span>
         <select
@@ -335,9 +390,15 @@ function onColorReset(payload: { hex: string | null }): void {
           @change="onAlgorithm"
         >
           <option value="">{{ t('layers.defaultAlgo') }}</option>
-          <option v-for="algo in algorithms" :key="algo.name" :value="algo.name">
-            {{ algo.name }}
-          </option>
+          <optgroup
+            v-for="group in algorithmsByKind"
+            :key="group.kind"
+            :label="t(`layers.algorithmKind.${group.kind}`, group.kind)"
+          >
+            <option v-for="algo in group.algos" :key="algo.name" :value="algo.name">
+              {{ algo.name }}
+            </option>
+          </optgroup>
         </select>
       </label>
 
