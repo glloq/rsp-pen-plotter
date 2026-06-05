@@ -33,14 +33,43 @@ const builtinPresets = computed<Preset[]>(() =>
   presets.value.filter((p) => p.kind !== 'user'),
 )
 
-// "Save as preset" only makes sense once the operator has actually
-// configured something — last_options is the snapshot of the converter
-// bundle that drove the latest upload / generate call. Empty / null
-// means there's nothing meaningful to capture.
+// What we capture when the operator clicks "Save". We prefer
+// ``last_options`` (the converter bundle that drove the latest /upload
+// or /generate) — it's the canonical snapshot. When that's empty (the
+// operator opened the editor without re-uploading and only tweaked
+// per-layer settings) we fall back to synthesising one from
+// ``layer_algorithms``: pick the most common algorithm across bitmap
+// layers and use its options. The synthesised shape matches /upload's
+// ``options`` body so a future upload using the saved preset replays
+// the same look.
 const currentOptions = computed<Record<string, unknown> | null>(() => {
-  const opts = job.selectedPlacement?.last_options
-  if (!opts || typeof opts !== 'object') return null
-  return Object.keys(opts).length === 0 ? null : (opts as Record<string, unknown>)
+  const placement = job.selectedPlacement
+  if (!placement) return null
+  const last = placement.last_options
+  if (last && typeof last === 'object' && Object.keys(last).length > 0) {
+    return last as Record<string, unknown>
+  }
+  // Fallback: synthesise from the placement's per-layer algorithm
+  // overrides. ``layer_algorithms`` is keyed by layer_id; we tally the
+  // algorithm choices and take the modal pick. Empty stack means
+  // nothing meaningful to save — return null so the form stays hidden.
+  const algorithms = placement.layer_algorithms ?? {}
+  const tally = new Map<string, number>()
+  let chosenOptions: Record<string, unknown> = {}
+  for (const layerId of Object.keys(algorithms)) {
+    const entry = algorithms[layerId]
+    if (!entry || !entry.algorithm) continue
+    const count = (tally.get(entry.algorithm) ?? 0) + 1
+    tally.set(entry.algorithm, count)
+    chosenOptions = entry.algorithm_options ?? {}
+  }
+  if (tally.size === 0) return null
+  const [bestAlgorithm] = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]!
+  return {
+    algorithm: bestAlgorithm,
+    algorithm_options: chosenOptions,
+    num_colors: placement.layers.length || 1,
+  }
 })
 
 const canSave = computed<boolean>(
@@ -83,8 +112,28 @@ async function onDelete(name: string): Promise<void> {
   }
 }
 
-function onApply(preset: Preset): void {
+async function onApply(preset: Preset): Promise<void> {
+  // Two effects: (1) mark the preset as selected so the next /upload
+  // picks it up; (2) when there's a live placement, apply the preset's
+  // algorithm + options to every bitmap layer in that placement and
+  // trigger a rerender, so the operator sees the new look immediately
+  // instead of having to re-upload. The same code path the V2 modal's
+  // "Generate" uses for policy decisions.
   job.selectedPresetName = preset.name
+  const algorithm = preset.options.algorithm
+  const algorithmOptions = preset.options.algorithm_options
+  if (
+    typeof algorithm === 'string' &&
+    algorithm.length > 0 &&
+    job.selectedPlacement &&
+    job.selectedPlacement.layers.length > 0
+  ) {
+    const opts =
+      algorithmOptions && typeof algorithmOptions === 'object'
+        ? (algorithmOptions as Record<string, unknown>)
+        : {}
+    await job.applyAlgorithmToAllLayers(algorithm, opts)
+  }
   toasts.success(t('presets.appliedToast', { name: preset.name }))
 }
 </script>
@@ -96,10 +145,19 @@ function onApply(preset: Preset): void {
       <span class="preset-panel__hint">{{ t('presets.hint') }}</span>
     </header>
 
-    <!-- Save form. Hidden when there's no current converter snapshot to
-         capture (fresh session, no upload yet). -->
+    <!-- Save form. Hidden when there's nothing capturable yet (no
+         placement, or a placement with no algorithm overrides) — we
+         surface an explanatory hint in that case rather than vanish
+         the affordance silently. -->
+    <p
+      v-if="!currentOptions"
+      class="preset-panel__noop"
+      data-test="preset-panel-noop"
+    >
+      {{ t('presets.nothingToSave') }}
+    </p>
     <form
-      v-if="currentOptions"
+      v-else
       class="preset-panel__save"
       data-test="preset-panel-save"
       @submit.prevent="onSave"
@@ -322,5 +380,14 @@ function onApply(preset: Preset): void {
   color: #94a3b8;
   font-size: 0.75rem;
   margin: 0.3rem 0 0;
+}
+.preset-panel__noop {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px dashed #475569;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.4);
 }
 </style>

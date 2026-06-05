@@ -9,9 +9,10 @@
 // adapted-render SVG, the original placement SVG, loading / error
 // flags, and the sheet geometry, and just hands them down.
 
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useProgressiveStream } from '../../composables/useProgressiveStream'
+import { useJobStore } from '../../stores/job'
 
 export interface SheetOutlineShape {
   widthPct: number
@@ -154,8 +155,16 @@ watch(
       // work and the overlay flicker is annoying. The plain spinner
       // is fine for sub-second loads.
       clearOpenTimer()
+      // Capture the file id at schedule time so a prop swap mid-delay
+      // can't sneak ``undefined`` into the URL.
+      const scheduledFileId = props.streamFileId
       openTimer = window.setTimeout(() => {
-        const url = `/preview/stream?file_id=${encodeURIComponent(props.streamFileId!)}`
+        openTimer = null
+        // Re-check at fire time: the parent may have invalidated the
+        // file (placement removed) during the 350 ms window. Bail
+        // silently — the plain spinner is fine.
+        if (!scheduledFileId || scheduledFileId !== props.streamFileId) return
+        const url = `/preview/stream?file_id=${encodeURIComponent(scheduledFileId)}`
         stream.open(url)
       }, SLOW_PREVIEW_MS)
     } else {
@@ -163,6 +172,71 @@ watch(
       stream.close()
     }
   },
+)
+
+// Vue auto-stops the watch on unmount, but a pending setTimeout would
+// otherwise still fire — opening an EventSource after the composable's
+// onUnmounted close already ran. Cancel the timer too so closing the
+// modal mid-delay leaks nothing.
+onBeforeUnmount(() => {
+  clearOpenTimer()
+})
+
+// =========================================================================
+// Per-layer opacity overlay (preview-only).
+// The job store mutates ``layer.opacity_percent`` when the operator drags
+// the LayerCard slider, but the backend's /rerender doesn't consume it —
+// opacity is intentionally a *preview* hint, not a hardware parameter.
+// We apply it client-side by walking the v-html'd SVG and setting
+// ``stroke-opacity`` on each ``<g class="layer color-XXX">`` group, then
+// re-apply whenever any layer's opacity_percent changes.
+
+const job = useJobStore()
+const previewRoot = ref<HTMLElement | null>(null)
+
+function applyOpacityOverlay(): void {
+  const root = previewRoot.value
+  if (!root) return
+  const svg = root.querySelector('svg')
+  if (!svg) return
+  // Build a layerId → opacity map so we can do one DOM walk instead of
+  // N queries. Defaults the implicit 100 % case so groups whose layer
+  // we don't recognise stay at 1.0 instead of inheriting a stale value
+  // left over from a previous SVG.
+  const opacityById = new Map<string, number>()
+  for (const layer of job.layers) {
+    const pct = layer.opacity_percent ?? 100
+    opacityById.set(layer.layer_id, Math.max(0, Math.min(100, pct)) / 100)
+  }
+  // The bitmap / vector / text pipelines all label each per-layer
+  // group with ``inkscape:label="color-XXXXXX"`` (= layer_id). The
+  // namespaced attribute selector is fragile across parsers (HTML
+  // vs XML mode), so we walk every <g> imperatively and filter on
+  // the attribute presence. Reset to 1.0 when the group's layer
+  // isn't in the active set so a stale value from the previous SVG
+  // doesn't bleed through.
+  const groups = svg.getElementsByTagName('g')
+  for (const g of Array.from(groups)) {
+    const label = g.getAttribute('inkscape:label')
+    if (!label) continue
+    const opacity = opacityById.get(label)
+    g.style.opacity = opacity === undefined ? '1' : String(opacity)
+  }
+}
+
+// Re-apply whenever the SVG content changes or any layer's
+// opacity_percent value moves.
+watch(
+  () => [props.plotSvg, props.originalSvg, viewMode.value],
+  () => {
+    // The v-html commit happens during the same flush; defer to the
+    // next microtask so the DOM is in place when we walk it.
+    void Promise.resolve().then(applyOpacityOverlay)
+  },
+)
+watch(
+  () => job.layers.map((l) => `${l.layer_id}:${l.opacity_percent ?? 100}`).join('|'),
+  () => applyOpacityOverlay(),
 )
 
 const streamLabel = computed<string>(() => {
@@ -206,6 +280,7 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
         <!-- eslint-disable-next-line vue/no-v-html -->
         <div
           v-if="displayedSvg"
+          ref="previewRoot"
           class="preview-svg"
           :class="{ 'is-stale': loading }"
           data-test="modal-v2-preview-svg"

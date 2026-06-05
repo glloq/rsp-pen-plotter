@@ -102,12 +102,16 @@ different `min_distance_mm` for stippling density.
 
 ## Saved presets
 
-Save the entire layer × algorithm × options vector with **Save as
-preset**. Presets appear in `GET /presets` (and the dropdown in either
-editor) so the same look applies to a new file in one click.
+The Expert panel's *Presets* row carries built-in styles ("Halftone",
+"Stippling", "Fine line", "Posterized") plus everything you've saved
+yourself. Click a chip to apply it to every layer of the current
+placement (a fresh `/rerender` follows immediately). Use **Save as
+preset** to snapshot the active placement's algorithm + options bundle
+so the same look applies to a new file in one click.
 
-Presets are versioned by content hash, so updating one doesn't
-retroactively change past plots.
+Built-in presets are read-only; user-saved presets carry a small `×`
+button to delete them. The store lives in JSON next to the SQLite DB
+(`data/user_presets.json`) and is capped at 64 entries.
 
 ## Shortcuts
 

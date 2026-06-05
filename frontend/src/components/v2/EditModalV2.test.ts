@@ -202,4 +202,23 @@ describe('EditModalV2 (beginner single-screen)', () => {
     expect(wrapper.emitted('cancel')).toBeTruthy()
     wrapper.unmount()
   })
+
+  it('hides the intent grid and mounts the expert panel when uiMode is expert', async () => {
+    // The header toggle / "Ouvrir l'éditeur complet" button flips
+    // uiMode.mode to 'expert'; the modal must respond by swapping its
+    // body to the per-layer LayersSection + PresetPanel surface and
+    // hiding the assisted intent / palette / style-stack fieldsets.
+    // Without this swap, the bottom-half audit found, the toggle was a
+    // placeholder. Lock the behaviour in a test so a future refactor
+    // can't silently regress.
+    const { useUiModeStore } = await import('../../stores/uiMode')
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    const uiMode = useUiModeStore()
+    uiMode.setMode('expert')
+    await nextTick()
+    expect(wrapper.find('[data-test="modal-v2-expert-panel"]').exists()).toBe(true)
+    // Intent cards must be hidden in expert mode — they belong to the
+    // assisted single-screen flow.
+    expect(wrapper.find('[data-test="intent-balanced"]').exists()).toBe(false)
+  })
 })

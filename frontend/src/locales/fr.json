@@ -684,6 +684,12 @@
     "simplify": "Simplifier (mm)",
     "optimize": "Optimiser",
     "opacity": "Opacité (aperçu)",
+    "algorithmKind": {
+      "fill": "Remplissage",
+      "lines": "Lignes",
+      "mono_stroke": "Trait monochrome",
+      "other": "Autre"
+    },
     "paths": "tracés",
     "kindText": "Calque texte",
     "kindImage": "Calque image (raster vectorisé)",
@@ -783,12 +789,13 @@
     "saving": "Enregistrement…",
     "savedToast": "Préréglage enregistré",
     "deletedToast": "Préréglage « {name} » supprimé",
-    "appliedToast": "Préréglage « {name} » sélectionné — appliqué au prochain import",
+    "appliedToast": "Préréglage « {name} » appliqué",
     "builtin": "Intégrés",
     "user": "Mes préréglages",
     "delete": "Supprimer ce préréglage",
     "deleteFor": "Supprimer le préréglage {name}",
-    "empty": "Aucun préréglage disponible."
+    "empty": "Aucun préréglage disponible.",
+    "nothingToSave": "Sélectionne une placement et règle au moins un algorithme par calque pour pouvoir l'enregistrer comme préréglage."
   },
   "preflight": {
     "button": "Vérification pré-tracé",

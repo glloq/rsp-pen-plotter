@@ -684,6 +684,12 @@
     "simplify": "Simplify (mm)",
     "optimize": "Optimize",
     "opacity": "Opacity (preview)",
+    "algorithmKind": {
+      "fill": "Fill",
+      "lines": "Lines",
+      "mono_stroke": "Mono stroke",
+      "other": "Other"
+    },
     "paths": "paths",
     "kindText": "Text layer",
     "kindImage": "Image layer (vectorized raster)",
@@ -783,12 +789,13 @@
     "saving": "Saving…",
     "savedToast": "Preset saved",
     "deletedToast": "Preset \"{name}\" deleted",
-    "appliedToast": "Preset \"{name}\" selected — applied on next upload",
+    "appliedToast": "Preset \"{name}\" applied",
     "builtin": "Built-in",
     "user": "Your presets",
     "delete": "Delete this preset",
     "deleteFor": "Delete preset {name}",
-    "empty": "No presets available."
+    "empty": "No presets available.",
+    "nothingToSave": "Pick a placement and set at least one per-layer algorithm to save it as a preset."
   },
   "preflight": {
     "button": "Preflight check",
