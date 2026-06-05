@@ -23,6 +23,12 @@ export interface SheetOutlineShape {
   labelW: number
   labelH: number
   isPortrait: boolean
+  /** Real sheet width in mm — used to scale the artwork so the same
+   *  drawing visibly shrinks when the operator picks a bigger paper
+   *  format (and overflows when picking a smaller one). */
+  widthMm: number
+  /** Real sheet height in mm — companion to ``widthMm``. */
+  heightMm: number
 }
 
 const props = defineProps<{
@@ -45,23 +51,43 @@ const props = defineProps<{
    *  Optional — when omitted, the pane falls back to the plain
    *  spinner. */
   streamFileId?: string | null
+  /** Artwork's physical dimensions in mm. Used together with
+   *  ``sheet.widthMm`` / ``heightMm`` to scale the SVG so it sits
+   *  inside the chosen paper format at its real footprint instead
+   *  of stretching to fill the pane. Omitted → fall back to the
+   *  legacy "fit to pane" behaviour for documents that don't carry
+   *  physical dimensions yet. */
+  artworkWidthMm?: number | null
+  artworkHeightMm?: number | null
 }>()
 
 const { t } = useI18n()
 
-// View mode: 'plot' = adapted render, 'original' = source placement.
-// Hidden behind a button that only appears once both versions exist.
-const viewMode = ref<'plot' | 'original'>('plot')
+// View mode: 'plot' = adapted render, 'source' = source placement,
+// 'split' = compare slider that wipes between source and plot. The
+// V1 modal had this three-way toggle; restoring it lets the operator
+// verify what the conversion did to the photo without leaving the
+// modal.
+type PreviewMode = 'plot' | 'source' | 'split'
+const viewMode = ref<PreviewMode>('plot')
+const canShowOriginal = computed<boolean>(() => Boolean(props.originalSvg))
 const canCompareOriginal = computed<boolean>(
   () => Boolean(props.originalSvg) && Boolean(props.plotSvg),
 )
+function setMode(mode: PreviewMode): void {
+  if (mode === 'source' && !canShowOriginal.value) return
+  if (mode === 'split' && !canCompareOriginal.value) return
+  viewMode.value = mode
+}
+// The legacy single-button toggle is gone; the template renders a
+// three-way Result / Source / Compare segmented control instead.
+
+// Pick which SVG the standalone Result / Source modes show; Split mode
+// stacks both so it consumes the props directly in the template.
 const displayedSvg = computed<string | null>(() => {
-  if (viewMode.value === 'original') return props.originalSvg ?? props.plotSvg ?? null
+  if (viewMode.value === 'source') return props.originalSvg ?? props.plotSvg ?? null
   return props.plotSvg ?? props.originalSvg ?? null
 })
-function toggleViewMode(): void {
-  viewMode.value = viewMode.value === 'plot' ? 'original' : 'plot'
-}
 
 // Zoom / pan — same gesture vocabulary as the rest of the app
 // (wheel zooms, drag pans, double-click recentres). The view is
@@ -161,6 +187,89 @@ const sheetStyle = computed<{ width: string; height: string } | null>(() => {
   }
   return { width: `${Math.round(w)}px`, height: `${Math.round(h)}px` }
 })
+
+// =========================================================================
+// Artwork-inside-sheet sizing.
+// The previous layout rendered the SVG and the sheet outline as
+// independent overlays — picking A4 vs. A3 left the artwork at the
+// same on-screen size and made it overflow the paper. The fix sizes
+// the artwork as a fraction of the sheet (artworkMm / sheetMm), so a
+// 100 × 100 mm drawing visibly fills half of an A4 portrait (210
+// × 297 mm) and barely covers a quarter of A3. Falls back to "fill the
+// sheet" when the artwork's own dimensions aren't known yet (typically
+// during the first /preview round-trip on upload).
+const artworkStyle = computed<{ width: string; height: string } | null>(() => {
+  if (!props.sheet) return null
+  const sw = props.sheet.widthMm
+  const sh = props.sheet.heightMm
+  if (!sw || !sh) return null
+  const aw = props.artworkWidthMm ?? sw
+  const ah = props.artworkHeightMm ?? sh
+  // Express the artwork box as a percentage of the sheet so the inline
+  // sheet container (already sized in pixels by ``sheetStyle``) does
+  // the unit conversion for us. Clamp at 100 % so an artwork bigger
+  // than the sheet doesn't bleed into the surrounding pane — instead
+  // it visibly fills the sheet and the rest of the artwork sits behind
+  // the overflow boundary (operator can see the clipping in the
+  // dashed sheet border).
+  const wPct = Math.min(100, (aw / sw) * 100)
+  const hPct = Math.min(100, (ah / sh) * 100)
+  return { width: `${wPct}%`, height: `${hPct}%` }
+})
+
+// =========================================================================
+// Split / compare slider.
+// V1 had a vertical reveal: dragging the handle swept between the
+// source preview (left half) and the converted result (right half).
+// V2 inherits the same mechanic so the operator can verify what the
+// algorithm did to the photo without leaving the modal.
+const splitPercent = ref<number>(50)
+const splitDragging = ref<boolean>(false)
+let splitPaneRect: DOMRect | null = null
+
+function onSplitGrab(event: PointerEvent): void {
+  if (!paneEl.value) return
+  event.stopPropagation()
+  event.preventDefault()
+  splitDragging.value = true
+  splitPaneRect = paneEl.value.getBoundingClientRect()
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  updateSplit(event)
+}
+function onSplitMove(event: PointerEvent): void {
+  if (!splitDragging.value) return
+  updateSplit(event)
+}
+function onSplitRelease(event: PointerEvent): void {
+  if (!splitDragging.value) return
+  splitDragging.value = false
+  splitPaneRect = null
+  ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
+}
+function updateSplit(event: PointerEvent): void {
+  if (!splitPaneRect) return
+  const x = event.clientX - splitPaneRect.left
+  const pct = (x / splitPaneRect.width) * 100
+  splitPercent.value = Math.max(0, Math.min(100, pct))
+}
+
+// Reset to 50/50 when switching INTO split mode so the operator gets a
+// clean fresh sweep instead of inheriting wherever the last drag ended
+// (often 0 % or 100 %, which hides one side entirely).
+watch(viewMode, (next, prev) => {
+  if (next === 'split' && prev !== 'split') splitPercent.value = 50
+})
+
+// Clip-paths for the split mode: the plot SVG is revealed from the
+// right edge inward to ``splitPercent``; the source SVG is shown only
+// in the complementary left band. Implemented with ``clip-path`` so
+// each half stays at full opacity and stacking is just z-order.
+const splitPlotClip = computed<string>(
+  () => `inset(0 0 0 ${splitPercent.value}%)`,
+)
+const splitSourceClip = computed<string>(
+  () => `inset(0 ${100 - splitPercent.value}% 0 0)`,
+)
 
 onMounted(() => {
   if (!paneEl.value || typeof ResizeObserver === 'undefined') return
@@ -321,44 +430,136 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
       @pointercancel="onPanEnd"
       @dblclick="resetView"
     >
-      <div
-        v-if="sheet && sheetStyle"
-        class="sheet-outline"
-        :style="sheetStyle"
-        aria-hidden="true"
-        data-test="modal-v2-sheet-outline"
-      >
-        <span class="sheet-caption">
-          {{ t('v2.modal.sheetCaptionLabel') }} ·
-          {{ sheet.labelW }} × {{ sheet.labelH }} mm
-        </span>
-      </div>
-      <div class="preview-viewport" :style="contentStyle">
-        <!-- eslint-disable-next-line vue/no-v-html -->
+      <!-- Zoom/pan stage. Centres the sheet (or the legacy
+           unbounded SVG fallback) inside the pane and applies the
+           ``contentStyle`` transform so wheel/drag gestures still
+           work after the artwork moved inside the sheet rectangle. -->
+      <div class="preview-stage" :style="contentStyle">
+        <!-- Sheet-as-canvas: the artwork lives INSIDE the dashed
+             rectangle now, so picking a bigger paper visibly shrinks
+             the drawing and picking a smaller one makes it overflow
+             the border. Drops back to "fill the pane" when no sheet
+             is selected so the operator still sees something. -->
         <div
-          v-if="displayedSvg"
-          ref="previewRoot"
-          class="preview-svg"
-          :class="{ 'is-stale': loading }"
-          data-test="modal-v2-preview-svg"
-          v-html="displayedSvg"
-        />
+          v-if="sheet && sheetStyle"
+          class="sheet-outline"
+          :style="sheetStyle"
+          data-test="modal-v2-sheet-outline"
+        >
+          <span class="sheet-caption" aria-hidden="true">
+            {{ t('v2.modal.sheetCaptionLabel') }} ·
+            {{ sheet.labelW }} × {{ sheet.labelH }} mm
+          </span>
+          <!-- Artwork box sized as a percentage of the sheet so its
+               footprint reflects the drawing's real mm size. -->
+          <div
+            v-if="artworkStyle"
+            ref="previewRoot"
+            class="artwork-box"
+            :style="artworkStyle"
+            data-test="modal-v2-artwork-box"
+          >
+            <!-- Plot (result) layer — always rendered; split mode
+                 clips it from the left so the source shows on that
+                 side. -->
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div
+              v-if="props.plotSvg"
+              class="artwork-svg artwork-svg--plot"
+              :class="{ 'is-stale': loading, 'is-hidden': viewMode === 'source' }"
+              :style="viewMode === 'split' ? { clipPath: splitPlotClip } : {}"
+              data-test="modal-v2-preview-svg"
+              v-html="props.plotSvg"
+            />
+            <!-- Source (original) layer — rendered only when needed so
+                 the DOM stays light when the operator is on plot-only. -->
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div
+              v-if="props.originalSvg && (viewMode === 'source' || viewMode === 'split')"
+              class="artwork-svg artwork-svg--source"
+              :style="viewMode === 'split' ? { clipPath: splitSourceClip } : {}"
+              data-test="modal-v2-preview-source"
+              v-html="props.originalSvg"
+            />
+          </div>
+          <!-- Vertical split-handle. Drag it left/right to sweep the
+               reveal across the artwork. Only rendered in split mode
+               so the handle never floats in plot-only or source-only. -->
+          <div
+            v-if="viewMode === 'split'"
+            class="split-handle"
+            :style="{ left: `${splitPercent}%` }"
+            data-test="modal-v2-split-handle"
+            @pointerdown="onSplitGrab"
+            @pointermove="onSplitMove"
+            @pointerup="onSplitRelease"
+            @pointercancel="onSplitRelease"
+          >
+            <span class="split-handle__grip" aria-hidden="true">⇆</span>
+          </div>
+        </div>
+
+        <!-- Unbounded fallback when no sheet is picked yet. The
+             ``modal-v2-preview-svg`` data-test mirrors the
+             sheet-bounded equivalent above so callers don't have to
+             branch on the layout when asserting presence. -->
+        <div v-else class="preview-viewport">
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <div
+            v-if="displayedSvg"
+            ref="previewRoot"
+            class="preview-svg"
+            :class="{ 'is-stale': loading }"
+            data-test="modal-v2-preview-svg"
+            v-html="displayedSvg"
+          />
+        </div>
       </div>
 
-      <button
-        v-if="canCompareOriginal"
-        type="button"
-        class="view-toggle"
-        :class="{ 'is-original': viewMode === 'original' }"
-        :aria-pressed="viewMode === 'original'"
-        data-test="modal-v2-view-toggle"
+      <!-- Three-way mode toggle: Result / Original / Compare. The
+           V1 modal exposed the same set; restoring it keeps the
+           operator able to verify what the conversion did to the
+           source pixels. -->
+      <div
+        v-if="canShowOriginal"
+        class="mode-toggle"
+        data-test="modal-v2-mode-toggle"
         @pointerdown.stop
         @wheel.stop
         @dblclick.stop
-        @click="toggleViewMode"
       >
-        {{ viewMode === 'plot' ? t('v2.modal.viewOriginal') : t('v2.modal.viewPlot') }}
-      </button>
+        <button
+          type="button"
+          :class="{ active: viewMode === 'plot' }"
+          :aria-pressed="viewMode === 'plot'"
+          :title="t('v2.modal.viewPlot')"
+          data-test="modal-v2-mode-plot"
+          @click="setMode('plot')"
+        >
+          {{ t('v2.modal.viewPlot') }}
+        </button>
+        <button
+          type="button"
+          :class="{ active: viewMode === 'source' }"
+          :aria-pressed="viewMode === 'source'"
+          :title="t('v2.modal.viewOriginal')"
+          data-test="modal-v2-mode-source"
+          @click="setMode('source')"
+        >
+          {{ t('v2.modal.viewOriginal') }}
+        </button>
+        <button
+          type="button"
+          :class="{ active: viewMode === 'split' }"
+          :aria-pressed="viewMode === 'split'"
+          :disabled="!canCompareOriginal"
+          :title="t('v2.modal.viewCompare')"
+          data-test="modal-v2-mode-split"
+          @click="setMode('split')"
+        >
+          {{ t('v2.modal.viewCompare') }}
+        </button>
+      </div>
 
       <div
         class="zoom"
@@ -441,7 +642,10 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
 <style scoped>
 .preview {
   position: relative;
-  height: clamp(220px, 42vh, 360px);
+  /* Operator asked for the preview to dominate the modal: bumped the
+     clamp upper bound so the pane scales with the available viewport
+     while still respecting the modal's own 92vh ceiling. */
+  height: clamp(320px, 62vh, 720px);
   background: repeating-conic-gradient(#f1f5f9 0% 25%, white 0% 50%) 0 / 20px 20px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -450,13 +654,24 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   justify-content: center;
   overflow: hidden;
 }
-.preview-viewport {
+/* Stage holds the centring + zoom/pan transform. The sheet sits in
+   the middle, so applying transform here scales the whole sheet (and
+   the artwork inside it) without breaking the absolute centring. */
+.preview-stage {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   will-change: transform;
+}
+.preview-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .preview-svg {
   width: 100%;
@@ -475,6 +690,115 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   max-height: 100%;
   height: auto;
   width: auto;
+}
+/* Artwork box: sits at top-left of the sheet, sized to the drawing's
+   real mm dimensions as a percentage of the sheet. Anchored top-left
+   so the operator can read the artwork's actual position on the
+   paper (we don't recentre to make a small drawing look big). */
+.artwork-box {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+}
+.artwork-svg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease;
+}
+.artwork-svg.is-stale {
+  opacity: 0.45;
+}
+.artwork-svg.is-hidden {
+  display: none;
+}
+.artwork-svg :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.artwork-svg--source :deep(svg),
+.artwork-svg--source :deep(img) {
+  /* Source SVG / fallback original may have its own background; keep
+     it readable against the sheet. */
+  background: transparent;
+}
+/* Split-handle: vertical reveal slider that sweeps between source
+   and plot in compare mode. Lives at the sheet level so it tracks
+   the sheet's transform (zoom/pan affect it together with the
+   artwork). */
+.split-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #1f6feb;
+  cursor: ew-resize;
+  z-index: 2;
+  touch-action: none;
+  transform: translateX(-1px);
+}
+.split-handle__grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  background: #1f6feb;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: bold;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+/* Mode toggle (Result / Source / Compare). Lives in the top-right
+   corner of the pane so it doesn't collide with the existing zoom
+   controls in the top-left or the gesture-hint at the bottom. */
+.mode-toggle {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  overflow: hidden;
+  z-index: 3;
+}
+.mode-toggle button {
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+.mode-toggle button + button {
+  border-left: 1px solid #cbd5e1;
+}
+.mode-toggle button.active {
+  background: #1f6feb;
+  color: white;
+}
+.mode-toggle button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.mode-toggle button:hover:not(.active):not(:disabled) {
+  background: #f1f5f9;
+}
+.mode-toggle button:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
 }
 .preview-overlay {
   position: absolute;
@@ -576,17 +900,18 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
 }
 
 .sheet-outline {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  /* Width/height come from the script setup's ``sheetStyle`` computed,
+  position: relative;
+  /* Width/height come from the script setup's ``sheetStyle`` computed
      which derives them from the ResizeObserver-tracked pane size so
-     the rectangle stays at the operator's chosen aspect ratio. */
+     the rectangle stays at the operator's chosen aspect ratio. The
+     ``.preview-stage`` flex parent handles centring. */
   border: 1px dashed #94a3b8;
   background: rgba(255, 255, 255, 0.4);
   border-radius: 2px;
-  pointer-events: none;
+  /* Pointer events ON so the split-handle inside the sheet can be
+     grabbed; the artwork-box has its own ``pointer-events: none``
+     when needed. */
+  pointer-events: auto;
   z-index: 0;
 }
 .sheet-caption {

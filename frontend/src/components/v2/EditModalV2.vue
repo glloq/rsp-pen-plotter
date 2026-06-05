@@ -331,6 +331,33 @@ const inventoryNameByHex = computed(() => {
   return map
 })
 const inkSwatches = computed<InkSwatch[]>(() => {
+  // Prefer the LIVE /preview palette when the V1 cards have just
+  // produced one (expert mode tweaks): it reflects what the
+  // operator is actually about to commit on Apply. Falls back to
+  // the placement's committed layers so assisted mode + fresh
+  // sessions keep their chip strip. Without this the swatches
+  // showed the previous /upload's colours even after the operator
+  // changed k-means settings in the Style tab — exactly the "couleurs
+  // pas à jour" the operator flagged.
+  const livePalette = fileManager.previewResult?.value?.palette ?? null
+  if (uiMode.isExpert && livePalette && livePalette.length > 0) {
+    return livePalette.map((entry, idx) => {
+      const hex = entry.color
+      const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
+      const name = namedMatch ?? hex
+      // Synthesise a stable layerId so the v-for keys stay stable
+      // across renders. The /preview palette doesn't carry layer
+      // ids; we tag them by index in cluster order.
+      return {
+        layerId: `preview-${idx}-${hex.replace('#', '')}`,
+        hex,
+        name,
+        displayName: name,
+        displayHex: namedMatch ? hex : '',
+        isFallback: false,
+      }
+    })
+  }
   const layers = job.selectedPlacement?.layers ?? []
   const ordered = [...layers].sort((a, b) => a.draw_order - b.draw_order)
   return ordered.map((layer) => {
@@ -491,7 +518,9 @@ const preflightItems = computed<PreflightItem[]>(() => [
     onFix: requiredPenCount.value > 0 ? openMagazine : null,
   },
 ])
-const allPreflightOk = computed<boolean>(() => preflightItems.value.every((i) => i.ok))
+// Header-chip variant doesn't aggregate — each chip carries its own
+// colour. The previous "all-OK" highlight is dropped along with the
+// body-level preflight block.
 
 // ============================ SHEET OUTLINE ============================
 // Translucent rectangle drawn behind the artwork at the active sheet's
@@ -500,15 +529,14 @@ const allPreflightOk = computed<boolean>(() => preflightItems.value.every((i) =>
 // plan view. Sized to fit the preview pane with a margin; null when no
 // sheet is selected so the template skips the overlay entirely.
 interface SheetOutline {
-  // Real aspect ratio (w/h). The pane uses CSS ``aspect-ratio`` to
-  // render the rectangle, so percentage sizing of width vs. height
-  // doesn't distort the shape when the pane itself isn't square. The
-  // outline shrinks to ``max-width: 92%; max-height: 92%`` of the
-  // pane, whichever bound hits first.
   aspectRatio: number
   labelW: number
   labelH: number
   isPortrait: boolean
+  // Real sheet width/height in mm — forwarded to EditPreviewPane so
+  // the artwork inside the sheet is sized as ``artwork_mm / sheet_mm``.
+  widthMm: number
+  heightMm: number
 }
 const sheetOutline = computed<SheetOutline | null>(() => {
   const sheet = ui.previewSheet
@@ -517,6 +545,8 @@ const sheetOutline = computed<SheetOutline | null>(() => {
   const h = sheet.height_mm
   if (!w || !h) return null
   return {
+    widthMm: w,
+    heightMm: h,
     aspectRatio: w / h,
     labelW: Math.round(w),
     labelH: Math.round(h),
@@ -533,6 +563,12 @@ function isLayerVisible(layerId: string): boolean {
   return job.isVisible(layerId)
 }
 function toggleLayerVisibility(layerId: string): void {
+  // Live /preview palette entries carry synthesised ids ("preview-N-…")
+  // because the response doesn't enumerate layers. They aren't real
+  // placement layers so the visibility map can't act on them — skip
+  // the toggle rather than write a phantom key the rest of the store
+  // would never read.
+  if (layerId.startsWith('preview-')) return
   const next = !isLayerVisible(layerId)
   job.setVisibility(layerId, next)
   // The resolver inputs haven't changed; only the render needs a
@@ -777,11 +813,69 @@ watch(
       :aria-label="t('v2.modal.title')"
     >
       <header class="modal-v2__header">
-        <h2>{{ t('v2.modal.title') }}</h2>
-        <!-- Mode toggle is only an *exit* affordance, useful once the
-             operator has actually crossed into expert. In assisted mode
-             the footer "Ouvrir l'éditeur complet →" link is enough; a
-             second redundant toggle just adds noise for beginners. -->
+        <h2 class="modal-v2__title">{{ t('v2.modal.title') }}</h2>
+
+        <!-- Preflight + cost chips live in the header so the operator
+             can read "am I ready, what will it cost?" at a glance
+             without scrolling. ``data-test`` ids match the previous
+             chips so existing Playwright selectors keep working. -->
+        <ul
+          v-if="hasPlacement"
+          class="modal-v2__header-chips"
+          :aria-label="t('v2.modal.preflightLabel')"
+        >
+          <li v-for="item in preflightItems" :key="item.id">
+            <button
+              v-if="!item.ok && item.onFix"
+              type="button"
+              class="modal-v2__hchip is-warn is-actionable"
+              :data-test="`modal-v2-preflight-${item.id}`"
+              :title="t('v2.modal.preflightFix')"
+              @click="item.onFix"
+            >
+              <span aria-hidden="true">⚠</span>
+              <span>{{ item.label }}</span>
+            </button>
+            <span
+              v-else
+              class="modal-v2__hchip"
+              :class="item.ok ? 'is-ok' : 'is-warn'"
+              :data-test="`modal-v2-preflight-${item.id}`"
+            >
+              <span aria-hidden="true">{{ item.ok ? '✓' : '⚠' }}</span>
+              <span>{{ item.label }}</span>
+            </span>
+          </li>
+          <li v-if="hasEstimate">
+            <span
+              class="modal-v2__hchip is-info"
+              data-test="modal-v2-estimate-time"
+              :title="t('v2.modal.estimateLabel')"
+            >
+              <span aria-hidden="true">⏱</span>
+              <span>{{ formatDuration(estimatedDurationSeconds) }}</span>
+            </span>
+          </li>
+          <li v-if="hasEstimate">
+            <span
+              class="modal-v2__hchip is-info"
+              data-test="modal-v2-estimate-length"
+            >
+              <span aria-hidden="true">📏</span>
+              <span>{{ formatLengthMeters(estimatedLengthMm) }} m</span>
+            </span>
+          </li>
+          <li v-if="requiredPenCount > 0">
+            <span
+              class="modal-v2__hchip is-info"
+              data-test="modal-v2-estimate-pens"
+            >
+              <span aria-hidden="true">🖊</span>
+              <span>{{ requiredPenCount }}</span>
+            </span>
+          </li>
+        </ul>
+
         <AssistantModeToggle v-if="uiMode.isExpert" />
         <button
           type="button"
@@ -840,20 +934,15 @@ watch(
           </button>
         </div>
 
-        <!-- Two-column layout in expert mode: preview pinned left,
-             controls scroll on the right. Assisted mode stays as a
-             single column so the wizard reads top-to-bottom. -->
-        <div
-          class="modal-v2__layout"
-          :class="{ 'is-split': uiMode.isExpert }"
-          data-test="modal-v2-layout"
-        >
-          <!-- LEFT column: preview pane + everything that describes
-               what the operator is about to plot (sheet format, file
-               name, cost, preflight, inks). Stays sticky in expert
-               mode so it remains visible while the operator scrolls
-               through tabs on the right. -->
-          <div class="modal-v2__left">
+        <!-- Single-column layout: preview dominates the top of the
+             modal, everything else condenses underneath. The operator
+             wanted maximum preview real estate; the tabs / sheet
+             picker / inks / footer all sit beneath it in a compact
+             stack. -->
+        <div class="modal-v2__layout" data-test="modal-v2-layout">
+          <!-- Preview block: preview pane + sheet picker. Sits at the
+               top so the artwork is always the first thing on screen. -->
+          <div class="modal-v2__preview-block">
         <!-- Live preview pane (zoom, pan, sheet outline, view toggle,
              gesture hint). Extracted to a subcomponent so this modal
              stays focused on decision-making. -->
@@ -864,6 +953,8 @@ watch(
           :error="previewError"
           :sheet="sheetOutline"
           :stream-file-id="job.selectedPlacement?.library_file_id ?? null"
+          :artwork-width-mm="job.selectedPlacement?.width_mm ?? null"
+          :artwork-height-mm="job.selectedPlacement?.height_mm ?? null"
         />
 
         <!-- Sheet picker: A6/A5/A4/A3/A2/Letter + portrait/landscape.
@@ -884,84 +975,8 @@ watch(
              count come from the placement's layers; the compatibility
              badge counts inks the resolver picked that aren't loaded in
              the magazine, with a one-click shortcut to fix it. -->
-        <div
-          v-if="hasEstimate || requiredPenCount > 0"
-          class="modal-v2__estimate"
-          data-test="modal-v2-estimate"
-          :aria-label="t('v2.modal.estimateLabel')"
-        >
-          <span class="modal-v2__estimate-label">{{ t('v2.modal.estimateLabel') }}</span>
-          <ul class="modal-v2__estimate-chips">
-            <li
-              v-if="hasEstimate"
-              class="modal-v2__estimate-chip"
-              data-test="modal-v2-estimate-time"
-            >
-              <span aria-hidden="true" class="modal-v2__estimate-icon">⏱</span>
-              <span>{{
-                t('v2.modal.estimateTime', { value: formatDuration(estimatedDurationSeconds) })
-              }}</span>
-            </li>
-            <li
-              v-if="hasEstimate"
-              class="modal-v2__estimate-chip"
-              data-test="modal-v2-estimate-length"
-            >
-              <span aria-hidden="true" class="modal-v2__estimate-icon">📏</span>
-              <span>{{
-                t('v2.modal.estimateLength', { meters: formatLengthMeters(estimatedLengthMm) })
-              }}</span>
-            </li>
-            <li
-              v-if="requiredPenCount > 0"
-              class="modal-v2__estimate-chip"
-              data-test="modal-v2-estimate-pens"
-            >
-              <span aria-hidden="true" class="modal-v2__estimate-icon">🖊</span>
-              <span>{{ t('v2.modal.estimatePens', { count: requiredPenCount }) }}</span>
-            </li>
-          </ul>
-        </div>
+        <!-- Cost + preflight chips moved to the header. -->
 
-        <!-- Plain-language "ready to plot?" checklist. Aggregates the
-             four signals an operator otherwise has to hunt for (file,
-             machine, sheet, inks) into a single line of green ticks
-             and amber warnings. Warnings whose fix lives inside a
-             panel are clickable shortcuts. Positioned right under the
-             cost row — readiness is the second thing a beginner asks
-             after "what will this look like?" -->
-        <div
-          class="modal-v2__preflight"
-          :class="{ 'is-all-ok': allPreflightOk }"
-          data-test="modal-v2-preflight"
-          :aria-label="t('v2.modal.preflightLabel')"
-        >
-          <span class="modal-v2__preflight-label">{{ t('v2.modal.preflightLabel') }}</span>
-          <ul class="modal-v2__preflight-list">
-            <li v-for="item in preflightItems" :key="item.id">
-              <button
-                v-if="!item.ok && item.onFix"
-                type="button"
-                class="modal-v2__preflight-chip is-warn is-actionable"
-                :data-test="`modal-v2-preflight-${item.id}`"
-                :title="t('v2.modal.preflightFix')"
-                @click="item.onFix"
-              >
-                <span aria-hidden="true">⚠</span>
-                <span>{{ item.label }}</span>
-              </button>
-              <span
-                v-else
-                class="modal-v2__preflight-chip"
-                :class="item.ok ? 'is-ok' : 'is-warn'"
-                :data-test="`modal-v2-preflight-${item.id}`"
-              >
-                <span aria-hidden="true">{{ item.ok ? '✓' : '⚠' }}</span>
-                <span>{{ item.label }}</span>
-              </span>
-            </li>
-          </ul>
-        </div>
 
         <!-- Per-layer ink swatches, in draw order. Each chip is a
              one-click visibility toggle (👁 / strike-through) so the
@@ -1025,13 +1040,13 @@ watch(
         </div>
 
           </div>
-          <!-- end LEFT column -->
+          <!-- end preview block -->
 
-          <!-- RIGHT column: settings / controls. Single-pane in
-               assisted (intent + palette + custom-style stack),
-               tab-stripped in expert (Image / SVG / Style / Text /
-               Layers + PresetPanel). -->
-          <div class="modal-v2__right">
+          <!-- Controls block: condensed under the preview. In
+               assisted mode this is the intent + palette + custom-
+               style stack; in expert mode it's the V1 tab strip
+               (Image / SVG / Style / Text / Layers + PresetPanel). -->
+          <div class="modal-v2__controls-block">
         <!-- Expert surface: V1-style tab strip (Image / SVG / Style /
              Text / Layers) restored from the audit. Each tab carries
              the source-level cards (brightness/contrast, segmentation
@@ -1120,7 +1135,7 @@ watch(
           {{ t('v2.modal.resolverError', { message: resolveError }) }}
         </p>
           </div>
-          <!-- end RIGHT column -->
+          <!-- end controls block -->
         </div>
         <!-- end .modal-v2__layout -->
       </template>
@@ -1261,79 +1276,111 @@ watch(
    for both preview (left) and controls (right). The light shell
    keeps the preview visually dominant; LayersSection / PresetPanel
    carry their own dark surface inside the right column. */
+/* Expert mode widens the modal a bit so the V1 tab cards fit, but
+   not so much that the controls drift far from the preview. The
+   preview pane caps at ``clamp(320px, 62vh, 720px)`` inside the
+   sheet-as-canvas layout. */
 .modal-v2:has(.modal-v2__expert) {
-  width: min(98vw, 1280px);
+  width: min(98vw, 980px);
 }
 
-/* Layout split: stacked (assisted) vs. two-column (expert).
-   Assisted stays single-column so the wizard reads top-to-bottom.
-   Expert pins the preview on the left and lets the operator scroll
-   through tabs on the right without losing sight of the result. */
+/* Single-column layout: preview block on top, controls condensed
+   below. The operator asked for maximum preview real estate so we
+   stack rather than split. */
 .modal-v2__layout {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
-.modal-v2__layout.is-split {
-  display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
-  gap: 1rem;
-  align-items: start;
-}
-.modal-v2__left {
+.modal-v2__preview-block {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  min-width: 0;
+  gap: 0.35rem;
 }
-.modal-v2__layout.is-split .modal-v2__left {
-  position: sticky;
-  top: 0.5rem;
-  /* Keep the preview + sheet + estimate visible while scrolling the
-     right column. ``max-height: calc(92vh - 6rem)`` reserves space
-     for the modal header + footer. */
-  max-height: calc(92vh - 6rem);
-  overflow-y: auto;
-}
-.modal-v2__right {
+.modal-v2__controls-block {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
   min-width: 0;
 }
 
-/* The expert-mode controls drawer inside the RIGHT column. */
+/* The expert-mode controls drawer condensed under the preview. */
 .modal-v2__expert {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 0.6rem;
   background: #0f172a;
   color: #e2e8f0;
   border-radius: 8px;
-  padding: 0.85rem;
+  padding: 0.65rem;
 }
 
-/* Narrow viewports fall back to single column so the operator can
-   still reach the controls on a tablet held in portrait. */
-@media (max-width: 900px) {
-  .modal-v2__layout.is-split {
-    grid-template-columns: 1fr;
-  }
-  .modal-v2__layout.is-split .modal-v2__left {
-    position: static;
-    max-height: none;
-  }
-}
+/* Vestigial media query — drop the legacy split rule. */
+/* (single-column layout — no media query needed any more). */
+
 .modal-v2__header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
 }
-.modal-v2__header h2 {
+.modal-v2__title {
+  margin: 0;
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+/* Preflight + estimate chip strip — lives in the header so the
+   operator reads "am I ready, what will it cost?" at a glance
+   without the body having to reserve real estate for them. */
+.modal-v2__header-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  list-style: none;
+  padding: 0;
   margin: 0;
   flex: 1;
-  font-size: 1.1rem;
+  min-width: 0;
+}
+.modal-v2__hchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  border: 1px solid transparent;
+  background: white;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.modal-v2__hchip.is-ok {
+  border-color: #10b981;
+  color: #065f46;
+  background: #ecfdf5;
+}
+.modal-v2__hchip.is-warn {
+  border-color: #f59e0b;
+  color: #92400e;
+  background: #fff7ed;
+}
+.modal-v2__hchip.is-info {
+  border-color: #cbd5e1;
+  color: #334155;
+  background: #f8fafc;
+}
+.modal-v2__hchip.is-actionable {
+  cursor: pointer;
+}
+.modal-v2__hchip.is-actionable:hover {
+  background: #ffedd5;
+}
+.modal-v2__hchip.is-actionable:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
 }
 .close {
   border: none;
