@@ -19,7 +19,7 @@ import { useI18n } from 'vue-i18n'
 import type { LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
-import type { Goal, PaletteMode, PolicyDecision, SourceKind } from '../../domain/policy/schemas'
+import type { Goal, PaletteMode, PolicyDecision, PolicyPass, SourceKind } from '../../domain/policy/schemas'
 import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
@@ -28,8 +28,12 @@ import { useUiModeStore } from '../../stores/uiMode'
 import { useJobStore } from '../../stores/job'
 import { usePlotterStore } from '../../stores/plotter'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
+import { BEGINNER_STYLES, type CustomStyleSelection } from './beginnerStyles'
+import StyleCustomizer from './StyleCustomizer.vue'
+import EditPreviewPane from './EditPreviewPane.vue'
 
 const ONBOARDING_KEY = 'omniplot.onboarding.editorV2.v1'
+const PREAMBLE_KEY = 'omniplot.preamble.editorV2.v1'
 const TOUR_STEPS = 3
 
 const props = defineProps<{
@@ -97,6 +101,37 @@ const INTENTS: readonly Goal[] = ['fast', 'balanced', 'quality'] as const
 // True when there's an active placement to apply the decision to.
 const hasPlacement = computed(() => Boolean(props.previewSvg || props.sourceName))
 
+// ============================ CUSTOM STYLE STACK =======================
+// Optional escape hatch from the resolver's automatic algorithm pick:
+// the StyleCustomizer subcomponent owns the picker UI, this parent
+// owns the selection state + the PolicyPass projection that drives
+// /rerender and Generate. Empty stack = resolver wins (default
+// experience). Non-empty stack = the modal overrides decision.default_*.
+const customStyles = ref<CustomStyleSelection[]>([])
+const customStylesActive = computed<boolean>(() => customStyles.value.length > 0)
+
+// Custom styles really only make sense for bitmap sources — vectors
+// and PDFs route through dedicated pipelines (vector_passthrough,
+// pdf_text_*) that ignore raster algorithms. We hide the panel
+// outright for non-bitmap kinds so the affordance never misleads.
+const canCustomizeStyles = computed<boolean>(
+  () => sourceKind.value === 'bitmap_photo' || sourceKind.value === 'bitmap_illustration',
+)
+
+// Build the PolicyPass[] the user's stack expresses. The full algorithm
+// option set keeps its registry defaults (see printRegistry.ts) and we
+// only override the primary knob's key — that's the entire contract of
+// the "1 simple knob per style" decision.
+const customPasses = computed<PolicyPass[]>(() =>
+  customStyles.value.map((sel) => {
+    const style = BEGINNER_STYLES.find((s) => s.id === sel.id)!
+    return {
+      algorithm: sel.id,
+      algorithm_options: { [style.primaryKnob.optionKey]: sel.knobValue },
+    }
+  }),
+)
+
 /**
  * Resolve the algorithm for the current intent, then render the real
  * result across every layer. Aborts any in-flight preview so rapid
@@ -134,11 +169,23 @@ async function resolveAndPreview(): Promise<void> {
 
   // Now render the adapted result. Keep the previous render visible
   // until the new one lands to avoid a flash back to the original.
-  // QUALITY recommendations carry a multi-pass stack — render that
-  // exactly as "Generate" would; otherwise render the single algorithm.
+  await renderAdaptedPreview(controller)
+}
+
+/**
+ * Render-only path used both by ``resolveAndPreview`` (after the policy
+ * lands) and by ``customStyles`` mutations (where the resolver result
+ * hasn't changed but the operator's stack has). Picks between custom
+ * passes, resolver multi-pass, and single-algorithm depending on what's
+ * active. Errors leave the previous render in place.
+ */
+async function renderAdaptedPreview(controller: AbortController): Promise<void> {
+  if (!decision.value) return
   previewLoading.value = true
   try {
-    const passes = decision.value.default_passes ?? []
+    const passes: PolicyPass[] = customStylesActive.value
+      ? customPasses.value
+      : (decision.value.default_passes ?? [])
     const result = passes.length
       ? await job.previewPassesOnAllLayers(passes, controller.signal)
       : await job.previewAlgorithmOnAllLayers(
@@ -156,6 +203,25 @@ async function resolveAndPreview(): Promise<void> {
     if (!controller.signal.aborted) previewLoading.value = false
   }
 }
+
+/** Re-render without re-resolving — used when only the custom-style
+ *  stack changes (the resolver inputs are unchanged, so its answer
+ *  would be identical). Aborts any in-flight render. */
+async function rerenderOnly(): Promise<void> {
+  if (!hasPlacement.value || !decision.value) return
+  previewController?.abort()
+  const controller = new AbortController()
+  previewController = controller
+  previewError.value = false
+  await renderAdaptedPreview(controller)
+}
+
+// Operator mutated the custom-style stack (added, removed, or tweaked a
+// slider). Re-render through the cheaper path that skips the policy
+// resolver. The deep watch fires on knob drags too; the AbortController
+// in ``rerenderOnly`` cancels stale renders so slider scrubbing stays
+// responsive.
+watch(customStyles, () => void rerenderOnly(), { deep: true })
 
 function selectGoal(g: Goal): void {
   if (goal.value === g && decision.value) return
@@ -177,78 +243,24 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
   void resolveAndPreview()
 }
 
-// ============================== ZOOM & PAN ==============================
-// Wheel zooms, drag pans, double-click / button resets. Same model as
-// the expert EditPreviewPane so the gesture vocabulary is consistent.
-// The view is intentionally *not* reset between intent changes so the
-// operator can zoom into a detail and flip Rapide↔Qualité to compare it
-// at the same magnification; switching files remounts the modal (App's
-// ``:key``) which resets it naturally.
-const zoom = ref(1)
-const panX = ref(0)
-const panY = ref(0)
-const panning = ref(false)
-let panStartX = 0
-let panStartY = 0
-let panInitX = 0
-let panInitY = 0
-const MIN_ZOOM = 0.2
-const MAX_ZOOM = 16
-
-const contentStyle = computed(() => ({
-  transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`,
-  transformOrigin: 'center center',
-  transition: panning.value ? 'none' : 'transform 0.08s ease-out',
-}))
-
-function clampZoom(value: number): number {
-  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value))
-}
-
-function onWheel(event: WheelEvent): void {
-  event.preventDefault()
-  const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15
-  zoom.value = clampZoom(zoom.value * factor)
-}
-
-function onPanStart(event: PointerEvent): void {
-  if (event.button !== 0 && event.button !== 1) return
-  panning.value = true
-  panStartX = event.clientX
-  panStartY = event.clientY
-  panInitX = panX.value
-  panInitY = panY.value
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-}
-
-function onPanMove(event: PointerEvent): void {
-  if (!panning.value) return
-  panX.value = panInitX + (event.clientX - panStartX)
-  panY.value = panInitY + (event.clientY - panStartY)
-}
-
-function onPanEnd(event: PointerEvent): void {
-  if (!panning.value) return
-  panning.value = false
-  ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
-}
-
-function zoomIn(): void {
-  zoom.value = clampZoom(zoom.value * 1.25)
-}
-
-function zoomOut(): void {
-  zoom.value = clampZoom(zoom.value / 1.25)
-}
-
-function resetView(): void {
-  zoom.value = 1
-  panX.value = 0
-  panY.value = 0
-}
-
 function confirm(): void {
   if (!hasPlacement.value || !decision.value) return
+  if (customStylesActive.value) {
+    // Override the resolver's algorithm pick with the operator's manual
+    // stack while keeping every other field the resolver decided
+    // (segmentation method, quality tier, fallback chain, …). First
+    // pass mirrors ``default_algorithm`` / ``default_options`` per the
+    // PolicyDecision contract (see schemas.ts ``default_passes`` doc).
+    const passes = customPasses.value
+    const first = passes[0]!
+    emit('confirm', {
+      ...decision.value,
+      default_algorithm: first.algorithm,
+      default_options: first.algorithm_options,
+      default_passes: passes,
+    })
+    return
+  }
   emit('confirm', decision.value)
 }
 
@@ -393,23 +405,10 @@ function openConnectionSettings(): void {
   ui.openPlotterSettings('connection')
 }
 
-// ============================ VIEW MODE (ORIGINAL ↔ PLOT) ==============
-// Beginners need to verify "is my drawing recognisable after the pen
-// plotter has its way with it?". A one-click toggle between the source
-// SVG and the adapted render answers that without leaving the modal.
-// Only meaningful once the adapted render has landed — until then there
-// is nothing to compare against, so the button is hidden.
-const viewMode = ref<'plot' | 'original'>('plot')
-const canCompareOriginal = computed<boolean>(
-  () => Boolean(props.previewSvg) && Boolean(renderedSvg.value),
-)
-const displayedSvg = computed<string | null>(() => {
-  if (viewMode.value === 'original') return props.previewSvg ?? renderedSvg.value ?? null
-  return renderedSvg.value ?? props.previewSvg ?? null
-})
-function toggleViewMode(): void {
-  viewMode.value = viewMode.value === 'plot' ? 'original' : 'plot'
-}
+// Note: the live preview pane (zoom, pan, original↔plot toggle,
+// sheet outline, gesture hint) lives in EditPreviewPane.vue — the
+// parent only forwards the source / rendered SVG and the loading /
+// error flags.
 
 // ============================ PREFLIGHT CHECKLIST ======================
 // Four things have to be true before Generate can do anything useful:
@@ -572,6 +571,34 @@ function dismissTour(): void {
   persistOnboardingSeen()
 }
 
+// ============================ PREAMBLE =================================
+// One-sentence context card above the preview answering "what is this
+// for?". Distinct from the welcome tour: the tour walks the operator
+// through interactions, the preamble names the outcome ("your machine
+// will draw this"). Persisted dismissal so it disappears once read.
+function readPreambleDismissed(): boolean {
+  try {
+    const raw = window.localStorage.getItem(PREAMBLE_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw) as { dismissed?: boolean }
+    return parsed.dismissed === true
+  } catch {
+    return false
+  }
+}
+const preambleDismissed = ref<boolean>(props.skipOnboarding ? true : readPreambleDismissed())
+const preambleVisible = computed<boolean>(
+  () => !preambleDismissed.value && hasPlacement.value,
+)
+function dismissPreamble(): void {
+  preambleDismissed.value = true
+  try {
+    window.localStorage.setItem(PREAMBLE_KEY, JSON.stringify({ dismissed: true }))
+  } catch {
+    /* private mode / quota — accept that the preamble may replay */
+  }
+}
+
 // Ctrl/Cmd+Enter = Générer. No prev/next anymore — there's one screen.
 useKeyboardShortcuts([
   {
@@ -700,129 +727,36 @@ watch(
       </div>
 
       <template v-else>
-        <!-- Large live preview of the real adapted result. The whole
-             surface captures pointer events for pan; the inner viewport
-             carries the zoom/pan transform. -->
+        <!-- Outcome preamble. The modal otherwise opens silent on the
+             question every beginner asks first: "what is this for?".
+             One short sentence + a dismiss-forever button. -->
         <div
-          class="modal-v2__preview"
-          data-test="modal-v2-preview"
-          :style="{ cursor: panning ? 'grabbing' : 'grab', touchAction: 'none' }"
-          @wheel="onWheel"
-          @pointerdown="onPanStart"
-          @pointermove="onPanMove"
-          @pointerup="onPanEnd"
-          @pointercancel="onPanEnd"
-          @dblclick="resetView"
+          v-if="preambleVisible"
+          class="modal-v2__preamble"
+          role="note"
+          data-test="modal-v2-preamble"
         >
-          <!-- Active sheet outline. Drawn behind the artwork as a
-               translucent dashed rectangle in the sheet's real aspect
-               ratio so the operator perceives portrait/landscape and
-               rough proportions at a glance. -->
-          <div
-            v-if="sheetOutline"
-            class="modal-v2__sheet-outline"
-            :style="{
-              width: `${sheetOutline.widthPct}%`,
-              height: `${sheetOutline.heightPct}%`,
-            }"
-            aria-hidden="true"
-            data-test="modal-v2-sheet-outline"
-          >
-            <span class="modal-v2__sheet-caption">
-              {{ sheetOutline.labelW }} × {{ sheetOutline.labelH }} mm
-            </span>
-          </div>
-          <div class="modal-v2__preview-viewport" :style="contentStyle">
-            <!-- v-html: caller (App.vue) passes already-sanitized SVG,
-                 and ``previewAlgorithmOnAllLayers`` returns backend-
-                 rendered SVG from the same trusted pipeline. -->
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <div
-              v-if="displayedSvg"
-              class="modal-v2__preview-svg"
-              :class="{ 'is-stale': previewLoading }"
-              data-test="modal-v2-preview-svg"
-              v-html="displayedSvg"
-            />
-          </div>
-
-          <!-- Original ↔ Plot toggle. Helps the beginner verify the
-               drawing is still recognisable after segmentation /
-               algorithm. Anchored bottom-left so it doesn't fight the
-               zoom controls for space. -->
+          <p>{{ t('v2.modal.preamble') }}</p>
           <button
-            v-if="canCompareOriginal"
             type="button"
-            class="modal-v2__view-toggle"
-            :class="{ 'is-original': viewMode === 'original' }"
-            :aria-pressed="viewMode === 'original'"
-            data-test="modal-v2-view-toggle"
-            @pointerdown.stop
-            @wheel.stop
-            @dblclick.stop
-            @click="toggleViewMode"
+            class="modal-v2__preamble-dismiss"
+            data-test="modal-v2-preamble-dismiss"
+            @click="dismissPreamble"
           >
-            {{ viewMode === 'plot' ? t('v2.modal.viewOriginal') : t('v2.modal.viewPlot') }}
+            {{ t('v2.modal.preambleDismiss') }}
           </button>
-
-          <!-- Floating zoom controls; opt out of the pan capture. -->
-          <div
-            class="modal-v2__zoom"
-            data-test="modal-v2-zoom"
-            @pointerdown.stop
-            @wheel.stop
-            @dblclick.stop
-          >
-            <button
-              type="button"
-              :title="t('v2.modal.zoomIn')"
-              :aria-label="t('v2.modal.zoomIn')"
-              data-test="modal-v2-zoom-in"
-              @click="zoomIn"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              :title="t('v2.modal.zoomOut')"
-              :aria-label="t('v2.modal.zoomOut')"
-              data-test="modal-v2-zoom-out"
-              @click="zoomOut"
-            >
-              −
-            </button>
-            <button
-              type="button"
-              class="modal-v2__zoom-reset"
-              :title="t('v2.modal.resetView')"
-              :aria-label="t('v2.modal.resetView')"
-              data-test="modal-v2-zoom-reset"
-              @click="resetView"
-            >
-              {{ Math.round(zoom * 100) }}%
-            </button>
-          </div>
-
-          <div
-            v-if="previewLoading"
-            class="modal-v2__preview-overlay"
-            role="status"
-            aria-live="polite"
-            data-test="modal-v2-preview-loading"
-          >
-            <span class="spinner" aria-hidden="true" />
-            {{ t('v2.modal.previewLoading') }}
-          </div>
-          <p v-if="previewError" class="modal-v2__preview-error" data-test="modal-v2-preview-error">
-            {{ t('v2.modal.previewError') }}
-          </p>
         </div>
 
-        <!-- Gesture hint: makes wheel/drag/double-click discoverable
-             without a tour overlay. Tiny, single-line, always visible. -->
-        <p class="modal-v2__gesture-hint" data-test="modal-v2-gesture-hint">
-          {{ t('v2.modal.gestureHint') }}
-        </p>
+        <!-- Live preview pane (zoom, pan, sheet outline, view toggle,
+             gesture hint). Extracted to a subcomponent so this modal
+             stays focused on decision-making. -->
+        <EditPreviewPane
+          :plot-svg="renderedSvg"
+          :original-svg="props.previewSvg ?? null"
+          :loading="previewLoading"
+          :error="previewError"
+          :sheet="sheetOutline"
+        />
 
         <!-- File caption. -->
         <p v-if="props.sourceName" class="modal-v2__caption" data-test="modal-v2-context">
@@ -871,6 +805,46 @@ watch(
             >
               <span aria-hidden="true" class="modal-v2__estimate-icon">🖊</span>
               <span>{{ t('v2.modal.estimatePens', { count: requiredPenCount }) }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Plain-language "ready to plot?" checklist. Aggregates the
+             four signals an operator otherwise has to hunt for (file,
+             machine, sheet, inks) into a single line of green ticks
+             and amber warnings. Warnings whose fix lives inside a
+             panel are clickable shortcuts. Positioned right under the
+             cost row — readiness is the second thing a beginner asks
+             after "what will this look like?" -->
+        <div
+          class="modal-v2__preflight"
+          :class="{ 'is-all-ok': allPreflightOk }"
+          data-test="modal-v2-preflight"
+          :aria-label="t('v2.modal.preflightLabel')"
+        >
+          <span class="modal-v2__preflight-label">{{ t('v2.modal.preflightLabel') }}</span>
+          <ul class="modal-v2__preflight-list">
+            <li v-for="item in preflightItems" :key="item.id">
+              <button
+                v-if="!item.ok && item.onFix"
+                type="button"
+                class="modal-v2__preflight-chip is-warn is-actionable"
+                :data-test="`modal-v2-preflight-${item.id}`"
+                :title="t('v2.modal.preflightFix')"
+                @click="item.onFix"
+              >
+                <span aria-hidden="true">⚠</span>
+                <span>{{ item.label }}</span>
+              </button>
+              <span
+                v-else
+                class="modal-v2__preflight-chip"
+                :class="item.ok ? 'is-ok' : 'is-warn'"
+                :data-test="`modal-v2-preflight-${item.id}`"
+              >
+                <span aria-hidden="true">{{ item.ok ? '✓' : '⚠' }}</span>
+                <span>{{ item.label }}</span>
+              </span>
             </li>
           </ul>
         </div>
@@ -983,47 +957,20 @@ watch(
           </div>
         </fieldset>
 
+        <!-- Optional "stack your own styles" panel. Empty stack = the
+             resolver wins (default experience); non-empty stack
+             overrides the algorithm at preview + Generate time. The
+             subcomponent owns the picker UI, the parent owns the
+             selection state via v-model. Bitmap-only — vector and PDF
+             pipelines bypass raster algorithms entirely. -->
+        <StyleCustomizer
+          v-if="canCustomizeStyles"
+          v-model="customStyles"
+        />
+
         <p v-if="resolveError" class="error" data-test="modal-v2-resolve-error">
           {{ t('v2.modal.resolverError', { message: resolveError }) }}
         </p>
-
-        <!-- Plain-language "ready to plot?" checklist. Aggregates the
-             four signals an operator otherwise has to hunt for (file,
-             machine, sheet, inks) into a single line of green ticks
-             and amber warnings. Warnings whose fix lives inside a
-             panel are clickable shortcuts. -->
-        <div
-          class="modal-v2__preflight"
-          :class="{ 'is-all-ok': allPreflightOk }"
-          data-test="modal-v2-preflight"
-          :aria-label="t('v2.modal.preflightLabel')"
-        >
-          <span class="modal-v2__preflight-label">{{ t('v2.modal.preflightLabel') }}</span>
-          <ul class="modal-v2__preflight-list">
-            <li v-for="item in preflightItems" :key="item.id">
-              <button
-                v-if="!item.ok && item.onFix"
-                type="button"
-                class="modal-v2__preflight-chip is-warn is-actionable"
-                :data-test="`modal-v2-preflight-${item.id}`"
-                :title="t('v2.modal.preflightFix')"
-                @click="item.onFix"
-              >
-                <span aria-hidden="true">⚠</span>
-                <span>{{ item.label }}</span>
-              </button>
-              <span
-                v-else
-                class="modal-v2__preflight-chip"
-                :class="item.ok ? 'is-ok' : 'is-warn'"
-                :data-test="`modal-v2-preflight-${item.id}`"
-              >
-                <span aria-hidden="true">{{ item.ok ? '✓' : '⚠' }}</span>
-                <span>{{ item.label }}</span>
-              </span>
-            </li>
-          </ul>
-        </div>
       </template>
 
       <footer class="modal-v2__footer">
@@ -1172,118 +1119,8 @@ watch(
   opacity: 0.4;
 }
 
-/* Live preview — the star of the screen. */
-.modal-v2__preview {
-  position: relative;
-  height: clamp(220px, 42vh, 360px);
-  background: repeating-conic-gradient(#f1f5f9 0% 25%, white 0% 50%) 0 / 20px 20px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-.modal-v2__preview-viewport {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  will-change: transform;
-}
-.modal-v2__preview-svg {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem;
-  transition: opacity 0.15s ease;
-}
-.modal-v2__preview-svg.is-stale {
-  opacity: 0.45;
-}
-.modal-v2__preview-svg :deep(svg) {
-  max-width: 100%;
-  max-height: 100%;
-  height: auto;
-  width: auto;
-}
-.modal-v2__preview-overlay {
-  position: absolute;
-  inset: auto 0 0 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.4rem;
-  background: rgba(255, 255, 255, 0.85);
-  font-size: 0.8rem;
-  color: #475569;
-}
-.modal-v2__preview-error {
-  position: absolute;
-  inset: auto 0.5rem 0.5rem;
-  margin: 0;
-  text-align: center;
-  font-size: 0.8rem;
-  color: #b71c1c;
-  background: #fdecea;
-  padding: 0.35rem;
-  border-radius: 4px;
-}
-.modal-v2__zoom {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.modal-v2__zoom button {
-  width: 1.9rem;
-  height: 1.9rem;
-  border: 1px solid #cbd5e1;
-  background: rgba(255, 255, 255, 0.92);
-  color: #1e293b;
-  border-radius: 4px;
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.modal-v2__zoom button:hover {
-  background: #e2e8f0;
-}
-.modal-v2__zoom button:focus-visible {
-  outline: 2px solid #1f6feb;
-  outline-offset: 1px;
-}
-.modal-v2__zoom-reset {
-  font-size: 0.6rem !important;
-  font-variant-numeric: tabular-nums;
-}
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid #cbd5e1;
-  border-top-color: #1f6feb;
-  border-radius: 50%;
-  animation: modal-v2-spin 0.7s linear infinite;
-}
-@keyframes modal-v2-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation: none;
-  }
-}
+/* Preview pane, zoom/pan, sheet outline, view toggle, gesture hint
+   and spinner all live in EditPreviewPane.vue now. */
 
 .modal-v2__caption {
   margin: 0.4rem 0 0.85rem;
@@ -1319,37 +1156,6 @@ watch(
   padding: 0;
   margin: 0;
 }
-.modal-v2__ink {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.15rem 0.45rem 0.15rem 0.25rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 999px;
-  background: white;
-  font-size: 0.72rem;
-  color: #334155;
-  max-width: 12rem;
-}
-.modal-v2__ink.is-fallback {
-  border-color: #f59e0b;
-  background: #fffbeb;
-  color: #92400e;
-}
-.modal-v2__ink-swatch {
-  display: inline-block;
-  width: 0.85rem;
-  height: 0.85rem;
-  border-radius: 50%;
-  border: 1px solid rgba(15, 23, 42, 0.25);
-  flex-shrink: 0;
-}
-.modal-v2__ink-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: ui-monospace, Menlo, monospace;
-}
 
 .modal-v2__intent {
   border: none;
@@ -1374,7 +1180,7 @@ watch(
   align-items: flex-start;
   gap: 0.2rem;
   padding: 0.65rem 0.75rem;
-  border: 1px solid #d0d0d0;
+  border: 1px solid #cbd5e1;
   border-radius: 6px;
   background: white;
   transition:
@@ -1446,7 +1252,7 @@ watch(
 }
 .palette-toggle button:focus-visible {
   outline: 2px solid #1f6feb;
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
 
 .error {
@@ -1483,9 +1289,51 @@ watch(
   opacity: 0.85;
 }
 
+/* Outcome preamble — single-sentence context card with a dismiss
+   button. Light blue tint so it reads as informational, not warning. */
+.modal-v2__preamble {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  background: #eef4ff;
+  border: 1px solid #c7d8ff;
+  border-radius: 6px;
+  margin-bottom: 0.6rem;
+  font-size: 0.82rem;
+  color: #1e293b;
+}
+.modal-v2__preamble p {
+  margin: 0;
+  flex: 1;
+  line-height: 1.35;
+}
+.modal-v2__preamble-dismiss {
+  border: none;
+  background: transparent;
+  color: #1f6feb;
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.modal-v2__preamble-dismiss:hover {
+  background: white;
+  text-decoration: underline;
+}
+.modal-v2__preamble-dismiss:focus-visible {
+  outline: 2px solid #1f6feb;
+  outline-offset: 2px;
+}
+
+/* Footer: Annuler on the left, expert link + Generate on the right. */
 .modal-v2__footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
   margin-top: 0.75rem;
 }
 .generate-btn {
@@ -1514,15 +1362,6 @@ watch(
 .generate-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* Gesture hint under the preview. */
-.modal-v2__gesture-hint {
-  margin: 0.35rem 0 0;
-  font-size: 0.7rem;
-  color: #94a3b8;
-  text-align: center;
-  font-style: italic;
 }
 
 /* Estimate + compatibility row. */
@@ -1591,7 +1430,7 @@ watch(
 }
 .modal-v2__ink:focus-visible {
   outline: 2px solid #1f6feb;
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 .modal-v2__ink.is-hidden {
   opacity: 0.5;
@@ -1609,6 +1448,19 @@ watch(
   line-height: 1;
   opacity: 0.7;
 }
+.modal-v2__ink-swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  border: 1px solid rgba(15, 23, 42, 0.25);
+  flex-shrink: 0;
+}
+.modal-v2__ink-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .modal-v2__ink-cta {
   border: 1px solid #f59e0b;
   background: #fff7ed;
@@ -1624,15 +1476,9 @@ watch(
 }
 .modal-v2__ink-cta:focus-visible {
   outline: 2px solid #1f6feb;
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
-/* Footer: Annuler on the left, expert link + Generate on the right. */
-.modal-v2__footer {
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-}
 .modal-v2__footer-actions {
   display: inline-flex;
   align-items: center;
@@ -1653,7 +1499,7 @@ watch(
 }
 .modal-v2__cancel:focus-visible {
   outline: 2px solid #1f6feb;
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 .modal-v2__expert-link {
   border: none;
@@ -1670,61 +1516,9 @@ watch(
 }
 .modal-v2__expert-link:focus-visible {
   outline: 2px solid #1f6feb;
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
-/* Sheet outline: translucent dashed rectangle drawn behind the
-   artwork, scaled to the active sheet's aspect ratio. */
-.modal-v2__sheet-outline {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  border: 1px dashed #94a3b8;
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: 2px;
-  pointer-events: none;
-  z-index: 0;
-}
-.modal-v2__sheet-caption {
-  position: absolute;
-  top: 2px;
-  left: 4px;
-  font-size: 0.6rem;
-  color: #64748b;
-  background: rgba(255, 255, 255, 0.7);
-  padding: 0 3px;
-  border-radius: 2px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* "View original ↔ View plot" toggle. Bottom-left of the preview pane,
-   opposite the zoom column so it doesn't compete for space. */
-.modal-v2__view-toggle {
-  position: absolute;
-  bottom: 0.5rem;
-  left: 0.5rem;
-  padding: 0.25rem 0.65rem;
-  border: 1px solid #cbd5e1;
-  background: rgba(255, 255, 255, 0.92);
-  color: #1e293b;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  cursor: pointer;
-  z-index: 2;
-}
-.modal-v2__view-toggle:hover {
-  background: white;
-}
-.modal-v2__view-toggle.is-original {
-  background: #eef4ff;
-  border-color: #1f6feb;
-  color: #1f6feb;
-}
-.modal-v2__view-toggle:focus-visible {
-  outline: 2px solid #1f6feb;
-  outline-offset: 1px;
-}
 
 /* Preflight checklist: one line of green / amber chips that
    aggregates the four "am I ready to plot" signals. */
@@ -1785,8 +1579,9 @@ watch(
 }
 .modal-v2__preflight-chip.is-actionable:focus-visible {
   outline: 2px solid #1f6feb;
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
+
 
 /* Onboarding tour overlay. Anchored to the modal so the preview
    underneath stays partly visible. */
@@ -1875,6 +1670,6 @@ watch(
 .modal-v2__tour-next:focus-visible,
 .modal-v2__tour-skip:focus-visible {
   outline: 2px solid #1f6feb;
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 </style>
