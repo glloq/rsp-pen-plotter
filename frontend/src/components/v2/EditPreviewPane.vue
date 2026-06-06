@@ -59,6 +59,14 @@ const props = defineProps<{
    *  physical dimensions yet. */
   artworkWidthMm?: number | null
   artworkHeightMm?: number | null
+  /** URL of the raw source image (PNG / JPG / PDF page raster / …),
+   *  shown in the "Original" and "Compare" modes instead of the
+   *  placement SVG. ``props.originalSvg`` was always the LAST
+   *  converted SVG, so comparing against it just stacked two
+   *  converted versions — the operator wanted to see the actual
+   *  uploaded picture vs. the conversion. Optional; when omitted
+   *  the pane falls back to ``originalSvg``. */
+  sourceImageUrl?: string | null
 }>()
 
 const { t } = useI18n()
@@ -70,9 +78,15 @@ const { t } = useI18n()
 // modal.
 type PreviewMode = 'plot' | 'source' | 'split'
 const viewMode = ref<PreviewMode>('plot')
-const canShowOriginal = computed<boolean>(() => Boolean(props.originalSvg))
+// Both "Original" and "Compare" are usable as long as we have either a
+// raw source image URL or the legacy fallback SVG. The image takes
+// priority in the template — see ``hasSource`` below.
+const hasSource = computed<boolean>(
+  () => Boolean(props.sourceImageUrl) || Boolean(props.originalSvg),
+)
+const canShowOriginal = computed<boolean>(() => hasSource.value)
 const canCompareOriginal = computed<boolean>(
-  () => Boolean(props.originalSvg) && Boolean(props.plotSvg),
+  () => hasSource.value && Boolean(props.plotSvg),
 )
 function setMode(mode: PreviewMode): void {
   if (mode === 'source' && !canShowOriginal.value) return
@@ -225,14 +239,20 @@ const artworkStyle = computed<{ width: string; height: string } | null>(() => {
 // algorithm did to the photo without leaving the modal.
 const splitPercent = ref<number>(50)
 const splitDragging = ref<boolean>(false)
-let splitPaneRect: DOMRect | null = null
+// We measure against the SHEET, not the pane, because the handle's
+// ``left: ${splitPercent}%`` is relative to the sheet outline (which
+// is what contains the artwork). Using the pane rect made the handle
+// jump under the pointer when the sheet wasn't pane-wide.
+let splitSheetRect: DOMRect | null = null
 
 function onSplitGrab(event: PointerEvent): void {
-  if (!paneEl.value) return
+  const sheet = (event.currentTarget as HTMLElement)
+    .closest('.sheet-outline') as HTMLElement | null
+  if (!sheet) return
   event.stopPropagation()
   event.preventDefault()
   splitDragging.value = true
-  splitPaneRect = paneEl.value.getBoundingClientRect()
+  splitSheetRect = sheet.getBoundingClientRect()
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   updateSplit(event)
 }
@@ -243,13 +263,13 @@ function onSplitMove(event: PointerEvent): void {
 function onSplitRelease(event: PointerEvent): void {
   if (!splitDragging.value) return
   splitDragging.value = false
-  splitPaneRect = null
+  splitSheetRect = null
   ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
 }
 function updateSplit(event: PointerEvent): void {
-  if (!splitPaneRect) return
-  const x = event.clientX - splitPaneRect.left
-  const pct = (x / splitPaneRect.width) * 100
+  if (!splitSheetRect) return
+  const x = event.clientX - splitSheetRect.left
+  const pct = (x / splitSheetRect.width) * 100
   splitPercent.value = Math.max(0, Math.min(100, pct))
 }
 
@@ -472,15 +492,32 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
               v-html="props.plotSvg"
             />
             <!-- Source (original) layer — rendered only when needed so
-                 the DOM stays light when the operator is on plot-only. -->
-            <!-- eslint-disable-next-line vue/no-v-html -->
+                 the DOM stays light when the operator is on plot-only.
+                 Prefers the raw source image (``sourceImageUrl``) so
+                 "Compare" shows the actual uploaded photo vs. the
+                 converted result. Falls back to ``originalSvg`` for
+                 vector-only sources (e.g. an SVG / DXF upload where
+                 no raster equivalent exists). -->
             <div
-              v-if="props.originalSvg && (viewMode === 'source' || viewMode === 'split')"
+              v-if="hasSource && (viewMode === 'source' || viewMode === 'split')"
               class="artwork-svg artwork-svg--source"
               :style="viewMode === 'split' ? { clipPath: splitSourceClip } : {}"
               data-test="modal-v2-preview-source"
-              v-html="props.originalSvg"
-            />
+            >
+              <img
+                v-if="props.sourceImageUrl"
+                :src="props.sourceImageUrl"
+                :alt="t('v2.modal.viewOriginal')"
+                class="artwork-source-img"
+                draggable="false"
+              />
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <div
+                v-else-if="props.originalSvg"
+                class="artwork-source-svg"
+                v-html="props.originalSvg"
+              />
+            </div>
           </div>
           <!-- Vertical split-handle. Drag it left/right to sweep the
                reveal across the artwork. Only rendered in split mode
@@ -726,38 +763,76 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
      it readable against the sheet. */
   background: transparent;
 }
+/* Raw source image: ``object-fit: contain`` mirrors the SVG's
+   intrinsic sizing so the image obeys the same artwork-box bounds.
+   ``user-select: none`` blocks the browser's default image-drag
+   gesture from competing with the split-handle pointer events. */
+.artwork-source-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.artwork-source-svg {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.artwork-source-svg :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 /* Split-handle: vertical reveal slider that sweeps between source
    and plot in compare mode. Lives at the sheet level so it tracks
    the sheet's transform (zoom/pan affect it together with the
    artwork). */
+/* Split handle: wider hit zone (12 px) than visible line (2 px) so
+   the operator can grab it without surgical precision. The visible
+   bar is rendered via the ``::before`` pseudo so the grip dot can
+   sit on top without losing the hit zone. */
 .split-handle {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 2px;
-  background: #1f6feb;
+  width: 14px;
+  background: transparent;
   cursor: ew-resize;
   z-index: 2;
   touch-action: none;
+  transform: translateX(-7px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.split-handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
   transform: translateX(-1px);
+  background: #1f6feb;
+  pointer-events: none;
 }
 .split-handle__grip {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 1.8rem;
-  height: 1.8rem;
+  position: relative;
+  width: 2rem;
+  height: 2rem;
   border-radius: 50%;
   background: #1f6feb;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: bold;
   pointer-events: none;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
 }
 /* Mode toggle (Result / Source / Compare). Lives in the top-right
    corner of the pane so it doesn't collide with the existing zoom

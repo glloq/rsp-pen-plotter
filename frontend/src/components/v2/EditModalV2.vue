@@ -16,7 +16,7 @@
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LayerInfo } from '../../api/client'
+import { libraryFilePreviewImageUrl, type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
 import type { Goal, PaletteMode, PolicyDecision, PolicyPass, SourceKind } from '../../domain/policy/schemas'
@@ -639,6 +639,22 @@ const effectivePreviewSvg = computed<string | null>(
 const effectivePreviewLoading = computed<boolean>(
   () => expertPreviewLoading.value || previewLoading.value,
 )
+
+// =========================================================================
+// Source image URL — fed to EditPreviewPane's "Original" and "Compare"
+// modes so the operator sees the actual uploaded photo (PNG / JPG /
+// PDF page raster) vs. the converted result, instead of two SVG
+// derivatives of the same input. ``libraryFilePreviewImageUrl`` works
+// for every supported source type (the backend rasterises vectors,
+// documents, PDFs on demand), so this single URL covers all kinds.
+// Null when the placement isn't backed by a library file yet — the
+// pane falls back to ``originalSvg`` in that case.
+const sourceImageUrl = computed<string | null>(() => {
+  const id = job.selectedPlacement?.library_file_id
+  if (!id) return null
+  const page = Number(job.selectedPlacement?.upload_metadata?.page ?? 0)
+  return libraryFilePreviewImageUrl(id, Number.isFinite(page) ? page : 0)
+})
 // Reset the tab whenever the source file kind changes so the operator
 // doesn't land on an "Image" tab for a vector file. The :key in App.vue
 // also remounts on placement switch; this watcher is the safety net
@@ -949,6 +965,7 @@ watch(
         <EditPreviewPane
           :plot-svg="effectivePreviewSvg"
           :original-svg="props.previewSvg ?? null"
+          :source-image-url="sourceImageUrl"
           :loading="effectivePreviewLoading"
           :error="previewError"
           :sheet="sheetOutline"
