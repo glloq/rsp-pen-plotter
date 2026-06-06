@@ -380,6 +380,18 @@ export function useFileManager(t?: Translator) {
       watch(
         () => store.selectedPlacementId,
         async () => {
+          // Drop the previous placement's preview result before
+          // anything else: the singleton previewer cached the SVG of
+          // the OLD source, and the V2 modal forwards
+          // ``previewer.previewSvg`` to ``EditPreviewPane`` — without
+          // this clear, switching files in FilesPane keeps showing
+          // the old conversion until a fresh /preview round-trip
+          // completes (which can take seconds for heavy algorithms).
+          // ``cancel`` aborts any in-flight request first so the
+          // staleness guard catches the response when it eventually
+          // lands.
+          previewer.cancel()
+          previewer.clear()
           _selectedFile.value = null
           const installed = (store.selectedProfile?.pens ?? [])
             .filter((p) => p.installed && p.color)
