@@ -16,7 +16,7 @@
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { LayerInfo } from '../../api/client'
+import { libraryFilePreviewImageUrl, type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
 import type { Goal, PaletteMode, PolicyDecision, PolicyPass, SourceKind } from '../../domain/policy/schemas'
@@ -639,6 +639,22 @@ const effectivePreviewSvg = computed<string | null>(
 const effectivePreviewLoading = computed<boolean>(
   () => expertPreviewLoading.value || previewLoading.value,
 )
+
+// =========================================================================
+// Source image URL — fed to EditPreviewPane's "Original" and "Compare"
+// modes so the operator sees the actual uploaded photo (PNG / JPG /
+// PDF page raster) vs. the converted result, instead of two SVG
+// derivatives of the same input. ``libraryFilePreviewImageUrl`` works
+// for every supported source type (the backend rasterises vectors,
+// documents, PDFs on demand), so this single URL covers all kinds.
+// Null when the placement isn't backed by a library file yet — the
+// pane falls back to ``originalSvg`` in that case.
+const sourceImageUrl = computed<string | null>(() => {
+  const id = job.selectedPlacement?.library_file_id
+  if (!id) return null
+  const page = Number(job.selectedPlacement?.upload_metadata?.page ?? 0)
+  return libraryFilePreviewImageUrl(id, Number.isFinite(page) ? page : 0)
+})
 // Reset the tab whenever the source file kind changes so the operator
 // doesn't land on an "Image" tab for a vector file. The :key in App.vue
 // also remounts on placement switch; this watcher is the safety net
@@ -949,6 +965,7 @@ watch(
         <EditPreviewPane
           :plot-svg="effectivePreviewSvg"
           :original-svg="props.previewSvg ?? null"
+          :source-image-url="sourceImageUrl"
           :loading="effectivePreviewLoading"
           :error="previewError"
           :sheet="sheetOutline"
@@ -1266,7 +1283,11 @@ watch(
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   padding: 1rem 1.5rem 1.25rem;
-  width: min(96vw, 640px);
+  /* Wide enough to fit the split layout — preview LEFT, controls
+     RIGHT — without crowding either side. The grid responds to the
+     viewport via min/max columns, so the modal isn't actually 1280
+     px on a 1200-px-wide screen. */
+  width: min(98vw, 1280px);
   max-height: 92vh;
   overflow-y: auto;
   font-family: system-ui, sans-serif;
@@ -1276,26 +1297,37 @@ watch(
    for both preview (left) and controls (right). The light shell
    keeps the preview visually dominant; LayersSection / PresetPanel
    carry their own dark surface inside the right column. */
-/* Expert mode widens the modal a bit so the V1 tab cards fit, but
-   not so much that the controls drift far from the preview. The
-   preview pane caps at ``clamp(320px, 62vh, 720px)`` inside the
-   sheet-as-canvas layout. */
+/* Expert mode used to widen the modal here; the base ``.modal-v2``
+   rule already maxes at 1280 px for both modes so the split has
+   room either way. Kept the selector for future expert-only style
+   overrides. */
 .modal-v2:has(.modal-v2__expert) {
-  width: min(98vw, 980px);
+  width: min(98vw, 1280px);
 }
 
-/* Single-column layout: preview block on top, controls condensed
-   below. The operator asked for maximum preview real estate so we
-   stack rather than split. */
+/* Split layout: preview pinned on the LEFT (sticky), controls on
+   the RIGHT. The preview block stays in view while the operator
+   scrolls through tabs / cards / per-layer settings on the right.
+   Falls back to a stacked single column on narrow viewports so the
+   controls stay reachable on a tablet held in portrait. */
 .modal-v2__layout {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(360px, 1.2fr);
+  gap: 1rem;
+  align-items: start;
 }
 .modal-v2__preview-block {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  position: sticky;
+  top: 0;
+  /* Reserve space for the modal header + footer so the preview block
+     never scrolls behind them. ``92vh`` matches the modal's own
+     ``max-height``; subtract roughly the header (44 px) + footer
+     (60 px) + paddings. */
+  max-height: calc(92vh - 9rem);
+  overflow-y: auto;
 }
 .modal-v2__controls-block {
   display: flex;
@@ -1304,7 +1336,7 @@ watch(
   min-width: 0;
 }
 
-/* The expert-mode controls drawer condensed under the preview. */
+/* The expert-mode controls drawer inside the right column. */
 .modal-v2__expert {
   display: flex;
   flex-direction: column;
@@ -1315,9 +1347,17 @@ watch(
   padding: 0.65rem;
 }
 
-/* Vestigial media query — drop the legacy split rule. */
-/* (single-column layout — no media query needed any more). */
-
+/* Narrow viewports (tablet portrait, phones): collapse to a single
+   column so the operator can still reach every control. */
+@media (max-width: 900px) {
+  .modal-v2__layout {
+    grid-template-columns: 1fr;
+  }
+  .modal-v2__preview-block {
+    position: static;
+    max-height: none;
+  }
+}
 .modal-v2__header {
   display: flex;
   align-items: center;
