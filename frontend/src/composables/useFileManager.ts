@@ -34,10 +34,30 @@ export type FileKind = 'bitmap' | 'typography' | 'document' | 'none'
 
 // ---- Singleton state ----
 const _selectedFile = ref<File | null>(null)
+// The placement id that ``_selectedFile`` was loaded for. Filename
+// alone is not a strong identity (two library entries can share a
+// name, ``downloadOriginalFile`` reuses ``placement.source_file``
+// verbatim); the placement id is unique. Every code path that wants
+// to know "is the in-memory file really for the currently-active
+// placement?" should compare this ref against ``store.selectedPlacementId``
+// rather than chase filename equality.
+const _selectedFilePlacementId = ref<string | null>(null)
 const _previewUrl = ref<string | null>(null)
 const _textPreview = ref<string>('')
 const _initialised = ref(false)
 let _disposers: Array<() => void> = []
+// The /preview scheduler is genuinely a singleton — sharing one
+// instance across every consumer is what makes "watcher in this
+// composable updates previewResult; expertPreviewSvg in EditModalV2
+// reads that updated previewResult" actually work. Previously a fresh
+// ``usePreviewScheduler({...})`` was created on every ``useFileManager()``
+// call, so the modal's second mount (after a placement switch) got a
+// brand-new previewer while the wired watchers kept writing to the
+// FIRST mount's instance — the V2 modal then sat on an empty
+// ``previewSvg`` ref forever, and its ``effectivePreviewSvg`` could
+// not refresh from the live /preview path. Type is fully derived from
+// the factory so we don't have to mirror its return shape by hand.
+let _previewer: ReturnType<typeof usePreviewScheduler> | null = null
 
 // Tagged shape for the optional i18n translator. Mirrors vue-i18n's
 // ``t`` overloads enough for our two callsites (no-arg and
@@ -92,37 +112,45 @@ export function useFileManager(t?: Translator) {
   }
 
   // ---- Preview scheduler ----
-  const previewer = usePreviewScheduler({
-    fileGetter: () => _selectedFile.value,
-    algorithmGetter: () => draft.bitmap.value.algorithm,
-    optionsBuilder: () => buildOptions(),
-    // Typography sources (.txt / .md) now get a live Hershey preview
-    // too, served by ``/preview-text``. Document sources still fall
-    // through to ``/upload`` (the bitmap-form preview only makes sense
-    // when there's a raster to segment).
-    //
-    // The ``editModalOpen`` guard is what prevents the "Calcul de
-    // l'aperçu…" toast from firing when the operator deletes a
-    // placement or drops a library file onto the sheet: those flows
-    // mutate ``selectedPlacementId`` (and via the watcher below the
-    // draft + the in-memory file), but with the modal closed the
-    // preview SVG is never on screen — running it just wastes a
-    // round-trip and surfaces a toast for nothing.
-    shouldRun: () => ui.editModalOpen && (kind.value === 'bitmap' || kind.value === 'typography'),
-    modeGetter: () => (kind.value === 'typography' ? 'text' : 'bitmap'),
-    qualityGetter: () => edit.previewQuality.value,
-    failedMessage: t?.('upload.failed') ?? 'preview failed',
-    timeoutMessage:
-      t?.('upload.previewTimeout') ??
-      'Preview too slow — lower the detail tier or hit Apply to render anyway.',
-    // Long-render progress toast wiring. Toast appears after 800ms
-    // (so quick renders never surface one), ticks every second so the
-    // operator sees the elapsed time, and exposes a cancel button
-    // that aborts the in-flight /preview round-trip.
-    progressMessage: (seconds: number) =>
-      t?.('upload.previewProgress', { seconds }) ?? `Rendering preview… (${seconds}s)`,
-    cancelLabel: t?.('upload.previewCancel') ?? 'Cancel',
-  })
+  // Singleton: first call wins, subsequent calls reuse the same
+  // instance so every consumer (modal, tabs, store) reads/writes the
+  // same previewResult. Without this, the second mount of the V2
+  // modal received a fresh, unwired scheduler whose previewSvg stayed
+  // empty regardless of what the watchers wrote.
+  if (!_previewer) {
+    _previewer = usePreviewScheduler({
+      fileGetter: () => _selectedFile.value,
+      algorithmGetter: () => draft.bitmap.value.algorithm,
+      optionsBuilder: () => buildOptions(),
+      // Typography sources (.txt / .md) now get a live Hershey preview
+      // too, served by ``/preview-text``. Document sources still fall
+      // through to ``/upload`` (the bitmap-form preview only makes sense
+      // when there's a raster to segment).
+      //
+      // The ``editModalOpen`` guard is what prevents the "Calcul de
+      // l'aperçu…" toast from firing when the operator deletes a
+      // placement or drops a library file onto the sheet: those flows
+      // mutate ``selectedPlacementId`` (and via the watcher below the
+      // draft + the in-memory file), but with the modal closed the
+      // preview SVG is never on screen — running it just wastes a
+      // round-trip and surfaces a toast for nothing.
+      shouldRun: () => ui.editModalOpen && (kind.value === 'bitmap' || kind.value === 'typography'),
+      modeGetter: () => (kind.value === 'typography' ? 'text' : 'bitmap'),
+      qualityGetter: () => edit.previewQuality.value,
+      failedMessage: t?.('upload.failed') ?? 'preview failed',
+      timeoutMessage:
+        t?.('upload.previewTimeout') ??
+        'Preview too slow — lower the detail tier or hit Apply to render anyway.',
+      // Long-render progress toast wiring. Toast appears after 800ms
+      // (so quick renders never surface one), ticks every second so the
+      // operator sees the elapsed time, and exposes a cancel button
+      // that aborts the in-flight /preview round-trip.
+      progressMessage: (seconds: number) =>
+        t?.('upload.previewProgress', { seconds }) ?? `Rendering preview… (${seconds}s)`,
+      cancelLabel: t?.('upload.previewCancel') ?? 'Cancel',
+    })
+  }
+  const previewer = _previewer
 
   // ---- File handling ----
   function refreshThumbnail(): void {
@@ -144,12 +172,14 @@ export function useFileManager(t?: Translator) {
   //      the bytes back on demand.
   async function ensureSelectedFile(): Promise<void> {
     if (_selectedFile.value) return
+    const placement = store.selectedPlacement
+    if (!placement) return
     if (store.lastFile) {
       _selectedFile.value = store.lastFile
+      _selectedFilePlacementId.value = placement.id
       return
     }
-    const placement = store.selectedPlacement
-    if (!placement?.library_file_id || !placement.source_file) return
+    if (!placement.library_file_id || !placement.source_file) return
     // Snapshot the placement id BEFORE the network round-trip. If the
     // operator clicks another file mid-download (slow link, large
     // raster), the active placement changes underneath us and the file
@@ -166,6 +196,7 @@ export function useFileManager(t?: Translator) {
       )
       if (store.selectedPlacementId !== requestedPlacementId) return
       _selectedFile.value = file
+      _selectedFilePlacementId.value = requestedPlacementId
     } catch {
       // Bytes evicted / network error — UI stays usable in read-only
       // mode (settings visible, /preview disabled until re-attach via
@@ -180,6 +211,7 @@ export function useFileManager(t?: Translator) {
 
   function setFile(file: File | null): void {
     _selectedFile.value = file
+    _selectedFilePlacementId.value = file ? (store.selectedPlacementId ?? null) : null
   }
 
   // ---- Upload ----
@@ -273,6 +305,7 @@ export function useFileManager(t?: Translator) {
 
   function clearAll(): void {
     _selectedFile.value = null
+    _selectedFilePlacementId.value = null
     store.clearJob()
   }
 
@@ -410,6 +443,7 @@ export function useFileManager(t?: Translator) {
           // the new /preview returning.
           resetEditState()
           _selectedFile.value = null
+          _selectedFilePlacementId.value = null
           const installed = (store.selectedProfile?.pens ?? [])
             .filter((p) => p.installed && p.color)
             .map((p) => p.color)
@@ -544,6 +578,7 @@ export function useFileManager(t?: Translator) {
 
   return {
     selectedFile: _selectedFile,
+    selectedFilePlacementId: _selectedFilePlacementId,
     previewUrl: _previewUrl,
     textPreview: _textPreview,
     sourceName,
@@ -573,6 +608,7 @@ export function useFileManager(t?: Translator) {
 // open starts from a clean slate.
 export function resetFileManager(): void {
   _selectedFile.value = null
+  _selectedFilePlacementId.value = null
   if (_previewUrl.value) {
     URL.revokeObjectURL(_previewUrl.value)
     _previewUrl.value = null
@@ -587,4 +623,8 @@ export function resetFileManager(): void {
   }
   _disposers = []
   _initialised.value = false
+  if (_previewer) {
+    _previewer.dispose()
+    _previewer = null
+  }
 }
