@@ -624,10 +624,24 @@ const activeExpertTab = ref<EditTabId>('layers')
 // result for this session. Outside those conditions we fall back to the
 // resolver-driven ``renderedSvg`` so the assisted wizard keeps its own
 // preview pipeline untouched.
+// The file manager's preview singleton outlives the modal: its
+// ``previewSvg`` can still hold the previous placement's render in the
+// brief window between the operator switching files and the new
+// /preview round-trip returning. Gate the forward on a name match
+// between the in-memory File and the active placement's source so the
+// pane never paints File B's pixels while File A is active. When the
+// file isn't loaded yet (just-switched placement, awaiting
+// ensureSelectedFile), suppress the svg too — anything still in the
+// singleton at that moment is the previous file's leftover.
 const expertPreviewSvg = computed<string | null>(() => {
   if (!uiMode.isExpert) return null
   const svg = fileManager.previewSvg.value
-  return svg && svg.length > 0 ? svg : null
+  if (!svg || svg.length === 0) return null
+  const fileName = fileManager.selectedFile.value?.name
+  const placementSource = job.selectedPlacement?.source_file
+  if (!fileName || !placementSource) return null
+  if (fileName !== placementSource) return null
+  return svg
 })
 const expertPreviewLoading = computed<boolean>(() => {
   if (!uiMode.isExpert) return false

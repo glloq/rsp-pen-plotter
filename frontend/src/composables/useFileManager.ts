@@ -16,7 +16,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { downloadOriginalFile } from '../api/client'
 import { confirmAction } from './confirm'
-import { useEditState } from './useEditState'
+import { resetEditState, useEditState } from './useEditState'
 import { useBitmapDraft } from './useBitmapDraft'
 import { usePreviewScheduler } from './usePreviewScheduler'
 import { usePreviewCostEstimator } from './usePreviewCostEstimator'
@@ -392,6 +392,13 @@ export function useFileManager(t?: Translator) {
           // lands.
           previewer.cancel()
           previewer.clear()
+          // Wipe every shared edit-state ref so EditPreviewPane stops
+          // mirroring the previous session's previewSvg / palette /
+          // loading flags while the new placement loads. Without this
+          // the singleton ``useEditState`` kept surfacing the prior
+          // file's render to the pane between the placement switch and
+          // the new /preview returning.
+          resetEditState()
           _selectedFile.value = null
           const installed = (store.selectedProfile?.pens ?? [])
             .filter((p) => p.installed && p.color)
