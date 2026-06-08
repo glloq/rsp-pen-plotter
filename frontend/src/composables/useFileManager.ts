@@ -13,7 +13,7 @@
 // most one instance at a time so a module-level singleton is simpler
 // than provide/inject across tab siblings.
 
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, effectScope, onBeforeUnmount, ref, watch } from 'vue'
 import { downloadOriginalFile } from '../api/client'
 import { confirmAction } from './confirm'
 import { resetEditState, useEditState } from './useEditState'
@@ -46,6 +46,20 @@ const _previewUrl = ref<string | null>(null)
 const _textPreview = ref<string>('')
 const _initialised = ref(false)
 let _disposers: Array<() => void> = []
+// Detached effect scope so the watchers wired in ``ensureWired`` survive
+// the first calling component's unmount. Without a detached scope,
+// ``watch()`` calls made inside ``useFileManager()`` are bound to the
+// current Vue component instance and get auto-stopped when that
+// component tears down — which is what happened the moment the operator
+// closed the modal. ``ensureWired`` only runs once (idempotency flag),
+// so on the second mount the watchers were silently dead: the deep
+// draft watcher never re-fired, the placement-switch watcher never
+// re-fired, ``_selectedFile`` stayed pinned to the previous session's
+// File, and ``previewer.previewResult`` could not refresh after a
+// placement switch. ``effectScope(true)`` produces a scope detached
+// from any parent — exactly the lifetime semantics a module-level
+// singleton needs.
+let _wiringScope: ReturnType<typeof effectScope> | null = null
 // The /preview scheduler is genuinely a singleton — sharing one
 // instance across every consumer is what makes "watcher in this
 // composable updates previewResult; expertPreviewSvg in EditModalV2
@@ -324,10 +338,24 @@ export function useFileManager(t?: Translator) {
   // lifetime — the singleton survives modal close. We track disposers
   // so a future ``disposeFileManager`` (called when the modal closes
   // for good) can tear them down cleanly.
+  //
+  // CRITICAL: every ``watch()`` below has to run inside the detached
+  // ``_wiringScope``. ``watch()`` called bare inside a component's
+  // ``setup()`` is bound to that component's effect scope and Vue
+  // auto-stops it on unmount — so the very first modal close used to
+  // tear down every watcher in this composable, and ``ensureWired``'s
+  // idempotency flag then blocked them from ever being re-installed.
+  // The detached scope makes them live for the lifetime of the module.
   function ensureWired(): void {
     if (_initialised.value) return
     _initialised.value = true
+    if (!_wiringScope) _wiringScope = effectScope(true)
+    _wiringScope.run(() => {
+      installWatchers()
+    })
+  }
 
+  function installWatchers(): void {
     // Bitmap thumbnail + plain-text preview rebuild on file change.
     _disposers.push(
       watch(_selectedFile, refreshThumbnail),
@@ -637,6 +665,10 @@ export function resetFileManager(): void {
   }
   _disposers = []
   _initialised.value = false
+  if (_wiringScope) {
+    _wiringScope.stop()
+    _wiringScope = null
+  }
   if (_previewer) {
     _previewer.dispose()
     _previewer = null
