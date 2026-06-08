@@ -421,21 +421,6 @@ export async function preflightCheck(
   return response.data
 }
 
-/** Estimate metrics for a standalone SVG (used by Compare drawer
- *  to fill per-variant metrics without building a full plan). */
-export async function preflightSvg(
-  svg: string,
-  profileName: string,
-  signal?: AbortSignal,
-): Promise<PreflightReport> {
-  const response = await api.post<PreflightReport>(
-    '/preflight/svg',
-    { svg, profile_name: profileName },
-    { signal },
-  )
-  return response.data
-}
-
 /** Fetch an archived resolved plan by its stable hash. */
 export async function getResolvedPlan(planHash: string): Promise<ResolvedPlan> {
   const response = await api.get<ResolvedPlan>(`/plans/${encodeURIComponent(planHash)}`)

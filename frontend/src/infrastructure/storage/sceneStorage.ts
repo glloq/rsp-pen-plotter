@@ -6,10 +6,16 @@
 
 import type { Ref } from 'vue'
 import { watch } from 'vue'
-import type { Placement, Variant } from '../../stores/job'
+import type { Placement } from '../../stores/job'
 
-const SCENE_KEY = 'omniplot.scene.v4'
-const LEGACY_SCENE_KEYS = ['omniplot.scene.v3', 'omniplot.scene.v2']
+const SCENE_KEY = 'omniplot.scene.v5'
+// v4 stored ``placement.variants`` + ``active_variant_id``; the v0.2
+// simplification flattened to a single style per file, so v4 entries
+// are migrated by collapsing the active variant (or the first one)
+// into the placement-level ``layer_algorithms`` + ``visibility`` and
+// dropping the wrapper. v2/v3 keys still migrate via their original
+// path inside ``migrateLegacyPlacement``.
+const LEGACY_SCENE_KEYS = ['omniplot.scene.v4', 'omniplot.scene.v3', 'omniplot.scene.v2']
 
 export interface SerializableScene {
   placements: Placement[]
@@ -27,8 +33,6 @@ export interface ScenePersistenceRefs {
   scaleMode: Ref<'fit' | 'actual'>
   marginMm: Ref<number>
   autoOptimize: Ref<boolean>
-  /** Build a default variant for placements migrated from a pre-v3 scene. */
-  makeDefaultVariant: () => Variant
 }
 
 /** Serialise the live editor state to a JSON string for ``localStorage``. */
@@ -78,9 +82,7 @@ export function hydrateScene(refs: ScenePersistenceRefs): boolean {
     }
     const data = JSON.parse(raw) as Partial<SerializableScene>
     if (Array.isArray(data.placements)) {
-      refs.placements.value = data.placements.map((p) =>
-        migrateLegacyPlacement(p, refs.makeDefaultVariant),
-      )
+      refs.placements.value = data.placements.map((p) => migrateLegacyPlacement(p))
     }
     if (data.selectedPlacementId !== undefined) {
       refs.selectedPlacementId.value = data.selectedPlacementId
@@ -158,10 +160,17 @@ export function attachScenePersistence(refs: ScenePersistenceRefs): () => void {
   }
 }
 
-function migrateLegacyPlacement(
-  p: Partial<Placement>,
-  makeDefaultVariant: () => Variant,
-): Placement {
+// Legacy variant snapshot shape — kept here so the v4→v5 migration
+// can still read pre-flattening scenes without dragging the dead
+// ``Variant`` interface into the store's public types.
+interface LegacyVariantSnapshot {
+  id: string
+  name?: string
+  layer_algorithms?: Record<string, unknown>
+  visibility?: Record<string, boolean>
+}
+
+function migrateLegacyPlacement(p: Partial<Placement>): Placement {
   // Default the fields that pre-v4 scenes didn't carry.
   const placement = {
     ...({
@@ -173,15 +182,31 @@ function migrateLegacyPlacement(
     } as Pick<Placement, 'library_file_id' | 'rerenderable' | 'rotation' | 'flip_h' | 'flip_v'>),
     ...p,
     last_file: null,
-  } as Placement
-  // v2 → v3 migration: wrap legacy placement state in a default
-  // variant so the variant API has a snapshot to point at.
-  if (!Array.isArray(placement.variants) || !placement.variants.length) {
-    const variant = makeDefaultVariant()
-    variant.layer_algorithms = { ...(placement.layer_algorithms ?? {}) }
-    variant.visibility = { ...(placement.visibility ?? {}) }
-    placement.variants = [variant]
-    placement.active_variant_id = variant.id
+  } as Placement & { variants?: LegacyVariantSnapshot[]; active_variant_id?: string }
+
+  // v4 → v5: collapse the variants list down to the active snapshot's
+  // ``layer_algorithms`` + ``visibility``, then drop the wrapper. Picks
+  // the active variant by id, falling back to the first entry, so
+  // older scenes with a missing/invalid ``active_variant_id`` still
+  // produce a usable placement.
+  if (Array.isArray(placement.variants) && placement.variants.length > 0) {
+    const active =
+      placement.variants.find((v) => v.id === placement.active_variant_id) ??
+      placement.variants[0]!
+    placement.layer_algorithms = {
+      ...(placement.layer_algorithms ?? {}),
+      ...(active.layer_algorithms ?? {}),
+    } as Placement['layer_algorithms']
+    placement.visibility = {
+      ...(placement.visibility ?? {}),
+      ...(active.visibility ?? {}),
+    }
+    delete placement.variants
+    delete placement.active_variant_id
   }
+  // Ensure the per-layer maps always exist — saves every consumer a
+  // ``?? {}`` after the migration.
+  if (!placement.layer_algorithms) placement.layer_algorithms = {}
+  if (!placement.visibility) placement.visibility = {}
   return placement
 }

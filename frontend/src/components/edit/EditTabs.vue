@@ -15,15 +15,13 @@ import { useI18n } from 'vue-i18n'
 // process filters). The old "Source" tab is gone — the modal always
 // opens with a file already attached (Edit on a library entry); the
 // rare empty-placement case shows a dedicated overlay dropzone
-// instead of a tab. Variants live in the persistent VariantsBar
-// mounted above this strip.
+// instead of a tab.
 
 export type EditTabId = 'image' | 'svg' | 'style' | 'text' | 'layers'
 
 const props = defineProps<{
   modelValue: EditTabId
   layerCount: number
-  variantCount: number
   showText: boolean
 }>()
 

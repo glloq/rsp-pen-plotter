@@ -37,8 +37,6 @@ function makePlacement(over: Partial<Placement> = {}): Placement {
     last_file: null,
     last_options: undefined,
     visibility: {},
-    variants: [],
-    active_variant_id: '',
     rotation: 0,
     flip_h: false,
     flip_v: false,

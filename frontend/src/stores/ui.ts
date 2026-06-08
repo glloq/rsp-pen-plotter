@@ -99,10 +99,6 @@ export const useUiStore = defineStore('ui', () => {
   const plotterSettingsOpen = ref(false)
   const plotterTab = ref<PlotterTab>('connection')
   const editModalOpen = ref(false)
-  // Compare drawer (roadmap C.5): side-by-side rendering of two variants
-  // of the selected placement. Opened from the edit modals (V1 / V2), no
-  // longer from a floating global launcher.
-  const compareOpen = ref(false)
   // Display-only sheet overlay shown on the workspace plan, positioned at
   // the top-left. Set when the user picks a sheet format in LayoutSection.
   const previewSheet = ref<PreviewSheet | null>(null)
@@ -230,14 +226,6 @@ export const useUiStore = defineStore('ui', () => {
     editModalOpen.value = false
   }
 
-  function openCompare(): void {
-    compareOpen.value = true
-  }
-
-  function closeCompare(): void {
-    compareOpen.value = false
-  }
-
   function startUpdate(message: string): void {
     updateState.value = {
       phase: 'running',
@@ -292,7 +280,6 @@ export const useUiStore = defineStore('ui', () => {
     plotterSettingsOpen,
     plotterTab,
     editModalOpen,
-    compareOpen,
     previewSheet,
     updateState,
     updateNotificationsEnabled,
@@ -304,8 +291,6 @@ export const useUiStore = defineStore('ui', () => {
     closePlotterSettings,
     openEditModal,
     closeEditModal,
-    openCompare,
-    closeCompare,
     startUpdate,
     setUpdateMessage,
     finishUpdate,

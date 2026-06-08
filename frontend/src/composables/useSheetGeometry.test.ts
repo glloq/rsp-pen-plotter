@@ -45,8 +45,6 @@ function makePlacement(overrides: Partial<Placement> = {}): Placement {
     flip_v: false,
     svg: null,
     layers: [],
-    variants: [],
-    active_variant_id: null,
     ...overrides,
   } as Placement
 }

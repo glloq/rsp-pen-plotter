@@ -61,7 +61,6 @@ const emit = defineEmits<{
   ]
   doubleClick: [id: string]
   pageChange: [{ id: string; page: number }]
-  variantChange: [{ id: string; variantId: string }]
   remove: [id: string]
 }>()
 
@@ -357,26 +356,6 @@ const HANDLES: Exclude<Handle, null>[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw',
           >
             <option v-for="n in placementPageCount(rp.placement)" :key="n - 1" :value="n - 1">
               {{ t('upload.pageOf', { current: n, total: placementPageCount(rp.placement) }) }}
-            </option>
-          </select>
-          <select
-            v-if="rp.placement.variants.length > 1"
-            class="max-w-[120px] truncate rounded border border-slate-600 bg-slate-800 px-1 py-0.5 text-[11px] text-slate-100 shadow focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            :value="rp.placement.active_variant_id"
-            :title="t('variants.title')"
-            @change="
-              (e) =>
-                emit('variantChange', {
-                  id: rp.placement.id,
-                  variantId: (e.target as HTMLSelectElement).value,
-                })
-            "
-            @pointerdown.stop
-            @click.stop
-            @dblclick.stop
-          >
-            <option v-for="variant in rp.placement.variants" :key="variant.id" :value="variant.id">
-              {{ variant.name }}
             </option>
           </select>
           <button

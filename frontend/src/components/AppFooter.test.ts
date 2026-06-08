@@ -76,8 +76,6 @@ function makePlacement(overrides: Partial<Placement> = {}): Placement {
     rotation: 0,
     flip_h: false,
     flip_v: false,
-    variants: [],
-    active_variant_id: '',
     ...overrides,
   } as unknown as Placement
 }
