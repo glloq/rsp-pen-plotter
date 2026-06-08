@@ -783,6 +783,16 @@ function onWindowKey(event: KeyboardEvent): void {
 
 onMounted(async () => {
   window.addEventListener('keydown', onWindowKey)
+  // Belt-and-braces preview reset on every mount: the modal :key
+  // remounts on placement change so this fires per editor session.
+  // The placement-switch watcher in useFileManager *should* have
+  // already cleared the singleton previewer, but if Vue reorders the
+  // watcher flush vs. the modal re-render the operator can briefly
+  // see the previous file's cached preview. Calling cancel + clear
+  // here guarantees a clean slate the moment the modal appears, no
+  // matter the order. Cheap when the previewer is already empty.
+  fileManager.previewer.cancel()
+  fileManager.previewer.clear()
   // Kick off the first preview immediately — zero clicks to a result.
   void resolveAndPreview()
   startTourIfFirstRun()
