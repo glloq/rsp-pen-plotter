@@ -150,12 +150,22 @@ export function useFileManager(t?: Translator) {
     }
     const placement = store.selectedPlacement
     if (!placement?.library_file_id || !placement.source_file) return
+    // Snapshot the placement id BEFORE the network round-trip. If the
+    // operator clicks another file mid-download (slow link, large
+    // raster), the active placement changes underneath us and the file
+    // bytes coming back belong to the wrong placement. Without this
+    // guard the late assignment overwrites the singleton with File A
+    // while Placement B is active — exactly the "wrong file at render"
+    // class of bug.
+    const requestedPlacementId = placement.id
     try {
-      _selectedFile.value = await downloadOriginalFile(
+      const file = await downloadOriginalFile(
         placement.library_file_id,
         placement.source_file,
         placement.source_mime || 'application/octet-stream',
       )
+      if (store.selectedPlacementId !== requestedPlacementId) return
+      _selectedFile.value = file
     } catch {
       // Bytes evicted / network error — UI stays usable in read-only
       // mode (settings visible, /preview disabled until re-attach via
