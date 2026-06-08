@@ -205,8 +205,17 @@ async function renderAdaptedPreview(controller: AbortController): Promise<void> 
         )
     if (controller.signal.aborted) return
     // ``null`` means nothing renderable (e.g. vector source with no
-    // layers) — fall back to the original SVG, not an error.
-    if (result) renderedSvg.value = result.svg
+    // layers, missing job_id, non-rerenderable) — fall back to the
+    // original placement SVG so the operator's last choice doesn't
+    // leave a stale render on screen. Without this clear, toggling
+    // goal / palette / custom style on a non-rerenderable placement
+    // would silently keep the previous render visible and read as
+    // "the preview doesn't update".
+    if (result) {
+      renderedSvg.value = result.svg
+    } else {
+      renderedSvg.value = null
+    }
   } catch {
     if (!controller.signal.aborted) previewError.value = true
   } finally {
@@ -624,10 +633,24 @@ const activeExpertTab = ref<EditTabId>('layers')
 // result for this session. Outside those conditions we fall back to the
 // resolver-driven ``renderedSvg`` so the assisted wizard keeps its own
 // preview pipeline untouched.
+// The file manager's preview singleton outlives the modal: its
+// ``previewSvg`` can still hold the previous placement's render in the
+// brief window between the operator switching files and the new
+// /preview round-trip returning. Gate the forward on a name match
+// between the in-memory File and the active placement's source so the
+// pane never paints File B's pixels while File A is active. When the
+// file isn't loaded yet (just-switched placement, awaiting
+// ensureSelectedFile), suppress the svg too — anything still in the
+// singleton at that moment is the previous file's leftover.
 const expertPreviewSvg = computed<string | null>(() => {
   if (!uiMode.isExpert) return null
   const svg = fileManager.previewSvg.value
-  return svg && svg.length > 0 ? svg : null
+  if (!svg || svg.length === 0) return null
+  const fileName = fileManager.selectedFile.value?.name
+  const placementSource = job.selectedPlacement?.source_file
+  if (!fileName || !placementSource) return null
+  if (fileName !== placementSource) return null
+  return svg
 })
 const expertPreviewLoading = computed<boolean>(() => {
   if (!uiMode.isExpert) return false
