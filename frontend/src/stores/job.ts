@@ -86,7 +86,7 @@ export interface LayerPass {
   algorithm_options: Record<string, unknown>
 }
 
-interface LayerAlgorithm {
+export interface LayerAlgorithm {
   algorithm: string
   algorithm_options: Record<string, unknown>
   // Optional multi-pass stack. When present and non-empty, the backend
@@ -97,17 +97,12 @@ interface LayerAlgorithm {
   passes?: LayerPass[]
 }
 
-// A variant is a named snapshot of the editor's per-layer choices for a
-// placement: which algorithm to render each layer with, and whether the
-// layer is currently visible. Switching variants pulls these into the
-// placement's live state and triggers /rerender. The placement always
-// has at least one variant; the active one IS the live state.
-export interface Variant {
-  id: string
-  name: string
-  layer_algorithms: Record<string, LayerAlgorithm>
-  visibility: Record<string, boolean>
-}
+// Per-layer choices live directly on the placement: ``layer_algorithms``
+// + ``visibility`` IS the editor state for this file. We used to wrap
+// these in a list of named ``Variant`` snapshots so the operator could
+// keep several styles per file and switch between them; the v0.2
+// simplification cut that down to a single style per file, so the
+// snapshot wrapper is gone.
 
 export interface Placement {
   id: string
@@ -141,8 +136,6 @@ export interface Placement {
   // Horizontal / vertical mirroring, applied AFTER rotation.
   flip_h: boolean
   flip_v: boolean
-  variants: Variant[]
-  active_variant_id: string
   // True when this placement was created by "Edit from library" without
   // an explicit "Add to plan" — it's a working copy that holds the
   // operator's conversion-settings draft but is **not** rendered on the
@@ -197,22 +190,22 @@ export const useJobStore = defineStore('job', () => {
     preflight.value = null
   }
 
-  // Persist a placement's variants back to the library so every future
-  // placement of the same file starts from the latest snapshot. No-op
-  // for placements without a library backing (legacy uploads).
+  // Persist a placement's editor state back to the library so every
+  // future placement of the same file starts from the latest snapshot.
+  // No-op for placements without a library backing (legacy uploads).
   function syncPlacementToLibrary(p: Placement | null): void {
     if (!p?.library_file_id) return
     const library = useLibraryStore()
-    // Persist the full editor config (``last_options``) alongside the
-    // per-layer variants so the next "Edit from library" rehydrates the
-    // operator's chosen segmentation / master style / preprocess instead
-    // of resetting to defaults.
-    library.saveFileVariants(p.library_file_id, p.variants, p.active_variant_id, p.last_options)
+    // Persist the per-layer state + the full editor config
+    // (``last_options``) so the next "Edit from library" rehydrates
+    // the operator's chosen segmentation / master style / preprocess
+    // instead of resetting to defaults.
+    library.saveFileSettings(p.library_file_id, {
+      layer_algorithms: p.layer_algorithms,
+      visibility: p.visibility,
+      last_options: p.last_options,
+    })
   }
-  function syncSelectedToLibrary(): void {
-    syncPlacementToLibrary(selectedPlacement.value)
-  }
-
   function selectPlacement(id: string | null): void {
     selectedPlacementId.value = id
   }
@@ -256,22 +249,8 @@ export const useJobStore = defineStore('job', () => {
     return { x_mm: (wsW - w) / 2, y_mm: (wsH - h) / 2, width_mm: w, height_mm: h }
   }
 
-  function newVariantId(): string {
-    return `v${Date.now().toString(36)}${Math.floor(Math.random() * 1000).toString(36)}`
-  }
-
-  function defaultVariant(): Variant {
-    return {
-      id: newVariantId(),
-      name: i18n.global.t('variants.default'),
-      layer_algorithms: {},
-      visibility: {},
-    }
-  }
-
   function blankPlacement(): Placement {
     const size = defaultPlacementSize()
-    const variant = defaultVariant()
     return {
       id: newPlacementId(),
       library_file_id: null,
@@ -288,8 +267,6 @@ export const useJobStore = defineStore('job', () => {
       last_file: null,
       last_options: undefined,
       visibility: {},
-      variants: [variant],
-      active_variant_id: variant.id,
       rotation: 0,
       flip_h: false,
       flip_v: false,
@@ -341,15 +318,6 @@ export const useJobStore = defineStore('job', () => {
   function duplicatePlacement(id: string, offsetMm = 15): string | null {
     const src = placements.value.find((p) => p.id === id)
     if (!src) return null
-    // Variants are per-file — preserve their identities across clones so
-    // edits made on one placement's active variant flow back through the
-    // library snapshot to the other placements of the same file. Only
-    // the per-placement geometry / live state is forked.
-    const clonedVariants = src.variants.map((v) => ({
-      ...v,
-      layer_algorithms: { ...v.layer_algorithms },
-      visibility: { ...v.visibility },
-    }))
     const clone: Placement = {
       ...src,
       id: newPlacementId(),
@@ -360,8 +328,6 @@ export const useJobStore = defineStore('job', () => {
       visibility: { ...src.visibility },
       layer_algorithms: { ...src.layer_algorithms },
       layers: src.layers.map((l) => ({ ...l })),
-      variants: clonedVariants,
-      active_variant_id: src.active_variant_id,
     }
     placements.value = [...placements.value, clone]
     invalidateOutputs()
@@ -612,7 +578,7 @@ export const useJobStore = defineStore('job', () => {
         [layerId]: { algorithm, algorithm_options: algorithmOptions },
       },
     })
-    autoSyncActiveVariant()
+    autoSyncFileSettings()
     clearLivePreviewSvg()
     scheduleRerender(250)
   }
@@ -625,52 +591,6 @@ export const useJobStore = defineStore('job', () => {
    * one shot rather than looping over ``applyLayerAlgorithm`` (each of
    * which would schedule its own debounced rerender).
    */
-  /**
-   * Render an arbitrary variant of a placement *without* mutating the
-   * live placement state. Returns the freshly rendered SVG so callers
-   * (e.g. the Compare drawer) can show two variants side by side.
-   *
-   * Uses the same ``/rerender`` endpoint as the live debounced path,
-   * but never patches ``placement.svg`` — the cache stays consistent
-   * with whichever variant is currently active.
-   */
-  async function renderVariant(
-    placement: Placement,
-    variant: Variant,
-    signal?: AbortSignal,
-  ): Promise<{ svg: string; warnings: string[] } | null> {
-    if (!placement.job_id || !placement.rerenderable) return null
-    const layersPayload = Object.entries(variant.layer_algorithms).map(([layer_id, spec]) => {
-      if (spec.passes && spec.passes.length) {
-        return {
-          layer_id,
-          passes: spec.passes.map((p) => ({
-            algorithm: p.algorithm,
-            algorithm_options: p.algorithm_options,
-          })),
-        }
-      }
-      return {
-        layer_id,
-        algorithm: spec.algorithm,
-        algorithm_options: spec.algorithm_options,
-      }
-    })
-    try {
-      const result = await rerenderJob(
-        placement.job_id,
-        layersPayload,
-        signal,
-        penWidthsFor(placement),
-        inkColorsFor(placement),
-      )
-      return { svg: result.svg, warnings: result.warnings ?? [] }
-    } catch (err) {
-      if ((err as { name?: string }).name === 'CanceledError') return null
-      throw err
-    }
-  }
-
   /**
    * Render the selected placement with a single algorithm applied to
    * every layer, *without* mutating the live placement state. Powers
@@ -767,7 +687,7 @@ export const useJobStore = defineStore('job', () => {
       }
     }
     patchSelected({ layer_algorithms: next })
-    autoSyncActiveVariant()
+    autoSyncFileSettings()
     clearLivePreviewSvg()
     scheduleRerender(50)
   }
@@ -786,7 +706,7 @@ export const useJobStore = defineStore('job', () => {
       }
     }
     patchSelected({ layer_algorithms: next })
-    autoSyncActiveVariant()
+    autoSyncFileSettings()
     clearLivePreviewSvg()
     scheduleRerender(50)
   }
@@ -798,7 +718,7 @@ export const useJobStore = defineStore('job', () => {
     const next = { ...p.layer_algorithms }
     delete next[layerId]
     patchSelected({ layer_algorithms: next })
-    autoSyncActiveVariant()
+    autoSyncFileSettings()
     clearLivePreviewSvg()
     scheduleRerender(250)
   }
@@ -831,7 +751,7 @@ export const useJobStore = defineStore('job', () => {
         },
       },
     })
-    autoSyncActiveVariant()
+    autoSyncFileSettings()
     clearLivePreviewSvg()
     scheduleRerender(250)
   }
@@ -976,7 +896,7 @@ export const useJobStore = defineStore('job', () => {
     const p = selectedPlacement.value
     if (!p) return
     patchSelected({ visibility: { ...p.visibility, [layerId]: visible } })
-    autoSyncActiveVariant()
+    autoSyncFileSettings()
   }
   function isVisible(layerId: string): boolean {
     return visibility.value[layerId] ?? true
@@ -1293,24 +1213,17 @@ export const useJobStore = defineStore('job', () => {
     // onto the new placement so the file renders with its last-used print
     // settings instead of the default conversion. Otherwise fall back to
     // a fresh default variant generated by ``blankPlacement``.
-    const saved = library.getFileVariants(detail.file_id)
-    const variantPatch: Partial<Placement> = {}
-    let activeVariantForRerender: Variant | null = null
-    if (saved && saved.variants.length) {
-      const activeId =
-        saved.variants.find((v) => v.id === saved.active_variant_id)?.id ?? saved.variants[0]!.id
-      const active = saved.variants.find((v) => v.id === activeId)!
-      activeVariantForRerender = active
-      variantPatch.variants = saved.variants
-      variantPatch.active_variant_id = activeId
-      variantPatch.layer_algorithms = { ...active.layer_algorithms }
+    const saved = library.getFileSettings(detail.file_id)
+    const settingsPatch: Partial<Placement> = {}
+    if (saved && Object.keys(saved.layer_algorithms).length > 0) {
+      settingsPatch.layer_algorithms = { ...saved.layer_algorithms }
     }
     // Restore the saved editor config so the modal opens showing the
     // chosen segmentation / master style / preprocess the operator last
     // applied to this file, instead of resetting the draft to defaults.
     // ``rehydrateDraft`` reads ``placement.last_options`` directly.
     if (saved?.last_options) {
-      variantPatch.last_options = { ...saved.last_options }
+      settingsPatch.last_options = { ...saved.last_options }
     }
     patchPlacement(placement.id, {
       library_file_id: detail.file_id,
@@ -1326,13 +1239,13 @@ export const useJobStore = defineStore('job', () => {
       upload_warnings: detail.warnings ?? [],
       upload_metadata: detail.upload_metadata ?? {},
       // Merge saved per-layer visibility on top of the default-all-visible
-      // map so layers the operator had hidden in their variant stay hidden.
+      // map so layers the operator had hidden stay hidden.
       visibility: {
         ...Object.fromEntries(detail.layers.map((l) => [l.layer_id, true])),
-        ...(activeVariantForRerender?.visibility ?? {}),
+        ...(saved?.visibility ?? {}),
       },
       ...layoutPatch,
-      ...variantPatch,
+      ...settingsPatch,
     })
     if (position) {
       const ws = selectedProfile.value?.workspace
@@ -1351,7 +1264,7 @@ export const useJobStore = defineStore('job', () => {
     // Kick a /rerender so the canvas shows the file with the hydrated
     // settings rather than the default conversion that came back from
     // the library detail endpoint.
-    if (activeVariantForRerender && Object.keys(activeVariantForRerender.layer_algorithms).length) {
+    if (saved && Object.keys(saved.layer_algorithms).length > 0) {
       scheduleRerender(50)
     }
     return placement.id
@@ -1760,120 +1673,13 @@ export const useJobStore = defineStore('job', () => {
   // are written to ``localStorage`` on a debounce so a tab refresh keeps
   // the scene intact. SVGs can be large — if quota is hit we fail
   // silently and the user simply doesn't get persistence that session.
-  // ====== Variants (named snapshots of layer choices on a placement) ====
-  const activeVariant = computed<Variant | null>(() => {
-    const p = selectedPlacement.value
-    if (!p) return null
-    return p.variants.find((v) => v.id === p.active_variant_id) ?? p.variants[0] ?? null
-  })
-
-  // Roll the placement's live layer_algorithms + visibility into the
-  // active variant snapshot, then mirror the whole variants list back to
-  // the library so the file remembers its settings. Called from the
-  // layer-algorithm / visibility mutators so the file-level snapshot is
-  // always current — operators no longer have to click "Update".
-  function autoSyncActiveVariant(): void {
-    const p = selectedPlacement.value
-    if (!p) return
-    const next = p.variants.map((v) =>
-      v.id === p.active_variant_id
-        ? { ...v, layer_algorithms: { ...p.layer_algorithms }, visibility: { ...p.visibility } }
-        : v,
-    )
-    patchSelected({ variants: next })
+  // ====== File-settings sync ============================================
+  // The placement's live ``layer_algorithms`` + ``visibility`` IS the
+  // single style we keep per file. Whenever a layer mutation lands we
+  // mirror the latest state back to the library so the next "Edit
+  // from library" reopens with exactly what the operator just set.
+  function autoSyncFileSettings(): void {
     syncPlacementToLibrary(selectedPlacement.value)
-  }
-
-  // Snapshot the placement's current live state (layer_algorithms +
-  // visibility) into a new variant. Returns the new variant id, or
-  // null if no placement is selected.
-  function addVariant(name: string): string | null {
-    const p = selectedPlacement.value
-    if (!p) return null
-    const variant: Variant = {
-      id: newVariantId(),
-      name: name.trim() || i18n.global.t('variants.untitled'),
-      layer_algorithms: { ...p.layer_algorithms },
-      visibility: { ...p.visibility },
-    }
-    patchSelected({
-      variants: [...p.variants, variant],
-      active_variant_id: variant.id,
-    })
-    syncSelectedToLibrary()
-    return variant.id
-  }
-
-  // Overwrite the active variant with the placement's current live state.
-  function updateActiveVariant(): void {
-    const p = selectedPlacement.value
-    if (!p) return
-    const next = p.variants.map((v) =>
-      v.id === p.active_variant_id
-        ? { ...v, layer_algorithms: { ...p.layer_algorithms }, visibility: { ...p.visibility } }
-        : v,
-    )
-    patchSelected({ variants: next })
-    syncSelectedToLibrary()
-  }
-
-  function renameVariant(variantId: string, name: string): void {
-    const p = selectedPlacement.value
-    if (!p) return
-    const trimmed = name.trim() || i18n.global.t('variants.untitled')
-    patchSelected({
-      variants: p.variants.map((v) => (v.id === variantId ? { ...v, name: trimmed } : v)),
-    })
-    syncSelectedToLibrary()
-  }
-
-  function removeVariant(variantId: string): void {
-    const p = selectedPlacement.value
-    if (!p) return
-    // Never delete the last variant — keep at least one so the placement
-    // always has a tracked snapshot to roll back to.
-    if (p.variants.length <= 1) return
-    const next = p.variants.filter((v) => v.id !== variantId)
-    const wasActive = p.active_variant_id === variantId
-    const newActive = wasActive ? (next[0]?.id ?? '') : p.active_variant_id
-    patchSelected({ variants: next, active_variant_id: newActive })
-    // Loading the new active variant restores its snapshot into live
-    // state. Look up by id (not next[0]) so the load matches newActive
-    // even when the deleted variant wasn't at index 0.
-    if (wasActive) loadVariantState(next.find((v) => v.id === newActive))
-    syncSelectedToLibrary()
-  }
-
-  // Load a variant's snapshot into the placement's live state and
-  // trigger a /rerender so the canvas reflects the swap.
-  function loadVariantState(variant: Variant | undefined): void {
-    if (!variant) return
-    patchSelected({
-      layer_algorithms: { ...variant.layer_algorithms },
-      visibility: { ...variant.visibility },
-    })
-    scheduleRerender(50)
-  }
-
-  function setActiveVariant(variantId: string): void {
-    const p = selectedPlacement.value
-    if (!p) return
-    const target = p.variants.find((v) => v.id === variantId)
-    if (!target) return
-    patchSelected({ active_variant_id: variantId })
-    loadVariantState(target)
-    syncSelectedToLibrary()
-  }
-
-  // Set the active variant on an arbitrary placement (not necessarily the
-  // currently-selected one). Used by the per-placement variant picker
-  // shown on the plan when a placement has more than one variant.
-  function setPlacementActiveVariant(placementId: string, variantId: string): void {
-    const target = placements.value.find((p) => p.id === placementId)
-    if (!target) return
-    if (!target.variants.find((v) => v.id === variantId)) return
-    selectedPlacementId.value = placementId
-    setActiveVariant(variantId)
   }
 
   // Hydrate from localStorage and auto-persist on changes. The full
@@ -1886,7 +1692,6 @@ export const useJobStore = defineStore('job', () => {
     scaleMode,
     marginMm,
     autoOptimize,
-    makeDefaultVariant: defaultVariant,
   })
 
   return {
@@ -1943,7 +1748,6 @@ export const useJobStore = defineStore('job', () => {
     applyPassesToAllLayers,
     previewPassesOnAllLayers,
     applyLayerPasses,
-    renderVariant,
     clearLayerAlgorithm,
     clearJob,
     totalLengthMm,
@@ -1967,14 +1771,6 @@ export const useJobStore = defineStore('job', () => {
     runPreflight,
     generate,
     flushRerender,
-    // Variants
-    activeVariant,
-    addVariant,
-    updateActiveVariant,
-    renameVariant,
-    removeVariant,
-    setActiveVariant,
-    setPlacementActiveVariant,
   }
 })
 

@@ -21,19 +21,21 @@ import { i18n } from '../i18n'
 import { usePerfStore } from './perf'
 import { useToastStore } from './toasts'
 import { validateUploadFile } from '../api/uploadValidation'
-import type { Variant } from './job'
+import type { LayerAlgorithm } from './job'
 
-// File-level snapshot of the print settings (variants) for a library
-// entry. Persisted across sessions so every new placement of the same
-// file starts from the operator's last-applied settings, instead of the
-// default conversion.
-export interface SavedFileVariants {
-  variants: Variant[]
-  active_variant_id: string
+// File-level snapshot of the print settings for a library entry.
+// Persisted across sessions so every new placement of the same file
+// starts from the operator's last-applied settings instead of the
+// default conversion. The v0.2 simplification dropped the multi-style
+// "variants" wrapper; one style per file is kept in
+// ``layer_algorithms`` + ``visibility`` directly.
+export interface SavedFileSettings {
+  layer_algorithms: Record<string, LayerAlgorithm>
+  visibility: Record<string, boolean>
   // The full editor configuration bag (``buildBitmapOptions`` output:
   // segmentation method, master style id, preprocess adjustments, per-
   // style knobs, curves…) the file was last applied with. Persisted
-  // alongside the per-layer variants so reopening the editor on a
+  // alongside the per-layer state so reopening the editor on a
   // configured file restores the *chosen config* — not just the layer
   // algorithms — instead of falling back to fresh defaults. Optional so
   // older snapshots (and files whose only state is layer overrides)
@@ -41,7 +43,23 @@ export interface SavedFileVariants {
   last_options?: Record<string, unknown>
 }
 
-const FILE_VARIANTS_KEY = 'omniplot.fileVariants.v1'
+const FILE_SETTINGS_KEY = 'omniplot.fileSettings.v2'
+// v1 stored per-variant snapshots under ``omniplot.fileVariants.v1``;
+// the v0.2 flattening collapses the active variant into
+// ``layer_algorithms`` + ``visibility``. We migrate transparently on
+// first load and then drop the legacy key.
+const LEGACY_FILE_VARIANTS_KEY = 'omniplot.fileVariants.v1'
+
+interface LegacyVariantSnapshot {
+  id: string
+  layer_algorithms?: Record<string, LayerAlgorithm>
+  visibility?: Record<string, boolean>
+}
+interface LegacySavedFileVariants {
+  variants?: LegacyVariantSnapshot[]
+  active_variant_id?: string
+  last_options?: Record<string, unknown>
+}
 
 // The library is the canonical store of uploaded sources. One entry per
 // unique SHA-256 (deduplication happens on the backend); placements on the
@@ -78,10 +96,10 @@ export const useLibraryStore = defineStore('library', () => {
     detailCache.value = next
   }
 
-  // Per-file saved variants — keyed by file_id, persisted in localStorage.
+  // Per-file saved settings — keyed by file_id, persisted in localStorage.
   // Hydrated lazily from storage on first access; subsequent mutations
-  // through ``saveFileVariants`` keep storage in sync.
-  const fileVariants = ref<Record<string, SavedFileVariants>>(loadFileVariants())
+  // through ``saveFileSettings`` keep storage in sync.
+  const fileSettings = ref<Record<string, SavedFileSettings>>(loadFileSettings())
 
   // Library integrity issues surfaced by the backend boot scan
   // (``GET /files/integrity`` — see backend lot L4). Lets the UI show a
@@ -98,91 +116,107 @@ export const useLibraryStore = defineStore('library', () => {
     return s
   })
 
-  function loadFileVariants(): Record<string, SavedFileVariants> {
+  function loadFileSettings(): Record<string, SavedFileSettings> {
     try {
-      const raw = localStorage.getItem(FILE_VARIANTS_KEY)
-      if (!raw) return {}
-      const parsed = JSON.parse(raw) as Record<string, SavedFileVariants>
-      return parsed && typeof parsed === 'object' ? parsed : {}
+      const raw = localStorage.getItem(FILE_SETTINGS_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, SavedFileSettings>
+        return parsed && typeof parsed === 'object' ? parsed : {}
+      }
+      // v1 → v2 migration: collapse each entry's variants list down to
+      // the active snapshot. We only run this once because the legacy
+      // key is removed after a successful read.
+      const legacyRaw = localStorage.getItem(LEGACY_FILE_VARIANTS_KEY)
+      if (!legacyRaw) return {}
+      const legacy = JSON.parse(legacyRaw) as Record<string, LegacySavedFileVariants>
+      const migrated: Record<string, SavedFileSettings> = {}
+      for (const [fileId, entry] of Object.entries(legacy ?? {})) {
+        if (!entry || typeof entry !== 'object') continue
+        const variants = Array.isArray(entry.variants) ? entry.variants : []
+        const active =
+          variants.find((v) => v.id === entry.active_variant_id) ?? variants[0] ?? null
+        migrated[fileId] = {
+          layer_algorithms: { ...(active?.layer_algorithms ?? {}) },
+          visibility: { ...(active?.visibility ?? {}) },
+          last_options: entry.last_options ? { ...entry.last_options } : undefined,
+        }
+      }
+      try {
+        localStorage.setItem(FILE_SETTINGS_KEY, JSON.stringify(migrated))
+        localStorage.removeItem(LEGACY_FILE_VARIANTS_KEY)
+      } catch {
+        // best-effort: leave the legacy key in place so a future load can retry.
+      }
+      return migrated
     } catch {
       return {}
     }
   }
 
-  function persistFileVariants(): void {
+  function persistFileSettings(): void {
     try {
-      localStorage.setItem(FILE_VARIANTS_KEY, JSON.stringify(fileVariants.value))
+      localStorage.setItem(FILE_SETTINGS_KEY, JSON.stringify(fileSettings.value))
     } catch {
       // localStorage unavailable / full — non-fatal, settings just won't
       // survive the next reload.
     }
   }
 
-  function cloneVariants(variants: Variant[]): Variant[] {
-    return variants.map((v) => ({
-      ...v,
-      layer_algorithms: { ...v.layer_algorithms },
-      visibility: { ...v.visibility },
-    }))
-  }
-
-  function saveFileVariants(
+  function saveFileSettings(
     fileId: string,
-    variants: Variant[],
-    activeId: string,
-    lastOptions?: Record<string, unknown>,
+    settings: {
+      layer_algorithms: Record<string, LayerAlgorithm>
+      visibility: Record<string, boolean>
+      last_options?: Record<string, unknown>
+    },
   ): void {
     if (!fileId) return
     // Preserve a previously-saved ``last_options`` when this call doesn't
-    // carry one (e.g. a pure visibility toggle on a placement whose
-    // options haven't been recomputed) so we never blank out a remembered
-    // config.
-    const prior = fileVariants.value[fileId]
-    fileVariants.value = {
-      ...fileVariants.value,
+    // carry one (e.g. a pure visibility toggle whose options haven't
+    // been recomputed) so we never blank out a remembered config.
+    const prior = fileSettings.value[fileId]
+    fileSettings.value = {
+      ...fileSettings.value,
       [fileId]: {
-        variants: cloneVariants(variants),
-        active_variant_id: activeId,
-        last_options: lastOptions
-          ? { ...lastOptions }
+        layer_algorithms: { ...settings.layer_algorithms },
+        visibility: { ...settings.visibility },
+        last_options: settings.last_options
+          ? { ...settings.last_options }
           : prior?.last_options
             ? { ...prior.last_options }
             : undefined,
       },
     }
-    persistFileVariants()
+    persistFileSettings()
   }
 
-  function getFileVariants(fileId: string): SavedFileVariants | null {
-    const saved = fileVariants.value[fileId]
+  function getFileSettings(fileId: string): SavedFileSettings | null {
+    const saved = fileSettings.value[fileId]
     if (!saved) return null
     return {
-      variants: cloneVariants(saved.variants),
-      active_variant_id: saved.active_variant_id,
+      layer_algorithms: { ...saved.layer_algorithms },
+      visibility: { ...saved.visibility },
       last_options: saved.last_options ? { ...saved.last_options } : undefined,
     }
   }
 
-  // A file is considered "configured" when at least one of its saved
-  // variants has an explicit per-layer algorithm — i.e. the operator has
-  // actually tweaked the conversion. Drives the green accent in FilesPane.
+  // A file is considered "configured" when its saved settings carry an
+  // explicit per-layer algorithm or a remembered editor config — i.e.
+  // the operator has actually tweaked the conversion. Drives the green
+  // accent in FilesPane.
   function hasFileSettings(fileId: string): boolean {
-    const saved = fileVariants.value[fileId]
+    const saved = fileSettings.value[fileId]
     if (!saved) return false
-    // A non-empty per-layer override OR a remembered editor config
-    // (master style / segmentation / preprocess) both count as "the
-    // operator configured this file" — so the green accent matches what
-    // "Edit from library" will actually restore.
     if (saved.last_options && Object.keys(saved.last_options).length > 0) return true
-    return saved.variants.some((v) => Object.keys(v.layer_algorithms ?? {}).length > 0)
+    return Object.keys(saved.layer_algorithms ?? {}).length > 0
   }
 
-  function dropFileVariants(fileId: string): void {
-    if (!(fileId in fileVariants.value)) return
-    const next = { ...fileVariants.value }
+  function dropFileSettings(fileId: string): void {
+    if (!(fileId in fileSettings.value)) return
+    const next = { ...fileSettings.value }
     delete next[fileId]
-    fileVariants.value = next
-    persistFileVariants()
+    fileSettings.value = next
+    persistFileSettings()
   }
 
   const filteredSorted = computed<LibraryFileRecord[]>(() => {
@@ -404,7 +438,7 @@ export const useLibraryStore = defineStore('library', () => {
       const next = { ...detailCache.value }
       delete next[fileId]
       detailCache.value = next
-      dropFileVariants(fileId)
+      dropFileSettings(fileId)
       try {
         folders.value = await apiListFolders()
       } catch {
@@ -449,7 +483,7 @@ export const useLibraryStore = defineStore('library', () => {
     sortOrder,
     folderFilter,
     detailCache,
-    fileVariants,
+    fileSettings,
     integrityIssues,
     integrityCheckedAt,
     // getters
@@ -467,9 +501,9 @@ export const useLibraryStore = defineStore('library', () => {
     setFolder,
     remove,
     clearCache,
-    saveFileVariants,
-    getFileVariants,
+    saveFileSettings,
+    getFileSettings,
     hasFileSettings,
-    dropFileVariants,
+    dropFileSettings,
   }
 })

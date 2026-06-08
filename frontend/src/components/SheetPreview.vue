@@ -212,9 +212,6 @@ async function onPlacementPageChange(payload: { id: string; page: number }): Pro
   }
   await store.changePage(payload.page)
 }
-function onPlacementVariantChange(payload: { id: string; variantId: string }): void {
-  store.setPlacementActiveVariant(payload.id, payload.variantId)
-}
 function onPlacementRemove(id: string): void {
   store.removePlacement(id)
 }
@@ -722,7 +719,6 @@ function pxToMm(): number {
             @resize="onPlacementResize"
             @double-click="onPlacementDoubleClick"
             @page-change="onPlacementPageChange"
-            @variant-change="onPlacementVariantChange"
             @remove="onPlacementRemove"
           />
         </svg>

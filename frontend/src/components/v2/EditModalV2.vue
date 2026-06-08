@@ -308,9 +308,6 @@ function confirm(): void {
   emit('confirm', decision.value)
 }
 
-// Compare needs two variants on the active placement to be useful.
-const canCompare = computed(() => (job.selectedPlacement?.variants.length ?? 0) >= 2)
-
 // Swatches shown under the preview: one per layer of the active
 // placement, in draw order, showing the colour the layer will actually
 // be drawn with (assigned ink hex from the magazine / inventory pool,
@@ -929,16 +926,6 @@ watch(
         <AssistantModeToggle v-if="uiMode.isExpert" />
         <button
           type="button"
-          class="ghost-btn"
-          :disabled="!canCompare"
-          :title="t('compare.open')"
-          data-test="modal-v2-compare-open"
-          @click="ui.openCompare()"
-        >
-          ⇄ {{ t('compare.open') }}
-        </button>
-        <button
-          type="button"
           class="close"
           :aria-label="t('settings.close')"
           data-test="modal-v2-close"
@@ -1109,7 +1096,6 @@ watch(
           <EditTabs
             :model-value="activeExpertTab"
             :layer-count="props.layers?.length ?? 0"
-            :variant-count="job.selectedPlacement?.variants?.length ?? 0"
             :show-text="showTextTab"
             @update:model-value="selectExpertTab"
           />

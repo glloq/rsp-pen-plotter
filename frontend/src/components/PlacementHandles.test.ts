@@ -20,7 +20,6 @@ const i18n = createI18n({
     en: {
       sheet: { removePlacement: 'Remove' },
       upload: { pageOf: 'Page {current}/{total}' },
-      variants: { title: 'Variants' },
     },
   },
 })
@@ -39,8 +38,6 @@ function makeRendered(id: string): RenderedPlacement {
       svg: '',
       layers: [],
       visibility: {},
-      variants: [],
-      active_variant_id: '',
       library_file_id: '',
       source_file: '',
       source_mime: '',

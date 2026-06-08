@@ -36,12 +36,6 @@
     "plotter": "Plotter",
     "workshop": "Print mode"
   },
-  "compare": {
-    "open": "Compare",
-    "title": "Compare variants",
-    "empty": "Need at least two variants on the current placement to compare. Add a second variant from the Variants bar.",
-    "loading": "Rendering both variants…"
-  },
   "workspaces": {
     "label": "Workspace",
     "menu": "Workspace menu",
@@ -54,8 +48,7 @@
     "empty": {
       "layers": "No layers — select a placement to populate the inspector.",
       "magazine": "No active profile — open the Plotter drawer to pick one.",
-      "queue": "No active run.",
-      "compareHint": "Compare two variants of the current placement side-by-side."
+      "queue": "No active run."
     },
     "panel": {
       "machineTelemetry": "Machine telemetry"
@@ -398,20 +391,6 @@
     "chars": "chars",
     "empty": "No blocks detected on this page.",
     "hint": "Text and image regions detected on the current page."
-  },
-  "variants": {
-    "title": "Variants",
-    "default": "Default",
-    "untitled": "New variant",
-    "add": "Save as variant",
-    "update": "Update",
-    "updateHint": "Overwrite the active variant with current settings",
-    "rename": "Rename",
-    "remove": "Delete variant",
-    "hint": "Each variant snapshots the layer styles and visibility for this file.",
-    "switchHint": "Click to switch · double-click to rename",
-    "collapse": "Collapse variants bar",
-    "expand": "Expand variants bar"
   },
   "printMode": {
     "title": "Colour mode",

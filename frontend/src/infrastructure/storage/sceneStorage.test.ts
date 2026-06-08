@@ -1,17 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, beforeEach } from 'vitest'
 import { ref } from 'vue'
-import type { Placement, Variant } from '../../stores/job'
+import type { Placement } from '../../stores/job'
 import { hydrateScene, persistScene, type ScenePersistenceRefs } from './sceneStorage'
-
-function makeVariant(): Variant {
-  return {
-    id: 'v-default',
-    name: 'Default',
-    layer_algorithms: {},
-    visibility: {},
-  }
-}
 
 function emptyPlacement(overrides: Partial<Placement> = {}): Placement {
   return {
@@ -37,8 +28,6 @@ function emptyPlacement(overrides: Partial<Placement> = {}): Placement {
     rotation: 0,
     flip_h: false,
     flip_v: false,
-    variants: [makeVariant()],
-    active_variant_id: 'v-default',
     ...overrides,
   }
 }
@@ -51,7 +40,6 @@ function makeRefs(): ScenePersistenceRefs {
     scaleMode: ref<'fit' | 'actual'>('fit'),
     marginMm: ref(10),
     autoOptimize: ref(true),
-    makeDefaultVariant: makeVariant,
   }
 }
 
@@ -81,7 +69,7 @@ describe('sceneStorage', () => {
     expect(restored.autoOptimize.value).toBe(false)
   })
 
-  it('migrates a legacy v3 scene to v4 and removes the old key', () => {
+  it('migrates a legacy v3 scene to v5 and removes the old key', () => {
     // Pre-v4 placements lack ``library_file_id`` and ``rotation``;
     // ``hydrateScene`` should default them rather than crash, and
     // delete the v3 key once migrated.
@@ -121,10 +109,75 @@ describe('sceneStorage', () => {
     const p = refs.placements.value[0]!
     expect(p.library_file_id).toBeNull()
     expect(p.rotation).toBe(0)
-    expect(p.variants).toHaveLength(1)
-    expect(p.active_variant_id).toBe(p.variants[0]!.id)
+    // No more variants wrapper — pre-v4 placements arrive with empty
+    // layer_algorithms and the migration defaults the per-layer maps.
+    expect(p.layer_algorithms).toEqual({})
+    expect(p.visibility).toEqual({})
     expect(localStorage.getItem('omniplot.scene.v3')).toBeNull()
-    expect(localStorage.getItem('omniplot.scene.v4')).not.toBeNull()
+    expect(localStorage.getItem('omniplot.scene.v5')).not.toBeNull()
+  })
+
+  it('migrates a v4 scene by collapsing the active variant into the placement', () => {
+    // v4 stored ``variants`` + ``active_variant_id`` on the placement;
+    // v5 flattens to a single style per file so the migration has to
+    // promote the active variant's layer state onto the placement and
+    // drop the wrapper.
+    const v4 = {
+      placements: [
+        {
+          id: 'p-v4',
+          library_file_id: 'lib-1',
+          source_file: 'a.png',
+          source_mime: 'image/png',
+          job_id: 'lib-1',
+          rerenderable: true,
+          svg: '<svg/>',
+          layers: [],
+          source_bbox: { x_min: 0, y_min: 0, x_max: 1, y_max: 1 },
+          layer_algorithms: {},
+          upload_warnings: [],
+          upload_metadata: {},
+          last_options: undefined,
+          visibility: {},
+          x_mm: 0,
+          y_mm: 0,
+          width_mm: 10,
+          height_mm: 10,
+          rotation: 0,
+          flip_h: false,
+          flip_v: false,
+          variants: [
+            { id: 'v1', name: 'default', layer_algorithms: {}, visibility: {} },
+            {
+              id: 'v2',
+              name: 'sketch',
+              layer_algorithms: { L1: { algorithm: 'pencil', algorithm_options: {} } },
+              visibility: { L1: false },
+            },
+          ],
+          active_variant_id: 'v2',
+        },
+      ],
+      selectedPlacementId: 'p-v4',
+      selectedProfileName: 'P',
+      scaleMode: 'fit',
+      marginMm: 5,
+      autoOptimize: true,
+    }
+    localStorage.setItem('omniplot.scene.v4', JSON.stringify(v4))
+
+    const refs = makeRefs()
+    const migrated = hydrateScene(refs)
+    expect(migrated).toBe(true)
+    const p = refs.placements.value[0]! as Placement & {
+      variants?: unknown
+      active_variant_id?: unknown
+    }
+    expect(p.layer_algorithms).toEqual({ L1: { algorithm: 'pencil', algorithm_options: {} } })
+    expect(p.visibility).toEqual({ L1: false })
+    expect(p.variants).toBeUndefined()
+    expect(p.active_variant_id).toBeUndefined()
+    expect(localStorage.getItem('omniplot.scene.v4')).toBeNull()
   })
 
   it('returns false (and leaves refs untouched) when no scene is stored', () => {

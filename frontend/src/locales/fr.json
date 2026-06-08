@@ -36,12 +36,6 @@
     "plotter": "Traceur",
     "workshop": "Mode impression"
   },
-  "compare": {
-    "open": "Comparer",
-    "title": "Comparer les variantes",
-    "empty": "Il faut au moins deux variantes sur le placement courant pour comparer. Crée-en une seconde depuis la barre Variantes.",
-    "loading": "Rendu des deux variantes…"
-  },
   "workspaces": {
     "label": "Espace de travail",
     "menu": "Menu espace de travail",
@@ -54,8 +48,7 @@
     "empty": {
       "layers": "Aucune couche — sélectionne un placement pour alimenter l'inspecteur.",
       "magazine": "Aucun profil actif — ouvre le tiroir Plotter pour en choisir un.",
-      "queue": "Aucun run actif.",
-      "compareHint": "Compare deux variantes du placement courant côte à côte."
+      "queue": "Aucun run actif."
     },
     "panel": {
       "machineTelemetry": "Télémétrie machine"
@@ -398,20 +391,6 @@
     "chars": "car.",
     "empty": "Aucun bloc détecté sur cette page.",
     "hint": "Zones texte et image détectées sur la page courante."
-  },
-  "variants": {
-    "title": "Variantes",
-    "default": "Défaut",
-    "untitled": "Nouvelle variante",
-    "add": "Enregistrer comme variante",
-    "update": "Mettre à jour",
-    "updateHint": "Écraser la variante active avec les réglages actuels",
-    "rename": "Renommer",
-    "remove": "Supprimer la variante",
-    "hint": "Chaque variante capture les styles et la visibilité des calques pour ce fichier.",
-    "switchHint": "Cliquer pour basculer · double-clic pour renommer",
-    "collapse": "Replier la barre des variantes",
-    "expand": "Déplier la barre des variantes"
   },
   "printMode": {
     "title": "Mode couleur",

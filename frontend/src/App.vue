@@ -24,11 +24,8 @@ import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
 const EditModalV2 = defineAsyncComponent(() => import('./components/v2/EditModalV2.vue'))
 const WorkshopMode = defineAsyncComponent(() => import('./components/v2/WorkshopMode.vue'))
 const PerfOverlay = defineAsyncComponent(() => import('./components/v2/PerfOverlay.vue'))
-const CompareView = defineAsyncComponent(() => import('./components/v2/CompareView.vue'))
-import type { Candidate } from './components/v2/CompareView.vue'
 
-import { api, preflightSvg } from './api/client'
-import type { CandidateMetrics } from './components/v2/CompareView.vue'
+import { api } from './api/client'
 import { useAlgorithmsStore } from './stores/algorithms'
 import { useFeatureFlag } from './composables/useFeatureFlag'
 import { useJobStore } from './stores/job'
@@ -64,102 +61,10 @@ const workshopEnabled = useFeatureFlag('workshopMode')
 const perfEnabled = useFeatureFlag('perf')
 const activeRun = computed(() => queue.active[0] ?? null)
 
-// Compare drawer (roadmap C.5). Entry button is gated by the
-// `compareMode` flag; opens a modal showing CompareView for two
-// variants of the current placement. Each variant is rendered
-// independently via ``renderVariant`` (same ``/rerender`` endpoint
-// the live editor uses, no mutation of the active placement). The
-// active variant's already-rendered SVG is reused for whichever
-// candidate matches its id to skip a redundant network call.
-const compareError = ref<string | null>(null)
-const compareLoading = ref(false)
-const compareSvgCache = ref<Record<string, string>>({})
-const compareMetricsCache = ref<Record<string, CandidateMetrics>>({})
-
-async function refreshCompareSvgs(): Promise<void> {
-  const placement = store.selectedPlacement
-  if (!placement || placement.variants.length < 2) return
-  compareLoading.value = true
-  compareError.value = null
-  try {
-    const [v1, v2] = placement.variants
-    if (!v1 || !v2) return
-    // Step 1: render each variant's SVG (active variant reuses the
-    // already-rendered placement.svg, no extra round-trip).
-    const svgCache: Record<string, string> = {
-      [placement.active_variant_id]: placement.svg,
-    }
-    const renderJobs: Promise<unknown>[] = []
-    for (const v of [v1, v2]) {
-      if (svgCache[v.id]) continue
-      renderJobs.push(
-        store.renderVariant(placement, v).then((r) => {
-          if (r) svgCache[v.id] = r.svg
-        }),
-      )
-    }
-    await Promise.all(renderJobs)
-    compareSvgCache.value = svgCache
-
-    // Step 2: per-variant metrics via the lightweight ``/preflight/svg``
-    // endpoint. Failures are swallowed — Compare degrades to "—" in the
-    // metrics column rather than blocking the whole drawer.
-    const profile = store.selectedProfile
-    if (profile) {
-      const metricsCache: Record<string, CandidateMetrics> = {}
-      const metricJobs: Promise<unknown>[] = []
-      for (const v of [v1, v2]) {
-        const svg = svgCache[v.id]
-        if (!svg) continue
-        metricJobs.push(
-          preflightSvg(svg, profile.name)
-            .then((report) => {
-              metricsCache[v.id] = {
-                est_time_s: report.estimated_seconds,
-                draw_length_mm: report.drawing_length_mm,
-                pen_up_length_mm: report.travel_length_mm,
-                swap_count: report.pen_changes,
-              }
-            })
-            .catch(() => {
-              // Leave metrics undefined — Compare shows em-dashes.
-            }),
-        )
-      }
-      await Promise.all(metricJobs)
-      compareMetricsCache.value = metricsCache
-    }
-  } catch (err) {
-    compareError.value = (err as Error).message
-  } finally {
-    compareLoading.value = false
-  }
-}
-watch(
-  () => ui.compareOpen,
-  (next) => {
-    if (next) void refreshCompareSvgs()
-  },
-)
-
-const compareCandidates = computed<{ a: Candidate; b: Candidate } | null>(() => {
-  const placement = store.selectedPlacement
-  if (!placement || placement.variants.length < 2) return null
-  const v1 = placement.variants[0]
-  const v2 = placement.variants[1]
-  if (!v1 || !v2) return null
-  const make = (variantId: string, label: string): Candidate => ({
-    id: variantId,
-    label,
-    svg: compareSvgCache.value[variantId] ?? placement.svg,
-    decision: null,
-    metrics: compareMetricsCache.value[variantId] ?? {},
-  })
-  return {
-    a: make(v1.id, v1.name || 'Variante A'),
-    b: make(v2.id, v2.name || 'Variante B'),
-  }
-})
+// Compare drawer was removed with the multi-style simplification —
+// one style per file means there's nothing to compare against. The
+// ``ui.compareOpen`` flag, the trigger button, and ``CompareView``
+// itself were dropped at the same time.
 
 function onEditV2Cancel(): void {
   ui.closeEditModal()
@@ -425,49 +330,6 @@ onBeforeUnmount(() => {
       @pause="workshopPause"
       @resume="workshopResume"
     />
-
-    <!-- Compare drawer (roadmap C.5). Launched from the edit modals
-         (Expert + wizard) via ``ui.openCompare()``; shows an explicit
-         empty state when the current placement has fewer than two
-         variants. -->
-    <div
-      v-if="ui.compareOpen"
-      class="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
-      data-test="compare-modal"
-      @click.self="ui.closeCompare()"
-    >
-      <div
-        class="max-h-[92vh] w-full max-w-5xl overflow-auto rounded-xl border border-slate-700 bg-white p-4 shadow-2xl"
-      >
-        <header class="mb-2 flex items-center justify-between">
-          <h2 class="text-base font-semibold text-slate-900">
-            {{ t('compare.title') }}
-          </h2>
-          <button
-            type="button"
-            class="rounded p-1 text-slate-500 hover:bg-slate-100"
-            :aria-label="t('settings.close')"
-            @click="ui.closeCompare()"
-          >
-            ✕
-          </button>
-        </header>
-        <p v-if="compareLoading" class="text-sm text-slate-600" data-test="compare-loading">
-          {{ t('compare.loading') }}
-        </p>
-        <p v-else-if="compareError" class="text-sm text-red-600" data-test="compare-error">
-          {{ compareError }}
-        </p>
-        <CompareView
-          v-else-if="compareCandidates"
-          :a="compareCandidates.a"
-          :b="compareCandidates.b"
-        />
-        <p v-else class="text-sm text-slate-600">
-          {{ t('compare.empty') }}
-        </p>
-      </div>
-    </div>
 
     <div
       v-if="dropping"
