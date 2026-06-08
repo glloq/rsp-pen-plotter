@@ -205,8 +205,17 @@ async function renderAdaptedPreview(controller: AbortController): Promise<void> 
         )
     if (controller.signal.aborted) return
     // ``null`` means nothing renderable (e.g. vector source with no
-    // layers) — fall back to the original SVG, not an error.
-    if (result) renderedSvg.value = result.svg
+    // layers, missing job_id, non-rerenderable) — fall back to the
+    // original placement SVG so the operator's last choice doesn't
+    // leave a stale render on screen. Without this clear, toggling
+    // goal / palette / custom style on a non-rerenderable placement
+    // would silently keep the previous render visible and read as
+    // "the preview doesn't update".
+    if (result) {
+      renderedSvg.value = result.svg
+    } else {
+      renderedSvg.value = null
+    }
   } catch {
     if (!controller.signal.aborted) previewError.value = true
   } finally {
