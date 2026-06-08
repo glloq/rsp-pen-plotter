@@ -18,9 +18,9 @@ import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
 
 // Lazy-load v2 surfaces that aren't on the boot critical path. Each
 // gets its own chunk, fetched only the first time the operator
-// triggers it: opens the V2 modal, toggles Workshop Mode, opens the
-// Compare drawer, or activates the perf overlay flag. Saves ~150 kB
-// from the initial parse on a fresh load.
+// triggers it: opens the V2 modal, toggles Workshop Mode, or
+// activates the perf overlay flag. Saves ~150 kB from the initial
+// parse on a fresh load.
 const EditModalV2 = defineAsyncComponent(() => import('./components/v2/EditModalV2.vue'))
 const WorkshopMode = defineAsyncComponent(() => import('./components/v2/WorkshopMode.vue'))
 const PerfOverlay = defineAsyncComponent(() => import('./components/v2/PerfOverlay.vue'))
@@ -60,11 +60,6 @@ const dropping = ref(false)
 const workshopEnabled = useFeatureFlag('workshopMode')
 const perfEnabled = useFeatureFlag('perf')
 const activeRun = computed(() => queue.active[0] ?? null)
-
-// Compare drawer was removed with the multi-style simplification —
-// one style per file means there's nothing to compare against. The
-// ``ui.compareOpen`` flag, the trigger button, and ``CompareView``
-// itself were dropped at the same time.
 
 function onEditV2Cancel(): void {
   ui.closeEditModal()
