@@ -8,6 +8,7 @@ import { usePerfStore } from './perf'
 import { useToastStore } from './toasts'
 import { useUiStore } from './ui'
 import { useEditState } from '../composables/useEditState'
+import { clearLivePreviewer } from '../composables/useFileManager'
 import { confirmAction } from '../composables/confirm'
 import {
   deleteProfile as apiDeleteProfile,
@@ -581,9 +582,17 @@ export const useJobStore = defineStore('job', () => {
   // to placementSvg, which /rerender just updated. The next bitmap
   // tweak naturally re-runs /preview and re-installs a fresh preview
   // SVG, so this clear is one-shot per layer-override action.
+  //
+  // Two things must be cleared: the mirror in ``useEditState`` (read by
+  // V1 surfaces) AND the source ``previewer.previewResult`` in
+  // useFileManager (read by V2's ``expertPreviewSvg``). Clearing the
+  // mirror alone left V2 painting the stale render until the next
+  // /preview round-trip — which only fires on the NEXT bitmap-draft
+  // tweak, not on the algorithm pick the operator just made.
   function clearLivePreviewSvg(): void {
     try {
       useEditState().previewSvg.value = ''
+      clearLivePreviewer()
     } catch {
       // Pinia store accessed outside of a setup context — happens in
       // tests; safe to ignore since there's no UI to wash out.

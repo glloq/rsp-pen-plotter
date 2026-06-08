@@ -603,6 +603,20 @@ export function useFileManager(t?: Translator) {
   }
 }
 
+// Module-level escape hatch for the job store: when a layer-level
+// override fires (algorithm pick, visibility toggle, colour assign)
+// the previously-cached /preview SVG is stale relative to the new
+// configuration. ``clearLivePreviewSvg`` in the store only wiped the
+// ``useEditState`` mirror, so V2's ``expertPreviewSvg`` — which
+// reads the source ``previewer.previewSvg`` directly — kept painting
+// the previous render until a fresh /preview round-trip landed. This
+// hook drops the singleton's previewResult so the pane falls back to
+// the placement's freshly-rerendered SVG immediately. No-op when the
+// previewer hasn't been initialised yet (closed app / first render).
+export function clearLivePreviewer(): void {
+  if (_previewer) _previewer.clear()
+}
+
 // Module-level reset hook used by EditModal on modal close. Wipes the
 // in-memory file and tears down the preview scheduler so a new modal
 // open starts from a clean slate.
