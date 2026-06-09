@@ -430,7 +430,7 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
 </script>
 
 <template>
-  <div>
+  <div class="preview-pane">
     <div
       ref="paneEl"
       class="preview"
@@ -663,12 +663,23 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
 </template>
 
 <style scoped>
+/* Root: flex column so the pane can flex against the gesture-hint
+   line and absorb whatever height the parent column hands down. */
+.preview-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .preview {
   position: relative;
-  /* Operator asked for the preview to dominate the modal: bumped the
-     clamp upper bound so the pane scales with the available viewport
-     while still respecting the modal's own 92vh ceiling. */
+  /* The clamp is only the preferred size (flex-basis). Inside the
+     modal's fixed-height left column the pane shrinks (down to the
+     min-height below) so the sheet picker and ink chips underneath
+     stay visible without scrolling; on narrow viewports the column
+     is auto-sized and the clamp applies as-is. */
   height: clamp(320px, 62vh, 720px);
+  flex: 1 1 auto;
+  min-height: 240px;
   /* Dark checkerboard: the white sheet (paper) pops against it, same
      contrast logic as the main plan view. */
   background: repeating-conic-gradient(#1e293b 0% 25%, #0f172a 0% 50%) 0 / 20px 20px;

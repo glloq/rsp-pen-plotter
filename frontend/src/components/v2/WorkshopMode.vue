@@ -91,8 +91,8 @@ function pct(run: PrintRun): number {
 .workshop-mode {
   position: fixed;
   inset: 0;
-  background: #111;
-  color: #f0f0f0;
+  background: #020617;
+  color: #f1f5f9;
   z-index: 10000;
   font-family: system-ui, sans-serif;
   display: flex;
@@ -105,13 +105,16 @@ header {
 }
 .exit {
   background: transparent;
-  border: 1px solid #555;
-  color: #f0f0f0;
+  border: 1px solid #475569;
+  color: #e2e8f0;
   font-size: 1.5rem;
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
   cursor: pointer;
+}
+.exit:hover {
+  background: #1e293b;
 }
 main {
   flex: 1;
@@ -134,23 +137,23 @@ main {
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
-  background: #888;
+  background: #64748b;
 }
 .dot.running {
-  background: #4caf50;
+  background: #34d399;
   animation: pulse 1.5s infinite;
 }
 .dot.paused {
-  background: #ffb300;
+  background: #fbbf24;
 }
 .dot.failed {
-  background: #e53935;
+  background: #f87171;
 }
 .dot.completed {
-  background: #1f6feb;
+  background: #38bdf8;
 }
 .dot.canceled {
-  background: #888;
+  background: #64748b;
 }
 @keyframes pulse {
   0% {
@@ -176,13 +179,13 @@ main {
 }
 .bar {
   height: 1rem;
-  background: #333;
+  background: #334155;
   border-radius: 999px;
   overflow: hidden;
 }
 .fill {
   height: 100%;
-  background: #1f6feb;
+  background: #10b981;
   transition: width 0.3s ease;
 }
 .percent {
@@ -191,8 +194,9 @@ main {
   font-family: ui-monospace, Menlo, monospace;
 }
 .hint {
-  background: #fff4cc;
-  color: #5b4a00;
+  background: rgba(69, 26, 3, 0.5);
+  border: 1px solid #b45309;
+  color: #fde68a;
   padding: 1rem 1.5rem;
   border-radius: 8px;
   max-width: 36rem;
@@ -220,15 +224,21 @@ main {
   cursor: pointer;
 }
 .pause {
-  background: #ffb300;
-  color: #111;
+  background: #f59e0b;
+  color: #451a03;
+}
+.pause:hover {
+  background: #fbbf24;
 }
 .resume {
-  background: #1f6feb;
+  background: #059669;
   color: white;
+}
+.resume:hover {
+  background: #10b981;
 }
 .empty {
   font-size: 1.25rem;
-  color: #888;
+  color: #64748b;
 }
 </style>

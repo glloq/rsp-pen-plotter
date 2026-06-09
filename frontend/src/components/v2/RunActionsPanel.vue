@@ -101,13 +101,13 @@ function commitConfirm(): void {
 
 <style scoped>
 .run-actions {
-  font-family: system-ui, sans-serif;
   font-size: 0.875rem;
+  color: #f1f5f9;
 }
 .hint {
-  background: #fff4cc;
-  border: 1px solid #d9b800;
-  color: #5b4a00;
+  background: rgba(69, 26, 3, 0.4);
+  border: 1px solid #b45309;
+  color: #fde68a;
   padding: 0.5rem 0.75rem;
   border-radius: 4px;
   margin-bottom: 0.5rem;
@@ -118,30 +118,40 @@ function commitConfirm(): void {
 }
 button {
   padding: 0.4rem 0.75rem;
-  border: 1px solid #d0d0d0;
-  background: white;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #e2e8f0;
   border-radius: 4px;
   cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: #334155;
 }
 button:disabled {
   cursor: default;
   opacity: 0.45;
 }
 button.primary {
-  background: #1f6feb;
+  background: #059669;
   color: white;
-  border-color: #1f6feb;
+  border-color: #059669;
+}
+button.primary:hover:not(:disabled) {
+  background: #10b981;
 }
 button.danger {
-  border-color: #b71c1c;
-  color: #b71c1c;
+  border-color: #b91c1c;
+  color: #fca5a5;
+}
+button.danger:hover:not(:disabled) {
+  background: rgba(69, 10, 10, 0.5);
 }
 .confirm {
   margin-top: 0.5rem;
   padding: 0.75rem;
-  border: 1px solid #888;
+  border: 1px solid #475569;
   border-radius: 4px;
-  background: #fafafa;
+  background: #0f172a;
 }
 .confirm div {
   display: flex;

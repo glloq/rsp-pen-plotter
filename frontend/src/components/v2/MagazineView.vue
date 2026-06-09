@@ -97,12 +97,12 @@ const visible = computed(() => {
 
 <style scoped>
 .magazine {
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  border-radius: 8px;
   padding: 0.75rem 1rem;
-  font-family: system-ui, sans-serif;
   font-size: 0.875rem;
-  background: white;
+  color: #f1f5f9;
 }
 header {
   display: flex;
@@ -112,11 +112,12 @@ header {
 }
 h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 .count {
-  color: #666;
-  font-size: 0.85rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
 }
 .grid {
   list-style: none;
@@ -127,23 +128,24 @@ h3 {
   gap: 0.5rem;
 }
 .slot-cell {
-  border: 1px solid #d0d0d0;
+  border: 1px solid #334155;
   border-radius: 4px;
   padding: 0.5rem;
   display: grid;
   grid-template-columns: 2rem 1fr 1.5rem;
   gap: 0.5rem;
   align-items: center;
-  background: #fafafa;
+  background: #0f172a;
 }
 .slot-cell.empty {
   opacity: 0.55;
 }
 .slot-cell.installed {
-  background: white;
+  border-color: #475569;
+  background: #1e293b;
 }
 .slot-cell.simulating {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: -2px;
 }
 .install-toggle {
@@ -157,34 +159,39 @@ h3 {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(241, 245, 249, 0.25);
 }
 .empty-dot {
-  background: #e0e0e0;
+  background: #334155;
   border-style: dashed;
 }
 .meta {
   display: flex;
   flex-direction: column;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 .idx {
   font-weight: 600;
   font-family: ui-monospace, Menlo, monospace;
 }
 .calib {
-  font-size: 0.7rem;
-  color: #2e7d32;
+  font-size: 0.6875rem;
+  color: #34d399;
 }
 .uncalib {
-  color: #b26a00;
+  color: #fbbf24;
 }
 .edit {
-  border: 1px solid #d0d0d0;
-  background: white;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #cbd5e1;
+  border-radius: 4px;
   cursor: pointer;
   width: 1.5rem;
   height: 1.5rem;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+}
+.edit:hover {
+  background: #334155;
 }
 </style>

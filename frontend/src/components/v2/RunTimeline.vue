@@ -98,12 +98,12 @@ const terminalBadge = computed<{ label: string; cls: string } | null>(() => {
 
 <style scoped>
 .run-timeline {
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  border-radius: 8px;
   padding: 0.75rem 1rem;
-  font-family: system-ui, sans-serif;
   font-size: 0.875rem;
-  background: white;
+  color: #f1f5f9;
 }
 header {
   display: flex;
@@ -113,12 +113,13 @@ header {
 }
 h4 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
   flex: 1;
 }
 .profile {
-  color: #555;
-  font-size: 0.8rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
   font-family: ui-monospace, Menlo, monospace;
 }
 .badge {
@@ -127,14 +128,14 @@ h4 {
   border-radius: 999px;
 }
 .badge.failed {
-  background: #fdecea;
-  color: #b71c1c;
-  border: 1px solid #b71c1c;
+  background: rgba(69, 10, 10, 0.4);
+  color: #fca5a5;
+  border: 1px solid #b91c1c;
 }
 .badge.canceled {
-  background: #f0f0f0;
-  color: #555;
-  border: 1px solid #aaa;
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+  border: 1px solid #475569;
 }
 .phases {
   list-style: none;
@@ -151,13 +152,13 @@ h4 {
   align-items: center;
   text-align: center;
   font-size: 0.75rem;
-  color: #888;
+  color: #64748b;
 }
 .phases li.done {
-  color: #2e7d32;
+  color: #059669;
 }
 .phases li.active {
-  color: #1f6feb;
+  color: #34d399;
   font-weight: 600;
 }
 .phases li.future {
@@ -179,26 +180,27 @@ h4 {
 .bar {
   flex: 1;
   height: 0.5rem;
-  background: #f0f0f0;
+  background: #334155;
   border-radius: 999px;
   overflow: hidden;
 }
 .fill {
   height: 100%;
-  background: #1f6feb;
+  background: #10b981;
   transition: width 0.2s ease;
 }
 .meta {
   font-size: 0.75rem;
-  color: #555;
+  color: #94a3b8;
   font-family: ui-monospace, Menlo, monospace;
 }
 .error {
   margin-top: 0.5rem;
   padding: 0.5rem;
-  background: #fdecea;
-  color: #b71c1c;
+  background: rgba(69, 10, 10, 0.4);
+  border: 1px solid #b91c1c;
+  color: #fca5a5;
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
 }
 </style>

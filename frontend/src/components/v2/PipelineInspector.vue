@@ -64,21 +64,23 @@ defineProps<{
 
 <style scoped>
 .pipeline-inspector {
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  border-radius: 8px;
   padding: 0.75rem 1rem;
-  font-family: system-ui, sans-serif;
   font-size: 0.875rem;
+  color: #f1f5f9;
 }
 header {
   margin-bottom: 0.5rem;
 }
 h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 .empty {
-  color: #777;
+  color: #94a3b8;
   font-style: italic;
   padding: 0.75rem 0;
 }
@@ -102,8 +104,8 @@ h3 {
   padding-left: 1rem;
 }
 .tier {
-  background: #eef4ff;
-  color: #1f6feb;
+  background: rgba(2, 44, 34, 0.6);
+  color: #6ee7b7;
   padding: 0 0.5rem;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -113,11 +115,11 @@ h3 {
 }
 .options summary {
   cursor: pointer;
-  color: #555;
+  color: #94a3b8;
 }
 pre {
-  background: #fafafa;
-  border: 1px solid #eee;
+  background: #0f172a;
+  border: 1px solid #334155;
   padding: 0.5rem;
   border-radius: 4px;
   font-size: 0.75rem;

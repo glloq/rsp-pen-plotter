@@ -182,3 +182,12 @@ P1–P5 are implemented in the same branch as this audit:
 
 Out of scope, still light-themed: `WorkshopMode`, `MagazineView`,
 `CapabilityWizard`, `RunTimeline`, `RunActionsPanel`, `PipelineInspector`.
+
+**Follow-up (same branch):** the remaining light/off-palette surfaces were
+migrated too — `WorkshopMode`, `MagazineView`, `CapabilityWizard` (including
+its previously unstyled native inputs and footer buttons), `RunTimeline`,
+`RunActionsPanel`, `PipelineInspector`, plus the shared
+`AssistantModeToggle` (rendered in the edit-modal header) and
+`ManifestFallbackBanner`; `PerfOverlay`'s neutral grays were aligned to
+slate. No light-themed component remains; the only intentional white
+surface left is the paper sheet in `EditPreviewPane`.
