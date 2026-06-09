@@ -239,12 +239,12 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
 
 <style scoped>
 .cap-wizard {
-  font-family: system-ui, sans-serif;
-  font-size: 0.9rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  font-size: 0.875rem;
+  border: 1px solid #334155;
+  border-radius: 8px;
   padding: 1rem 1.25rem;
-  background: white;
+  background: #1e293b;
+  color: #f1f5f9;
 }
 header {
   display: flex;
@@ -254,11 +254,12 @@ header {
 }
 h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 .step-indicator {
-  color: #666;
-  font-size: 0.85rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
 }
 .modes {
   list-style: none;
@@ -272,17 +273,50 @@ h3 {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: 0.2rem;
   padding: 0.75rem;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  background: white;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0f172a;
+  color: inherit;
   cursor: pointer;
   text-align: left;
   width: 100%;
 }
+.modes li button span {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.modes li button:hover {
+  background: #1e293b;
+  border-color: #475569;
+}
 .modes li.active button {
-  border-color: #1f6feb;
-  background: #eef4ff;
+  border-color: #059669;
+  background: rgba(2, 44, 34, 0.45);
+  box-shadow: inset 0 0 0 1px #059669;
+}
+input[type='text'],
+input[type='number'],
+textarea {
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f1f5f9;
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.875rem;
+}
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 1px;
+}
+section > div > label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+small {
+  color: #94a3b8;
 }
 .macro-steps {
   list-style: none;
@@ -314,5 +348,32 @@ footer {
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 1rem;
+}
+footer button,
+.macro-steps button,
+button[data-test='cap-macro-add'] {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+footer button:hover:not(:disabled),
+.macro-steps button:hover,
+button[data-test='cap-macro-add']:hover {
+  background: #334155;
+}
+footer button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+footer button[data-test='cap-confirm'] {
+  border-color: #059669;
+  background: #059669;
+  color: white;
+}
+footer button[data-test='cap-confirm']:hover {
+  background: #10b981;
 }
 </style>

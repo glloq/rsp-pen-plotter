@@ -40,9 +40,9 @@ const message = computed(() => {
 
 <style scoped>
 .manifest-fallback-banner {
-  background: #fff4cc;
-  border: 1px solid #d9b800;
-  color: #5b4a00;
+  background: rgba(69, 26, 3, 0.4);
+  border: 1px solid #b45309;
+  color: #fde68a;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   display: flex;
@@ -50,7 +50,7 @@ const message = computed(() => {
   align-items: center;
 }
 .manifest-fallback-banner__detail {
-  opacity: 0.6;
+  opacity: 0.7;
   font-family: monospace;
 }
 </style>

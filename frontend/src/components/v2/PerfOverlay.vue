@@ -83,8 +83,9 @@ function labelFor(kpi: string): string {
   position: fixed;
   bottom: 12px;
   right: 12px;
-  background: rgba(20, 20, 20, 0.92);
-  color: #f0f0f0;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #334155;
+  color: #e2e8f0;
   font-family: ui-monospace, Menlo, monospace;
   font-size: 0.75rem;
   padding: 0.5rem 0.75rem;
@@ -103,7 +104,7 @@ header {
 header button {
   background: transparent;
   border: none;
-  color: #f0f0f0;
+  color: #e2e8f0;
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
@@ -119,7 +120,7 @@ td {
 }
 th:first-child {
   text-align: left;
-  color: #ddd;
+  color: #94a3b8;
 }
 tbody th {
   font-weight: 400;

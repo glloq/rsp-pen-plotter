@@ -41,32 +41,31 @@ const ui = useUiModeStore()
 <style scoped>
 .assistant-mode-toggle {
   display: inline-flex;
-  border: 1px solid #d0d0d0;
+  border: 1px solid #334155;
   border-radius: 4px;
   overflow: hidden;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
 }
 .assistant-mode-toggle button {
   padding: 0.25rem 0.75rem;
   border: none;
-  background: white;
-  color: #555;
+  background: #1e293b;
+  color: #cbd5e1;
   cursor: pointer;
-}
-.assistant-mode-toggle button.active {
-  background: #1f6feb;
-  color: white;
-}
-.assistant-mode-toggle button:focus-visible {
-  outline: 2px solid #1f6feb;
-  outline-offset: -2px;
-}
-.assistant-mode-toggle button {
   transition:
     background 0.12s ease,
     color 0.12s ease;
 }
+.assistant-mode-toggle button.active {
+  background: rgba(2, 44, 34, 0.6);
+  color: #6ee7b7;
+  font-weight: 600;
+}
+.assistant-mode-toggle button:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: -2px;
+}
 .assistant-mode-toggle button:hover:not(.active) {
-  background: #f1f5f9;
+  background: #334155;
 }
 </style>
