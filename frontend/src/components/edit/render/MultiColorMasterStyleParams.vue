@@ -55,20 +55,47 @@ function setKnob<K extends string>(key: K, value: unknown): void {
 }
 
 // Cluster count surfaced at the top so the operator gets the same
-// orientation cue as the mono card's "bands" slider. Writes go through
-// the bitmap draft directly — same path the PaletteCard uses.
+// orientation cue as the mono card's "bands" slider. This is the
+// **single** num_colors knob in the editor — the PaletteCard
+// intentionally doesn't expose its own input so the operator has one
+// place, not two, to change colour count.
+//
+// What the slider does, by palette source:
+//   * pens     — StyleTab watcher truncates ``bitmap.palette`` to
+//                ``num_colors`` so the preview uses only the first N
+//                installed pens.
+//   * auto     — ``num_colors`` drives the k-means cluster count.
+//   * manual   — fixed_palette ignores ``num_colors`` downstream
+//                (the palette length wins), so the setter resizes
+//                the palette in lock-step: truncate when smaller,
+//                pad with neutral grey when bigger.
 const numColors = computed({
   get: () => props.bitmap.num_colors,
   set: (v: number) => {
-    props.bitmap.num_colors = Math.max(1, Math.min(16, Math.round(v)))
+    const target = Math.max(1, Math.min(16, Math.round(v)))
+    props.bitmap.num_colors = target
     draft.markSegmentationTouched('num_bands') // close enough family
+
+    // Manual-palette resize: only when the operator is hand-editing a
+    // fixed palette (not following pens — that path is handled by the
+    // StyleTab watcher, which knows the installed-pen list to slice).
+    if (
+      props.bitmap.segmentation_method === 'fixed_palette' &&
+      props.bitmap.palette.length > 0 &&
+      !draft.paletteFollowsPens.value
+    ) {
+      const current = props.bitmap.palette
+      if (current.length > target) {
+        props.bitmap.palette = current.slice(0, target)
+      } else if (current.length < target) {
+        const padded = [...current]
+        while (padded.length < target) padded.push('#888888')
+        props.bitmap.palette = padded
+      }
+    }
   },
 })
 
-// The slider always drives ``num_colors``. In fixed_palette + pens
-// modes the StyleTab watcher truncates the palette to ``num_colors``
-// so dragging the slider actually shrinks/grows the rendered output,
-// instead of silently doing nothing because the palette length wins.
 const effectiveColorCount = computed(() => props.bitmap.num_colors)
 </script>
 
