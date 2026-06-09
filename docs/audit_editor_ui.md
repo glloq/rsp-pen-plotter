@@ -155,3 +155,30 @@ Expected effort: P1+P2 are the bulk (the two big scoped-CSS files);
 P3–P4 are mechanical. No behavioral/markup-structure changes are required —
 this is a styling migration, so existing component tests should be
 unaffected; visual review via the e2e/screenshot flow is the main check.
+
+## Status: applied (2026-06)
+
+P1–P5 are implemented in the same branch as this audit:
+
+- **P1** `EditModalV2.vue` — dark slate-900 shell, slate-700 borders,
+  emerald CTA/active states, translucent functional chips, dark tour
+  overlay. The `.modal-v2__expert` drawer lost its own surface (cards
+  sit directly on the modal background, as in the main view).
+- **P2** `EditPreviewPane.vue` — dark checkerboard + chrome (zoom, mode
+  toggle, overlay, split handle in emerald); the sheet is now solid
+  white so the plot reads as ink on paper.
+- **P3** `StyleCustomizer.vue`, `LayerInspector.vue` — converted to the
+  slate/emerald system; off-palette grays and `#2e7d32`/`#b71c1c`
+  removed. `SheetPicker.vue` (mounted under the preview) converted too;
+  `PresetPanel.vue` accents aligned (`#1f6feb`/`#1e3a8a` → emerald).
+- **P4** — type scale reduced to 1rem / 0.875 / 0.75 / 0.6875 / 0.625rem;
+  radii to 4 / 8 / 12px + pills; all focus rings standardized on
+  emerald; native range/checkbox/radio inputs get `accent-color`
+  emerald via an `@layer base` rule in `style.css`.
+- **P5** — `.btn`, `.btn-cta`, `.card`, `.chip` primitives added in
+  `@layer components` (`style.css`); `.card` adopted across the 11
+  exact-duplicate card strings in `components/edit/**`. Adoption
+  elsewhere is incremental.
+
+Out of scope, still light-themed: `WorkshopMode`, `MagazineView`,
+`CapabilityWizard`, `RunTimeline`, `RunActionsPanel`, `PipelineInspector`.

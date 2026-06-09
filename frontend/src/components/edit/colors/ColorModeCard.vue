@@ -19,7 +19,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+  <div class="card space-y-2 text-xs">
     <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('printMode.title') }}</p>
     <div class="grid grid-cols-2 gap-1">
       <button

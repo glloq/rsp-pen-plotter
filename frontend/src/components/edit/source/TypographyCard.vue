@@ -164,7 +164,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
     <!-- =================== DOCUMENT MODE TOGGLE =================== -->
     <section
       v-if="mode === 'document'"
-      class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs"
+      class="card space-y-2 text-xs"
     >
       <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
         {{ t('typography.docHeader') }}
@@ -187,7 +187,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
     <!-- =================== FONT =================== -->
     <section
       v-if="mode === 'typography' || typo.hershey_text"
-      class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2.5 text-xs"
+      class="card space-y-2.5 text-xs"
     >
       <header class="flex items-baseline justify-between">
         <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
@@ -273,7 +273,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
     <!-- =================== LAYOUT (typography sources only) =================== -->
     <section
       v-if="mode === 'typography'"
-      class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs"
+      class="card space-y-2 text-xs"
     >
       <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
         {{ t('typography.layoutSection') }}
@@ -307,7 +307,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
     <!-- =================== PAGE (typography sources only) =================== -->
     <section
       v-if="mode === 'typography'"
-      class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs"
+      class="card space-y-2 text-xs"
     >
       <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
         {{ t('typography.pageSection') }}

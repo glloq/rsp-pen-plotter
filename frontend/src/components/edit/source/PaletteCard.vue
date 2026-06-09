@@ -124,7 +124,7 @@ function onNumColorsChange(): void {
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+  <div class="card space-y-2 text-xs">
     <div class="flex items-baseline justify-between">
       <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ t('palette.title') }}</p>
       <div class="flex overflow-hidden rounded border border-slate-700">

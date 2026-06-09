@@ -85,9 +85,7 @@ const hasSource = computed<boolean>(
   () => Boolean(props.sourceImageUrl) || Boolean(props.originalSvg),
 )
 const canShowOriginal = computed<boolean>(() => hasSource.value)
-const canCompareOriginal = computed<boolean>(
-  () => hasSource.value && Boolean(props.plotSvg),
-)
+const canCompareOriginal = computed<boolean>(() => hasSource.value && Boolean(props.plotSvg))
 function setMode(mode: PreviewMode): void {
   if (mode === 'source' && !canShowOriginal.value) return
   if (mode === 'split' && !canCompareOriginal.value) return
@@ -246,8 +244,7 @@ const splitDragging = ref<boolean>(false)
 let splitSheetRect: DOMRect | null = null
 
 function onSplitGrab(event: PointerEvent): void {
-  const sheet = (event.currentTarget as HTMLElement)
-    .closest('.sheet-outline') as HTMLElement | null
+  const sheet = (event.currentTarget as HTMLElement).closest('.sheet-outline') as HTMLElement | null
   if (!sheet) return
   event.stopPropagation()
   event.preventDefault()
@@ -284,12 +281,8 @@ watch(viewMode, (next, prev) => {
 // right edge inward to ``splitPercent``; the source SVG is shown only
 // in the complementary left band. Implemented with ``clip-path`` so
 // each half stays at full opacity and stacking is just z-order.
-const splitPlotClip = computed<string>(
-  () => `inset(0 0 0 ${splitPercent.value}%)`,
-)
-const splitSourceClip = computed<string>(
-  () => `inset(0 ${100 - splitPercent.value}% 0 0)`,
-)
+const splitPlotClip = computed<string>(() => `inset(0 0 0 ${splitPercent.value}%)`)
+const splitSourceClip = computed<string>(() => `inset(0 ${100 - splitPercent.value}% 0 0)`)
 
 onMounted(() => {
   if (!paneEl.value || typeof ResizeObserver === 'undefined') return
@@ -467,8 +460,7 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
           data-test="modal-v2-sheet-outline"
         >
           <span class="sheet-caption" aria-hidden="true">
-            {{ t('v2.modal.sheetCaptionLabel') }} ·
-            {{ sheet.labelW }} × {{ sheet.labelH }} mm
+            {{ t('v2.modal.sheetCaptionLabel') }} · {{ sheet.labelW }} × {{ sheet.labelH }} mm
           </span>
           <!-- Artwork box sized as a percentage of the sheet so its
                footprint reflects the drawing's real mm size. -->
@@ -598,13 +590,7 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
         </button>
       </div>
 
-      <div
-        class="zoom"
-        data-test="modal-v2-zoom"
-        @pointerdown.stop
-        @wheel.stop
-        @dblclick.stop
-      >
+      <div class="zoom" data-test="modal-v2-zoom" @pointerdown.stop @wheel.stop @dblclick.stop>
         <button
           type="button"
           :title="t('v2.modal.zoomIn')"
@@ -683,8 +669,10 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
      clamp upper bound so the pane scales with the available viewport
      while still respecting the modal's own 92vh ceiling. */
   height: clamp(320px, 62vh, 720px);
-  background: repeating-conic-gradient(#f1f5f9 0% 25%, white 0% 50%) 0 / 20px 20px;
-  border: 1px solid #e2e8f0;
+  /* Dark checkerboard: the white sheet (paper) pops against it, same
+     contrast logic as the main plan view. */
+  background: repeating-conic-gradient(#1e293b 0% 25%, #0f172a 0% 50%) 0 / 20px 20px;
+  border: 1px solid #334155;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -816,7 +804,7 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   left: 50%;
   width: 2px;
   transform: translateX(-1px);
-  background: #1f6feb;
+  background: #059669;
   pointer-events: none;
 }
 .split-handle__grip {
@@ -824,12 +812,12 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: #1f6feb;
+  background: #059669;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: bold;
   pointer-events: none;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
@@ -842,8 +830,8 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   top: 0.5rem;
   left: 0.5rem;
   display: inline-flex;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #cbd5e1;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid #334155;
   border-radius: 4px;
   overflow: hidden;
   z-index: 3;
@@ -851,17 +839,17 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
 .mode-toggle button {
   border: none;
   background: transparent;
-  color: #475569;
-  font-size: 0.72rem;
+  color: #cbd5e1;
+  font-size: 0.75rem;
   padding: 0.25rem 0.55rem;
   cursor: pointer;
   font-weight: 500;
 }
 .mode-toggle button + button {
-  border-left: 1px solid #cbd5e1;
+  border-left: 1px solid #334155;
 }
 .mode-toggle button.active {
-  background: #1f6feb;
+  background: #059669;
   color: white;
 }
 .mode-toggle button:disabled {
@@ -869,10 +857,10 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   cursor: not-allowed;
 }
 .mode-toggle button:hover:not(.active):not(:disabled) {
-  background: #f1f5f9;
+  background: #334155;
 }
 .mode-toggle button:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 .preview-overlay {
@@ -884,9 +872,9 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   justify-content: center;
   gap: 0.35rem;
   padding: 0.5rem 0.75rem;
-  background: rgba(255, 255, 255, 0.92);
-  font-size: 0.8rem;
-  color: #475569;
+  background: rgba(15, 23, 42, 0.88);
+  font-size: 0.75rem;
+  color: #cbd5e1;
 }
 .preview-overlay__label {
   display: inline-flex;
@@ -894,20 +882,20 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   gap: 0.4rem;
 }
 .preview-overlay__layer {
-  color: #1f6feb;
+  color: #34d399;
   font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 .preview-overlay__bar {
   width: min(100%, 240px);
   height: 4px;
-  background: #e2e8f0;
+  background: #334155;
   border-radius: 999px;
   overflow: hidden;
 }
 .preview-overlay__bar-fill {
   height: 100%;
-  background: #1f6feb;
+  background: #10b981;
   border-radius: 999px;
   transition: width 0.15s ease;
 }
@@ -916,9 +904,10 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   inset: auto 0.5rem 0.5rem;
   margin: 0;
   text-align: center;
-  font-size: 0.8rem;
-  color: #b71c1c;
-  background: #fdecea;
+  font-size: 0.75rem;
+  color: #fca5a5;
+  background: rgba(69, 10, 10, 0.9);
+  border: 1px solid #b91c1c;
   padding: 0.35rem;
   border-radius: 4px;
 }
@@ -933,9 +922,9 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
 .zoom button {
   width: 1.9rem;
   height: 1.9rem;
-  border: 1px solid #cbd5e1;
-  background: rgba(255, 255, 255, 0.92);
-  color: #1e293b;
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
   border-radius: 4px;
   font-size: 1rem;
   line-height: 1;
@@ -945,21 +934,21 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   justify-content: center;
 }
 .zoom button:hover {
-  background: #e2e8f0;
+  background: #334155;
 }
 .zoom button:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 .zoom-reset {
-  font-size: 0.6rem !important;
+  font-size: 0.625rem !important;
   font-variant-numeric: tabular-nums;
 }
 .spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid #cbd5e1;
-  border-top-color: #1f6feb;
+  border: 2px solid #334155;
+  border-top-color: #10b981;
   border-radius: 50%;
   animation: preview-spin 0.7s linear infinite;
 }
@@ -980,8 +969,11 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
      which derives them from the ResizeObserver-tracked pane size so
      the rectangle stays at the operator's chosen aspect ratio. The
      ``.preview-stage`` flex parent handles centring. */
-  border: 1px dashed #94a3b8;
-  background: rgba(255, 255, 255, 0.4);
+  border: 1px dashed #64748b;
+  /* Solid white: this rectangle *is* the paper — the one surface that
+     stays light in the dark editor so the plot reads like ink on a
+     sheet. */
+  background: white;
   border-radius: 2px;
   /* Pointer events ON so the split-handle inside the sheet can be
      grabbed; the artwork-box has its own ``pointer-events: none``
@@ -993,7 +985,7 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   position: absolute;
   top: 2px;
   left: 4px;
-  font-size: 0.6rem;
+  font-size: 0.625rem;
   color: #64748b;
   background: rgba(255, 255, 255, 0.7);
   padding: 0 3px;
@@ -1006,31 +998,31 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   bottom: 0.5rem;
   left: 0.5rem;
   padding: 0.25rem 0.65rem;
-  border: 1px solid #cbd5e1;
-  background: rgba(255, 255, 255, 0.92);
-  color: #1e293b;
+  border: 1px solid #334155;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   cursor: pointer;
   z-index: 2;
 }
 .view-toggle:hover {
-  background: white;
+  background: #334155;
 }
 .view-toggle.is-original {
-  background: #eef4ff;
-  border-color: #1f6feb;
-  color: #1f6feb;
+  background: rgba(2, 44, 34, 0.6);
+  border-color: #059669;
+  color: #6ee7b7;
 }
 .view-toggle:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 
 .gesture-hint {
   margin: 0.35rem 0 0;
-  font-size: 0.7rem;
-  color: #94a3b8;
+  font-size: 0.6875rem;
+  color: #64748b;
   text-align: center;
   font-style: italic;
 }

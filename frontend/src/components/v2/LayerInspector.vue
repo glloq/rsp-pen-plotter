@@ -104,11 +104,12 @@ function fmtMm(value: number): string {
 
 <style scoped>
 .layer-inspector {
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  border-radius: 8px;
   padding: 0.75rem 1rem;
-  font-family: system-ui, sans-serif;
   font-size: 0.875rem;
+  color: #f1f5f9;
 }
 header {
   display: flex;
@@ -118,11 +119,12 @@ header {
 }
 h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 .summary {
-  color: #555;
-  font-size: 0.85rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
 }
 table {
   width: 100%;
@@ -131,12 +133,12 @@ table {
 th,
 td {
   padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #334155;
   text-align: left;
 }
 th {
   font-weight: 600;
-  color: #444;
+  color: #94a3b8;
 }
 .dot {
   display: inline-block;
@@ -145,10 +147,10 @@ th {
   border-radius: 50%;
   margin-right: 0.35rem;
   vertical-align: middle;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(241, 245, 249, 0.3);
 }
 .muted {
-  color: #999;
+  color: #64748b;
 }
 .pause {
   font-size: 0.75rem;
@@ -159,12 +161,12 @@ th {
   letter-spacing: 0.04em;
 }
 .pause-auto {
-  color: #555;
+  color: #94a3b8;
 }
 .pause-always {
-  color: #b71c1c;
+  color: #f87171;
 }
 .pause-never {
-  color: #2e7d32;
+  color: #34d399;
 }
 </style>
