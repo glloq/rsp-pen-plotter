@@ -65,15 +65,21 @@ const effectivePalette = computed<string[]>(() =>
 
 // When the operator turned ``palette-follows-pens`` on AND the
 // effective palette has at least one chip, mirror it into the draft
-// palette + lock the segmentation method to ``fixed_palette``.
+// palette + lock the segmentation method to ``fixed_palette``. The
+// palette is truncated to ``bitmap.num_colors`` so the operator can
+// use fewer pens than installed (e.g. only the first 4 of 6 magazine
+// slots) — without that, the "Nombre de couleurs" inputs would write
+// to ``num_colors`` but the preview would keep rendering with all 6
+// pens because ``fixed_palette`` walks the entire palette array.
 // Guarded against stomping a mono-mode rehydrate (only seed genuine
 // multicolour placements).
 watch(
-  [draft.paletteFollowsPens, effectivePalette],
-  ([follows, colors]) => {
+  [draft.paletteFollowsPens, effectivePalette, () => bitmap.value.num_colors],
+  ([follows, colors, n]) => {
     if (printMode.value !== 'multicolor') return
     if (follows && colors.length) {
-      bitmap.value.palette = [...colors]
+      const limit = Math.min(colors.length, Math.max(1, Number(n) || colors.length))
+      bitmap.value.palette = colors.slice(0, limit)
       bitmap.value.segmentation_method = 'fixed_palette'
     }
   },
