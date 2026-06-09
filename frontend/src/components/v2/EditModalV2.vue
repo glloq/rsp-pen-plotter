@@ -19,7 +19,13 @@ import { useI18n } from 'vue-i18n'
 import { libraryFilePreviewImageUrl, type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import { resolveAlgorithmPolicy } from '../../domain/policy/client'
-import type { Goal, PaletteMode, PolicyDecision, PolicyPass, SourceKind } from '../../domain/policy/schemas'
+import type {
+  Goal,
+  PaletteMode,
+  PolicyDecision,
+  PolicyPass,
+  SourceKind,
+} from '../../domain/policy/schemas'
 import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
@@ -390,11 +396,7 @@ const inkSwatches = computed<InkSwatch[]>(() => {
 // when there's no placement; the template hides the row in that case.
 const DEFAULT_SPEED_MM_S = 60
 function effectiveSpeed(layer: LayerInfo): number {
-  return (
-    layer.drawing_speed_mm_s ??
-    job.selectedProfile?.drawing_speed_mm_s ??
-    DEFAULT_SPEED_MM_S
-  )
+  return layer.drawing_speed_mm_s ?? job.selectedProfile?.drawing_speed_mm_s ?? DEFAULT_SPEED_MM_S
 }
 const estimatedLengthMm = computed<number>(() => {
   const layers = props.layers ?? []
@@ -753,9 +755,7 @@ function readPreambleDismissed(): boolean {
   }
 }
 const preambleDismissed = ref<boolean>(props.skipOnboarding ? true : readPreambleDismissed())
-const preambleVisible = computed<boolean>(
-  () => !preambleDismissed.value && hasPlacement.value,
-)
+const preambleVisible = computed<boolean>(() => !preambleDismissed.value && hasPlacement.value)
 function dismissPreamble(): void {
   preambleDismissed.value = true
   try {
@@ -904,19 +904,13 @@ watch(
             </span>
           </li>
           <li v-if="hasEstimate">
-            <span
-              class="modal-v2__hchip is-info"
-              data-test="modal-v2-estimate-length"
-            >
+            <span class="modal-v2__hchip is-info" data-test="modal-v2-estimate-length">
               <span aria-hidden="true">📏</span>
               <span>{{ formatLengthMeters(estimatedLengthMm) }} m</span>
             </span>
           </li>
           <li v-if="requiredPenCount > 0">
-            <span
-              class="modal-v2__hchip is-info"
-              data-test="modal-v2-estimate-pens"
-            >
+            <span class="modal-v2__hchip is-info" data-test="modal-v2-estimate-pens">
               <span aria-hidden="true">🖊</span>
               <span>{{ requiredPenCount }}</span>
             </span>
@@ -980,103 +974,96 @@ watch(
           <!-- Preview block: preview pane + sheet picker. Sits at the
                top so the artwork is always the first thing on screen. -->
           <div class="modal-v2__preview-block">
-        <!-- Live preview pane (zoom, pan, sheet outline, view toggle,
+            <!-- Live preview pane (zoom, pan, sheet outline, view toggle,
              gesture hint). Extracted to a subcomponent so this modal
              stays focused on decision-making. -->
-        <EditPreviewPane
-          :plot-svg="effectivePreviewSvg"
-          :original-svg="props.previewSvg ?? null"
-          :source-image-url="sourceImageUrl"
-          :loading="effectivePreviewLoading"
-          :error="previewError"
-          :sheet="sheetOutline"
-          :stream-file-id="job.selectedPlacement?.library_file_id ?? null"
-          :artwork-width-mm="job.selectedPlacement?.width_mm ?? null"
-          :artwork-height-mm="job.selectedPlacement?.height_mm ?? null"
-        />
+            <EditPreviewPane
+              :plot-svg="effectivePreviewSvg"
+              :original-svg="props.previewSvg ?? null"
+              :source-image-url="sourceImageUrl"
+              :loading="effectivePreviewLoading"
+              :error="previewError"
+              :sheet="sheetOutline"
+              :stream-file-id="job.selectedPlacement?.library_file_id ?? null"
+              :artwork-width-mm="job.selectedPlacement?.width_mm ?? null"
+              :artwork-height-mm="job.selectedPlacement?.height_mm ?? null"
+            />
 
-        <!-- Sheet picker: A6/A5/A4/A3/A2/Letter + portrait/landscape.
+            <!-- Sheet picker: A6/A5/A4/A3/A2/Letter + portrait/landscape.
              Lives right under the preview so the operator can size the
              page-guide without leaving the modal. Mutations go through
              ``ui.setPreviewSheet`` so the plan view stays in sync. -->
-        <SheetPicker />
+            <SheetPicker />
 
-        <!-- File caption. -->
-        <p v-if="props.sourceName" class="modal-v2__caption" data-test="modal-v2-context">
-          <span class="modal-v2__filename">{{ props.sourceName }}</span>
-          <span v-if="props.layers && props.layers.length" class="modal-v2__counts">
-            · {{ t('v2.modal.layerCount', { count: props.layers.length }) }}
-          </span>
-        </p>
+            <!-- File caption. -->
+            <p v-if="props.sourceName" class="modal-v2__caption" data-test="modal-v2-context">
+              <span class="modal-v2__filename">{{ props.sourceName }}</span>
+              <span v-if="props.layers && props.layers.length" class="modal-v2__counts">
+                · {{ t('v2.modal.layerCount', { count: props.layers.length }) }}
+              </span>
+            </p>
 
-        <!-- Estimate + magazine compatibility row. Time, length, pen
+            <!-- Estimate + magazine compatibility row. Time, length, pen
              count come from the placement's layers; the compatibility
              badge counts inks the resolver picked that aren't loaded in
              the magazine, with a one-click shortcut to fix it. -->
-        <!-- Cost + preflight chips moved to the header. -->
+            <!-- Cost + preflight chips moved to the header. -->
 
-
-        <!-- Per-layer ink swatches, in draw order. Each chip is a
+            <!-- Per-layer ink swatches, in draw order. Each chip is a
              one-click visibility toggle (👁 / strike-through) so the
              beginner can mute a layer without leaving the modal. When
              the resolver fell back because nothing in the magazine
              matched, a secondary "Charger" button on the chip jumps
              straight to the magazine editor. -->
-        <div
-          v-if="inkSwatches.length"
-          class="modal-v2__inks"
-          data-test="modal-v2-inks"
-          :aria-label="t('v2.modal.inksLabel')"
-        >
-          <span class="modal-v2__inks-label">{{ t('v2.modal.inksLabel') }}</span>
-          <ul class="modal-v2__inks-list">
-            <li
-              v-for="ink in inkSwatches"
-              :key="ink.layerId"
-              class="modal-v2__ink-item"
+            <div
+              v-if="inkSwatches.length"
+              class="modal-v2__inks"
+              data-test="modal-v2-inks"
+              :aria-label="t('v2.modal.inksLabel')"
             >
-              <button
-                type="button"
-                class="modal-v2__ink"
-                :class="{
-                  'is-fallback': ink.isFallback,
-                  'is-hidden': !isLayerVisible(ink.layerId),
-                }"
-                :aria-pressed="isLayerVisible(ink.layerId)"
-                :title="
-                  isLayerVisible(ink.layerId)
-                    ? t('v2.modal.layerHide')
-                    : t('v2.modal.layerShow')
-                "
-                :data-test="`modal-v2-ink-${ink.layerId}`"
-                @click="toggleLayerVisibility(ink.layerId)"
-              >
-                <span
-                  class="modal-v2__ink-eye"
-                  aria-hidden="true"
-                >{{ isLayerVisible(ink.layerId) ? '👁' : '⊘' }}</span>
-                <span
-                  class="modal-v2__ink-swatch"
-                  :style="{ backgroundColor: ink.hex }"
-                  aria-hidden="true"
-                />
-                <span class="modal-v2__ink-name">{{ ink.displayName }}</span>
-              </button>
-              <button
-                v-if="ink.isFallback"
-                type="button"
-                class="modal-v2__ink-cta"
-                :title="t('v2.modal.inkFallback', { hex: ink.hex })"
-                :aria-label="t('v2.modal.inkFallbackCta')"
-                :data-test="`modal-v2-ink-load-${ink.layerId}`"
-                @click="openMagazine"
-              >
-                {{ t('v2.modal.inkFallbackCta') }}
-              </button>
-            </li>
-          </ul>
-        </div>
-
+              <span class="modal-v2__inks-label">{{ t('v2.modal.inksLabel') }}</span>
+              <ul class="modal-v2__inks-list">
+                <li v-for="ink in inkSwatches" :key="ink.layerId" class="modal-v2__ink-item">
+                  <button
+                    type="button"
+                    class="modal-v2__ink"
+                    :class="{
+                      'is-fallback': ink.isFallback,
+                      'is-hidden': !isLayerVisible(ink.layerId),
+                    }"
+                    :aria-pressed="isLayerVisible(ink.layerId)"
+                    :title="
+                      isLayerVisible(ink.layerId)
+                        ? t('v2.modal.layerHide')
+                        : t('v2.modal.layerShow')
+                    "
+                    :data-test="`modal-v2-ink-${ink.layerId}`"
+                    @click="toggleLayerVisibility(ink.layerId)"
+                  >
+                    <span class="modal-v2__ink-eye" aria-hidden="true">{{
+                      isLayerVisible(ink.layerId) ? '👁' : '⊘'
+                    }}</span>
+                    <span
+                      class="modal-v2__ink-swatch"
+                      :style="{ backgroundColor: ink.hex }"
+                      aria-hidden="true"
+                    />
+                    <span class="modal-v2__ink-name">{{ ink.displayName }}</span>
+                  </button>
+                  <button
+                    v-if="ink.isFallback"
+                    type="button"
+                    class="modal-v2__ink-cta"
+                    :title="t('v2.modal.inkFallback', { hex: ink.hex })"
+                    :aria-label="t('v2.modal.inkFallbackCta')"
+                    :data-test="`modal-v2-ink-load-${ink.layerId}`"
+                    @click="openMagazine"
+                  >
+                    {{ t('v2.modal.inkFallbackCta') }}
+                  </button>
+                </li>
+              </ul>
+            </div>
           </div>
           <!-- end preview block -->
 
@@ -1085,92 +1072,96 @@ watch(
                style stack; in expert mode it's the V1 tab strip
                (Image / SVG / Style / Text / Layers + PresetPanel). -->
           <div class="modal-v2__controls-block">
-        <!-- Expert surface: V1-style tab strip (Image / SVG / Style /
+            <!-- Expert surface: V1-style tab strip (Image / SVG / Style /
              Text / Layers) restored from the audit. Each tab carries
              the source-level cards (brightness/contrast, segmentation
              method, master style, typography) the V1→V2 migration
              dropped. The preview pane on the left stays mounted in
              both modes so the operator never loses sight of the
              result. -->
-        <section v-if="uiMode.isExpert" class="modal-v2__expert" data-test="modal-v2-expert-panel">
-          <EditTabs
-            :model-value="activeExpertTab"
-            :layer-count="props.layers?.length ?? 0"
-            :show-text="showTextTab"
-            @update:model-value="selectExpertTab"
-          />
-          <div class="modal-v2__expert-body">
-            <ImageTab v-if="activeExpertTab === 'image'" />
-            <SvgTab v-else-if="activeExpertTab === 'svg'" />
-            <StyleTab v-else-if="activeExpertTab === 'style'" />
-            <TextTab v-else-if="activeExpertTab === 'text'" />
-            <LayersSection v-else-if="activeExpertTab === 'layers'" />
-          </div>
-          <PresetPanel />
-        </section>
-
-        <!-- Assisted surface: intent + palette + custom-style stack.
-             Single-screen, three clicks max to a usable Generate. -->
-        <fieldset v-else class="modal-v2__intent">
-          <legend>{{ t('v2.modal.chooseIntent') }}</legend>
-          <div class="intent-grid">
-            <button
-              v-for="opt in INTENTS"
-              :key="opt"
-              type="button"
-              :class="{ active: goal === opt }"
-              :aria-pressed="goal === opt"
-              :data-test="`intent-${opt}`"
-              @click="selectGoal(opt)"
+            <section
+              v-if="uiMode.isExpert"
+              class="modal-v2__expert"
+              data-test="modal-v2-expert-panel"
             >
-              <strong>{{ t(`v2.intent.${opt}`) }}</strong>
-              <span class="intent-desc">{{ t(`v2.intent.${opt}Desc`) }}</span>
-            </button>
-          </div>
-        </fieldset>
+              <EditTabs
+                :model-value="activeExpertTab"
+                :layer-count="props.layers?.length ?? 0"
+                :show-text="showTextTab"
+                @update:model-value="selectExpertTab"
+              />
+              <div class="modal-v2__expert-body">
+                <ImageTab v-if="activeExpertTab === 'image'" />
+                <SvgTab v-else-if="activeExpertTab === 'svg'" />
+                <StyleTab v-else-if="activeExpertTab === 'style'" />
+                <TextTab v-else-if="activeExpertTab === 'text'" />
+                <LayersSection v-else-if="activeExpertTab === 'layers'" />
+              </div>
+              <PresetPanel />
+            </section>
 
-        <!-- Secondary control: where the colours come from. Machine
+            <!-- Assisted surface: intent + palette + custom-style stack.
+             Single-screen, three clicks max to a usable Generate. -->
+            <fieldset v-else class="modal-v2__intent">
+              <legend>{{ t('v2.modal.chooseIntent') }}</legend>
+              <div class="intent-grid">
+                <button
+                  v-for="opt in INTENTS"
+                  :key="opt"
+                  type="button"
+                  :class="{ active: goal === opt }"
+                  :aria-pressed="goal === opt"
+                  :data-test="`intent-${opt}`"
+                  @click="selectGoal(opt)"
+                >
+                  <strong>{{ t(`v2.intent.${opt}`) }}</strong>
+                  <span class="intent-desc">{{ t(`v2.intent.${opt}Desc`) }}</span>
+                </button>
+              </div>
+            </fieldset>
+
+            <!-- Secondary control: where the colours come from. Machine
              magazine is the safe default (only pens actually loaded);
              "free" lets the resolver pick from the full palette for
              operators who'll swap pens by hand. -->
-        <fieldset v-if="uiMode.isAssisted" class="modal-v2__palette">
-          <legend>{{ t('v2.modal.paletteLabel') }}</legend>
-          <div class="palette-toggle">
-            <button
-              type="button"
-              :class="{ active: paletteMode === 'machine_only' }"
-              :aria-pressed="paletteMode === 'machine_only'"
-              data-test="palette-machine_only"
-              @click="selectPalette('machine_only')"
-            >
-              {{ t('v2.modal.paletteMachine') }}
-            </button>
-            <button
-              type="button"
-              :class="{ active: paletteMode === 'free' }"
-              :aria-pressed="paletteMode === 'free'"
-              data-test="palette-free"
-              @click="selectPalette('free')"
-            >
-              {{ t('v2.modal.paletteFree') }}
-            </button>
-          </div>
-        </fieldset>
+            <fieldset v-if="uiMode.isAssisted" class="modal-v2__palette">
+              <legend>{{ t('v2.modal.paletteLabel') }}</legend>
+              <div class="palette-toggle">
+                <button
+                  type="button"
+                  :class="{ active: paletteMode === 'machine_only' }"
+                  :aria-pressed="paletteMode === 'machine_only'"
+                  data-test="palette-machine_only"
+                  @click="selectPalette('machine_only')"
+                >
+                  {{ t('v2.modal.paletteMachine') }}
+                </button>
+                <button
+                  type="button"
+                  :class="{ active: paletteMode === 'free' }"
+                  :aria-pressed="paletteMode === 'free'"
+                  data-test="palette-free"
+                  @click="selectPalette('free')"
+                >
+                  {{ t('v2.modal.paletteFree') }}
+                </button>
+              </div>
+            </fieldset>
 
-        <!-- Optional "stack your own styles" panel. Empty stack = the
+            <!-- Optional "stack your own styles" panel. Empty stack = the
              resolver wins (default experience); non-empty stack
              overrides the algorithm at preview + Generate time. The
              subcomponent owns the picker UI, the parent owns the
              selection state via v-model. Bitmap-only — vector and PDF
              pipelines bypass raster algorithms entirely. -->
-        <StyleCustomizer
-          v-if="uiMode.isAssisted && canCustomizeStyles"
-          v-model="customStyles"
-        />
+            <StyleCustomizer
+              v-if="uiMode.isAssisted && canCustomizeStyles"
+              v-model="customStyles"
+            />
 
-        <p v-if="resolveError" class="error" data-test="modal-v2-resolve-error">
-          {{ t('v2.modal.resolverError', { message: resolveError }) }}
-        </p>
+            <p v-if="resolveError" class="error" data-test="modal-v2-resolve-error">
+              {{ t('v2.modal.resolverError', { message: resolveError }) }}
+            </p>
           </div>
           <!-- end controls block -->
         </div>
@@ -1209,9 +1200,7 @@ watch(
             class="modal-v2__apply-btn"
             :disabled="!bitmapDraft.isDirty || !hasPlacement"
             :title="
-              bitmapDraft.isDirty
-                ? t('v2.modal.applyExpertHint')
-                : t('v2.modal.applyExpertClean')
+              bitmapDraft.isDirty ? t('v2.modal.applyExpertHint') : t('v2.modal.applyExpertClean')
             "
             data-test="modal-v2-apply-expert"
             @click="applyExpertDraft"
@@ -1254,7 +1243,11 @@ watch(
             <strong>{{ t('v2.modal.tourStep1Title') }}</strong>
             <p>{{ t('v2.modal.tourStep1Body') }}</p>
           </div>
-          <div v-else-if="tourStep === 2" class="modal-v2__tour-body" data-test="modal-v2-tour-step-2">
+          <div
+            v-else-if="tourStep === 2"
+            class="modal-v2__tour-body"
+            data-test="modal-v2-tour-step-2"
+          >
             <strong>{{ t('v2.modal.tourStep2Title') }}</strong>
             <p>{{ t('v2.modal.tourStep2Body') }}</p>
           </div>
@@ -1294,14 +1287,17 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.6);
   padding: 1rem;
   overflow-y: auto;
 }
 .modal-v2 {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  /* Same surface as the app's other modals: slate-900 card with a
+     slate-700 border (see PlotterSettingsModal). */
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
   padding: 1rem 1.5rem 1.25rem;
   /* Wide enough to fit the split layout — preview LEFT, controls
      RIGHT — without crowding either side. The grid responds to the
@@ -1311,12 +1307,8 @@ watch(
   max-height: 92vh;
   overflow-y: auto;
   font-family: system-ui, sans-serif;
-  color: #1e293b;
+  color: #f1f5f9;
 }
-/* Expert mode widens the modal so the side-by-side layout has room
-   for both preview (left) and controls (right). The light shell
-   keeps the preview visually dominant; LayersSection / PresetPanel
-   carry their own dark surface inside the right column. */
 /* Expert mode used to widen the modal here; the base ``.modal-v2``
    rule already maxes at 1280 px for both modes so the split has
    room either way. Kept the selector for future expert-only style
@@ -1356,15 +1348,13 @@ watch(
   min-width: 0;
 }
 
-/* The expert-mode controls drawer inside the right column. */
+/* The expert-mode controls drawer inside the right column. No own
+   surface: the tabs and cards inside carry their slate-800 panels
+   directly on the modal's slate-900 background, like the main view. */
 .modal-v2__expert {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  background: #0f172a;
-  color: #e2e8f0;
-  border-radius: 8px;
-  padding: 0.65rem;
 }
 
 /* Narrow viewports (tablet portrait, phones): collapse to a single
@@ -1385,11 +1375,11 @@ watch(
   gap: 0.5rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #334155;
 }
 .modal-v2__title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1rem;
   flex-shrink: 0;
 }
 /* Preflight + estimate chip strip — lives in the header so the
@@ -1411,35 +1401,35 @@ watch(
   gap: 0.3rem;
   padding: 0.18rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   border: 1px solid transparent;
-  background: white;
+  background: #1e293b;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .modal-v2__hchip.is-ok {
-  border-color: #10b981;
-  color: #065f46;
-  background: #ecfdf5;
+  border-color: #047857;
+  color: #a7f3d0;
+  background: rgba(2, 44, 34, 0.4);
 }
 .modal-v2__hchip.is-warn {
-  border-color: #f59e0b;
-  color: #92400e;
-  background: #fff7ed;
+  border-color: #b45309;
+  color: #fde68a;
+  background: rgba(69, 26, 3, 0.4);
 }
 .modal-v2__hchip.is-info {
-  border-color: #cbd5e1;
-  color: #334155;
-  background: #f8fafc;
+  border-color: #334155;
+  color: #cbd5e1;
+  background: #1e293b;
 }
 .modal-v2__hchip.is-actionable {
   cursor: pointer;
 }
 .modal-v2__hchip.is-actionable:hover {
-  background: #ffedd5;
+  background: rgba(69, 26, 3, 0.7);
 }
 .modal-v2__hchip.is-actionable:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 .close {
@@ -1447,20 +1437,23 @@ watch(
   background: transparent;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #777;
+  color: #94a3b8;
   line-height: 1;
 }
+.close:hover {
+  color: #e2e8f0;
+}
 .ghost-btn {
-  border: 1px solid #cbd5e1;
-  background: #f8fafc;
-  color: #1e293b;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #e2e8f0;
   padding: 0.25rem 0.6rem;
   border-radius: 4px;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 .ghost-btn:hover:not(:disabled) {
-  background: #e2e8f0;
+  background: #334155;
 }
 .ghost-btn:disabled {
   cursor: not-allowed;
@@ -1472,15 +1465,15 @@ watch(
 
 .modal-v2__caption {
   margin: 0.4rem 0 0.85rem;
-  font-size: 0.8rem;
-  color: #64748b;
+  font-size: 0.75rem;
+  color: #94a3b8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .modal-v2__filename {
   font-family: ui-monospace, Menlo, monospace;
-  color: #334155;
+  color: #cbd5e1;
 }
 
 .modal-v2__inks {
@@ -1490,7 +1483,7 @@ watch(
   margin: 0 0 0.6rem;
 }
 .modal-v2__inks-label {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
@@ -1513,9 +1506,9 @@ watch(
 .modal-v2__intent legend {
   padding: 0;
   margin-bottom: 0.5rem;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: #334155;
+  color: #e2e8f0;
 }
 .intent-grid {
   display: grid;
@@ -1528,9 +1521,10 @@ watch(
   align-items: flex-start;
   gap: 0.2rem;
   padding: 0.65rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: white;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #1e293b;
+  color: inherit;
   transition:
     background 0.12s ease,
     border-color 0.12s ease,
@@ -1539,24 +1533,24 @@ watch(
   text-align: left;
 }
 .intent-grid button.active {
-  border-color: #1f6feb;
-  background: #eef4ff;
-  box-shadow: inset 0 0 0 1px #1f6feb;
+  border-color: #059669;
+  background: rgba(2, 44, 34, 0.45);
+  box-shadow: inset 0 0 0 1px #059669;
 }
 .intent-grid button:hover:not(.active) {
-  background: #f8fafc;
-  border-color: #94a3b8;
+  background: #334155;
+  border-color: #475569;
 }
 .intent-grid button:active {
   transform: scale(0.98);
 }
 .intent-grid button:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 .intent-desc {
-  font-size: 0.72rem;
-  color: #64748b;
+  font-size: 0.75rem;
+  color: #94a3b8;
   font-weight: 400;
 }
 
@@ -1568,57 +1562,58 @@ watch(
 .modal-v2__palette legend {
   padding: 0;
   margin-bottom: 0.4rem;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: #334155;
+  color: #e2e8f0;
 }
 .palette-toggle {
   display: inline-flex;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  border: 1px solid #334155;
+  border-radius: 4px;
   overflow: hidden;
 }
 .palette-toggle button {
   padding: 0.35rem 0.8rem;
   border: none;
-  background: white;
-  color: #475569;
-  font-size: 0.82rem;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-size: 0.75rem;
   cursor: pointer;
   transition: background 0.12s ease;
 }
 .palette-toggle button + button {
-  border-left: 1px solid #cbd5e1;
+  border-left: 1px solid #334155;
 }
 .palette-toggle button.active {
-  background: #eef4ff;
-  color: #1f6feb;
+  background: rgba(2, 44, 34, 0.6);
+  color: #6ee7b7;
   font-weight: 600;
 }
 .palette-toggle button:hover:not(.active) {
-  background: #f8fafc;
+  background: #334155;
 }
 .palette-toggle button:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 
 .error {
-  color: #b71c1c;
-  background: #fdecea;
+  color: #fca5a5;
+  background: rgba(69, 10, 10, 0.4);
+  border: 1px solid #b91c1c;
   padding: 0.5rem;
   border-radius: 4px;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   margin: 0.5rem 0 0;
 }
 .modal-v2__noplacement {
-  background: #fff4cc;
-  border: 1px solid #d9b800;
-  color: #5b4a00;
+  background: rgba(69, 26, 3, 0.4);
+  border: 1px solid #b45309;
+  color: #fde68a;
   padding: 0.65rem 0.85rem;
-  border-radius: 6px;
+  border-radius: 8px;
   margin-bottom: 0.75rem;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
@@ -1633,23 +1628,23 @@ watch(
 }
 .modal-v2__noplacement-body p {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   opacity: 0.85;
 }
 
 /* Outcome preamble — single-sentence context card with a dismiss
-   button. Light blue tint so it reads as informational, not warning. */
+   button. Sky tint so it reads as informational, not warning. */
 .modal-v2__preamble {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
   padding: 0.55rem 0.75rem;
-  background: #eef4ff;
-  border: 1px solid #c7d8ff;
-  border-radius: 6px;
+  background: rgba(8, 47, 73, 0.35);
+  border: 1px solid #0369a1;
+  border-radius: 8px;
   margin-bottom: 0.6rem;
-  font-size: 0.82rem;
-  color: #1e293b;
+  font-size: 0.75rem;
+  color: #bae6fd;
 }
 .modal-v2__preamble p {
   margin: 0;
@@ -1659,7 +1654,7 @@ watch(
 .modal-v2__preamble-dismiss {
   border: none;
   background: transparent;
-  color: #1f6feb;
+  color: #7dd3fc;
   font-size: 0.75rem;
   cursor: pointer;
   padding: 0.15rem 0.4rem;
@@ -1668,11 +1663,11 @@ watch(
   flex-shrink: 0;
 }
 .modal-v2__preamble-dismiss:hover {
-  background: white;
+  background: rgba(8, 47, 73, 0.7);
   text-decoration: underline;
 }
 .modal-v2__preamble-dismiss:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 
@@ -1686,11 +1681,11 @@ watch(
 }
 .generate-btn {
   padding: 0.55rem 1.4rem;
-  border: 1px solid #1f6feb;
-  background: #1f6feb;
+  border: 1px solid #059669;
+  background: #059669;
   color: white;
-  border-radius: 6px;
-  font-size: 0.95rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -1698,13 +1693,13 @@ watch(
     transform 0.08s ease;
 }
 .generate-btn:hover:not(:disabled) {
-  background: #1959c7;
+  background: #10b981;
 }
 .generate-btn:active:not(:disabled) {
   transform: scale(0.97);
 }
 .generate-btn:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 .generate-btn:disabled {
@@ -1720,7 +1715,7 @@ watch(
   margin: 0.5rem 0 0.6rem;
 }
 .modal-v2__estimate-label {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
@@ -1740,11 +1735,11 @@ watch(
   align-items: center;
   gap: 0.3rem;
   padding: 0.2rem 0.55rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #334155;
   border-radius: 999px;
-  background: #f8fafc;
-  font-size: 0.78rem;
-  color: #334155;
+  background: #1e293b;
+  font-size: 0.75rem;
+  color: #cbd5e1;
   font-variant-numeric: tabular-nums;
 }
 .modal-v2__estimate-icon {
@@ -1762,11 +1757,11 @@ watch(
   align-items: center;
   gap: 0.3rem;
   padding: 0.15rem 0.55rem 0.15rem 0.35rem;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #334155;
   border-radius: 999px;
-  background: white;
-  font-size: 0.72rem;
-  color: #334155;
+  background: #1e293b;
+  font-size: 0.75rem;
+  color: #cbd5e1;
   max-width: 14rem;
   cursor: pointer;
   transition:
@@ -1774,10 +1769,10 @@ watch(
     opacity 0.15s ease;
 }
 .modal-v2__ink:hover {
-  background: #f8fafc;
+  background: #334155;
 }
 .modal-v2__ink:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 .modal-v2__ink.is-hidden {
@@ -1787,12 +1782,12 @@ watch(
   text-decoration: line-through;
 }
 .modal-v2__ink.is-fallback {
-  border-color: #f59e0b;
-  background: #fffbeb;
-  color: #92400e;
+  border-color: #b45309;
+  background: rgba(69, 26, 3, 0.4);
+  color: #fde68a;
 }
 .modal-v2__ink-eye {
-  font-size: 0.7rem;
+  font-size: 0.6875rem;
   line-height: 1;
   opacity: 0.7;
 }
@@ -1801,7 +1796,7 @@ watch(
   width: 0.85rem;
   height: 0.85rem;
   border-radius: 50%;
-  border: 1px solid rgba(15, 23, 42, 0.25);
+  border: 1px solid rgba(241, 245, 249, 0.3);
   flex-shrink: 0;
 }
 .modal-v2__ink-name {
@@ -1810,20 +1805,20 @@ watch(
   white-space: nowrap;
 }
 .modal-v2__ink-cta {
-  border: 1px solid #f59e0b;
-  background: #fff7ed;
-  color: #92400e;
+  border: 1px solid #b45309;
+  background: rgba(69, 26, 3, 0.4);
+  color: #fde68a;
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  font-size: 0.7rem;
+  font-size: 0.6875rem;
   cursor: pointer;
   white-space: nowrap;
 }
 .modal-v2__ink-cta:hover {
-  background: #ffedd5;
+  background: rgba(69, 26, 3, 0.7);
 }
 .modal-v2__ink-cta:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 
@@ -1835,18 +1830,18 @@ watch(
 .modal-v2__cancel {
   border: none;
   background: transparent;
-  color: #64748b;
-  font-size: 0.85rem;
+  color: #94a3b8;
+  font-size: 0.875rem;
   cursor: pointer;
   padding: 0.3rem 0.5rem;
   border-radius: 4px;
 }
 .modal-v2__cancel:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: #1e293b;
+  color: #e2e8f0;
 }
 .modal-v2__cancel:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 .modal-v2__apply-btn {
@@ -1854,11 +1849,11 @@ watch(
   align-items: center;
   gap: 0.35rem;
   padding: 0.45rem 1rem;
-  border: 1px solid #10b981;
-  background: #ecfdf5;
-  color: #065f46;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  border: 1px solid #047857;
+  background: rgba(2, 44, 34, 0.4);
+  color: #a7f3d0;
+  border-radius: 4px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -1866,7 +1861,7 @@ watch(
     opacity 0.12s ease;
 }
 .modal-v2__apply-btn:hover:not(:disabled) {
-  background: #d1fae5;
+  background: rgba(2, 44, 34, 0.7);
 }
 .modal-v2__apply-btn:disabled {
   opacity: 0.5;
@@ -1877,27 +1872,26 @@ watch(
   outline-offset: 2px;
 }
 .modal-v2__apply-btn .dirty-dot {
-  font-size: 0.7rem;
-  color: #f59e0b;
+  font-size: 0.6875rem;
+  color: #fbbf24;
 }
 .modal-v2__expert-link {
   border: none;
   background: transparent;
-  color: #1f6feb;
-  font-size: 0.85rem;
+  color: #34d399;
+  font-size: 0.875rem;
   cursor: pointer;
   padding: 0.3rem 0.4rem;
   border-radius: 4px;
 }
 .modal-v2__expert-link:hover {
-  background: #eef4ff;
+  background: rgba(2, 44, 34, 0.4);
   text-decoration: underline;
 }
 .modal-v2__expert-link:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
-
 
 /* Preflight checklist: one line of green / amber chips that
    aggregates the four "am I ready to plot" signals. */
@@ -1907,18 +1901,18 @@ watch(
   gap: 0.3rem;
   margin: 0.6rem 0 0;
   padding: 0.5rem 0.65rem;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #1e293b;
+  border-radius: 8px;
 }
 .modal-v2__preflight.is-all-ok {
-  background: #ecfdf5;
-  border-color: #10b981;
+  background: rgba(2, 44, 34, 0.4);
+  border-color: #047857;
 }
 .modal-v2__preflight-label {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: #334155;
+  color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1938,29 +1932,28 @@ watch(
   border-radius: 999px;
   font-size: 0.75rem;
   border: 1px solid transparent;
-  background: white;
+  background: #0f172a;
 }
 .modal-v2__preflight-chip.is-ok {
-  border-color: #10b981;
-  color: #065f46;
-  background: #ecfdf5;
+  border-color: #047857;
+  color: #a7f3d0;
+  background: rgba(2, 44, 34, 0.4);
 }
 .modal-v2__preflight-chip.is-warn {
-  border-color: #f59e0b;
-  color: #92400e;
-  background: #fff7ed;
+  border-color: #b45309;
+  color: #fde68a;
+  background: rgba(69, 26, 3, 0.4);
 }
 .modal-v2__preflight-chip.is-actionable {
   cursor: pointer;
 }
 .modal-v2__preflight-chip.is-actionable:hover {
-  background: #ffedd5;
+  background: rgba(69, 26, 3, 0.7);
 }
 .modal-v2__preflight-chip.is-actionable:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
-
 
 /* Onboarding tour overlay. Anchored to the modal so the preview
    underneath stays partly visible. */
@@ -1971,8 +1964,8 @@ watch(
   align-items: flex-end;
   justify-content: center;
   padding: 1rem;
-  background: rgba(15, 23, 42, 0.35);
-  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.6);
+  border-radius: 12px;
   z-index: 5;
   pointer-events: auto;
 }
@@ -1980,9 +1973,10 @@ watch(
   position: relative;
 }
 .modal-v2__tour-card {
-  background: white;
+  background: #1e293b;
+  border: 1px solid #334155;
   border-radius: 8px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   padding: 0.85rem 1rem;
   max-width: 22rem;
   width: 100%;
@@ -1995,24 +1989,24 @@ watch(
 }
 .modal-v2__tour-header h3 {
   margin: 0;
-  font-size: 0.95rem;
-  color: #1e293b;
+  font-size: 0.875rem;
+  color: #f1f5f9;
 }
 .modal-v2__tour-progress {
-  font-size: 0.7rem;
+  font-size: 0.6875rem;
   color: #94a3b8;
   font-variant-numeric: tabular-nums;
 }
 .modal-v2__tour-body strong {
   display: block;
   margin-bottom: 0.25rem;
-  font-size: 0.85rem;
-  color: #1e293b;
+  font-size: 0.875rem;
+  color: #e2e8f0;
 }
 .modal-v2__tour-body p {
   margin: 0;
-  font-size: 0.8rem;
-  color: #475569;
+  font-size: 0.75rem;
+  color: #cbd5e1;
   line-height: 1.4;
 }
 .modal-v2__tour-footer {
@@ -2025,8 +2019,8 @@ watch(
 .modal-v2__tour-skip {
   border: none;
   background: transparent;
-  color: #64748b;
-  font-size: 0.78rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
   cursor: pointer;
   padding: 0.25rem 0.4rem;
 }
@@ -2034,21 +2028,21 @@ watch(
   text-decoration: underline;
 }
 .modal-v2__tour-next {
-  border: 1px solid #1f6feb;
-  background: #1f6feb;
+  border: 1px solid #059669;
+  background: #059669;
   color: white;
   padding: 0.35rem 0.9rem;
-  border-radius: 6px;
-  font-size: 0.82rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
 }
 .modal-v2__tour-next:hover {
-  background: #1959c7;
+  background: #10b981;
 }
 .modal-v2__tour-next:focus-visible,
 .modal-v2__tour-skip:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 </style>

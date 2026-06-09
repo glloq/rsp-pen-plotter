@@ -151,7 +151,7 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
     <ColorModeCard :mode="printMode" @update:mode="(mode) => draft.setPrintMode(mode)" />
 
     <template v-if="printMode === 'monochrome'">
-      <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
+      <div class="card space-y-3 text-xs">
         <PenSlotPicker
           :model-value="draft.monoPenSlot.value"
           @update:model-value="(v) => (draft.monoPenSlot.value = v)"
@@ -173,7 +173,7 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
     </template>
 
     <template v-else>
-      <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
+      <div class="card space-y-3 text-xs">
         <MasterStylePicker
           mode="multicolor"
           :model-value="draft.multicolorMasterStyleId.value"

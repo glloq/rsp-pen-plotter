@@ -46,7 +46,7 @@ function onSimplifyChange(event: Event): void {
 <template>
   <section v-if="fm.hasSource.value && fm.showsBitmapForm.value" class="space-y-3">
     <!-- Detail tier + path treatments -->
-    <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-3 text-xs">
+    <div class="card space-y-3 text-xs">
       <DetailPicker
         :model-value="bitmap.max_dimension_px"
         @update:model-value="(v) => (bitmap.max_dimension_px = v)"

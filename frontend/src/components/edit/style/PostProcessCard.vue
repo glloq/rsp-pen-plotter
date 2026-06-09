@@ -34,7 +34,7 @@ function onBgLuminanceInput(e: Event): void {
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 text-xs space-y-2">
+  <div class="card text-xs space-y-2">
     <p class="text-[10px] uppercase tracking-wider text-slate-500">
       {{ t('convert.postProcess') }}
     </p>

@@ -1,3 +1,31 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* Native form controls follow the app accent (emerald) so bare
+     range/checkbox/radio inputs never fall back to the browser blue. */
+  input[type='range'],
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: theme('colors.emerald.500');
+  }
+}
+
+@layer components {
+  /* Shared UI primitives. These mirror the utility patterns repeated
+     across the app (see docs/audit_editor_ui.md) so new code can opt
+     into one class instead of re-pasting the full string. */
+  .btn {
+    @apply rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-cta {
+    @apply rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .card {
+    @apply rounded-lg border border-slate-700 bg-slate-800 p-3;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs;
+  }
+}

@@ -142,7 +142,7 @@ function setOrientation(o: Orientation): void {
   margin: 0.5rem 0;
 }
 .sheet-picker__label {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
@@ -155,13 +155,13 @@ function setOrientation(o: Orientation): void {
   align-items: center;
 }
 .sheet-picker__sep {
-  color: #cbd5e1;
+  color: #475569;
   margin: 0 0.15rem;
 }
 .sheet-picker__chip {
-  border: 1px solid #cbd5e1;
-  background: white;
-  color: #475569;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #cbd5e1;
   border-radius: 999px;
   padding: 0.2rem 0.6rem;
   font-size: 0.75rem;
@@ -171,16 +171,16 @@ function setOrientation(o: Orientation): void {
     border-color 0.12s ease;
 }
 .sheet-picker__chip:hover {
-  background: #f1f5f9;
+  background: #334155;
 }
 .sheet-picker__chip.active {
-  border-color: #1f6feb;
-  background: #eef4ff;
-  color: #1f6feb;
+  border-color: #059669;
+  background: rgba(2, 44, 34, 0.6);
+  color: #6ee7b7;
   font-weight: 600;
 }
 .sheet-picker__chip:focus-visible {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 2px;
 }
 </style>

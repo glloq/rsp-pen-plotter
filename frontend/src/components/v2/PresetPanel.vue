@@ -29,9 +29,7 @@ const saveError = ref<string | null>(null)
 
 const presets = computed<Preset[]>(() => job.presets)
 const userPresets = computed<Preset[]>(() => presets.value.filter((p) => p.kind === 'user'))
-const builtinPresets = computed<Preset[]>(() =>
-  presets.value.filter((p) => p.kind !== 'user'),
-)
+const builtinPresets = computed<Preset[]>(() => presets.value.filter((p) => p.kind !== 'user'))
 
 // What we capture when the operator clicks "Save". We prefer
 // ``last_options`` (the converter bundle that drove the latest /upload
@@ -149,19 +147,10 @@ async function onApply(preset: Preset): Promise<void> {
          placement, or a placement with no algorithm overrides) — we
          surface an explanatory hint in that case rather than vanish
          the affordance silently. -->
-    <p
-      v-if="!currentOptions"
-      class="preset-panel__noop"
-      data-test="preset-panel-noop"
-    >
+    <p v-if="!currentOptions" class="preset-panel__noop" data-test="preset-panel-noop">
       {{ t('presets.nothingToSave') }}
     </p>
-    <form
-      v-else
-      class="preset-panel__save"
-      data-test="preset-panel-save"
-      @submit.prevent="onSave"
-    >
+    <form v-else class="preset-panel__save" data-test="preset-panel-save" @submit.prevent="onSave">
       <input
         v-model="newName"
         type="text"
@@ -288,21 +277,21 @@ async function onApply(preset: Preset): Promise<void> {
 }
 .preset-panel__name:focus,
 .preset-panel__desc:focus {
-  outline: 2px solid #1f6feb;
+  outline: 2px solid #10b981;
   outline-offset: 1px;
 }
 .preset-panel__save-btn {
-  border: 1px solid #10b981;
-  background: #065f46;
+  border: 1px solid #059669;
+  background: #059669;
   color: white;
   border-radius: 4px;
   padding: 0.3rem 0.7rem;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
 }
 .preset-panel__save-btn:hover:not(:disabled) {
-  background: #047857;
+  background: #10b981;
 }
 .preset-panel__save-btn:disabled {
   opacity: 0.4;
@@ -356,9 +345,9 @@ async function onApply(preset: Preset): Promise<void> {
   color: white;
 }
 .preset-panel__chip.active {
-  border-color: #1f6feb;
-  background: #1e3a8a;
-  color: white;
+  border-color: #059669;
+  background: rgba(2, 44, 34, 0.6);
+  color: #6ee7b7;
 }
 .preset-panel__delete {
   border: 1px solid #7f1d1d;

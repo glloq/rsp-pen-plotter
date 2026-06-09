@@ -73,7 +73,7 @@ const imageCount = computed(() => currentBlocks.value.filter((b) => b.kind === '
 <template>
   <section
     v-if="isPdf && (loading || analysis || error)"
-    class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2"
+    class="card space-y-2"
   >
     <div class="flex items-baseline justify-between">
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
