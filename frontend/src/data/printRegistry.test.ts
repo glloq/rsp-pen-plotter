@@ -44,6 +44,7 @@ describe('printRegistry', () => {
         'kmeans_lab',
         'fixed_palette',
         'palette_dither',
+        'otsu',
       ]).toContain(seg.method)
       // Band-based monochrome styles default to a single layer (1 band);
       // the shading slider lets the operator add bands. Must still be a

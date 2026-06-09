@@ -21,7 +21,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 def _erode_disk(mask: NDArray[np.bool_], radius: int) -> NDArray[np.bool_]:
@@ -102,6 +102,14 @@ class ConcentricOffsetAlgorithm(RasterAlgorithm):
         "Spiral inward via morphological erosion — near-continuous stroke, "
         "very few pen-lifts per region."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=3, min=1, max=30, step=0.5),
+        OptionSpec(key="max_rings", label="convert.maxRings", type="integer",
+                   default=50, min=1, max=200, step=1),
+        OptionSpec(key="bridge", label="convert.bridge", type="boolean", default=True),
+    ]
 
     def render_layer(
         self,

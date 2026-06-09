@@ -45,7 +45,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 _NEIGHBOURS_8 = (
     (-1, -1),
@@ -300,6 +300,12 @@ class CenterlineAlgorithm(RasterAlgorithm):
         "schematics and line art. Thick filled regions collapse to a single "
         "line at the centre, which is intentional but may surprise on photos."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="smooth", label="convert.smooth", type="boolean", default=True),
+        OptionSpec(key="min_branch_px", label="convert.minBranch", type="integer",
+                   default=3, min=0, max=50, step=1),
+    ]
 
     def render_layer(
         self,

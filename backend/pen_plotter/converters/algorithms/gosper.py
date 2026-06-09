@@ -20,7 +20,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 _RULES = {
     "A": "A-B--B+A++AA+B-",
@@ -123,6 +123,15 @@ class GosperFillAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Fill regions with a Gosper flowsnake — organic hexagonal space-filling stroke."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="order", label="convert.gosperOrder", type="integer",
+                   default=4, min=1, max=6, step=1),
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="rotation_deg", label="convert.angleDeg", type="number",
+                   default=0, min=0, max=360, step=5),
+    ]
 
     def render_layer(
         self,

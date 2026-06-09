@@ -18,7 +18,7 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 _GROUP_RE = re.compile(r"<g\b.*?</g>", re.DOTALL)
 
@@ -28,6 +28,9 @@ class DirectVectorizationAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "direct"
     description: ClassVar[str] = "Trace region outlines into filled vector paths (potrace)."
+
+    # ``direct`` is parameterless — potrace is invoked with fixed defaults.
+    options_schema: ClassVar[list[OptionSpec]] = []
 
     def render_layer(
         self,

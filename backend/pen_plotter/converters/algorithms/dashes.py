@@ -15,7 +15,7 @@ from xml.sax.saxutils import quoteattr
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 from pen_plotter.converters.algorithms.crosshatch import _line_segments
 
 
@@ -27,6 +27,18 @@ class DashesAlgorithm(RasterAlgorithm):
         "Dashed hatching — parallel strokes chopped into short dashes "
         "for a stitched / engraving texture."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=5, min=1, max=30, step=0.5),
+        OptionSpec(key="angle_deg", label="convert.angleDeg", type="number",
+                   default=45, min=0, max=180, step=1),
+        OptionSpec(key="dash_px", label="convert.dashPx", type="number",
+                   default=3, min=0.5, max=20, step=0.5),
+        OptionSpec(key="gap_px", label="convert.gapPx", type="number",
+                   default=3, min=0.5, max=20, step=0.5),
+        OptionSpec(key="crossed", label="convert.crossed", type="boolean", default=False),
+    ]
 
     def render_layer(
         self,

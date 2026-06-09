@@ -12,7 +12,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 class StipplingAlgorithm(RasterAlgorithm):
@@ -20,6 +20,20 @@ class StipplingAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "stippling"
     description: ClassVar[str] = "Fill regions with randomly scattered dots."
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(
+            key="density", label="convert.density", type="number",
+            default=0.02, min=0.001, max=0.5, step=0.001,
+        ),
+        OptionSpec(
+            key="dot_radius_px", label="convert.dotRadius", type="number",
+            default=0.6, min=0.1, max=5, step=0.1,
+        ),
+        OptionSpec(
+            key="seed", label="convert.seed", type="integer",
+            default=0, min=0, step=1,
+        ),
+    ]
 
     def render_layer(
         self,

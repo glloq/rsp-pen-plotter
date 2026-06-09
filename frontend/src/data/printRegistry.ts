@@ -58,10 +58,15 @@ export interface AlgoOption {
   // i18n label key, e.g. ``convert.cellSize``. Consumers run this
   // through ``t()`` themselves so the schema stays framework-agnostic.
   label: string
-  type: 'number' | 'boolean'
+  // ``integer`` is rendered like ``number`` but the input is restricted
+  // to whole values (the backend casts via ``int(opts.get(...))``).
+  // ``select`` exposes ``choices`` as a dropdown for enum-typed knobs
+  // (e.g. tsp_opt's ``method``, flowfield's ``mode``).
+  type: 'number' | 'integer' | 'boolean' | 'select'
   min?: number
   max?: number
   step?: number
+  choices?: string[]
 }
 
 export interface AlgorithmSpec {
@@ -76,7 +81,9 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     id: 'halftone',
     defaults: { cell_size_px: 6, angle_deg: 0 },
     schema: [
-      { key: 'cell_size_px', label: 'convert.cellSize', type: 'number', min: 1, max: 64, step: 1 },
+      // Backend clamps to ``max(2, ...)``: anything below collapses adjacent
+      // dots into a solid fill, so the floor is 2 (was 1, silently clipped).
+      { key: 'cell_size_px', label: 'convert.cellSize', type: 'integer', min: 2, max: 64, step: 1 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
     ],
   },
@@ -100,15 +107,15 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         max: 5,
         step: 0.1,
       },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   crosshatch: {
     id: 'crosshatch',
-    defaults: { angle_deg: 45, spacing_px: 4, crossed: false },
+    defaults: { spacing_px: 4, angle_deg: 45, crossed: false },
     schema: [
-      { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
     ],
   },
@@ -117,40 +124,28 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     defaults: { spacing_px: 4, max_rings: 20 },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'max_rings', label: 'convert.maxRings', type: 'number', min: 1, max: 100, step: 1 },
+      { key: 'max_rings', label: 'convert.maxRings', type: 'integer', min: 1, max: 100, step: 1 },
     ],
   },
   edges: {
     id: 'edges',
-    defaults: { stroke_width: 0.8 },
-    schema: [
-      {
-        key: 'stroke_width',
-        label: 'convert.strokeWidthPx',
-        type: 'number',
-        min: 0.1,
-        max: 5,
-        step: 0.1,
-      },
-    ],
+    // ``stroke_width`` is injected automatically from the pen slot at
+    // render time (see backend ``_style.stroke_attr_px``) — no operator
+    // knob.
+    defaults: {},
+    schema: [],
   },
   centerline: {
     id: 'centerline',
-    defaults: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+    // ``stroke_width`` is injected from the pen slot at render time — no
+    // operator knob (see backend ``_style.stroke_attr_px``).
+    defaults: { smooth: true, min_branch_px: 3 },
     schema: [
-      {
-        key: 'stroke_width',
-        label: 'convert.strokeWidthPx',
-        type: 'number',
-        min: 0.1,
-        max: 5,
-        step: 0.1,
-      },
       { key: 'smooth', label: 'convert.smooth', type: 'boolean' },
       {
         key: 'min_branch_px',
         label: 'convert.minBranch',
-        type: 'number',
+        type: 'integer',
         min: 0,
         max: 50,
         step: 1,
@@ -165,7 +160,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       {
         key: 'samples_per_turn',
         label: 'convert.samplesPerTurn',
-        type: 'number',
+        type: 'integer',
         min: 16,
         max: 256,
         step: 1,
@@ -200,12 +195,13 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         max: 0.5,
         step: 0.001,
       },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   flowfield: {
     id: 'flowfield',
     defaults: {
+      mode: 'gradient',
       seed_spacing_px: 6,
       step_px: 0.8,
       max_steps: 800,
@@ -214,6 +210,14 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       seed: 0,
     },
     schema: [
+      // Field source: ``gradient`` follows the image's structure, ``perlin``
+      // is decorative (image-independent).
+      {
+        key: 'mode',
+        label: 'convert.flowMode',
+        type: 'select',
+        choices: ['gradient', 'perlin'],
+      },
       {
         key: 'seed_spacing_px',
         label: 'convert.spacing',
@@ -223,7 +227,14 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         step: 0.5,
       },
       { key: 'step_px', label: 'convert.stepPx', type: 'number', min: 0.2, max: 3, step: 0.1 },
-      { key: 'max_steps', label: 'convert.maxSteps', type: 'number', min: 50, max: 4000, step: 50 },
+      {
+        key: 'max_steps',
+        label: 'convert.maxSteps',
+        type: 'integer',
+        min: 50,
+        max: 4000,
+        step: 50,
+      },
       { key: 'bidirectional', label: 'convert.bidirectional', type: 'boolean' },
       {
         key: 'noise_scale',
@@ -233,22 +244,26 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         max: 128,
         step: 1,
       },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   hilbert: {
     id: 'hilbert',
-    defaults: { spacing_px: 4, min_run_px: 3 },
+    defaults: { spacing_px: 4, min_run_px: 3, order: 0 },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'min_run_px', label: 'convert.minRunPx', type: 'number', min: 1, max: 20, step: 1 },
+      { key: 'min_run_px', label: 'convert.minRunPx', type: 'integer', min: 1, max: 20, step: 1 },
+      // ``order`` overrides the auto-derived L-system depth (0 = auto, 1..8
+      // force that depth). Operators can tune ink density on small regions
+      // where the auto rule under-fills.
+      { key: 'order', label: 'convert.hilbertOrder', type: 'integer', min: 0, max: 8, step: 1 },
     ],
   },
   gosper: {
     id: 'gosper',
     defaults: { order: 4, spacing_px: 4, rotation_deg: 0 },
     schema: [
-      { key: 'order', label: 'convert.gosperOrder', type: 'number', min: 1, max: 6, step: 1 },
+      { key: 'order', label: 'convert.gosperOrder', type: 'integer', min: 1, max: 6, step: 1 },
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
       { key: 'rotation_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 360, step: 5 },
     ],
@@ -267,13 +282,20 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     defaults: { spacing_px: 3, max_rings: 50, bridge: true },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'max_rings', label: 'convert.maxRings', type: 'number', min: 1, max: 200, step: 1 },
+      { key: 'max_rings', label: 'convert.maxRings', type: 'integer', min: 1, max: 200, step: 1 },
       { key: 'bridge', label: 'convert.bridge', type: 'boolean' },
     ],
   },
   tsp_opt: {
     id: 'tsp_opt',
-    defaults: { density: 0.02, max_points: 4000, time_budget_s: 1.5, seed: 0, poisson_disk: true },
+    defaults: {
+      density: 0.02,
+      max_points: 4000,
+      method: 'nn_2opt',
+      time_budget_s: 1.5,
+      seed: 0,
+      poisson_disk: true,
+    },
     schema: [
       {
         key: 'density',
@@ -286,10 +308,19 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       {
         key: 'max_points',
         label: 'convert.maxPoints',
-        type: 'number',
+        type: 'integer',
         min: 100,
         max: 20000,
         step: 100,
+      },
+      // ``nn_2opt`` (default) seeds with greedy NN then refines with 2-opt
+      // (best quality / time). ``nn`` is plain nearest-neighbour (fastest).
+      // ``mst`` follows the minimum spanning tree (different aesthetic).
+      {
+        key: 'method',
+        label: 'convert.tspMethod',
+        type: 'select',
+        choices: ['nn_2opt', 'nn', 'mst'],
       },
       {
         key: 'time_budget_s',
@@ -300,7 +331,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         step: 0.1,
       },
       { key: 'poisson_disk', label: 'convert.poissonDisk', type: 'boolean' },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   voronoi_stipple: {
@@ -323,19 +354,28 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         max: 5,
         step: 0.1,
       },
-      { key: 'iterations', label: 'convert.iterations', type: 'number', min: 0, max: 30, step: 1 },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      { key: 'iterations', label: 'convert.iterations', type: 'integer', min: 0, max: 30, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   squiggle: {
     id: 'squiggle',
-    defaults: { spacing_px: 4, amp_px: 1.4, period_px: 8, jitter: 0.4, seed: 0 },
+    defaults: { spacing_px: 4, amp_px: 1.4, period_px: 8, jitter: 0.4, mode: 'modulated', seed: 0 },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
       { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0.1, max: 8, step: 0.1 },
       { key: 'period_px', label: 'convert.wavePeriod', type: 'number', min: 2, max: 40, step: 0.5 },
       { key: 'jitter', label: 'convert.jitter', type: 'number', min: 0, max: 1, step: 0.05 },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      // ``modulated`` lets the amplitude track image tone; ``constant`` keeps
+      // a uniform wiggle — better for pure-decoration fills where tone shouldn't
+      // bleed into the pattern.
+      {
+        key: 'mode',
+        label: 'convert.squiggleMode',
+        type: 'select',
+        choices: ['modulated', 'constant'],
+      },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   lowpoly: {
@@ -350,7 +390,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         max: 0.1,
         step: 0.001,
       },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   scribble: {
@@ -366,9 +406,20 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
       { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 8, step: 0.1 },
+      // ``overshoot_px`` is the random extension each stroke runs past the
+      // boundary — the "sketchy" feel of scribble fill. 0 = clean stops at
+      // the boundary, higher values = scratchy / loose pencil.
+      {
+        key: 'overshoot_px',
+        label: 'convert.overshoot',
+        type: 'number',
+        min: 0,
+        max: 20,
+        step: 0.5,
+      },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   grid: {
@@ -382,8 +433,8 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     id: 'brick',
     defaults: { brick_w_px: 16, brick_h_px: 8 },
     schema: [
-      { key: 'brick_w_px', label: 'convert.brickW', type: 'number', min: 2, max: 60, step: 1 },
-      { key: 'brick_h_px', label: 'convert.brickH', type: 'number', min: 2, max: 40, step: 1 },
+      { key: 'brick_w_px', label: 'convert.brickW', type: 'integer', min: 2, max: 60, step: 1 },
+      { key: 'brick_h_px', label: 'convert.brickH', type: 'integer', min: 2, max: 40, step: 1 },
     ],
   },
   dashes: {
@@ -401,8 +452,8 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     id: 'truchet',
     defaults: { cell_px: 10, seed: 0 },
     schema: [
-      { key: 'cell_px', label: 'convert.cellPx', type: 'number', min: 2, max: 40, step: 1 },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 2, max: 40, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   rings: {
@@ -415,14 +466,17 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   sunburst: {
     id: 'sunburst',
     defaults: { rays: 120 },
-    schema: [{ key: 'rays', label: 'convert.rays', type: 'number', min: 8, max: 720, step: 4 }],
+    schema: [{ key: 'rays', label: 'convert.rays', type: 'integer', min: 8, max: 720, step: 4 }],
   },
   circle_pack: {
     id: 'circle_pack',
     // ``attempts`` is intentionally omitted: the backend auto-scales the
     // dart budget with the region area so the packing fills densely
     // without the operator tuning it. Smaller radii ⇒ more bubbles.
-    defaults: { min_radius_px: 1.0, max_radius_px: 7, gap_px: 0.6, seed: 0 },
+    // Defaults aligned with the backend ``opts.get`` fallbacks
+    // (``circle_pack.py``: 1.2 / 8.0) so the operator sees the same
+    // packing the backend renders when no override is set.
+    defaults: { min_radius_px: 1.2, max_radius_px: 8.0, gap_px: 0.6, seed: 0 },
     schema: [
       {
         key: 'min_radius_px',
@@ -430,7 +484,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         type: 'number',
         min: 0.5,
         max: 10,
-        step: 0.5,
+        step: 0.1,
       },
       {
         key: 'max_radius_px',
@@ -441,7 +495,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         step: 0.5,
       },
       { key: 'gap_px', label: 'convert.gapPx', type: 'number', min: 0, max: 10, step: 0.1 },
-      { key: 'seed', label: 'convert.seed', type: 'number', min: 0, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
 }
@@ -1262,6 +1316,35 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
   },
   {
+    // Otsu binary segmentation: the backend auto-picks the ink/paper split
+    // from the image histogram (no threshold to tune). Useful for scans,
+    // logos and high-contrast line art where ``outline``'s 0.5 threshold
+    // chops parts of the subject. Fills the dark region with crosshatch
+    // so it reads as a solid ink area rather than a single outline pass.
+    id: 'otsu-binary',
+    labelKey: 'mono.modes.otsuBinary',
+    descriptionKey: 'mono.modes.otsuBinaryDesc',
+    applicableTo: ['image', 'schematic'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'otsu',
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+      // Line-art benefits from the higher canvas size, same as ``outline``.
+      default_max_dimension_px: 2400,
+    },
+    defaultAlgorithm: 'crosshatch',
+    defaultAlgorithmOptions: { angle_deg: 45, spacing_px: 3, crossed: false },
+    bandRecipe() {
+      return {
+        algorithm: 'crosshatch',
+        algorithm_options: { angle_deg: 45, spacing_px: 3, crossed: false },
+      }
+    },
+  },
+  {
     id: 'tsp',
     labelKey: 'mono.modes.tsp',
     descriptionKey: 'mono.modes.tspDesc',
@@ -1448,6 +1531,29 @@ export const PRINT_STYLES: PrintStyle[] = [
       // the way RGB distance happens to fall.
       method: 'kmeans_lab',
       default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'direct',
+    defaultAlgorithmOptions: {},
+    colorRecipe() {
+      return { algorithm: 'direct', algorithm_options: {} }
+    },
+  },
+  {
+    // Palette-dithered fill: snaps the image to the operator's pen palette
+    // with ordered (Bayer) dithering on top. Lets a small magazine fake
+    // mid-tones — close to half-toning but using whatever pens are
+    // installed. Requires a non-empty palette (Colours block).
+    id: 'color-palette-dither',
+    labelKey: 'colorStyles.paletteDither',
+    descriptionKey: 'colorStyles.paletteDitherDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'palette_dither',
       drop_background: true,
       background_luminance: 0.92,
       knob_bands: false,
@@ -2412,6 +2518,7 @@ export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   silhouette: 'silhouette',
   lowpoly: 'lowpoly',
   scribble: 'scribble',
+  'otsu-binary': 'otsu-binary',
 }
 
 // ---- Query helpers ----

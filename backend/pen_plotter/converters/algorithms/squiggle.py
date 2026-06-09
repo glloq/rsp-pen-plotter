@@ -29,7 +29,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 class SquiggleAlgorithm(RasterAlgorithm):
@@ -39,6 +39,24 @@ class SquiggleAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Wiggly horizontal lines with amplitude / frequency drift — " "hand-drawn squiggle look."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="amp_px", label="convert.waveAmp", type="number",
+                   default=1.4, min=0.1, max=8, step=0.1),
+        OptionSpec(key="period_px", label="convert.wavePeriod", type="number",
+                   default=8, min=2, max=40, step=0.5),
+        OptionSpec(key="jitter", label="convert.jitter", type="number",
+                   default=0.4, min=0, max=1, step=0.05),
+        # ``modulated`` lets the amplitude follow the image tone for a tonal
+        # squiggle; ``constant`` keeps a uniform wiggle — useful for pure-
+        # decoration fills where you don't want tone bleeding into the pattern.
+        OptionSpec(key="mode", label="convert.squiggleMode", type="select",
+                   default="modulated", choices=["modulated", "constant"]),
+        OptionSpec(key="seed", label="convert.seed", type="integer",
+                   default=0, min=0, step=1),
+    ]
 
     def render_layer(
         self,

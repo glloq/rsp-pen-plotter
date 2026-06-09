@@ -16,7 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 def _runs(line: NDArray[np.bool_]) -> list[tuple[int, int]]:
@@ -41,6 +41,11 @@ class GridAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Square mesh of horizontal and vertical strokes clipped to the mask."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=6, min=1, max=30, step=0.5),
+    ]
 
     def render_layer(
         self,
