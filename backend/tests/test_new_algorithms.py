@@ -80,6 +80,17 @@ def test_registry_lists_all_algorithms() -> None:
         "string_art",
         "space_colonization",
         "penrose",
+        "dither",
+        "etch",
+        "noise_contours",
+        "reaction_diffusion",
+        "superpixel_hatch",
+        "moire",
+        "weave",
+        "honeycomb",
+        "harmonograph",
+        "attractor",
+        "text_fill",
     }
 
 

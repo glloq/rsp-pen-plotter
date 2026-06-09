@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pen_plotter.converters.algorithms.attractor import AttractorAlgorithm
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 from pen_plotter.converters.algorithms.brick import BrickAlgorithm
 from pen_plotter.converters.algorithms.centerline import CenterlineAlgorithm
@@ -22,19 +23,26 @@ from pen_plotter.converters.algorithms.cubic_disarray import CubicDisarrayAlgori
 from pen_plotter.converters.algorithms.curve_stitching import CurveStitchingAlgorithm
 from pen_plotter.converters.algorithms.dashes import DashesAlgorithm
 from pen_plotter.converters.algorithms.direct import DirectVectorizationAlgorithm
+from pen_plotter.converters.algorithms.dither import DitherAlgorithm
 from pen_plotter.converters.algorithms.edges import EdgesAlgorithm
+from pen_plotter.converters.algorithms.etch import EtchAlgorithm
 from pen_plotter.converters.algorithms.eulerian_hatch import EulerianHatchAlgorithm
 from pen_plotter.converters.algorithms.flowfield import FlowFieldAlgorithm
 from pen_plotter.converters.algorithms.gosper import GosperFillAlgorithm
 from pen_plotter.converters.algorithms.grid import GridAlgorithm
 from pen_plotter.converters.algorithms.halftone import HalftoneAlgorithm
+from pen_plotter.converters.algorithms.harmonograph import HarmonographAlgorithm
 from pen_plotter.converters.algorithms.hilbert import HilbertFillAlgorithm
 from pen_plotter.converters.algorithms.hitomezashi import HitomezashiAlgorithm
+from pen_plotter.converters.algorithms.honeycomb import HoneycombAlgorithm
 from pen_plotter.converters.algorithms.lowpoly import LowPolyAlgorithm
 from pen_plotter.converters.algorithms.maze import MazeAlgorithm
+from pen_plotter.converters.algorithms.moire import MoireAlgorithm
+from pen_plotter.converters.algorithms.noise_contours import NoiseContoursAlgorithm
 from pen_plotter.converters.algorithms.penrose import PenroseAlgorithm
 from pen_plotter.converters.algorithms.phyllotaxis import PhyllotaxisAlgorithm
 from pen_plotter.converters.algorithms.quadtree import QuadtreeAlgorithm
+from pen_plotter.converters.algorithms.reaction_diffusion import ReactionDiffusionAlgorithm
 from pen_plotter.converters.algorithms.ridge_lines import RidgeLinesAlgorithm
 from pen_plotter.converters.algorithms.rings import RingsAlgorithm
 from pen_plotter.converters.algorithms.scanlines import ScanlinesAlgorithm
@@ -45,11 +53,14 @@ from pen_plotter.converters.algorithms.squiggle import SquiggleAlgorithm
 from pen_plotter.converters.algorithms.stippling import StipplingAlgorithm
 from pen_plotter.converters.algorithms.string_art import StringArtAlgorithm
 from pen_plotter.converters.algorithms.sunburst import SunburstAlgorithm
+from pen_plotter.converters.algorithms.superpixel_hatch import SuperpixelHatchAlgorithm
+from pen_plotter.converters.algorithms.text_fill import TextFillAlgorithm
 from pen_plotter.converters.algorithms.truchet import TruchetAlgorithm
 from pen_plotter.converters.algorithms.tsp import TspAlgorithm
 from pen_plotter.converters.algorithms.tsp_opt import TspOptimizedAlgorithm
 from pen_plotter.converters.algorithms.voronoi_mosaic import VoronoiMosaicAlgorithm
 from pen_plotter.converters.algorithms.voronoi_stipple import VoronoiStippleAlgorithm
+from pen_plotter.converters.algorithms.weave import WeaveAlgorithm
 
 AlgorithmKind = Literal["fill", "lines", "mono_stroke"]
 
@@ -104,6 +115,17 @@ _ALGORITHMS: dict[str, RasterAlgorithm] = {
         StringArtAlgorithm(),
         SpaceColonizationAlgorithm(),
         PenroseAlgorithm(),
+        DitherAlgorithm(),
+        EtchAlgorithm(),
+        NoiseContoursAlgorithm(),
+        ReactionDiffusionAlgorithm(),
+        SuperpixelHatchAlgorithm(),
+        MoireAlgorithm(),
+        WeaveAlgorithm(),
+        HoneycombAlgorithm(),
+        HarmonographAlgorithm(),
+        AttractorAlgorithm(),
+        TextFillAlgorithm(),
     )
 }
 
@@ -159,6 +181,17 @@ _KINDS: dict[str, AlgorithmKind] = {
     "string_art": "mono_stroke",
     "space_colonization": "lines",
     "penrose": "lines",
+    "dither": "fill",
+    "etch": "fill",
+    "noise_contours": "lines",
+    "reaction_diffusion": "fill",
+    "superpixel_hatch": "fill",
+    "moire": "lines",
+    "weave": "lines",
+    "honeycomb": "lines",
+    "harmonograph": "mono_stroke",
+    "attractor": "fill",
+    "text_fill": "fill",
 }
 
 # Rough cost class per algorithm — see ``AlgorithmComplexity`` above for
@@ -204,6 +237,17 @@ _COMPLEXITY: dict[str, AlgorithmComplexity] = {
     "string_art": "high",  # greedy chord search per thread hop
     "space_colonization": "high",  # kd-tree per growth iteration
     "penrose": "medium",  # exponential triangle count in divisions
+    "dither": "medium",  # python-loop error diffusion over the cell grid
+    "etch": "medium",  # one short stroke per grid site
+    "noise_contours": "medium",  # fBm synthesis + marching squares per level
+    "reaction_diffusion": "high",  # thousands of Gray–Scott steps
+    "superpixel_hatch": "high",  # SLIC + per-region hatch sweeps
+    "moire": "low",  # two clipped pattern families
+    "weave": "low",  # two ribbon sweeps
+    "honeycomb": "low",  # one hex outline per cell
+    "harmonograph": "medium",  # tens of thousands of curve samples
+    "attractor": "medium",  # sequential chaotic-map iteration
+    "text_fill": "medium",  # glyph stroke clipping per row
 }
 
 
@@ -258,6 +302,7 @@ def available_algorithms() -> list[RasterAlgorithm]:
 __all__ = [
     "AlgorithmComplexity",
     "AlgorithmKind",
+    "AttractorAlgorithm",
     "BrickAlgorithm",
     "CenterlineAlgorithm",
     "CirclePackAlgorithm",
@@ -268,20 +313,27 @@ __all__ = [
     "CurveStitchingAlgorithm",
     "DashesAlgorithm",
     "DirectVectorizationAlgorithm",
+    "DitherAlgorithm",
     "EdgesAlgorithm",
+    "EtchAlgorithm",
     "EulerianHatchAlgorithm",
     "FlowFieldAlgorithm",
     "GosperFillAlgorithm",
     "GridAlgorithm",
     "HalftoneAlgorithm",
+    "HarmonographAlgorithm",
     "HilbertFillAlgorithm",
     "HitomezashiAlgorithm",
+    "HoneycombAlgorithm",
     "LowPolyAlgorithm",
     "MazeAlgorithm",
+    "MoireAlgorithm",
+    "NoiseContoursAlgorithm",
     "PenroseAlgorithm",
     "PhyllotaxisAlgorithm",
     "QuadtreeAlgorithm",
     "RasterAlgorithm",
+    "ReactionDiffusionAlgorithm",
     "RidgeLinesAlgorithm",
     "RingsAlgorithm",
     "ScanlinesAlgorithm",
@@ -292,11 +344,14 @@ __all__ = [
     "StipplingAlgorithm",
     "StringArtAlgorithm",
     "SunburstAlgorithm",
+    "SuperpixelHatchAlgorithm",
+    "TextFillAlgorithm",
     "TruchetAlgorithm",
     "TspAlgorithm",
     "TspOptimizedAlgorithm",
     "VoronoiMosaicAlgorithm",
     "VoronoiStippleAlgorithm",
+    "WeaveAlgorithm",
     "algorithm_complexity",
     "algorithm_hidden",
     "algorithm_kind",

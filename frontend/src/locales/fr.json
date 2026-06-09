@@ -986,7 +986,20 @@
     "attractors": "Attracteurs",
     "influencePx": "Rayon d'influence",
     "killPx": "Rayon de capture",
-    "divisions": "Subdivisions"
+    "divisions": "Subdivisions",
+    "ditherMethod": "Méthode de tramage",
+    "strokeLen": "Longueur des traits",
+    "levels": "Niveaux de contours",
+    "noiseAmp": "Quantité de bruit",
+    "pattern": "Motif",
+    "regions": "Régions",
+    "mode": "Mode",
+    "offsetPx": "Décalage",
+    "bandPx": "Largeur de ruban",
+    "freqRatio": "Rapport de fréquences",
+    "damping": "Amortissement",
+    "turns": "Tours",
+    "text": "Texte"
   },
   "profile": {
     "title": "Profil machine",

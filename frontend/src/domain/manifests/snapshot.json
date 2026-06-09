@@ -2,7 +2,7 @@
   "algorithms": {
     "meta": {
       "domain": "algorithms",
-      "manifest_version": 3,
+      "manifest_version": 4,
       "schema_semver": "0.2.0",
       "generated_at": "1970-01-01T00:00:00+00:00",
       "deprecations": [],
@@ -1504,6 +1504,486 @@
               "maximum": 9.0,
               "multipleOf": 1.0,
               "x-label": "convert.divisions"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "dither",
+        "version": 1,
+        "deprecated": false,
+        "name": "dither",
+        "description": "Error-diffusion dither (Floyd\u2013Steinberg / Atkinson / Bayer) \u2014 fixed-size dots whose pattern carries the tone.",
+        "kind": "fill",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "cell_px": {
+              "type": "integer",
+              "default": 4,
+              "minimum": 2.0,
+              "maximum": 20.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.cellPx"
+            },
+            "dot_radius_px": {
+              "type": "number",
+              "default": 1.0,
+              "minimum": 0.2,
+              "maximum": 5.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.dotRadius"
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "floyd",
+                "atkinson",
+                "bayer"
+              ],
+              "default": "floyd",
+              "x-label": "convert.ditherMethod"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "etch",
+        "version": 1,
+        "deprecated": false,
+        "name": "etch",
+        "description": "Engraving strokes \u2014 short marks following the image's isophotes, denser and longer where darker.",
+        "kind": "fill",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 5,
+              "minimum": 2.0,
+              "maximum": 20.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "length_px": {
+              "type": "number",
+              "default": 9,
+              "minimum": 2.0,
+              "maximum": 40.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.strokeLen"
+            },
+            "jitter": {
+              "type": "number",
+              "default": 0.3,
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "multipleOf": 0.05,
+              "x-label": "convert.jitter"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "noise_contours",
+        "version": 1,
+        "deprecated": false,
+        "name": "noise_contours",
+        "description": "Marbled topography \u2014 iso-lines of the image tone warped by fractal noise, pooling around dark features.",
+        "kind": "lines",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "levels": {
+              "type": "integer",
+              "default": 12,
+              "minimum": 3.0,
+              "maximum": 40.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.levels"
+            },
+            "noise_scale": {
+              "type": "number",
+              "default": 60,
+              "minimum": 10.0,
+              "maximum": 300.0,
+              "multipleOf": 5.0,
+              "x-label": "convert.noiseScale"
+            },
+            "noise_amp": {
+              "type": "number",
+              "default": 0.35,
+              "minimum": 0.0,
+              "maximum": 2.0,
+              "multipleOf": 0.05,
+              "x-label": "convert.noiseAmp"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "reaction_diffusion",
+        "version": 1,
+        "deprecated": false,
+        "name": "reaction_diffusion",
+        "description": "Reaction-diffusion (Gray\u2013Scott) \u2014 organic Turing spots/stripes grown inside the region, denser where darker.",
+        "kind": "fill",
+        "complexity": "high",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "enum": [
+                "spots",
+                "stripes"
+              ],
+              "default": "spots",
+              "x-label": "convert.pattern"
+            },
+            "steps": {
+              "type": "integer",
+              "default": 2500,
+              "minimum": 500.0,
+              "maximum": 8000.0,
+              "multipleOf": 100.0,
+              "x-label": "convert.maxSteps"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "superpixel_hatch",
+        "version": 1,
+        "deprecated": false,
+        "name": "superpixel_hatch",
+        "description": "Painterly patches \u2014 SLIC superpixels each hatched along their own dominant orientation, spacing from local darkness.",
+        "kind": "fill",
+        "complexity": "high",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "regions": {
+              "type": "integer",
+              "default": 180,
+              "minimum": 20.0,
+              "maximum": 800.0,
+              "multipleOf": 10.0,
+              "x-label": "convert.regions"
+            },
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.5,
+              "maximum": 20.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "moire",
+        "version": 1,
+        "deprecated": false,
+        "name": "moire",
+        "description": "Moir\u00e9 interference \u2014 two offset ring or line gratings whose beat pattern forms op-art fringes.",
+        "kind": "lines",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 5,
+              "minimum": 2.0,
+              "maximum": 20.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "rings",
+                "lines"
+              ],
+              "default": "rings",
+              "x-label": "convert.mode"
+            },
+            "offset_px": {
+              "type": "number",
+              "default": 14,
+              "minimum": 0.0,
+              "maximum": 80.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.offsetPx"
+            },
+            "delta_deg": {
+              "type": "number",
+              "default": 4,
+              "minimum": 0.5,
+              "maximum": 20.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.angleDeg"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "weave",
+        "version": 1,
+        "deprecated": false,
+        "name": "weave",
+        "description": "Basket weave \u2014 horizontal and vertical ribbons interlacing over/under at alternating crossings.",
+        "kind": "lines",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "band_px": {
+              "type": "integer",
+              "default": 12,
+              "minimum": 4.0,
+              "maximum": 60.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.bandPx"
+            },
+            "gap_px": {
+              "type": "number",
+              "default": 2,
+              "minimum": 0.5,
+              "maximum": 10.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.gapPx"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "honeycomb",
+        "version": 1,
+        "deprecated": false,
+        "name": "honeycomb",
+        "description": "Honeycomb \u2014 hexagonal lattice clipped to the region, or tone-scaled hex cells in 'scaled' mode.",
+        "kind": "lines",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "cell_px": {
+              "type": "integer",
+              "default": 12,
+              "minimum": 4.0,
+              "maximum": 60.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.cellPx"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "grid",
+                "scaled"
+              ],
+              "default": "grid",
+              "x-label": "convert.mode"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "harmonograph",
+        "version": 1,
+        "deprecated": false,
+        "name": "harmonograph",
+        "description": "Harmonograph \u2014 a damped twin-pendulum figure traced as one long decaying stroke.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "freq_ratio": {
+              "type": "number",
+              "default": 2.01,
+              "minimum": 1.0,
+              "maximum": 5.0,
+              "multipleOf": 0.01,
+              "x-label": "convert.freqRatio"
+            },
+            "damping": {
+              "type": "number",
+              "default": 0.004,
+              "minimum": 0.0005,
+              "maximum": 0.02,
+              "multipleOf": 0.0005,
+              "x-label": "convert.damping"
+            },
+            "turns": {
+              "type": "integer",
+              "default": 40,
+              "minimum": 5.0,
+              "maximum": 150.0,
+              "multipleOf": 5.0,
+              "x-label": "convert.turns"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "attractor",
+        "version": 1,
+        "deprecated": false,
+        "name": "attractor",
+        "description": "Strange attractor \u2014 a chaotic orbit (de Jong / Clifford) scattered into the region as smoky dot filaments.",
+        "kind": "fill",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": [
+                "dejong",
+                "clifford"
+              ],
+              "default": "dejong",
+              "x-label": "convert.pattern"
+            },
+            "points": {
+              "type": "integer",
+              "default": 6000,
+              "minimum": 500.0,
+              "maximum": 20000.0,
+              "multipleOf": 500.0,
+              "x-label": "convert.maxPoints"
+            },
+            "dot_radius_px": {
+              "type": "number",
+              "default": 0.5,
+              "minimum": 0.2,
+              "maximum": 3.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.dotRadius"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "text_fill",
+        "version": 1,
+        "deprecated": false,
+        "name": "text_fill",
+        "description": "Text fill \u2014 rows of repeated single-stroke text become the shading texture (typewriter-art portraits).",
+        "kind": "fill",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "default": "OmniPlot ",
+              "x-label": "convert.text"
+            },
+            "font_size_px": {
+              "type": "number",
+              "default": 12,
+              "minimum": 4.0,
+              "maximum": 60.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.fontSize"
+            },
+            "line_spacing": {
+              "type": "number",
+              "default": 1.25,
+              "minimum": 0.8,
+              "maximum": 3.0,
+              "multipleOf": 0.05,
+              "x-label": "convert.lineSpacing"
+            },
+            "threshold": {
+              "type": "number",
+              "default": 0.35,
+              "minimum": 0.0,
+              "maximum": 0.95,
+              "multipleOf": 0.05,
+              "x-label": "convert.threshold"
             }
           },
           "additionalProperties": true

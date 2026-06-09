@@ -19,6 +19,7 @@ from pen_plotter.converters.algorithms import (
 from pen_plotter.manifests.algorithms import algorithms_manifest
 
 NEW_ALGORITHMS = [
+    # 2026-06 batch 1
     "ridge_lines",
     "hitomezashi",
     "cubic_disarray",
@@ -30,9 +31,30 @@ NEW_ALGORITHMS = [
     "string_art",
     "space_colonization",
     "penrose",
+    # 2026-06 batch 2
+    "dither",
+    "etch",
+    "noise_contours",
+    "reaction_diffusion",
+    "superpixel_hatch",
+    "moire",
+    "weave",
+    "honeycomb",
+    "harmonograph",
+    "attractor",
+    "text_fill",
 ]
 
 _GEOMETRY_TAGS = ("<line", "<polyline", "<circle", "<rect", "<polygon", "<path")
+
+# Reduced budgets for the expensive algorithms so the smoke tests stay
+# fast; visual quality is irrelevant here.
+_FAST_OPTIONS: dict[str, dict[str, object]] = {
+    "string_art": {"pegs": 32, "lines": 60},
+    "reaction_diffusion": {"steps": 400},
+    "space_colonization": {"attractors": 200},
+    "superpixel_hatch": {"regions": 40},
+}
 
 
 def _element_count(svg: str) -> int:
@@ -58,7 +80,9 @@ def _radial_tone(size: int = 120) -> np.ndarray:
 @pytest.mark.parametrize("name", NEW_ALGORITHMS)
 def test_new_algorithm_renders_geometry(name: str) -> None:
     algo = get_algorithm(name)
-    options = {"_tone": _radial_tone()} if algo.tone_aware else {}
+    options: dict[str, object] = dict(_FAST_OPTIONS.get(name, {}))
+    if algo.tone_aware:
+        options["_tone"] = _radial_tone()
     svg = algo.render_layer(_disk_mask(), "#102030", "layer", options=options)
     assert svg.startswith("<g ")
     assert svg.endswith("</g>")
@@ -76,14 +100,17 @@ def test_new_algorithm_empty_mask_yields_empty_group(name: str) -> None:
 
 @pytest.mark.parametrize("name", ["hitomezashi", "cubic_disarray", "maze",
                                   "voronoi_mosaic", "curve_stitching",
-                                  "space_colonization"])
+                                  "space_colonization", "etch",
+                                  "noise_contours", "harmonograph",
+                                  "attractor"])
 def test_seeded_algorithms_are_deterministic(name: str) -> None:
     algo = get_algorithm(name)
     mask = _disk_mask()
-    first = algo.render_layer(mask, "#000000", "d", options={"seed": 7})
-    second = algo.render_layer(mask, "#000000", "d", options={"seed": 7})
+    opts = dict(_FAST_OPTIONS.get(name, {}))
+    first = algo.render_layer(mask, "#000000", "d", options={**opts, "seed": 7})
+    second = algo.render_layer(mask, "#000000", "d", options={**opts, "seed": 7})
     assert first == second
-    changed = algo.render_layer(mask, "#000000", "d", options={"seed": 8})
+    changed = algo.render_layer(mask, "#000000", "d", options={**opts, "seed": 8})
     assert changed != first
 
 
@@ -103,6 +130,29 @@ def test_ridge_lines_tone_displaces_rows() -> None:
     peaked = algo.render_layer(mask, "#000", "r", options={"_tone": np.zeros((60, 60))})
     # White tone → no displacement; black tone → rows shifted upward.
     assert flat != peaked
+
+
+def test_text_fill_renders_custom_text_option() -> None:
+    algo = get_algorithm("text_fill")
+    # ``text`` is a free-form string knob (OptionSpec type="text").
+    spec = {opt.key: opt for opt in algo.options_schema}
+    assert spec["text"].type == "text"
+    svg = algo.render_layer(
+        _disk_mask(), "#000", "t", options={"text": "ABC ", "font_size_px": 10}
+    )
+    assert "<polyline" in svg
+
+
+def test_dither_methods_produce_distinct_patterns() -> None:
+    algo = get_algorithm("dither")
+    mask = np.ones((48, 48), dtype=bool)
+    # Horizontal gradient — a flat 0.5 would give the same checkerboard
+    # under both error diffusion and ordered dithering.
+    tone = np.tile(np.linspace(0.1, 0.9, 48), (48, 1))
+    floyd = algo.render_layer(mask, "#000", "d", options={"_tone": tone, "method": "floyd"})
+    bayer = algo.render_layer(mask, "#000", "d", options={"_tone": tone, "method": "bayer"})
+    assert floyd != bayer
+    assert "<circle" in floyd and "<circle" in bayer
 
 
 def test_quadtree_subdivides_darker_regions_finer() -> None:

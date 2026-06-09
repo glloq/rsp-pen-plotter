@@ -35,7 +35,9 @@ from pen_plotter.manifests import Manifest, ManifestEntry, ManifestMeta, registe
 # changes in a way that requires the frontend to upgrade.
 # v3: ``hidden`` flag (duplicate consolidation) + the 2026-06 expert
 # style batch (ridge_lines … penrose).
-ALGORITHMS_MANIFEST_VERSION = 3
+# v4: second style batch (dither … text_fill) + the ``text`` option
+# type (free-form string knobs, e.g. text_fill's ``text``).
+ALGORITHMS_MANIFEST_VERSION = 4
 
 
 class AlgorithmManifestEntry(ManifestEntry):

@@ -986,7 +986,20 @@
     "attractors": "Attractors",
     "influencePx": "Influence radius",
     "killPx": "Capture radius",
-    "divisions": "Subdivisions"
+    "divisions": "Subdivisions",
+    "ditherMethod": "Dither method",
+    "strokeLen": "Stroke length",
+    "levels": "Contour levels",
+    "noiseAmp": "Noise amount",
+    "pattern": "Pattern",
+    "regions": "Regions",
+    "mode": "Mode",
+    "offsetPx": "Offset",
+    "bandPx": "Ribbon width",
+    "freqRatio": "Frequency ratio",
+    "damping": "Damping",
+    "turns": "Turns",
+    "text": "Text"
   },
   "profile": {
     "title": "Machine profile",

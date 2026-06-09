@@ -1,6 +1,6 @@
 # Picking the right algorithm
 
-OmniPlot ships 34 visible raster algorithms (38 registered — four legacy
+OmniPlot ships 45 visible raster algorithms (49 registered — four legacy
 duplicates are hidden from the pickers, see below). This page is a
 decision tree, not a catalogue — for the full algorithm table see
 [`docs/converters.md`](../docs/converters.md).
@@ -23,8 +23,12 @@ decision tree, not a catalogue — for the full algorithm table see
 | Comic / graphic-novel page | Strong outlines + fill | `direct` then `crosshatch` (multi-pass) |
 | Topographic map / contour | Iso-lines | `concentric_offset` |
 | Portrait photo | Iconic single-line | `spiral` (tonal), `string_art`, `ridge_lines` |
-| Portrait photo | Organic / botanical | `phyllotaxis`, `voronoi_mosaic`, `space_colonization` |
-| Abstract poster | Generative pattern | `truchet`, `brick`, `rings`, `sunburst`, `circle_pack`, `hitomezashi`, `cubic_disarray`, `penrose`, `curve_stitching`, `maze` |
+| Portrait photo | Engraving / banknote | `etch`, `dither` |
+| Portrait photo | Organic / botanical | `phyllotaxis`, `voronoi_mosaic`, `space_colonization`, `reaction_diffusion` |
+| Portrait photo | Painterly patches | `superpixel_hatch` |
+| Portrait photo | Words as shading | `text_fill` |
+| Landscape photo | Marbled topography | `noise_contours` |
+| Abstract poster | Generative pattern | `truchet`, `brick`, `rings`, `sunburst`, `circle_pack`, `hitomezashi`, `cubic_disarray`, `penrose`, `curve_stitching`, `maze`, `moire`, `weave`, `honeycomb`, `harmonograph`, `attractor` |
 | Anything | Tone as structure | `quadtree`, `cubic_disarray` |
 | Anything | One unbroken stroke | `tsp_opt`, `hilbert`, `gosper`, `spiral`, `string_art` |
 | Anything (debug) | "Just draw it raster" | `scanlines` |

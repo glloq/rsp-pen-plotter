@@ -66,6 +66,20 @@ export type AlgorithmId =
   | 'string_art'
   | 'space_colonization'
   | 'penrose'
+  // 2026-06 expert-style batch 2 — see ``backend/.../algorithms/{dither,
+  // etch,noise_contours,reaction_diffusion,superpixel_hatch,moire,weave,
+  // honeycomb,harmonograph,attractor,text_fill}.py``.
+  | 'dither'
+  | 'etch'
+  | 'noise_contours'
+  | 'reaction_diffusion'
+  | 'superpixel_hatch'
+  | 'moire'
+  | 'weave'
+  | 'honeycomb'
+  | 'harmonograph'
+  | 'attractor'
+  | 'text_fill'
 
 export interface AlgoOption {
   key: string
@@ -75,8 +89,9 @@ export interface AlgoOption {
   // ``integer`` is rendered like ``number`` but the input is restricted
   // to whole values (the backend casts via ``int(opts.get(...))``).
   // ``select`` exposes ``choices`` as a dropdown for enum-typed knobs
-  // (e.g. tsp_opt's ``method``, flowfield's ``mode``).
-  type: 'number' | 'integer' | 'boolean' | 'select'
+  // (e.g. tsp_opt's ``method``, flowfield's ``mode``). ``text`` is a
+  // free-form string (e.g. text_fill's repeated text).
+  type: 'number' | 'integer' | 'boolean' | 'select' | 'text'
   min?: number
   max?: number
   step?: number
@@ -659,6 +674,182 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     defaults: { divisions: 6 },
     schema: [
       { key: 'divisions', label: 'convert.divisions', type: 'integer', min: 2, max: 9, step: 1 },
+    ],
+  },
+  dither: {
+    id: 'dither',
+    defaults: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 2, max: 20, step: 1 },
+      {
+        key: 'dot_radius_px',
+        label: 'convert.dotRadius',
+        type: 'number',
+        min: 0.2,
+        max: 5,
+        step: 0.1,
+      },
+      {
+        key: 'method',
+        label: 'convert.ditherMethod',
+        type: 'select',
+        choices: ['floyd', 'atkinson', 'bayer'],
+      },
+    ],
+  },
+  etch: {
+    id: 'etch',
+    defaults: { spacing_px: 5, length_px: 9, jitter: 0.3, seed: 0 },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 20, step: 0.5 },
+      { key: 'length_px', label: 'convert.strokeLen', type: 'number', min: 2, max: 40, step: 1 },
+      { key: 'jitter', label: 'convert.jitter', type: 'number', min: 0, max: 1, step: 0.05 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  noise_contours: {
+    id: 'noise_contours',
+    defaults: { levels: 12, noise_scale: 60, noise_amp: 0.35, seed: 0 },
+    schema: [
+      { key: 'levels', label: 'convert.levels', type: 'integer', min: 3, max: 40, step: 1 },
+      {
+        key: 'noise_scale',
+        label: 'convert.noiseScale',
+        type: 'number',
+        min: 10,
+        max: 300,
+        step: 5,
+      },
+      { key: 'noise_amp', label: 'convert.noiseAmp', type: 'number', min: 0, max: 2, step: 0.05 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  reaction_diffusion: {
+    id: 'reaction_diffusion',
+    defaults: { pattern: 'spots', steps: 2500, seed: 0 },
+    schema: [
+      { key: 'pattern', label: 'convert.pattern', type: 'select', choices: ['spots', 'stripes'] },
+      { key: 'steps', label: 'convert.maxSteps', type: 'integer', min: 500, max: 8000, step: 100 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  superpixel_hatch: {
+    id: 'superpixel_hatch',
+    defaults: { regions: 180, spacing_px: 4, seed: 0 },
+    schema: [
+      { key: 'regions', label: 'convert.regions', type: 'integer', min: 20, max: 800, step: 10 },
+      {
+        key: 'spacing_px',
+        label: 'convert.spacing',
+        type: 'number',
+        min: 1.5,
+        max: 20,
+        step: 0.5,
+      },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  moire: {
+    id: 'moire',
+    defaults: { spacing_px: 5, mode: 'rings', offset_px: 14, delta_deg: 4 },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 20, step: 0.5 },
+      { key: 'mode', label: 'convert.mode', type: 'select', choices: ['rings', 'lines'] },
+      { key: 'offset_px', label: 'convert.offsetPx', type: 'number', min: 0, max: 80, step: 1 },
+      {
+        key: 'delta_deg',
+        label: 'convert.angleDeg',
+        type: 'number',
+        min: 0.5,
+        max: 20,
+        step: 0.5,
+      },
+    ],
+  },
+  weave: {
+    id: 'weave',
+    defaults: { band_px: 12, gap_px: 2 },
+    schema: [
+      { key: 'band_px', label: 'convert.bandPx', type: 'integer', min: 4, max: 60, step: 1 },
+      { key: 'gap_px', label: 'convert.gapPx', type: 'number', min: 0.5, max: 10, step: 0.5 },
+    ],
+  },
+  honeycomb: {
+    id: 'honeycomb',
+    defaults: { cell_px: 12, mode: 'grid' },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 4, max: 60, step: 1 },
+      { key: 'mode', label: 'convert.mode', type: 'select', choices: ['grid', 'scaled'] },
+    ],
+  },
+  harmonograph: {
+    id: 'harmonograph',
+    defaults: { freq_ratio: 2.01, damping: 0.004, turns: 40, seed: 0 },
+    schema: [
+      { key: 'freq_ratio', label: 'convert.freqRatio', type: 'number', min: 1, max: 5, step: 0.01 },
+      {
+        key: 'damping',
+        label: 'convert.damping',
+        type: 'number',
+        min: 0.0005,
+        max: 0.02,
+        step: 0.0005,
+      },
+      { key: 'turns', label: 'convert.turns', type: 'integer', min: 5, max: 150, step: 5 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  attractor: {
+    id: 'attractor',
+    defaults: { preset: 'dejong', points: 6000, dot_radius_px: 0.5, seed: 0 },
+    schema: [
+      {
+        key: 'preset',
+        label: 'convert.pattern',
+        type: 'select',
+        choices: ['dejong', 'clifford'],
+      },
+      {
+        key: 'points',
+        label: 'convert.maxPoints',
+        type: 'integer',
+        min: 500,
+        max: 20000,
+        step: 500,
+      },
+      {
+        key: 'dot_radius_px',
+        label: 'convert.dotRadius',
+        type: 'number',
+        min: 0.2,
+        max: 3,
+        step: 0.1,
+      },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  text_fill: {
+    id: 'text_fill',
+    defaults: { text: 'OmniPlot ', font_size_px: 12, line_spacing: 1.25, threshold: 0.35 },
+    schema: [
+      { key: 'text', label: 'convert.text', type: 'text' },
+      { key: 'font_size_px', label: 'convert.fontSize', type: 'number', min: 4, max: 60, step: 1 },
+      {
+        key: 'line_spacing',
+        label: 'convert.lineSpacing',
+        type: 'number',
+        min: 0.8,
+        max: 3,
+        step: 0.05,
+      },
+      {
+        key: 'threshold',
+        label: 'convert.threshold',
+        type: 'number',
+        min: 0,
+        max: 0.95,
+        step: 0.05,
+      },
     ],
   },
 }

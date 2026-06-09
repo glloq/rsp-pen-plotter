@@ -17,7 +17,7 @@ from typing import Any, ClassVar, Literal
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
-OptionType = Literal["number", "integer", "boolean", "select"]
+OptionType = Literal["number", "integer", "boolean", "select", "text"]
 
 
 class OptionSpec(BaseModel):
@@ -54,6 +54,8 @@ class OptionSpec(BaseModel):
                 "enum": list(self.choices or []),
                 "default": self.default,
             }
+        if self.type == "text":
+            return {"type": "string", "default": self.default}
         # number / integer share the numeric envelope; ``integer`` adds
         # the integer constraint so callers (zod, ajv) reject decimals.
         schema: dict[str, Any] = {

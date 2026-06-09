@@ -40,6 +40,8 @@ function onChange(opt: AlgoOption, ev: Event): void {
     value = (el as HTMLInputElement).checked
   } else if (opt.type === 'select') {
     value = (el as HTMLSelectElement).value
+  } else if (opt.type === 'text') {
+    value = (el as HTMLInputElement).value
   } else if (opt.type === 'integer') {
     // Round to keep the operator from sending non-integer values that
     // the backend would silently truncate (and that bypass the form's
@@ -89,6 +91,26 @@ function onChange(opt: AlgoOption, ev: Event): void {
             {{ choice }}
           </option>
         </select>
+      </label>
+      <label
+        v-else-if="opt.type === 'text'"
+        :class="
+          compact
+            ? 'flex items-center gap-1.5 text-[11px] text-slate-400'
+            : 'block text-[11px] text-slate-400'
+        "
+      >
+        <span :class="compact ? 'w-24 shrink-0 truncate' : ''">{{ t(opt.label) }}</span>
+        <input
+          type="text"
+          :value="String(currentValue(opt) ?? '')"
+          :class="
+            compact
+              ? 'min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-100'
+              : 'mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100'
+          "
+          @change="(e) => onChange(opt, e)"
+        />
       </label>
       <label
         v-else
