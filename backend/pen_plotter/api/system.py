@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import subprocess
 from pathlib import Path
@@ -281,12 +282,26 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
     cmd: list[str] = [str(script)]
     if force:
         cmd.append("--force")
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        cwd=str(root),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=str(root),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+    except OSError as exc:
+        # Spawning can fail before the script even runs — most commonly a
+        # lost executable bit on update.sh (PermissionError). Without this
+        # guard the exception escapes as a bare 500 with no JSON detail and
+        # the UI can only show a generic axios message.
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": f"could not launch update.sh: {exc}",
+                "log": "Check that update.sh is executable (chmod +x update.sh).",
+                "returncode": -1,
+            },
+        ) from exc
     try:
         # 10-minute ceiling: npm install + vite build on a Raspberry Pi can be
         # slow but shouldn't legitimately exceed this. Past that, something is
@@ -294,18 +309,22 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=600)
     except TimeoutError as exc:
         process.kill()
-        record("system.update_timeout")
+        with contextlib.suppress(Exception):
+            record("system.update_timeout")
         raise HTTPException(status_code=504, detail="update timed out after 10 minutes") from exc
 
     log = stdout.decode("utf-8", errors="replace") if stdout else ""
     ok = process.returncode == 0
     new = _git("rev-parse", "HEAD") if ok else previous
     updated = ok and previous is not None and new is not None and previous != new
-    record(
-        "system.update",
-        f"updated={updated} forced={force} previous={previous} "
-        f"new={new} rc={process.returncode}",
-    )
+    # Audit is best-effort here: a failed SQLite write (locked/full disk
+    # mid-rebuild) must not mask the update result behind a bare 500.
+    with contextlib.suppress(Exception):
+        record(
+            "system.update",
+            f"updated={updated} forced={force} previous={previous} "
+            f"new={new} rc={process.returncode}",
+        )
 
     if not ok:
         # Surface the failure body so the UI can show actionable error text
