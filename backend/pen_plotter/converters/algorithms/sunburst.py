@@ -17,7 +17,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 class SunburstAlgorithm(RasterAlgorithm):
@@ -27,6 +27,11 @@ class SunburstAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Radial rays fanning out from the region centroid, clipped to the mask."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="rays", label="convert.rays", type="integer",
+                   default=120, min=8, max=720, step=4),
+    ]
 
     def render_layer(
         self,

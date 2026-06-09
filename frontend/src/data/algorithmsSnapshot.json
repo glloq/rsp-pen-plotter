@@ -1,0 +1,979 @@
+[
+  {
+    "name": "direct",
+    "kind": "fill",
+    "complexity": "low",
+    "options": []
+  },
+  {
+    "name": "halftone",
+    "kind": "fill",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "cell_size_px",
+        "label": "convert.cellSize",
+        "type": "integer",
+        "default": 6,
+        "min": 2.0,
+        "max": 64.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "angle_deg",
+        "label": "convert.angleDeg",
+        "type": "number",
+        "default": 0,
+        "min": 0.0,
+        "max": 180.0,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "stippling",
+    "kind": "fill",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "density",
+        "label": "convert.density",
+        "type": "number",
+        "default": 0.02,
+        "min": 0.001,
+        "max": 0.5,
+        "step": 0.001,
+        "choices": null
+      },
+      {
+        "key": "dot_radius_px",
+        "label": "convert.dotRadius",
+        "type": "number",
+        "default": 0.6,
+        "min": 0.1,
+        "max": 5.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "crosshatch",
+    "kind": "fill",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "angle_deg",
+        "label": "convert.angleDeg",
+        "type": "number",
+        "default": 45,
+        "min": 0.0,
+        "max": 180.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "crossed",
+        "label": "convert.crossed",
+        "type": "boolean",
+        "default": false,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "contours",
+    "kind": "lines",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "max_rings",
+        "label": "convert.maxRings",
+        "type": "integer",
+        "default": 20,
+        "min": 1.0,
+        "max": 100.0,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "edges",
+    "kind": "lines",
+    "complexity": "low",
+    "options": []
+  },
+  {
+    "name": "centerline",
+    "kind": "lines",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "smooth",
+        "label": "convert.smooth",
+        "type": "boolean",
+        "default": true,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      },
+      {
+        "key": "min_branch_px",
+        "label": "convert.minBranch",
+        "type": "integer",
+        "default": 3,
+        "min": 0.0,
+        "max": 50.0,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "spiral",
+    "kind": "mono_stroke",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "samples_per_turn",
+        "label": "convert.samplesPerTurn",
+        "type": "integer",
+        "default": 64,
+        "min": 16.0,
+        "max": 256.0,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "scanlines",
+    "kind": "mono_stroke",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "wave_amp_px",
+        "label": "convert.waveAmp",
+        "type": "number",
+        "default": 0,
+        "min": 0.0,
+        "max": 20.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "wave_period_px",
+        "label": "convert.wavePeriod",
+        "type": "number",
+        "default": 12,
+        "min": 2.0,
+        "max": 50.0,
+        "step": 0.5,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "tsp",
+    "kind": "mono_stroke",
+    "complexity": "high",
+    "options": [
+      {
+        "key": "density",
+        "label": "convert.density",
+        "type": "number",
+        "default": 0.02,
+        "min": 0.001,
+        "max": 0.5,
+        "step": 0.001,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "hilbert",
+    "kind": "mono_stroke",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "min_run_px",
+        "label": "convert.minRunPx",
+        "type": "integer",
+        "default": 3,
+        "min": 1.0,
+        "max": 20.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "order",
+        "label": "convert.hilbertOrder",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": 8.0,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "gosper",
+    "kind": "mono_stroke",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "order",
+        "label": "convert.gosperOrder",
+        "type": "integer",
+        "default": 4,
+        "min": 1.0,
+        "max": 6.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "rotation_deg",
+        "label": "convert.angleDeg",
+        "type": "number",
+        "default": 0,
+        "min": 0.0,
+        "max": 360.0,
+        "step": 5.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "eulerian_hatch",
+    "kind": "fill",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "angle_deg",
+        "label": "convert.angleDeg",
+        "type": "number",
+        "default": 45,
+        "min": 0.0,
+        "max": 180.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "crossed",
+        "label": "convert.crossed",
+        "type": "boolean",
+        "default": false,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "concentric_offset",
+    "kind": "mono_stroke",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 3,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "max_rings",
+        "label": "convert.maxRings",
+        "type": "integer",
+        "default": 50,
+        "min": 1.0,
+        "max": 200.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "bridge",
+        "label": "convert.bridge",
+        "type": "boolean",
+        "default": true,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "flowfield",
+    "kind": "fill",
+    "complexity": "high",
+    "options": [
+      {
+        "key": "mode",
+        "label": "convert.flowMode",
+        "type": "select",
+        "default": "gradient",
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": [
+          "gradient",
+          "perlin"
+        ]
+      },
+      {
+        "key": "seed_spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 6,
+        "min": 2.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "step_px",
+        "label": "convert.stepPx",
+        "type": "number",
+        "default": 0.8,
+        "min": 0.2,
+        "max": 3.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "max_steps",
+        "label": "convert.maxSteps",
+        "type": "integer",
+        "default": 800,
+        "min": 50.0,
+        "max": 4000.0,
+        "step": 50.0,
+        "choices": null
+      },
+      {
+        "key": "bidirectional",
+        "label": "convert.bidirectional",
+        "type": "boolean",
+        "default": true,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      },
+      {
+        "key": "noise_scale",
+        "label": "convert.noiseScale",
+        "type": "number",
+        "default": 32,
+        "min": 4.0,
+        "max": 128.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "tsp_opt",
+    "kind": "mono_stroke",
+    "complexity": "high",
+    "options": [
+      {
+        "key": "density",
+        "label": "convert.density",
+        "type": "number",
+        "default": 0.02,
+        "min": 0.001,
+        "max": 0.5,
+        "step": 0.001,
+        "choices": null
+      },
+      {
+        "key": "max_points",
+        "label": "convert.maxPoints",
+        "type": "integer",
+        "default": 4000,
+        "min": 100.0,
+        "max": 20000.0,
+        "step": 100.0,
+        "choices": null
+      },
+      {
+        "key": "method",
+        "label": "convert.tspMethod",
+        "type": "select",
+        "default": "nn_2opt",
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": [
+          "nn_2opt",
+          "nn",
+          "mst"
+        ]
+      },
+      {
+        "key": "time_budget_s",
+        "label": "convert.timeBudgetS",
+        "type": "number",
+        "default": 1.5,
+        "min": 0.1,
+        "max": 10.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "poisson_disk",
+        "label": "convert.poissonDisk",
+        "type": "boolean",
+        "default": true,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "voronoi_stipple",
+    "kind": "fill",
+    "complexity": "high",
+    "options": [
+      {
+        "key": "density",
+        "label": "convert.density",
+        "type": "number",
+        "default": 0.02,
+        "min": 0.001,
+        "max": 0.5,
+        "step": 0.001,
+        "choices": null
+      },
+      {
+        "key": "dot_radius_px",
+        "label": "convert.dotRadius",
+        "type": "number",
+        "default": 0.6,
+        "min": 0.1,
+        "max": 5.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "iterations",
+        "label": "convert.iterations",
+        "type": "integer",
+        "default": 6,
+        "min": 0.0,
+        "max": 30.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "squiggle",
+    "kind": "mono_stroke",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "amp_px",
+        "label": "convert.waveAmp",
+        "type": "number",
+        "default": 1.4,
+        "min": 0.1,
+        "max": 8.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "period_px",
+        "label": "convert.wavePeriod",
+        "type": "number",
+        "default": 8,
+        "min": 2.0,
+        "max": 40.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "jitter",
+        "label": "convert.jitter",
+        "type": "number",
+        "default": 0.4,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05,
+        "choices": null
+      },
+      {
+        "key": "mode",
+        "label": "convert.squiggleMode",
+        "type": "select",
+        "default": "modulated",
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": [
+          "modulated",
+          "constant"
+        ]
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "lowpoly",
+    "kind": "lines",
+    "complexity": "high",
+    "options": [
+      {
+        "key": "density",
+        "label": "convert.density",
+        "type": "number",
+        "default": 0.01,
+        "min": 0.001,
+        "max": 0.1,
+        "step": 0.001,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "scribble",
+    "kind": "fill",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "amp_px",
+        "label": "convert.waveAmp",
+        "type": "number",
+        "default": 1.6,
+        "min": 0.0,
+        "max": 8.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "overshoot_px",
+        "label": "convert.overshoot",
+        "type": "number",
+        "default": 3,
+        "min": 0.0,
+        "max": 20.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "angle_deg",
+        "label": "convert.angleDeg",
+        "type": "number",
+        "default": 45,
+        "min": 0.0,
+        "max": 180.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "crossed",
+        "label": "convert.crossed",
+        "type": "boolean",
+        "default": false,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "grid",
+    "kind": "lines",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 6,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "brick",
+    "kind": "lines",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "brick_w_px",
+        "label": "convert.brickW",
+        "type": "integer",
+        "default": 16,
+        "min": 2.0,
+        "max": 60.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "brick_h_px",
+        "label": "convert.brickH",
+        "type": "integer",
+        "default": 8,
+        "min": 2.0,
+        "max": 40.0,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "dashes",
+    "kind": "fill",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 5,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "angle_deg",
+        "label": "convert.angleDeg",
+        "type": "number",
+        "default": 45,
+        "min": 0.0,
+        "max": 180.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "dash_px",
+        "label": "convert.dashPx",
+        "type": "number",
+        "default": 3,
+        "min": 0.5,
+        "max": 20.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "gap_px",
+        "label": "convert.gapPx",
+        "type": "number",
+        "default": 3,
+        "min": 0.5,
+        "max": 20.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "crossed",
+        "label": "convert.crossed",
+        "type": "boolean",
+        "default": false,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "truchet",
+    "kind": "lines",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "cell_px",
+        "label": "convert.cellPx",
+        "type": "integer",
+        "default": 10,
+        "min": 2.0,
+        "max": 40.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "rings",
+    "kind": "mono_stroke",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 6,
+        "min": 1.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "sunburst",
+    "kind": "mono_stroke",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "rays",
+        "label": "convert.rays",
+        "type": "integer",
+        "default": 120,
+        "min": 8.0,
+        "max": 720.0,
+        "step": 4.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "circle_pack",
+    "kind": "fill",
+    "complexity": "high",
+    "options": [
+      {
+        "key": "min_radius_px",
+        "label": "convert.minRadius",
+        "type": "number",
+        "default": 1.2,
+        "min": 0.5,
+        "max": 10.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "max_radius_px",
+        "label": "convert.maxRadius",
+        "type": "number",
+        "default": 8.0,
+        "min": 1.0,
+        "max": 40.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "gap_px",
+        "label": "convert.gapPx",
+        "type": "number",
+        "default": 0.6,
+        "min": 0.0,
+        "max": 10.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  }
+]

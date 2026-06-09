@@ -15,7 +15,7 @@ from xml.sax.saxutils import quoteattr
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 from pen_plotter.converters.algorithms.grid import _runs
 
 
@@ -27,6 +27,13 @@ class BrickAlgorithm(RasterAlgorithm):
         "Running-bond brick pattern: horizontal courses with staggered "
         "vertical mortar joints, clipped to the mask."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="brick_w_px", label="convert.brickW", type="integer",
+                   default=16, min=2, max=60, step=1),
+        OptionSpec(key="brick_h_px", label="convert.brickH", type="integer",
+                   default=8, min=2, max=40, step=1),
+    ]
 
     def render_layer(
         self,

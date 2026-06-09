@@ -15,7 +15,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 def _greedy_nn_tour(points: NDArray[np.float64]) -> list[int]:
@@ -47,8 +47,16 @@ class TspAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "tsp"
     description: ClassVar[str] = (
-        "Dots connected in one greedy nearest-neighbour tour — single-stroke TSP art."
+        "Legacy: dots connected by a greedy nearest-neighbour tour. "
+        "Prefer ``tsp_opt`` — same idea with shorter total travel."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="density", label="convert.density", type="number",
+                   default=0.02, min=0.001, max=0.5, step=0.001),
+        OptionSpec(key="seed", label="convert.seed", type="integer",
+                   default=0, min=0, step=1),
+    ]
 
     def render_layer(
         self,

@@ -16,7 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 def _line_segments(
@@ -73,8 +73,24 @@ class CrosshatchAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "crosshatch"
     description: ClassVar[str] = (
-        "Fill regions with parallel pen strokes (and optional 90° cross-hatching)."
+        "Parallel pen strokes (optional crossed 90° pass) — disconnected runs, "
+        "more pen-lifts than eulerian_hatch but simpler to tune per layer."
     )
+    # ``angles`` (a list of 1–4 hatch angles for darkening passes inside a
+    # single layer) is *also* accepted, but it's an internal hook used by
+    # master styles — not surfaced as a standalone form field. The legacy
+    # ``angle_deg`` + ``crossed`` pair covers everything operators do by hand.
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(
+            key="spacing_px", label="convert.spacing", type="number",
+            default=4, min=1, max=30, step=0.5,
+        ),
+        OptionSpec(
+            key="angle_deg", label="convert.angleDeg", type="number",
+            default=45, min=0, max=180, step=1,
+        ),
+        OptionSpec(key="crossed", label="convert.crossed", type="boolean", default=False),
+    ]
 
     def render_layer(
         self,

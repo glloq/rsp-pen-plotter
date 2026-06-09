@@ -16,7 +16,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 class TruchetAlgorithm(RasterAlgorithm):
@@ -26,6 +26,13 @@ class TruchetAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Truchet tiles — a grid of randomly oriented diagonals making a maze-like graphic fill."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="cell_px", label="convert.cellPx", type="integer",
+                   default=10, min=2, max=40, step=1),
+        OptionSpec(key="seed", label="convert.seed", type="integer",
+                   default=0, min=0, step=1),
+    ]
 
     def render_layer(
         self,

@@ -101,26 +101,6 @@ function updatePaletteColour(i: number, value: string): void {
   next[i] = value
   props.bitmap.palette = next
 }
-
-// Resize the manual palette to match the requested colour count so the
-// "Nombre de couleurs" input stays meaningful in manual mode. Truncates
-// extra entries and pads new slots with a neutral grey the operator can
-// then edit. Only fires for the manual / fixed_palette branch — pens
-// mode keeps its hands off the palette (it's mirrored from installed
-// pens by the StyleTab watcher), and auto mode doesn't use ``palette``.
-function onNumColorsChange(): void {
-  if (source.value !== 'manual') return
-  const target = Math.max(1, Math.min(16, Number(props.bitmap.num_colors) || 1))
-  const current = props.bitmap.palette
-  if (current.length === target) return
-  if (current.length > target) {
-    props.bitmap.palette = current.slice(0, target)
-  } else {
-    const padded = [...current]
-    while (padded.length < target) padded.push('#888888')
-    props.bitmap.palette = padded
-  }
-}
 </script>
 
 <template>
@@ -164,27 +144,12 @@ function onNumColorsChange(): void {
       </div>
     </div>
 
-    <!-- "Nombre de couleurs" is shown in every mode so the operator can
-         always set it. In ``auto`` it drives k-means clusters; in
-         ``manual`` it resizes the palette via ``onNumColorsChange``; in
-         ``pens`` it persists the value and acts as the target whenever
-         the user later switches to auto. -->
-    <label class="block text-slate-400">
-      {{ t('convert.numColors') }}
-      <LayerCountBadge
-        v-if="source === 'auto' || (source === 'manual' && bitmap.palette.length > 0)"
-        :count="draft.expectedLayerCount.value"
-      />
-      <input
-        v-model.number="bitmap.num_colors"
-        type="number"
-        min="1"
-        max="16"
-        data-test="palette-num-colors"
-        class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-        @change="onNumColorsChange"
-      />
-    </label>
+    <!-- Number of colours lives on a single slider in
+         ``MultiColorMasterStyleParams`` (just below the style picker)
+         so the operator has one knob, not two. In pens mode the
+         StyleTab watcher truncates the palette to ``num_colors``; in
+         auto mode num_colors drives k-means; in manual mode the slider
+         resizes the editable palette below. -->
 
     <!-- Pen-following: chips locked to the installed pens, with slot
          numbers so the user knows which pen will plot what. -->

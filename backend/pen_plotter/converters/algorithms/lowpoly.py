@@ -23,7 +23,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 class LowPolyAlgorithm(RasterAlgorithm):
@@ -34,6 +34,13 @@ class LowPolyAlgorithm(RasterAlgorithm):
         "Low-poly facets — a Delaunay triangulation of scattered points, "
         "drawn as edges. Denser points read darker."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="density", label="convert.density", type="number",
+                   default=0.01, min=0.001, max=0.1, step=0.001),
+        OptionSpec(key="seed", label="convert.seed", type="integer",
+                   default=0, min=0, step=1),
+    ]
 
     def render_layer(
         self,
