@@ -163,6 +163,17 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
   // parsed result instead of re-running DOMParser on every pointer-move.
   const styledCache = new Map<string, { key: string; out: string }>()
 
+  // Crop cache: ``cropSvgViewBoxToBbox`` is a string-replace but it runs
+  // for every placement on every reactive tick of ``renderedPlacements``.
+  // During a drag that's once per frame × N placements, on potentially
+  // large SVGs. Cache by placement id + the inputs that change the
+  // output: the post-style SVG and the bbox identity. Both are stable
+  // during move/resize gestures, so the cached entry hits every frame.
+  const cropCache = new Map<
+    string,
+    { svgIn: string; bboxKey: string; out: string }
+  >()
+
   const renderedPlacements = computed<RenderedPlacement[]>(() => {
     const w = workspace.value
     if (!w) return []
@@ -205,7 +216,15 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
         if (widthMap && widthMap.size) {
           const mmPerUnit = mmPerViewBoxUnit(cleanSvg, p.width_mm, p.height_mm)
           if (mmPerUnit) {
-            const key = `${mmPerUnit.toFixed(4)}|${mapSig}`
+            // Quantize mmPerUnit to 3 decimals (≈ 0.001 mm/unit) so a
+            // resize drag spanning hundreds of intermediate scales
+            // collapses to a handful of cache slots. DOMParser +
+            // querySelectorAll + serialize on a large SVG can take
+            // 5–20 ms; without this, every pointer-move during a
+            // resize re-ran them. The quantisation error is well
+            // below the operator's perceivable line-thickness
+            // threshold.
+            const key = `${mmPerUnit.toFixed(3)}|${mapSig}`
             const cached = styledCache.get(p.id)
             if (cached && cached.key === key) {
               cleanSvg = cached.out
@@ -223,11 +242,25 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
         // footprint is clipped on the bottom-right.
         const bbox = p.source_bbox
         if (bbox && bbox.x_max > bbox.x_min && bbox.y_max > bbox.y_min) {
-          cleanSvg = cropSvgViewBoxToBbox(cleanSvg, bbox)
+          // The crop output depends only on the post-style SVG and the
+          // bbox identity — both stable across move/resize frames — so
+          // the cache hits every drag tick once primed. The previous
+          // implementation re-ran the regex for every placement on
+          // every reactive recompute (= N placements × every frame).
+          const bboxKey = `${bbox.x_min}|${bbox.y_min}|${bbox.x_max}|${bbox.y_max}`
+          const cached = cropCache.get(p.id)
+          if (cached && cached.svgIn === cleanSvg && cached.bboxKey === bboxKey) {
+            cleanSvg = cached.out
+          } else {
+            const cropped = cropSvgViewBoxToBbox(cleanSvg, bbox)
+            cropCache.set(p.id, { svgIn: cleanSvg, bboxKey, out: cropped })
+            cleanSvg = cropped
+          }
         }
       } else {
         sanitizedCache.delete(p.id)
         styledCache.delete(p.id)
+        cropCache.delete(p.id)
       }
       // Tier 1 source preview is only attempted when (a) we have a
       // library entry to read bytes from, and (b) the MIME is one
@@ -251,6 +284,9 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
     }
     for (const id of styledCache.keys()) {
       if (!seen.has(id)) styledCache.delete(id)
+    }
+    for (const id of cropCache.keys()) {
+      if (!seen.has(id)) cropCache.delete(id)
     }
     return out
   })

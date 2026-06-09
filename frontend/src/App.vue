@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getHealth, systemCheckUpdate } from './api/client'
 import AppHeader from './components/AppHeader.vue'
@@ -21,9 +21,69 @@ import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
 // triggers it: opens the V2 modal, toggles Workshop Mode, or
 // activates the perf overlay flag. Saves ~150 kB from the initial
 // parse on a fresh load.
-const EditModalV2 = defineAsyncComponent(() => import('./components/v2/EditModalV2.vue'))
-const WorkshopMode = defineAsyncComponent(() => import('./components/v2/WorkshopMode.vue'))
-const PerfOverlay = defineAsyncComponent(() => import('./components/v2/PerfOverlay.vue'))
+//
+// The factory references below are reused by ``prefetchHeavySurfaces``
+// in ``onMounted`` to warm the chunks during browser idle time, so the
+// first editor open feels instant instead of waiting on the network
+// round-trip + parse. ``import()`` caches the module promise, so
+// calling it again at click time is a no-op once prefetched.
+const loadEditModal = () => import('./components/v2/EditModalV2.vue')
+const loadWorkshop = () => import('./components/v2/WorkshopMode.vue')
+const loadPerfOverlay = () => import('./components/v2/PerfOverlay.vue')
+// Minimal skeleton shown only while the modal chunk is in flight (the
+// 200 ms ``delay`` swallows any near-instant load so this never flashes
+// on a primed cache). Renders a backdrop + spinner so the click feels
+// acknowledged immediately, even on a cold load over a slow network.
+const EditModalLoading = {
+  name: 'EditModalLoading',
+  render() {
+    return h(
+      'div',
+      {
+        class:
+          'fixed inset-0 z-40 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm',
+        role: 'status',
+        'aria-live': 'polite',
+        'data-test': 'modal-v2-loading',
+      },
+      [
+        h('span', {
+          class:
+            'inline-block h-8 w-8 animate-spin rounded-full border-4 border-slate-600 border-t-emerald-400',
+          'aria-hidden': 'true',
+        }),
+      ],
+    )
+  },
+}
+const EditModalV2 = defineAsyncComponent({
+  loader: loadEditModal,
+  loadingComponent: EditModalLoading,
+  delay: 200,
+})
+const WorkshopMode = defineAsyncComponent(loadWorkshop)
+const PerfOverlay = defineAsyncComponent(loadPerfOverlay)
+
+// Pull the heavy lazy chunks into cache during idle time so the first
+// operator interaction (clicking Edit, toggling Workshop Mode) hits a
+// hot module cache and renders without a perceptible delay. Idle
+// scheduling keeps the boot critical path uncontested — the prefetch
+// only runs when the main thread has spare cycles. ``requestIdleCallback``
+// isn't shipped by every browser; ``setTimeout`` (1 s) is a safe
+// fallback that still arrives well before the typical first Edit click.
+function prefetchHeavySurfaces(): void {
+  type IdleScheduler = (cb: () => void, opts?: { timeout: number }) => unknown
+  const idle =
+    (window as unknown as { requestIdleCallback?: IdleScheduler }).requestIdleCallback ??
+    ((cb: () => void) => window.setTimeout(cb, 1000))
+  idle(
+    () => {
+      void loadEditModal().catch(() => undefined)
+      void loadWorkshop().catch(() => undefined)
+    },
+    { timeout: 4000 },
+  )
+}
 
 import { api } from './api/client'
 import { useAlgorithmsStore } from './stores/algorithms'
@@ -261,6 +321,10 @@ onMounted(async () => {
   // opens the Plotter tab. ``startPolling`` is idempotent — calling
   // it again from PlotterControl is a no-op.
   queue.startPolling()
+  // Warm the editor + Workshop chunks during idle time so the first
+  // click on Edit (or Workshop Mode) doesn't pay the network + parse
+  // cost. See ``prefetchHeavySurfaces`` for the scheduling notes.
+  prefetchHeavySurfaces()
 })
 
 onBeforeUnmount(() => {
