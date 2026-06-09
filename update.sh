@@ -73,13 +73,21 @@ NEW_COMMIT="$(git rev-parse "origin/$BRANCH")"
 
 # Build artifacts a healthy checkout needs after install + build. Missing
 # any of these means a prior update left the working tree half-built — most
-# commonly an npm install that died on EACCES before vite ran. In that
-# state, exiting on "already up to date" leaves the operator with a stale
+# commonly an npm install that died on EACCES before vite ran. A dist/
+# built from a *different* commit counts as unhealthy too: it means a
+# previous run pulled successfully but failed during install/build, so
+# HEAD moved forward while the bundle stayed stale. In those states,
+# exiting on "already up to date" leaves the operator with a stale
 # bundle and no obvious way back; we'd rather re-run install + build than
 # pretend the checkout is healthy.
 needs_rebuild() {
   [ ! -d "$ROOT/frontend/node_modules" ] && return 0
   [ ! -f "$ROOT/frontend/dist/index.html" ] && return 0
+  local built_commit
+  built_commit="$(cat "$ROOT/frontend/dist/.build-commit" 2>/dev/null || true)"
+  # Missing stamp = bundle predates the stamping mechanism — rebuild once
+  # to self-heal; afterwards install.sh writes the stamp on every build.
+  [ "$built_commit" != "$PREV_COMMIT" ] && return 0
   return 1
 }
 
@@ -91,7 +99,7 @@ if [ "$PREV_COMMIT" = "$NEW_COMMIT" ]; then
   # re-exec leg; only exit early when we genuinely have nothing to do.
   if [ -z "${OMNIPLOT_UPDATE_REEXEC:-}" ]; then
     if needs_rebuild; then
-      step "Already at $PREV_COMMIT but build artifacts are missing — rebuilding"
+      step "Already at $PREV_COMMIT but build artifacts are missing or stale — rebuilding"
       # Fall through to the install + restart path below. NEW_COMMIT equals
       # PREV_COMMIT so the "Updating ..." banner is suppressed, but the
       # bytecode purge / install.sh / restart steps still run.

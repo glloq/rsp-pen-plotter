@@ -196,6 +196,13 @@ install_frontend() {
     exit "$npm_status"
   fi
   npm run build
+  # Stamp the bundle with the commit that produced it. update.sh compares
+  # this against HEAD: a pull that succeeded but died before/while
+  # rebuilding leaves HEAD ahead of the stamp, and would otherwise be
+  # reported as "already up to date" with a stale bundle forever.
+  if has git && git -C "$ROOT" rev-parse HEAD >/dev/null 2>&1; then
+    git -C "$ROOT" rev-parse HEAD > dist/.build-commit
+  fi
 }
 
 # -------------------------------------------------------------- service ----
