@@ -19,7 +19,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 class HalftoneAlgorithm(RasterAlgorithm):
@@ -30,6 +30,19 @@ class HalftoneAlgorithm(RasterAlgorithm):
         "Fill regions with a regular grid of variable-size dots, "
         "optionally rotated to a per-ink screen angle."
     )
+    options_schema: ClassVar[list[OptionSpec]] = [
+        # ``cell_size_px`` floor is 2 — anything below collapses adjacent
+        # dots into a solid fill, so the backend clamps to 2. Front-facing
+        # min matches that floor instead of silently accepting 1.
+        OptionSpec(
+            key="cell_size_px", label="convert.cellSize", type="integer",
+            default=6, min=2, max=64, step=1,
+        ),
+        OptionSpec(
+            key="angle_deg", label="convert.angleDeg", type="number",
+            default=0, min=0, max=180, step=1,
+        ),
+    ]
 
     def render_layer(
         self,

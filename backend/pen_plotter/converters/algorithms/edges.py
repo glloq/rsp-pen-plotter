@@ -26,7 +26,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 def _boundary_chains(mask: NDArray[np.bool_]) -> list[list[tuple[float, float]]]:
@@ -93,6 +93,12 @@ class EdgesAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "edges"
     description: ClassVar[str] = "Trace the region boundary — a line-art / technical-drawing style."
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        # ``stroke_width`` is auto-injected from the pen-slot inventory by the
+        # frontend (see ``_style.stroke_attr_px``); it intentionally doesn't
+        # appear as a tunable knob here.
+    ]
 
     def render_layer(
         self,

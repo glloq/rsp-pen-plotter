@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 def _boundary_polylines(mask: NDArray[np.bool_]) -> list[list[tuple[int, int]]]:
@@ -71,6 +71,13 @@ class ContoursAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Fill regions with concentric inner outlines — a topographic-map feel."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="max_rings", label="convert.maxRings", type="integer",
+                   default=20, min=1, max=100, step=1),
+    ]
 
     def render_layer(
         self,

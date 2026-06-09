@@ -15,7 +15,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 class SpiralAlgorithm(RasterAlgorithm):
@@ -25,6 +25,13 @@ class SpiralAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Fill regions with a single Archimedean spiral clipped to the mask."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="samples_per_turn", label="convert.samplesPerTurn",
+                   type="integer", default=64, min=16, max=256, step=1),
+    ]
 
     def render_layer(
         self,

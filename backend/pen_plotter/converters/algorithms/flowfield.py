@@ -31,7 +31,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 def _gradient_field(
@@ -139,6 +139,25 @@ class FlowFieldAlgorithm(RasterAlgorithm):
         "Long streamlines following the image gradient or smooth noise — "
         "few pen-lifts, organic feel."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        # Field source: image gradient (follows the photo's structure) or
+        # smooth Perlin noise (decorative, image-independent).
+        OptionSpec(key="mode", label="convert.flowMode", type="select",
+                   default="gradient", choices=["gradient", "perlin"]),
+        OptionSpec(key="seed_spacing_px", label="convert.spacing", type="number",
+                   default=6, min=2, max=30, step=0.5),
+        OptionSpec(key="step_px", label="convert.stepPx", type="number",
+                   default=0.8, min=0.2, max=3, step=0.1),
+        OptionSpec(key="max_steps", label="convert.maxSteps", type="integer",
+                   default=800, min=50, max=4000, step=50),
+        OptionSpec(key="bidirectional", label="convert.bidirectional", type="boolean",
+                   default=True),
+        OptionSpec(key="noise_scale", label="convert.noiseScale", type="number",
+                   default=32, min=4, max=128, step=1),
+        OptionSpec(key="seed", label="convert.seed", type="integer",
+                   default=0, min=0, step=1),
+    ]
 
     def render_layer(
         self,

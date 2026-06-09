@@ -34,8 +34,20 @@ function currentValue(opt: AlgoOption): unknown {
 }
 
 function onChange(opt: AlgoOption, ev: Event): void {
-  const el = ev.target as HTMLInputElement
-  const value = opt.type === 'boolean' ? el.checked : Number(el.value)
+  const el = ev.target as HTMLInputElement | HTMLSelectElement
+  let value: unknown
+  if (opt.type === 'boolean') {
+    value = (el as HTMLInputElement).checked
+  } else if (opt.type === 'select') {
+    value = (el as HTMLSelectElement).value
+  } else if (opt.type === 'integer') {
+    // Round to keep the operator from sending non-integer values that
+    // the backend would silently truncate (and that bypass the form's
+    // step=1 constraint when typed in directly).
+    value = Math.round(Number((el as HTMLInputElement).value))
+  } else {
+    value = Number((el as HTMLInputElement).value)
+  }
   emit('update', opt.key, value)
 }
 </script>
@@ -56,6 +68,29 @@ function onChange(opt: AlgoOption, ev: Event): void {
         {{ t(opt.label) }}
       </label>
       <label
+        v-else-if="opt.type === 'select'"
+        :class="
+          compact
+            ? 'flex items-center gap-1.5 text-[11px] text-slate-400'
+            : 'block text-[11px] text-slate-400'
+        "
+      >
+        <span :class="compact ? 'w-24 shrink-0 truncate' : ''">{{ t(opt.label) }}</span>
+        <select
+          :value="String(currentValue(opt) ?? '')"
+          :class="
+            compact
+              ? 'min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-100'
+              : 'mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100'
+          "
+          @change="(e) => onChange(opt, e)"
+        >
+          <option v-for="choice in opt.choices ?? []" :key="choice" :value="choice">
+            {{ choice }}
+          </option>
+        </select>
+      </label>
+      <label
         v-else
         :class="
           compact
@@ -68,7 +103,7 @@ function onChange(opt: AlgoOption, ev: Event): void {
           type="number"
           :min="opt.min"
           :max="opt.max"
-          :step="opt.step"
+          :step="opt.type === 'integer' ? (opt.step ?? 1) : opt.step"
           :value="currentValue(opt)"
           :class="
             compact

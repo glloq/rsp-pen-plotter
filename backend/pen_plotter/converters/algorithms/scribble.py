@@ -24,7 +24,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 from pen_plotter.converters.algorithms.crosshatch import _line_segments
 
 
@@ -81,6 +81,23 @@ class ScribbleAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Sketchy hand-drawn hatching — wobbly, overshooting strokes for a loose pencil feel."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="amp_px", label="convert.waveAmp", type="number",
+                   default=1.6, min=0, max=8, step=0.1),
+        # ``overshoot_px`` is the random extension each stroke runs past the
+        # region boundary — the "sketchy" feel of scribble fill. 0 = clean
+        # stops at the boundary, high values = scratchy / loose pencil.
+        OptionSpec(key="overshoot_px", label="convert.overshoot", type="number",
+                   default=3, min=0, max=20, step=0.5),
+        OptionSpec(key="angle_deg", label="convert.angleDeg", type="number",
+                   default=45, min=0, max=180, step=1),
+        OptionSpec(key="crossed", label="convert.crossed", type="boolean", default=False),
+        OptionSpec(key="seed", label="convert.seed", type="integer",
+                   default=0, min=0, step=1),
+    ]
 
     def render_layer(
         self,

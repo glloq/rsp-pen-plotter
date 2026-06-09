@@ -12,7 +12,8 @@ Each entry carries:
 - ``kind`` / ``complexity`` — UI grouping + static cost class
 - ``description`` — operator-facing text
 - ``params`` — JSON Schema fragment describing the tunables (frontend
-  uses it to generate the form, A.7)
+  uses it to generate the form, A.7), derived from each algorithm's
+  ``options_schema`` ClassVar
 - ``recommended_presets`` — preset ids that work well with this algo
   (populated by phase B once the preset manifest lands)
 """
@@ -25,12 +26,13 @@ from pen_plotter.converters.algorithms import (
     algorithm_complexity,
     algorithm_kind,
     available_algorithms,
+    get_algorithm,
 )
 from pen_plotter.manifests import Manifest, ManifestEntry, ManifestMeta, register_manifest
 
 # Manifest schema version for this domain. Bump when the entry shape
 # changes in a way that requires the frontend to upgrade.
-ALGORITHMS_MANIFEST_VERSION = 1
+ALGORITHMS_MANIFEST_VERSION = 2
 
 
 class AlgorithmManifestEntry(ManifestEntry):
@@ -44,31 +46,30 @@ class AlgorithmManifestEntry(ManifestEntry):
     recommended_presets: list[str] = []
 
 
-def _default_params_schema(algo_name: str) -> dict[str, Any]:
-    """Return a minimal JSON Schema fragment for ``algo_name``.
+def _params_schema(algo_name: str) -> dict[str, Any]:
+    """Return a JSON Schema fragment describing ``algo_name``'s knobs.
 
-    Each algorithm currently exposes only an ``options`` dict whose
-    contents are validated by the converter on the way in. The schema
-    captured here is intentionally **permissive** for now — the v0.2
-    resolver work (phase B) will pin tight bounds with calibrated
-    defaults per algorithm, and that's what the frontend zod schema
-    (A.7) will key on.
+    Derived directly from the algorithm class's ``options_schema``
+    ClassVar so backend and frontend can't drift. Algorithms with no
+    schema (e.g. parameterless ``direct``) get an empty-properties
+    object so the frontend still receives a well-formed schema.
     """
+    algo = get_algorithm(algo_name)
+    properties: dict[str, Any] = {}
+    for opt in algo.options_schema:
+        properties[opt.key] = opt.to_json_schema()
+        properties[opt.key]["x-label"] = opt.label
     return {
         "type": "object",
-        "properties": {},
+        "properties": properties,
+        # Permissive on extras: master styles inject internal hooks
+        # (``angles``, ``intensity``, ``_tone``) that aren't operator-facing.
         "additionalProperties": True,
     }
 
 
 def algorithms_manifest() -> Manifest[AlgorithmManifestEntry]:
-    """Build the current algorithms manifest from the static registry.
-
-    A pure function of the registry — easy to call from tests, easy to
-    snapshot for the frontend offline fallback. Phase B will replace
-    the registry call with a dynamic plugin discovery layer; the
-    manifest shape stays the same.
-    """
+    """Build the current algorithms manifest from the static registry."""
     entries = [
         AlgorithmManifestEntry(
             id=algo.name,
@@ -77,7 +78,7 @@ def algorithms_manifest() -> Manifest[AlgorithmManifestEntry]:
             description=algo.description,
             kind=algorithm_kind(algo.name),
             complexity=algorithm_complexity(algo.name),
-            params=_default_params_schema(algo.name),
+            params=_params_schema(algo.name),
         )
         for algo in available_algorithms()
     ]
@@ -85,7 +86,7 @@ def algorithms_manifest() -> Manifest[AlgorithmManifestEntry]:
         meta=ManifestMeta(
             domain="algorithms",
             manifest_version=ALGORITHMS_MANIFEST_VERSION,
-            schema_semver="0.1.0",
+            schema_semver="0.2.0",
         ),
         entries=entries,
     )

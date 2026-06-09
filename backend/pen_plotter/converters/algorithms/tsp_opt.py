@@ -26,7 +26,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 from pen_plotter.core.tsp import (
     mst_dfs_tour,
     nearest_neighbour_tour,
@@ -79,6 +79,21 @@ class TspOptimizedAlgorithm(RasterAlgorithm):
         "TSP-art with 2-opt or MST optimisation — shorter total travel than the "
         "legacy greedy tour."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="density", label="convert.density", type="number",
+                   default=0.02, min=0.001, max=0.5, step=0.001),
+        OptionSpec(key="max_points", label="convert.maxPoints", type="integer",
+                   default=4000, min=100, max=20000, step=100),
+        OptionSpec(key="method", label="convert.tspMethod", type="select",
+                   default="nn_2opt", choices=["nn_2opt", "nn", "mst"]),
+        OptionSpec(key="time_budget_s", label="convert.timeBudgetS", type="number",
+                   default=1.5, min=0.1, max=10, step=0.1),
+        OptionSpec(key="poisson_disk", label="convert.poissonDisk", type="boolean",
+                   default=True),
+        OptionSpec(key="seed", label="convert.seed", type="integer",
+                   default=0, min=0, step=1),
+    ]
 
     def render_layer(
         self,

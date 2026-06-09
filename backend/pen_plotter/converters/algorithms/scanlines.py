@@ -15,7 +15,7 @@ from xml.sax.saxutils import quoteattr
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 class ScanlinesAlgorithm(RasterAlgorithm):
@@ -23,6 +23,15 @@ class ScanlinesAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "scanlines"
     description: ClassVar[str] = "Horizontal scan lines clipped to the mask — flat or sinusoidal."
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="wave_amp_px", label="convert.waveAmp", type="number",
+                   default=0, min=0, max=20, step=0.5),
+        OptionSpec(key="wave_period_px", label="convert.wavePeriod", type="number",
+                   default=12, min=2, max=50, step=0.5),
+    ]
 
     def render_layer(
         self,

@@ -23,7 +23,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
-from pen_plotter.converters.algorithms.base import RasterAlgorithm
+from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
 def _d2xy(order: int, d: int) -> tuple[int, int]:
@@ -114,6 +114,18 @@ class HilbertFillAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Fill regions with a Hilbert space-filling curve — one continuous stroke per region."
     )
+
+    options_schema: ClassVar[list[OptionSpec]] = [
+        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
+                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="min_run_px", label="convert.minRunPx", type="integer",
+                   default=3, min=1, max=20, step=1),
+        # ``order`` overrides the auto-derived L-system depth; 0 = "auto",
+        # 1..8 force that depth. Useful for tuning ink density on small
+        # regions where the auto rule under-fills.
+        OptionSpec(key="order", label="convert.hilbertOrder", type="integer",
+                   default=0, min=0, max=8, step=1),
+    ]
 
     def render_layer(
         self,
