@@ -6,8 +6,6 @@ import AppHeader from './components/AppHeader.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import FilesPane from './components/FilesPane.vue'
-import PlotterSettingsModal from './components/PlotterSettingsModal.vue'
-import SettingsDrawer from './components/SettingsDrawer.vue'
 import SwapPromptModal from './components/SwapPromptModal.vue'
 import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
@@ -30,6 +28,14 @@ import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
 const loadEditModal = () => import('./components/v2/EditModalV2.vue')
 const loadWorkshop = () => import('./components/v2/WorkshopMode.vue')
 const loadPerfOverlay = () => import('./components/v2/PerfOverlay.vue')
+// SettingsDrawer + PlotterSettingsModal are gated by ``v-if`` so they
+// never render until the operator opens them — moving them out of the
+// main bundle shrinks the boot-time JS by ~40 kB gzip (ProfileEditor +
+// AvailableColorsPanel + MacroPanel + the five SystemPanel-family
+// tabs). Idle-time prefetch (below) warms the chunk so the first open
+// still hits a hot cache.
+const loadSettingsDrawer = () => import('./components/SettingsDrawer.vue')
+const loadPlotterSettingsModal = () => import('./components/PlotterSettingsModal.vue')
 // Minimal skeleton shown only while the modal chunk is in flight (the
 // 200 ms ``delay`` swallows any near-instant load so this never flashes
 // on a primed cache). Renders a backdrop + spinner so the click feels
@@ -63,6 +69,8 @@ const EditModalV2 = defineAsyncComponent({
 })
 const WorkshopMode = defineAsyncComponent(loadWorkshop)
 const PerfOverlay = defineAsyncComponent(loadPerfOverlay)
+const SettingsDrawer = defineAsyncComponent(loadSettingsDrawer)
+const PlotterSettingsModal = defineAsyncComponent(loadPlotterSettingsModal)
 
 // Pull the heavy lazy chunks into cache during idle time so the first
 // operator interaction (clicking Edit, toggling Workshop Mode) hits a
@@ -80,6 +88,8 @@ function prefetchHeavySurfaces(): void {
     () => {
       void loadEditModal().catch(() => undefined)
       void loadWorkshop().catch(() => undefined)
+      void loadSettingsDrawer().catch(() => undefined)
+      void loadPlotterSettingsModal().catch(() => undefined)
     },
     { timeout: 4000 },
   )

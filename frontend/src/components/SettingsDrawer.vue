@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useUiStore, type SettingsTab } from '../stores/ui'
@@ -21,8 +21,36 @@ const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'manifests', label: 'settings.manifests' },
 ]
 
+// Lazy-mount tabs on first visit. The previous ``v-show`` for every
+// tab mounted all five panels — and fired all five ``onMounted`` API
+// calls — the moment the drawer opened, even though the operator only
+// sees one at a time. The seen-once map keeps an already-visited tab
+// resident so switching back is instant (and unsaved form state in
+// SystemPanel / ProfileEditor survives), while a never-visited tab
+// pays nothing.
+const visited = reactive<Record<SettingsTab, boolean>>({
+  system: false,
+  history: false,
+  audit: false,
+  slo: false,
+  manifests: false,
+})
+function markVisited(tab: SettingsTab): void {
+  visited[tab] = true
+}
+// Mark the initial tab as visited the moment the drawer opens so its
+// panel mounts in the same tick the drawer becomes visible.
+watch(
+  settingsOpen,
+  (open) => {
+    if (open) markVisited(settingsTab.value)
+  },
+  { immediate: true },
+)
+
 function select(tab: SettingsTab): void {
   settingsTab.value = tab
+  markVisited(tab)
 }
 
 function onKey(event: KeyboardEvent): void {
@@ -74,11 +102,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </nav>
 
       <div class="flex-1 overflow-y-auto p-4">
-        <div v-show="settingsTab === 'system'"><SystemPanel /></div>
-        <div v-show="settingsTab === 'history'"><JobHistory /></div>
-        <div v-show="settingsTab === 'audit'"><AuditPanel /></div>
-        <div v-show="settingsTab === 'slo'"><SloPanel /></div>
-        <div v-show="settingsTab === 'manifests'"><ManifestsPanel /></div>
+        <div v-show="settingsTab === 'system'">
+          <SystemPanel v-if="visited.system" />
+        </div>
+        <div v-show="settingsTab === 'history'">
+          <JobHistory v-if="visited.history" />
+        </div>
+        <div v-show="settingsTab === 'audit'">
+          <AuditPanel v-if="visited.audit" />
+        </div>
+        <div v-show="settingsTab === 'slo'">
+          <SloPanel v-if="visited.slo" />
+        </div>
+        <div v-show="settingsTab === 'manifests'">
+          <ManifestsPanel v-if="visited.manifests" />
+        </div>
       </div>
     </div>
   </div>

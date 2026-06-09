@@ -372,17 +372,34 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  // In-flight dedup so the FilesPane mount + thumbnail prefetch watch
+  // doesn't spawn N parallel GETs for the same file id when called in
+  // quick succession (the watch re-fires on every search / sort /
+  // folder change, and the cached detail isn't visible until the
+  // response lands). Keyed by file id; entries are removed in a
+  // ``finally`` so a failed fetch is retried by the next caller
+  // instead of permanently caching a rejection.
+  const detailInflight = new Map<string, Promise<LibraryFileDetail | null>>()
+
   async function ensureDetail(fileId: string): Promise<LibraryFileDetail | null> {
     const cached = detailCache.value[fileId]
     if (cached) return cached
-    try {
-      const detail = await apiGet(fileId)
-      cacheDetail(detail)
-      return detail
-    } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('library.loadFailed'))
-      return null
-    }
+    const pending = detailInflight.get(fileId)
+    if (pending) return pending
+    const promise = (async () => {
+      try {
+        const detail = await apiGet(fileId)
+        cacheDetail(detail)
+        return detail
+      } catch (err) {
+        error.value = errorDetail(err, i18n.global.t('library.loadFailed'))
+        return null
+      } finally {
+        detailInflight.delete(fileId)
+      }
+    })()
+    detailInflight.set(fileId, promise)
+    return promise
   }
 
   function getDetail(fileId: string): LibraryFileDetail | null {
