@@ -1,5 +1,6 @@
 export function errorDetail(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  const response = (err as { response?: { data?: unknown } })?.response
+  const detail = (response?.data as { detail?: unknown } | undefined)?.detail
   if (typeof detail === 'string' && detail.length > 0) return detail
   if (detail && typeof detail === 'object') {
     // FastAPI handlers sometimes raise HTTPException with a dict detail
@@ -13,6 +14,18 @@ export function errorDetail(err: unknown, fallback: string): string {
       const header = message ? `${message}${rc}` : ''
       return [header, log].filter(Boolean).join('\n\n') || fallback
     }
+  }
+  // Non-JSON error bodies: an unhandled backend exception yields Starlette's
+  // bare-text "Internal Server Error", a proxy yields an HTML page. Surface
+  // a trimmed snippet so the operator gets more than axios' generic
+  // "Request failed with status code NNN".
+  const raw = response?.data
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    const text = raw
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (text) return `${fallback} — ${text.length > 300 ? `${text.slice(0, 300)}…` : text}`
   }
   return fallback
 }
