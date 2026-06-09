@@ -65,16 +65,11 @@ const numColors = computed({
   },
 })
 
-// fixed_palette locks num_colors to the manual palette length — show
-// the count but disable the slider so the operator isn't surprised
-// when dragging it does nothing.
-const numColorsLocked = computed(
-  () => props.bitmap.segmentation_method === 'fixed_palette' && props.bitmap.palette.length > 0,
-)
-
-const effectiveColorCount = computed(() =>
-  numColorsLocked.value ? props.bitmap.palette.length : props.bitmap.num_colors,
-)
+// The slider always drives ``num_colors``. In fixed_palette + pens
+// modes the StyleTab watcher truncates the palette to ``num_colors``
+// so dragging the slider actually shrinks/grows the rendered output,
+// instead of silently doing nothing because the palette length wins.
+const effectiveColorCount = computed(() => props.bitmap.num_colors)
 </script>
 
 <template>
@@ -94,12 +89,11 @@ const effectiveColorCount = computed(() =>
         :min="2"
         :max="16"
         step="1"
-        :disabled="numColorsLocked"
-        class="w-full accent-emerald-500 disabled:opacity-50"
+        class="w-full accent-emerald-500"
         @input="(e) => (numColors = Number((e.target as HTMLInputElement).value))"
       />
       <p class="text-[10px] text-slate-500">
-        {{ numColorsLocked ? t('colorStyles.numColorsLocked') : t('colorStyles.numColorsHint') }}
+        {{ t('colorStyles.numColorsHint') }}
       </p>
     </div>
 
