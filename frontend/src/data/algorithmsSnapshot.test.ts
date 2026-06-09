@@ -37,6 +37,15 @@ interface SnapshotAlgorithm {
 
 const SNAPSHOT = snapshot as SnapshotAlgorithm[]
 
+// ``noUncheckedIndexedAccess`` makes Record lookups ``| undefined``;
+// centralise the existence check so the per-algorithm tests below can
+// dereference the spec without per-line guards.
+function getSpec(name: string): AlgorithmSpec {
+  const spec = (ALGORITHMS as Record<string, AlgorithmSpec>)[name]
+  if (!spec) throw new Error(`algorithm "${name}" missing from ALGORITHMS`)
+  return spec
+}
+
 function frontendOption(opt: AlgoOption): SnapshotOption {
   // Normalise ``undefined`` to ``null`` so the comparison matches the
   // JSON snapshot's representation of "unset" fields.
@@ -69,14 +78,16 @@ describe('algorithmsSnapshot parity (backend SoT ↔ frontend ALGORITHMS)', () =
 
   for (const entry of SNAPSHOT) {
     it(`"${entry.name}" — schema matches backend (keys / types / bounds / choices)`, () => {
-      const spec = (ALGORITHMS as Record<string, AlgorithmSpec>)[entry.name]
+      const spec = getSpec(entry.name)
       const expected = entry.options.map(({ default: _d, ...rest }) => rest)
-      const actual = spec.schema.map((opt) => frontendOption(opt)).map(({ default: _d, ...rest }) => rest)
+      const actual = spec.schema
+        .map((opt) => frontendOption(opt))
+        .map(({ default: _d, ...rest }) => rest)
       expect(actual, `schema drift for ${entry.name}`).toEqual(expected)
     })
 
     it(`"${entry.name}" — defaults match backend`, () => {
-      const spec = (ALGORITHMS as Record<string, AlgorithmSpec>)[entry.name]
+      const spec = getSpec(entry.name)
       for (const opt of entry.options) {
         if (opt.default === null || opt.default === undefined) continue
         const got = spec.defaults[opt.key]
