@@ -1,7 +1,7 @@
 // Curated 12-style catalogue for the beginner editor's
 // "Personnaliser le style" panel.
 //
-// The full registry ships 49 algorithms (frontend/src/data/printRegistry.ts)
+// The full registry ships 51 algorithms (frontend/src/data/printRegistry.ts)
 // — most have a niche use case or are surfaced automatically by the
 // resolver for specific source kinds (text → hershey, pdf → pdf_text_*).
 // Exposing all of them to a beginner is overwhelming, so we hand-pick a

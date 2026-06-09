@@ -80,6 +80,9 @@ export type AlgorithmId =
   | 'harmonograph'
   | 'attractor'
   | 'text_fill'
+  // 2026-06 expert-style batch 3.
+  | 'lsystem'
+  | 'chladni'
 
 export interface AlgoOption {
   key: string
@@ -287,7 +290,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   hilbert: {
     id: 'hilbert',
-    defaults: { spacing_px: 4, min_run_px: 3, order: 0 },
+    defaults: { spacing_px: 4, min_run_px: 3, order: 0, adaptive: false },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
       { key: 'min_run_px', label: 'convert.minRunPx', type: 'integer', min: 1, max: 20, step: 1 },
@@ -295,6 +298,9 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       // force that depth). Operators can tune ink density on small regions
       // where the auto rule under-fills.
       { key: 'order', label: 'convert.hilbertOrder', type: 'integer', min: 0, max: 8, step: 1 },
+      // Tone-adaptive traversal: deeper recursion (tighter curve) where
+      // the region is darker.
+      { key: 'adaptive', label: 'convert.adaptive', type: 'boolean' },
     ],
   },
   gosper: {
@@ -539,12 +545,13 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   ridge_lines: {
     id: 'ridge_lines',
-    defaults: { spacing_px: 6, amp_px: 10, smooth_px: 3, occlude: true },
+    defaults: { spacing_px: 6, amp_px: 10, smooth_px: 3, occlude: true, layout: 'rows' },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 40, step: 0.5 },
       { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 60, step: 1 },
       { key: 'smooth_px', label: 'convert.smooth', type: 'integer', min: 0, max: 20, step: 1 },
       { key: 'occlude', label: 'convert.hiddenLines', type: 'boolean' },
+      { key: 'layout', label: 'convert.mode', type: 'select', choices: ['rows', 'radial'] },
     ],
   },
   hitomezashi: {
@@ -850,6 +857,28 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         max: 0.95,
         step: 0.05,
       },
+    ],
+  },
+  lsystem: {
+    id: 'lsystem',
+    defaults: { preset: 'dragon', iterations: 0 },
+    schema: [
+      {
+        key: 'preset',
+        label: 'convert.pattern',
+        type: 'select',
+        choices: ['dragon', 'plant', 'koch', 'sierpinski'],
+      },
+      { key: 'iterations', label: 'convert.iterations', type: 'integer', min: 0, max: 12, step: 1 },
+    ],
+  },
+  chladni: {
+    id: 'chladni',
+    defaults: { m: 3, n: 5, modes: 1 },
+    schema: [
+      { key: 'm', label: 'convert.modeM', type: 'integer', min: 1, max: 12, step: 1 },
+      { key: 'n', label: 'convert.modeN', type: 'integer', min: 1, max: 12, step: 1 },
+      { key: 'modes', label: 'convert.levels', type: 'integer', min: 1, max: 7, step: 1 },
     ],
   },
 }

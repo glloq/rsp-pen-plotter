@@ -2,7 +2,7 @@
   "algorithms": {
     "meta": {
       "domain": "algorithms",
-      "manifest_version": 4,
+      "manifest_version": 5,
       "schema_semver": "0.2.0",
       "generated_at": "1970-01-01T00:00:00+00:00",
       "deprecations": [],
@@ -343,7 +343,7 @@
         "version": 1,
         "deprecated": false,
         "name": "hilbert",
-        "description": "Fill regions with a Hilbert space-filling curve \u2014 one continuous stroke per region.",
+        "description": "Fill regions with a Hilbert space-filling curve \u2014 one continuous stroke per region, optionally tone-adaptive.",
         "kind": "mono_stroke",
         "complexity": "medium",
         "hidden": false,
@@ -373,6 +373,11 @@
               "maximum": 8.0,
               "multipleOf": 1.0,
               "x-label": "convert.hilbertOrder"
+            },
+            "adaptive": {
+              "type": "boolean",
+              "default": false,
+              "x-label": "convert.adaptive"
             }
           },
           "additionalProperties": true
@@ -1127,6 +1132,15 @@
               "type": "boolean",
               "default": true,
               "x-label": "convert.hiddenLines"
+            },
+            "layout": {
+              "type": "string",
+              "enum": [
+                "rows",
+                "radial"
+              ],
+              "default": "rows",
+              "x-label": "convert.mode"
             }
           },
           "additionalProperties": true
@@ -1984,6 +1998,83 @@
               "maximum": 0.95,
               "multipleOf": 0.05,
               "x-label": "convert.threshold"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "lsystem",
+        "version": 1,
+        "deprecated": false,
+        "name": "lsystem",
+        "description": "L-system \u2014 dragon curve, branching plant, Koch island or Sierpi\u0144ski arrowhead fitted to the region.",
+        "kind": "lines",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": [
+                "dragon",
+                "plant",
+                "koch",
+                "sierpinski"
+              ],
+              "default": "dragon",
+              "x-label": "convert.pattern"
+            },
+            "iterations": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "maximum": 12.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.iterations"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "chladni",
+        "version": 1,
+        "deprecated": false,
+        "name": "chladni",
+        "description": "Chladni figures \u2014 nodal lines of a vibrating plate, the sand-pattern symmetry of resonance experiments.",
+        "kind": "lines",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "m": {
+              "type": "integer",
+              "default": 3,
+              "minimum": 1.0,
+              "maximum": 12.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.modeM"
+            },
+            "n": {
+              "type": "integer",
+              "default": 5,
+              "minimum": 1.0,
+              "maximum": 12.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.modeN"
+            },
+            "modes": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1.0,
+              "maximum": 7.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.levels"
             }
           },
           "additionalProperties": true

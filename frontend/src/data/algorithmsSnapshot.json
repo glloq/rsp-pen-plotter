@@ -317,6 +317,16 @@
         "max": 8.0,
         "step": 1.0,
         "choices": null
+      },
+      {
+        "key": "adaptive",
+        "label": "convert.adaptive",
+        "type": "boolean",
+        "default": false,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
       }
     ]
   },
@@ -1060,6 +1070,19 @@
         "max": null,
         "step": null,
         "choices": null
+      },
+      {
+        "key": "layout",
+        "label": "convert.mode",
+        "type": "select",
+        "default": "rows",
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": [
+          "rows",
+          "radial"
+        ]
       }
     ]
   },
@@ -1862,6 +1885,75 @@
         "min": 0.0,
         "max": 0.95,
         "step": 0.05,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "lsystem",
+    "kind": "lines",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "preset",
+        "label": "convert.pattern",
+        "type": "select",
+        "default": "dragon",
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": [
+          "dragon",
+          "plant",
+          "koch",
+          "sierpinski"
+        ]
+      },
+      {
+        "key": "iterations",
+        "label": "convert.iterations",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": 12.0,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "chladni",
+    "kind": "lines",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "m",
+        "label": "convert.modeM",
+        "type": "integer",
+        "default": 3,
+        "min": 1.0,
+        "max": 12.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "n",
+        "label": "convert.modeN",
+        "type": "integer",
+        "default": 5,
+        "min": 1.0,
+        "max": 12.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "modes",
+        "label": "convert.levels",
+        "type": "integer",
+        "default": 1,
+        "min": 1.0,
+        "max": 7.0,
+        "step": 1.0,
         "choices": null
       }
     ]

@@ -43,6 +43,9 @@ NEW_ALGORITHMS = [
     "harmonograph",
     "attractor",
     "text_fill",
+    # 2026-06 batch 3
+    "lsystem",
+    "chladni",
 ]
 
 _GEOMETRY_TAGS = ("<line", "<polyline", "<circle", "<rect", "<polygon", "<path")
@@ -153,6 +156,51 @@ def test_dither_methods_produce_distinct_patterns() -> None:
     bayer = algo.render_layer(mask, "#000", "d", options={"_tone": tone, "method": "bayer"})
     assert floyd != bayer
     assert "<circle" in floyd and "<circle" in bayer
+
+
+def test_hilbert_adaptive_densifies_dark_areas() -> None:
+    algo = get_algorithm("hilbert")
+    mask = np.ones((128, 128), dtype=bool)
+    dark = algo.render_layer(
+        mask, "#000", "h", options={"adaptive": True, "_tone": np.zeros((128, 128))}
+    )
+    light = algo.render_layer(
+        mask, "#000", "h",
+        options={"adaptive": True, "_tone": np.full((128, 128), 0.85)},
+    )
+    # Point count tracks darkness; both stay a single connected stroke.
+    assert dark.count(",") > 4 * light.count(",")
+    assert dark.count("<polyline") == 1
+
+
+def test_ridge_lines_radial_layout() -> None:
+    algo = get_algorithm("ridge_lines")
+    mask = np.ones((90, 90), dtype=bool)
+    tone = np.tile(np.linspace(0.0, 1.0, 90), (90, 1))
+    rows = algo.render_layer(mask, "#000", "r", options={"_tone": tone})
+    radial = algo.render_layer(
+        mask, "#000", "r", options={"_tone": tone, "layout": "radial"}
+    )
+    assert "<polyline" in radial
+    assert radial != rows
+
+
+def test_lsystem_presets_render_distinct_figures() -> None:
+    algo = get_algorithm("lsystem")
+    mask = _disk_mask()
+    dragon = algo.render_layer(mask, "#000", "l", options={"preset": "dragon"})
+    plant = algo.render_layer(mask, "#000", "l", options={"preset": "plant"})
+    assert "<polyline" in dragon and "<polyline" in plant
+    assert dragon != plant
+
+
+def test_chladni_modes_change_figure() -> None:
+    algo = get_algorithm("chladni")
+    mask = _disk_mask()
+    a = algo.render_layer(mask, "#000", "c", options={"m": 3, "n": 5})
+    b = algo.render_layer(mask, "#000", "c", options={"m": 2, "n": 7})
+    assert "<polyline" in a and "<polyline" in b
+    assert a != b
 
 
 def test_quadtree_subdivides_darker_regions_finer() -> None:

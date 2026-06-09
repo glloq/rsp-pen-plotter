@@ -16,6 +16,7 @@ mountain-range effect, rows are then drawn bottom-up.
 
 from __future__ import annotations
 
+import math
 from typing import Any, ClassVar
 from xml.sax.saxutils import quoteattr
 
@@ -54,6 +55,11 @@ class RidgeLinesAlgorithm(RasterAlgorithm):
                    default=3, min=0, max=20, step=1),
         OptionSpec(key="occlude", label="convert.hiddenLines", type="boolean",
                    default=True),
+        # ``rows`` is the classic horizontal pulsar plot; ``radial`` bends
+        # the same displacement around the centroid — concentric rings
+        # pushed outward by darkness (the circular soundwave look).
+        OptionSpec(key="layout", label="convert.mode", type="select",
+                   default="rows", choices=["rows", "radial"]),
     ]
 
     def render_layer(
@@ -86,6 +92,13 @@ class RidgeLinesAlgorithm(RasterAlgorithm):
         else:
             darkness = bool_mask.astype(np.float64)
 
+        if str(opts.get("layout", "rows")) == "radial":
+            parts = self._radial_ridges(
+                bool_mask, darkness, spacing=spacing, amp=amp,
+                smooth_px=smooth_px, occlude=occlude,
+            )
+            return group_open + "".join(parts) + "</g>"
+
         xs = np.arange(width, dtype=np.float64)
         rows = np.arange(spacing / 2.0, height, spacing)
         # Bottom-up so each ridge can occlude the ones behind (above) it.
@@ -116,3 +129,66 @@ class RidgeLinesAlgorithm(RasterAlgorithm):
         # Rows were generated back-to-front; order in the SVG is irrelevant
         # for the plotter, so no re-sort needed.
         return group_open + "".join(parts) + "</g>"
+
+    @staticmethod
+    def _radial_ridges(
+        bool_mask: NDArray[np.bool_],
+        darkness: NDArray[np.float64],
+        *,
+        spacing: float,
+        amp: float,
+        smooth_px: int,
+        occlude: bool,
+    ) -> list[str]:
+        """Concentric rings displaced outward by darkness.
+
+        Rings march inner → outer on a shared angular grid; a fixed
+        per-angle horizon (the furthest displaced radius so far) hides
+        outer-ring portions sitting behind an inner ring's peak — the
+        circular analogue of the rows' bottom-up occlusion.
+        """
+        height, width = bool_mask.shape
+        ys, xs = np.where(bool_mask)
+        cx, cy = float(xs.mean()), float(ys.mean())
+        max_r = float(np.hypot(xs - cx, ys - cy).max()) + spacing
+        n_angles = max(180, int(2 * math.pi * max_r / 1.5))
+        theta = np.linspace(0.0, 2 * math.pi, n_angles, endpoint=False)
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+
+        horizon = np.zeros(n_angles)
+        parts: list[str] = []
+        r = spacing
+        while r <= max_r:
+            bx = cx + r * cos_t
+            by = cy + r * sin_t
+            ix = np.clip(np.round(bx).astype(np.intp), 0, width - 1)
+            iy = np.clip(np.round(by).astype(np.intp), 0, height - 1)
+            on = bool_mask[iy, ix]
+            disp = darkness[iy, ix] * amp
+            if smooth_px > 0:
+                # Circular box smoothing along the ring.
+                kernel = np.ones(2 * smooth_px + 1) / (2 * smooth_px + 1)
+                disp = np.convolve(
+                    np.concatenate((disp[-smooth_px:], disp, disp[:smooth_px])),
+                    kernel, mode="valid",
+                )
+            ridge_r = r + disp
+            visible = on.copy()
+            if occlude:
+                visible &= ridge_r > horizon
+                np.maximum(horizon, np.where(on, ridge_r, 0.0), out=horizon)
+            px = cx + ridge_r * cos_t
+            py = cy + ridge_r * sin_t
+            run: list[str] = []
+            for i in range(n_angles):
+                if visible[i]:
+                    run.append(f"{px[i]:.2f},{py[i]:.2f}")
+                elif len(run) >= 2:
+                    parts.append(f'<polyline points="{" ".join(run)}"/>')
+                    run = []
+                else:
+                    run = []
+            if len(run) >= 2:
+                parts.append(f'<polyline points="{" ".join(run)}"/>')
+            r += spacing
+        return parts

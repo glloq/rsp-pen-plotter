@@ -91,6 +91,8 @@ def test_registry_lists_all_algorithms() -> None:
         "harmonograph",
         "attractor",
         "text_fill",
+        "lsystem",
+        "chladni",
     }
 
 

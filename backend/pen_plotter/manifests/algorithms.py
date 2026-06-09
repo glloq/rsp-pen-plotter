@@ -37,7 +37,9 @@ from pen_plotter.manifests import Manifest, ManifestEntry, ManifestMeta, registe
 # style batch (ridge_lines … penrose).
 # v4: second style batch (dither … text_fill) + the ``text`` option
 # type (free-form string knobs, e.g. text_fill's ``text``).
-ALGORITHMS_MANIFEST_VERSION = 4
+# v5: third batch (lsystem, chladni) + adaptive hilbert / radial
+# ridge_lines options.
+ALGORITHMS_MANIFEST_VERSION = 5
 
 
 class AlgorithmManifestEntry(ManifestEntry):

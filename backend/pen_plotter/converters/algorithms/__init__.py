@@ -15,6 +15,7 @@ from pen_plotter.converters.algorithms.attractor import AttractorAlgorithm
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 from pen_plotter.converters.algorithms.brick import BrickAlgorithm
 from pen_plotter.converters.algorithms.centerline import CenterlineAlgorithm
+from pen_plotter.converters.algorithms.chladni import ChladniAlgorithm
 from pen_plotter.converters.algorithms.circle_pack import CirclePackAlgorithm
 from pen_plotter.converters.algorithms.concentric_offset import ConcentricOffsetAlgorithm
 from pen_plotter.converters.algorithms.contours import ContoursAlgorithm
@@ -36,6 +37,7 @@ from pen_plotter.converters.algorithms.hilbert import HilbertFillAlgorithm
 from pen_plotter.converters.algorithms.hitomezashi import HitomezashiAlgorithm
 from pen_plotter.converters.algorithms.honeycomb import HoneycombAlgorithm
 from pen_plotter.converters.algorithms.lowpoly import LowPolyAlgorithm
+from pen_plotter.converters.algorithms.lsystem import LSystemAlgorithm
 from pen_plotter.converters.algorithms.maze import MazeAlgorithm
 from pen_plotter.converters.algorithms.moire import MoireAlgorithm
 from pen_plotter.converters.algorithms.noise_contours import NoiseContoursAlgorithm
@@ -126,6 +128,8 @@ _ALGORITHMS: dict[str, RasterAlgorithm] = {
         HarmonographAlgorithm(),
         AttractorAlgorithm(),
         TextFillAlgorithm(),
+        LSystemAlgorithm(),
+        ChladniAlgorithm(),
     )
 }
 
@@ -192,6 +196,8 @@ _KINDS: dict[str, AlgorithmKind] = {
     "harmonograph": "mono_stroke",
     "attractor": "fill",
     "text_fill": "fill",
+    "lsystem": "lines",
+    "chladni": "lines",
 }
 
 # Rough cost class per algorithm — see ``AlgorithmComplexity`` above for
@@ -248,6 +254,8 @@ _COMPLEXITY: dict[str, AlgorithmComplexity] = {
     "harmonograph": "medium",  # tens of thousands of curve samples
     "attractor": "medium",  # sequential chaotic-map iteration
     "text_fill": "medium",  # glyph stroke clipping per row
+    "lsystem": "medium",  # capped string expansion + turtle walk
+    "chladni": "low",  # one smooth field + marching squares
 }
 
 
@@ -305,6 +313,7 @@ __all__ = [
     "AttractorAlgorithm",
     "BrickAlgorithm",
     "CenterlineAlgorithm",
+    "ChladniAlgorithm",
     "CirclePackAlgorithm",
     "ConcentricOffsetAlgorithm",
     "ContoursAlgorithm",
@@ -325,6 +334,7 @@ __all__ = [
     "HilbertFillAlgorithm",
     "HitomezashiAlgorithm",
     "HoneycombAlgorithm",
+    "LSystemAlgorithm",
     "LowPolyAlgorithm",
     "MazeAlgorithm",
     "MoireAlgorithm",

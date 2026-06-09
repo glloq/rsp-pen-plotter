@@ -999,7 +999,10 @@
     "freqRatio": "Rapport de fréquences",
     "damping": "Amortissement",
     "turns": "Tours",
-    "text": "Texte"
+    "text": "Texte",
+    "adaptive": "Adaptatif au ton",
+    "modeM": "Mode m",
+    "modeN": "Mode n"
   },
   "profile": {
     "title": "Profil machine",
