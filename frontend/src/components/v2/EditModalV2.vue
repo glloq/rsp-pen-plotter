@@ -1334,12 +1334,19 @@ watch(
   gap: 0.35rem;
   position: sticky;
   top: 0;
-  /* Reserve space for the modal header + footer so the preview block
-     never scrolls behind them. ``92vh`` matches the modal's own
-     ``max-height``; subtract roughly the header (44 px) + footer
-     (60 px) + paddings. */
-  max-height: calc(92vh - 9rem);
+  /* Fixed height (header 44 px + footer 60 px + paddings subtracted
+     from the modal's 92vh ceiling): the preview pane flexes inside it
+     and gives up height to the sheet picker and ink chips below, so
+     format and colours are readable without scrolling this column —
+     notably in expert mode where the right column gets long. */
+  height: calc(92vh - 9rem);
   overflow-y: auto;
+}
+/* The preview pane (child component root) absorbs the column's spare
+   height; the sheet picker / caption / inks keep their natural size. */
+.modal-v2__preview-block > .preview-pane {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .modal-v2__controls-block {
   display: flex;
@@ -1365,7 +1372,7 @@ watch(
   }
   .modal-v2__preview-block {
     position: static;
-    max-height: none;
+    height: auto;
   }
 }
 .modal-v2__header {
@@ -1464,7 +1471,7 @@ watch(
    and spinner all live in EditPreviewPane.vue now. */
 
 .modal-v2__caption {
-  margin: 0.4rem 0 0.85rem;
+  margin: 0;
   font-size: 0.75rem;
   color: #94a3b8;
   white-space: nowrap;
@@ -1480,7 +1487,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  margin: 0 0 0.6rem;
+  margin: 0;
 }
 .modal-v2__inks-label {
   font-size: 0.75rem;

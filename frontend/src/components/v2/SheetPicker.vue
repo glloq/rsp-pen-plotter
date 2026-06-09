@@ -139,7 +139,6 @@ function setOrientation(o: Orientation): void {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  margin: 0.5rem 0;
 }
 .sheet-picker__label {
   font-size: 0.75rem;
