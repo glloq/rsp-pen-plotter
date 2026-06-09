@@ -18,6 +18,11 @@
             "title": "Description",
             "type": "string"
           },
+          "hidden": {
+            "default": false,
+            "title": "Hidden",
+            "type": "boolean"
+          },
           "kind": {
             "default": "fill",
             "enum": [
@@ -31,6 +36,14 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "options": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OptionSpec"
+            },
+            "title": "Options",
+            "type": "array"
           }
         },
         "required": [
@@ -2246,6 +2259,86 @@
           "metrics"
         ],
         "title": "OptimizeResponse",
+        "type": "object"
+      },
+      "OptionSpec": {
+        "description": "One operator-tunable knob on a raster algorithm.\n\n``key`` is the dict key the backend reads via ``options.get(key)``;\n``label`` is an i18n key the frontend runs through ``t()``;\n``default`` is the value used when the operator doesn't override it.\n\n``min`` / ``max`` / ``step`` constrain number / integer inputs. For\n``select`` knobs, ``choices`` is the list of allowed string values\n(the first one is the canonical default unless ``default`` says\notherwise).",
+        "properties": {
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choices"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "type": {
+            "enum": [
+              "number",
+              "integer",
+              "boolean",
+              "select"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type"
+        ],
+        "title": "OptionSpec",
         "type": "object"
       },
       "PageBlocks": {

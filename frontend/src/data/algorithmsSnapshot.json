@@ -29,6 +29,22 @@
         "max": 180.0,
         "step": 1.0,
         "choices": null
+      },
+      {
+        "key": "glyph",
+        "label": "convert.glyph",
+        "type": "select",
+        "default": "dot",
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": [
+          "dot",
+          "ring",
+          "square",
+          "diamond",
+          "cross"
+        ]
       }
     ]
   },
@@ -97,6 +113,16 @@
       {
         "key": "crossed",
         "label": "convert.crossed",
+        "type": "boolean",
+        "default": false,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      },
+      {
+        "key": "joined",
+        "label": "convert.joined",
         "type": "boolean",
         "default": false,
         "min": null,
@@ -892,6 +918,20 @@
         "max": null,
         "step": 1.0,
         "choices": null
+      },
+      {
+        "key": "tile",
+        "label": "convert.tile",
+        "type": "select",
+        "default": "diagonal",
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": [
+          "diagonal",
+          "arc",
+          "mixed"
+        ]
       }
     ]
   },
@@ -971,6 +1011,393 @@
         "default": 0,
         "min": 0.0,
         "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "ridge_lines",
+    "kind": "fill",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 6,
+        "min": 2.0,
+        "max": 40.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "amp_px",
+        "label": "convert.waveAmp",
+        "type": "number",
+        "default": 10,
+        "min": 0.0,
+        "max": 60.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "smooth_px",
+        "label": "convert.smooth",
+        "type": "integer",
+        "default": 3,
+        "min": 0.0,
+        "max": 20.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "occlude",
+        "label": "convert.hiddenLines",
+        "type": "boolean",
+        "default": true,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "hitomezashi",
+    "kind": "lines",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "cell_px",
+        "label": "convert.cellPx",
+        "type": "integer",
+        "default": 8,
+        "min": 3.0,
+        "max": 40.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "cubic_disarray",
+    "kind": "lines",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "cell_px",
+        "label": "convert.cellPx",
+        "type": "integer",
+        "default": 12,
+        "min": 4.0,
+        "max": 60.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "max_rotate_deg",
+        "label": "convert.rotateMax",
+        "type": "number",
+        "default": 35,
+        "min": 0.0,
+        "max": 90.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "max_offset_px",
+        "label": "convert.offsetMax",
+        "type": "number",
+        "default": 5,
+        "min": 0.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "quadtree",
+    "kind": "lines",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "min_cell_px",
+        "label": "convert.minCell",
+        "type": "integer",
+        "default": 6,
+        "min": 2.0,
+        "max": 64.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "split_threshold",
+        "label": "convert.threshold",
+        "type": "number",
+        "default": 0.12,
+        "min": 0.01,
+        "max": 0.9,
+        "step": 0.01,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "maze",
+    "kind": "lines",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "cell_px",
+        "label": "convert.cellPx",
+        "type": "integer",
+        "default": 8,
+        "min": 3.0,
+        "max": 40.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "phyllotaxis",
+    "kind": "fill",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_px",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 7,
+        "min": 2.0,
+        "max": 30.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "dot_radius_px",
+        "label": "convert.dotRadius",
+        "type": "number",
+        "default": 2.5,
+        "min": 0.3,
+        "max": 10.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "outline",
+        "label": "convert.outline",
+        "type": "boolean",
+        "default": false,
+        "min": null,
+        "max": null,
+        "step": null,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "voronoi_mosaic",
+    "kind": "lines",
+    "complexity": "high",
+    "options": [
+      {
+        "key": "density",
+        "label": "convert.density",
+        "type": "number",
+        "default": 0.004,
+        "min": 0.0005,
+        "max": 0.05,
+        "step": 0.0005,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "curve_stitching",
+    "kind": "lines",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "cell_px",
+        "label": "convert.cellPx",
+        "type": "integer",
+        "default": 18,
+        "min": 8.0,
+        "max": 80.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "chords",
+        "label": "convert.chords",
+        "type": "integer",
+        "default": 7,
+        "min": 3.0,
+        "max": 20.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "string_art",
+    "kind": "mono_stroke",
+    "complexity": "high",
+    "options": [
+      {
+        "key": "pegs",
+        "label": "convert.pegs",
+        "type": "integer",
+        "default": 96,
+        "min": 24.0,
+        "max": 240.0,
+        "step": 4.0,
+        "choices": null
+      },
+      {
+        "key": "lines",
+        "label": "convert.lineCount",
+        "type": "integer",
+        "default": 350,
+        "min": 50.0,
+        "max": 1500.0,
+        "step": 10.0,
+        "choices": null
+      },
+      {
+        "key": "fade",
+        "label": "convert.fade",
+        "type": "number",
+        "default": 0.25,
+        "min": 0.05,
+        "max": 1.0,
+        "step": 0.05,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "space_colonization",
+    "kind": "lines",
+    "complexity": "high",
+    "options": [
+      {
+        "key": "attractors",
+        "label": "convert.attractors",
+        "type": "integer",
+        "default": 700,
+        "min": 100.0,
+        "max": 4000.0,
+        "step": 50.0,
+        "choices": null
+      },
+      {
+        "key": "step_px",
+        "label": "convert.stepPx",
+        "type": "number",
+        "default": 4,
+        "min": 1.0,
+        "max": 15.0,
+        "step": 0.5,
+        "choices": null
+      },
+      {
+        "key": "influence_px",
+        "label": "convert.influencePx",
+        "type": "number",
+        "default": 40,
+        "min": 5.0,
+        "max": 200.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "kill_px",
+        "label": "convert.killPx",
+        "type": "number",
+        "default": 6,
+        "min": 2.0,
+        "max": 40.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "penrose",
+    "kind": "lines",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "divisions",
+        "label": "convert.divisions",
+        "type": "integer",
+        "default": 6,
+        "min": 2.0,
+        "max": 9.0,
         "step": 1.0,
         "choices": null
       }

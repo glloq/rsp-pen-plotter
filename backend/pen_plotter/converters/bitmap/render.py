@@ -38,6 +38,16 @@ from .segment import _REC709
 ProgressCallback = Callable[[int, int, str], None]
 
 
+def _wants_tone(algo_name: Any) -> bool:
+    """True when ``algo_name`` is registered and opts into ``_tone``."""
+    if not isinstance(algo_name, str):
+        return False
+    try:
+        return get_algorithm(algo_name).tone_aware
+    except KeyError:
+        return False
+
+
 def _render_layer_unpack(
     job: tuple[
         NDArray[np.bool_],
@@ -205,13 +215,14 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
         passes: list[dict[str, Any]] | None = list(passes_raw) if passes_raw else None
         algo_name = override.get("algorithm") or algorithm
         algo_options = override.get("algorithm_options") or algorithm_options
-        # The tonal spiral modulates its wobble from the per-pixel
-        # luminance map, so it renders as one continuous, smoothly-shaded
-        # spiral over the whole image rather than a uniform binary fill.
-        # Inject the map (when available) into the spiral's options; other
-        # algorithms never read ``_tone`` so the extra key is harmless.
+        # Tone-aware algorithms (``tone_aware`` ClassVar — tonal spiral,
+        # ridge lines, string art, …) modulate their geometry from the
+        # per-pixel luminance map, so they render as one continuous,
+        # smoothly-shaded texture over the whole image rather than a
+        # uniform binary fill. Inject the map (when available) into their
+        # options; other algorithms never read ``_tone``.
         if seg.luminance is not None:
-            if algo_name == "spiral":
+            if _wants_tone(algo_name):
                 algo_options = {**algo_options, "_tone": seg.luminance}
             if passes:
                 passes = [
@@ -222,7 +233,7 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
                             "_tone": seg.luminance,
                         },
                     }
-                    if isinstance(p, dict) and p.get("algorithm") == "spiral"
+                    if isinstance(p, dict) and _wants_tone(p.get("algorithm"))
                     else p
                     for p in passes
                 ]

@@ -25,6 +25,7 @@ class SpiralAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Fill regions with a single Archimedean spiral clipped to the mask."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="spacing_px", label="convert.spacing", type="number",

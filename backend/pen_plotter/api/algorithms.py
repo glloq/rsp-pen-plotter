@@ -9,6 +9,7 @@ from pen_plotter.converters.algorithms import (
     AlgorithmComplexity,
     AlgorithmKind,
     algorithm_complexity,
+    algorithm_hidden,
     algorithm_kind,
     available_algorithms,
 )
@@ -35,6 +36,9 @@ class AlgorithmInfo(BaseModel):
     # build the parameter form (label key, type, bounds, step, default,
     # choices). Empty list for parameterless algorithms like ``direct``.
     options: list[OptionSpec] = []
+    # Hidden algorithms stay registered for persisted layers but are not
+    # offered by the editor's pickers (duplicates of visible entries).
+    hidden: bool = False
 
 
 @router.get("/algorithms")
@@ -51,6 +55,7 @@ async def list_algorithms() -> list[AlgorithmInfo]:
             kind=algorithm_kind(algo.name),
             complexity=algorithm_complexity(algo.name),
             options=list(algo.options_schema),
+            hidden=algorithm_hidden(algo.name),
         )
         for algo in available_algorithms()
     ]

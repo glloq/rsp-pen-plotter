@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import type { LayerPass } from '../../stores/job'
 import {
   ALGORITHMS,
+  HIDDEN_ALGORITHMS,
   defaultsFor,
   getAlgorithm,
   layerStyles,
@@ -48,9 +49,12 @@ const { t } = useI18n()
 // tracks gets/sets through the computed wrapper below.
 const HIDDEN_BY_LAYER: Map<string, Record<number, boolean>> = reactive(new Map())
 
-// Available algorithms in the stack picker — everything in the
-// registry except ``direct`` (stacking direct on top is a no-op visually).
-const algoChoices = computed(() => Object.values(ALGORITHMS).filter((a) => a.id !== 'direct'))
+// Available algorithms in the stack picker — everything in the registry
+// except ``direct`` (stacking direct on top is a no-op visually) and the
+// hidden duplicates (tsp, grid, …) whose visible counterpart covers them.
+const algoChoices = computed(() =>
+  Object.values(ALGORITHMS).filter((a) => a.id !== 'direct' && !HIDDEN_ALGORITHMS.has(a.id)),
+)
 
 // Per-row expanded toggle for the params form. Default collapsed so
 // a tall stack stays scannable; the operator opens the row they want

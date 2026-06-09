@@ -40,6 +40,10 @@ export const AlgorithmManifestEntrySchema = ManifestEntrySchema.extend({
   description: z.string().default(''),
   kind: z.enum(['fill', 'lines', 'mono_stroke']).default('fill'),
   complexity: z.enum(['low', 'medium', 'high']).default('medium'),
+  // Hidden algorithms stay registered backend-side (persisted layers keep
+  // rendering) but pickers must not offer them for new layers — each one
+  // duplicates a visible entry (tsp → tsp_opt, grid → crosshatch, …).
+  hidden: z.boolean().default(false),
   params: z.record(z.string(), z.unknown()).default({}),
   recommended_presets: z.array(z.string()).default([]),
 })

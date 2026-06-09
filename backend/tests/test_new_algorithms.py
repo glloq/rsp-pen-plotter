@@ -69,6 +69,17 @@ def test_registry_lists_all_algorithms() -> None:
         "rings",
         "sunburst",
         "circle_pack",
+        "ridge_lines",
+        "hitomezashi",
+        "cubic_disarray",
+        "quadtree",
+        "maze",
+        "phyllotaxis",
+        "voronoi_mosaic",
+        "curve_stitching",
+        "string_art",
+        "space_colonization",
+        "penrose",
     }
 
 

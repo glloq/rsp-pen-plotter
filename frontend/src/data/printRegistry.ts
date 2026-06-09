@@ -52,6 +52,20 @@ export type AlgorithmId =
   | 'rings'
   | 'sunburst'
   | 'circle_pack'
+  // 2026-06 expert-style batch — see ``backend/.../algorithms/{ridge_lines,
+  // hitomezashi,cubic_disarray,quadtree,maze,phyllotaxis,voronoi_mosaic,
+  // curve_stitching,string_art,space_colonization,penrose}.py``.
+  | 'ridge_lines'
+  | 'hitomezashi'
+  | 'cubic_disarray'
+  | 'quadtree'
+  | 'maze'
+  | 'phyllotaxis'
+  | 'voronoi_mosaic'
+  | 'curve_stitching'
+  | 'string_art'
+  | 'space_colonization'
+  | 'penrose'
 
 export interface AlgoOption {
   key: string
@@ -79,12 +93,18 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   direct: { id: 'direct', defaults: {}, schema: [] },
   halftone: {
     id: 'halftone',
-    defaults: { cell_size_px: 6, angle_deg: 0 },
+    defaults: { cell_size_px: 6, angle_deg: 0, glyph: 'dot' },
     schema: [
       // Backend clamps to ``max(2, ...)``: anything below collapses adjacent
       // dots into a solid fill, so the floor is 2 (was 1, silently clipped).
       { key: 'cell_size_px', label: 'convert.cellSize', type: 'integer', min: 2, max: 64, step: 1 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
+      {
+        key: 'glyph',
+        label: 'convert.glyph',
+        type: 'select',
+        choices: ['dot', 'ring', 'square', 'diamond', 'cross'],
+      },
     ],
   },
   stippling: {
@@ -112,11 +132,14 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   crosshatch: {
     id: 'crosshatch',
-    defaults: { spacing_px: 4, angle_deg: 45, crossed: false },
+    defaults: { spacing_px: 4, angle_deg: 45, crossed: false, joined: false },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
+      // Stitches sweeps into boustrophedon zig-zags (the former
+      // ``eulerian_hatch`` entry, folded in as an option).
+      { key: 'joined', label: 'convert.joined', type: 'boolean' },
     ],
   },
   contours: {
@@ -450,10 +473,11 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   truchet: {
     id: 'truchet',
-    defaults: { cell_px: 10, seed: 0 },
+    defaults: { cell_px: 10, seed: 0, tile: 'diagonal' },
     schema: [
       { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 2, max: 40, step: 1 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+      { key: 'tile', label: 'convert.tile', type: 'select', choices: ['diagonal', 'arc', 'mixed'] },
     ],
   },
   rings: {
@@ -498,7 +522,157 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
+  ridge_lines: {
+    id: 'ridge_lines',
+    defaults: { spacing_px: 6, amp_px: 10, smooth_px: 3, occlude: true },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 40, step: 0.5 },
+      { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 60, step: 1 },
+      { key: 'smooth_px', label: 'convert.smooth', type: 'integer', min: 0, max: 20, step: 1 },
+      { key: 'occlude', label: 'convert.hiddenLines', type: 'boolean' },
+    ],
+  },
+  hitomezashi: {
+    id: 'hitomezashi',
+    defaults: { cell_px: 8, seed: 0 },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 3, max: 40, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  cubic_disarray: {
+    id: 'cubic_disarray',
+    defaults: { cell_px: 12, max_rotate_deg: 35, max_offset_px: 5, seed: 0 },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 4, max: 60, step: 1 },
+      { key: 'max_rotate_deg', label: 'convert.rotateMax', type: 'number', min: 0, max: 90, step: 1 },
+      {
+        key: 'max_offset_px',
+        label: 'convert.offsetMax',
+        type: 'number',
+        min: 0,
+        max: 30,
+        step: 0.5,
+      },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  quadtree: {
+    id: 'quadtree',
+    defaults: { min_cell_px: 6, split_threshold: 0.12 },
+    schema: [
+      { key: 'min_cell_px', label: 'convert.minCell', type: 'integer', min: 2, max: 64, step: 1 },
+      {
+        key: 'split_threshold',
+        label: 'convert.threshold',
+        type: 'number',
+        min: 0.01,
+        max: 0.9,
+        step: 0.01,
+      },
+    ],
+  },
+  maze: {
+    id: 'maze',
+    defaults: { cell_px: 8, seed: 0 },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 3, max: 40, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  phyllotaxis: {
+    id: 'phyllotaxis',
+    defaults: { spacing_px: 7, dot_radius_px: 2.5, outline: false },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 30, step: 0.5 },
+      {
+        key: 'dot_radius_px',
+        label: 'convert.dotRadius',
+        type: 'number',
+        min: 0.3,
+        max: 10,
+        step: 0.1,
+      },
+      { key: 'outline', label: 'convert.outline', type: 'boolean' },
+    ],
+  },
+  voronoi_mosaic: {
+    id: 'voronoi_mosaic',
+    defaults: { density: 0.004, seed: 0 },
+    schema: [
+      {
+        key: 'density',
+        label: 'convert.density',
+        type: 'number',
+        min: 0.0005,
+        max: 0.05,
+        step: 0.0005,
+      },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  curve_stitching: {
+    id: 'curve_stitching',
+    defaults: { cell_px: 18, chords: 7, seed: 0 },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 8, max: 80, step: 1 },
+      { key: 'chords', label: 'convert.chords', type: 'integer', min: 3, max: 20, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  string_art: {
+    id: 'string_art',
+    defaults: { pegs: 96, lines: 350, fade: 0.25 },
+    schema: [
+      { key: 'pegs', label: 'convert.pegs', type: 'integer', min: 24, max: 240, step: 4 },
+      { key: 'lines', label: 'convert.lineCount', type: 'integer', min: 50, max: 1500, step: 10 },
+      { key: 'fade', label: 'convert.fade', type: 'number', min: 0.05, max: 1, step: 0.05 },
+    ],
+  },
+  space_colonization: {
+    id: 'space_colonization',
+    defaults: { attractors: 700, step_px: 4, influence_px: 40, kill_px: 6, seed: 0 },
+    schema: [
+      {
+        key: 'attractors',
+        label: 'convert.attractors',
+        type: 'integer',
+        min: 100,
+        max: 4000,
+        step: 50,
+      },
+      { key: 'step_px', label: 'convert.stepPx', type: 'number', min: 1, max: 15, step: 0.5 },
+      {
+        key: 'influence_px',
+        label: 'convert.influencePx',
+        type: 'number',
+        min: 5,
+        max: 200,
+        step: 1,
+      },
+      { key: 'kill_px', label: 'convert.killPx', type: 'number', min: 2, max: 40, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  penrose: {
+    id: 'penrose',
+    defaults: { divisions: 6 },
+    schema: [
+      { key: 'divisions', label: 'convert.divisions', type: 'integer', min: 2, max: 9, step: 1 },
+    ],
+  },
 }
+
+// Backend-flagged duplicates: still registered (persisted layers keep
+// rendering, ``getAlgorithm`` keeps resolving them) but pickers must not
+// offer them for new layers. Mirrors ``_HIDDEN`` in
+// ``backend/pen_plotter/converters/algorithms/__init__.py``.
+export const HIDDEN_ALGORITHMS: ReadonlySet<AlgorithmId> = new Set([
+  'tsp',
+  'grid',
+  'eulerian_hatch',
+  'contours',
+])
 
 export function getAlgorithm(id: string | null | undefined): AlgorithmSpec | null {
   if (!id) return null

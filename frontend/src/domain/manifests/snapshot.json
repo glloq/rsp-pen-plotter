@@ -2,8 +2,8 @@
   "algorithms": {
     "meta": {
       "domain": "algorithms",
-      "manifest_version": 1,
-      "schema_semver": "0.1.0",
+      "manifest_version": 3,
+      "schema_semver": "0.2.0",
       "generated_at": "1970-01-01T00:00:00+00:00",
       "deprecations": [],
       "feature_flags": {}
@@ -17,6 +17,7 @@
         "description": "Trace region outlines into filled vector paths (potrace).",
         "kind": "fill",
         "complexity": "low",
+        "hidden": false,
         "params": {
           "type": "object",
           "properties": {},
@@ -32,9 +33,39 @@
         "description": "Fill regions with a regular grid of variable-size dots, optionally rotated to a per-ink screen angle.",
         "kind": "fill",
         "complexity": "low",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "cell_size_px": {
+              "type": "integer",
+              "default": 6,
+              "minimum": 2.0,
+              "maximum": 64.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.cellSize"
+            },
+            "angle_deg": {
+              "type": "number",
+              "default": 0,
+              "minimum": 0.0,
+              "maximum": 180.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.angleDeg"
+            },
+            "glyph": {
+              "type": "string",
+              "enum": [
+                "dot",
+                "ring",
+                "square",
+                "diamond",
+                "cross"
+              ],
+              "default": "dot",
+              "x-label": "convert.glyph"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -47,9 +78,34 @@
         "description": "Fill regions with randomly scattered dots.",
         "kind": "fill",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "density": {
+              "type": "number",
+              "default": 0.02,
+              "minimum": 0.001,
+              "maximum": 0.5,
+              "multipleOf": 0.001,
+              "x-label": "convert.density"
+            },
+            "dot_radius_px": {
+              "type": "number",
+              "default": 0.6,
+              "minimum": 0.1,
+              "maximum": 5.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.dotRadius"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -59,12 +115,40 @@
         "version": 1,
         "deprecated": false,
         "name": "crosshatch",
-        "description": "Fill regions with parallel pen strokes (and optional 90\u00b0 cross-hatching).",
+        "description": "Parallel pen strokes (optional crossed 90\u00b0 pass) \u2014 disconnected runs, more pen-lifts than eulerian_hatch but simpler to tune per layer.",
         "kind": "fill",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "angle_deg": {
+              "type": "number",
+              "default": 45,
+              "minimum": 0.0,
+              "maximum": 180.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.angleDeg"
+            },
+            "crossed": {
+              "type": "boolean",
+              "default": false,
+              "x-label": "convert.crossed"
+            },
+            "joined": {
+              "type": "boolean",
+              "default": false,
+              "x-label": "convert.joined"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -77,9 +161,27 @@
         "description": "Fill regions with concentric inner outlines \u2014 a topographic-map feel.",
         "kind": "lines",
         "complexity": "low",
+        "hidden": true,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "max_rings": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1.0,
+              "maximum": 100.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.maxRings"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -92,6 +194,7 @@
         "description": "Trace the region boundary \u2014 a line-art / technical-drawing style.",
         "kind": "lines",
         "complexity": "low",
+        "hidden": false,
         "params": {
           "type": "object",
           "properties": {},
@@ -107,9 +210,24 @@
         "description": "Trace the medial skeleton as single-stroke polylines \u2014 ideal for schematics and line art. Thick filled regions collapse to a single line at the centre, which is intentional but may surprise on photos.",
         "kind": "lines",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "smooth": {
+              "type": "boolean",
+              "default": true,
+              "x-label": "convert.smooth"
+            },
+            "min_branch_px": {
+              "type": "integer",
+              "default": 3,
+              "minimum": 0.0,
+              "maximum": 50.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.minBranch"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -122,9 +240,27 @@
         "description": "Fill regions with a single Archimedean spiral clipped to the mask.",
         "kind": "mono_stroke",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "samples_per_turn": {
+              "type": "integer",
+              "default": 64,
+              "minimum": 16.0,
+              "maximum": 256.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.samplesPerTurn"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -137,9 +273,35 @@
         "description": "Horizontal scan lines clipped to the mask \u2014 flat or sinusoidal.",
         "kind": "mono_stroke",
         "complexity": "low",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "wave_amp_px": {
+              "type": "number",
+              "default": 0,
+              "minimum": 0.0,
+              "maximum": 20.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.waveAmp"
+            },
+            "wave_period_px": {
+              "type": "number",
+              "default": 12,
+              "minimum": 2.0,
+              "maximum": 50.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.wavePeriod"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -149,12 +311,29 @@
         "version": 1,
         "deprecated": false,
         "name": "tsp",
-        "description": "Dots connected in one greedy nearest-neighbour tour \u2014 single-stroke TSP art.",
+        "description": "Legacy: dots connected by a greedy nearest-neighbour tour. Prefer ``tsp_opt`` \u2014 same idea with shorter total travel.",
         "kind": "mono_stroke",
         "complexity": "high",
+        "hidden": true,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "density": {
+              "type": "number",
+              "default": 0.02,
+              "minimum": 0.001,
+              "maximum": 0.5,
+              "multipleOf": 0.001,
+              "x-label": "convert.density"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -167,9 +346,35 @@
         "description": "Fill regions with a Hilbert space-filling curve \u2014 one continuous stroke per region.",
         "kind": "mono_stroke",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "min_run_px": {
+              "type": "integer",
+              "default": 3,
+              "minimum": 1.0,
+              "maximum": 20.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.minRunPx"
+            },
+            "order": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "maximum": 8.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.hilbertOrder"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -182,9 +387,35 @@
         "description": "Fill regions with a Gosper flowsnake \u2014 organic hexagonal space-filling stroke.",
         "kind": "mono_stroke",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "order": {
+              "type": "integer",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 6.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.gosperOrder"
+            },
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "rotation_deg": {
+              "type": "number",
+              "default": 0,
+              "minimum": 0.0,
+              "maximum": 360.0,
+              "multipleOf": 5.0,
+              "x-label": "convert.angleDeg"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -197,9 +428,32 @@
         "description": "Parallel hatches stitched into one continuous zig-zag per island \u2014 drastically fewer pen-lifts than crosshatch.",
         "kind": "fill",
         "complexity": "medium",
+        "hidden": true,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "angle_deg": {
+              "type": "number",
+              "default": 45,
+              "minimum": 0.0,
+              "maximum": 180.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.angleDeg"
+            },
+            "crossed": {
+              "type": "boolean",
+              "default": false,
+              "x-label": "convert.crossed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -212,9 +466,32 @@
         "description": "Spiral inward via morphological erosion \u2014 near-continuous stroke, very few pen-lifts per region.",
         "kind": "mono_stroke",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 3,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "max_rings": {
+              "type": "integer",
+              "default": 50,
+              "minimum": 1.0,
+              "maximum": 200.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.maxRings"
+            },
+            "bridge": {
+              "type": "boolean",
+              "default": true,
+              "x-label": "convert.bridge"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -227,9 +504,64 @@
         "description": "Long streamlines following the image gradient or smooth noise \u2014 few pen-lifts, organic feel.",
         "kind": "fill",
         "complexity": "high",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "gradient",
+                "perlin"
+              ],
+              "default": "gradient",
+              "x-label": "convert.flowMode"
+            },
+            "seed_spacing_px": {
+              "type": "number",
+              "default": 6,
+              "minimum": 2.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "step_px": {
+              "type": "number",
+              "default": 0.8,
+              "minimum": 0.2,
+              "maximum": 3.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.stepPx"
+            },
+            "max_steps": {
+              "type": "integer",
+              "default": 800,
+              "minimum": 50.0,
+              "maximum": 4000.0,
+              "multipleOf": 50.0,
+              "x-label": "convert.maxSteps"
+            },
+            "bidirectional": {
+              "type": "boolean",
+              "default": true,
+              "x-label": "convert.bidirectional"
+            },
+            "noise_scale": {
+              "type": "number",
+              "default": 32,
+              "minimum": 4.0,
+              "maximum": 128.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.noiseScale"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -242,9 +574,57 @@
         "description": "TSP-art with 2-opt or MST optimisation \u2014 shorter total travel than the legacy greedy tour.",
         "kind": "mono_stroke",
         "complexity": "high",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "density": {
+              "type": "number",
+              "default": 0.02,
+              "minimum": 0.001,
+              "maximum": 0.5,
+              "multipleOf": 0.001,
+              "x-label": "convert.density"
+            },
+            "max_points": {
+              "type": "integer",
+              "default": 4000,
+              "minimum": 100.0,
+              "maximum": 20000.0,
+              "multipleOf": 100.0,
+              "x-label": "convert.maxPoints"
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "nn_2opt",
+                "nn",
+                "mst"
+              ],
+              "default": "nn_2opt",
+              "x-label": "convert.tspMethod"
+            },
+            "time_budget_s": {
+              "type": "number",
+              "default": 1.5,
+              "minimum": 0.1,
+              "maximum": 10.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.timeBudgetS"
+            },
+            "poisson_disk": {
+              "type": "boolean",
+              "default": true,
+              "x-label": "convert.poissonDisk"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -257,9 +637,42 @@
         "description": "Centroidal Voronoi stippling \u2014 evenly-spaced dots, optionally weighted by darkness.",
         "kind": "fill",
         "complexity": "high",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "density": {
+              "type": "number",
+              "default": 0.02,
+              "minimum": 0.001,
+              "maximum": 0.5,
+              "multipleOf": 0.001,
+              "x-label": "convert.density"
+            },
+            "dot_radius_px": {
+              "type": "number",
+              "default": 0.6,
+              "minimum": 0.1,
+              "maximum": 5.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.dotRadius"
+            },
+            "iterations": {
+              "type": "integer",
+              "default": 6,
+              "minimum": 0.0,
+              "maximum": 30.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.iterations"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -272,9 +685,59 @@
         "description": "Wiggly horizontal lines with amplitude / frequency drift \u2014 hand-drawn squiggle look.",
         "kind": "mono_stroke",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "amp_px": {
+              "type": "number",
+              "default": 1.4,
+              "minimum": 0.1,
+              "maximum": 8.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.waveAmp"
+            },
+            "period_px": {
+              "type": "number",
+              "default": 8,
+              "minimum": 2.0,
+              "maximum": 40.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.wavePeriod"
+            },
+            "jitter": {
+              "type": "number",
+              "default": 0.4,
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "multipleOf": 0.05,
+              "x-label": "convert.jitter"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "modulated",
+                "constant"
+              ],
+              "default": "modulated",
+              "x-label": "convert.squiggleMode"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -287,9 +750,26 @@
         "description": "Low-poly facets \u2014 a Delaunay triangulation of scattered points, drawn as edges. Denser points read darker.",
         "kind": "lines",
         "complexity": "high",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "density": {
+              "type": "number",
+              "default": 0.01,
+              "minimum": 0.001,
+              "maximum": 0.1,
+              "multipleOf": 0.001,
+              "x-label": "convert.density"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -302,9 +782,55 @@
         "description": "Sketchy hand-drawn hatching \u2014 wobbly, overshooting strokes for a loose pencil feel.",
         "kind": "fill",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "amp_px": {
+              "type": "number",
+              "default": 1.6,
+              "minimum": 0.0,
+              "maximum": 8.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.waveAmp"
+            },
+            "overshoot_px": {
+              "type": "number",
+              "default": 3,
+              "minimum": 0.0,
+              "maximum": 20.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.overshoot"
+            },
+            "angle_deg": {
+              "type": "number",
+              "default": 45,
+              "minimum": 0.0,
+              "maximum": 180.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.angleDeg"
+            },
+            "crossed": {
+              "type": "boolean",
+              "default": false,
+              "x-label": "convert.crossed"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -317,9 +843,19 @@
         "description": "Square mesh of horizontal and vertical strokes clipped to the mask.",
         "kind": "lines",
         "complexity": "low",
+        "hidden": true,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 6,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -332,9 +868,27 @@
         "description": "Running-bond brick pattern: horizontal courses with staggered vertical mortar joints, clipped to the mask.",
         "kind": "lines",
         "complexity": "low",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "brick_w_px": {
+              "type": "integer",
+              "default": 16,
+              "minimum": 2.0,
+              "maximum": 60.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.brickW"
+            },
+            "brick_h_px": {
+              "type": "integer",
+              "default": 8,
+              "minimum": 2.0,
+              "maximum": 40.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.brickH"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -347,9 +901,48 @@
         "description": "Dashed hatching \u2014 parallel strokes chopped into short dashes for a stitched / engraving texture.",
         "kind": "fill",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 5,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "angle_deg": {
+              "type": "number",
+              "default": 45,
+              "minimum": 0.0,
+              "maximum": 180.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.angleDeg"
+            },
+            "dash_px": {
+              "type": "number",
+              "default": 3,
+              "minimum": 0.5,
+              "maximum": 20.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.dashPx"
+            },
+            "gap_px": {
+              "type": "number",
+              "default": 3,
+              "minimum": 0.5,
+              "maximum": 20.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.gapPx"
+            },
+            "crossed": {
+              "type": "boolean",
+              "default": false,
+              "x-label": "convert.crossed"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -362,9 +955,36 @@
         "description": "Truchet tiles \u2014 a grid of randomly oriented diagonals making a maze-like graphic fill.",
         "kind": "lines",
         "complexity": "low",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "cell_px": {
+              "type": "integer",
+              "default": 10,
+              "minimum": 2.0,
+              "maximum": 40.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.cellPx"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            },
+            "tile": {
+              "type": "string",
+              "enum": [
+                "diagonal",
+                "arc",
+                "mixed"
+              ],
+              "default": "diagonal",
+              "x-label": "convert.tile"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -377,9 +997,19 @@
         "description": "Concentric circles about the region centroid, clipped to the mask.",
         "kind": "mono_stroke",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 6,
+              "minimum": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -392,9 +1022,19 @@
         "description": "Radial rays fanning out from the region centroid, clipped to the mask.",
         "kind": "mono_stroke",
         "complexity": "medium",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "rays": {
+              "type": "integer",
+              "default": 120,
+              "minimum": 8.0,
+              "maximum": 720.0,
+              "multipleOf": 4.0,
+              "x-label": "convert.rays"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []
@@ -407,9 +1047,465 @@
         "description": "Packs non-overlapping circle outlines into the region \u2014 the bubble / foam generative fill.",
         "kind": "fill",
         "complexity": "high",
+        "hidden": false,
         "params": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "min_radius_px": {
+              "type": "number",
+              "default": 1.2,
+              "minimum": 0.5,
+              "maximum": 10.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.minRadius"
+            },
+            "max_radius_px": {
+              "type": "number",
+              "default": 8.0,
+              "minimum": 1.0,
+              "maximum": 40.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.maxRadius"
+            },
+            "gap_px": {
+              "type": "number",
+              "default": 0.6,
+              "minimum": 0.0,
+              "maximum": 10.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.gapPx"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "ridge_lines",
+        "version": 1,
+        "deprecated": false,
+        "name": "ridge_lines",
+        "description": "Horizontal lines displaced upward by darkness \u2014 the pulsar-plot ridge / mountain-range texture.",
+        "kind": "fill",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 6,
+              "minimum": 2.0,
+              "maximum": 40.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "amp_px": {
+              "type": "number",
+              "default": 10,
+              "minimum": 0.0,
+              "maximum": 60.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.waveAmp"
+            },
+            "smooth_px": {
+              "type": "integer",
+              "default": 3,
+              "minimum": 0.0,
+              "maximum": 20.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.smooth"
+            },
+            "occlude": {
+              "type": "boolean",
+              "default": true,
+              "x-label": "convert.hiddenLines"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "hitomezashi",
+        "version": 1,
+        "deprecated": false,
+        "name": "hitomezashi",
+        "description": "Hitomezashi sashiko stitches \u2014 phase-shifted dash rows and columns weaving an interlocking textile pattern.",
+        "kind": "lines",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "cell_px": {
+              "type": "integer",
+              "default": 8,
+              "minimum": 3.0,
+              "maximum": 40.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.cellPx"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "cubic_disarray",
+        "version": 1,
+        "deprecated": false,
+        "name": "cubic_disarray",
+        "description": "Cubic disarray (Schotter) \u2014 a grid of squares tumbling into disorder where the region is darkest.",
+        "kind": "lines",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "cell_px": {
+              "type": "integer",
+              "default": 12,
+              "minimum": 4.0,
+              "maximum": 60.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.cellPx"
+            },
+            "max_rotate_deg": {
+              "type": "number",
+              "default": 35,
+              "minimum": 0.0,
+              "maximum": 90.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.rotateMax"
+            },
+            "max_offset_px": {
+              "type": "number",
+              "default": 5,
+              "minimum": 0.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.offsetMax"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "quadtree",
+        "version": 1,
+        "deprecated": false,
+        "name": "quadtree",
+        "description": "Quadtree subdivision \u2014 squares split recursively where the region is darkest, turning tone into cell density.",
+        "kind": "lines",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "min_cell_px": {
+              "type": "integer",
+              "default": 6,
+              "minimum": 2.0,
+              "maximum": 64.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.minCell"
+            },
+            "split_threshold": {
+              "type": "number",
+              "default": 0.12,
+              "minimum": 0.01,
+              "maximum": 0.9,
+              "multipleOf": 0.01,
+              "x-label": "convert.threshold"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "maze",
+        "version": 1,
+        "deprecated": false,
+        "name": "maze",
+        "description": "Perfect maze \u2014 a random spanning tree carved over the region, walls drawn between unconnected corridors.",
+        "kind": "lines",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "cell_px": {
+              "type": "integer",
+              "default": 8,
+              "minimum": 3.0,
+              "maximum": 40.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.cellPx"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "phyllotaxis",
+        "version": 1,
+        "deprecated": false,
+        "name": "phyllotaxis",
+        "description": "Phyllotaxis \u2014 sunflower-spiral dots from the centroid, sized by local darkness.",
+        "kind": "fill",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "spacing_px": {
+              "type": "number",
+              "default": 7,
+              "minimum": 2.0,
+              "maximum": 30.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.spacing"
+            },
+            "dot_radius_px": {
+              "type": "number",
+              "default": 2.5,
+              "minimum": 0.3,
+              "maximum": 10.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.dotRadius"
+            },
+            "outline": {
+              "type": "boolean",
+              "default": false,
+              "x-label": "convert.outline"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "voronoi_mosaic",
+        "version": 1,
+        "deprecated": false,
+        "name": "voronoi_mosaic",
+        "description": "Voronoi mosaic \u2014 cracked-glaze cell walls, cells smaller where the region is darker.",
+        "kind": "lines",
+        "complexity": "high",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "density": {
+              "type": "number",
+              "default": 0.004,
+              "minimum": 0.0005,
+              "maximum": 0.05,
+              "multipleOf": 0.0005,
+              "x-label": "convert.density"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "curve_stitching",
+        "version": 1,
+        "deprecated": false,
+        "name": "curve_stitching",
+        "description": "Curve stitching \u2014 per-cell chord fans whose envelopes read as parabolas, the nail-and-thread op-art texture.",
+        "kind": "lines",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "cell_px": {
+              "type": "integer",
+              "default": 18,
+              "minimum": 8.0,
+              "maximum": 80.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.cellPx"
+            },
+            "chords": {
+              "type": "integer",
+              "default": 7,
+              "minimum": 3.0,
+              "maximum": 20.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.chords"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "string_art",
+        "version": 1,
+        "deprecated": false,
+        "name": "string_art",
+        "description": "String art \u2014 one continuous thread between rim pegs, chords stacked greedily where the region is darkest.",
+        "kind": "mono_stroke",
+        "complexity": "high",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "pegs": {
+              "type": "integer",
+              "default": 96,
+              "minimum": 24.0,
+              "maximum": 240.0,
+              "multipleOf": 4.0,
+              "x-label": "convert.pegs"
+            },
+            "lines": {
+              "type": "integer",
+              "default": 350,
+              "minimum": 50.0,
+              "maximum": 1500.0,
+              "multipleOf": 10.0,
+              "x-label": "convert.lineCount"
+            },
+            "fade": {
+              "type": "number",
+              "default": 0.25,
+              "minimum": 0.05,
+              "maximum": 1.0,
+              "multipleOf": 0.05,
+              "x-label": "convert.fade"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "space_colonization",
+        "version": 1,
+        "deprecated": false,
+        "name": "space_colonization",
+        "description": "Space colonization \u2014 organic veins growing toward the darkest parts of the region, root / lightning texture.",
+        "kind": "lines",
+        "complexity": "high",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "attractors": {
+              "type": "integer",
+              "default": 700,
+              "minimum": 100.0,
+              "maximum": 4000.0,
+              "multipleOf": 50.0,
+              "x-label": "convert.attractors"
+            },
+            "step_px": {
+              "type": "number",
+              "default": 4,
+              "minimum": 1.0,
+              "maximum": 15.0,
+              "multipleOf": 0.5,
+              "x-label": "convert.stepPx"
+            },
+            "influence_px": {
+              "type": "number",
+              "default": 40,
+              "minimum": 5.0,
+              "maximum": 200.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.influencePx"
+            },
+            "kill_px": {
+              "type": "number",
+              "default": 6,
+              "minimum": 2.0,
+              "maximum": 40.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.killPx"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "penrose",
+        "version": 1,
+        "deprecated": false,
+        "name": "penrose",
+        "description": "Penrose tiling \u2014 aperiodic five-fold rhombi (P3) clipped to the region, the quasi-crystal texture.",
+        "kind": "lines",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "divisions": {
+              "type": "integer",
+              "default": 6,
+              "minimum": 2.0,
+              "maximum": 9.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.divisions"
+            }
+          },
           "additionalProperties": true
         },
         "recommended_presets": []

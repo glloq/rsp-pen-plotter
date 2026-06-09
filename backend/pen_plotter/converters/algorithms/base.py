@@ -78,6 +78,10 @@ class RasterAlgorithm(ABC):
     # without exposed options (or pre-schema ones during a partial
     # migration) keep working — they just won't appear in the form.
     options_schema: ClassVar[list[OptionSpec]] = []
+    # True when the algorithm reads the per-pixel luminance map the
+    # render pipeline injects as ``options["_tone"]`` (0=black..1=white).
+    # The pipeline only pays the dict-copy for algorithms that opt in.
+    tone_aware: ClassVar[bool] = False
 
     @abstractmethod
     def render_layer(

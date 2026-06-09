@@ -48,6 +48,9 @@ export interface AlgorithmInfo {
   // algorithm registered without an explicit entry. Drives the preview
   // pane's seed estimate before the EMA has any real observations.
   complexity?: AlgorithmComplexity
+  // Server-declared duplicate flag: still renderable (persisted layers),
+  // but pickers must not offer it for new layers.
+  hidden?: boolean
 }
 
 export type SegmentationMethod =

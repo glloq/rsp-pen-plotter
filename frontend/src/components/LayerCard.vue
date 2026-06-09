@@ -121,6 +121,10 @@ const ALGORITHM_KIND_ORDER: AlgorithmKind[] = ['fill', 'lines', 'mono_stroke']
 const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }>>(() => {
   const buckets = new Map<string, AlgorithmInfo[]>()
   for (const algo of algorithms.value) {
+    // Hidden = backend-flagged duplicate (tsp, grid, …). Keep it only
+    // when this layer already uses it, so the select still shows the
+    // persisted value instead of a blank.
+    if (algo.hidden && algo.name !== currentAlgorithm.value) continue
     const key = (algo.kind as string) ?? 'other'
     const list = buckets.get(key) ?? []
     list.push(algo)
