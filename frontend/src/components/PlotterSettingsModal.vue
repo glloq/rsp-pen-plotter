@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { MachineCapabilities } from '../domain/capability/schemas'
@@ -43,8 +43,34 @@ const tabs: Array<{ id: PlotterTab; label: string; icon: string }> = [
   { id: 'macros', label: 'plotter.tabMacros', icon: '⌘' },
 ]
 
+// Lazy-mount tabs on first visit. Same rationale as SettingsDrawer:
+// previously, opening the modal mounted ProfileEditor, AvailableColorsPanel
+// AND MacroPanel at the same time even though the operator sees one at a
+// time. ProfileEditor in particular instantiates ``useProfileDraft`` and
+// clones the active profile on mount — a real cost we don't want to pay
+// when the operator only came to load a pen colour. The seen-once map
+// keeps already-visited tabs resident so switching back is instant.
+const visited = reactive<Record<PlotterTab, boolean>>({
+  connection: false,
+  profile: false,
+  colors: false,
+  macros: false,
+  queue: false,
+})
+function markVisited(tab: PlotterTab): void {
+  visited[tab] = true
+}
+watch(
+  plotterSettingsOpen,
+  (open) => {
+    if (open) markVisited(plotterTab.value)
+  },
+  { immediate: true },
+)
+
 function selectTab(tab: PlotterTab): void {
   plotterTab.value = tab
+  markVisited(tab)
 }
 
 // Capability wizard entrypoint inside the profile tab.
@@ -325,36 +351,40 @@ onBeforeUnmount(() => {
 
           <!-- PROFILE TAB -->
           <div v-show="plotterTab === 'profile'" class="space-y-3">
-            <div class="flex items-center justify-end">
-              <button
-                v-if="!wizardOpen"
-                type="button"
-                class="rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700"
-                data-test="open-capability-wizard"
-                @click="wizardOpen = true"
+            <template v-if="visited.profile">
+              <div class="flex items-center justify-end">
+                <button
+                  v-if="!wizardOpen"
+                  type="button"
+                  class="rounded border border-slate-700 bg-slate-800 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-700"
+                  data-test="open-capability-wizard"
+                  @click="wizardOpen = true"
+                >
+                  + {{ t('plotter.newPlotterWizard') }}
+                </button>
+              </div>
+              <div
+                v-if="wizardOpen"
+                class="rounded-lg border border-slate-700 bg-slate-800/40 p-3"
+                data-test="capability-wizard-host"
               >
-                + {{ t('plotter.newPlotterWizard') }}
-              </button>
-            </div>
-            <div
-              v-if="wizardOpen"
-              class="rounded-lg border border-slate-700 bg-slate-800/40 p-3"
-              data-test="capability-wizard-host"
-            >
-              <CapabilityWizard @cancel="wizardOpen = false" @confirm="onWizardConfirm" />
-            </div>
-            <ProfileEditor />
+                <CapabilityWizard @cancel="wizardOpen = false" @confirm="onWizardConfirm" />
+              </div>
+              <ProfileEditor />
+            </template>
           </div>
 
           <!-- COLORS TAB -->
           <div v-show="plotterTab === 'colors'" class="space-y-4">
-            <AvailableColorsPanel />
+            <AvailableColorsPanel v-if="visited.colors" />
           </div>
 
           <!-- MACROS TAB -->
           <div v-show="plotterTab === 'macros'" class="space-y-3">
-            <p class="text-xs text-slate-400">{{ t('plotter.macrosHint') }}</p>
-            <MacroPanel />
+            <template v-if="visited.macros">
+              <p class="text-xs text-slate-400">{{ t('plotter.macrosHint') }}</p>
+              <MacroPanel />
+            </template>
           </div>
         </div>
       </section>

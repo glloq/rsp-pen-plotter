@@ -685,6 +685,13 @@ function pxToMm(): number {
         :style="{
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
           transformOrigin: '50% 50%',
+          // Promote to a GPU layer so the pan / zoom transform doesn't
+          // repaint the SVG subtree each frame. ``will-change`` is opt-in
+          // and not free — applying it permanently to a heavy SVG with
+          // foreignObject contents wastes memory — but for the canvas it
+          // pays back as visibly smoother gestures, especially when the
+          // plan carries several large placements.
+          willChange: 'transform',
         }"
       >
         <svg

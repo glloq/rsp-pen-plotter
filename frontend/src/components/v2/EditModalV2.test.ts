@@ -8,6 +8,7 @@ import { createI18n } from 'vue-i18n'
 vi.mock('../../api/client', () => ({ api: { post: vi.fn(), get: vi.fn() } }))
 
 import { api } from '../../api/client'
+import { clearAlgorithmPolicyCache } from '../../domain/policy/client'
 import EditModalV2 from './EditModalV2.vue'
 
 const i18n = createI18n({
@@ -79,6 +80,11 @@ describe('EditModalV2 (beginner single-screen)', () => {
     window.localStorage.clear()
     vi.mocked(api.post).mockReset()
     vi.mocked(api.post).mockResolvedValue({ data: validDecision })
+    // The resolver client memoises identical inputs across calls so the
+    // editor doesn't re-pay the network round-trip on every open; tests
+    // share inputs across cases, so clear it to keep ``api.post`` call
+    // counts honest.
+    clearAlgorithmPolicyCache()
   })
 
   it('shows the live preview and the three intent cards when a placement is attached', () => {
