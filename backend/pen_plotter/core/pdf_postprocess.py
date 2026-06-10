@@ -217,15 +217,16 @@ def expand_use_refs(root: ET.Element) -> int:
             expansions += 1
         if round_count == 0:
             break
-    # Drop now-orphaned <defs> blocks. We only remove those whose
-    # descendants were the targets of expanded <use>s; keep unrelated
-    # defs (e.g. gradients still referenced by fill="url(#...)").
+    # Best-effort <defs> cleanup, tuned to PyMuPDF output. The check is
+    # purely structural: PyMuPDF emits <defs> whose children all carry
+    # ``id`` attributes (the glyph definitions the <use>s above pointed
+    # at), so a block in which *every* child has an ``id`` is treated as
+    # consumed and removed. A block with any id-less child is preserved
+    # (we cannot prove it held only consumed glyphs). Note this does NOT
+    # verify the ids are unreferenced elsewhere — an id'd gradient still
+    # used via ``fill="url(#…)"`` inside an all-id'd <defs> would be
+    # dropped too; PyMuPDF doesn't produce that shape today.
     for defs in [e for e in root.iter() if _local(e.tag) == "defs"]:
-        # Best-effort: PyMuPDF emits <defs> solely to hold glyphs that <use>
-        # consumed, so they can be safely removed once empty of referenced
-        # content. We keep them only if a non-<use> reference remains.
-        # Keep the block only if a child lacks an ``id`` (we cannot prove it was
-        # a consumed glyph, so we err on the side of preserving it).
         keep = any(not child.get("id") for child in defs)
         if not keep:
             parent = next((p for p in root.iter() if defs in list(p)), None)
@@ -2007,9 +2008,6 @@ def postprocess_pdf_svg(
         except ET.ParseError:
             image_warnings.append("Hershey text group was not valid SVG; skipped.")
 
-    # Ensure xmlns:inkscape is on the root so downstream parsers see the
-    # labels we just added.
-    if root.get(f"{{{_INKSCAPE_NS}}}__placeholder__") is None:
-        pass  # ElementTree manages xmlns via register_namespace
-
+    # xmlns:inkscape on the root is handled by ElementTree itself via
+    # register_namespace, so downstream parsers see the labels we added.
     return svg_tostring(root), image_warnings

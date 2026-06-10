@@ -58,16 +58,15 @@ def _poisson_sample(
     gx = ((xs - xs.min()) // cell).astype(np.int64)
     gy = ((ys - ys.min()) // cell).astype(np.int64)
     key = gx + gy * (int(gx.max()) + 2)
-    # Pick one random pixel per occupied cell.
+    # Pick one random pixel per occupied cell: permute the pixels, then
+    # keep the first occurrence of each cell key. ``np.unique`` with
+    # ``return_index`` does the "first wins" scan in C instead of a
+    # per-pixel Python dict loop.
     order = rng.permutation(n)
-    seen: dict[int, int] = {}
-    for idx in order:
-        k = int(key[idx])
-        if k not in seen:
-            seen[k] = int(idx)
-    chosen = list(seen.values())
-    if len(chosen) > target:
-        chosen = list(rng.choice(chosen, size=target, replace=False))
+    _, first = np.unique(key[order], return_index=True)
+    chosen = order[first]
+    if chosen.size > target:
+        chosen = rng.choice(chosen, size=target, replace=False)
     return np.column_stack([xs[chosen], ys[chosen]]).astype(np.float64)
 
 

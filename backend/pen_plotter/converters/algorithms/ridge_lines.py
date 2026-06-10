@@ -93,11 +93,11 @@ class RidgeLinesAlgorithm(RasterAlgorithm):
             darkness = bool_mask.astype(np.float64)
 
         if str(opts.get("layout", "rows")) == "radial":
-            parts = self._radial_ridges(
+            radial_parts = self._radial_ridges(
                 bool_mask, darkness, spacing=spacing, amp=amp,
                 smooth_px=smooth_px, occlude=occlude,
             )
-            return group_open + "".join(parts) + "</g>"
+            return group_open + "".join(radial_parts) + "</g>"
 
         xs = np.arange(width, dtype=np.float64)
         rows = np.arange(spacing / 2.0, height, spacing)

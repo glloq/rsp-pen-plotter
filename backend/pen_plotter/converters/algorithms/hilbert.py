@@ -16,6 +16,7 @@ depth covers the region completely.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any, ClassVar
 from xml.sax.saxutils import quoteattr
 
@@ -114,7 +115,7 @@ def _adaptive_hilbert(
     yj: tuple[float, float],
     depth: int,
     min_cell: float,
-    darkness_mean,
+    darkness_mean: Callable[[float, float, float], float],
     out: list[tuple[float, float]],
 ) -> None:
     """Hilbert traversal that recurses deeper where the cell is darker.

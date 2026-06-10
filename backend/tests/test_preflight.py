@@ -72,3 +72,38 @@ def test_pen_lift_time_added_to_estimate() -> None:
 
     assert base.path_count == 2
     assert abs((lifted.estimated_seconds - base.estimated_seconds) - 2.0) < 1e-6
+
+
+def test_assigned_color_pen_changes_match_gcode_prompts() -> None:
+    """L7 assigned colours must pause identically in preflight and G-code.
+
+    Regression: ``preflight_report`` fed ``should_pause`` the raw
+    ``target_pen_slot`` / ``source_color`` while ``generate_gcode``
+    promoted ``assigned_color_hex`` to an installed pen slot first, so
+    the reported ``pen_changes`` count drifted from the number of
+    tool-change prompts the generated program actually contains.
+    """
+    from pen_plotter.core.gcode import generate_gcode
+    from pen_plotter.models import PenSlot
+
+    profile = _profile().model_copy(
+        update={
+            "pens": [
+                PenSlot(index=0, name="Red", color="#FF0000"),
+                PenSlot(index=1, name="Blue", color="#0000ff"),
+            ],
+        }
+    )
+    # No explicit slots — only assigned colours, in mixed case so the
+    # promotion's case-insensitive hex match is exercised too.
+    layers = [
+        LayerGeneration(layer_id="red", assigned_color_hex="#ff0000"),
+        LayerGeneration(layer_id="blue", assigned_color_hex="#0000FF"),
+    ]
+
+    report = preflight_report(TWO_LAYERS, profile, layers=layers)
+    gcode = generate_gcode(TWO_LAYERS, profile, layers=layers)
+
+    prompts = sum(1 for line in gcode.splitlines() if line.startswith("; Change"))
+    assert prompts == 2
+    assert report.pen_changes == prompts

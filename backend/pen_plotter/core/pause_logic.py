@@ -20,8 +20,60 @@ the surrounding decision rule stays specific.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from pen_plotter.domain.print_plan import PausePolicy
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from pen_plotter.models import PenSlot
+
+
+def installed_pen_hex_slots(pens: Mapping[int, PenSlot]) -> dict[str, int]:
+    """Map lower-cased installed-pen hex → magazine slot index.
+
+    Lower-cased lookup so case differences across the inventory ↔
+    profile YAML don't miss matches. The first slot wins when two
+    installed pens carry the same hex.
+    """
+    mapping: dict[str, int] = {}
+    for pen_index, slot_pen in pens.items():
+        if slot_pen.installed and slot_pen.color:
+            mapping.setdefault(slot_pen.color.lower(), pen_index)
+    return mapping
+
+
+def effective_layer_pen(
+    *,
+    slot: int | None,
+    source_color: str | None,
+    assigned_color_hex: str | None,
+    pen_hex_to_slot: Mapping[str, int],
+) -> tuple[int | None, str | None]:
+    """Promote a layer's raw plan values to the effective slot / colour.
+
+    L7: when the operator picked an assigned colour AND it matches an
+    installed pen by hex, the prompt is promoted to a proper
+    tool-change with the magazine slot. Without a matching pen the
+    assigned hex still replaces the raw source colour so the mono-pen
+    swap prompt names the ink the operator actually picked.
+
+    Both :func:`pen_plotter.core.gcode.generate_gcode` and
+    :func:`pen_plotter.core.preflight.preflight_report` MUST feed
+    :func:`should_pause` these promoted values — otherwise the
+    preflight ``pen_changes`` count drifts from the number of M0
+    prompts the generated program actually contains.
+
+    Returns:
+        ``(effective_slot, effective_color)``.
+    """
+    promoted_slot: int | None = None
+    if assigned_color_hex and slot is None:
+        promoted_slot = pen_hex_to_slot.get(assigned_color_hex.lower())
+    effective_slot = slot if slot is not None else promoted_slot
+    effective_color = assigned_color_hex or source_color
+    return effective_slot, effective_color
 
 
 @dataclass(frozen=True)

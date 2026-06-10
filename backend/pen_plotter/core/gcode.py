@@ -16,7 +16,11 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, meta
 
 from pen_plotter.core.arcs import ArcTo, fit_arcs
 from pen_plotter.core.layers import labeled_group_fragments
-from pen_plotter.core.pause_logic import should_pause
+from pen_plotter.core.pause_logic import (
+    effective_layer_pen,
+    installed_pen_hex_slots,
+    should_pause,
+)
 from pen_plotter.core.toolpath import _doc_from_svg
 from pen_plotter.domain.print_plan import LayerPlan, ScaleMode
 from pen_plotter.models import MachineProfile, Placement
@@ -396,12 +400,9 @@ def _generate_gcode_impl(
 
     # Pre-compute hex → installed-pen-slot index so the assignment can
     # promote a mono-pen swap into a tool-change when the operator's
-    # picked hex matches a mounted slot. Lower-cased lookup so case
-    # differences across the inventory ↔ profile YAML don't miss matches.
-    pen_hex_to_slot: dict[str, int] = {}
-    for pen_index, slot_pen in pens.items():
-        if slot_pen.installed and slot_pen.color:
-            pen_hex_to_slot.setdefault(slot_pen.color.lower(), pen_index)
+    # picked hex matches a mounted slot. Shared with preflight via
+    # core.pause_logic so the two sites can't drift.
+    pen_hex_to_slot = installed_pen_hex_slots(pens)
 
     if not bounds.empty:
         for layer in layer_geometry:
@@ -419,11 +420,14 @@ def _generate_gcode_impl(
             # mono-pen swap prompt so the operator knows which Sharpie
             # to grab — the assignment was made against the active
             # pool (pens / available / union) at /upload time.
-            promoted_slot: int | None = None
-            if assigned_hex and slot is None:
-                promoted_slot = pen_hex_to_slot.get(assigned_hex.lower())
-            effective_slot = slot if slot is not None else promoted_slot
-            effective_color = assigned_hex or source_color
+            # Shared with preflight (core.pause_logic) so the reported
+            # pen_changes count matches the emitted M0 prompts.
+            effective_slot, effective_color = effective_layer_pen(
+                slot=slot,
+                source_color=source_color,
+                assigned_color_hex=assigned_hex,
+                pen_hex_to_slot=pen_hex_to_slot,
+            )
 
             decision = should_pause(
                 slot=effective_slot,

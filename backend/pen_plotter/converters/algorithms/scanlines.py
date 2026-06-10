@@ -12,6 +12,7 @@ import math
 from typing import Any, ClassVar
 from xml.sax.saxutils import quoteattr
 
+import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
@@ -53,6 +54,17 @@ class ScanlinesAlgorithm(RasterAlgorithm):
         for y in range(0, height, spacing):
             row = bool_mask[y]
             if not row.any():
+                continue
+            if wave_amp <= 0:
+                # Flat lines: a run is fully described by its two
+                # endpoints — emitting one vertex per pixel would bloat
+                # the SVG (and the G-code) by ~width× for no visual gain.
+                delta = np.diff(np.concatenate(([0], row.astype(np.int8), [0])))
+                starts = np.flatnonzero(delta == 1)
+                ends = np.flatnonzero(delta == -1)  # exclusive
+                for a, b in zip(starts, ends, strict=True):
+                    if b - a >= 2:
+                        polylines.append([(float(a), float(y)), (float(b - 1), float(y))])
                 continue
             current: list[tuple[float, float]] = []
             for x in range(width):

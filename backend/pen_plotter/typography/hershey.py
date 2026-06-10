@@ -384,11 +384,14 @@ def _placed_span_path(hf: HersheyFonts, span: PlacedSpan, text: str) -> str:
     diagnostics can show the raw input.
 
     When ``span.source_width`` is set and the natural Hershey extent of
-    ``text`` is wider, the glyphs are compressed horizontally (down to
-    ``_MIN_LINE_SCALE``) so the span fits the source document's
-    intended layout — otherwise PDF / DOCX text drifts rightward and
-    overflows the line because Hershey glyphs are wider than the
-    document's original TrueType face at the same point size.
+    ``text`` is wider, the glyphs are compressed horizontally by
+    whatever factor brings them back to the source width (floored only
+    by ``_MIN_PLACED_SPAN_SCALE``, which is intentionally ``0.0`` — the
+    source document's layout wins over readability) so the span fits
+    the source document's intended layout — otherwise PDF / DOCX text
+    drifts rightward and overflows the line because Hershey glyphs are
+    wider than the document's original TrueType face at the same point
+    size.
     """
     italic_shear = math.tan(math.radians(_ITALIC_SLANT_DEG)) if span.italic else 0.0
     bold_offset = span.size * _BOLD_OFFSET_RATIO if span.bold else 0.0
@@ -597,6 +600,16 @@ class HersheyRenderer:
         Tokens still too wide at maximum compression are hard-broken at
         character boundaries: below ``_MIN_LINE_SCALE`` single-stroke
         glyphs collide and the line stops being legible.
+
+        Line widths are accumulated incrementally from per-word metrics
+        (ink extents + typographic advance) instead of re-measuring the
+        growing candidate line with ``strokes_for_text`` on every
+        appended word — the latter walks every glyph of the line again
+        per word, i.e. O(words²) glyph work for long paragraphs. The
+        font lays words out left-to-right with uniform per-char
+        advances, so a word placed at cursor offset ``c`` contributes
+        ink extents ``(c + x_min, c + x_max)`` — identical geometry to
+        measuring the joined string.
         """
         words = paragraph.split()
         if not words:
@@ -608,17 +621,52 @@ class HersheyRenderer:
                 pieces.extend(self._break_long_word(word, max_natural_w))
             else:
                 pieces.append(word)
+
+        metrics = {piece: self._word_metrics(piece) for piece in set(pieces)}
+        spacing = self.opts.letter_spacing_mm
+        space_adv = self._char_advance(" ") + spacing
+
         lines: list[str] = []
-        current = pieces[0]
+        current = [pieces[0]]
+        cur_xmin, cur_xmax, cursor = metrics[pieces[0]]
         for piece in pieces[1:]:
-            candidate = f"{current} {piece}"
-            if self._measure(candidate) <= max_natural_w:
-                current = candidate
+            w_xmin, w_xmax, w_adv = metrics[piece]
+            offset = cursor + space_adv
+            cand_xmin = min(cur_xmin, offset + w_xmin)
+            cand_xmax = max(cur_xmax, offset + w_xmax)
+            cand_width = 0.0 if cand_xmax == -math.inf else cand_xmax - min(cand_xmin, 0.0)
+            if cand_width <= max_natural_w:
+                current.append(piece)
+                cur_xmin, cur_xmax = cand_xmin, cand_xmax
+                cursor = offset + w_adv
             else:
-                lines.append(current)
-                current = piece
-        lines.append(current)
+                lines.append(" ".join(current))
+                current = [piece]
+                cur_xmin, cur_xmax, cursor = w_xmin, w_xmax, w_adv
+        lines.append(" ".join(current))
         return lines
+
+    def _word_metrics(self, word: str) -> tuple[float, float, float]:
+        """Return ``(ink_x_min, ink_x_max, advance)`` for ``word``.
+
+        Ink extents come from rendering the word standalone (``inf`` /
+        ``-inf`` sentinels when the word draws nothing, mirroring
+        :meth:`_measure`); ``advance`` is the cursor displacement after
+        the word — the per-character typographic advances plus the
+        operator's ``letter_spacing_mm`` tweak when set, matching the
+        layout rule in :meth:`_strokes` / ``strokes_for_text``.
+        """
+        x_min = math.inf
+        x_max = -math.inf
+        for stroke in self._strokes(word):
+            for x, _ in stroke:
+                if x < x_min:
+                    x_min = x
+                if x > x_max:
+                    x_max = x
+        spacing = self.opts.letter_spacing_mm
+        advance = sum(self._char_advance(ch) + spacing for ch in word)
+        return x_min, x_max, advance
 
     def _break_long_word(self, word: str, usable_w: float) -> list[str]:
         """Split ``word`` into chunks each fitting inside ``usable_w``.

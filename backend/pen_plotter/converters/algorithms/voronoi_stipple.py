@@ -33,6 +33,7 @@ class VoronoiStippleAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Centroidal Voronoi stippling — evenly-spaced dots, optionally " "weighted by darkness."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="density", label="convert.density", type="number",
@@ -92,7 +93,14 @@ class VoronoiStippleAlgorithm(RasterAlgorithm):
         # its nearest site, then moves the site to the centroid of its
         # assigned cluster. Intensity (if supplied as a 2D float array)
         # weights the centroid so darker pixels pull dots toward them.
+        # The explicit ``intensity`` option wins; otherwise fall back to
+        # the pipeline-injected ``_tone`` luminance map (0=black..
+        # 1=white — same convention: lower = darker = more dots).
         intensity = opts.get("intensity")
+        if not (isinstance(intensity, np.ndarray) and intensity.shape == bool_mask.shape):
+            tone = opts.get("_tone")
+            if isinstance(tone, np.ndarray) and tone.shape == bool_mask.shape:
+                intensity = tone
         weights: NDArray[np.float64] | None = None
         if isinstance(intensity, np.ndarray) and intensity.shape == bool_mask.shape:
             # Invert so darker -> larger weight; clip to avoid all-zero

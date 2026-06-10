@@ -13,8 +13,10 @@ decided in a later phase.
 
 from __future__ import annotations
 
+import hashlib
 import io
-from functools import lru_cache
+import threading
+from collections import OrderedDict
 from xml.etree import ElementTree as ET
 
 from svgelements import SVG, Shape
@@ -85,13 +87,25 @@ def _group_color(group: ET.Element) -> str:
     return "#000000"
 
 
-@lru_cache(maxsize=256)
+# Memoisation for :func:`_measure`, keyed on a SHA-1 of the markup
+# rather than the markup itself: an ``lru_cache`` keyed on multi-MB SVG
+# strings would pin hundreds of MB of document text just to serve as
+# dictionary keys. The digest cache stores only the small
+# ``(length, bbox)`` results. Guarded by a lock so concurrent request
+# handlers can share it safely (the worst race is a duplicate
+# measurement, never a corrupt cache).
+_MEASURE_CACHE: OrderedDict[str, tuple[float, BoundingBox]] = OrderedDict()
+_MEASURE_CACHE_LOCK = threading.Lock()
+_MEASURE_CACHE_MAX = 1024
+
+
 def _measure(svg_markup: str) -> tuple[float, BoundingBox]:
     """Measure total path length and bounding box in user units.
 
     Physical ``width``/``height`` are stripped so svgelements reports lengths in
     the document's ``viewBox`` coordinate system rather than scaling to pixels.
-    Results are memoized since the same fragment may be measured repeatedly.
+    Results are memoized (keyed by content hash) since the same fragment may
+    be measured repeatedly.
 
     Args:
         svg_markup: A self-contained SVG document.
@@ -99,6 +113,22 @@ def _measure(svg_markup: str) -> tuple[float, BoundingBox]:
     Returns:
         A ``(length, bbox)`` pair; zeros if the SVG has no measurable geometry.
     """
+    digest = hashlib.sha1(svg_markup.encode("utf-8")).hexdigest()
+    with _MEASURE_CACHE_LOCK:
+        cached = _MEASURE_CACHE.get(digest)
+        if cached is not None:
+            _MEASURE_CACHE.move_to_end(digest)
+            return cached
+    result = _measure_uncached(svg_markup)
+    with _MEASURE_CACHE_LOCK:
+        _MEASURE_CACHE[digest] = result
+        _MEASURE_CACHE.move_to_end(digest)
+        while len(_MEASURE_CACHE) > _MEASURE_CACHE_MAX:
+            _MEASURE_CACHE.popitem(last=False)
+    return result
+
+
+def _measure_uncached(svg_markup: str) -> tuple[float, BoundingBox]:
     stripped = strip_root_size(svg_markup)
     total = 0.0
     x_min = y_min = float("inf")
