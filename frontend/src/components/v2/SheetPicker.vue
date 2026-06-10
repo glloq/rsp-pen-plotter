@@ -10,10 +10,23 @@
 // (the plan view and the preview pane both reflect it).
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useJobStore } from '../../stores/job'
 import { useUiStore } from '../../stores/ui'
+import type { PreviewSheet } from '../../stores/ui'
 
 const { t } = useI18n()
 const ui = useUiStore()
+const job = useJobStore()
+
+// Commit a sheet change AND refit the active artwork to the new page.
+// The preview pane sizes the artwork as ``artwork_mm / sheet_mm``, so
+// without the refit picking a bigger format left the drawing at its old
+// physical size — it only *looked* right on formats smaller than the
+// artwork, where the preview's 100 % clamp made it fill the sheet.
+function commitSheet(sheet: PreviewSheet): void {
+  ui.setPreviewSheet(sheet)
+  job.fitSelectedPlacementToSheet(sheet)
+}
 
 interface SheetPreset {
   name: string
@@ -54,7 +67,7 @@ function isActive(p: SheetPreset): boolean {
 
 function applyPreset(p: SheetPreset): void {
   const landscape = currentOrientation.value === 'landscape'
-  ui.setPreviewSheet({
+  commitSheet({
     width_mm: landscape ? p.h : p.w,
     height_mm: landscape ? p.w : p.h,
     x_mm: ui.previewSheet?.x_mm ?? 0,
@@ -69,7 +82,7 @@ function setOrientation(o: Orientation): void {
   // so the orientation toggle is never a no-op.
   if (!ui.previewSheet) {
     const a4 = PRESETS.find((p) => p.name === 'A4')!
-    ui.setPreviewSheet({
+    commitSheet({
       width_mm: o === 'landscape' ? a4.h : a4.w,
       height_mm: o === 'landscape' ? a4.w : a4.h,
       x_mm: 0,
@@ -81,7 +94,7 @@ function setOrientation(o: Orientation): void {
   const h = ui.previewSheet.height_mm
   const big = Math.max(w, h)
   const small = Math.min(w, h)
-  ui.setPreviewSheet({
+  commitSheet({
     width_mm: o === 'landscape' ? big : small,
     height_mm: o === 'landscape' ? small : big,
     x_mm: ui.previewSheet.x_mm,

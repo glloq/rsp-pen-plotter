@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createI18n } from 'vue-i18n'
 
 import SheetPicker from './SheetPicker.vue'
+import { useJobStore } from '../../stores/job'
 import { useUiStore } from '../../stores/ui'
 
 const i18n = createI18n({
@@ -65,6 +66,36 @@ describe('SheetPicker', () => {
     await wrapper.find('[data-test="sheet-orientation-landscape"]').trigger('click')
     expect(ui.previewSheet?.width_mm).toBe(297)
     expect(ui.previewSheet?.height_mm).toBe(210)
+  })
+
+  it('refits the selected placement to the new sheet format (uniform scale, centred)', async () => {
+    const job = useJobStore()
+    // No machine profile in the test pinia → blank placement defaults
+    // to 100 × 100 mm at (0, 0).
+    job.addEmptyPlacement()
+    const wrapper = mountPicker()
+    await wrapper.find('[data-test="sheet-preset-A4"]').trigger('click')
+    const p = job.selectedPlacement!
+    // 100 × 100 fitted into portrait A4 (210 × 297): factor 2.1 →
+    // 210 × 210, centred in the page.
+    expect(p.width_mm).toBeCloseTo(210)
+    expect(p.height_mm).toBeCloseTo(210)
+    expect(p.x_mm).toBeCloseTo(0)
+    expect(p.y_mm).toBeCloseTo((297 - 210) / 2)
+  })
+
+  it('refits the selected placement when the orientation flips', async () => {
+    const ui = useUiStore()
+    const job = useJobStore()
+    job.addEmptyPlacement()
+    ui.setPreviewSheet({ width_mm: 210, height_mm: 297, x_mm: 0, y_mm: 0 })
+    const wrapper = mountPicker()
+    await wrapper.find('[data-test="sheet-orientation-landscape"]').trigger('click')
+    const p = job.selectedPlacement!
+    expect(p.width_mm).toBeCloseTo(210)
+    expect(p.height_mm).toBeCloseTo(210)
+    expect(p.x_mm).toBeCloseTo((297 - 210) / 2)
+    expect(p.y_mm).toBeCloseTo(0)
   })
 
   it('marks the active preset based on the live sheet dimensions (±0.5 mm tolerance)', async () => {
