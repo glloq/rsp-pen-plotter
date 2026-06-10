@@ -418,3 +418,43 @@ async def test_preview_image_unknown_id_is_404() -> None:
     async with _client() as client:
         response = await client.get("/files/does-not-exist/preview-image")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_concurrent_identical_upload_race_is_idempotent(monkeypatch) -> None:
+    """Dedup TOCTOU regression: two concurrent identical uploads can both
+    pass the hash pre-check; the loser's INSERT then hits the unique
+    ``sha256`` index. The endpoint must catch the integrity error, clean
+    up its orphaned artefact directory, and return the winner's record —
+    not a 500."""
+    from pen_plotter.api import files as files_module
+
+    async with _client() as client:
+        first = await client.post("/files", **_upload_form(SVG_A, "a.svg"))
+    assert first.status_code == 200
+    winner_id = first.json()["file"]["file_id"]
+    dirs_before = {p.name for p in FILES_DIR.iterdir()}
+
+    # Simulate the race window: the pre-check misses (as if the winner's
+    # row hadn't landed yet), but the post-IntegrityError recovery lookup
+    # sees the real record.
+    real_lookup = files_module.get_file_record_by_hash
+    calls = {"n": 0}
+
+    def racy_lookup(digest):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return None  # pre-check: pretend the row isn't there yet
+        return real_lookup(digest)
+
+    monkeypatch.setattr(files_module, "get_file_record_by_hash", racy_lookup)
+
+    async with _client() as client:
+        second = await client.post("/files", **_upload_form(SVG_A, "renamed.svg"))
+
+    assert second.status_code == 200, second.text
+    assert second.json()["existing"] is True
+    assert second.json()["file"]["file_id"] == winner_id
+    # The loser's artefact directory was cleaned up — no orphans.
+    dirs_after = {p.name for p in FILES_DIR.iterdir()}
+    assert dirs_after == dirs_before

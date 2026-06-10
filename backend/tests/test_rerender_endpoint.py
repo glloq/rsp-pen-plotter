@@ -581,13 +581,13 @@ def test_rerender_404_when_bitmap_options_corrupted(
     client: TestClient, tmp_path, monkeypatch
 ) -> None:
     """meta.json without bitmap_options (legacy / edited) ⇒ structured 404."""
-    from pen_plotter.api import files as files_module
+    from pen_plotter.application import file_library
 
     file_id = _seed_library_png(client, tmp_path, monkeypatch)
     rerender_module._clear_cache_for_tests()
     # Strip bitmap_options from meta.json to simulate a legacy file or
     # an externally-tampered library entry.
-    meta_path = files_module._meta_path(file_id)
+    meta_path = file_library.meta_path(file_id)
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     meta["bitmap_options"] = None
     meta_path.write_text(json.dumps(meta), encoding="utf-8")
@@ -609,7 +609,7 @@ def test_files_integrity_endpoint_lists_broken_entries(
     """The /files/integrity endpoint surfaces the same diagnoses the UI
     needs to disable Edit / show a re-upload banner.
     """
-    from pen_plotter.api import files as files_module
+    from pen_plotter.application import file_library
 
     file_id = _seed_library_png(client, tmp_path, monkeypatch)
     # Healthy snapshot first.
@@ -618,7 +618,7 @@ def test_files_integrity_endpoint_lists_broken_entries(
     assert healthy["issues"] == []
 
     # Now break the entry on disk and re-run the scan.
-    meta_path = files_module._meta_path(file_id)
+    meta_path = file_library.meta_path(file_id)
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     meta["bitmap_options"] = None
     meta_path.write_text(json.dumps(meta), encoding="utf-8")

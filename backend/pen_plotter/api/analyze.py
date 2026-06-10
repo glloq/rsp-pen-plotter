@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
 from pen_plotter.converters.pdf_blocks import DocumentAnalysis, extract_blocks
 
@@ -53,6 +54,8 @@ async def analyze_document(
             detail=f"File exceeds the {MAX_ANALYZE_BYTES // (1024 * 1024)} MB analysis limit.",
         )
     try:
-        return extract_blocks(data)
+        # PyMuPDF parsing is synchronous CPU-bound work; keep it off the
+        # event loop so a large PDF doesn't stall every other request.
+        return await run_in_threadpool(extract_blocks, data)
     except Exception as exc:  # PyMuPDF raises a variety of exceptions
         raise HTTPException(status_code=422, detail=f"PDF analysis failed: {exc}") from exc

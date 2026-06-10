@@ -3167,6 +3167,103 @@
         "title": "PrintRun",
         "type": "object"
       },
+      "PrintRunSummary": {
+        "description": "Wire projection of a :class:`PrintRun` WITHOUT the G-code payload.\n\nThe cockpit polls ``GET /queue`` every 3 s; serialising the full\n``gcode`` (plus ``pause_points`` / ``swap_actions``) per run made each\npoll a multi-MB response. This summary carries everything the\nfrontend's queue store and panels actually consume \u2014 progress,\nlifecycle state, swap prompt, skipped layers \u2014 and nothing else.\nUse ``GET /queue/{run_id}`` for the full row including ``gcode``.",
+        "properties": {
+          "acked_lines": {
+            "title": "Acked Lines",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idempotency Key"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "profile_name": {
+            "title": "Profile Name",
+            "type": "string"
+          },
+          "skipped_layers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped Layers",
+            "type": "array"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "swap_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swap Prompt"
+          },
+          "total_lines": {
+            "title": "Total Lines",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "profile_name",
+          "total_lines",
+          "acked_lines",
+          "state",
+          "priority",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "PrintRunSummary",
+        "type": "object"
+      },
       "QualityTier": {
         "description": "Preview-time quality tier the renderer should target.",
         "enum": [
@@ -7363,7 +7460,7 @@
     },
     "/preview/stream": {
       "get": {
-        "description": "Open a Server-Sent Events stream emitting progress events.\n\nWhen ``file_id`` is set, runs the real pipeline against the\nmatching library entry; otherwise falls back to the synthetic\nemitter (useful for tests and frontend smoke).",
+        "description": "Open a Server-Sent Events stream emitting progress events.\n\nWhen ``file_id`` is set, runs the real pipeline against the\nmatching library entry; otherwise falls back to the synthetic\nemitter (useful for tests and frontend smoke).\n\nRaises:\n    HTTPException: 404 when ``file_id`` is unknown or its original\n        bytes are missing on disk \u2014 validated *before* the streaming\n        response starts so the client gets a real 404 status instead\n        of an error frame behind a 200.",
         "operationId": "preview_stream_preview_stream_get",
         "parameters": [
           {
@@ -7881,7 +7978,7 @@
     },
     "/queue": {
       "get": {
-        "description": "List print runs, active ones first.\n\nProtected because ``PrintRun.pause_points`` carries operator-facing\nprompts (e.g. \"Insert pen slot 1: Red\") that reveal the pen carousel\nconfiguration when an API key is configured.",
+        "description": "List print runs, active ones first \u2014 summaries without ``gcode``.\n\nProtected because the swap prompt carries operator-facing pen\nconfiguration when an API key is configured. The frontend polls\nthis endpoint; fetch ``GET /queue/{run_id}`` when the full G-code\npayload is needed.",
         "operationId": "list_queue_queue_get",
         "parameters": [
           {
@@ -7923,7 +8020,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/PrintRun"
+                    "$ref": "#/components/schemas/PrintRunSummary"
                   },
                   "title": "Response List Queue Queue Get",
                   "type": "array"

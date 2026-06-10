@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from pen_plotter.application.plan_resolver import PlanResolutionError
@@ -48,7 +49,9 @@ async def preflight(request: PreflightRequest) -> PreflightReport:
     if profile is None:
         raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
     try:
-        outcome = run_preflight(request, profile)
+        # Plan resolution + SVG parsing + path estimation are synchronous
+        # CPU-bound work; keep them off the event loop.
+        outcome = await run_in_threadpool(run_preflight, request, profile)
     except PlanResolutionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
@@ -77,7 +80,9 @@ async def preflight_svg(request: PreflightSvgRequest) -> PreflightReport:
     if profile is None:
         raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
     try:
-        return preflight_report(request.svg, profile)
+        # Same threadpool treatment as /preflight — SVG metric extraction
+        # is synchronous and can be heavy for dense drawings.
+        return await run_in_threadpool(preflight_report, request.svg, profile)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

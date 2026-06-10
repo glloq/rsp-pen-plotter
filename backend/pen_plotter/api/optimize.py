@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from pen_plotter.core.layers import extract_layers
@@ -60,7 +61,10 @@ async def optimize(request: OptimizeRequest) -> OptimizeResponse:
         HTTPException: 400 if the SVG cannot be processed.
     """
     try:
-        result = _optimize_with_ir_when_available(request)
+        # vpype / geometry optimization is synchronous CPU-bound work; run
+        # it in the threadpool so a big SVG doesn't freeze the event loop
+        # (including /plotter/emergency_stop) for every other client.
+        result = await run_in_threadpool(_optimize_with_ir_when_available, request)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # vpype/geometry failures

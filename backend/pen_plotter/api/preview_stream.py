@@ -19,13 +19,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from queue import Queue
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from pen_plotter.persistence import FileRecord
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -93,7 +99,16 @@ async def _synthetic_stream(layer_count: int) -> AsyncIterator[bytes]:
     ).encode()
 
 
-async def _real_stream(file_id: str) -> AsyncIterator[bytes]:
+def _log_stream_worker_outcome(task: asyncio.Task[None]) -> None:
+    """Surface conversion-thread failures from a detached SSE worker task."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        _log.error("preview-stream worker failed after client disconnect", exc_info=exc)
+
+
+async def _real_stream(file_id: str, record: FileRecord, raw: bytes) -> AsyncIterator[bytes]:
     """Run the real pipeline in a worker thread, bridging progress to SSE.
 
     The bitmap pipeline is synchronous and CPU-bound, so we run it on
@@ -102,15 +117,11 @@ async def _real_stream(file_id: str) -> AsyncIterator[bytes]:
     ``progress_callback``, while the async generator drains them and
     formats SSE frames. A sentinel ``None`` signals completion (or
     error) and lets the loop drain any final state without polling.
+
+    ``record``/``raw`` are validated by the endpoint *before* the
+    response starts, so a missing file is a clean 404 instead of an
+    error after the 200 headers have already been sent.
     """
-    from pen_plotter.application import file_library
-    from pen_plotter.persistence import get_file_record
-
-    record = get_file_record(file_id)
-    raw = file_library.read_original_bytes(file_id)
-    if record is None or raw is None:
-        raise HTTPException(status_code=404, detail=f"unknown file_id {file_id!r}")
-
     loop = asyncio.get_event_loop()
     start_ts = loop.time()
     queue: Queue[tuple[str, dict[str, Any]] | None] = Queue()
@@ -167,6 +178,10 @@ async def _real_stream(file_id: str) -> AsyncIterator[bytes]:
     seq += 1
 
     task = asyncio.create_task(asyncio.to_thread(run))
+    # Log worker failures even when the client disconnects before the
+    # sentinel arrives — the task is detached in that case (see below)
+    # and would otherwise drop its exception on the floor.
+    task.add_done_callback(_log_stream_worker_outcome)
     try:
         while True:
             item = await loop.run_in_executor(None, queue.get)
@@ -183,8 +198,19 @@ async def _real_stream(file_id: str) -> AsyncIterator[bytes]:
                 )
             ).encode()
             seq += 1
-    finally:
+        # Normal completion: the worker pushed its sentinel, so it is
+        # finishing right now — awaiting here is safe and re-raises any
+        # unexpected task failure in request context.
         await task
+    except GeneratorExit:
+        # Client disconnected mid-stream. We must NOT await inside this
+        # path: an ``await`` while handling GeneratorExit raises
+        # "async generator ignored GeneratorExit". The synchronous
+        # conversion thread cannot be cancelled either — detach it; it
+        # runs to completion in the threadpool, pushes its sentinel into
+        # the (garbage-collectable) queue and the done-callback above
+        # logs any failure.
+        raise
 
 
 @router.get("/preview/stream")
@@ -197,9 +223,22 @@ async def preview_stream(
     When ``file_id`` is set, runs the real pipeline against the
     matching library entry; otherwise falls back to the synthetic
     emitter (useful for tests and frontend smoke).
+
+    Raises:
+        HTTPException: 404 when ``file_id`` is unknown or its original
+            bytes are missing on disk — validated *before* the streaming
+            response starts so the client gets a real 404 status instead
+            of an error frame behind a 200.
     """
     if file_id:
-        body: AsyncIterator[bytes] = _real_stream(file_id)
+        from pen_plotter.application import file_library  # noqa: PLC0415
+        from pen_plotter.persistence import get_file_record  # noqa: PLC0415
+
+        record = get_file_record(file_id)
+        raw = file_library.read_original_bytes(file_id)
+        if record is None or raw is None:
+            raise HTTPException(status_code=404, detail=f"unknown file_id {file_id!r}")
+        body: AsyncIterator[bytes] = _real_stream(file_id, record, raw)
     else:
         body = _synthetic_stream(layer_count)
     return StreamingResponse(

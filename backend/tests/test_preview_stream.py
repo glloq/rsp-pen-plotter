@@ -67,3 +67,16 @@ async def test_preview_stream_validates_layer_count() -> None:
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/preview/stream?layer_count=0")
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_preview_stream_unknown_file_id_is_a_real_404() -> None:
+    """Regression: the file lookup must run BEFORE the StreamingResponse
+    starts. Previously it lived inside the async generator, so the 200
+    headers were already on the wire and the client saw a broken stream
+    instead of a 404 status."""
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/preview/stream?file_id=no-such-file")
+    assert response.status_code == 404
+    assert "no-such-file" in response.text
