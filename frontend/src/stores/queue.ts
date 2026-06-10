@@ -70,6 +70,16 @@ export const useQueueStore = defineStore('queue', () => {
           }
           lastSeenSkips.set(run.id, current)
         }
+        // Drop bookkeeping for runs that have left the queue (completed,
+        // cancelled, deleted) so the Map can't grow unbounded across a
+        // long-lived session — one entry would otherwise linger forever
+        // per run id ever seen.
+        if (lastSeenSkips.size > next.length) {
+          const live = new Set(next.map((r) => r.id))
+          for (const id of lastSeenSkips.keys()) {
+            if (!live.has(id)) lastSeenSkips.delete(id)
+          }
+        }
         primedSkips = true
         runs.value = next
         error.value = null

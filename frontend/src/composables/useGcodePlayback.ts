@@ -16,7 +16,7 @@
 // The composable owns its own RAF handle and registers an
 // ``onBeforeUnmount`` cleanup so the caller doesn't have to remember.
 
-import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
+import { onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
 import { parseGcode, type ParseOptions, type SimResult } from '../lib/gcode'
 
 export interface PlaybackInputs {
@@ -55,7 +55,14 @@ export interface PlaybackHandle {
  * preset row (1× / 5× / 100×); the original component opens at 5×.
  */
 export function useGcodePlayback(inputs: PlaybackInputs): PlaybackHandle {
-  const sim = ref<SimResult | null>(null)
+  // ``shallowRef`` on purpose: a parsed plot can hold tens of thousands
+  // of ``SimSegment`` objects. A plain ``ref`` would wrap every segment
+  // (and every field within) in a reactive Proxy — doubling memory and
+  // routing each ``seg.x0`` read in the canvas hot loop through a getter.
+  // The result is only ever replaced wholesale in ``reparse``, never
+  // mutated field-by-field, so shallow reactivity (trigger on
+  // reassignment only) is both correct and far cheaper.
+  const sim = shallowRef<SimResult | null>(null)
   const playing = ref(false)
   const simTime = ref(0)
   const speed = ref(5)
