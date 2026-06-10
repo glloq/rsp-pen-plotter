@@ -662,6 +662,7 @@ export const useJobStore = defineStore('job', () => {
         signal,
         penWidthsFor(p),
         inkColorsFor(p),
+        { width_mm: p.width_mm, height_mm: p.height_mm },
       )
       return { svg: result.svg, warnings: result.warnings ?? [] }
     } catch (err) {
@@ -698,6 +699,7 @@ export const useJobStore = defineStore('job', () => {
         signal,
         penWidthsFor(p),
         inkColorsFor(p),
+        { width_mm: p.width_mm, height_mm: p.height_mm },
       )
       return { svg: result.svg, warnings: result.warnings ?? [] }
     } catch (err) {
@@ -863,6 +865,7 @@ export const useJobStore = defineStore('job', () => {
         controller.signal,
         penWidthsFor(p),
         inkColorsFor(p),
+        { width_mm: p.width_mm, height_mm: p.height_mm },
       )
       if (controller.signal.aborted) return
       // patchPlacement already invalidates the cached outputs for the new SVG.

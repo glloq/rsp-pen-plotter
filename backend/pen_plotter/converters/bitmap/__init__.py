@@ -425,6 +425,7 @@ class BitmapConverter(Converter):
         per_layer_overrides: dict[str, dict[str, Any]] | None = None,
         layer_stroke_widths: dict[str, float] | None = None,
         layer_ink_colors: dict[str, str] | None = None,
+        px_per_mm: float | None = None,
         n_workers: int = 1,
         progress_callback: Any = None,
     ) -> tuple[str, list[str]]:
@@ -444,6 +445,7 @@ class BitmapConverter(Converter):
             per_layer_overrides=per_layer_overrides,
             layer_stroke_widths=layer_stroke_widths,
             layer_ink_colors=layer_ink_colors,
+            px_per_mm=px_per_mm,
             n_workers=n_workers,
             progress_callback=progress_callback,
         )

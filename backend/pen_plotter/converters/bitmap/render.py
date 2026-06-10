@@ -27,6 +27,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from pen_plotter.converters.algorithms import get_algorithm
+from pen_plotter.converters.algorithms._style import A4_LONG_SIDE_MM, convert_mm_options
 
 from .cache import SegmentationResult
 from .segment import _REC709
@@ -148,6 +149,7 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     per_layer_overrides: dict[str, dict[str, Any]] | None = None,
     layer_stroke_widths: dict[str, float] | None = None,
     layer_ink_colors: dict[str, str] | None = None,
+    px_per_mm: float | None = None,
     n_workers: int = 1,
     progress_callback: ProgressCallback | None = None,
 ) -> tuple[str, list[str]]:
@@ -157,6 +159,14 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     dict with ``algorithm`` and/or ``algorithm_options`` keys, swapping
     in a different algorithm just for that layer. Layers without an
     override fall back to ``algorithm`` + ``algorithm_options``.
+
+    ``px_per_mm`` is the raster scale of the placement's physical
+    footprint (raster pixels per plotted millimetre). Every ``*_mm``
+    option — top-level, override or pass — is converted into its
+    ``*_px`` twin at this scale before reaching the algorithms, so a
+    millimetre knob keeps the same on-paper pitch whatever page format
+    the drawing is placed on. ``None`` falls back to mapping the
+    raster's long side onto an A4 long side (297 mm).
 
     ``layer_ink_colors`` maps a layer label to the actual ink hex the
     layer should be rendered with — the operator's assigned colour from
@@ -176,6 +186,13 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
     overrides = per_layer_overrides or {}
     stroke_widths = layer_stroke_widths or {}
     ink_colors = layer_ink_colors or {}
+    raster_h, raster_w = seg.labels.shape
+    scale_px_per_mm = (
+        px_per_mm
+        if px_per_mm is not None and px_per_mm > 0
+        else max(raster_w, raster_h) / A4_LONG_SIDE_MM
+    )
+    algorithm_options = convert_mm_options(algorithm_options, scale_px_per_mm)
     warnings: list[str] = []
     # (mask, color_hex, ink_hex, label, algo_name, algo_options, passes)
     # Local type alias; uppercase matches the convention for type
@@ -212,9 +229,31 @@ def render_from_segmentation(  # noqa: C901 — sequential vs parallel branches
         # group so the layer is drawn with multiple visual effects
         # (e.g. contours + crosshatch fill) using a single ink.
         passes_raw = override.get("passes") or []
-        passes: list[dict[str, Any]] | None = list(passes_raw) if passes_raw else None
+        # Millimetre → raster-pixel conversion for pass options; the
+        # top-level ``algorithm_options`` were converted once above and
+        # per-layer override options get converted just below.
+        passes: list[dict[str, Any]] | None = (
+            [
+                {
+                    **p,
+                    "algorithm_options": convert_mm_options(
+                        p.get("algorithm_options"), scale_px_per_mm
+                    ),
+                }
+                if isinstance(p, dict)
+                else p
+                for p in passes_raw
+            ]
+            if passes_raw
+            else None
+        )
         algo_name = override.get("algorithm") or algorithm
-        algo_options = override.get("algorithm_options") or algorithm_options
+        override_options = override.get("algorithm_options")
+        algo_options = (
+            convert_mm_options(override_options, scale_px_per_mm)
+            if override_options
+            else algorithm_options
+        )
         # Tone-aware algorithms (``tone_aware`` ClassVar — tonal spiral,
         # ridge lines, string art, …) modulate their geometry from the
         # per-pixel luminance map, so they render as one continuous,

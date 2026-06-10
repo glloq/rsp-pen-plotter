@@ -206,6 +206,10 @@ describe('EditModalV2 (beginner single-screen)', () => {
     await new Promise((resolve) => setTimeout(resolve, 400))
     await flushPromises()
     expect(vi.mocked(rerenderJob).mock.calls.length).toBeGreaterThanOrEqual(1)
+    // The physical footprint rides along so millimetre options
+    // (spacing_mm, …) convert to the right raster pitch server-side.
+    const lastCall = vi.mocked(rerenderJob).mock.calls.at(-1)!
+    expect(lastCall[5]).toMatchObject({ width_mm: 420, height_mm: 420 })
   })
 
   it('exposes zoom controls and updates the zoom level on click', async () => {

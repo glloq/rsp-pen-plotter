@@ -97,6 +97,15 @@ class RerenderRequest(BaseModel):
     # be drawn instead of the segmentation centroid. Omitted layers fall
     # back to the cluster's source colour (legacy behaviour).
     layer_ink_colors: dict[str, str] = Field(default_factory=dict)
+    # Physical footprint (mm) the rendered drawing will occupy on the
+    # sheet. Used to derive the raster's px-per-mm scale so millimetre
+    # algorithm options (``spacing_mm``, ``cell_size_mm``, …) keep the
+    # same on-paper pitch whatever page format the operator picked —
+    # a bigger page gets proportionally more lines, not the same
+    # geometry scaled up. Omitted → the A4 reference fallback applies
+    # (see ``convert_mm_options``).
+    target_width_mm: float | None = Field(default=None, gt=0)
+    target_height_mm: float | None = Field(default=None, gt=0)
 
 
 class RerenderResponse(BaseModel):
@@ -135,8 +144,7 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
                     "reason": reason,
                     "job_id": request.job_id,
                     "message": (
-                        f"No cached segmentation for job {request.job_id!r}; "
-                        "re-upload to refresh."
+                        f"No cached segmentation for job {request.job_id!r}; re-upload to refresh."
                     ),
                 },
             )
@@ -168,6 +176,14 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
         _maybe_reseg_for_line_art_overrides, entry, request.job_id, overrides
     )
 
+    # Raster scale of the placement footprint: compare long sides so an
+    # operator-stretched placement (aspect drifted from the raster's)
+    # still yields a sane uniform scale for the mm-option conversion.
+    px_per_mm: float | None = None
+    if request.target_width_mm and request.target_height_mm:
+        raster_h, raster_w = entry.segmentation.labels.shape
+        px_per_mm = max(raster_w, raster_h) / max(request.target_width_mm, request.target_height_mm)
+
     try:
         # Rendering is synchronous geometry/raster work — keep it off the
         # event loop for the same reason as the rehydration above.
@@ -178,6 +194,7 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
             per_layer_overrides=overrides,
             layer_stroke_widths=request.layer_stroke_widths,
             layer_ink_colors=request.layer_ink_colors,
+            px_per_mm=px_per_mm,
         )
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -217,20 +234,30 @@ def _maybe_reseg_for_line_art_overrides(
     needs_resegment = False
     for spec in overrides.values():
         algo = spec.get("algorithm")
-        if isinstance(algo, str) and pick_effective_segmentation(
-            algorithm=algo,
-            mono_ink_color=cached_opts.mono_ink_color,
-            segmentation_method=cached_opts.segmentation_method,
-        ) == "otsu" and cached_opts.segmentation_method != "otsu":
+        if (
+            isinstance(algo, str)
+            and pick_effective_segmentation(
+                algorithm=algo,
+                mono_ink_color=cached_opts.mono_ink_color,
+                segmentation_method=cached_opts.segmentation_method,
+            )
+            == "otsu"
+            and cached_opts.segmentation_method != "otsu"
+        ):
             needs_resegment = True
             break
         for sub in spec.get("passes", []) or []:
             sub_algo = sub.get("algorithm") if isinstance(sub, dict) else None
-            if isinstance(sub_algo, str) and pick_effective_segmentation(
-                algorithm=sub_algo,
-                mono_ink_color=cached_opts.mono_ink_color,
-                segmentation_method=cached_opts.segmentation_method,
-            ) == "otsu" and cached_opts.segmentation_method != "otsu":
+            if (
+                isinstance(sub_algo, str)
+                and pick_effective_segmentation(
+                    algorithm=sub_algo,
+                    mono_ink_color=cached_opts.mono_ink_color,
+                    segmentation_method=cached_opts.segmentation_method,
+                )
+                == "otsu"
+                and cached_opts.segmentation_method != "otsu"
+            ):
                 needs_resegment = True
                 break
         if needs_resegment:

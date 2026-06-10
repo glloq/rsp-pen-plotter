@@ -57,16 +57,17 @@ def test_bitmap_photo_balanced_picks_crosshatch() -> None:
 
 def test_bitmap_photo_quality_picks_double_crosshatch() -> None:
     d = resolve(_input(goal=Goal.QUALITY))
-    # Quality is now a two-pass fine crosshatch (45° + 15°, pitch 3 px)
-    # — strictly denser than the BALANCED single crosshatch at pitch 4.
+    # Quality is now a two-pass fine crosshatch (45° + 15°, pitch 1.1 mm)
+    # — strictly denser than the BALANCED single crosshatch at 1.5 mm.
     # The old single stippling pass read as sparser/worse than balanced.
+    # Spacing is physical (mm) so the pitch holds across page formats.
     assert d.default_algorithm == "crosshatch"
     assert d.quality_tier is QualityTier.FINAL
-    assert d.default_options["spacing_px"] == 3
+    assert d.default_options["spacing_mm"] == 1.1
     assert [p["algorithm"] for p in d.default_passes] == ["crosshatch", "crosshatch"]
     assert d.default_passes[0]["algorithm_options"]["angle_deg"] == 45
     assert d.default_passes[1]["algorithm_options"]["angle_deg"] == 15
-    assert all(p["algorithm_options"]["spacing_px"] == 3 for p in d.default_passes)
+    assert all(p["algorithm_options"]["spacing_mm"] == 1.1 for p in d.default_passes)
 
 
 # ── Matrix branches — Section B: bitmap_illustration ─────────────────
