@@ -64,7 +64,7 @@ export type AlgorithmsManifest = z.infer<typeof AlgorithmsManifestSchema>
  * changes in a way the UI needs to adapt to.
  */
 export const SUPPORTED_MANIFEST_VERSION: Record<string, number> = {
-  algorithms: 1,
+  algorithms: 5,
   system: 1,
 }
 
