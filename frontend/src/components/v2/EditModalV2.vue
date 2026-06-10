@@ -251,6 +251,35 @@ async function rerenderOnly(): Promise<void> {
 // responsive.
 watch(customStyles, () => void rerenderOnly(), { deep: true })
 
+// Physical size → render coupling. The /rerender payload carries each
+// layer's pen tip width converted into viewBox units from the
+// placement's mm size (``penWidthsFor``); that's what adapts stroke
+// thickness and floors the fill spacing to the real pen on paper.
+// Changing the sheet format refits the placement (SheetPicker →
+// ``fitSelectedPlacementToSheet``), so the render must re-run at the
+// new size — without this watcher the preview showed the exact same
+// drawing on A6 and A2 even though the physical result differs.
+// Debounced so a quick A6→A5→A4 click run renders once; the
+// AbortController inside ``rerenderOnly`` cancels stale renders.
+let sizeRerenderTimer: number | null = null
+watch(
+  () => [job.selectedPlacement?.width_mm ?? 0, job.selectedPlacement?.height_mm ?? 0] as const,
+  ([w, h], [prevW, prevH]) => {
+    // Sub-0.01 mm deltas are float noise from centring math, not an
+    // operator action — skip so the watcher can't ping-pong.
+    if (Math.abs(w - prevW) < 0.01 && Math.abs(h - prevH) < 0.01) return
+    if (!decision.value) return
+    if (sizeRerenderTimer !== null) window.clearTimeout(sizeRerenderTimer)
+    sizeRerenderTimer = window.setTimeout(() => {
+      sizeRerenderTimer = null
+      void rerenderOnly()
+    }, 300)
+  },
+)
+onBeforeUnmount(() => {
+  if (sizeRerenderTimer !== null) window.clearTimeout(sizeRerenderTimer)
+})
+
 function selectGoal(g: Goal): void {
   if (goal.value === g && decision.value) return
   goal.value = g
