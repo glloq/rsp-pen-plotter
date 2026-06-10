@@ -11,6 +11,7 @@
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useEstimatedProgress } from '../../composables/useEstimatedProgress'
 import { useProgressiveStream } from '../../composables/useProgressiveStream'
 import { useJobStore } from '../../stores/job'
 
@@ -67,6 +68,12 @@ const props = defineProps<{
    *  uploaded picture vs. the conversion. Optional; when omitted
    *  the pane falls back to ``originalSvg``. */
   sourceImageUrl?: string | null
+  /** Expected /preview latency in ms for the active algorithm ×
+   *  quality (from ``usePreviewCostEstimator``). Drives the estimated
+   *  progress bar in the loading overlay; when the SSE stream reports
+   *  real per-layer percents too, the bar shows whichever is further
+   *  along. Optional — omitted falls back to a generic estimate. */
+  estimateMs?: number | null
 }>()
 
 const { t } = useI18n()
@@ -427,6 +434,22 @@ const streamLabel = computed<string>(() => {
 })
 const streamPercent = computed<number>(() => stream.percent.value ?? 0)
 const streamActive = computed<boolean>(() => Boolean(stream.active.value))
+
+// Estimated determinate progress — always available while loading,
+// even when no SSE stream can run (draft previews without a library
+// file id, single-band mono renders whose stream would tick 0→100 in
+// one step). When the stream *is* reporting, the bar shows whichever
+// of the two is further along so real layer ticks can only move it
+// forward, never backwards.
+const estimatedProgress = useEstimatedProgress(
+  () => props.loading,
+  () => props.estimateMs ?? 0,
+)
+const displayPercent = computed<number>(() =>
+  streamActive.value
+    ? Math.max(streamPercent.value, estimatedProgress.percent.value)
+    : estimatedProgress.percent.value,
+)
 </script>
 
 <template>
@@ -631,24 +654,26 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
         <span class="spinner" aria-hidden="true" />
         <span class="preview-overlay__label">
           {{ t('v2.modal.previewLoading') }}
+          <span class="preview-overlay__percent" data-test="modal-v2-preview-percent">
+            {{ displayPercent }} %
+          </span>
           <span v-if="streamActive && streamLabel" class="preview-overlay__layer">
             · {{ streamLabel }}
           </span>
         </span>
-        <!-- SSE progress bar: only shown when the stream is actually
-             active. The percent comes straight from the backend
-             ``progress`` events, so it tracks real pipeline state, not
-             a fake loading animation. -->
+        <!-- Progress bar: estimated fill from the cost-estimator EMA
+             (per algorithm × quality), advanced by the SSE stream's
+             real per-layer percent when one is active. Always visible
+             while a preview is computing. -->
         <div
-          v-if="streamActive"
           class="preview-overlay__bar"
           role="progressbar"
-          :aria-valuenow="streamPercent"
+          :aria-valuenow="displayPercent"
           aria-valuemin="0"
           aria-valuemax="100"
           data-test="modal-v2-preview-progress"
         >
-          <div class="preview-overlay__bar-fill" :style="{ width: `${streamPercent}%` }" />
+          <div class="preview-overlay__bar-fill" :style="{ width: `${displayPercent}%` }" />
         </div>
       </div>
       <p v-if="error" class="preview-error" data-test="modal-v2-preview-error">
@@ -896,6 +921,12 @@ const streamActive = computed<boolean>(() => Boolean(stream.active.value))
   color: #34d399;
   font-family: ui-monospace, Menlo, monospace;
   font-size: 0.75rem;
+}
+.preview-overlay__percent {
+  color: #94a3b8;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
 }
 .preview-overlay__bar {
   width: min(100%, 240px);

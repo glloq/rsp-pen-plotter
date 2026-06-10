@@ -34,6 +34,9 @@ import { useUiModeStore } from '../../stores/uiMode'
 import { useJobStore } from '../../stores/job'
 import { usePlotterStore } from '../../stores/plotter'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
+import { useEditState } from '../../composables/useEditState'
+import { useAlgorithmsStore } from '../../stores/algorithms'
+import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimator'
 import { useFileManager } from '../../composables/useFileManager'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayersSection from '../LayersSection.vue'
@@ -663,6 +666,29 @@ const effectivePreviewLoading = computed<boolean>(
   () => expertPreviewLoading.value || previewLoading.value,
 )
 
+// Expected latency of the in-flight /preview for the active algorithm
+// × quality tier — the EMA the cost estimator maintains from past
+// ``elapsed_ms`` observations. Drives the determinate progress bar in
+// EditPreviewPane's loading overlay.
+const editState = useEditState()
+const costEstimator = usePreviewCostEstimator()
+const algorithmsCatalog = useAlgorithmsStore()
+const previewEstimateMs = computed<number>(() => {
+  // Touch the samples ref so a fresh EMA observation re-evaluates the
+  // estimate for the *next* run.
+  void costEstimator.samples.value
+  const algo = bitmapDraft.bitmap.value.algorithm
+  // Manifest complexity seeds the estimate before the first real
+  // observation — a 'high' algorithm (string_art, reaction_diffusion)
+  // starts near its real cost instead of the generic medium seed.
+  const complexity = algorithmsCatalog.byId.get(algo)?.complexity as
+    | 'low'
+    | 'medium'
+    | 'high'
+    | undefined
+  return costEstimator.estimateMs(algo, editState.previewQuality.value, complexity)
+})
+
 // =========================================================================
 // Source image URL — fed to EditPreviewPane's "Original" and "Compare"
 // modes so the operator sees the actual uploaded photo (PNG / JPG /
@@ -984,6 +1010,7 @@ watch(
               :loading="effectivePreviewLoading"
               :error="previewError"
               :sheet="sheetOutline"
+              :estimate-ms="previewEstimateMs"
               :stream-file-id="job.selectedPlacement?.library_file_id ?? null"
               :artwork-width-mm="job.selectedPlacement?.width_mm ?? null"
               :artwork-height-mm="job.selectedPlacement?.height_mm ?? null"
