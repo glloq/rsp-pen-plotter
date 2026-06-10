@@ -31,7 +31,7 @@ recipes live in the [`wiki/`](../wiki/Home.md) folder instead.
 | --- | --- |
 | [architecture.md](architecture.md) | System layers, the SVG-pivot pipeline, module map |
 | [api_reference.md](api_reference.md) | Every REST endpoint and the WebSocket message shape |
-| [converters.md](converters.md) | Supported input formats and the 27+ raster algorithms |
+| [converters.md](converters.md) | Supported input formats and the 51 registered raster algorithms (47 visible) |
 | [adding_a_converter.md](adding_a_converter.md) | How to add support for a new input format |
 | [profile_format.md](profile_format.md) | Machine profile YAML schema and the bundled examples |
 | [hardware_streaming.md](hardware_streaming.md) | Serial transport, the G-code streamer, EBB, templates |

@@ -114,10 +114,15 @@ for the wiring.
 
 The backend is a single-process FastAPI app. Inside:
 
-- a thread pool for blocking subprocess calls (LibreOffice, Ghostscript,
-  potrace)
+- a thread pool for CPU-heavy request handlers — upload/convert,
+  rerender, optimize, analyze, generate, preflight and the system git
+  subprocess all run via `run_in_threadpool`, so a long conversion never
+  blocks the event loop (and the blocking subprocess calls to
+  LibreOffice, Ghostscript and potrace ride along in those workers)
 - an asyncio event loop for everything else (HTTP, WebSocket, serial)
-- a single background task for the persistent queue worker
+- a single background task for the persistent queue worker, which
+  throttles its SQLite progress checkpoints (every 50 lines / 2 s plus
+  on every stream-state flip) so a per-`ok` fsync never lands on the loop
 - a single background task for the SLO evaluator (when enabled)
 
 There is no shared lock for *placements* — the operator owns them

@@ -19,7 +19,7 @@ algorithm](Picking-the-Right-Algorithm.md)).
 | `.jpg` `.jpeg` | `image/jpeg` | Most common photo format |
 | `.tiff` | `image/tiff` | Multi-layer not supported — first layer only |
 | `.webp` | `image/webp` | Lossy and lossless variants both work |
-| `.heic` `.heif` | `image/heic`, `image/heif` | iPhone photos (`pillow-heif`) |
+| `.heic` | `image/heic` | iPhone photos (`pillow-heif`). The picker lists `.heic` only — rename a `.heif` (the backend converter accepts both MIMEs over the API) |
 
 → [Bitmaps in detail](File-Type-Bitmaps.md)
 
@@ -58,24 +58,25 @@ native dependencies (Cairo, Pango).
 
 → [Text in detail](File-Type-Text.md)
 
-## Raw G-code → direct send
+## Raw G-code → API only
 
-| Extension | Notes |
-| --- | --- |
-| `.gcode` `.nc` `.tap` | Bypasses the pipeline; streamed straight to the queue |
-
-The dialect must match the active machine profile — there's no
-translation. Useful for vector art exported from external CAM (e.g. ploterifs
-output from `vpype write`).
+Raw G-code is **not an upload type** — the picker doesn't accept `.gcode`
+files and the converter pipeline has nothing to convert. Hand the program
+to the backend directly: `POST /queue` (durable, resumable) or
+`POST /plotter/run` (immediate), each with a `gcode` string in the body.
+The dialect must match the target machine profile — there's no
+translation.
 
 → [Raw G-code in detail](File-Type-Gcode.md)
 
-## Format autodetection
+## Format detection
 
-OmniPlot trusts the file extension *and* the magic-byte sniff (Python's
-`mimetypes` + a small lookup table for HEIC, DXF and EPS). If the two
-disagree, the magic-byte sniff wins. Unknown types are rejected at upload
-time with a 415 — there's no silent fallback.
+OmniPlot resolves the format from the **client-supplied `Content-Type`
+header**, falling back to the filename extension (Python's `mimetypes`)
+when the header is missing or `application/octet-stream`. There is **no
+magic-byte sniffing** — a mislabelled file is routed by its claimed type.
+Unknown types are rejected at upload time with a 415 — there's no silent
+fallback.
 
 ## What about format X?
 

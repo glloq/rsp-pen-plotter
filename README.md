@@ -63,12 +63,12 @@ with `./start.sh`. Full install / config reference:
 
 | Category | Extensions | Notes |
 | --- | --- | --- |
-| **Bitmaps** | `.png` `.jpg` `.jpeg` `.tiff` `.webp` `.heic` `.heif` | Vectorised via potrace, stippling, hatching, halftone, flow imager. K-means colour separation. |
+| **Bitmaps** | `.png` `.jpg` `.jpeg` `.tiff` `.webp` `.heic` | 47 raster algorithms in the editor — potrace vectorisation, stippling, hatching, halftone, flowfield and more. K-means colour separation. |
 | **Vectors** | `.svg` | Pass-through. Layers map to pen slots, attributes (`stroke`, `fill`) preserved. |
 | **CAD / print** | `.pdf` `.dxf` `.eps` `.ps` `.ai` | Per-page PDF selection. DXF `TEXT`/`MTEXT` rendered with Hershey single-stroke fonts. Embedded rasters re-vectorised inline. |
 | **Documents** | `.docx` `.odt` `.rtf` `.html` | Office docs via headless LibreOffice → PDF; HTML via WeasyPrint. |
 | **Text** | `.txt` `.md` | Hershey fonts; Markdown headings become font sizes. |
-| **Raw G-code** | `.gcode` `.nc` | Direct send / queue, no transformation. |
+| **Raw G-code** | API only | `POST /queue` or `POST /plotter/run` with a `gcode` string — no transformation, no file upload. |
 
 If your plotter has a documented G-code dialect, it's supported — write a
 YAML profile, no code changes needed. See
@@ -173,7 +173,7 @@ Any other plotter works as long as its G-code dialect is documented.
 End-to-end working: full conversion pipeline, colour separation, G-code
 generation, simulator, plotter connection, durable queue, audit trail,
 profile editor, presets, macros, optional API-key auth, one-command
-install, systemd auto-start. Backend ships ~145 unit and integration tests.
+install, systemd auto-start. Backend ships 940 unit and integration tests.
 
 See [`docs/ROADMAP_V0.2.md`](docs/ROADMAP_V0.2.md) for what's coming next.
 

@@ -50,8 +50,8 @@ visible entry:
 
 | Budget | Avoid | Prefer |
 | --- | --- | --- |
-| < 5 min on A5 | TSP / flow field / Voronoi stippling | `scanlines`, `halftone`, `direct`, `grid` |
-| 10 – 20 min on A4 | Voronoi / low-poly on big sources | `stippling`, `crosshatch`, `eulerian_hatch` |
+| < 5 min on A5 | TSP / flow field / Voronoi stippling | `scanlines`, `halftone`, `direct`, `truchet` |
+| 10 – 20 min on A4 | Voronoi / low-poly on big sources | `stippling`, `crosshatch` (`joined: true` for fewer pen-lifts) |
 | All night on A2 | (nothing — go wild) | `tsp_opt`, `flowfield`, `circle_pack`, multi-pass stacks |
 
 The editor surfaces the live time estimate. Aim for ~1.5× the simulator's
@@ -73,28 +73,54 @@ The wizard recommends one of these for each (source, goal) pair:
 - **stippling** — density follows tone; portraits, faces, fur
 - **crosshatch** — angled hatches per tonal band; editorial illustrations
 - **halftone** — circles on a regular grid; print-press, comics
-- **flowfield** — strokes follow image gradient; landscapes, atmosphere
+- **flowfield** — tone-aware streamlines follow the image gradient
+  (darker = denser structure); landscapes, atmosphere
 - **direct** (potrace) — pure B/W outlines; logos, line art
 - **edges** — edge-detected silhouettes; line drawings from photos
-- **contours** — equal-tone isolines; maps, topography
+- **concentric_offset** — inward offset rings; maps, topography
 - **scanlines** — modulated raster sweep; minimalist, glitchy
 - **tsp_opt** — single tour through stipple seeds; one continuous stroke
 - **hilbert / gosper** — space-filling curves; geometric / abstract
-- **voronoi_stipple** — weighted stippling with Lloyd relaxation; gallery quality
+- **voronoi_stipple** — tone-aware Lloyd-relaxed stippling, dots pulled
+  toward dark pixels; gallery quality
 - **lowpoly** — Delaunay triangulation of sampled points; geometric portraits
 - **squiggle** — wavy raster sweep; organic feel without per-stroke logic
 - **circle_pack** — non-overlapping circle packing; generative art
+- **etch / dither** — engraving strokes / error-diffusion dots; banknote
+  and retro-print portraits
+- **noise_contours** — tone isolines warped by fractal noise; marbled
+  topography
+- **superpixel_hatch** — per-patch hatching along local orientation;
+  painterly
+- **string_art** — one continuous thread between rim pegs; iconic single-line
+- **text_fill** — repeated single-stroke text as the shading texture;
+  typewriter-art
+
+> **Tone awareness.** Many algorithms (including `flowfield` and
+> `voronoi_stipple` since the audit-fix batch) read the per-pixel luminance
+> map the pipeline injects alongside the mask — dark areas get denser
+> strokes or dots automatically, so the result follows the source image's
+> structure rather than just the region silhouette.
 
 ## Tuning
 
-Each algorithm exposes a small option schema; see `GET /algorithms` for
-the live shape. Common knobs:
+Each algorithm exposes a small option schema; see `GET /algorithms` (or
+the `/manifests/algorithms` manifest) for the live shape. Geometry knobs
+are pixel-based — they apply at segmentation resolution, not in mm.
+Common knobs:
 
-- `density` (most fill algorithms) — 0–100 % of theoretical maximum
-- `angle_deg` (hatching, crosshatch) — primary stroke direction
-- `min_distance_mm` (stippling, Voronoi) — sets effective resolution
-- `step_mm` (scanlines, grid, brick) — raster pitch
-- `iterations` (Voronoi, TSP optimiser) — quality / time tradeoff
+- `density` (stippling, voronoi_stipple, tsp_opt, lowpoly) — fraction of
+  region pixels that become dots / sample points
+- `angle_deg` (crosshatch, halftone, dashes) — primary stroke direction
+- `spacing_px` (crosshatch, scanlines, concentric_offset, moire, …) —
+  raster / hatch pitch
+- `cell_size_px` / `cell_px` (halftone, truchet, and other cell-based
+  patterns) — pattern cell size
+- `dot_radius_px` (stippling, voronoi_stipple) — pen-dot footprint
+- `step_px` (flowfield) — streamline integration step
+- `iterations` (voronoi_stipple) and `method` (tsp_opt) — quality / time
+  tradeoff
+- `seed` (randomised algorithms) — deterministic re-rolls
 
 Defaults are tuned to look reasonable on a Pi-class device in under a few
 seconds.

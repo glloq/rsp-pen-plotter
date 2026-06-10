@@ -16,7 +16,7 @@ the same name.
 | `name` | string | Unique display name; used to look the profile up |
 | `units` | `"mm"` \| `"inch"` | Profile measurement units |
 | `workspace` | object | `{ x_min, y_min, x_max, y_max }` drawable bounds |
-| `origin` | `"top_left"` \| `"bottom_left"` \| `"center"` | Coordinate origin; controls Y direction |
+| `origin` | `"top_left"` \| `"bottom_left"` | Coordinate origin; controls Y direction. Legacy `"center"` is auto-migrated to `"bottom_left"` by a validator (it was only ever treated as a Y-flip), so old profiles keep loading |
 | `gcode_dialect` | `"grbl"` \| `"marlin"` \| `"klipper"` \| `"ebb"` \| `"custom"` | Selects the output generator |
 | `pen_up_command` | string | Raw command emitted to lift the pen |
 | `pen_down_command` | string | Raw command emitted to lower the pen |
@@ -25,11 +25,28 @@ the same name.
 | `drawing_speed_mm_s` | float | Default drawing feed (mm/s) |
 | `travel_speed_mm_s` | float | Pen-up travel feed (mm/s) |
 | `acceleration_mm_s2` | float | Acceleration limit (mm/s²) |
+| `pen_lift_time_ms` | float (default `0.0`) | Time for one pen lift or drop to physically settle. Two transitions happen per drawn polyline, so this feeds the preflight time estimate; `0` = instant. Typical SG90/EBB servos sit around 150–250 ms |
 | `pen_slot_count` | int | Number of physical pen slots |
+| `pens` | list of `PenSlot` \| null | The magazine (see below). When omitted, one default slot per `pen_slot_count` is synthesized |
+| `pen_change_position` | `{ x, y }` \| null | Machine-coordinate park point for *manual* pen swaps / magazine load pauses, so the head clears the drawing. `null` falls back to the workspace home corner (`x_min` / `y_min`); carousel and rack profiles ignore it |
 | `supports_arcs` | bool (default `false`) | Enable G2/G3 arc fitting |
 | `arc_tolerance_mm` | float (default `0.1`) | Max deviation when fitting arcs |
 | `ebb` | `EbbConfig` \| null | Required only when `gcode_dialect: "ebb"` |
 | `capabilities` | `MachineCapabilities` \| null | **v0.2 Capability Model** (see below). Optional; derived from `tool_change_method` when omitted. |
+
+### `PenSlot`
+
+One entry per magazine position:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `index` | int | Slot number, referenced by layer assignments |
+| `name` | string (default `""`) | Operator label |
+| `color` | string (default `"#000000"`) | Ink colour, shown in the palette |
+| `installed` | bool (default `true`) | Whether a pen currently sits in the slot |
+| `position` | `{ x, y }` \| null | Slot coordinates for carousel / rack pickups |
+| `pen_up_command` | string \| null | Per-slot calibration: overrides the profile's pen-up command (e.g. a different servo depth) |
+| `pen_down_command` | string \| null | Per-slot calibration: overrides the profile's pen-down command |
 
 ### `MachineCapabilities` (v0.2, roadmap A.5)
 
@@ -115,6 +132,7 @@ tool_change_command: "M0"
 drawing_speed_mm_s: 60.0
 travel_speed_mm_s: 120.0
 acceleration_mm_s2: 1500.0
+pen_lift_time_ms: 150.0           # SG90 hobby servo settling time
 pen_slot_count: 6
 supports_arcs: true               # GRBL supports G2/G3
 arc_tolerance_mm: 0.1
@@ -135,6 +153,7 @@ tool_change_command: "M0"
 drawing_speed_mm_s: 50.0
 travel_speed_mm_s: 130.0
 acceleration_mm_s2: 1000.0
+pen_lift_time_ms: 250.0    # AxiDraw EBB servo ~250 ms per lift/drop
 pen_slot_count: 1
 ebb:
   steps_per_mm: 80.0

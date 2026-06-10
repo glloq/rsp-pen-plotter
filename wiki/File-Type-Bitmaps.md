@@ -2,23 +2,33 @@
 
 PNG, JPG, TIFF, WebP, HEIC and HEIF — anything Pillow + `pillow-heif` can
 open. OmniPlot doesn't print pixels: it converts the raster to plotter
-strokes via one of the 25+ raster algorithms.
+strokes via one of the 47 visible raster algorithms (51 registered — four
+hidden legacy duplicates).
 
 ## Pre-processing
 
 Before any algorithm runs, the converter:
 
-1. **decodes** the file with Pillow (auto-rotates EXIF orientation)
-2. **caps total pixels** at `MAX_PIXELS` (12 megapixels) — bigger images
-   are downscaled. Plotter resolution is the pen tip, not the source — a
-   24 MP photo gives no extra detail.
-3. **normalises the colour mode** to RGBA so downstream algorithms can
-   reason about transparency
-4. **(optionally) colour-separates** into N pen layers via k-means
+1. **decodes** the file with Pillow (`pillow-heif` registered for
+   HEIC/HEIF) and **normalises the colour mode to RGB**
+2. **rejects oversized images** — anything above `MAX_PIXELS`
+   (16 megapixels) fails with an error asking you to resize the source or
+   split the plot. The guard reads the header only, so a decompression
+   bomb is refused before any RAM is committed. Plotter resolution is the
+   pen tip, not the source — a 24 MP photo gives no extra detail anyway.
+3. **applies the Image-tab adjustments** (crop, rotate, flip, levels,
+   gamma, brightness/contrast, blur/sharpen, auto-contrast)
+4. **downscales** to the segmentation canvas (the detail tier you pick in
+   the SVG tab; 800 px by default)
+5. **(optionally) dithers** — the Floyd–Steinberg dither from the Image
+   tab runs *after* the downscale, at segmentation resolution, so the dot
+   texture survives instead of being averaged away by the resize
+6. **(optionally) colour-separates** into N pen layers via k-means
    (`scikit-learn`)
 
-The MAX_PIXELS cap is a class attribute on `BitmapConverter` if you ever
-need to bump it for an outlier file.
+The `MAX_PIXELS` cap is a module constant in
+`backend/pen_plotter/converters/bitmap/preprocess.py` if you ever need to
+bump it for an outlier file.
 
 ## Choosing the algorithm
 
@@ -26,9 +36,14 @@ See [Picking the right algorithm](Picking-the-Right-Algorithm.md). The
 short version:
 
 - **photo, shaded** → `stippling`, `crosshatch`, `halftone`, `flowfield`
+- **photo, engraving / retro print** → `etch`, `dither`, `text_fill`
+- **photo, organic** → `phyllotaxis`, `superpixel_hatch`,
+  `reaction_diffusion`, `noise_contours`
 - **logo, line art** → `direct` (potrace)
 - **technical drawing** → `edges` or `centerline`
-- **decorative / generative** → `truchet`, `brick`, `voronoi_stipple`
+- **one continuous stroke** → `tsp_opt`, `hilbert`, `spiral`, `string_art`
+- **decorative / generative** → `truchet`, `brick`, `voronoi_stipple`,
+  `maze`, `penrose`, `lsystem`, `chladni`
 
 ## Colour separation
 
