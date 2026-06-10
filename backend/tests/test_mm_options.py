@@ -11,13 +11,17 @@ scaled up.
 
 from __future__ import annotations
 
+import io
+import json
+
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from pen_plotter.api import rerender as rerender_module
 from pen_plotter.converters.algorithms._style import convert_mm_options
-from pen_plotter.converters.bitmap import BitmapOptions, SegmentationResult
+from pen_plotter.converters.bitmap import BitmapConverter, BitmapOptions, SegmentationResult
 from pen_plotter.converters.bitmap.render import render_from_segmentation
 from pen_plotter.main import app
 
@@ -140,3 +144,71 @@ def test_rerender_without_target_size_keeps_working(client: TestClient) -> None:
     response = client.post("/rerender", json={"job_id": job_id, "layers": []})
     assert response.status_code == 200
     assert "<svg" in response.json()["svg"]
+
+
+# ── /upload-time footprint stored on BitmapOptions ───────────────────
+
+
+def test_options_target_size_feeds_the_scale_when_request_omits_it() -> None:
+    # /upload and /preview persist the placement footprint on the options;
+    # the classmethod wrapper falls back to it when no explicit px_per_mm
+    # is given — so the very first render is already page-adapted.
+    def render(target_w: float, target_h: float) -> str:
+        opts = BitmapOptions.model_validate(
+            {
+                "algorithm": "scanlines",
+                "drop_background": False,
+                "num_colors": 1,
+                "algorithm_options": {"spacing_mm": 8.0},
+                "target_width_mm": target_w,
+                "target_height_mm": target_h,
+            }
+        )
+        svg, _ = BitmapConverter.render_from_segmentation(_solid_seg(64), opts)
+        return svg
+
+    a6 = render(105, 148)
+    a2 = render(420, 594)
+    assert a2.count("<polyline") > a6.count("<polyline")
+
+
+def _png_bytes(width: int = 48, height: int = 48) -> bytes:
+    image = Image.new("RGB", (width, height), (0, 0, 0))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@pytest.fixture(autouse=True)
+def _reset_preview_cache():
+    from pen_plotter.api import preview as preview_module
+
+    preview_module._cache.clear()
+    yield
+    preview_module._cache.clear()
+
+
+def test_preview_target_size_drives_line_density(client: TestClient) -> None:
+    payload = _png_bytes()
+
+    def line_count(target_w: float, target_h: float) -> int:
+        response = client.post(
+            "/preview",
+            data={
+                "algorithm": "scanlines",
+                "options": json.dumps(
+                    {
+                        "num_colors": 1,
+                        "drop_background": False,
+                        "algorithm_options": {"spacing_mm": 8.0},
+                        "target_width_mm": target_w,
+                        "target_height_mm": target_h,
+                    }
+                ),
+            },
+            files={"file": ("solid.png", payload, "image/png")},
+        )
+        assert response.status_code == 200, response.text
+        return response.json()["svg"].count("<polyline")
+
+    assert line_count(420, 594) > line_count(105, 148)

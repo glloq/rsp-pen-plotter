@@ -179,6 +179,16 @@ class BitmapOptions(BaseModel):
     # the field is safe to omit; the editor's "Image" tab writes the
     # operator's tweaks here. See :class:`PreprocessOptions`.
     preprocess: PreprocessOptions = Field(default_factory=PreprocessOptions)
+    # Physical footprint (mm) the rendered drawing will occupy on the
+    # sheet. Drives the millimetre → raster-pixel conversion of length
+    # options (``spacing_mm``, ``cell_size_mm``, …, see
+    # ``convert_mm_options``) so the on-paper pitch the operator dialled
+    # in survives across page formats from the very first render —
+    # /upload and /preview pass it here, /rerender can override it
+    # per-request when the placement was resized since. ``None`` falls
+    # back to the A4 reference scale.
+    target_width_mm: float | None = Field(default=None, gt=0)
+    target_height_mm: float | None = Field(default=None, gt=0)
 
 
 class BitmapConverter(Converter):
@@ -434,7 +444,16 @@ class BitmapConverter(Converter):
         Thin wrapper around :func:`render.render_from_segmentation`;
         unpacks the relevant fields of :class:`BitmapOptions` so the
         module function can keep a primitive signature.
+
+        ``px_per_mm`` resolution order: the caller's explicit value (the
+        /rerender request, whose placement may have been resized since
+        upload) wins; otherwise the target footprint stored in ``opts``
+        at /upload / /preview time; otherwise ``None`` (the module-level
+        A4 reference fallback applies).
         """
+        if px_per_mm is None and opts.target_width_mm and opts.target_height_mm:
+            raster_h, raster_w = seg.labels.shape
+            px_per_mm = max(raster_w, raster_h) / max(opts.target_width_mm, opts.target_height_mm)
         return render_from_segmentation(
             seg,
             algorithm=opts.algorithm,
