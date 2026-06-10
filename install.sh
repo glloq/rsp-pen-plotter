@@ -97,24 +97,28 @@ install_system_deps() {
 
 install_nodejs() {
   if has node && has npm; then
-    local version
-    version="$(node -p 'process.versions.node.split(".")[0]')"
-    if [ "$version" -ge 20 ]; then
+    # Vite 7 requires ^20.19.0 || >=22.12.0 — npm prints EBADENGINE
+    # warnings on every install when the runtime falls outside that
+    # range, so gate on the same bounds instead of a bare major check.
+    if node -e 'const [maj, min] = process.versions.node.split(".").map(Number); process.exit((maj === 20 && min >= 19) || (maj === 22 && min >= 12) || maj >= 23 ? 0 : 1)' 2>/dev/null; then
       step "Node.js $(node --version) detected"
       return
     fi
-    step "Node.js too old (need 20+), reinstalling via NodeSource"
+    step "Node.js $(node --version) too old (need 20.19+ / 22.12+), reinstalling via NodeSource"
   fi
   if [ -n "${OMNIPLOT_SKIP_NODE:-}" ]; then
-    echo "Error: Node.js 20+ is required (set OMNIPLOT_SKIP_NODE='' to auto-install)." >&2
+    echo "Error: Node.js 22+ is required (set OMNIPLOT_SKIP_NODE='' to auto-install)." >&2
     exit 1
   fi
   if ! has apt-get || ! has curl; then
-    echo "Error: install Node.js 20+ manually (https://nodejs.org)" >&2
+    echo "Error: install Node.js 22+ manually (https://nodejs.org)" >&2
     exit 1
   fi
-  step "Installing Node.js 20 via NodeSource"
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo_run -E bash -
+  # Node 20 reached end-of-life in April 2026; NodeSource's setup_20.x
+  # script warns loudly about it on every fresh install. Track the
+  # active LTS instead.
+  step "Installing Node.js 22 via NodeSource"
+  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo_run -E bash -
   sudo_run apt-get install -y nodejs
 }
 
@@ -181,11 +185,16 @@ install_frontend() {
     exit 1
   fi
 
+  # --no-fund / --no-audit: installer output is read by operators (and
+  # surfaced verbatim in the UI's update log); funding pitches and audit
+  # advisories are developer-time concerns, not install-time ones, and
+  # they read like warnings about a broken install when nothing is wrong.
+  local npm_flags=(--no-fund --no-audit)
   local npm_status=0
   if [ -f package-lock.json ]; then
-    npm ci || npm_status=$?
+    npm ci "${npm_flags[@]}" || npm_status=$?
   else
-    npm install || npm_status=$?
+    npm install "${npm_flags[@]}" || npm_status=$?
   fi
   if [ "$npm_status" -ne 0 ]; then
     echo "Error: npm install failed (exit $npm_status)." >&2

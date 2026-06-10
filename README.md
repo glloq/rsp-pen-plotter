@@ -45,7 +45,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/glloq/rsp-pen-plotter/main/b
 Then open `http://<pi-ip>:8000` from any device on your network. That's it.
 
 What the installer does: apt packages (`potrace`, `ghostscript`,
-`libreoffice-writer`), Node.js 20, the `uv` Python toolchain, builds the
+`libreoffice-writer`), Node.js 22, the `uv` Python toolchain, builds the
 frontend, and (with `--service`) enables a `systemd` unit that auto-starts on
 boot and adds the user to the `dialout` group for USB serial access.
 
