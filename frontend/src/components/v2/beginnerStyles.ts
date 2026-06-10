@@ -13,11 +13,19 @@
 // /rerender pipeline. The primary knob's ``optionKey`` is the registry
 // schema key the slider writes to; the unused options keep their backend
 // defaults from ``printRegistry.ts``.
+//
+// Length knobs are expressed in MILLIMETRES (``spacing_mm``,
+// ``cell_size_mm``, ``max_radius_mm``): the backend converts them to
+// raster pixels per placement (``convert_mm_options``) using the
+// physical footprint shipped with each /rerender, so the on-paper pitch
+// the operator dialled in stays constant across page formats — a bigger
+// sheet gets proportionally more lines instead of the same drawing
+// scaled up. Dimensionless knobs (``density``, ``rays``) stay as-is.
 
 import type { AlgorithmId } from '../../data/printRegistry'
 
 export interface BeginnerStyleKnob {
-  /** Registry option key the slider writes to (e.g. ``spacing_px``). */
+  /** Registry option key the slider writes to (e.g. ``spacing_mm``). */
   optionKey: string
   /** i18n key for the knob's user-facing label. */
   labelKey: string
@@ -137,13 +145,13 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
     labelKey: 'v2.style.crosshatch',
     descriptionKey: 'v2.style.descCrosshatch',
     primaryKnob: {
-      optionKey: 'spacing_px',
+      optionKey: 'spacing_mm',
       labelKey: 'convert.spacing',
-      min: 1,
-      max: 30,
-      step: 0.5,
-      default: 4,
-      unit: 'px',
+      min: 0.5,
+      max: 10,
+      step: 0.1,
+      default: 1.5,
+      unit: 'mm',
     },
   },
   {
@@ -153,13 +161,13 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
     labelKey: 'v2.style.scanlines',
     descriptionKey: 'v2.style.descScanlines',
     primaryKnob: {
-      optionKey: 'spacing_px',
+      optionKey: 'spacing_mm',
       labelKey: 'convert.spacing',
-      min: 1,
-      max: 30,
-      step: 0.5,
-      default: 4,
-      unit: 'px',
+      min: 0.5,
+      max: 10,
+      step: 0.1,
+      default: 1.5,
+      unit: 'mm',
     },
   },
   {
@@ -199,13 +207,13 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
     labelKey: 'v2.style.halftone',
     descriptionKey: 'v2.style.descHalftone',
     primaryKnob: {
-      optionKey: 'cell_size_px',
+      optionKey: 'cell_size_mm',
       labelKey: 'convert.cellSize',
-      min: 1,
-      max: 64,
-      step: 1,
-      default: 6,
-      unit: 'px',
+      min: 0.5,
+      max: 20,
+      step: 0.1,
+      default: 2.2,
+      unit: 'mm',
     },
   },
   {
@@ -215,13 +223,13 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
     labelKey: 'v2.style.grid',
     descriptionKey: 'v2.style.descGrid',
     primaryKnob: {
-      optionKey: 'spacing_px',
+      optionKey: 'spacing_mm',
       labelKey: 'convert.spacing',
-      min: 1,
-      max: 30,
-      step: 0.5,
-      default: 6,
-      unit: 'px',
+      min: 0.5,
+      max: 10,
+      step: 0.1,
+      default: 2.2,
+      unit: 'mm',
     },
   },
   {
@@ -231,13 +239,13 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
     labelKey: 'v2.style.spiral',
     descriptionKey: 'v2.style.descSpiral',
     primaryKnob: {
-      optionKey: 'spacing_px',
+      optionKey: 'spacing_mm',
       labelKey: 'convert.spacing',
-      min: 1,
-      max: 30,
-      step: 0.5,
-      default: 4,
-      unit: 'px',
+      min: 0.5,
+      max: 10,
+      step: 0.1,
+      default: 1.5,
+      unit: 'mm',
     },
   },
   {
@@ -247,13 +255,13 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
     labelKey: 'v2.style.rings',
     descriptionKey: 'v2.style.descRings',
     primaryKnob: {
-      optionKey: 'spacing_px',
+      optionKey: 'spacing_mm',
       labelKey: 'convert.spacing',
-      min: 1,
-      max: 30,
-      step: 0.5,
-      default: 6,
-      unit: 'px',
+      min: 0.5,
+      max: 10,
+      step: 0.1,
+      default: 2.2,
+      unit: 'mm',
     },
   },
   {
@@ -278,13 +286,13 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
     labelKey: 'v2.style.circlePack',
     descriptionKey: 'v2.style.descCirclePack',
     primaryKnob: {
-      optionKey: 'max_radius_px',
+      optionKey: 'max_radius_mm',
       labelKey: 'convert.maxRadius',
-      min: 1,
-      max: 40,
-      step: 0.5,
-      default: 7,
-      unit: 'px',
+      min: 0.5,
+      max: 15,
+      step: 0.1,
+      default: 2.6,
+      unit: 'mm',
     },
   },
   {
@@ -294,13 +302,13 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
     labelKey: 'v2.style.scribble',
     descriptionKey: 'v2.style.descScribble',
     primaryKnob: {
-      optionKey: 'spacing_px',
+      optionKey: 'spacing_mm',
       labelKey: 'convert.spacing',
-      min: 1,
-      max: 30,
-      step: 0.5,
-      default: 4,
-      unit: 'px',
+      min: 0.5,
+      max: 10,
+      step: 0.1,
+      default: 1.5,
+      unit: 'mm',
     },
   },
   {
@@ -310,13 +318,13 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
     labelKey: 'v2.style.squiggle',
     descriptionKey: 'v2.style.descSquiggle',
     primaryKnob: {
-      optionKey: 'spacing_px',
+      optionKey: 'spacing_mm',
       labelKey: 'convert.spacing',
-      min: 1,
-      max: 30,
-      step: 0.5,
-      default: 4,
-      unit: 'px',
+      min: 0.5,
+      max: 10,
+      step: 0.1,
+      default: 1.5,
+      unit: 'mm',
     },
   },
 ]

@@ -5,9 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createI18n } from 'vue-i18n'
 
-vi.mock('../../api/client', () => ({ api: { post: vi.fn(), get: vi.fn() } }))
+vi.mock('../../api/client', () => ({
+  api: { post: vi.fn(), get: vi.fn() },
+  // The job store's preview / rerender paths import this wrapper
+  // directly (not via ``api.post``), so the mock must provide it for
+  // the size→render coupling test below.
+  rerenderJob: vi.fn(),
+}))
 
-import { api } from '../../api/client'
+import { api, rerenderJob } from '../../api/client'
 import { clearAlgorithmPolicyCache } from '../../domain/policy/client'
 import EditModalV2 from './EditModalV2.vue'
 
@@ -80,6 +86,8 @@ describe('EditModalV2 (beginner single-screen)', () => {
     window.localStorage.clear()
     vi.mocked(api.post).mockReset()
     vi.mocked(api.post).mockResolvedValue({ data: validDecision })
+    vi.mocked(rerenderJob).mockReset()
+    vi.mocked(rerenderJob).mockResolvedValue({ svg: '<svg/>', warnings: [] })
     // The resolver client memoises identical inputs across calls so the
     // editor doesn't re-pay the network round-trip on every open; tests
     // share inputs across cases, so clear it to keep ``api.post`` call
@@ -144,6 +152,64 @@ describe('EditModalV2 (beginner single-screen)', () => {
       '/policy/resolve',
       expect.objectContaining({ palette_mode: 'free' }),
     )
+  })
+
+  it('re-renders at the new physical size when the sheet format changes', async () => {
+    // A rerenderable placement: the size→render watcher and the sheet
+    // refit both need job_id + svg + layers to fire /rerender.
+    const { useJobStore } = await import('../../stores/job')
+    const job = useJobStore()
+    const id = job.addEmptyPlacement()
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            job_id: 'job-1',
+            rerenderable: true,
+            source_file: 'photo.jpg',
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>',
+            layers: [
+              {
+                layer_id: 'color-112233',
+                source_color: '#112233',
+                target_pen_slot: null,
+                draw_order: 0,
+                total_length_mm: 100,
+                path_count: 1,
+                bbox: { x_min: 0, y_min: 0, x_max: 100, y_max: 100 },
+                optimize: true,
+                simplify_tolerance_mm: 0,
+                drawing_speed_mm_s: null,
+                color_label: null,
+                pause_before: 'auto',
+                assigned_color_hex: null,
+                color_assignment: 'auto',
+              },
+            ],
+          }
+        : p,
+    )
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    vi.mocked(rerenderJob).mockClear()
+
+    await wrapper.find('[data-test="sheet-preset-A2"]').trigger('click')
+    // The placement is refit to the new page (100×100 → 420×420 on A2
+    // portrait 420×594, centred).
+    const p = job.selectedPlacement!
+    expect(p.width_mm).toBeCloseTo(420)
+    expect(p.height_mm).toBeCloseTo(420)
+
+    // The size→render watcher is debounced (300 ms) and the store's
+    // committed-SVG rerender at 250 ms; wait past both, then the new
+    // physical size must have triggered at least one /rerender.
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    await flushPromises()
+    expect(vi.mocked(rerenderJob).mock.calls.length).toBeGreaterThanOrEqual(1)
+    // The physical footprint rides along so millimetre options
+    // (spacing_mm, …) convert to the right raster pitch server-side.
+    const lastCall = vi.mocked(rerenderJob).mock.calls.at(-1)!
+    expect(lastCall[5]).toMatchObject({ width_mm: 420, height_mm: 420 })
   })
 
   it('exposes zoom controls and updates the zoom level on click', async () => {

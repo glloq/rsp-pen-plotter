@@ -134,6 +134,15 @@ export function useFileManager(t?: Translator, options: UseFileManagerOptions = 
       if (pageCount > 1 && currentPage > 0) {
         opts.page = currentPage
       }
+      // Physical footprint (mm) of the placement so the backend converts
+      // millimetre length options (spacing_mm, cell_size_mm, …) at the
+      // real page scale from the very first render — /preview and the
+      // Apply re-upload both flow through here. Bitmap options only:
+      // the typography pipeline has its own physical sizing (font mm).
+      if (showsBitmapForm.value && placement && placement.width_mm > 0 && placement.height_mm > 0) {
+        opts.target_width_mm = placement.width_mm
+        opts.target_height_mm = placement.height_mm
+      }
     }
     return opts
   }
@@ -390,6 +399,26 @@ export function useFileManager(t?: Translator, options: UseFileManagerOptions = 
         () => {
           if (_selectedFile.value && kind.value === 'bitmap') {
             previewer.schedule({ immediate: true })
+          }
+        },
+      ),
+      // Placement footprint change (sheet-format pick in the editor,
+      // plan-view resize): ``buildOptions`` embeds the physical size as
+      // target_width_mm/height_mm, so the live preview must re-run for
+      // the new scale — millimetre length options (spacing_mm, …)
+      // resolve to a different raster pitch on a different page.
+      // Sub-0.01 mm deltas are float noise from centring math, not an
+      // operator action.
+      watch(
+        () =>
+          [
+            store.selectedPlacement?.width_mm ?? 0,
+            store.selectedPlacement?.height_mm ?? 0,
+          ] as const,
+        ([w, h], [prevW, prevH]) => {
+          if (Math.abs(w - prevW) < 0.01 && Math.abs(h - prevH) < 0.01) return
+          if (_selectedFile.value && kind.value === 'bitmap') {
+            previewer.schedule()
           }
         },
       ),

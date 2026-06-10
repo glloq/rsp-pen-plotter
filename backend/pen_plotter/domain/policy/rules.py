@@ -53,43 +53,50 @@ class _BaseRule:
 # - section E text_typography: Hershey at three intensities
 _MATRIX: dict[tuple[SourceKind, Goal], _BaseRule] = {
     # ── A) bitmap_photo ───────────────────────────────────────────────
+    # Spacing options are expressed in millimetres (converted to raster
+    # pixels per placement at render time, see ``convert_mm_options``)
+    # so the on-paper pitch stays constant across page formats — an A2
+    # print gets proportionally more lines than an A6 one. The mm values
+    # mirror the historical px defaults at the A4 reference scale
+    # (800 px long side / 297 mm ≈ 2.7 px/mm): 5 px ≈ 1.8 mm,
+    # 4 px ≈ 1.5 mm, 3 px ≈ 1.1 mm.
     (SourceKind.BITMAP_PHOTO, Goal.FAST): _BaseRule(
         algorithm="scanlines",
         quality=QualityTier.DRAFT,
         fallback_chain=("halftone",),
-        options={"spacing_px": 5, "wave_amp_px": 0},
+        options={"spacing_mm": 1.8, "wave_amp_px": 0},
         rationale="Photo + objectif rapidité : scanlines en palette fixée.",
     ),
     (SourceKind.BITMAP_PHOTO, Goal.BALANCED): _BaseRule(
         algorithm="crosshatch",
         quality=QualityTier.STANDARD,
         fallback_chain=("scanlines",),
-        options={"spacing_px": 4, "angle_deg": 45, "crossed": True},
+        options={"spacing_mm": 1.5, "angle_deg": 45, "crossed": True},
         rationale="Photo + objectif équilibré : crosshatch à 45°.",
     ),
     (SourceKind.BITMAP_PHOTO, Goal.QUALITY): _BaseRule(
         # Two-pass fine crosshatch: a 45° base layer plus a 15° layer so
         # the result reads as four hatch directions at a tighter pitch
-        # than BALANCED (spacing 3 vs 4, two passes vs one). The old
-        # single stippling pass at density 0.018 was sparser than
+        # than BALANCED (spacing 1.1 vs 1.5 mm, two passes vs one). The
+        # old single stippling pass at density 0.018 was sparser than
         # BALANCED and read as worse, not better (operator report).
         algorithm="crosshatch",
         quality=QualityTier.FINAL,
         fallback_chain=("scanlines",),
-        options={"spacing_px": 3, "angle_deg": 45, "crossed": True},
+        options={"spacing_mm": 1.1, "angle_deg": 45, "crossed": True},
         passes=(
             {
                 "algorithm": "crosshatch",
-                "algorithm_options": {"spacing_px": 3, "angle_deg": 45, "crossed": True},
+                "algorithm_options": {"spacing_mm": 1.1, "angle_deg": 45, "crossed": True},
             },
             {
                 "algorithm": "crosshatch",
-                "algorithm_options": {"spacing_px": 3, "angle_deg": 15, "crossed": True},
+                "algorithm_options": {"spacing_mm": 1.1, "angle_deg": 15, "crossed": True},
             },
         ),
         rationale=(
             "Photo + objectif qualité : double passe crosshatch fine "
-            "(45° + 15°, pitch 3 px) pour un maximum de détail."
+            "(45° + 15°, pitch 1,1 mm) pour un maximum de détail."
         ),
     ),
     # ── B) bitmap_illustration ────────────────────────────────────────
@@ -103,7 +110,7 @@ _MATRIX: dict[tuple[SourceKind, Goal], _BaseRule] = {
         algorithm="contours",
         quality=QualityTier.STANDARD,
         fallback_chain=("direct",),
-        options={"spacing_px": 4, "max_rings": 24},
+        options={"spacing_mm": 1.5, "max_rings": 24},
         rationale="Illustration + équilibré : contours + passe crosshatch.",
     ),
     (SourceKind.BITMAP_ILLUSTRATION, Goal.QUALITY): _BaseRule(

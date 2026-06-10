@@ -455,6 +455,12 @@ export const useJobStore = defineStore('job', () => {
       x_mm: zoneX + (sheet.width_mm - w) / 2,
       y_mm: zoneY + (sheet.height_mm - h) / 2,
     })
+    // The committed SVG bakes stroke widths + fill spacing derived from
+    // the placement's OLD physical size (``penWidthsFor``). Re-render so
+    // the plan view and Generate consume geometry adapted to the new
+    // page — same pen on a bigger sheet means relatively finer, denser
+    // strokes. No-op for placements without a rerender cache.
+    scheduleRerender(250)
   }
 
   // ====== Misc state ====================================================
@@ -656,6 +662,7 @@ export const useJobStore = defineStore('job', () => {
         signal,
         penWidthsFor(p),
         inkColorsFor(p),
+        { width_mm: p.width_mm, height_mm: p.height_mm },
       )
       return { svg: result.svg, warnings: result.warnings ?? [] }
     } catch (err) {
@@ -692,6 +699,7 @@ export const useJobStore = defineStore('job', () => {
         signal,
         penWidthsFor(p),
         inkColorsFor(p),
+        { width_mm: p.width_mm, height_mm: p.height_mm },
       )
       return { svg: result.svg, warnings: result.warnings ?? [] }
     } catch (err) {
@@ -857,6 +865,7 @@ export const useJobStore = defineStore('job', () => {
         controller.signal,
         penWidthsFor(p),
         inkColorsFor(p),
+        { width_mm: p.width_mm, height_mm: p.height_mm },
       )
       if (controller.signal.aborted) return
       // patchPlacement already invalidates the cached outputs for the new SVG.

@@ -649,6 +649,7 @@ export async function rerenderJob(
   signal?: AbortSignal,
   layerStrokeWidths?: Record<string, number>,
   layerInkColors?: Record<string, string>,
+  targetSizeMm?: { width_mm: number; height_mm: number } | null,
 ): Promise<RerenderResponse> {
   const response = await api.post<RerenderResponse>(
     '/rerender',
@@ -663,6 +664,16 @@ export async function rerenderJob(
       // so the rendered SVG shows the colours that will actually be
       // drawn rather than the segmentation centroids.
       ...(layerInkColors ? { layer_ink_colors: layerInkColors } : {}),
+      // Physical footprint (mm) the placement occupies on the sheet so
+      // millimetre algorithm options (spacing_mm, cell_size_mm, …)
+      // convert to the right raster pitch — this is what makes the
+      // page format drive the line density.
+      ...(targetSizeMm && targetSizeMm.width_mm > 0 && targetSizeMm.height_mm > 0
+        ? {
+            target_width_mm: targetSizeMm.width_mm,
+            target_height_mm: targetSizeMm.height_mm,
+          }
+        : {}),
     },
     // No timeout: a heavy multi-pass stack on a high-res placement
     // can take a while. The caller passes ``signal`` so the operator
