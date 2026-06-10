@@ -273,3 +273,46 @@ def test_manifest_carries_hidden_flag() -> None:
     assert by_id["ridge_lines"].hidden is False
     # Every registered algorithm still appears in the manifest.
     assert set(by_id) == {a.name for a in available_algorithms()}
+
+
+# ---------------------------------------------------------------------------
+# Full-pipeline integration: every new algorithm through the real converter
+# ---------------------------------------------------------------------------
+
+
+def _gradient_png(size: int = 100) -> bytes:
+    import io
+
+    import PIL.Image
+
+    yy, xx = np.mgrid[0:size, 0:size]
+    img = (255 * np.clip(np.hypot(xx - size / 2, yy - size / 2) / (size / 2), 0, 1)).astype(
+        np.uint8
+    )
+    img[size // 4 : size // 3, :] = 30
+    buf = io.BytesIO()
+    PIL.Image.fromarray(img, "L").convert("RGB").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("name", NEW_ALGORITHMS)
+def test_new_algorithm_via_full_bitmap_pipeline(name: str) -> None:
+    """segment_and_render must produce ink for every new algorithm.
+
+    This is the path /upload and /preview take — it exercises tone-map
+    injection (``_tone`` for tone_aware algos), option validation and
+    the SVG assembly, none of which the render_layer unit tests touch.
+    """
+    from pen_plotter.converters.bitmap import BitmapConverter
+
+    result, seg = BitmapConverter().segment_and_render(
+        _gradient_png(),
+        options={
+            "algorithm": name,
+            "algorithm_options": dict(_FAST_OPTIONS.get(name, {})),
+            "segmentation_options": {"method": "luminance_bands", "num_bands": 2},
+            "mono_ink_color": "#1d4ed8",
+        },
+    )
+    assert seg.luminance is not None
+    assert _element_count(result.svg) > 0, f"{name} produced no geometry via the pipeline"

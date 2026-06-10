@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ALGORITHMS,
   DEFAULT_MASTER_STYLE_ID,
+  HIDDEN_ALGORITHMS,
   LEGACY_MASTER_ID_MAP,
   PRINT_STYLES,
   defaultsFor,
@@ -9,7 +10,10 @@ import {
   layerStyles,
   masterStyles,
   resolveMasterStyle,
+  type AlgorithmId,
 } from './printRegistry'
+import en from '../locales/en.json'
+import fr from '../locales/fr.json'
 
 // The registry is the single source of truth for all "style" and
 // "algorithm" data the editor uses. These tests pin down the shape
@@ -144,6 +148,33 @@ describe('printRegistry', () => {
     const dark = gosper.bandRecipe!(0, 4)!.algorithm_options as Record<string, number>
     const light = gosper.bandRecipe!(3, 4)!.algorithm_options as Record<string, number>
     expect(dark.order!).toBeGreaterThan(light.order!)
+  })
+
+  it('every visible algorithm is reachable from at least one style preset', () => {
+    // Parity guard: when a new algorithm lands in the backend registry,
+    // it must also get a preset (layer style and/or master) so the
+    // Style surfaces offer it — otherwise it only exists in the raw
+    // per-layer dropdown and operators never discover it.
+    const covered = new Set(PRINT_STYLES.map((s) => s.defaultAlgorithm))
+    for (const id of Object.keys(ALGORITHMS)) {
+      if (HIDDEN_ALGORITHMS.has(id as AlgorithmId)) continue
+      expect(covered, `algorithm ${id} has no style preset`).toContain(id)
+    }
+  })
+
+  it('every style label / description key resolves in both locales', () => {
+    const lookup = (root: Record<string, unknown>, key: string): unknown =>
+      key.split('.').reduce<unknown>((node, part) => {
+        if (node && typeof node === 'object') return (node as Record<string, unknown>)[part]
+        return undefined
+      }, root)
+    for (const s of PRINT_STYLES) {
+      for (const key of [s.labelKey, s.descriptionKey]) {
+        if (!key) continue
+        expect(lookup(en, key), `missing EN i18n key ${key} (style ${s.id})`).toBeTypeOf('string')
+        expect(lookup(fr, key), `missing FR i18n key ${key} (style ${s.id})`).toBeTypeOf('string')
+      }
+    }
   })
 
   it('layerStyles filters by applicableTo', () => {
