@@ -428,6 +428,35 @@ export const useJobStore = defineStore('job', () => {
     })
   }
 
+  // Fit the selected placement inside a sheet zone: uniform scale (aspect
+  // preserved) so the drawing fills the page, then centre it in the zone.
+  // Called by the editor's SheetPicker when the operator changes the paper
+  // format — picking A3 after A5 must rescale the artwork to the new page
+  // instead of leaving it at its old physical size (which only *looked*
+  // right on formats smaller than the artwork, where the preview clamped
+  // it to the sheet).
+  function fitSelectedPlacementToSheet(sheet: {
+    width_mm: number
+    height_mm: number
+    x_mm?: number
+    y_mm?: number
+  }): void {
+    const p = selectedPlacement.value
+    if (!p) return
+    if (p.width_mm <= 0 || p.height_mm <= 0 || sheet.width_mm <= 0 || sheet.height_mm <= 0) return
+    const factor = Math.min(sheet.width_mm / p.width_mm, sheet.height_mm / p.height_mm)
+    const w = p.width_mm * factor
+    const h = p.height_mm * factor
+    const zoneX = Math.max(0, sheet.x_mm ?? 0)
+    const zoneY = Math.max(0, sheet.y_mm ?? 0)
+    patchSelected({
+      width_mm: w,
+      height_mm: h,
+      x_mm: zoneX + (sheet.width_mm - w) / 2,
+      y_mm: zoneY + (sheet.height_mm - h) / 2,
+    })
+  }
+
   // ====== Misc state ====================================================
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -1781,6 +1810,7 @@ export const useJobStore = defineStore('job', () => {
     setDrawing,
     resetDrawing,
     restorePlacementAspect,
+    fitSelectedPlacementToSheet,
     applyLayerAlgorithm,
     applyAlgorithmToAllLayers,
     previewAlgorithmOnAllLayers,

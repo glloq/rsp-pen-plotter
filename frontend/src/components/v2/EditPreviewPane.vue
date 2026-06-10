@@ -217,23 +217,35 @@ const sheetStyle = computed<{ width: string; height: string } | null>(() => {
 // × 297 mm) and barely covers a quarter of A3. Falls back to "fill the
 // sheet" when the artwork's own dimensions aren't known yet (typically
 // during the first /preview round-trip on upload).
-const artworkStyle = computed<{ width: string; height: string } | null>(() => {
+const artworkFraction = computed<{ w: number; h: number } | null>(() => {
   if (!props.sheet) return null
   const sw = props.sheet.widthMm
   const sh = props.sheet.heightMm
   if (!sw || !sh) return null
   const aw = props.artworkWidthMm ?? sw
   const ah = props.artworkHeightMm ?? sh
+  let w = aw / sw
+  let h = ah / sh
+  // Overflow clamp: scale BOTH axes by the same factor so an artwork
+  // bigger than the sheet still keeps its aspect ratio while filling
+  // the page. The previous per-axis ``Math.min(100, …)`` clamp
+  // stretched the drawing whenever the two axes overflowed by
+  // different amounts (e.g. an A4-sized artwork on an A6 sheet).
+  const over = Math.max(w, h)
+  if (over > 1) {
+    w /= over
+    h /= over
+  }
+  return { w, h }
+})
+
+const artworkStyle = computed<{ width: string; height: string } | null>(() => {
   // Express the artwork box as a percentage of the sheet so the inline
   // sheet container (already sized in pixels by ``sheetStyle``) does
-  // the unit conversion for us. Clamp at 100 % so an artwork bigger
-  // than the sheet doesn't bleed into the surrounding pane — instead
-  // it visibly fills the sheet and the rest of the artwork sits behind
-  // the overflow boundary (operator can see the clipping in the
-  // dashed sheet border).
-  const wPct = Math.min(100, (aw / sw) * 100)
-  const hPct = Math.min(100, (ah / sh) * 100)
-  return { width: `${wPct}%`, height: `${hPct}%` }
+  // the unit conversion for us.
+  const f = artworkFraction.value
+  if (!f) return null
+  return { width: `${f.w * 100}%`, height: `${f.h * 100}%` }
 })
 
 // =========================================================================
@@ -288,8 +300,22 @@ watch(viewMode, (next, prev) => {
 // right edge inward to ``splitPercent``; the source SVG is shown only
 // in the complementary left band. Implemented with ``clip-path`` so
 // each half stays at full opacity and stacking is just z-order.
-const splitPlotClip = computed<string>(() => `inset(0 0 0 ${splitPercent.value}%)`)
-const splitSourceClip = computed<string>(() => `inset(0 ${100 - splitPercent.value}% 0 0)`)
+//
+// The handle's ``left`` is a percentage of the SHEET, but the clip
+// paths apply to the artwork layers inside the (top-left anchored,
+// possibly smaller) artwork box — so the handle position has to be
+// converted from sheet space into artwork space before clipping.
+// Without the conversion the visible cut line only tracked the handle
+// when the artwork happened to fill the sheet exactly (oversized
+// drawings on A5/A6); on bigger formats it drifted away from the
+// handle, which read as a broken slider.
+const splitArtworkPercent = computed<number>(() => {
+  const f = artworkFraction.value
+  if (!f || f.w <= 0) return splitPercent.value
+  return Math.max(0, Math.min(100, splitPercent.value / f.w))
+})
+const splitPlotClip = computed<string>(() => `inset(0 0 0 ${splitArtworkPercent.value}%)`)
+const splitSourceClip = computed<string>(() => `inset(0 ${100 - splitArtworkPercent.value}% 0 0)`)
 
 onMounted(() => {
   if (!paneEl.value || typeof ResizeObserver === 'undefined') return

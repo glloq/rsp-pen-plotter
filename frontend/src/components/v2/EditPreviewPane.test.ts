@@ -1,0 +1,125 @@
+// @vitest-environment happy-dom
+import { mount } from '@vue/test-utils'
+import { setActivePinia, createPinia } from 'pinia'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { createI18n } from 'vue-i18n'
+
+import EditPreviewPane, { type SheetOutlineShape } from './EditPreviewPane.vue'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'fr',
+  fallbackLocale: 'fr',
+  messages: {
+    fr: {
+      v2: {
+        modal: {
+          sheetCaptionLabel: 'Feuille',
+          viewPlot: 'Résultat',
+          viewOriginal: 'Original',
+          viewCompare: 'Comparer',
+          previewLoading: 'Mise à jour de l’aperçu…',
+          previewError: 'Aperçu indisponible.',
+          zoomIn: 'Zoom +',
+          zoomOut: 'Zoom −',
+          resetView: 'Recentrer',
+          gestureHint: 'Molette : zoom · Glisser : déplacer',
+        },
+      },
+    },
+  },
+})
+
+// The pane sizes the sheet outline from a ResizeObserver on the preview
+// pane; happy-dom doesn't implement one, so fake an observer that
+// reports a fixed pane size synchronously on observe().
+type ObserverCb = (entries: { contentRect: { width: number; height: number } }[]) => void
+class FakeResizeObserver {
+  private readonly cb: ObserverCb
+  constructor(cb: ObserverCb) {
+    this.cb = cb
+  }
+  observe(): void {
+    this.cb([{ contentRect: { width: 800, height: 600 } }])
+  }
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+const SVG = '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+
+// Portrait A4 sheet.
+const SHEET: SheetOutlineShape = {
+  aspectRatio: 210 / 297,
+  labelW: 210,
+  labelH: 297,
+  isPortrait: true,
+  widthMm: 210,
+  heightMm: 297,
+}
+
+function mountPane(props: Record<string, unknown> = {}) {
+  return mount(EditPreviewPane, {
+    props: {
+      plotSvg: SVG,
+      originalSvg: SVG,
+      loading: false,
+      error: false,
+      sheet: SHEET,
+      ...props,
+    },
+    global: { plugins: [i18n] },
+  })
+}
+
+describe('EditPreviewPane (sheet / artwork geometry)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('sizes the artwork box as artwork_mm / sheet_mm percentages', async () => {
+    const wrapper = mountPane({ artworkWidthMm: 105, artworkHeightMm: 148.5 })
+    await nextTick()
+    const box = wrapper.find<HTMLElement>('[data-test="modal-v2-artwork-box"]')
+    expect(box.exists()).toBe(true)
+    expect(box.element.style.width).toBe('50%')
+    expect(box.element.style.height).toBe('50%')
+  })
+
+  it('clamps an oversized artwork uniformly so its aspect ratio survives', async () => {
+    // 420 × 297 artwork on a 210 × 297 sheet: width overflows 2×, height
+    // fits exactly. A per-axis clamp would yield 100 % × 100 % (stretched);
+    // the uniform clamp keeps the 2:√2 shape → 100 % × 50 %.
+    const wrapper = mountPane({ artworkWidthMm: 420, artworkHeightMm: 297 })
+    await nextTick()
+    const box = wrapper.find<HTMLElement>('[data-test="modal-v2-artwork-box"]')
+    expect(box.element.style.width).toBe('100%')
+    expect(box.element.style.height).toBe('50%')
+  })
+
+  it('maps the compare-slider position from sheet space into artwork space', async () => {
+    // Artwork covers the left 50 % of the sheet. The handle starts at
+    // 50 % of the SHEET — i.e. exactly the artwork's right edge — so the
+    // plot layer must be clipped at 100 % of the ARTWORK box, not 50 %.
+    const wrapper = mountPane({ artworkWidthMm: 105, artworkHeightMm: 148.5 })
+    await nextTick()
+    await wrapper.find('[data-test="modal-v2-mode-split"]').trigger('click')
+    const plot = wrapper.find<HTMLElement>('[data-test="modal-v2-preview-svg"]')
+    expect(plot.element.style.clipPath).toBe('inset(0 0 0 100%)')
+    const source = wrapper.find<HTMLElement>('[data-test="modal-v2-preview-source"]')
+    expect(source.element.style.clipPath).toBe('inset(0 0% 0 0)')
+  })
+
+  it('keeps the 1:1 sheet↔artwork mapping when the artwork fills the sheet', async () => {
+    const wrapper = mountPane({ artworkWidthMm: 210, artworkHeightMm: 297 })
+    await nextTick()
+    await wrapper.find('[data-test="modal-v2-mode-split"]').trigger('click')
+    const plot = wrapper.find<HTMLElement>('[data-test="modal-v2-preview-svg"]')
+    expect(plot.element.style.clipPath).toBe('inset(0 0 0 50%)')
+  })
+})
