@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getAlgorithm, resolveMasterStyle, type SegmentationMethod } from '../../../data/printRegistry'
+import {
+  getAlgorithm,
+  resolveMasterStyle,
+  type SegmentationMethod,
+} from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { useJobStore } from '../../../stores/job'
@@ -78,6 +82,15 @@ const advancedMode = computed({
 // ---- Per-style knob accessors ----
 const knobs = computed(() => draft.getMonoStyleKnobs(props.styleId))
 
+// Trailing-edge throttle for the layer propagation below. A slider
+// drag emits one @input per pixel; patching every layer's
+// ``layer_algorithms`` on each of those floods the store with writes
+// while the knob itself (``draft.setMonoKnob``) already gives the
+// operator immediate visual feedback. One propagation ~120ms after
+// the last input event is enough for /rerender consistency.
+const KNOB_PROPAGATION_DELAY_MS = 120
+let knobPropagationTimer: ReturnType<typeof setTimeout> | null = null
+
 function setKnob<K extends string>(key: K, value: unknown): void {
   // The composable's setMonoKnob is generic over keyof MonoStyleKnobs;
   // widening here keeps the template terse while every call site
@@ -89,11 +102,15 @@ function setKnob<K extends string>(key: K, value: unknown): void {
   // ``band_recipes`` from current knobs on every call; ``layer_algorithms``
   // would otherwise stay frozen on the values captured at upload time.
   if (store.layers.length > 0) {
-    void applyMasterStyleToLayers(store, {
-      styleId: props.styleId,
-      penSlot: draft.monoPenSlot.value,
-      recipeResolver: (index, total) => draft.monoRecipeForBand(index, total),
-    })
+    if (knobPropagationTimer !== null) clearTimeout(knobPropagationTimer)
+    knobPropagationTimer = setTimeout(() => {
+      knobPropagationTimer = null
+      void applyMasterStyleToLayers(store, {
+        styleId: props.styleId,
+        penSlot: draft.monoPenSlot.value,
+        recipeResolver: (index, total) => draft.monoRecipeForBand(index, total),
+      })
+    }, KNOB_PROPAGATION_DELAY_MS)
   }
 }
 

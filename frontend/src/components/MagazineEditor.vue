@@ -20,6 +20,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { MachineProfile, PenSlot, Point } from '../api/client'
 import { useAvailableColorsStore } from '../stores/availableColors'
+import { canonicalHex } from '../lib/penWidth'
 import { useJobStore } from '../stores/job'
 import { defaultPen, normalizePens } from '../composables/useProfileDraft'
 import ColorPicker from './ColorPicker.vue'
@@ -97,22 +98,10 @@ const showsCalibration = computed(
     profile.value?.tool_change_method === 'rack',
 )
 
-function canonicaliseHex(value: string): string {
-  const trimmed = value.trim().replace(/^#/, '').toLowerCase()
-  if (/^[0-9a-f]{3}$/.test(trimmed)) {
-    return `#${trimmed
-      .split('')
-      .map((c) => c + c)
-      .join('')}`
-  }
-  if (/^[0-9a-f]{6}$/.test(trimmed)) return `#${trimmed}`
-  return value
-}
-
 function matchAvailable(hex: string): string {
   // Return the canonical hex if it lives in the inventory, otherwise
   // the empty string so the select shows the "custom" sentinel option.
-  const canon = canonicaliseHex(hex)
+  const canon = canonicalHex(hex)
   return availableColors.ordered.find((c) => c.hex === canon)?.hex ?? ''
 }
 

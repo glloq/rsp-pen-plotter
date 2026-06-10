@@ -94,6 +94,84 @@ describe('multi-pass helpers', () => {
     expect(rerenderJob).not.toHaveBeenCalled()
   })
 
+  it('applyLayerPasses keeps disabled passes in state (non-destructive hide)', async () => {
+    const store = useJobStore()
+    store.placements = [makePlacement()]
+    store.selectPlacement('p1')
+
+    const stack: LayerPass[] = [
+      { ...PASSES[0]!, enabled: false },
+      { ...PASSES[1]! },
+    ]
+    await store.applyLayerPasses('a', stack)
+
+    const spec = store.placements[0]!.layer_algorithms.a!
+    // Both passes persist — the hidden one carries enabled: false.
+    expect(spec.passes).toHaveLength(2)
+    expect(spec.passes![0]!.enabled).toBe(false)
+    expect(spec.passes![1]!.enabled).toBeUndefined()
+    // Legacy mirror fields reflect the first ENABLED pass.
+    expect(spec.algorithm_options.angle_deg).toBe(15)
+  })
+
+  it('re-enabling a disabled pass restores it without re-picking the algorithm', async () => {
+    const store = useJobStore()
+    store.placements = [makePlacement()]
+    store.selectPlacement('p1')
+
+    await store.applyLayerPasses('a', [{ ...PASSES[0]!, enabled: false }, { ...PASSES[1]! }])
+    const kept = store.placements[0]!.layer_algorithms.a!.passes!
+    await store.applyLayerPasses(
+      'a',
+      kept.map((p) => ({ ...p, enabled: true })),
+    )
+
+    const spec = store.placements[0]!.layer_algorithms.a!
+    expect(spec.passes).toHaveLength(2)
+    expect(spec.passes!.every((p) => p.enabled !== false)).toBe(true)
+    expect(spec.algorithm_options.angle_deg).toBe(45)
+  })
+
+  it('triggerRerender strips disabled passes from the backend payload', async () => {
+    rerenderJob.mockResolvedValue({ svg: '<svg id="r2"/>', warnings: [] })
+    const store = useJobStore()
+    store.placements = [makePlacement()]
+    store.selectPlacement('p1')
+
+    await store.applyLayerPasses('a', [{ ...PASSES[0]!, enabled: false }, { ...PASSES[1]! }])
+    await store.flushRerender()
+
+    expect(rerenderJob).toHaveBeenCalled()
+    const [, layersPayload] = rerenderJob.mock.calls.at(-1)!
+    const entry = (layersPayload as { layer_id: string; passes?: LayerPass[] }[]).find(
+      (l) => l.layer_id === 'a',
+    )
+    expect(entry).toBeDefined()
+    expect(entry!.passes).toHaveLength(1)
+    expect(entry!.passes![0]!.algorithm_options.angle_deg).toBe(15)
+    // The wire shape never carries the UI-only flag.
+    expect('enabled' in entry!.passes![0]!).toBe(false)
+  })
+
+  it('an all-disabled stack sends no override for that layer', async () => {
+    rerenderJob.mockResolvedValue({ svg: '<svg id="r3"/>', warnings: [] })
+    const store = useJobStore()
+    store.placements = [makePlacement()]
+    store.selectPlacement('p1')
+
+    await store.applyLayerPasses('a', [
+      { ...PASSES[0]!, enabled: false },
+      { ...PASSES[1]!, enabled: false },
+    ])
+    await store.flushRerender()
+
+    const [, layersPayload] = rerenderJob.mock.calls.at(-1)!
+    const ids = (layersPayload as { layer_id: string }[]).map((l) => l.layer_id)
+    expect(ids).not.toContain('a')
+    // State still holds the stack so the operator can re-enable.
+    expect(store.placements[0]!.layer_algorithms.a!.passes).toHaveLength(2)
+  })
+
   it('applyPassesToAllLayers writes the pass stack to every layer', async () => {
     const store = useJobStore()
     store.placements = [makePlacement()]

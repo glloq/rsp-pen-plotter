@@ -22,6 +22,7 @@ import {
   uploadFile,
   type BoundingBox,
   type Job,
+  type LayerAlgorithmOverride,
   type LayerInfo,
   type MachineProfile,
   type Preset,
@@ -29,13 +30,19 @@ import {
   type ToolpathMetrics,
 } from '../api/client'
 import { buildComposite } from '../lib/composite'
-import { layerStrokeWidthsPx, mmPerViewBoxUnit, strokeWidthMmByHex } from '../lib/penWidth'
+import {
+  canonicalHex,
+  layerStrokeWidthsPx,
+  mmPerViewBoxUnit,
+  strokeWidthMmByHex,
+} from '../lib/penWidth'
 import { nearestPoolHex } from '../lib/nearestColor'
 import { resolveEffectivePalette } from '../lib/effectivePalette'
 import { usePaletteSourceStore } from './paletteSource'
 import { useAvailableColorsStore } from './availableColors'
 import { buildPrintPlan } from '../domain/plan-builder'
 import { buildTypographyPlan } from '../composables/useBitmapDraft'
+import { isTextSource } from '../composables/useTypographyDraft'
 import type { PrintPlan } from '../domain/print-plan'
 import {
   PipelineAbortedError,
@@ -50,23 +57,14 @@ const DEFAULT_SPEED_MM_S = 60
 // ``visiblePlacements`` together walk every layer of every placement on each
 // invalidation; recomputing two regex tests + string allocations per layer
 // shows up on the Pi when the operator drags a slider. The map is bounded so
-// it can't grow unbounded across long sessions.
-const HEX3_RE = /^[0-9a-f]{3}$/
-const HEX6_RE = /^[0-9a-f]{6}$/
+// it can't grow unbounded across long sessions. The actual normalisation is
+// the shared ``canonicalHex`` from lib/penWidth — this wrapper only memoizes.
 const _canonHexCache = new Map<string, string>()
 const CANON_HEX_CACHE_MAX = 256
 function canonHexMemo(value: string): string {
   const cached = _canonHexCache.get(value)
   if (cached !== undefined) return cached
-  const trimmed = value.trim().replace(/^#/, '').toLowerCase()
-  let result: string
-  if (HEX3_RE.test(trimmed)) {
-    result = `#${trimmed[0]}${trimmed[0]}${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}`
-  } else if (HEX6_RE.test(trimmed)) {
-    result = `#${trimmed}`
-  } else {
-    result = value
-  }
+  const result = canonicalHex(value)
   if (_canonHexCache.size >= CANON_HEX_CACHE_MAX) {
     const oldest = _canonHexCache.keys().next().value
     if (oldest !== undefined) _canonHexCache.delete(oldest)
@@ -84,6 +82,16 @@ function canonHexMemo(value: string): string {
 export interface LayerPass {
   algorithm: string
   algorithm_options: Record<string, unknown>
+  // Non-destructive visibility toggle (the eye in LayerPassStack).
+  // ``false`` keeps the pass in the stack — so the operator can A/B and
+  // re-enable it — but strips it from the /rerender payload so the
+  // backend never draws it. Missing / ``true`` → enabled.
+  enabled?: boolean
+}
+
+/** Passes that actually ship to the backend: ``enabled !== false``. */
+export function enabledPasses(passes: readonly LayerPass[]): LayerPass[] {
+  return passes.filter((pass) => pass.enabled !== false)
 }
 
 export interface LayerAlgorithm {
@@ -638,10 +646,12 @@ export const useJobStore = defineStore('job', () => {
     signal?: AbortSignal,
   ): Promise<{ svg: string; warnings: string[] } | null> {
     const p = selectedPlacement.value
-    if (!p || !p.job_id || !p.rerenderable || !p.layers.length || !passes.length) return null
+    if (!p || !p.job_id || !p.rerenderable || !p.layers.length) return null
+    const active = enabledPasses(passes)
+    if (!active.length) return null
     const layersPayload = p.layers.map((layer) => ({
       layer_id: layer.layer_id,
-      passes: passes.map((pass) => ({
+      passes: active.map((pass) => ({
         algorithm: pass.algorithm,
         algorithm_options: { ...pass.algorithm_options },
       })),
@@ -670,9 +680,9 @@ export const useJobStore = defineStore('job', () => {
   async function applyPassesToAllLayers(passes: readonly LayerPass[]): Promise<void> {
     const p = selectedPlacement.value
     if (!p || !passes.length) return
-    const first = passes[0]!
+    const first = enabledPasses(passes)[0] ?? passes[0]!
     const stack = passes.map((pass) => ({
-      algorithm: pass.algorithm,
+      ...pass,
       algorithm_options: { ...pass.algorithm_options },
     }))
     const next: Record<string, LayerAlgorithm> = {}
@@ -727,6 +737,9 @@ export const useJobStore = defineStore('job', () => {
   // of algorithms (with options) drawn against the same colour mask. The
   // first pass plots first, the last on top — order is preserved in the
   // toolpath. An empty list clears the override (same as clearLayerAlgorithm).
+  // Disabled passes (``enabled === false``) are KEPT in state — they're a
+  // non-destructive A/B toggle — and only stripped when building the
+  // /rerender payload (see triggerRerender).
   async function applyLayerPasses(layerId: string, passes: LayerPass[]): Promise<void> {
     const p = selectedPlacement.value
     if (!p) return
@@ -734,20 +747,22 @@ export const useJobStore = defineStore('job', () => {
       await clearLayerAlgorithm(layerId)
       return
     }
-    // Mirror the first pass into the legacy algorithm/options fields so
-    // existing UI that reads ``layer_algorithms[id].algorithm`` (e.g.
-    // PrintStylePicker highlighting) still surfaces the dominant pass.
-    const first = passes[0]!
+    // Mirror the first enabled pass into the legacy algorithm/options
+    // fields so existing UI that reads ``layer_algorithms[id].algorithm``
+    // (e.g. PrintStylePicker highlighting) still surfaces the dominant
+    // pass. Fall back to the first pass when everything is disabled.
+    const first = enabledPasses(passes)[0] ?? passes[0]!
     patchSelected({
       layer_algorithms: {
         ...p.layer_algorithms,
         [layerId]: {
           algorithm: first.algorithm,
           algorithm_options: { ...first.algorithm_options },
-          passes: passes.map((pass) => ({
-            algorithm: pass.algorithm,
-            algorithm_options: { ...pass.algorithm_options },
-          })),
+          // Share the pass objects (no deep copy) so LayerPassStack's
+          // per-row WeakMap keys stay stable across the emit → store →
+          // props round-trip; the component never mutates a pass in
+          // place (every edit builds a fresh object).
+          passes: [...passes],
         },
       },
     })
@@ -775,25 +790,38 @@ export const useJobStore = defineStore('job', () => {
     const perf = usePerfStore()
     const tStart = performance.now()
     try {
-      const layersPayload = Object.entries(p.layer_algorithms).map(([layer_id, spec]) => {
-        // Multi-pass stack: send ``passes`` so the backend stacks the
-        // algorithms; the legacy single-algorithm fields stay populated
-        // for back-compat but the backend prefers ``passes`` when set.
-        if (spec.passes && spec.passes.length) {
-          return {
-            layer_id,
-            passes: spec.passes.map((p) => ({
-              algorithm: p.algorithm,
-              algorithm_options: p.algorithm_options,
-            })),
+      const layersPayload = Object.entries(p.layer_algorithms).flatMap(
+        ([layer_id, spec]): LayerAlgorithmOverride[] => {
+          // Multi-pass stack: send ``passes`` so the backend stacks the
+          // algorithms; the legacy single-algorithm fields stay populated
+          // for back-compat but the backend prefers ``passes`` when set.
+          // Disabled passes are a non-destructive UI toggle — they stay in
+          // state but never ship to the backend. A stack whose passes are
+          // ALL disabled sends no override at all, so the layer falls back
+          // to its default conversion (same as a cleared stack) while the
+          // operator can still re-enable any pass.
+          if (spec.passes && spec.passes.length) {
+            const active = enabledPasses(spec.passes)
+            if (!active.length) return []
+            return [
+              {
+                layer_id,
+                passes: active.map((p) => ({
+                  algorithm: p.algorithm,
+                  algorithm_options: p.algorithm_options,
+                })),
+              },
+            ]
           }
-        }
-        return {
-          layer_id,
-          algorithm: spec.algorithm,
-          algorithm_options: spec.algorithm_options,
-        }
-      })
+          return [
+            {
+              layer_id,
+              algorithm: spec.algorithm,
+              algorithm_options: spec.algorithm_options,
+            },
+          ]
+        },
+      )
       const result = await rerenderJob(
         p.job_id,
         layersPayload,
@@ -1356,6 +1384,10 @@ export const useJobStore = defineStore('job', () => {
   // the library entry that backs this placement keeps the originally
   // uploaded bytes, only the rendered SVG / layers change here.
   async function changePage(page: number): Promise<void> {
+    // Single-flight guard (same as upload): a double-click on the page
+    // chevrons would otherwise race two /upload round-trips against the
+    // same placement and interleave their patches.
+    if (loading.value) return
     const p = selectedPlacement.value
     if (!p) return
     // ``last_file`` is only populated in-memory after a fresh /upload
@@ -1513,7 +1545,10 @@ export const useJobStore = defineStore('job', () => {
     // the library bytes — no re-upload needed when the operator
     // tweaks the font. See ``buildTypographyPlan`` for the
     // single-draft limitation acknowledged in this iteration.
-    const textPlacement = ready.find((p) => p.source_mime)
+    // ``isTextSource`` (not "any mime") so a mixed scene (image + text)
+    // attaches the typography plan to the actual text placement instead
+    // of silently dropping it because the first placement was a raster.
+    const textPlacement = ready.find((p) => isTextSource(p.source_mime))
     const typography = buildTypographyPlan(textPlacement?.source_mime)
     return buildPrintPlan({
       svg: result.svg,
@@ -1565,7 +1600,11 @@ export const useJobStore = defineStore('job', () => {
     // didn't make it into the toolpath.
     await flushRerender()
 
-    const ready = placements.value.some((p) => p.svg && p.layers.length)
+    // Mirror buildPlanPayload's filter: library drafts never reach the
+    // plan, so they must not count toward readiness either — otherwise a
+    // drafts-only scene passes the gate and the pipeline errors out on a
+    // null plan.
+    const ready = placements.value.some((p) => !p.is_library_draft && p.svg && p.layers.length)
     if (!ready) {
       generating.value = false
       return

@@ -26,6 +26,9 @@ const props = withDefaults(
   {
     step: 1,
     unit: '',
+    // ``fmt`` below falls back to step-derived decimals when no
+    // formatter is provided.
+    format: undefined,
   },
 )
 

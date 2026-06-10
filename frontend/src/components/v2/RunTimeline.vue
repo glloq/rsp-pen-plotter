@@ -8,25 +8,28 @@
 // component to display the active run on a dashboard.
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { PrintRun, RunState } from '../../api/client'
 
 const props = defineProps<{
   run: PrintRun
 }>()
 
+const { t } = useI18n()
+
 interface Phase {
   key: RunState
-  label: string
+  labelKey: string
 }
 
 // Canonical positive path. Failure / cancel render as separate
 // status pills at the right instead of being inlined here so the
 // timeline still reads left-to-right.
 const PHASES: Phase[] = [
-  { key: 'queued', label: 'En file' },
-  { key: 'running', label: 'En cours' },
-  { key: 'paused', label: 'Pause' },
-  { key: 'completed', label: 'Terminé' },
+  { key: 'queued', labelKey: 'v2.run.phaseQueued' },
+  { key: 'running', labelKey: 'v2.run.phaseRunning' },
+  { key: 'paused', labelKey: 'v2.run.phasePaused' },
+  { key: 'completed', labelKey: 'v2.run.phaseCompleted' },
 ]
 
 const reachedIndex = computed<number>(() => {
@@ -44,8 +47,8 @@ const progressPercent = computed<number>(() => {
 })
 
 const terminalBadge = computed<{ label: string; cls: string } | null>(() => {
-  if (props.run.state === 'failed') return { label: 'Échec', cls: 'failed' }
-  if (props.run.state === 'canceled') return { label: 'Annulé', cls: 'canceled' }
+  if (props.run.state === 'failed') return { label: t('v2.run.badgeFailed'), cls: 'failed' }
+  if (props.run.state === 'canceled') return { label: t('v2.run.badgeCanceled'), cls: 'canceled' }
   return null
 })
 </script>
@@ -64,7 +67,7 @@ const terminalBadge = computed<{ label: string; cls: string } | null>(() => {
       </span>
     </header>
 
-    <ol class="phases" aria-label="Run lifecycle">
+    <ol class="phases" :aria-label="t('v2.run.lifecycleAria')">
       <li
         v-for="(phase, i) in PHASES"
         :key="phase.key"
@@ -77,7 +80,7 @@ const terminalBadge = computed<{ label: string; cls: string } | null>(() => {
         :data-test="`phase-${phase.key}`"
       >
         <span class="dot" />
-        <span class="label">{{ phase.label }}</span>
+        <span class="label">{{ t(phase.labelKey) }}</span>
       </li>
     </ol>
 
@@ -86,7 +89,13 @@ const terminalBadge = computed<{ label: string; cls: string } | null>(() => {
         <div class="fill" :style="{ width: `${progressPercent}%` }" />
       </div>
       <span class="meta">
-        {{ run.acked_lines }} / {{ run.total_lines }} lignes ({{ progressPercent }} %)
+        {{
+          t('v2.run.linesProgress', {
+            acked: run.acked_lines,
+            total: run.total_lines,
+            percent: progressPercent,
+          })
+        }}
       </span>
     </div>
 

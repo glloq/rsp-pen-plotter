@@ -14,23 +14,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAvailableColorsStore } from '../stores/availableColors'
-import { parsePenWidthMm } from '../lib/penWidth'
+// ``canonicalHex`` matches the backend's normalisation so the dedup
+// check below treats ``#ABC`` and ``#aabbcc`` as the same entry.
+import { canonicalHex, parsePenWidthMm } from '../lib/penWidth'
 import ColorPicker from './ColorPicker.vue'
 import MagazineEditor from './MagazineEditor.vue'
-
-function canonicaliseHex(value: string): string {
-  // Match the backend's normalisation so the dedup check below treats
-  // ``#ABC`` and ``#aabbcc`` as the same entry.
-  const trimmed = value.trim().replace(/^#/, '').toLowerCase()
-  if (/^[0-9a-f]{3}$/.test(trimmed)) {
-    return `#${trimmed
-      .split('')
-      .map((c) => c + c)
-      .join('')}`
-  }
-  if (/^[0-9a-f]{6}$/.test(trimmed)) return `#${trimmed}`
-  return value
-}
 
 const { t } = useI18n()
 const store = useAvailableColorsStore()
@@ -52,7 +40,7 @@ const ordered = computed(() => store.ordered)
 // inventory — used to disable the Add button + show a heads-up so the
 // idempotent backend POST doesn't silently mutate the existing row.
 const duplicate = computed(() => {
-  const canon = canonicaliseHex(newHex.value)
+  const canon = canonicalHex(newHex.value)
   return ordered.value.find((c) => c.hex === canon) ?? null
 })
 

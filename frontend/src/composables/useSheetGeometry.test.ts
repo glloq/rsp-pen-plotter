@@ -176,6 +176,41 @@ describe('useSheetGeometry renderedPlacements', () => {
   })
 })
 
+describe('useSheetGeometry stroke-width restyle cache', () => {
+  function makeStrokedSvg(paths: number): string {
+    const body = Array.from(
+      { length: paths },
+      (_, i) => `<path stroke="#ff0000" d="M${i} 0 L${i} 1"/>`,
+    ).join('')
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">${body}</svg>`
+  }
+
+  it('recomputes the styled SVG when /rerender swaps the SVG at the same size + inventory', () => {
+    // Regression: the styled cache used to be keyed only by
+    // mmPerUnit|inventory-signature, so a /rerender that replaced
+    // placement.svg without changing size or pen widths kept serving the
+    // stale styled output — the canvas showed the pre-rerender drawing
+    // whenever stroke widths existed.
+    const placements = ref<readonly Placement[]>([
+      makePlacement({ id: 'p1', svg: makeStrokedSvg(2) }),
+    ])
+    const inputs = {
+      ...makeInputs({ profile: makeProfile() }),
+      placements,
+      strokeWidthMm: ref(new Map([['#ff0000', 0.5]])),
+    }
+    const g = useSheetGeometry(inputs)
+    const before = g.renderedPlacements.value[0]!.cleanSvg
+    expect((before.match(/<path/g) ?? []).length).toBe(2)
+
+    // Same id, same size, same inventory — only the SVG content changes.
+    placements.value = [makePlacement({ id: 'p1', svg: makeStrokedSvg(5) })]
+    const after = g.renderedPlacements.value[0]!.cleanSvg
+    expect((after.match(/<path/g) ?? []).length).toBe(5)
+    expect(after).not.toBe(before)
+  })
+})
+
 describe('useSheetGeometry grid', () => {
   it('emits cm labels at every 50mm step', () => {
     const g = useSheetGeometry(makeInputs({ profile: makeProfile() }))

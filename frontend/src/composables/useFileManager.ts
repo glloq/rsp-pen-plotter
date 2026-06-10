@@ -78,8 +78,21 @@ let _previewer: ReturnType<typeof usePreviewScheduler> | null = null
 // args-object) without pulling vue-i18n's type tree into this file.
 export type Translator = (key: string, args?: Record<string, unknown>) => string
 
+export interface UseFileManagerOptions {
+  /**
+   * Only the modal-level owner of the preview lifecycle should pass
+   * ``owner: true``. The owner cancels any in-flight /preview when it
+   * unmounts (modal closed → nothing on screen needs the result).
+   * Non-owner consumers (the tabs inside the modal) must NOT cancel on
+   * unmount: a tab switch tears the tab down while the modal — and the
+   * shared singleton previewer — is still alive, and cancelling there
+   * aborted the preview the next tab was waiting on.
+   */
+  owner?: boolean
+}
+
 // ---- Public composable ----
-export function useFileManager(t?: Translator) {
+export function useFileManager(t?: Translator, options: UseFileManagerOptions = {}) {
   const store = useJobStore()
   const ui = useUiStore()
   const draft = useBitmapDraft()
@@ -595,14 +608,17 @@ export function useFileManager(t?: Translator) {
   // is a no-op for wiring but returns the same singleton handles.
   ensureWired()
 
-  // Best-effort cleanup on unmount of the calling component; the
-  // singleton stays initialised so the next mount re-uses the same
-  // wiring. ``onBeforeUnmount`` here only fires when the active
-  // component instance tears down, not the module — exactly the
-  // semantics we want.
-  onBeforeUnmount(() => {
-    previewer.cancel()
-  })
+  // Best-effort cleanup on unmount — but ONLY for the modal-level
+  // owner. The previewer is a shared singleton; when every consumer
+  // (each tab) registered this hook, switching tabs aborted the
+  // in-flight /preview the next tab was about to display. The
+  // singleton stays initialised either way so the next mount re-uses
+  // the same wiring.
+  if (options.owner) {
+    onBeforeUnmount(() => {
+      previewer.cancel()
+    })
+  }
 
   return {
     selectedFile: _selectedFile,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import draggable from 'vuedraggable'
 import { useI18n } from 'vue-i18n'
 import type { LayerPass } from '../../stores/job'
@@ -19,20 +19,20 @@ import StyleThumbnail from './shared/StyleThumbnail.vue'
 //   - drag-to-reorder via the same vuedraggable used by LayersSection
 //     (handle = ⠿, no more ▲/▼ buttons)
 //   - per-pass duplicate button (⎘)
-//   - per-pass visibility toggle (eye) — UI-only for now: a hidden
-//     pass is not shipped to /rerender, so the operator can A/B a
-//     stack without removing passes. The hidden state lives in this
-//     component and is dropped on stack changes from upstream.
+//   - per-pass visibility toggle (eye) — non-destructive: a hidden
+//     pass stays in the emitted stack with ``enabled: false``; the
+//     job store strips disabled passes only when building the
+//     /rerender payload, so the operator can A/B a stack without
+//     losing passes and the state survives remounts + reloads.
 //   - style thumbnail per row so the operator recognises an algorithm
 //     by glyph + colour without parsing the dropdown label
 //   - same curated presets and bottom action row as PassList
 
 const props = defineProps<{
   passes: LayerPass[]
-  // Layer identifier — used to key the per-pass visibility state in a
-  // module-level Map so the operator's hide/show toggles survive
-  // navigating away from this layer card and back. Optional so call
-  // sites that don't track layer ids (none today) still compile.
+  // Layer identifier — kept for call-site compatibility / debugging;
+  // per-pass state now travels on the pass objects themselves
+  // (``enabled``) or is keyed by the stable per-row key below.
   layerId?: string
 }>()
 
@@ -42,12 +42,29 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// Module-level visibility store, keyed by layer id → {rowIndex: hidden}.
-// Lives outside the component so unmount/remount of LayerCard (which
-// happens whenever the operator scrolls or switches variants) doesn't
-// wipe the operator's hide/show toggles. ``reactive`` so Vue still
-// tracks gets/sets through the computed wrapper below.
-const HIDDEN_BY_LAYER: Map<string, Record<number, boolean>> = reactive(new Map())
+// ---- Stable per-row keys -------------------------------------------
+// LayerPass objects have no id of their own, so we assign one lazily
+// via a WeakMap. The store shares pass objects back through props
+// (applyLayerPasses keeps references), and every in-component edit
+// carries the old object's key onto its replacement — so a row keeps
+// its key (and therefore its expanded state and DOM node) across
+// option edits, reorders and duplicates. Used both as the draggable
+// ``item-key`` and to key the expanded map.
+let nextPassKey = 1
+const PASS_KEYS = new WeakMap<LayerPass, number>()
+function passKey(pass: LayerPass): number {
+  let key = PASS_KEYS.get(pass)
+  if (key === undefined) {
+    key = nextPassKey++
+    PASS_KEYS.set(pass, key)
+  }
+  return key
+}
+/** Transfer ``from``'s row key onto its replacement object. */
+function withKeyOf(from: LayerPass, to: LayerPass): LayerPass {
+  PASS_KEYS.set(to, passKey(from))
+  return to
+}
 
 // Available algorithms in the stack picker — everything in the registry
 // except ``direct`` (stacking direct on top is a no-op visually) and the
@@ -56,126 +73,106 @@ const algoChoices = computed(() =>
   Object.values(ALGORITHMS).filter((a) => a.id !== 'direct' && !HIDDEN_ALGORITHMS.has(a.id)),
 )
 
-// Per-row expanded toggle for the params form. Default collapsed so
-// a tall stack stays scannable; the operator opens the row they want
-// to tweak.
+// Per-row expanded toggle for the params form, keyed by the stable row
+// key (NOT the index, which shifts on reorder / remove). Default
+// collapsed so a tall stack stays scannable.
 const expanded = ref<Record<number, boolean>>({})
-function toggleExpanded(i: number): void {
-  expanded.value = { ...expanded.value, [i]: !expanded.value[i] }
+function toggleExpanded(pass: LayerPass): void {
+  const key = passKey(pass)
+  expanded.value = { ...expanded.value, [key]: !expanded.value[key] }
+}
+function isExpanded(pass: LayerPass): boolean {
+  return !!expanded.value[passKey(pass)]
 }
 function hasOptions(algorithm: string): boolean {
   return (getAlgorithm(algorithm)?.schema.length ?? 0) > 0
 }
 
-// Per-row visibility toggle. Hidden passes are filtered out before
-// emitting the update — the backend never sees them, but the
-// operator can flip them back on without re-picking the algorithm.
-// State is keyed by row index, and the whole map is keyed by layer
-// id in a module-level store so toggles survive scrolling away from
-// this layer card and back (or switching variants). Without this, a
-// hidden pass would silently re-appear the moment the operator
-// switches layers, because Vue tears down + remounts each card.
-const hidden = computed<Record<number, boolean>>({
-  get: () => HIDDEN_BY_LAYER.get(props.layerId ?? '__nolayer__') ?? {},
-  set: (value) => {
-    HIDDEN_BY_LAYER.set(props.layerId ?? '__nolayer__', value)
-  },
-})
-function toggleHidden(i: number): void {
-  hidden.value = { ...hidden.value, [i]: !hidden.value[i] }
-  pushUpdate(props.passes)
+// Per-row visibility toggle — non-destructive. The flag lives on the
+// pass itself (``enabled``), so it persists through the store, the
+// scene storage and any remount; the backend payload is filtered in
+// the job store, never here.
+function isHidden(pass: LayerPass): boolean {
+  return pass.enabled === false
+}
+function toggleHidden(index: number): void {
+  const pass = props.passes[index]
+  if (!pass) return
+  const next = [...props.passes]
+  next[index] = withKeyOf(pass, { ...pass, enabled: isHidden(pass) })
+  pushUpdate(next)
 }
 
-// Computed "what we ship to the backend": passes minus the hidden ones.
-function visiblePasses(all: LayerPass[]): LayerPass[] {
-  return all.filter((_, i) => !hidden.value[i])
-}
-
+// Emit the FULL stack — hidden rows included — so the parent/store
+// state always carries every pass. Filtering for the backend happens
+// in the job store when the /rerender payload is built.
 function pushUpdate(next: LayerPass[]): void {
-  emit('update', visiblePasses(next))
-}
-
-// Direct passes-array writer that bypasses the hidden filter — used
-// for upstream-visible mutations like add/remove/reorder. The hidden
-// filter is reapplied on the next emit.
-function pushRaw(next: LayerPass[]): void {
-  emit(
-    'update',
-    next.filter((_, i) => !hidden.value[i]),
-  )
+  emit('update', next)
 }
 
 // Two-way binding for vuedraggable. ``draggablePasses`` is the model
-// it reads/writes; the setter pipes the reordered list through the
-// hidden filter before emitting upstream.
+// it reads/writes; the setter emits the reordered (full) list.
 const draggablePasses = computed<LayerPass[]>({
   get: () => props.passes,
-  set: (value) => pushRaw(value),
+  set: (value) => pushUpdate(value),
 })
 
 function onPassAlgorithm(index: number, algorithm: string): void {
   const preset = layerStyles().find((s) => s.defaultAlgorithm === algorithm)
+  const pass = props.passes[index]
+  if (!pass) return
   const next = [...props.passes]
-  next[index] = {
+  next[index] = withKeyOf(pass, {
+    ...pass,
     algorithm,
     algorithm_options: {
       ...(preset?.defaultAlgorithmOptions ?? defaultsFor(algorithm)),
     },
-  }
-  pushRaw(next)
+  })
+  pushUpdate(next)
 }
 
 function onOption(index: number, key: string, value: unknown): void {
   const next = [...props.passes]
   const pass = next[index]
   if (!pass) return
-  next[index] = {
-    algorithm: pass.algorithm,
+  next[index] = withKeyOf(pass, {
+    ...pass,
     algorithm_options: { ...pass.algorithm_options, [key]: value },
-  }
-  pushRaw(next)
+  })
+  pushUpdate(next)
 }
 
 function removePass(index: number): void {
-  // Drop the matching hidden flag so subsequent rows keep their state.
-  const next = { ...hidden.value }
-  delete next[index]
-  const shifted: Record<number, boolean> = {}
-  for (const k of Object.keys(next)) {
-    const ki = Number(k)
-    if (ki > index) shifted[ki - 1] = next[ki]!
-    else shifted[ki] = next[ki]!
-  }
-  hidden.value = shifted
-  pushRaw(props.passes.filter((_, i) => i !== index))
+  pushUpdate(props.passes.filter((_, i) => i !== index))
 }
 
 function duplicatePass(index: number): void {
   const source = props.passes[index]
   if (!source) return
+  // Fresh object → fresh row key; per-row state of every other row is
+  // untouched because their keys ride on the (unchanged) objects.
   const copy: LayerPass = {
-    algorithm: source.algorithm,
+    ...source,
     algorithm_options: { ...source.algorithm_options },
   }
   const next = [...props.passes]
   next.splice(index + 1, 0, copy)
-  pushRaw(next)
+  pushUpdate(next)
 }
 
 function addPass(algorithm: AlgorithmId = 'crosshatch'): void {
   const preset = layerStyles().find((s) => s.defaultAlgorithm === algorithm)
-  pushRaw([
-    ...props.passes,
-    {
-      algorithm,
-      algorithm_options: {
-        ...(preset?.defaultAlgorithmOptions ?? defaultsFor(algorithm)),
-      },
+  const fresh: LayerPass = {
+    algorithm,
+    algorithm_options: {
+      ...(preset?.defaultAlgorithmOptions ?? defaultsFor(algorithm)),
     },
-  ])
+  }
+  pushUpdate([...props.passes, fresh])
   // Auto-expand the freshly added pass so the operator sees the knobs
   // — discoverability win surfaced by the original PassList rewrite.
-  expanded.value = { ...expanded.value, [props.passes.length]: true }
+  expanded.value = { ...expanded.value, [passKey(fresh)]: true }
 }
 
 // Curated multi-pass presets, identical to PassList's — one click
@@ -224,9 +221,8 @@ const passPresets: PassPreset[] = [
 ]
 
 function applyPreset(preset: PassPreset): void {
-  hidden.value = {}
   expanded.value = {}
-  pushRaw(
+  pushUpdate(
     preset.passes.map((p) => ({
       algorithm: p.algorithm,
       algorithm_options: { ...p.algorithm_options },
@@ -235,9 +231,8 @@ function applyPreset(preset: PassPreset): void {
 }
 
 function clearAll(): void {
-  hidden.value = {}
   expanded.value = {}
-  pushRaw([])
+  pushUpdate([])
 }
 </script>
 
@@ -289,7 +284,7 @@ function clearAll(): void {
     <draggable
       v-if="passes.length"
       v-model="draggablePasses"
-      item-key="pass-key"
+      :item-key="(pass: LayerPass) => passKey(pass)"
       handle=".pass-handle"
       :animation="150"
       ghost-class="opacity-50"
@@ -299,7 +294,7 @@ function clearAll(): void {
       <template #item="{ element: pass, index: i }: { element: LayerPass; index: number }">
         <div
           class="rounded bg-slate-900 px-1.5 py-1 transition"
-          :class="hidden[i] ? 'opacity-50' : ''"
+          :class="isHidden(pass) ? 'opacity-50' : ''"
         >
           <div class="flex items-center gap-1">
             <button
@@ -313,16 +308,17 @@ function clearAll(): void {
             <button
               type="button"
               class="rounded px-1 py-0.5 text-[11px] hover:bg-slate-800"
-              :class="hidden[i] ? 'text-amber-500' : 'text-slate-300'"
-              :title="hidden[i] ? t('passes.show') : t('passes.hide')"
+              :class="isHidden(pass) ? 'text-amber-500' : 'text-slate-300'"
+              :title="isHidden(pass) ? t('passes.show') : t('passes.hide')"
+              :data-test="`pass-toggle-${i}`"
               @click="toggleHidden(i)"
             >
-              {{ hidden[i] ? '◌' : '●' }}
+              {{ isHidden(pass) ? '◌' : '●' }}
             </button>
             <span class="relative inline-flex">
               <StyleThumbnail :algorithm="pass.algorithm" size="sm" />
               <span
-                v-if="hidden[i]"
+                v-if="isHidden(pass)"
                 class="pointer-events-none absolute inset-0 flex items-center justify-center text-[14px] font-bold leading-none text-amber-400"
                 aria-hidden="true"
                 >⊘</span
@@ -331,7 +327,7 @@ function clearAll(): void {
             <select
               :value="pass.algorithm"
               class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-1.5 py-0.5 text-[11px] text-slate-100"
-              :class="hidden[i] ? 'line-through text-slate-500' : ''"
+              :class="isHidden(pass) ? 'line-through text-slate-500' : ''"
               @change="(e) => onPassAlgorithm(i, (e.target as HTMLSelectElement).value)"
             >
               <option v-for="algo in algoChoices" :key="algo.id" :value="algo.id">
@@ -342,9 +338,9 @@ function clearAll(): void {
               v-if="hasOptions(pass.algorithm)"
               type="button"
               class="rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-300 hover:bg-slate-700"
-              :class="expanded[i] ? 'text-emerald-300' : ''"
+              :class="isExpanded(pass) ? 'text-emerald-300' : ''"
               :title="t('passes.toggleOptions')"
-              @click="toggleExpanded(i)"
+              @click="toggleExpanded(pass)"
             >
               ⚙
             </button>
@@ -352,6 +348,7 @@ function clearAll(): void {
               type="button"
               class="rounded bg-slate-800 px-1 py-0.5 text-[10px] text-slate-300 hover:bg-slate-700"
               :title="t('passes.duplicate')"
+              :data-test="`pass-duplicate-${i}`"
               @click="duplicatePass(i)"
             >
               ⎘
@@ -360,6 +357,7 @@ function clearAll(): void {
               type="button"
               class="rounded bg-slate-800 px-1 py-0.5 text-[10px] text-rose-300 hover:bg-rose-900/60"
               :title="t('passes.remove')"
+              :data-test="`pass-remove-${i}`"
               @click="removePass(i)"
             >
               ✕
@@ -370,7 +368,7 @@ function clearAll(): void {
                stack stays scannable. Only rendered when the algorithm
                actually has knobs. -->
           <div
-            v-if="expanded[i] && hasOptions(pass.algorithm)"
+            v-if="isExpanded(pass) && hasOptions(pass.algorithm)"
             class="mt-1 ml-12 rounded border border-slate-800 bg-slate-950/60 p-1.5"
           >
             <AlgoParamsForm

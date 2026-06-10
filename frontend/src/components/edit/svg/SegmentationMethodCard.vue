@@ -64,11 +64,23 @@ function removeThreshold(i: number): void {
   draft.markSegmentationTouched('thresholds')
 }
 function updateThreshold(i: number, value: number): void {
+  // Write the clamped value in place WITHOUT sorting: the rows are
+  // index-keyed and the edited input is still focused, so re-sorting
+  // here would yank the row (and focus) out from under the operator
+  // mid-edit. The list is re-ordered on blur (commitThresholdOrder).
   const clamped = Math.max(0, Math.min(1, value))
   const next = [...props.bitmap.thresholds]
   next[i] = clamped
-  props.bitmap.thresholds = next.sort((a, b) => a - b)
+  props.bitmap.thresholds = next
   draft.markSegmentationTouched('thresholds')
+}
+function commitThresholdOrder(): void {
+  const sorted = [...props.bitmap.thresholds].sort((a, b) => a - b)
+  // Only patch when the order actually changes — avoids a useless
+  // reactive write (and preview reschedule) on every blur.
+  if (sorted.some((v, idx) => v !== props.bitmap.thresholds[idx])) {
+    props.bitmap.thresholds = sorted
+  }
 }
 </script>
 
@@ -175,6 +187,7 @@ function updateThreshold(i: number, value: number): void {
             :value="value"
             class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
             @change="(e) => updateThreshold(i, Number((e.target as HTMLInputElement).value))"
+            @blur="commitThresholdOrder"
           />
           <button
             type="button"

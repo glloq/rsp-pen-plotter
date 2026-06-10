@@ -57,6 +57,33 @@ export const usePlotterStore = defineStore('plotter', () => {
     }
   }
 
+  // True while the live status stream is delivering frames. REST
+  // responses are snapshots taken when the request was *processed*; a
+  // WS frame emitted right after (more acked lines, state flip) is
+  // strictly fresher, so REST must not overwrite it.
+  function socketLive(): boolean {
+    return socket !== null && socket.readyState === WebSocket.OPEN
+  }
+
+  // Tear the socket down without triggering the auto-reconnect.
+  function closeSocket(): void {
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    if (socket) {
+      const s = socket
+      socket = null
+      s.onclose = null
+      s.onmessage = null
+      try {
+        s.close()
+      } catch {
+        // Already closed / closing — nothing to do.
+      }
+    }
+  }
+
   async function withErrors(
     fn: () => Promise<PlotterStatus>,
     progressMessage?: string,
@@ -66,7 +93,13 @@ export const usePlotterStore = defineStore('plotter', () => {
     const toasts = useToastStore()
     const toastId = progressMessage ? toasts.progress(progressMessage) : null
     try {
-      status.value = await fn()
+      const result = await fn()
+      // While the WebSocket is live it owns ``status`` — a REST snapshot
+      // arriving after newer WS frames would roll back the live
+      // progress (acked counter jumping backwards, state flicker).
+      if (!socketLive()) {
+        status.value = result
+      }
       if (toastId !== null && successMessage) {
         toasts.update(toastId, 'success', successMessage, 3000)
       } else if (toastId !== null) {
@@ -92,7 +125,14 @@ export const usePlotterStore = defineStore('plotter', () => {
     if (status.value.connected) openSocket()
   }
 
-  const disconnect = (): Promise<void> => withErrors(() => plotterDisconnect())
+  const disconnect = (): Promise<void> => {
+    // Close the stream FIRST so the REST response below is allowed to
+    // write the final (disconnected) status, and so the browser doesn't
+    // keep a dangling socket + reconnect timer alive after the operator
+    // explicitly disconnected.
+    closeSocket()
+    return withErrors(() => plotterDisconnect())
+  }
   const jog = (dx: number, dy: number, profileName: string): Promise<void> =>
     withErrors(() => plotterJog(dx, dy, profileName))
   const goto = (x: number, y: number, profileName: string): Promise<void> =>

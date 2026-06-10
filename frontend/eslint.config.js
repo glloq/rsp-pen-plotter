@@ -56,15 +56,35 @@ export default [
       'vue/html-indent': 'off',
       'vue/html-closing-bracket-newline': 'off',
       'vue/first-attribute-linebreak': 'off',
-      // The v0.1 editor cards (image / render / shared) intentionally
-      // mutate a reactive ``draft`` / ``preprocess`` / ``bitmap`` prop
-      // because each card is one slice of the same parent draft
-      // object, with the parent owning the lifecycle. Refactoring all
-      // of them to ``defineModel`` / explicit emits is documented as
-      // a v2.0 hygiene follow-up (TODO 6.2); for v0.2 the rule is
-      // downgraded to ``warn`` so it surfaces in the dev console but
-      // doesn't gate CI.
-      'vue/no-mutating-props': 'warn',
+    },
+  },
+  {
+    // Shared-draft idiom (deliberate, documented): each of these edit
+    // draft-card components receives a reactive slice of a draft
+    // singleton (``bitmap`` / ``typo`` / ``draft`` / ``pen``) from its
+    // parent and mutates it directly — the parent owns the lifecycle and
+    // every card is one facet of the SAME object, so ``defineModel`` /
+    // emit round-trips would only add indirection without changing
+    // ownership. ``vue/no-mutating-props`` is therefore disabled for
+    // exactly these files; any NEW component mutating a prop still gets
+    // flagged by the recommended preset above. Refactoring the idiom
+    // itself stays tracked as the v2.0 hygiene follow-up (TODO 6.2).
+    files: [
+      'src/components/ProfilePenFields.vue',
+      'src/components/edit/image/BasicAdjustmentsCard.vue',
+      'src/components/edit/image/FiltersCard.vue',
+      'src/components/edit/image/LevelsCard.vue',
+      'src/components/edit/image/TransformCard.vue',
+      'src/components/edit/render/DualRangeSlider.vue',
+      'src/components/edit/render/MasterStyleParams.vue',
+      'src/components/edit/render/MultiColorMasterStyleParams.vue',
+      'src/components/edit/source/PaletteCard.vue',
+      'src/components/edit/source/TypographyCard.vue',
+      'src/components/edit/style/PostProcessCard.vue',
+      'src/components/edit/svg/SegmentationMethodCard.vue',
+    ],
+    rules: {
+      'vue/no-mutating-props': 'off',
     },
   },
   prettier,

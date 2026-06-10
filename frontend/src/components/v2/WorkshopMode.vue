@@ -11,7 +11,10 @@
 // Toggle with Ctrl/Cmd + W (registered through useKeyboardShortcuts
 // elsewhere) or by clicking the Atelier button in the header.
 
+import { useI18n } from 'vue-i18n'
 import type { PrintRun } from '../../api/client'
+
+const { t } = useI18n()
 
 defineProps<{
   run: PrintRun | null
@@ -37,7 +40,7 @@ function pct(run: PrintRun): number {
       <button
         type="button"
         class="exit"
-        aria-label="Quitter le mode atelier"
+        :aria-label="t('v2.workshop.exit')"
         data-test="workshop-exit"
         @click="emit('exit')"
       >
@@ -56,7 +59,7 @@ function pct(run: PrintRun): number {
         <div class="percent">{{ pct(run) }} %</div>
       </div>
       <div v-if="nextActionHint && run.state === 'paused'" class="hint" data-test="workshop-hint">
-        <strong>Action requise</strong>
+        <strong>{{ t('v2.workshop.actionRequired') }}</strong>
         <p>{{ nextActionHint }}</p>
       </div>
       <div class="actions">
@@ -67,7 +70,7 @@ function pct(run: PrintRun): number {
           data-test="workshop-pause"
           @click="emit('pause')"
         >
-          Pause
+          {{ t('v2.workshop.pause') }}
         </button>
         <button
           v-else-if="run.state === 'paused'"
@@ -76,13 +79,13 @@ function pct(run: PrintRun): number {
           data-test="workshop-resume"
           @click="emit('resume')"
         >
-          Reprendre
+          {{ t('v2.workshop.resume') }}
         </button>
       </div>
     </main>
 
     <main v-else class="empty" data-test="workshop-empty">
-      <p>Aucun run actif.</p>
+      <p>{{ t('v2.workshop.noActiveRun') }}</p>
     </main>
   </div>
 </template>

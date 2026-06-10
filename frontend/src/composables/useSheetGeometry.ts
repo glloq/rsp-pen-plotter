@@ -24,7 +24,11 @@ import { libraryFileOriginalUrl } from '../api/client'
 import type { MachineProfile } from '../api/client'
 import type { Placement } from '../stores/job'
 import { applyPhysicalStrokeWidth, cropSvgViewBoxToBbox, mmPerViewBoxUnit } from '../lib/penWidth'
-import type { PlanPreviewMode } from '../stores/ui'
+import type { PlanPreviewMode, PreviewSheet } from '../stores/ui'
+
+// Single source of truth for the sheet-overlay shape lives in
+// stores/ui.ts; re-exported here so existing importers keep working.
+export type { PreviewSheet }
 
 // In 'auto' mode a placement keeps its (cheap) raster preview once its
 // chosen-style SVG carries more than this many pen primitives — past
@@ -34,13 +38,6 @@ import type { PlanPreviewMode } from '../stores/ui'
 // line/halftone styles stay well under it; only dense multi-pass hatching
 // trips the fallback.
 export const AUTO_SVG_PRIMITIVE_LIMIT = 5000
-
-export interface PreviewSheet {
-  width_mm: number
-  height_mm: number
-  x_mm?: number
-  y_mm?: number
-}
 
 export interface RenderedPlacement {
   placement: Placement
@@ -157,11 +154,16 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
     return { profile, ws, wsW, wsH, pad }
   })
 
-  // Stroke-width restyle cache: keyed by raw svg + scale + inventory
-  // signature so resizing a placement (new scale) or editing a pen
-  // width (new signature) recomputes, but an unchanged frame reuses the
-  // parsed result instead of re-running DOMParser on every pointer-move.
-  const styledCache = new Map<string, { key: string; out: string }>()
+  // Stroke-width restyle cache: keyed by the sanitized input SVG + scale
+  // + inventory signature so resizing a placement (new scale), editing a
+  // pen width (new signature) OR a /rerender that swaps the SVG at the
+  // same size all recompute, but an unchanged frame reuses the parsed
+  // result instead of re-running DOMParser on every pointer-move. The
+  // ``svgIn`` identity check mirrors the crop cache below — without it a
+  // /rerender with identical size + inventory kept serving the stale
+  // styled output (and then the stale crop), so the canvas showed the
+  // pre-rerender drawing whenever stroke widths existed.
+  const styledCache = new Map<string, { svgIn: string; key: string; out: string }>()
 
   // Crop cache: ``cropSvgViewBoxToBbox`` is a string-replace but it runs
   // for every placement on every reactive tick of ``renderedPlacements``.
@@ -226,11 +228,12 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
             // threshold.
             const key = `${mmPerUnit.toFixed(3)}|${mapSig}`
             const cached = styledCache.get(p.id)
-            if (cached && cached.key === key) {
+            if (cached && cached.svgIn === cleanSvg && cached.key === key) {
               cleanSvg = cached.out
             } else {
-              cleanSvg = applyPhysicalStrokeWidth(cleanSvg, widthMap, mmPerUnit)
-              styledCache.set(p.id, { key, out: cleanSvg })
+              const styled = applyPhysicalStrokeWidth(cleanSvg, widthMap, mmPerUnit)
+              styledCache.set(p.id, { svgIn: cleanSvg, key, out: styled })
+              cleanSvg = styled
             }
           }
         }

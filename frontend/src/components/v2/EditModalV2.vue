@@ -606,7 +606,11 @@ function openExpertEditor(): void {
 // the file kind, so we use it to gate the Text tab (only when the
 // source carries typography) and to default the active tab to the
 // most useful starting point for the current source.
-const fileManager = useFileManager(t)
+// ``owner: true`` — the modal owns the preview lifecycle: closing the
+// modal cancels any in-flight /preview. The tabs inside the modal call
+// useFileManager() WITHOUT owner so a tab switch can't abort the
+// shared previewer mid-flight.
+const fileManager = useFileManager(t, { owner: true })
 // Direct access to the V1 singleton draft so we can read ``isDirty``
 // for the expert-mode "Appliquer" affordance. The cards inside the
 // expert tabs already mutate this singleton via their own imports;
