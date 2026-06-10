@@ -39,6 +39,7 @@ from .preprocess import (
     PreprocessOptions,
     Rotation,
     _floyd_steinberg,
+    apply_dither,
     apply_preprocess,
     fit_within,
     is_preprocess_neutral,
@@ -315,6 +316,15 @@ class BitmapConverter(Converter):
             image = apply_preprocess(image, opts.preprocess)
         with traced_span("pipeline.bitmap.fit_within", max_dim_px=max_dim):
             image = fit_within(image, max_dim)
+        # Dither *after* the downscale: error diffusion at segmentation
+        # resolution is fast, and a pre-downscale dither would be
+        # LANCZOS-averaged back to flat grey anyway.
+        if opts.preprocess.dither_levels >= 2:
+            with traced_span(
+                "pipeline.bitmap.dither",
+                dither_levels=opts.preprocess.dither_levels,
+            ):
+                image = apply_dither(image, opts.preprocess)
         with traced_span(
             "pipeline.bitmap.segment",
             method=effective_method,

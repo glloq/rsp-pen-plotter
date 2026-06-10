@@ -14,6 +14,7 @@ import asyncio
 import contextlib
 import logging
 import re
+import time
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -40,6 +41,16 @@ from pen_plotter.persistence import engine as default_engine
 from pen_plotter.profiles import get_profile
 
 _log = logging.getLogger(__name__)
+
+# Checkpoint throttling. The streamer emits one progress event per acked
+# G-code line; committing a SQLite row for each would put a synchronous
+# fsync on the event loop for every ``ok``. Persist at most every
+# ``_CHECKPOINT_EVERY_LINES`` lines or ``_CHECKPOINT_INTERVAL_S`` seconds,
+# plus on every stream-state flip (pause/swap/error/done) so recovery
+# resolution stays acceptable: a crash loses at most ~50 lines of
+# checkpoint, and every pause/error boundary is always durable.
+_CHECKPOINT_EVERY_LINES = 50
+_CHECKPOINT_INTERVAL_S = 2.0
 
 
 class RunState(StrEnum):
@@ -369,28 +380,56 @@ class PrintQueue:
         # Tracks the swap state we last mirrored into the DB so we only
         # write a row when it actually flips (the streamer emits progress
         # on every acked line; we don't want a redundant UPDATE each time).
-        swap_state = {"waiting": False}
+        swap_waiting = False
+        # In-memory progress tracker. ``latest_acked`` is the live absolute
+        # checkpoint — error recovery below MUST use it instead of the
+        # ``run`` row snapshot loaded at ``next_queued`` time, which is
+        # stale the moment streaming starts. ``flushed_acked``/``flushed_at``
+        # drive the write throttle.
+        latest_acked = start_checkpoint
+        flushed_acked = start_checkpoint
+        flushed_at = time.monotonic()
+        last_stream_state: object = None
 
         async def checkpoint(progress: object) -> None:
+            nonlocal swap_waiting, latest_acked, flushed_acked, flushed_at, last_stream_state
             acked = getattr(progress, "acked", 0)
             absolute = min(start_checkpoint + max(0, acked - preamble_len), run.total_lines)
-            fields: dict[str, object] = {"acked_lines": absolute}
+            latest_acked = absolute
+            fields: dict[str, object] = {}
             state = getattr(progress, "state", None)
             if state == StreamState.WAITING:
                 # The streamer parked for an operator-confirm swap. Surface
                 # it as a durable ``paused`` run carrying the prompt so the
                 # cockpit/header/atelier can show what to do + offer Resume
                 # (which routes back through ``controller.resume()``).
-                if not swap_state["waiting"]:
-                    swap_state["waiting"] = True
+                if not swap_waiting:
+                    swap_waiting = True
                     fields["state"] = RunState.PAUSED
                     fields["swap_prompt"] = getattr(progress, "message", None)
-            elif state == StreamState.RUNNING and swap_state["waiting"]:
+            elif state == StreamState.RUNNING and swap_waiting:
                 # Streaming resumed past the swap — clear the prompt and
                 # restore the running state.
-                swap_state["waiting"] = False
+                swap_waiting = False
                 fields["state"] = RunState.RUNNING
                 fields["swap_prompt"] = None
+            state_flipped = state != last_stream_state
+            last_stream_state = state
+            now = time.monotonic()
+            # Throttle: a synchronous SQLite commit per acked line would
+            # stall the event loop on every ``ok``. Flush on state flips
+            # (pause points, swaps, error/done/aborted) so recovery
+            # boundaries are always durable, otherwise every N lines / T s.
+            if not (
+                fields
+                or state_flipped
+                or absolute - flushed_acked >= _CHECKPOINT_EVERY_LINES
+                or now - flushed_at >= _CHECKPOINT_INTERVAL_S
+            ):
+                return
+            fields["acked_lines"] = absolute
+            flushed_acked = absolute
+            flushed_at = now
             _update(run.id, self._engine, **fields)
 
         try:
@@ -422,10 +461,15 @@ class PrintQueue:
                     run.id,
                     self._engine,
                     state=RunState.PAUSED,
+                    acked_lines=latest_acked,
                     error=f"{exc} — paused per recovery policy.",
                 )
             elif decision.directive is Directive.SKIP_AND_CONTINUE:
-                boundary = _next_layer_boundary(run.gcode, run.acked_lines)
+                # Use the LIVE checkpoint, not ``run.acked_lines`` — that
+                # snapshot was loaded before streaming started, and re-queuing
+                # at the stale boundary would physically re-plot already-inked
+                # layers (and record the wrong skipped label).
+                boundary = _next_layer_boundary(run.gcode, latest_acked)
                 if boundary is None:
                     # No more layers to skip into — treat as a normal
                     # failure so the operator is informed.
@@ -433,6 +477,7 @@ class PrintQueue:
                         run.id,
                         self._engine,
                         state=RunState.FAILED,
+                        acked_lines=latest_acked,
                         error=f"{exc} — skip-layer policy: no further layer boundary.",
                     )
                 else:
@@ -449,7 +494,37 @@ class PrintQueue:
                     )
                     self.wake()
             else:
-                _update(run.id, self._engine, state=RunState.FAILED, error=str(exc))
+                _update(
+                    run.id,
+                    self._engine,
+                    state=RunState.FAILED,
+                    acked_lines=latest_acked,
+                    error=str(exc),
+                )
+            return True
+        except Exception as exc:  # noqa: BLE001 — never leave a run stranded RUNNING
+            # ``controller.stream`` can raise more than ``StreamError``:
+            # a ``RuntimeError`` ("A job is already running" / "Not
+            # connected") when a manual command or disconnect raced the
+            # queue worker. The run was already flipped RUNNING above —
+            # without this handler it would stay stranded forever
+            # (``next_queued`` only selects QUEUED rows).
+            if isinstance(exc, RuntimeError):
+                # Connection / busy race — give the run back to the queue
+                # so the worker retries once the controller frees up.
+                _log.warning("Run %s could not stream (%s); re-queueing.", run.id, exc)
+                _update(
+                    run.id, self._engine, state=RunState.QUEUED, acked_lines=latest_acked
+                )
+            else:
+                _log.exception("Run %s failed unexpectedly", run.id)
+                _update(
+                    run.id,
+                    self._engine,
+                    state=RunState.FAILED,
+                    acked_lines=latest_acked,
+                    error=str(exc),
+                )
             return True
         finally:
             self._current_id = None
@@ -466,9 +541,12 @@ class PrintQueue:
             state = RunState.CANCELED if self._cancel_requested else RunState.PAUSED
             # Keep the swap prompt when the abort left the run paused
             # mid-swap (so the cockpit still shows what to do on resume);
-            # clear it on an outright cancel.
+            # clear it on an outright cancel. Always persist the final
+            # checkpoint — with throttled writes the last flushed value
+            # can lag the true acked count (e.g. an emergency-stop cancel
+            # never reaches the streamer's ABORTED emit).
             clear = {"swap_prompt": None} if state == RunState.CANCELED else {}
-            _update(run.id, self._engine, state=state, **clear)
+            _update(run.id, self._engine, state=state, acked_lines=latest_acked, **clear)
         return True
 
     def pause(self, run_id: str) -> PrintRun | None:

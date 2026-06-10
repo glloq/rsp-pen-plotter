@@ -18,14 +18,18 @@ them and `converters/defaults.py` registers the built-in set at startup.
 | `HtmlConverter` | `.html` | `text/html` | WeasyPrint → PDF → vectors |
 | `DocumentConverter` | `.docx` `.odt` `.rtf` | Office MIMEs | `libreoffice --headless` → PDF → first page |
 
-The `gcode` upload path bypasses the converter pipeline and streams uploaded
-G-code directly to the queue.
+There is no raw G-code *upload* path — G-code never goes through the
+converter pipeline. It enters the system only through the API, as the body
+of `POST /queue` (enqueue a print run) or `POST /plotter/run` (stream a job
+immediately).
 
 ## Raster algorithms
 
 For bitmap input, the operator picks a raster-art strategy in the editor.
 Algorithms are registered by name in
-`backend/pen_plotter/converters/algorithms/__init__.py`. Each carries:
+`backend/pen_plotter/converters/algorithms/__init__.py` — 51 registered, of
+which 47 are visible in the editor's pickers (see the hidden flag below).
+Each carries:
 
 - a **kind** — `fill` (packs ink across a region), `lines` (discrete
   outlines) or `mono_stroke` (single continuous polyline)
@@ -35,36 +39,75 @@ Algorithms are registered by name in
 | Name | Kind | Complexity | What it does |
 | --- | --- | --- | --- |
 | `direct` | fill | low | potrace outline of tonal masks |
-| `halftone` | fill | low | uniform dot grid, radius follows tone |
-| `stippling` | fill | medium | Poisson-disk dot field by intensity |
-| `crosshatch` | fill | medium | parallel-stroke shading per tonal band |
-| `contours` | lines | low | iso-contour outlines |
-| `edges` | lines | low | edge-detected outlines (Sobel / Canny) |
-| `centerline` | lines | medium | skeletonised mid-lines |
-| `spiral` | mono_stroke | medium | continuous tone-modulated spiral |
-| `scanlines` | mono_stroke | low | raster sweep with tone-mapped jitter |
-| `tsp` | mono_stroke | high | TSP tour through stipple points |
-| `tsp_opt` | mono_stroke | high | TSP + 2-opt with kd-tree neighbours |
-| `hilbert` | mono_stroke | medium | space-filling Hilbert curve at chosen depth |
-| `gosper` | mono_stroke | medium | Gosper / flowsnake fill |
-| `eulerian_hatch` | fill | medium | hatching as a single Eulerian path |
-| `concentric_offset` | mono_stroke | medium | inward offsetting outlines |
-| `flowfield` | fill | high | streamlines following image gradients |
-| `voronoi_stipple` | fill | high | Lloyd-relaxed weighted Voronoi stippling |
-| `squiggle` | mono_stroke | medium | wavy sub-pixel scan row |
-| `lowpoly` | lines | high | Delaunay triangulation over sampled points |
-| `scribble` | fill | medium | wobble polyline per scan run |
-| `grid` | lines | low | two clipped line sweeps |
-| `brick` | lines | low | staggered course lines |
-| `dashes` | fill | medium | hatch sweep chopped into dashes |
-| `truchet` | lines | low | one Truchet diagonal per cell |
-| `rings` | mono_stroke | medium | concentric ring sampling |
-| `sunburst` | mono_stroke | medium | radial ray sampling |
-| `circle_pack` | fill | high | dart-throwing circle packing |
+| `halftone` | fill | low | regular grid of variable-size dots, optional per-ink screen angle |
+| `stippling` | fill | medium | randomly scattered dot field by intensity |
+| `crosshatch` | fill | medium | parallel strokes, optional crossed 90° pass and `joined` zig-zag mode |
+| `contours` *(hidden)* | lines | low | concentric inner outlines — topographic-map feel |
+| `edges` | lines | low | traced region boundary — line-art / technical style |
+| `centerline` | lines | medium | medial-skeleton single-stroke polylines |
+| `spiral` | mono_stroke | medium | single Archimedean spiral clipped to the mask, tone-modulated |
+| `scanlines` | mono_stroke | low | horizontal scan lines, flat or sinusoidal |
+| `tsp` *(hidden)* | mono_stroke | high | legacy greedy nearest-neighbour tour through stipple points |
+| `hilbert` | mono_stroke | medium | Hilbert space-filling curve, optionally tone-adaptive |
+| `gosper` | mono_stroke | medium | Gosper / flowsnake space-filling stroke |
+| `eulerian_hatch` *(hidden)* | fill | medium | hatches stitched into one continuous zig-zag per island |
+| `concentric_offset` | mono_stroke | medium | inward erosion spiral — very few pen-lifts |
+| `flowfield` | fill | high | streamlines following the image gradient or smooth noise (tone-aware) |
+| `tsp_opt` | mono_stroke | high | TSP tour with 2-opt / MST optimisation, kd-tree neighbours |
+| `voronoi_stipple` | fill | high | centroidal Voronoi stippling, darkness-weighted (tone-aware) |
+| `squiggle` | mono_stroke | medium | wiggly lines with amplitude / frequency drift |
+| `lowpoly` | lines | high | Delaunay triangulation over sampled points, drawn as edges |
+| `scribble` | fill | medium | wobbly, overshooting strokes — loose pencil feel |
+| `grid` *(hidden)* | lines | low | square mesh of horizontal + vertical strokes |
+| `brick` | lines | low | running-bond courses with staggered joints |
+| `dashes` | fill | medium | hatch sweep chopped into short dashes |
+| `truchet` | lines | low | randomly oriented Truchet diagonals per cell |
+| `rings` | mono_stroke | medium | concentric circles about the region centroid |
+| `sunburst` | mono_stroke | medium | radial rays fanning out from the centroid |
+| `circle_pack` | fill | high | dart-throwing non-overlapping circle packing |
+| `ridge_lines` | fill | low | rows displaced upward by darkness — the pulsar-plot ridge texture |
+| `hitomezashi` | lines | low | sashiko stitch rows/columns weaving an interlocking pattern |
+| `cubic_disarray` | lines | low | grid of squares tumbling into disorder where darkest (Schotter) |
+| `quadtree` | lines | medium | recursive square subdivision — tone becomes cell density |
+| `maze` | lines | medium | perfect maze carved as a random spanning tree over the region |
+| `phyllotaxis` | fill | medium | sunflower-spiral dots sized by local darkness |
+| `voronoi_mosaic` | lines | high | cracked-glaze Voronoi cell walls, smaller cells where darker |
+| `curve_stitching` | lines | low | per-cell chord fans — the nail-and-thread op-art envelope |
+| `string_art` | mono_stroke | high | one continuous thread between rim pegs, chords stacked by darkness |
+| `space_colonization` | lines | high | organic veins growing toward dark areas — root / lightning texture |
+| `penrose` | lines | medium | aperiodic five-fold Penrose (P3) rhombi clipped to the region |
+| `dither` | fill | medium | error-diffusion dots (Floyd–Steinberg / Atkinson / Bayer) |
+| `etch` | fill | medium | short engraving strokes along isophotes, denser where darker |
+| `noise_contours` | lines | medium | tone iso-lines warped by fractal noise — marbled topography |
+| `reaction_diffusion` | fill | high | Gray–Scott Turing spots/stripes grown inside the region |
+| `superpixel_hatch` | fill | high | SLIC superpixels hatched along their dominant orientation |
+| `moire` | lines | low | two offset ring/line gratings beating into op-art fringes |
+| `weave` | lines | low | basket weave — interlacing over/under ribbons |
+| `honeycomb` | lines | low | hexagonal lattice, optionally tone-scaled cells |
+| `harmonograph` | mono_stroke | medium | damped twin-pendulum figure as one long decaying stroke |
+| `attractor` | fill | medium | chaotic orbit (de Jong / Clifford) scattered as smoky filaments |
+| `text_fill` | fill | medium | rows of repeated single-stroke text as shading texture |
+| `lsystem` | lines | medium | dragon curve / plant / Koch island / Sierpiński arrowhead |
+| `chladni` | lines | low | nodal lines of a vibrating plate — resonance sand patterns |
 
-`GET /algorithms` returns the available choices, their option schemas, kinds
-and complexity hints — the frontend uses this to group algorithm cards in the
-editor and to pre-warn on slow previews.
+### Hidden algorithms
+
+Four entries carry the **hidden** flag (`_HIDDEN` in the registry): they stay
+fully registered — persisted placements and presets that reference them keep
+rendering — but the editor's pickers no longer offer them for *new* layers,
+because each is a strict or near duplicate of a better-tuned visible entry:
+
+| Hidden | Superseded by |
+| --- | --- |
+| `tsp` | `tsp_opt` — `method: nn` is byte-equivalent, the other methods strictly better |
+| `grid` | `crosshatch` with `angle_deg: 0` + `crossed: true` |
+| `eulerian_hatch` | `crosshatch` with `joined: true` |
+| `contours` | `concentric_offset` — marching-squares quality vs the deliberately approximate hull walk |
+
+`GET /algorithms` returns the available choices, their option schemas, kinds,
+complexity hints and the hidden flag; the canonical wire format is the
+manifest at `/manifests/algorithms`. The frontend uses this to group
+algorithm cards in the editor and to pre-warn on slow previews.
 
 ## External tool dependencies
 

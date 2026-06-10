@@ -575,3 +575,32 @@ def test_centerline_palette_segmentation_is_respected() -> None:
         f"explicit thresholds must not be overridden by the otsu auto-switch; "
         f"got {len(layers)} layer(s)"
     )
+
+
+def test_apply_dither_quantises_to_requested_levels() -> None:
+    """The dither stage snaps a smooth ramp onto exactly N grey levels."""
+    from pen_plotter.converters.bitmap.preprocess import apply_dither
+
+    ramp = Image.new("L", (64, 64))
+    ramp.putdata([int(255 * (i % 64) / 63) for i in range(64 * 64)])
+    out = apply_dither(ramp.convert("RGB"), PreprocessOptions(dither_levels=2))
+
+    assert set(out.convert("L").getdata()) <= {0, 255}
+
+
+def test_preprocess_no_longer_dithers_before_downscale() -> None:
+    """Regression: dithering must run after fit_within, not in apply_preprocess.
+
+    Dithering the full-resolution upload was O(pixels) ahead of the
+    downscale AND pointless — LANCZOS averaged the dot texture back
+    into smooth grey. ``apply_preprocess`` must now leave the tonal
+    ramp untouched even when ``dither_levels`` is set; the dither is a
+    separate post-downscale stage.
+    """
+    from pen_plotter.converters.bitmap.preprocess import apply_preprocess
+
+    ramp = Image.new("L", (64, 64))
+    ramp.putdata([int(255 * (i % 64) / 63) for i in range(64 * 64)])
+    out = apply_preprocess(ramp.convert("RGB"), PreprocessOptions(dither_levels=2))
+
+    assert len(set(out.convert("L").getdata())) > 2

@@ -35,6 +35,8 @@ from numpy.typing import NDArray
 from PIL import Image
 from sklearn.cluster import KMeans
 
+from pen_plotter.converters._bayer import BAYER8_CENTERED
+
 _REC709 = np.array([0.2126, 0.7152, 0.0722])
 
 
@@ -57,23 +59,9 @@ def _greyscale(image: Image.Image) -> NDArray[np.float64]:
 # 8×8 recursive Bayer ordered-dither matrix, normalised to roughly
 # [-0.5, 0.5). Used by :func:`palette_dither` to perturb each pixel before
 # the nearest-colour snap so smooth gradients break into an interleaved
-# mix of the two closest pens.
-_BAYER8 = (
-    np.array(
-        [
-            [0, 32, 8, 40, 2, 34, 10, 42],
-            [48, 16, 56, 24, 50, 18, 58, 26],
-            [12, 44, 4, 36, 14, 46, 6, 38],
-            [60, 28, 52, 20, 62, 30, 54, 22],
-            [3, 35, 11, 43, 1, 33, 9, 41],
-            [51, 19, 59, 27, 49, 17, 57, 25],
-            [15, 47, 7, 39, 13, 45, 5, 37],
-            [63, 31, 55, 23, 61, 29, 53, 21],
-        ],
-        dtype=np.float64,
-    )
-    + 0.5
-) / 64.0 - 0.5
+# mix of the two closest pens. The base pattern is shared with the
+# ``dither`` raster algorithm via ``pen_plotter.converters._bayer``.
+_BAYER8 = BAYER8_CENTERED
 
 
 def _nearest_palette_rgb(
@@ -388,6 +376,7 @@ def drop_small_regions(labels: NDArray[np.intp], min_pixels: int) -> NDArray[np.
     if min_pixels <= 0:
         return labels
     try:
+        from scipy.ndimage import find_objects
         from scipy.ndimage import label as nd_label
     except ImportError:
         # scipy is a transitive dep of scikit-learn; if it's gone we degrade
@@ -401,10 +390,19 @@ def drop_small_regions(labels: NDArray[np.intp], min_pixels: int) -> NDArray[np.
         if count == 0:
             continue
         sizes = np.bincount(components.ravel())
+        # ``find_objects`` confines the per-component pixel scan to each
+        # component's bounding box — without it every small component
+        # would pay an O(H*W) ``np.where`` over the whole image.
+        slices = find_objects(components)
         for comp_idx in range(1, count + 1):
             if sizes[comp_idx] >= min_pixels:
                 continue
-            ys, xs = np.where(components == comp_idx)
+            box = slices[comp_idx - 1]
+            if box is None:
+                continue
+            local_ys, local_xs = np.where(components[box] == comp_idx)
+            ys = local_ys + box[0].start
+            xs = local_xs + box[1].start
             # Sample 4-neighbours, vote for the most common other cluster.
             neighbours: list[int] = []
             for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
@@ -455,7 +453,11 @@ def merge_similar_colours(
 
     roots = sorted({find(i) for i in range(n)})
     remap = {old: new for new, old in enumerate(roots)}
-    new_labels = np.vectorize(lambda v: remap[find(int(v))])(labels).astype(np.intp)
+    # LUT-based relabel: one fancy-index over the image instead of a
+    # per-pixel Python call (np.vectorize) — the palette has at most a
+    # few dozen entries while the label map can be 16M pixels.
+    lut = np.array([remap[find(i)] for i in range(n)], dtype=np.intp)
+    new_labels = lut[labels]
     new_palette = palette[roots]
     return new_labels, new_palette
 

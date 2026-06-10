@@ -424,19 +424,18 @@ export async function preflightCheck(
   return response.data
 }
 
-/** Fetch an archived resolved plan by its stable hash. */
-export async function getResolvedPlan(planHash: string): Promise<ResolvedPlan> {
-  const response = await api.get<ResolvedPlan>(`/plans/${encodeURIComponent(planHash)}`)
-  return response.data
-}
-
 export type RunState = 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'canceled'
 
 export interface PrintRun {
   id: string
   name: string
   profile_name: string
-  gcode: string
+  /** Full G-code payload. Absent on `GET /queue` items — the backend
+   *  returns lightweight summaries there so the 3 s poll doesn't ship
+   *  multi-MB programs; fetch `GET /queue/{id}` when the program is
+   *  needed. Still present on enqueue / pause / resume / cancel
+   *  responses. */
+  gcode?: string
   total_lines: number
   acked_lines: number
   state: RunState
@@ -1184,4 +1183,3 @@ export async function setPaletteSource(source: PaletteSource): Promise<PaletteSo
   })
   return response.data.source
 }
-

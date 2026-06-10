@@ -19,7 +19,9 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 
+from pen_plotter.api.upload_limits import max_upload_bytes as _max_upload_bytes
 from pen_plotter.application.color_assignment import auto_assign_layer_colors
 from pen_plotter.application.file_library import (
     FileMeta,
@@ -57,24 +59,6 @@ from pen_plotter.persistence import (
 )
 
 router = APIRouter()
-
-
-def _max_upload_bytes() -> int:
-    """Return the per-request body cap, configurable via env var.
-
-    ``OMNIPLOT_MAX_UPLOAD_MB`` (positive integer) overrides the default
-    50 MB.
-    """
-    raw = os.environ.get("OMNIPLOT_MAX_UPLOAD_MB", "").strip()
-    if raw:
-        try:
-            mb = int(raw)
-            if mb > 0:
-                return mb * 1024 * 1024
-        except ValueError:
-            pass
-    return 50 * 1024 * 1024
-
 
 MAX_UPLOAD_BYTES = _max_upload_bytes()
 
@@ -127,12 +111,10 @@ def _sanitize_folder(folder: str) -> str:
 _DEFAULT_FILES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "files"
 FILES_DIR = Path(os.environ.get("OMNIPLOT_FILES_DIR", _DEFAULT_FILES_DIR))
 
-# Backwards-compatible aliases. The tests and any external callers that
-# imported these private helpers from this module keep working; new
-# code should import them from ``application.file_library`` directly.
+# Backwards-compatible aliases. Callers that imported these private
+# helpers from this module keep working; new code should import them
+# from ``application.file_library`` directly.
 _file_dir = file_dir
-_meta_path = lambda file_id: file_dir(file_id) / "meta.json"  # noqa: E731
-_svg_path = lambda file_id: file_dir(file_id) / "normalized.svg"  # noqa: E731
 _find_original = find_original
 
 
@@ -415,7 +397,19 @@ async def upload_to_library(
         created_at=datetime.now(UTC),
         schema_version=PERSISTENCE_SCHEMA_VERSION,
     )
-    save_file_record(record)
+    try:
+        save_file_record(record)
+    except IntegrityError:
+        # Dedup TOCTOU: a concurrent identical upload won the race between
+        # our hash check above and this insert — the unique ``sha256`` index
+        # rejected the second row. Clean up our orphaned artefact directory
+        # and return the winner's record so the dedup stays idempotent
+        # instead of surfacing a 500.
+        shutil.rmtree(final_dir, ignore_errors=True)
+        winner = get_file_record_by_hash(digest)
+        if winner is None:  # pragma: no cover — index hit but row vanished
+            raise
+        return FileUploadResponse(file=_record_to_detail(winner), existing=True)
 
     if converted.bitmap_segmentation is not None and converted.bitmap_options is not None:
         # Cache under the file_id so /rerender can find the segmentation

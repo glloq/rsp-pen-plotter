@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+/* eslint-disable vue/one-component-per-file --
+   Throwaway host components per test case; not real SFCs. */
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
@@ -75,6 +77,39 @@ describe('useKeyboardShortcuts', () => {
     press('k', { ctrl: true, target: input })
     expect(onPause).not.toHaveBeenCalled()
     document.body.removeChild(input)
+  })
+
+  it('triggers queue.resume on plain r without any modifier', () => {
+    const onResume = vi.fn()
+    const ResumeHost = defineComponent({
+      setup() {
+        useKeyboardShortcuts([{ id: 'queue.resume', handler: onResume }])
+        return () => h('div')
+      },
+    })
+    mount(ResumeHost)
+    press('r')
+    expect(onResume).toHaveBeenCalledOnce()
+  })
+
+  it('never intercepts Ctrl/Cmd+R (browser reload)', () => {
+    const onResume = vi.fn()
+    const ResumeHost = defineComponent({
+      setup() {
+        useKeyboardShortcuts([{ id: 'queue.resume', handler: onResume }])
+        return () => h('div')
+      },
+    })
+    mount(ResumeHost)
+    const event = new KeyboardEvent('keydown', {
+      key: 'r',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    window.dispatchEvent(event)
+    expect(onResume).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
   })
 
   it('unregisters the handler on unmount', () => {

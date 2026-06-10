@@ -9,6 +9,7 @@ import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from pen_plotter import __version__
@@ -43,6 +44,16 @@ def _git(*args: str, cwd: Path | None = None) -> str | None:
     return result.stdout.strip()
 
 
+async def _git_async(*args: str, cwd: Path | None = None) -> str | None:
+    """Run :func:`_git` in the threadpool.
+
+    ``subprocess.run`` blocks the calling thread for up to its 10 s
+    timeout; from an async handler that would freeze the whole event
+    loop (including /plotter/emergency_stop) while git churns.
+    """
+    return await run_in_threadpool(_git, *args, cwd=cwd)
+
+
 class VersionResponse(BaseModel):
     """Currently-installed OmniPlot version and git state."""
 
@@ -59,6 +70,13 @@ class VersionResponse(BaseModel):
 @router.get("/version", response_model=VersionResponse)
 async def get_version() -> VersionResponse:
     """Report the package version and (if available) the git checkout state."""
+    # The git invocations below are blocking subprocess calls (up to 10 s
+    # each on a wedged disk); run the whole snapshot in the threadpool.
+    return await run_in_threadpool(_version_snapshot)
+
+
+def _version_snapshot() -> VersionResponse:
+    """Collect the version/git state synchronously (threadpool worker)."""
     root = _repo_root()
     is_git = (root / ".git").exists()
     commit = _git("rev-parse", "HEAD") if is_git else None
@@ -144,8 +162,8 @@ async def check_update() -> CheckUpdateResponse:
             error="not a git checkout",
         )
 
-    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
-    current = _git("rev-parse", "HEAD")
+    branch = await _git_async("rev-parse", "--abbrev-ref", "HEAD")
+    current = await _git_async("rev-parse", "HEAD")
     if not branch or branch == "HEAD" or not current:
         return CheckUpdateResponse(
             update_available=False,
@@ -201,7 +219,7 @@ async def check_update() -> CheckUpdateResponse:
         )
 
     remote_ref = f"origin/{branch}"
-    remote = _git("rev-parse", remote_ref)
+    remote = await _git_async("rev-parse", remote_ref)
     if not remote:
         return CheckUpdateResponse(
             update_available=False,
@@ -214,7 +232,7 @@ async def check_update() -> CheckUpdateResponse:
 
     # ``rev-list --count HEAD..origin/branch`` reports the number of commits
     # the remote has that we don't — i.e. how far behind we are.
-    behind_str = _git("rev-list", "--count", f"HEAD..{remote_ref}")
+    behind_str = await _git_async("rev-list", "--count", f"HEAD..{remote_ref}")
     try:
         behind = int(behind_str) if behind_str is not None else 0
     except ValueError:
@@ -277,7 +295,7 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
         raise HTTPException(status_code=403, detail="self-update is disabled on this host")
 
     force = bool(request.force) if request else False
-    previous = _git("rev-parse", "HEAD")
+    previous = await _git_async("rev-parse", "HEAD")
 
     cmd: list[str] = [str(script)]
     if force:
@@ -315,7 +333,7 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
 
     log = stdout.decode("utf-8", errors="replace") if stdout else ""
     ok = process.returncode == 0
-    new = _git("rev-parse", "HEAD") if ok else previous
+    new = await _git_async("rev-parse", "HEAD") if ok else previous
     updated = ok and previous is not None and new is not None and previous != new
     # Audit is best-effort here: a failed SQLite write (locked/full disk
     # mid-rebuild) must not mask the update result behind a bare 500.

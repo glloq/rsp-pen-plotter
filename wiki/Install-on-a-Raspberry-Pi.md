@@ -70,7 +70,7 @@ auto-suggests the available ports.
 If the Pi is on a shared LAN:
 
 ```bash
-sudo nano /etc/omniplot/.env.service
+nano ~/rsp-pen-plotter/.env.service     # written by install-service.sh, mode 600
 # add:
 OMNIPLOT_API_KEY=<32+ random characters>
 OMNIPLOT_REQUIRE_AUTH=1
@@ -96,6 +96,11 @@ cd ~/rsp-pen-plotter
 rebuilds the frontend and restarts the systemd unit. The update endpoint
 can be disabled (`OMNIPLOT_DISABLE_UPDATE=1`) on appliances that should
 only be updated by hand.
+
+When re-running `./install.sh` manually, two flags are useful on an
+appliance: `--no-restart` skips the automatic restart of an installed
+`omniplot.service`, and `--no-service-refresh` keeps an existing systemd
+unit as-is instead of refreshing it.
 
 ## See also
 

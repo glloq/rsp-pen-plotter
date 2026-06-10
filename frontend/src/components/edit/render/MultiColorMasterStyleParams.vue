@@ -36,6 +36,13 @@ const style = computed(() => resolveMulticolorStyle(props.styleId))
 
 const knobs = computed(() => draft.getMulticolorStyleKnobs(props.styleId))
 
+// Trailing-edge throttle — twin of MasterStyleParams. A slider drag
+// fires one @input per pixel; the knob write below is immediate (live
+// preview feedback) but the per-layer store propagation only needs to
+// run once, shortly after the drag settles.
+const KNOB_PROPAGATION_DELAY_MS = 120
+let knobPropagationTimer: ReturnType<typeof setTimeout> | null = null
+
 function setKnob<K extends string>(key: K, value: unknown): void {
   ;(draft.setMulticolorKnob as any)(props.styleId, key, value)
   // Push the updated knobs onto existing layers so /rerender (gcode
@@ -46,12 +53,15 @@ function setKnob<K extends string>(key: K, value: unknown): void {
   // output would diverge as soon as the operator tweaks any knob
   // (crossed, angle_step, spacing range, …).
   if (store.layers.length > 0) {
-    void applyMasterStyleToLayers(store, {
-      styleId: props.styleId,
-      penSlot: null,
-      recipeResolver: (index, total, hex) =>
-        draft.multicolorRecipeForCluster(index, total, hex),
-    })
+    if (knobPropagationTimer !== null) clearTimeout(knobPropagationTimer)
+    knobPropagationTimer = setTimeout(() => {
+      knobPropagationTimer = null
+      void applyMasterStyleToLayers(store, {
+        styleId: props.styleId,
+        penSlot: null,
+        recipeResolver: (index, total, hex) => draft.multicolorRecipeForCluster(index, total, hex),
+      })
+    }, KNOB_PROPAGATION_DELAY_MS)
   }
 }
 

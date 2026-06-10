@@ -27,7 +27,13 @@ _INKSCAPE_NS = "http://www.inkscape.org/namespaces/inkscape"
 _SVG_NS = "http://www.w3.org/2000/svg"
 _INKSCAPE_LABEL = f"{{{_INKSCAPE_NS}}}label"
 
-_NUMBER_RE = re.compile(r"-?\d+\.?\d*(?:[eE][-+]?\d+)?")
+# SVG number grammar: optional sign, then EITHER ``digits[.digits]`` OR
+# ``.digits`` — tools like PyMuPDF emit coordinates with no leading zero
+# (e.g. ``.61035158``), so a regex that requires a digit before the
+# decimal point would silently misparse them. Mirrors the pattern used
+# in :mod:`pen_plotter.core.pdf_postprocess`.
+_NUMBER_PATTERN = r"-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?"
+_NUMBER_RE = re.compile(_NUMBER_PATTERN)
 
 
 def is_ir_enabled() -> bool:
@@ -72,7 +78,7 @@ def _polylines_from_path(d: str) -> list[Polyline]:
     Bezier control points (good enough for hashing and travel metrics;
     a proper flattener lands with phase B).
     """
-    tokens = re.findall(r"[MmLlHhVvCcSsQqTtAaZz]|-?\d+\.?\d*(?:[eE][-+]?\d+)?", d)
+    tokens = re.findall(rf"[MmLlHhVvCcSsQqTtAaZz]|{_NUMBER_PATTERN}", d)
     polylines: list[Polyline] = []
     points: list[tuple[float, float]] = []
     x = y = 0.0
@@ -84,11 +90,16 @@ def _polylines_from_path(d: str) -> list[Polyline]:
         if tok.isalpha():
             cmd = tok
             i += 1
-            if cmd in {"Z", "z"} and points:
-                points.append((start_x, start_y))
-                if len(points) >= 2:
-                    polylines.append(Polyline(points=points, closed=True))
-                points = []
+            if cmd in {"Z", "z"}:
+                if points:
+                    points.append((start_x, start_y))
+                    if len(points) >= 2:
+                        polylines.append(Polyline(points=points, closed=True))
+                    points = []
+                # Per the SVG spec the current point returns to the
+                # subpath's initial point after a closepath — relative
+                # commands following a ``z`` are offset from there.
+                x, y = start_x, start_y
             continue
         if cmd is None:
             i += 1
@@ -96,6 +107,11 @@ def _polylines_from_path(d: str) -> list[Polyline]:
         absolute = cmd.isupper()
         op = cmd.upper()
         try:
+            if op != "M" and not points:
+                # Drawing command with no open subpath (e.g. an ``L``
+                # straight after a ``Z``): the new subpath starts at the
+                # current point, so seed it as the first vertex.
+                points.append((x, y))
             if op in {"M", "L"}:
                 nx, ny = float(tokens[i]), float(tokens[i + 1])
                 i += 2

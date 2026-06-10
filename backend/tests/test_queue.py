@@ -313,3 +313,201 @@ async def test_run_next_skips_layer_on_recoverable_failure(monkeypatch) -> None:
     assert updated.acked_lines > 2
     assert updated.skipped_layers
     assert "simulated firmware reject" in (updated.error or "")
+
+
+def _skip_layer_profile(monkeypatch):
+    """Patch the queue module's profile lookup to a skip_layer policy."""
+    from pen_plotter import queue as queue_module
+    from pen_plotter.domain.capability import (
+        MachineCapabilities,
+        RecoveryPolicy,
+        ToolChangeStrategy,
+        ToolingMode,
+    )
+
+    base = get_profile(PROFILE)
+    assert base is not None
+    base.capabilities = MachineCapabilities(
+        tool_change=ToolChangeStrategy(
+            mode=ToolingMode.MANUAL,
+            command_source="operator",
+            recovery_policy=RecoveryPolicy.SKIP_LAYER,
+            manual_prompt=None,
+            host_macro=[],
+        ),
+    )
+    monkeypatch.setattr(queue_module, "get_profile", lambda name: base)
+    return base
+
+
+@pytest.mark.asyncio
+async def test_skip_layer_uses_live_checkpoint_not_stale_snapshot(monkeypatch) -> None:
+    """Regression: when ``StreamError`` fires mid-run, the skip-layer
+    boundary must be computed from the LIVE acked count reported by the
+    streamer's progress callbacks — not from the ``run`` row snapshot
+    loaded before streaming started. The stale snapshot would re-queue
+    the run at a too-early boundary, physically re-plotting layers that
+    are already inked (and recording the wrong skipped label)."""
+    from pen_plotter.hardware.streamer import StreamError, StreamProgress, StreamState
+
+    engine = _engine()
+    multi_layer = (
+        "G21\nG90\n"  # exec 0, 1
+        "; layer-A\n"
+        "G1 X1 Y1\n"  # exec 2
+        "; layer-B\n"
+        "G1 X2 Y2\n"  # exec 3
+        "; layer-C\n"
+        "G1 X3 Y3\n"  # exec 4
+    )
+    run = enqueue("job", PROFILE, multi_layer, target=engine)
+    assert run.acked_lines == 0  # the stale snapshot the bug acted on
+
+    _skip_layer_profile(monkeypatch)
+    queue, _transport = _queue(engine)
+
+    async def _stream_then_fail(gcode, on_progress=None, **_kwargs):
+        # Simulate the firmware acking 3 lines (into layer-B) before the
+        # reject; the queue's checkpoint callback sees the live progress.
+        assert on_progress is not None
+        await on_progress(StreamProgress(total=5, sent=3, acked=3, state=StreamState.RUNNING))
+        raise StreamError("reject mid layer-B")
+
+    queue._controller.stream = _stream_then_fail  # type: ignore[assignment]
+
+    await queue.run_next()
+
+    updated = get_run(run.id, engine)
+    assert updated is not None
+    assert updated.state == RunState.QUEUED
+    # Live checkpoint was exec 3 (inside layer-B) → next boundary is
+    # layer-C at exec 4. The stale snapshot (acked_lines=0) would have
+    # re-queued at exec 2 and recorded layer "A" as skipped.
+    assert updated.acked_lines == 4
+    assert updated.skipped_layers == ["C"]
+
+
+@pytest.mark.asyncio
+async def test_checkpoints_are_throttled_not_per_line(monkeypatch) -> None:
+    """One SQLite commit per acked line stalls the event loop; the
+    checkpoint callback must batch writes (every N lines / T seconds /
+    state flips) while still persisting the final completion state."""
+    from pen_plotter import queue as queue_module
+
+    engine = _engine()
+    gcode = "\n".join(f"G1 X{i}" for i in range(30))
+    run = enqueue("job", PROFILE, gcode, target=engine)
+    queue, _transport = _queue(engine)
+
+    calls: list[dict] = []
+    real_update = queue_module._update
+
+    def counting_update(run_id, target, **fields):
+        calls.append(fields)
+        return real_update(run_id, target, **fields)
+
+    monkeypatch.setattr(queue_module, "_update", counting_update)
+
+    await queue.run_next()
+
+    updated = get_run(run.id, engine)
+    assert updated is not None
+    assert updated.state == RunState.COMPLETED
+    assert updated.acked_lines == run.total_lines
+    # 30 acked lines must NOT produce ~30 row updates. Expected writes:
+    # RUNNING flip, initial progress emit, DONE flip, final COMPLETED —
+    # comfortably under 10 even with margin for time-based flushes.
+    assert len(calls) < 10, f"checkpointing not throttled: {len(calls)} writes"
+
+
+@pytest.mark.asyncio
+async def test_run_next_requeues_on_runtime_error(monkeypatch) -> None:
+    """``controller.stream`` can raise RuntimeError ("A job is already
+    running" / "Not connected") after the run was flipped RUNNING — it
+    must go back to QUEUED, not stay stranded (``next_queued`` only
+    selects QUEUED rows)."""
+    engine = _engine()
+    run = enqueue("job", PROFILE, GCODE, target=engine)
+    queue, _transport = _queue(engine)
+
+    async def _busy(*_args, **_kwargs):
+        raise RuntimeError("A job is already running.")
+
+    queue._controller.stream = _busy  # type: ignore[assignment]
+
+    assert await queue.run_next() is True
+    updated = get_run(run.id, engine)
+    assert updated is not None
+    assert updated.state == RunState.QUEUED
+
+
+@pytest.mark.asyncio
+async def test_run_next_fails_run_on_unexpected_error(monkeypatch) -> None:
+    """A non-StreamError, non-RuntimeError failure marks the run FAILED
+    with the error message instead of leaving it RUNNING forever."""
+    engine = _engine()
+    run = enqueue("job", PROFILE, GCODE, target=engine)
+    queue, _transport = _queue(engine)
+
+    async def _boom(*_args, **_kwargs):
+        raise ValueError("unexpected kaboom")
+
+    queue._controller.stream = _boom  # type: ignore[assignment]
+
+    assert await queue.run_next() is True
+    updated = get_run(run.id, engine)
+    assert updated is not None
+    assert updated.state == RunState.FAILED
+    assert "unexpected kaboom" in (updated.error or "")
+
+
+@pytest.mark.asyncio
+async def test_queue_list_endpoint_returns_summaries_without_gcode() -> None:
+    """GET /queue is polled every 3 s by the frontend — it must NOT ship
+    the full ``gcode`` / ``pause_points`` / ``swap_actions`` payloads.
+    The detail route keeps the full row for callers that need it."""
+    import httpx
+    from httpx import ASGITransport
+
+    from pen_plotter.main import app
+
+    client = httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    big_gcode = "\n".join(f"G1 X{i}" for i in range(200))
+    async with client:
+        created = await client.post(
+            "/queue",
+            json={"name": "shape-test", "profile_name": PROFILE, "gcode": big_gcode},
+        )
+        assert created.status_code == 200
+        run_id = created.json()["id"]
+        try:
+            listed = await client.get("/queue")
+            assert listed.status_code == 200
+            items = [r for r in listed.json() if r["id"] == run_id]
+            assert len(items) == 1
+            item = items[0]
+            assert "gcode" not in item
+            assert "pause_points" not in item
+            assert "swap_actions" not in item
+            # Everything the queue store / cockpit consumes is present.
+            for key in (
+                "id",
+                "name",
+                "profile_name",
+                "state",
+                "priority",
+                "total_lines",
+                "acked_lines",
+                "error",
+                "swap_prompt",
+                "skipped_layers",
+                "created_at",
+                "updated_at",
+            ):
+                assert key in item, f"summary missing {key!r}"
+
+            detail = await client.get(f"/queue/{run_id}")
+            assert detail.status_code == 200
+            assert detail.json()["gcode"] == big_gcode
+        finally:
+            await client.delete(f"/queue/{run_id}")

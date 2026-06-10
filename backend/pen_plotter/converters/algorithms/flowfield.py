@@ -19,7 +19,10 @@ Two field sources:
 When ``options["intensity"]`` is supplied (2D float array, same shape
 as the mask) and ``mode="gradient"`` is selected, the gradient is
 computed from that intensity instead of the mask — produces tonal
-streamlines following the source image's brightness gradient.
+streamlines following the source image's brightness gradient. Without
+an explicit override the algorithm is tone-aware: the pipeline-injected
+``options["_tone"]`` luminance map is inverted to darkness and used as
+the intensity, so streamlines trace the source image's structure.
 """
 
 from __future__ import annotations
@@ -101,18 +104,23 @@ def _integrate_streamline(
     step: float,
     max_steps: int,
     direction: int,
+    skip_occupied_start: bool = False,
 ) -> list[tuple[float, float]]:
     h, w = mask.shape
     x, y = seed_xy
     path: list[tuple[float, float]] = []
-    for _ in range(max_steps):
+    for step_idx in range(max_steps):
         ix, iy = int(round(x)), int(round(y))
         if not (0 <= ix < w and 0 <= iy < h):
             break
         if not mask[iy, ix]:
             break
-        # Occupancy on a coarse grid so streamlines spread apart.
-        if occupancy[iy, ix]:
+        # Per-pixel occupancy stops a streamline when it collides with
+        # an already-drawn one (or itself). The backward pass of a
+        # bidirectional streamline starts on the cell the forward pass
+        # just claimed, so it skips the occupancy check at its first
+        # step (``skip_occupied_start``) instead of dying immediately.
+        if occupancy[iy, ix] and not (skip_occupied_start and step_idx == 0):
             break
         occupancy[iy, ix] = True
         path.append((x, y))
@@ -139,6 +147,7 @@ class FlowFieldAlgorithm(RasterAlgorithm):
         "Long streamlines following the image gradient or smooth noise — "
         "few pen-lifts, organic feel."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         # Field source: image gradient (follows the photo's structure) or
@@ -190,10 +199,16 @@ class FlowFieldAlgorithm(RasterAlgorithm):
         else:
             # Prefer caller-supplied intensity (greyscale tonal map) when
             # available — gives streamlines that follow the source image
-            # rather than just the mask silhouette.
+            # rather than just the mask silhouette. An explicit
+            # ``intensity`` option wins; otherwise the pipeline-injected
+            # ``_tone`` luminance map (0=black..1=white) is inverted to a
+            # darkness map so dark areas carry the strongest structure.
             intensity_opt = opts.get("intensity")
+            tone_opt = opts.get("_tone")
             if isinstance(intensity_opt, np.ndarray) and intensity_opt.shape == bool_mask.shape:
                 intensity = intensity_opt.astype(np.float32)
+            elif isinstance(tone_opt, np.ndarray) and tone_opt.shape == bool_mask.shape:
+                intensity = 1.0 - np.clip(tone_opt.astype(np.float32), 0.0, 1.0)
             else:
                 # Distance transform of the mask gives a smooth interior
                 # gradient even without caller-supplied intensity.
@@ -243,6 +258,7 @@ class FlowFieldAlgorithm(RasterAlgorithm):
                     step=step,
                     max_steps=max_steps,
                     direction=-1,
+                    skip_occupied_start=True,
                 )
                 # Reverse backward path and stitch in front of forward.
                 if len(bwd) > 1:

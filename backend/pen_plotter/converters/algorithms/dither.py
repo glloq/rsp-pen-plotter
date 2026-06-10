@@ -20,26 +20,14 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters._bayer import BAYER8_UNIT
 from pen_plotter.converters.algorithms._style import floored_spacing
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
-# Standard 8×8 Bayer matrix, thresholds normalised to (0, 1).
-_BAYER_8 = (
-    np.array(
-        [
-            [0, 32, 8, 40, 2, 34, 10, 42],
-            [48, 16, 56, 24, 50, 18, 58, 26],
-            [12, 44, 4, 36, 14, 46, 6, 38],
-            [60, 28, 52, 20, 62, 30, 54, 22],
-            [3, 35, 11, 43, 1, 33, 9, 41],
-            [51, 19, 59, 27, 49, 17, 57, 25],
-            [15, 47, 7, 39, 13, 45, 5, 37],
-            [63, 31, 55, 23, 61, 29, 53, 21],
-        ],
-        dtype=np.float64,
-    )
-    + 0.5
-) / 64.0
+# Standard 8×8 Bayer matrix, thresholds normalised to (0, 1). The base
+# pattern is shared with ``segmentation.palette_dither`` via
+# ``pen_plotter.converters._bayer``.
+_BAYER_8 = BAYER8_UNIT
 
 
 def _error_diffuse(darkness: NDArray[np.float64], method: str) -> NDArray[np.bool_]:

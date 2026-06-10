@@ -8,9 +8,11 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -43,7 +45,7 @@ from pen_plotter.api.slo import router as slo_router
 from pen_plotter.api.system import router as system_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.application.file_library import integrity_scan
-from pen_plotter.auth import require_api_key, verify_auth_configuration
+from pen_plotter.auth import API_KEY_ENV, require_api_key, verify_auth_configuration
 from pen_plotter.converters.defaults import register_default_converters
 from pen_plotter.converters.registry import registry
 from pen_plotter.deployment import capabilities_for, resolve_role
@@ -128,6 +130,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     slo_task: asyncio.Task[None] | None = None
     if caps.serves_http and slo_evaluator_enabled():
         slo_task = asyncio.create_task(slo_evaluator_loop())
+        # Surface a crashed evaluator in the logs instead of silently
+        # losing the exception inside an unawaited task object.
+        slo_task.add_done_callback(_log_slo_task_outcome)
     try:
         yield
     finally:
@@ -135,10 +140,23 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             slo_task.cancel()
             try:
                 await slo_task
-            except (asyncio.CancelledError, Exception):
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                # Already logged by the done-callback; don't let a
+                # crashed evaluator break the rest of the shutdown.
                 pass
         if caps.runs_queue_worker:
             await print_queue.stop()
+
+
+def _log_slo_task_outcome(task: asyncio.Task[None]) -> None:
+    """Log non-cancellation failures of the background SLO evaluator."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        _log.error("SLO evaluator task crashed", exc_info=exc)
 
 
 app = FastAPI(title="OmniPlot", version=__version__, lifespan=lifespan)
@@ -182,6 +200,52 @@ _SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
 }
+
+# Methods that never mutate state — exempt from the cross-origin guard.
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def _origin_matches_host(origin: str, host: str) -> bool:
+    """True when the Origin header's authority equals the request Host.
+
+    Compares the ``host[:port]`` part only — a same-origin browser
+    request always carries the same authority in both headers,
+    regardless of scheme (the appliance may sit behind plain HTTP on
+    the LAN or TLS at a proxy).
+    """
+    try:
+        netloc = urlsplit(origin).netloc
+    except ValueError:
+        return False
+    return bool(netloc) and netloc.lower() == host.strip().lower()
+
+
+@app.middleware("http")
+async def _reject_cross_site_writes(request, call_next):  # type: ignore[no-untyped-def]
+    """CSRF / DNS-rebinding guard for the open (no API key) mode.
+
+    With ``OMNIPLOT_API_KEY`` unset, several mutating endpoints accept
+    requests without a JSON body (``POST /plotter/pause|abort|…``,
+    ``POST /macros/{name}/run``, ``POST /system/update``) — exactly the
+    shape a cross-origin HTML form can produce. Browsers always attach
+    an ``Origin`` header to such requests, so: reject state-changing
+    methods whose Origin is present and neither matches the request
+    Host nor sits in the CORS allow-list (which keeps the Vite dev
+    server working). Requests without an Origin header (curl, the
+    Python SDK, same-machine scripts) are untouched, and locked mode
+    relies on the API key — an attacker's page can't read or forge it.
+    """
+    if request.method in _SAFE_METHODS or os.environ.get(API_KEY_ENV):
+        return await call_next(request)
+    origin = request.headers.get("origin")
+    if origin:
+        host = request.headers.get("host", "")
+        if origin not in _cors_origins() and not _origin_matches_host(origin, host):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Cross-origin request blocked (origin not allowed)."},
+            )
+    return await call_next(request)
 
 
 @app.middleware("http")

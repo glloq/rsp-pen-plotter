@@ -10,10 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from pen_plotter.application import file_library as _lib
 from pen_plotter.application.file_library import (
+    CacheEntry,
     find_original,
     forget_job,
     get_cached,
@@ -122,7 +124,10 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
     """
     entry = get_cached(request.job_id)
     if entry is None:
-        entry, reason = try_rehydrate(request.job_id)
+        # Rehydration re-reads the original bytes and re-runs the full
+        # segmentation — CPU-bound work that would freeze the event loop
+        # (and /plotter/emergency_stop) if run inline.
+        entry, reason = await run_in_threadpool(try_rehydrate, request.job_id)
         if entry is None:
             raise HTTPException(
                 status_code=404,
@@ -159,10 +164,15 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
     # per-layer algorithm picker. Best-effort: if the source bytes have
     # been GC'd or the new options don't round-trip, fall through to the
     # legacy cached-render path.
-    entry = _maybe_reseg_for_line_art_overrides(entry, request.job_id, overrides)
+    entry = await run_in_threadpool(
+        _maybe_reseg_for_line_art_overrides, entry, request.job_id, overrides
+    )
 
     try:
-        svg, warnings = BitmapConverter.render_from_segmentation(
+        # Rendering is synchronous geometry/raster work — keep it off the
+        # event loop for the same reason as the rehydration above.
+        svg, warnings = await run_in_threadpool(
+            BitmapConverter.render_from_segmentation,
             entry.segmentation,
             entry.options,
             per_layer_overrides=overrides,
@@ -178,10 +188,10 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
 
 
 def _maybe_reseg_for_line_art_overrides(
-    entry: Any,
+    entry: CacheEntry,
     job_id: str,
     overrides: dict[str, dict[str, Any]],
-) -> Any:
+) -> CacheEntry:
     """Re-segment from disk when an override needs Otsu but the cache doesn't have it.
 
     The upload auto-switch only fires when the operator picked a
@@ -242,8 +252,6 @@ def _maybe_reseg_for_line_art_overrides(
         )
     except Exception:  # noqa: BLE001 — degrade to cached render rather than 500
         return entry
-    from pen_plotter.application.file_library import CacheEntry  # noqa: PLC0415
-
     fresh = CacheEntry(segmentation, new_opts)
     remember_job(job_id, segmentation, new_opts)
     return fresh

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from pen_plotter.api.rerender import remember_job
+from pen_plotter.api.upload_limits import max_upload_bytes as _max_upload_bytes
 from pen_plotter.converters.pipeline import (
     convert_file,
     parse_options,
@@ -19,25 +20,6 @@ from pen_plotter.models import Job
 from pen_plotter.persistence import save_job
 
 router = APIRouter()
-
-
-def _max_upload_bytes() -> int:
-    """Return the per-request body cap, configurable via env var.
-
-    ``OMNIPLOT_MAX_UPLOAD_MB`` (positive integer) overrides the default
-    50 MB. Resolved at call time so tests can monkeypatch the env var
-    without re-importing the module.
-    """
-    raw = os.environ.get("OMNIPLOT_MAX_UPLOAD_MB", "").strip()
-    if raw:
-        try:
-            mb = int(raw)
-            if mb > 0:
-                return mb * 1024 * 1024
-        except ValueError:
-            pass
-    return 50 * 1024 * 1024
-
 
 MAX_UPLOAD_BYTES = _max_upload_bytes()
 
@@ -80,7 +62,10 @@ async def upload(
     data = await read_upload_safely(file, _max_upload_bytes())
 
     parsed_options = parse_options(options)
-    converted = convert_file(data, file.filename, mime, parsed_options)
+    # Conversion is fully synchronous and CPU-bound (segmentation, potrace,
+    # vpype, …). Off-load it to the threadpool so a heavy file doesn't freeze
+    # the event loop — and with it /plotter/emergency_stop — while it runs.
+    converted = await run_in_threadpool(convert_file, data, file.filename, mime, parsed_options)
 
     job = Job(
         source_file=converted.source_file,

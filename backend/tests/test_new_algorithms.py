@@ -534,3 +534,39 @@ def test_new_algorithms_empty_mask_safe() -> None:
         svg = get_algorithm(name).render_layer(mask, "#000", "empty")
         assert svg.startswith("<g ") and svg.endswith("</g>")
         assert "<line" not in svg and "<polyline" not in svg and "<circle" not in svg
+
+
+def test_flowfield_backward_pass_survives_seed_occupancy() -> None:
+    """Regression: bidirectional streamlines died on their first backward step.
+
+    The forward pass claims the seed cell in the occupancy grid; the
+    backward pass starts on that same cell and used to bail out
+    immediately, making the ``bidirectional`` option a silent no-op.
+    """
+    from pen_plotter.converters.algorithms.flowfield import _integrate_streamline
+
+    h = w = 32
+    mask = np.ones((h, w), dtype=bool)
+    vx = np.ones((h, w), dtype=np.float32)  # uniform field pointing +x
+    vy = np.zeros((h, w), dtype=np.float32)
+    occupancy = np.zeros((h, w), dtype=bool)
+    seed = (16.0, 16.0)
+
+    fwd = _integrate_streamline(
+        vx, vy, mask, occupancy, seed, step=1.0, max_steps=10, direction=1
+    )
+    bwd = _integrate_streamline(
+        vx,
+        vy,
+        mask,
+        occupancy,
+        seed,
+        step=1.0,
+        max_steps=10,
+        direction=-1,
+        skip_occupied_start=True,
+    )
+
+    assert len(fwd) > 1
+    # Before the fix the backward walk returned at most the seed itself.
+    assert len(bwd) > 1

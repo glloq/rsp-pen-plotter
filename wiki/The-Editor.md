@@ -28,6 +28,47 @@ layers, per-layer settings, variant)` tuple. The shared keys are:
 
 Switching surface preserves all of the above.
 
+## Print styles — the primary selection model
+
+Day to day you rarely pick a raw algorithm: you pick a **print style** — a
+named bundle of algorithm + options (and, for master styles, the
+segmentation too). All 136 styles live in one registry,
+`frontend/src/data/printRegistry.ts`, split by **scope**:
+
+- **Master styles** (`scope: 'master'`, 85 entries) own the whole result:
+  segmentation method, default algorithm, and a per-band / per-cluster
+  recipe applied to every produced layer. They come in two families,
+  switched by the colour-mode toggle on the **Style tab**:
+  - 34 **tonal (monochrome)** masters — Pencil, Halftone shaded,
+    Stippling shaded, Engraving, Outline, Etch burin, String thread,
+    Coral growth, … driven by luminance-bands / threshold / Otsu
+    segmentation. Pencil is the default.
+  - 51 **multicolour** masters (ids prefixed `color-*`) — driven by
+    k-means / fixed-palette segmentation, with a per-colour-cluster
+    recipe. Flat aplats (`color-flat`) is the default.
+- **Layer styles** (`scope: 'layer'`, 51 entries) are per-layer presets —
+  algorithm + options for a single layer or pass, with no segmentation
+  responsibility.
+
+How it surfaces in the UI:
+
+- The **Style tab** carries the master-style gallery
+  (`MasterStylePicker`): one card per style with thumbnail, label and
+  one-line description, filtered to the active colour mode. Selecting a
+  card commits the style id into the draft and re-renders. A **Custom**
+  pill appears when you've tweaked segmentation or algorithm knobs past
+  the preset's defaults, so the highlighted tile never lies about what's
+  actually rendered.
+- Each **layer card** carries the per-layer picker (`PrintStylePicker`): a
+  curated short-list of general-purpose styles up front, the long tail
+  behind a *show all* toggle, and a *Default* tile that clears the
+  override so the layer falls back to what the master style baked in. The
+  picker hides while a multi-pass stack is active — you edit one source of
+  truth at a time.
+
+Saved placements from before the registry merge keep working: legacy
+master ids are mapped to the renamed registry entries on rehydration.
+
 ## Assistant — the six-step wizard
 
 For: a fresh print, a learner, a quick result.
@@ -44,9 +85,9 @@ For: a fresh print, a learner, a quick result.
    bounds) and the *Generate* button.
 
 The wizard re-renders the placement on every step so you always see what
-*Generate* will commit. It never reaches algorithm options like
-`min_distance_mm` or `eps_steps`: it picks sensible defaults and surfaces
-two or three sliders per algorithm.
+*Generate* will commit. It never reaches the long tail of algorithm
+options like stippling's `dot_radius_px` or flowfield's `step_px`: it
+picks sensible defaults and surfaces two or three sliders per algorithm.
 
 Need a knob the wizard hides? Click **Switch to Expert mode** in the
 footer.
@@ -97,8 +138,8 @@ view with:
 - a *Pick A* / *Pick B* button that commits the choice and closes the
   drawer
 
-Use Compare for cross-hatch vs. stippling on the same portrait, or
-different `min_distance_mm` for stippling density.
+Use Compare for cross-hatch vs. stippling on the same portrait, or two
+different stippling `density` settings.
 
 ## Saved presets
 
@@ -119,5 +160,8 @@ button to delete them. The store lives in JSON next to the SQLite DB
 - **⌘/Ctrl + Backspace** — previous step
 - **⌘/Ctrl + M** — toggle Assistant ⇆ Expert
 - **Esc** — close editor (asks to confirm if you have unsaved tweaks)
+
+Outside the editor, queue resume is plain **R** (no modifier — Ctrl/Cmd+R
+stays the browser reload).
 
 Full list: [`docs/shortcuts.md`](../docs/shortcuts.md).

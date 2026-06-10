@@ -17,7 +17,11 @@ from pen_plotter.core.gcode import (
     _read_layers,
     sheet_exceeds_workspace,
 )
-from pen_plotter.core.pause_logic import should_pause
+from pen_plotter.core.pause_logic import (
+    effective_layer_pen,
+    installed_pen_hex_slots,
+    should_pause,
+)
 from pen_plotter.domain.print_plan import LayerPlan, ScaleMode
 from pen_plotter.models import MachineProfile, Placement, PreflightReport
 
@@ -101,24 +105,33 @@ def preflight_report(
     travel_speed = max(profile.travel_speed_mm_s, 1e-9)
     accel = profile.acceleration_mm_s2
     mono_pen = profile.pen_slot_count <= 1
+    pen_hex_to_slot = installed_pen_hex_slots(pens)
 
     for layer in geometry:
         setting = overrides.get(layer.label)
         slot = setting.target_pen_slot if setting else None
         source_color = setting.source_color if setting else None
         pause_before = setting.pause_before if setting else "auto"
+        assigned_hex = setting.assigned_color_hex if setting else None
 
         if slot is not None and slot not in missing:
             pen = pens.get(slot)
             if pen is None or not pen.installed:
                 missing.append(slot)
 
-        # Share the predicate with ``generate_gcode`` so the reported
-        # ``pen_changes`` count exactly matches the M0 prompts the
-        # streamer will surface — see core/pause_logic.
-        if should_pause(
+        # Share the predicate AND the L7 assigned-colour promotion with
+        # ``generate_gcode`` so the reported ``pen_changes`` count
+        # exactly matches the M0 prompts the streamer will surface —
+        # see core/pause_logic.
+        effective_slot, effective_color = effective_layer_pen(
             slot=slot,
             source_color=source_color,
+            assigned_color_hex=assigned_hex,
+            pen_hex_to_slot=pen_hex_to_slot,
+        )
+        if should_pause(
+            slot=effective_slot,
+            source_color=effective_color,
             pause_before=pause_before,
             previous_slot=previous_slot,
             previous_color=previous_color,
@@ -126,10 +139,10 @@ def preflight_report(
             tool_change_method=profile.tool_change_method,
         ).pause:
             pen_changes += 1
-        if slot is not None:
-            previous_slot = slot
-        if source_color is not None:
-            previous_color = source_color
+        if effective_slot is not None:
+            previous_slot = effective_slot
+        if effective_color is not None:
+            previous_color = effective_color
 
         override_speed = setting.drawing_speed_mm_s if setting else None
         speed = max(override_speed or profile.drawing_speed_mm_s, 1e-9)

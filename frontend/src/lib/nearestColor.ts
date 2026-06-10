@@ -5,6 +5,8 @@
 // override happens instantly in the UI (no /rerender round-trip),
 // matching what the backend would compute at the next /upload.
 
+import { canonicalHex } from './penWidth'
+
 function hexToRgb(hex: string): [number, number, number] {
   const body = hex.replace(/^#/, '').toLowerCase()
   const expanded =
@@ -23,12 +25,6 @@ function hexToRgb(hex: string): [number, number, number] {
 
 function gamma(x: number): number {
   return x > 0.04045 ? ((x + 0.055) / 1.055) ** 2.4 : x / 12.92
-}
-
-function normaliseHex(hex: string): string {
-  const [r, g, b] = hexToRgb(hex)
-  const toHex = (v: number): string => v.toString(16).padStart(2, '0')
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
 }
 
 function srgbToXyz(rgb: [number, number, number]): [number, number, number] {
@@ -128,5 +124,6 @@ export function nearestPoolHex(sourceHex: string, pool: readonly string[]): stri
       bestIdx = i
     }
   }
-  return normaliseHex(pool[bestIdx]!)
+  // Shared canonicaliser (lib/penWidth): lowercase #rrggbb, #rgb expanded.
+  return canonicalHex(pool[bestIdx]!)
 }

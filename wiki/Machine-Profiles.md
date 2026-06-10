@@ -17,35 +17,49 @@ into the user dir.
 
 ## Anatomy
 
-A minimal profile (`my-axidraw.yaml`):
+The schema is **flat** — speeds, pen commands and tool-change settings
+sit at the top level, not in nested blocks. A typical profile
+(`my-axidraw.yaml`, adapted from the bundled `axidraw_v3.yaml`):
 
 ```yaml
-name: my-axidraw
-description: AxiDraw v3 with 0.5 mm Sakura Micron
-gcode_dialect: ebb              # ebb | marlin | grbl | klipper | custom
-
-workspace:
-  width_mm: 297
-  height_mm: 210
-  margin_mm: 10
-  origin: top_left              # top_left | bottom_left
-
-motion:
-  travel_speed_mm_s: 80
-  drawing_speed_mm_s: 30
-  acceleration_mm_s2: 1500
-
-pen:
-  up_command: "SP,1"
-  down_command: "SP,0"
-  up_delay_ms: 250
-  down_delay_ms: 150
-
-pens:                            # the magazine
-  slot_count: 1
-  slots:
-    - { id: 1, name: "Sakura Micron 005", colour: "#111" }
+name: "My AxiDraw V3"
+units: "mm"                      # mm | inch
+workspace:                       # drawable bounds, in profile units
+  x_min: 0.0
+  y_min: 0.0
+  x_max: 300.0
+  y_max: 218.0
+origin: "top_left"               # top_left | bottom_left
+gcode_dialect: "ebb"             # grbl | marlin | klipper | ebb | custom
+pen_up_command: "SP,1"
+pen_down_command: "SP,0"
+tool_change_method: "manual_pause"   # manual_pause | carousel | rack | none
+tool_change_command: "M0"            # required
+drawing_speed_mm_s: 50.0
+travel_speed_mm_s: 130.0
+acceleration_mm_s2: 1000.0
+pen_lift_time_ms: 250.0          # servo settle time per lift/drop; 0 = instant
+pen_slot_count: 1
+pens:                            # optional magazine; one PenSlot per entry
+  - index: 0
+    name: "Sakura Micron 005"
+    color: "#111111"
+    installed: true
+    # position: { x: ..., y: ... }      # carousel/rack slot coordinates
+    # pen_up_command: "SP,1,14000"      # per-slot calibration override
+    # pen_down_command: "SP,0,11000"
+# pen_change_position: { x: 0.0, y: 0.0 }  # park point for manual swaps
+ebb:                             # only for gcode_dialect: ebb
+  steps_per_mm: 80.0
+  servo_up: 16000
+  servo_down: 12000
+  servo_rate: 400
+  serial_terminator: "cr"
 ```
+
+There is no `description` field — `name` is the only label, and it's
+also the lookup key. When `pens` is omitted, one default slot per
+`pen_slot_count` is synthesized.
 
 A full reference, with every supported field, the validation rules and
 example bundled profiles: [`docs/profile_format.md`](../docs/profile_format.md).

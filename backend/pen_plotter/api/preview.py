@@ -29,7 +29,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from pen_plotter.converters.bitmap import BitmapConverter
-from pen_plotter.converters.pipeline import resolve_mime
+from pen_plotter.converters.pipeline import read_upload_safely, resolve_mime
 
 router = APIRouter()
 
@@ -214,12 +214,10 @@ async def preview(
         if not isinstance(current_max, (int, float)) or current_max > cap:
             raw_opts["max_dimension_px"] = cap
 
-    data = await file.read()
-    if len(data) > MAX_PREVIEW_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds the {MAX_PREVIEW_BYTES // (1024 * 1024)} MB preview limit",
-        )
+    # Stream-read with a cumulative cap (raises 413 mid-read) so an
+    # oversized body never gets fully buffered into RAM before the check —
+    # same helper as /upload and /files.
+    data = await read_upload_safely(file, MAX_PREVIEW_BYTES)
 
     key = _cache_key(data, raw_opts, quality)
     cached = _cache.get(key)

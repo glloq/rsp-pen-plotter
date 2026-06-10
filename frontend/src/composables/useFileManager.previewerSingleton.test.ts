@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+/* eslint-disable vue/one-component-per-file --
+   Two throwaway host components in one test file is the point: the
+   regression is "two DIFFERENT consumers must share one previewer". */
 // Regression guard for the per-call previewer instantiation bug.
 // ``usePreviewScheduler`` used to be created fresh on every
 // ``useFileManager()`` call — so when the V2 modal remounted on a

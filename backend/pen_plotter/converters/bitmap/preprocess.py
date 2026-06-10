@@ -3,8 +3,10 @@
 The editor's "Image" tab writes into :class:`PreprocessOptions`; this
 module owns the validated schema and the photo-editor pipeline that
 walks the operator's tweaks in the order they'd expect from a real
-editor (geometry → colour space → tonal → spatial → auto-contrast →
-dither).
+editor (geometry → colour space → tonal → spatial → auto-contrast).
+The optional Floyd-Steinberg dither (:func:`apply_dither`) runs as a
+separate stage *after* the :func:`fit_within` downscale so the dot
+texture survives at segmentation resolution.
 
 Kept separate from segmentation / render so the pipeline can be
 unit-tested without spinning up a converter, and so the
@@ -207,46 +209,56 @@ def apply_preprocess(image: Image.Image, opts: PreprocessOptions) -> Image.Image
         )
     if opts.auto_contrast:
         out = ImageOps.autocontrast(out, cutoff=1)
-    if opts.dither_levels >= 2:
-        out = _floyd_steinberg(out, opts.dither_levels)
+    # NOTE: ``dither_levels`` is intentionally *not* applied here. The
+    # dither must run at segmentation resolution — i.e. after
+    # :func:`fit_within` — both for speed (error diffusion is O(pixels))
+    # and because downscaling a dithered image with LANCZOS averages the
+    # dot texture straight back to flat grey. The pipeline calls
+    # :func:`apply_dither` separately after the downscale.
     return out
+
+
+def apply_dither(image: Image.Image, opts: PreprocessOptions) -> Image.Image:
+    """Apply the optional Floyd-Steinberg dither stage.
+
+    Runs *after* :func:`fit_within` in the pipeline so the error
+    diffusion operates at segmentation resolution: dithering the
+    full-resolution upload first would be both slow (up to 16 Mpx) and
+    pointless — the LANCZOS downscale would average the dot texture
+    back into smooth grey, erasing the effect the operator asked for.
+    """
+    if opts.dither_levels >= 2:
+        return _floyd_steinberg(image, opts.dither_levels)
+    return image
 
 
 def _floyd_steinberg(image: Image.Image, levels: int) -> Image.Image:
     """Floyd-Steinberg error diffusion onto an N-level grey ramp.
 
     Quantises each pixel to the nearest of ``levels`` evenly-spaced
-    grey values (0..255 inclusive) and pushes the rounding error to
-    the 4 unprocessed neighbours via the standard Floyd-Steinberg
-    kernel (7/16 right, 3/16 down-left, 5/16 down, 1/16 down-right).
-    The output is RGB (grey replicated across channels) so the rest
-    of the segmentation pipeline keeps its 3-channel assumption.
+    grey values (0..255 inclusive), diffusing the rounding error to
+    unprocessed neighbours with the standard Floyd-Steinberg kernel.
+    The heavy lifting is delegated to Pillow's C quantizer
+    (``Image.quantize`` against a fixed grey-ramp palette with
+    ``Dither.FLOYDSTEINBERG``), which is deterministic and orders of
+    magnitude faster than a per-pixel Python loop. The output is RGB
+    (grey replicated across channels) so the rest of the segmentation
+    pipeline keeps its 3-channel assumption.
     """
     levels = max(2, levels)
     # Operate on a single greyscale plane — dithering each RGB
     # channel independently produces colour shimmer that no plotter
     # workflow benefits from, and the downstream segmentation snaps
     # back to a small palette anyway.
-    grey = np.asarray(image.convert("L"), dtype=np.float32)
-    h, w = grey.shape
-    step = 255.0 / (levels - 1)
-    for y in range(h):
-        for x in range(w):
-            old = grey[y, x]
-            new = round(old / step) * step
-            grey[y, x] = new
-            err = old - new
-            if x + 1 < w:
-                grey[y, x + 1] += err * 7 / 16
-            if y + 1 < h:
-                if x > 0:
-                    grey[y + 1, x - 1] += err * 3 / 16
-                grey[y + 1, x] += err * 5 / 16
-                if x + 1 < w:
-                    grey[y + 1, x + 1] += err * 1 / 16
-    clipped = np.clip(grey, 0.0, 255.0).astype(np.uint8)
-    rgb = np.stack([clipped, clipped, clipped], axis=-1)
-    return Image.fromarray(rgb, mode="RGB")
+    ramp = [round(i * 255.0 / (levels - 1)) for i in range(levels)]
+    palette_img = Image.new("P", (1, 1))
+    flat: list[int] = []
+    for value in ramp:
+        flat.extend((value, value, value))
+    palette_img.putpalette(flat)
+    grey = image.convert("L").convert("RGB")
+    quantised = grey.quantize(palette=palette_img, dither=Image.Dither.FLOYDSTEINBERG)
+    return quantised.convert("RGB")
 
 
 def fit_within(image: Image.Image, max_dim: int) -> Image.Image:

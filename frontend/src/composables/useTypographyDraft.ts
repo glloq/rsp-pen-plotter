@@ -91,8 +91,9 @@ export function defaultTypography(): TypographyDraft {
 // Mime-type predicate kept here so the EditModal and the pipeline
 // builder agree on what counts as a "text source" for typography
 // purposes. Aligned with the backend's text-handling converters
-// (text, markdown, html, docx, pdf).
-function isTextSource(mime: string): boolean {
+// (text, markdown, html, docx, pdf). Exported so the job store's plan
+// builder can locate the actual text placement in a mixed scene.
+export function isTextSource(mime: string): boolean {
   return (
     mime.startsWith('text/') ||
     mime === 'application/pdf' ||

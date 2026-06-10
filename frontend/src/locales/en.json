@@ -1767,6 +1767,61 @@
         "errors": "Errors"
       },
       "clear": "Clear"
+    },
+    "workshop": {
+      "exit": "Exit workshop mode",
+      "actionRequired": "Action required",
+      "pause": "Pause",
+      "resume": "Resume",
+      "noActiveRun": "No active run."
+    },
+    "run": {
+      "phaseQueued": "Queued",
+      "phaseRunning": "Running",
+      "phasePaused": "Paused",
+      "phaseCompleted": "Completed",
+      "badgeFailed": "Failed",
+      "badgeCanceled": "Canceled",
+      "lifecycleAria": "Run lifecycle",
+      "linesProgress": "{acked} / {total} lines ({percent} %)",
+      "actionRequired": "Action required:",
+      "pause": "Pause",
+      "resume": "Resume",
+      "cancel": "Cancel",
+      "confirmPausePrompt": "Confirm: pause the run?",
+      "confirmCancelPrompt": "Confirm: cancel the run?",
+      "confirmYes": "Yes",
+      "confirmNo": "No"
+    },
+    "capability": {
+      "title": "Configure the machine",
+      "stepIndicator": "Step {current} / {total}",
+      "modeQuestion": "How does the machine change pens?",
+      "modeFirmwareLabel": "Firmware (M6/T<n>)",
+      "modeFirmwareHelp": "The controller handles the change (CNC carousel, etc.).",
+      "modeHostMacroLabel": "Host macros (rack)",
+      "modeHostMacroHelp": "The Raspberry sends a G-code sequence to drive the rack.",
+      "modeManualLabel": "Guided manual",
+      "modeManualHelp": "The machine parks, the operator swaps the pen, then confirms.",
+      "modeSinglePenLabel": "Single pen (no changes)",
+      "modeSinglePenHelp": "One pen for the whole job.",
+      "manualIntro": "Customise the prompt shown to the operator:",
+      "manualTitle": "Title",
+      "manualBody": "Body",
+      "variablesSupported": "Supported variables:",
+      "macroIntro": "Command sequence sent on every pen change:",
+      "macroPlaceholder": "e.g. M6 T{slot}",
+      "addLine": "+ Line",
+      "noKnobs": "No configuration needed for the “{mode}” mode.",
+      "recoveryQuestion": "What should happen when a pen change fails?",
+      "recoveryAbort": "Abort — the job is marked failed.",
+      "recoveryPausePrompt": "Pause and ask the operator (recommended).",
+      "recoverySkipLayer": "Skip the layer and continue (advanced).",
+      "magazineSize": "Magazine size",
+      "cancel": "Cancel",
+      "previous": "Previous",
+      "next": "Next",
+      "save": "Save"
     }
   }
 }

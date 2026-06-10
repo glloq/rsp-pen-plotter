@@ -10,6 +10,7 @@
 // events and the parent (queue store / page) calls into the API.
 
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { PrintRun, RunState } from '../../api/client'
 
 const props = defineProps<{
@@ -23,6 +24,8 @@ const emit = defineEmits<{
   (e: 'resume'): void
   (e: 'cancel'): void
 }>()
+
+const { t } = useI18n()
 
 const ACTIVE: RunState[] = ['queued', 'running', 'paused']
 
@@ -51,7 +54,7 @@ function commitConfirm(): void {
 <template>
   <section class="run-actions" :data-test="`run-actions-${run.id}`">
     <div v-if="run.state === 'paused' && nextActionHint" class="hint" data-test="next-action-hint">
-      <strong>Action requise&nbsp;:</strong> {{ nextActionHint }}
+      <strong>{{ t('v2.run.actionRequired') }}</strong> {{ nextActionHint }}
     </div>
 
     <div class="buttons">
@@ -61,7 +64,7 @@ function commitConfirm(): void {
         data-test="action-pause"
         @click="startConfirm('pause')"
       >
-        Pause
+        {{ t('v2.run.pause') }}
       </button>
       <button
         type="button"
@@ -70,7 +73,7 @@ function commitConfirm(): void {
         data-test="action-resume"
         @click="emit('resume')"
       >
-        Reprendre
+        {{ t('v2.run.resume') }}
       </button>
       <button
         type="button"
@@ -79,20 +82,22 @@ function commitConfirm(): void {
         data-test="action-cancel"
         @click="startConfirm('cancel')"
       >
-        Annuler
+        {{ t('v2.run.cancel') }}
       </button>
     </div>
 
     <div v-if="confirming" class="confirm" role="alertdialog" data-test="confirm-dialog">
       <p>
-        Confirmer&nbsp;:
-        <strong>{{ confirming === 'pause' ? 'Mettre en pause' : 'Annuler le run' }}</strong
-        >&nbsp;?
+        <strong>{{
+          confirming === 'pause' ? t('v2.run.confirmPausePrompt') : t('v2.run.confirmCancelPrompt')
+        }}</strong>
       </p>
       <div>
-        <button type="button" data-test="confirm-cancel" @click="dismissConfirm">Non</button>
+        <button type="button" data-test="confirm-cancel" @click="dismissConfirm">
+          {{ t('v2.run.confirmNo') }}
+        </button>
         <button type="button" class="primary" data-test="confirm-ok" @click="commitConfirm">
-          Oui
+          {{ t('v2.run.confirmYes') }}
         </button>
       </div>
     </div>

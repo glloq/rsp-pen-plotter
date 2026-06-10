@@ -1767,6 +1767,61 @@
         "errors": "Erreurs"
       },
       "clear": "Vider"
+    },
+    "workshop": {
+      "exit": "Quitter le mode atelier",
+      "actionRequired": "Action requise",
+      "pause": "Pause",
+      "resume": "Reprendre",
+      "noActiveRun": "Aucun run actif."
+    },
+    "run": {
+      "phaseQueued": "En file",
+      "phaseRunning": "En cours",
+      "phasePaused": "Pause",
+      "phaseCompleted": "Terminé",
+      "badgeFailed": "Échec",
+      "badgeCanceled": "Annulé",
+      "lifecycleAria": "Cycle de vie du run",
+      "linesProgress": "{acked} / {total} lignes ({percent} %)",
+      "actionRequired": "Action requise :",
+      "pause": "Pause",
+      "resume": "Reprendre",
+      "cancel": "Annuler",
+      "confirmPausePrompt": "Confirmer : Mettre en pause ?",
+      "confirmCancelPrompt": "Confirmer : Annuler le run ?",
+      "confirmYes": "Oui",
+      "confirmNo": "Non"
+    },
+    "capability": {
+      "title": "Configurer la machine",
+      "stepIndicator": "Étape {current} / {total}",
+      "modeQuestion": "Comment la machine change-t-elle de stylo ?",
+      "modeFirmwareLabel": "Firmware (M6/T<n>)",
+      "modeFirmwareHelp": "Le contrôleur gère le changement (carousel CNC, etc.).",
+      "modeHostMacroLabel": "Macros host (rack)",
+      "modeHostMacroHelp": "Le Raspberry envoie une séquence G-code pour piloter le rack.",
+      "modeManualLabel": "Manuel guidé",
+      "modeManualHelp": "La machine se positionne, l'opérateur change le stylo, puis confirme.",
+      "modeSinglePenLabel": "Mono-pen (aucun changement)",
+      "modeSinglePenHelp": "Un seul stylo pour tout le job.",
+      "manualIntro": "Personnalise la consigne affichée à l'opérateur :",
+      "manualTitle": "Titre",
+      "manualBody": "Corps",
+      "variablesSupported": "Variables supportées :",
+      "macroIntro": "Séquence de commandes envoyée à chaque changement :",
+      "macroPlaceholder": "ex : M6 T{slot}",
+      "addLine": "+ Ligne",
+      "noKnobs": "Aucune configuration requise pour le mode « {mode} ».",
+      "recoveryQuestion": "Que faire en cas d'échec d'un changement ?",
+      "recoveryAbort": "Abandonner — le job est marqué en échec.",
+      "recoveryPausePrompt": "Pause et demande à l'opérateur (recommandé).",
+      "recoverySkipLayer": "Sauter la couche et continuer (avancé).",
+      "magazineSize": "Taille du magasin",
+      "cancel": "Annuler",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "save": "Enregistrer"
     }
   }
 }

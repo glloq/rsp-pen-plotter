@@ -28,6 +28,12 @@ export function useConfirmState(): ConfirmState {
 }
 
 export function confirmAction(options: ConfirmOptions): Promise<boolean> {
+  // A second concurrent confirmAction() would otherwise silently
+  // overwrite ``state.resolve`` and leave the first awaiter hanging
+  // forever. Settle the previous prompt as "cancelled" before the new
+  // one takes over the singleton dialog state.
+  state.resolve?.(false)
+  state.resolve = null
   state.title = options.title
   state.message = options.message
   state.confirmLabel = options.confirmLabel

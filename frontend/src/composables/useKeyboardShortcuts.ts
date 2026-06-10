@@ -38,7 +38,10 @@ export const SHORTCUTS: readonly ShortcutBinding[] = [
   },
   { id: 'perf.toggle', key: 'p', mod: 'ctrl_or_meta', description: 'Toggle perf overlay' },
   { id: 'queue.pause', key: 'k', mod: 'ctrl_or_meta', description: 'Pause active run' },
-  { id: 'queue.resume', key: 'r', mod: 'ctrl_or_meta', description: 'Resume active run' },
+  // Plain 'r' (no modifier) on purpose: Ctrl/Cmd+R is the browser's
+  // reload — intercepting it hijacked a reflex everyone has. The
+  // editable-surface guard in the listener keeps plain letters safe.
+  { id: 'queue.resume', key: 'r', mod: 'none', description: 'Resume active run' },
 ]
 
 const handlers = new Map<string, () => void>()

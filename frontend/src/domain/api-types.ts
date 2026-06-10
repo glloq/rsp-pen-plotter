@@ -1052,6 +1052,12 @@ export interface paths {
          *     When ``file_id`` is set, runs the real pipeline against the
          *     matching library entry; otherwise falls back to the synthetic
          *     emitter (useful for tests and frontend smoke).
+         *
+         *     Raises:
+         *         HTTPException: 404 when ``file_id`` is unknown or its original
+         *             bytes are missing on disk — validated *before* the streaming
+         *             response starts so the client gets a real 404 status instead
+         *             of an error frame behind a 200.
          */
         get: operations["preview_stream_preview_stream_get"];
         put?: never;
@@ -1176,11 +1182,12 @@ export interface paths {
         };
         /**
          * List Queue
-         * @description List print runs, active ones first.
+         * @description List print runs, active ones first — summaries without ``gcode``.
          *
-         *     Protected because ``PrintRun.pause_points`` carries operator-facing
-         *     prompts (e.g. "Insert pen slot 1: Red") that reveal the pen carousel
-         *     configuration when an API key is configured.
+         *     Protected because the swap prompt carries operator-facing pen
+         *     configuration when an API key is configured. The frontend polls
+         *     this endpoint; fetch ``GET /queue/{run_id}`` when the full G-code
+         *     payload is needed.
          */
         get: operations["list_queue_queue_get"];
         put?: never;
@@ -1511,6 +1518,11 @@ export interface components {
             /** Description */
             description: string;
             /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /**
              * Kind
              * @default fill
              * @enum {string}
@@ -1518,6 +1530,11 @@ export interface components {
             kind: "fill" | "lines" | "mono_stroke";
             /** Name */
             name: string;
+            /**
+             * Options
+             * @default []
+             */
+            options: components["schemas"]["OptionSpec"][];
         };
         /**
          * AuditEntry
@@ -2672,6 +2689,40 @@ export interface components {
             svg: string;
         };
         /**
+         * OptionSpec
+         * @description One operator-tunable knob on a raster algorithm.
+         *
+         *     ``key`` is the dict key the backend reads via ``options.get(key)``;
+         *     ``label`` is an i18n key the frontend runs through ``t()``;
+         *     ``default`` is the value used when the operator doesn't override it.
+         *
+         *     ``min`` / ``max`` / ``step`` constrain number / integer inputs. For
+         *     ``select`` knobs, ``choices`` is the list of allowed string values
+         *     (the first one is the canonical default unless ``default`` says
+         *     otherwise).
+         */
+        OptionSpec: {
+            /** Choices */
+            choices?: string[] | null;
+            /** Default */
+            default?: unknown;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Step */
+            step?: number | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "number" | "integer" | "boolean" | "select" | "text";
+        };
+        /**
          * PageBlocks
          * @description All detected blocks on one PDF page.
          */
@@ -3082,6 +3133,54 @@ export interface components {
              * Format: date-time
              */
             updated_at?: string;
+        };
+        /**
+         * PrintRunSummary
+         * @description Wire projection of a :class:`PrintRun` WITHOUT the G-code payload.
+         *
+         *     The cockpit polls ``GET /queue`` every 3 s; serialising the full
+         *     ``gcode`` (plus ``pause_points`` / ``swap_actions``) per run made each
+         *     poll a multi-MB response. This summary carries everything the
+         *     frontend's queue store and panels actually consume — progress,
+         *     lifecycle state, swap prompt, skipped layers — and nothing else.
+         *     Use ``GET /queue/{run_id}`` for the full row including ``gcode``.
+         */
+        PrintRunSummary: {
+            /** Acked Lines */
+            acked_lines: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id: string;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /** Name */
+            name: string;
+            /** Priority */
+            priority: number;
+            /** Profile Name */
+            profile_name: string;
+            /**
+             * Skipped Layers
+             * @default []
+             */
+            skipped_layers: string[];
+            /** State */
+            state: string;
+            /** Swap Prompt */
+            swap_prompt?: string | null;
+            /** Total Lines */
+            total_lines: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /**
          * QualityTier
@@ -5464,7 +5563,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PrintRun"][];
+                    "application/json": components["schemas"]["PrintRunSummary"][];
                 };
             };
             /** @description Validation Error */

@@ -205,11 +205,14 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
         previewError.value = e.message || opts.failedMessage || 'preview failed'
       }
     } finally {
+      // Same identity guard as previewLoading: a superseded run A must
+      // not dismiss the toast / delay timer belonging to the newer run B
+      // (B called startToast() when it took over the controller slot).
       if (controller === c) {
         controller = null
         previewLoading.value = false
+        dismissToast()
       }
-      dismissToast()
     }
   }
 

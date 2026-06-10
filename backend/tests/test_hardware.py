@@ -355,3 +355,29 @@ async def test_broadcast_drops_oldest_when_subscriber_is_slow() -> None:
     while not queue.empty():
         drained.append(queue.get_nowait())
     assert drained[-1].sent == ctrl_mod._SUBSCRIBER_QUEUE_MAXSIZE + 4
+
+
+@pytest.mark.asyncio
+async def test_manual_command_rechecks_idle_after_acquiring_lock() -> None:
+    """Regression: jog/goto/home/send_commands check ``_require_idle``
+    BEFORE awaiting ``_send_lock``. A manual command queued on the lock
+    while a job starts used to slip its G-code into the live stream once
+    the lock freed; ``_send_immediate`` must re-check under the lock."""
+    controller = PlotterController()
+    controller.attach(MockTransport())
+
+    async with controller._send_lock:
+        # Passes the pre-lock idle check (no job yet), then parks on the lock.
+        manual = asyncio.create_task(controller.send_commands(["G91", "G0 X1"]))
+        await asyncio.sleep(0)
+        assert not manual.done()
+        # A streaming job takes ownership while the manual command waits.
+        job = asyncio.get_event_loop().create_task(asyncio.sleep(60))
+        controller._task = job  # type: ignore[assignment]
+
+    with pytest.raises(RuntimeError, match="job is running"):
+        await manual
+
+    job.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await job

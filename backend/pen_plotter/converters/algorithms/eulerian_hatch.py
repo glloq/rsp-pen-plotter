@@ -15,70 +15,11 @@ import math
 from typing import Any, ClassVar
 from xml.sax.saxutils import quoteattr
 
-import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._hatch import sweep_segments as _sweep_segments
 from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
-
-
-def _sweep_segments(
-    mask: NDArray[np.bool_],
-    angle_deg: float,
-    spacing_px: float,
-) -> list[list[tuple[float, float, float, float]]]:
-    """Sweep parallel lines at ``angle_deg`` and return per-sweep segments.
-
-    Unlike :func:`crosshatch._line_segments` this returns segments
-    *grouped by sweep line* so the caller can chain consecutive sweeps
-    into a boustrophedon polyline.
-    """
-    height, width = mask.shape
-    diag = math.hypot(width, height)
-    theta = math.radians(angle_deg)
-    cos_t, sin_t = math.cos(theta), math.sin(theta)
-    centre_x, centre_y = width / 2.0, height / 2.0
-    samples = max(2, int(diag * 2))
-    along_t = np.linspace(-diag, diag, samples)
-    spacing = max(1.0, spacing_px)
-    across_t = np.arange(-diag, diag + spacing, spacing)
-    per_sweep: list[list[tuple[float, float, float, float]]] = []
-    for s in across_t:
-        ox = centre_x + s * -sin_t
-        oy = centre_y + s * cos_t
-        xs = ox + along_t * cos_t
-        ys = oy + along_t * sin_t
-        ix = np.round(xs).astype(np.intp)
-        iy = np.round(ys).astype(np.intp)
-        inside = (ix >= 0) & (ix < width) & (iy >= 0) & (iy < height)
-        valid = np.zeros_like(inside)
-        valid[inside] = mask[iy[inside], ix[inside]]
-        segs: list[tuple[float, float, float, float]] = []
-        run_start: int | None = None
-        for i, v in enumerate(valid):
-            if v and run_start is None:
-                run_start = i
-            elif not v and run_start is not None:
-                segs.append(
-                    (
-                        float(xs[run_start]),
-                        float(ys[run_start]),
-                        float(xs[i - 1]),
-                        float(ys[i - 1]),
-                    )
-                )
-                run_start = None
-        if run_start is not None:
-            segs.append(
-                (
-                    float(xs[run_start]),
-                    float(ys[run_start]),
-                    float(xs[-1]),
-                    float(ys[-1]),
-                )
-            )
-        per_sweep.append(segs)
-    return per_sweep
 
 
 def _connect_boustrophedon(

@@ -12,6 +12,7 @@
 //   3. Pick a recovery policy + magazine size + confirm.
 
 import { computed, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   defaultCapabilities,
   type MachineCapabilities,
@@ -25,29 +26,31 @@ const emit = defineEmits<{
   (e: 'confirm', capabilities: MachineCapabilities): void
 }>()
 
+const { t } = useI18n()
+
 const state = reactive<MachineCapabilities>(defaultCapabilities('manual'))
 const activeStep = ref<0 | 1 | 2>(0)
 
-const modeOptions: { value: ToolingMode; label: string; help: string }[] = [
+const modeOptions: { value: ToolingMode; labelKey: string; helpKey: string }[] = [
   {
     value: 'firmware',
-    label: 'Firmware (M6/T<n>)',
-    help: 'Le contrôleur gère le changement (carousel CNC, etc.).',
+    labelKey: 'v2.capability.modeFirmwareLabel',
+    helpKey: 'v2.capability.modeFirmwareHelp',
   },
   {
     value: 'host_macro',
-    label: 'Macros host (rack)',
-    help: 'Le Raspberry envoie une séquence G-code pour piloter le rack.',
+    labelKey: 'v2.capability.modeHostMacroLabel',
+    helpKey: 'v2.capability.modeHostMacroHelp',
   },
   {
     value: 'manual',
-    label: 'Manuel guidé',
-    help: "La machine se positionne, l'opérateur change le stylo, puis confirme.",
+    labelKey: 'v2.capability.modeManualLabel',
+    helpKey: 'v2.capability.modeManualHelp',
   },
   {
     value: 'single_pen',
-    label: 'Mono-pen (aucun changement)',
-    help: 'Un seul stylo pour tout le job.',
+    labelKey: 'v2.capability.modeSinglePenLabel',
+    helpKey: 'v2.capability.modeSinglePenHelp',
   },
 ]
 
@@ -104,29 +107,25 @@ function confirm(): void {
   emit('confirm', JSON.parse(JSON.stringify(state)) as MachineCapabilities)
 }
 
-const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
-  { value: 'abort', label: 'Abandonner — le job est marqué en échec.' },
-  {
-    value: 'pause_and_prompt',
-    label: "Pause et demande à l'opérateur (recommandé).",
-  },
-  {
-    value: 'skip_layer',
-    label: 'Sauter la couche et continuer (avancé).',
-  },
+const recoveryOptions: { value: RecoveryPolicy; labelKey: string }[] = [
+  { value: 'abort', labelKey: 'v2.capability.recoveryAbort' },
+  { value: 'pause_and_prompt', labelKey: 'v2.capability.recoveryPausePrompt' },
+  { value: 'skip_layer', labelKey: 'v2.capability.recoverySkipLayer' },
 ]
 </script>
 
 <template>
   <div class="cap-wizard" data-test="capability-wizard">
     <header>
-      <h3>Configurer la machine</h3>
-      <span class="step-indicator">Étape {{ activeStep + 1 }} / 3</span>
+      <h3>{{ t('v2.capability.title') }}</h3>
+      <span class="step-indicator">{{
+        t('v2.capability.stepIndicator', { current: activeStep + 1, total: 3 })
+      }}</span>
     </header>
 
     <!-- Step 1: pick tool-change mode -->
     <section v-if="activeStep === 0" data-test="cap-step-mode">
-      <p>Comment la machine change-t-elle de stylo&nbsp;?</p>
+      <p>{{ t('v2.capability.modeQuestion') }}</p>
       <ul class="modes">
         <li
           v-for="opt in modeOptions"
@@ -134,8 +133,8 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
           :class="{ active: state.tool_change.mode === opt.value }"
         >
           <button type="button" :data-test="`cap-mode-${opt.value}`" @click="setMode(opt.value)">
-            <strong>{{ opt.label }}</strong>
-            <span>{{ opt.help }}</span>
+            <strong>{{ t(opt.labelKey) }}</strong>
+            <span>{{ t(opt.helpKey) }}</span>
           </button>
         </li>
       </ul>
@@ -144,9 +143,9 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
     <!-- Step 2: mode-specific knobs -->
     <section v-else-if="activeStep === 1" data-test="cap-step-details">
       <div v-if="state.tool_change.mode === 'manual'" data-test="cap-manual-knobs">
-        <p>Personnalise la consigne affichée à l'opérateur&nbsp;:</p>
+        <p>{{ t('v2.capability.manualIntro') }}</p>
         <label>
-          Titre
+          {{ t('v2.capability.manualTitle') }}
           <input
             v-model="state.tool_change.manual_prompt!.title"
             type="text"
@@ -154,7 +153,7 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
           />
         </label>
         <label>
-          Corps
+          {{ t('v2.capability.manualBody') }}
           <textarea
             v-model="state.tool_change.manual_prompt!.body"
             rows="3"
@@ -162,19 +161,21 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
           ></textarea>
         </label>
         <small
-          >Variables supportées&nbsp;: <code>{color}</code>, <code>{slot}</code>,
-          <code>{label}</code>.</small
+          >{{ t('v2.capability.variablesSupported') }} <code>{{ '{color}' }}</code
+          >, <code>{{ '{slot}' }}</code
+          >, <code>{{ '{label}' }}</code
+          >.</small
         >
       </div>
 
       <div v-else-if="state.tool_change.mode === 'host_macro'" data-test="cap-macro-knobs">
-        <p>Séquence de commandes envoyée à chaque changement&nbsp;:</p>
+        <p>{{ t('v2.capability.macroIntro') }}</p>
         <ol class="macro-steps">
           <li v-for="(step, i) in state.tool_change.host_macro" :key="i">
             <input
               v-model="step.send"
               type="text"
-              placeholder="ex: M6 T{slot}"
+              :placeholder="t('v2.capability.macroPlaceholder', { slot: '{slot}' })"
               :data-test="`cap-macro-send-${i}`"
             />
             <input
@@ -189,27 +190,29 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
             </button>
           </li>
         </ol>
-        <button type="button" data-test="cap-macro-add" @click="addMacroStep">+ Ligne</button>
+        <button type="button" data-test="cap-macro-add" @click="addMacroStep">
+          {{ t('v2.capability.addLine') }}
+        </button>
       </div>
 
       <div v-else data-test="cap-no-knobs">
-        Aucune configuration requise pour le mode « {{ state.tool_change.mode }} ».
+        {{ t('v2.capability.noKnobs', { mode: state.tool_change.mode }) }}
       </div>
     </section>
 
     <!-- Step 3: recovery + magazine + confirm -->
     <section v-else data-test="cap-step-finalize">
-      <p>Que faire en cas d'échec d'un changement&nbsp;?</p>
+      <p>{{ t('v2.capability.recoveryQuestion') }}</p>
       <ul class="recovery">
         <li v-for="opt in recoveryOptions" :key="opt.value">
           <label>
             <input v-model="state.tool_change.recovery_policy" type="radio" :value="opt.value" />
-            {{ opt.label }}
+            {{ t(opt.labelKey) }}
           </label>
         </li>
       </ul>
       <label class="magazine">
-        Taille du magasin
+        {{ t('v2.capability.magazineSize') }}
         <input
           v-model.number="state.max_pens_in_magazine"
           type="number"
@@ -221,8 +224,10 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
     </section>
 
     <footer>
-      <button type="button" @click="emit('cancel')">Annuler</button>
-      <button type="button" :disabled="activeStep === 0" @click="previous">Précédent</button>
+      <button type="button" @click="emit('cancel')">{{ t('v2.capability.cancel') }}</button>
+      <button type="button" :disabled="activeStep === 0" @click="previous">
+        {{ t('v2.capability.previous') }}
+      </button>
       <button
         v-if="activeStep < 2"
         type="button"
@@ -230,9 +235,11 @@ const recoveryOptions: { value: RecoveryPolicy; label: string }[] = [
         data-test="cap-next"
         @click="next"
       >
-        Suivant
+        {{ t('v2.capability.next') }}
       </button>
-      <button v-else type="button" data-test="cap-confirm" @click="confirm">Enregistrer</button>
+      <button v-else type="button" data-test="cap-confirm" @click="confirm">
+        {{ t('v2.capability.save') }}
+      </button>
     </footer>
   </div>
 </template>

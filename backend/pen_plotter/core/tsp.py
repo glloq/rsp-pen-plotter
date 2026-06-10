@@ -198,13 +198,26 @@ def mst_dfs_tour(points: NDArray[np.float64], *, neighbour_k: int = 8) -> list[i
     # Symmetric k-NN: edge (i, j) exists iff j is in i's k-NN list. Using
     # only one direction would leave isolated nodes in irregular clusters
     # — MST would silently drop them.
+    #
+    # Edge presence is tracked in an explicit dict rather than by testing
+    # ``graph[i, j] == 0``: scipy's sparse matrices use 0 as "no entry",
+    # so a genuine zero-length edge (exact-duplicate points) would look
+    # like a missing edge and the duplicate could end up disconnected.
+    # Zero weights are floored to a tiny epsilon for the same reason —
+    # ``minimum_spanning_tree`` ignores stored zeros.
+    eps = 1e-12
+    best_edges: dict[tuple[int, int], float] = {}
     for i in range(n):
         for idx in range(1, k + 1):
             j = int(neighbours[i, idx])
-            w = float(dists[i, idx])
-            if graph[i, j] == 0 or w < graph[i, j]:
-                graph[i, j] = w
-                graph[j, i] = w
+            w = max(float(dists[i, idx]), eps)
+            key = (i, j) if i < j else (j, i)
+            current = best_edges.get(key)
+            if current is None or w < current:
+                best_edges[key] = w
+    for (i, j), w in best_edges.items():
+        graph[i, j] = w
+        graph[j, i] = w
     mst = minimum_spanning_tree(graph.tocsr())
     start = int(np.argmin(points[:, 0] + points[:, 1]))
     visited_order, _ = depth_first_order(mst, i_start=start, directed=False)

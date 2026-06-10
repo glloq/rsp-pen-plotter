@@ -85,7 +85,7 @@ Environment variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OMNIPLOT_DB` | `omniplot.db` | SQLite job-history database path |
+| `OMNIPLOT_DB` | `backend/data/omniplot.db` | SQLite database path (jobs, queue, audit, library) |
 | `OMNIPLOT_PROFILES_DIR` | platform user dir | Where imported user profiles are stored |
 | `OMNIPLOT_IR_ENABLED` | unset | When `1`, the converter pipeline builds a `GeometryIR` artifact alongside the SVG and persists it in the `ir_artifact_cache` table. Write-only today; the IR-native render/optimize path consumes it next. |
 | `OMNIPLOT_OTEL_ENABLED` | unset | When `1`, installs the OpenTelemetry tracer provider and emits spans for `convert_file`, `segment_and_render`, `optimize_svg`, `generate_gcode`. Pair with `OMNIPLOT_OTEL_EXPORTER=console` to see them in stderr. |

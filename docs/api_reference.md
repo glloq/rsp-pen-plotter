@@ -2,7 +2,15 @@
 
 Base URL defaults to `http://localhost:8000`. All bodies are JSON unless noted.
 Models referenced here are defined in `backend/pen_plotter/models.py` and the
-per-router request/response classes.
+per-router request/response classes. The complete, generated route list lives
+in `backend/openapi.json`.
+
+**Cross-origin guard (open mode).** When `OMNIPLOT_API_KEY` is *unset*, a
+middleware rejects state-changing requests (anything but `GET`/`HEAD`/`OPTIONS`)
+whose `Origin` header matches neither the request `Host` nor the
+`OMNIPLOT_CORS_ORIGINS` allow-list — they get a `403` (CSRF / DNS-rebinding
+protection). Requests without an `Origin` header (curl, scripts, SDKs) are
+unaffected, and locked mode relies on the API key instead.
 
 ## Health
 
@@ -42,14 +50,27 @@ A single `MachineProfile`. Unknown name → `404`.
 ### `GET /profiles/{name}/export`
 The profile serialized as YAML (`text/plain`).
 
+### `POST /profiles`
+Body is a `MachineProfile` JSON object; validates and stores it under
+`OMNIPLOT_PROFILES_DIR`.
+
 ### `POST /profiles/import`
 Body is a YAML profile; validates against the schema and stores it under
 `OMNIPLOT_PROFILES_DIR`. Invalid YAML/schema → `400`.
 
+### `DELETE /profiles/{name}`
+Removes a user-imported profile. Bundled profiles cannot be deleted.
+
 ## Presets, fonts, algorithms
 
 ### `GET /presets`
-Built-in parameter presets (e.g. fine line, dense hatching, stippling).
+Built-in + user parameter presets (e.g. fine line, dense hatching, stippling).
+
+### `POST /presets`
+Create a user preset (`201`). Name validated, store capped.
+
+### `DELETE /presets/{name}`
+Delete a user preset (`204`). Built-ins cannot be removed.
 
 ### `GET /fonts`
 Names of the bundled Hershey single-stroke fonts.
@@ -83,7 +104,8 @@ All return a `StatusResponse`:
 | `POST /plotter/run` | `{ "gcode" }` | Starts streaming; `409` if a job already runs |
 | `POST /plotter/pause` | — | Pause the running job |
 | `POST /plotter/resume` | — | Resume a paused job |
-| `POST /plotter/abort` | — | Abort the running job |
+| `POST /plotter/abort` | — | Abort the running job (waits for the current `ok`) |
+| `POST /plotter/emergency_stop` | optional query `profile_name` | Real-time stop, preempting any in-flight move: writes the dialect's emergency payload (GRBL `0x18`, Marlin `M112`, EBB `ES`) straight to the line and cancels the stream |
 
 ### `WS /ws/plotter`
 On connect, the server sends the current status, then pushes a status object on
@@ -117,17 +139,27 @@ the queue and placements reference it by `file_id`.
 ## Queue
 
 All queue endpoints honour the optional `OMNIPLOT_API_KEY`. `POST /queue`
-honours an `Idempotency-Key` header for safe automation retries.
+honours an `Idempotency-Key` header for safe automation retries: a second
+request with the same key returns the existing run (the keys are persisted
+with the run — there is no expiry window).
+
+`GET /queue` returns **summaries without the `gcode` payload**
+(`PrintRunSummary`: `id`, `name`, `profile_name`, `total_lines`,
+`acked_lines`, `state`, `priority`, `error`, `swap_prompt`,
+`skipped_layers`, `idempotency_key`, `created_at`, `updated_at`) — the
+frontend polls it every few seconds, and serialising the full program per
+run made each poll a multi-MB response. Fetch `GET /queue/{run_id}` for
+the full row including `gcode`.
 
 | Method & path | Notes |
 | --- | --- |
-| `GET /queue` | List active + pending + recent finished runs |
-| `GET /queue/{run_id}` | A single run with checkpoint and pen-change state |
-| `POST /queue` | Enqueue a job from a generated G-code blob + plan |
+| `GET /queue` | List runs, active first — `PrintRunSummary[]`, no `gcode` |
+| `GET /queue/{run_id}` | The full run, including `gcode`, checkpoint and pen-change state |
+| `POST /queue` | Enqueue `{ name, profile_name, gcode, priority }`; `404` on unknown profile |
 | `POST /queue/{run_id}/pause` | Soft-pause (firmware-portable) |
-| `POST /queue/{run_id}/resume` | Resume from checkpoint |
+| `POST /queue/{run_id}/resume` | Resume from checkpoint; also confirms a guided pen swap the run is waiting on |
 | `POST /queue/{run_id}/cancel` | Abort and clean up |
-| `POST /queue/{run_id}/confirm-swap` | Operator confirms a guided pen change |
+| `DELETE /queue/{run_id}` | Remove a run; `409` while it is streaming (cancel first), `404` if unknown |
 
 ## Preflight, preview, rerender, optimize
 
@@ -148,7 +180,10 @@ honours an `Idempotency-Key` header for safe automation retries.
 | --- | --- |
 | `GET /plans/{plan_hash}` | Resolved plan for a given content + settings hash |
 | `POST /policy/resolve` | Wizard recommendation given source kind + goal |
-| `GET /available-colors` | Pen colours available on the active machine |
+| `GET /available-colors` | The operator's app-wide ink inventory, in display order |
+| `POST /available-colors` | Add a colour (`hex` required; duplicates return the existing entry) |
+| `PATCH /available-colors/{color_id}` | Edit name, hex, position, stroke width, odometer |
+| `DELETE /available-colors/{color_id}` | Remove a colour; `404` if unknown |
 
 ## Macros
 
@@ -165,7 +200,7 @@ honours an `Idempotency-Key` header for safe automation retries.
 | --- | --- |
 | `GET /manifests` | All algorithm + UI manifests with a single hash |
 | `GET /manifests/{domain}` | One manifest by domain (e.g. `algorithms`) |
-| `GET /presets` | Built-in parameter presets |
+| `GET /presets` | Built-in + user parameter presets |
 | `GET /fonts` | Bundled Hershey single-stroke font names |
 | `GET /settings/palette-source` | Where pen palettes are loaded from |
 | `PUT /settings/palette-source` | Override the source |
@@ -180,8 +215,8 @@ honours an `Idempotency-Key` header for safe automation retries.
 
 | Method & path | Notes |
 | --- | --- |
-| `GET /version` | Running version + git revision |
-| `GET /check-update` | Behind / ahead of `origin/main`, advisory only |
+| `GET /system/version` | Running version + git revision |
+| `GET /system/check-update` | Behind / ahead of `origin/main`, advisory only |
 | `POST /system/update` | Pull + rebuild + restart (disabled when `OMNIPLOT_DISABLE_UPDATE=1`) |
 
 ## SLO

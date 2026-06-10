@@ -151,9 +151,21 @@ class PlotterController:
 
         Holds ``_send_lock`` for the duration so two concurrent manual
         commands cannot interleave bytes on the serial line.
+
+        Raises:
+            RuntimeError: If disconnected, or if a streaming job took
+                ownership of the transport while this command was queued
+                on the lock (the callers' ``_require_idle`` pre-check is
+                a TOCTOU: ``stream()``/``run()`` may install a streamer
+                between that check and our lock acquisition).
         """
         transport = self._require_transport()
         async with self._send_lock:
+            # Re-check under the lock — a manual command that passed
+            # ``_require_idle`` may have been waiting here while a job
+            # started; letting it proceed would interleave its G-code
+            # into the live stream.
+            self._require_idle()
             for line in lines:
                 await transport.write_line(line)
                 while True:

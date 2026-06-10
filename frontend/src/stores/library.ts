@@ -153,13 +153,43 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
-  function persistFileSettings(): void {
+  function persistFileSettingsNow(): void {
     try {
       localStorage.setItem(FILE_SETTINGS_KEY, JSON.stringify(fileSettings.value))
     } catch {
       // localStorage unavailable / full — non-fatal, settings just won't
       // survive the next reload.
     }
+  }
+
+  // Debounced write-behind. ``saveFileSettings`` fires once per layer per
+  // pointer event while the operator drags a master-style slider
+  // (slider → applyMasterStyleToLayers → per-layer applyLayerAlgorithm →
+  // autoSyncFileSettings); a synchronous JSON.stringify + setItem of the
+  // whole settings blob on each of those visibly stutters the drag on
+  // Pi-class hardware. 300 ms trailing collapses the burst into one
+  // write; ``beforeunload`` flushes so a quick tab close can't lose the
+  // last edit.
+  let persistTimer: ReturnType<typeof setTimeout> | null = null
+  function persistFileSettings(): void {
+    if (persistTimer) clearTimeout(persistTimer)
+    persistTimer = setTimeout(() => {
+      persistTimer = null
+      persistFileSettingsNow()
+    }, 300)
+  }
+
+  /** Write any pending (debounced) settings immediately. */
+  function flushFileSettings(): void {
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+      persistFileSettingsNow()
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', flushFileSettings)
   }
 
   function saveFileSettings(
@@ -522,5 +552,6 @@ export const useLibraryStore = defineStore('library', () => {
     getFileSettings,
     hasFileSettings,
     dropFileSettings,
+    flushFileSettings,
   }
 })

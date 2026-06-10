@@ -17,7 +17,11 @@ textareas, contenteditable). Normal typing is never intercepted.
 | Ctrl/Cmd + M      | Toggle assisted / expert mode       | `mode.toggle`     |
 | Ctrl/Cmd + P      | Toggle the perf overlay (C.8)       | `perf.toggle`     |
 | Ctrl/Cmd + K      | Pause the active run                | `queue.pause`     |
-| Ctrl/Cmd + R      | Resume the active run               | `queue.resume`    |
+| R                 | Resume the active run               | `queue.resume`    |
+
+`queue.resume` is deliberately a plain letter: Ctrl/Cmd + R is the
+browser's reload reflex and must never be intercepted. Plain letters
+are safe because the listener ignores editable surfaces.
 
 Components opt into a binding by registering a handler:
 

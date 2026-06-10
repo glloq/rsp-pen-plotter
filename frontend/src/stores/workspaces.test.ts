@@ -3,8 +3,13 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
+import { createI18n } from 'vue-i18n'
 import type { PrintRun } from '../api/client'
 import WorkshopMode from '../components/v2/WorkshopMode.vue'
+import fr from '../locales/fr.json'
+
+const i18n = createI18n({ legacy: false, locale: 'fr', fallbackLocale: 'fr', messages: { fr } })
+const globalConfig = { global: { plugins: [i18n] } }
 import { useWorkspacesStore } from './workspaces'
 
 describe('useWorkspacesStore', () => {
@@ -117,6 +122,7 @@ function makeRun(over: Partial<PrintRun> = {}): PrintRun {
 describe('WorkshopMode', () => {
   it('shows the running run with progress', () => {
     const wrapper = mount(WorkshopMode, {
+      ...globalConfig,
       props: { run: makeRun() },
     })
     expect(wrapper.find('[data-test="workshop-run-r1"]').exists()).toBe(true)
@@ -124,12 +130,13 @@ describe('WorkshopMode', () => {
   })
 
   it('renders empty state when run is null', () => {
-    const wrapper = mount(WorkshopMode, { props: { run: null } })
+    const wrapper = mount(WorkshopMode, { ...globalConfig, props: { run: null } })
     expect(wrapper.find('[data-test="workshop-empty"]').exists()).toBe(true)
   })
 
   it('shows the hint and Resume button when paused', () => {
     const wrapper = mount(WorkshopMode, {
+      ...globalConfig,
       props: {
         run: makeRun({ state: 'paused' }),
         nextActionHint: 'Insérer pen Cyan.',
@@ -141,6 +148,7 @@ describe('WorkshopMode', () => {
 
   it('only shows Pause button when running', () => {
     const wrapper = mount(WorkshopMode, {
+      ...globalConfig,
       props: { run: makeRun({ state: 'running' }) },
     })
     expect(wrapper.find('[data-test="workshop-pause"]').exists()).toBe(true)
@@ -148,13 +156,14 @@ describe('WorkshopMode', () => {
   })
 
   it('emits exit on the close button', async () => {
-    const wrapper = mount(WorkshopMode, { props: { run: makeRun() } })
+    const wrapper = mount(WorkshopMode, { ...globalConfig, props: { run: makeRun() } })
     await wrapper.find('[data-test="workshop-exit"]').trigger('click')
     expect(wrapper.emitted('exit')).toBeTruthy()
   })
 
   it('emits pause/resume from the buttons', async () => {
     const wrapper = mount(WorkshopMode, {
+      ...globalConfig,
       props: { run: makeRun({ state: 'running' }) },
     })
     await wrapper.find('[data-test="workshop-pause"]').trigger('click')

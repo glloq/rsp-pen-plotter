@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from jinja2 import UndefinedError
 from pydantic import BaseModel
 
@@ -61,7 +62,11 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
     if profile is None:
         raise HTTPException(status_code=404, detail=f"Unknown profile: {request.profile_name!r}")
     try:
-        outcome = run_generate(
+        # Plan resolution + template rendering + geometry are synchronous
+        # CPU-bound work; run them in the threadpool so generation of a big
+        # plan doesn't freeze the event loop for every other request.
+        outcome = await run_in_threadpool(
+            run_generate,
             request,
             profile,
             allow_missing_slots=request.allow_missing_slots,
