@@ -36,8 +36,8 @@ class HalftoneAlgorithm(RasterAlgorithm):
         # dots into a solid fill, so the backend clamps to 2. Front-facing
         # min matches that floor instead of silently accepting 1.
         OptionSpec(
-            key="cell_size_px", label="convert.cellSize", type="integer",
-            default=6, min=2, max=64, step=1,
+            key="cell_size_mm", label="convert.cellSize", type="number",
+            default=2.2, min=0.74, max=24, step=0.1,
         ),
         OptionSpec(
             key="angle_deg", label="convert.angleDeg", type="number",

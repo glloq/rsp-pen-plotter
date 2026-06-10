@@ -26,8 +26,8 @@ class StipplingAlgorithm(RasterAlgorithm):
             default=0.02, min=0.001, max=0.5, step=0.001,
         ),
         OptionSpec(
-            key="dot_radius_px", label="convert.dotRadius", type="number",
-            default=0.6, min=0.1, max=5, step=0.1,
+            key="dot_radius_mm", label="convert.dotRadius", type="number",
+            default=0.22, min=0.04, max=1.9, step=0.1,
         ),
         OptionSpec(
             key="seed", label="convert.seed", type="integer",

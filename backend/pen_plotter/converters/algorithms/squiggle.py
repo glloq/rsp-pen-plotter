@@ -41,12 +41,12 @@ class SquiggleAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1, max=30, step=0.5),
-        OptionSpec(key="amp_px", label="convert.waveAmp", type="number",
-                   default=1.4, min=0.1, max=8, step=0.1),
-        OptionSpec(key="period_px", label="convert.wavePeriod", type="number",
-                   default=8, min=2, max=40, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.37, max=11, step=0.1),
+        OptionSpec(key="amp_mm", label="convert.waveAmp", type="number",
+                   default=0.52, min=0.04, max=3, step=0.1),
+        OptionSpec(key="period_mm", label="convert.wavePeriod", type="number",
+                   default=3, min=0.74, max=15, step=0.1),
         OptionSpec(key="jitter", label="convert.jitter", type="number",
                    default=0.4, min=0, max=1, step=0.05),
         # ``modulated`` lets the amplitude follow the image tone for a tonal

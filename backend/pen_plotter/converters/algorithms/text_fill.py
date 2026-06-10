@@ -49,8 +49,8 @@ class TextFillAlgorithm(RasterAlgorithm):
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="text", label="convert.text", type="text",
                    default="OmniPlot "),
-        OptionSpec(key="font_size_px", label="convert.fontSize", type="number",
-                   default=12, min=4, max=60, step=1),
+        OptionSpec(key="font_size_mm", label="convert.fontSize", type="number",
+                   default=4.5, min=1.5, max=22, step=0.1),
         OptionSpec(key="line_spacing", label="convert.lineSpacing", type="number",
                    default=1.25, min=0.8, max=3, step=0.05),
         # Minimum local darkness for a glyph point to survive when a tone

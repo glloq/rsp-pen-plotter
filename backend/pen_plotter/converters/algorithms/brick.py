@@ -29,10 +29,10 @@ class BrickAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="brick_w_px", label="convert.brickW", type="integer",
-                   default=16, min=2, max=60, step=1),
-        OptionSpec(key="brick_h_px", label="convert.brickH", type="integer",
-                   default=8, min=2, max=40, step=1),
+        OptionSpec(key="brick_w_mm", label="convert.brickW", type="number",
+                   default=5.9, min=0.74, max=22, step=0.1),
+        OptionSpec(key="brick_h_mm", label="convert.brickH", type="number",
+                   default=3, min=0.74, max=15, step=0.1),
     ]
 
     def render_layer(

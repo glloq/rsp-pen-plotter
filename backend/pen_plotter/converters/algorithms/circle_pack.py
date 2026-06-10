@@ -38,12 +38,12 @@ class CirclePackAlgorithm(RasterAlgorithm):
     options_schema: ClassVar[list[OptionSpec]] = [
         # Defaults aligned with the backend clamps in ``render_layer``;
         # ``attempts`` is intentionally not exposed — auto-scales with area.
-        OptionSpec(key="min_radius_px", label="convert.minRadius", type="number",
-                   default=1.2, min=0.5, max=10, step=0.1),
-        OptionSpec(key="max_radius_px", label="convert.maxRadius", type="number",
-                   default=8.0, min=1, max=40, step=0.5),
-        OptionSpec(key="gap_px", label="convert.gapPx", type="number",
-                   default=0.6, min=0, max=10, step=0.1),
+        OptionSpec(key="min_radius_mm", label="convert.minRadius", type="number",
+                   default=0.45, min=0.19, max=3.7, step=0.1),
+        OptionSpec(key="max_radius_mm", label="convert.maxRadius", type="number",
+                   default=3, min=0.37, max=15, step=0.1),
+        OptionSpec(key="gap_mm", label="convert.gapPx", type="number",
+                   default=0.22, min=0, max=3.7, step=0.1),
         OptionSpec(key="seed", label="convert.seed", type="integer",
                    default=0, min=0, step=1),
     ]

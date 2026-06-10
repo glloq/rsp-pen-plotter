@@ -64,7 +64,9 @@ export type AlgorithmsManifest = z.infer<typeof AlgorithmsManifestSchema>
  * changes in a way the UI needs to adapt to.
  */
 export const SUPPORTED_MANIFEST_VERSION: Record<string, number> = {
-  algorithms: 5,
+  // v6: length options declared in millimetres (``*_mm``) instead of
+  // raster pixels — see backend ``ALGORITHMS_MANIFEST_VERSION``.
+  algorithms: 6,
   system: 1,
 }
 

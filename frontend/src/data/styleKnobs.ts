@@ -130,15 +130,15 @@ const HATCH_FAMILY: StyleKnobConfig = {
       labelKey: 'mono.angles',
       hintKey: 'mono.anglesHint',
     },
-    dual('spacing_min', 'spacing_max', 1, 10, 0.5, 'mono.spacingRange', {
-      unit: 'px',
+    dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', {
+      unit: 'mm',
       hintKey: 'mono.spacingRangeHint',
     }),
     checkbox('crossed_on_darkest', 'mono.crossedOnDarkest'),
   ],
 }
 
-const DOT_RADIUS = range('dot_radius', 0.3, 1.5, 0.05, 'mono.dotRadius', { decimals: 2 })
+const DOT_RADIUS = range('dot_radius', 0.11, 0.56, 0.1, 'mono.dotRadius', { decimals: 2 })
 const STROKE_WIDTH = range('stroke_width', 0.4, 2.0, 0.1, 'mono.strokeWidth', { decimals: 2 })
 
 // Stippling / Voronoi shade: density range + dot radius.
@@ -154,9 +154,9 @@ const STIPPLE_MONO: StyleKnobConfig = {
 // Engraving / squiggle: spacing range + wave amplitude range + period.
 const ENGRAVE: StyleKnobConfig = {
   controls: [
-    dual('spacing_min', 'spacing_max', 1, 8, 0.5, 'mono.spacingRange', { unit: 'px' }),
-    dual('wave_min', 'wave_max', 0, 3, 0.1, 'mono.waveRange', { unit: 'px' }),
-    range('wave_period', 8, 20, 1, 'mono.wavePeriod', { unit: ' px' }),
+    dual('spacing_min', 'spacing_max', 0.37, 3, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+    dual('wave_min', 'wave_max', 0, 1.1, 0.1, 'mono.waveRange', { unit: 'mm' }),
+    range('wave_period', 3, 7.4, 0.1, 'mono.wavePeriod', { decimals: 1, unit: ' mm' }),
   ],
 }
 
@@ -165,8 +165,8 @@ const ENGRAVE: StyleKnobConfig = {
 // bandRecipe, so it renders the generic AlgoParamsForm fallback).
 const SPACING_WIDE: StyleKnobConfig = {
   controls: [
-    dual('spacing_min', 'spacing_max', 1, 20, 0.5, 'mono.spacingRange', {
-      unit: 'px',
+    dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', {
+      unit: 'mm',
       hintKey: 'mono.spacingRangeHint',
     }),
   ],
@@ -193,8 +193,8 @@ export const MONO_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   scribble: HATCH_FAMILY,
   'halftone-shade': {
     controls: [
-      dual('cell_min', 'cell_max', 2, 14, 1, 'mono.cellRange', {
-        unit: 'px',
+      dual('cell_min', 'cell_max', 0.74, 5.2, 0.1, 'mono.cellRange', {
+        unit: 'mm',
         hintKey: 'mono.cellRangeHint',
       }),
     ],
@@ -205,7 +205,7 @@ export const MONO_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   'squiggle-shade': ENGRAVE,
   'contours-topo': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 8, 0.5, 'mono.spacingRange', { unit: 'px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3, 0.1, 'mono.spacingRange', { unit: 'mm' }),
       dual('rings_min', 'rings_max', 5, 40, 1, 'mono.ringsRange', {
         hintKey: 'mono.ringsRangeHint',
       }),
@@ -213,7 +213,7 @@ export const MONO_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   },
   'concentric-rings': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 10, 1, 'mono.spacingRange', { unit: 'px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' }),
       dual('rings_min', 'rings_max', 2, 80, 1, 'mono.ringsRange', {
         hintKey: 'mono.ringsRangeHint',
       }),
@@ -233,12 +233,12 @@ export const MONO_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   'spiral-master': {
     introHintKey: 'mono.spiralTonalHint',
     controls: [
-      range('spacing_px', 3, 30, 1, 'mono.spiralSpacing', {
-        unit: ' px',
+      range('spacing_mm', 1.1, 11, 0.1, 'mono.spiralSpacing', {
+        unit: ' mm',
         hintKey: 'mono.spiralSpacingHint',
       }),
-      range('wavelength_px', 2, 24, 1, 'mono.spiralWavelength', {
-        unit: ' px',
+      range('wavelength_mm', 0.74, 8.9, 0.1, 'mono.spiralWavelength', {
+        unit: ' mm',
         hintKey: 'mono.spiralWavelengthHint',
       }),
       range('tone_strength', 0, 1, 0.05, 'mono.spiralStrength', {
@@ -268,8 +268,8 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   'color-flat-lab': FLAT_PLACEHOLDER,
   'color-crosshatch': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 10, 0.5, 'mono.spacingRange', {
-        unit: 'px',
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', {
+        unit: 'mm',
         hintKey: 'colorStyles.crosshatchSpacingHint',
       }),
       range('angle_step', 0, 90, 5, 'colorStyles.angleStep', {
@@ -290,25 +290,25 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   },
   'color-halftone-cmyk': {
     controls: [
-      range('cell_size', 2, 14, 1, 'convert.cellSize', {
-        unit: ' px',
+      range('cell_size', 0.74, 5.2, 0.1, 'convert.cellSize', {
+        unit: ' mm',
         hintKey: 'colorStyles.cmykHint',
       }),
     ],
   },
   'color-contours-topo': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 8, 0.5, 'mono.spacingRange', { unit: 'px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3, 0.1, 'mono.spacingRange', { unit: 'mm' }),
       dual('rings_min', 'rings_max', 5, 40, 1, 'mono.ringsRange'),
     ],
   },
   'color-flowfield': {
     controls: [
-      dual('seed_spacing_min', 'seed_spacing_max', 2, 30, 0.5, 'colorStyles.seedSpacingRange', {
-        unit: 'px',
+      dual('seed_spacing_min', 'seed_spacing_max', 0.74, 11, 0.1, 'colorStyles.seedSpacingRange', {
+        unit: 'mm',
         hintKey: 'colorStyles.seedSpacingHint',
       }),
-      range('step_px', 0.2, 3, 0.1, 'convert.stepPx', { decimals: 1, unit: ' px' }),
+      range('step_mm', 0.07, 1.1, 0.1, 'convert.stepPx', { decimals: 1, unit: ' mm' }),
       range('max_steps', 100, 2000, 50, 'convert.maxSteps'),
       range('noise_scale', 4, 128, 2, 'convert.noiseScale'),
       checkbox('bidirectional', 'convert.bidirectional'),
@@ -316,15 +316,15 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   },
   'color-sketch': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 10, 0.5, 'mono.spacingRange', { unit: 'px' }),
-      dual('amp_min', 'amp_max', 0.2, 4, 0.1, 'colorStyles.ampRange', { unit: 'px' }),
-      range('period_px', 2, 20, 0.5, 'mono.wavePeriod', { unit: ' px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+      dual('amp_min', 'amp_max', 0.07, 1.5, 0.1, 'colorStyles.ampRange', { unit: 'mm' }),
+      range('period_mm', 0.74, 7.4, 0.1, 'mono.wavePeriod', { decimals: 1, unit: ' mm' }),
       range('jitter', 0, 1, 0.05, 'convert.jitter', { decimals: 2 }),
     ],
   },
   'color-spiral': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 8, 0.5, 'mono.spacingRange', { unit: 'px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3, 0.1, 'mono.spacingRange', { unit: 'mm' }),
       range('max_rings', 5, 120, 1, 'convert.maxRings'),
     ],
   },
@@ -333,19 +333,19 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   },
   'color-edges': { controls: [STROKE_WIDTH] },
   'color-centerline': {
-    controls: [STROKE_WIDTH, range('min_branch_px', 1, 20, 1, 'convert.minBranch', { unit: ' px' })],
+    controls: [STROKE_WIDTH, range('min_branch_mm', 0.37, 7.4, 0.1, 'convert.minBranch', { decimals: 1, unit: ' mm' })],
   },
   'color-spiral-classic': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 8, 0.5, 'mono.spacingRange', { unit: 'px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3, 0.1, 'mono.spacingRange', { unit: 'mm' }),
       range('samples_per_turn', 16, 256, 4, 'convert.samplesPerTurn'),
     ],
   },
   'color-scanlines': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 10, 0.5, 'mono.spacingRange', { unit: 'px' }),
-      range('wave_amp_px', 0, 6, 0.2, 'convert.waveAmp', { decimals: 1, unit: ' px' }),
-      range('wave_period_px', 2, 40, 1, 'convert.wavePeriod', { unit: ' px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+      range('wave_amp_mm', 0, 2.2, 0.1, 'convert.waveAmp', { decimals: 1, unit: ' mm' }),
+      range('wave_period_mm', 0.74, 15, 0.1, 'convert.wavePeriod', { decimals: 1, unit: ' mm' }),
     ],
   },
   'color-tsp': {
@@ -353,19 +353,19 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   },
   'color-hilbert': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 10, 0.5, 'mono.spacingRange', { unit: 'px' }),
-      range('min_run_px', 1, 20, 1, 'convert.minRunPx', { unit: ' px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+      range('min_run_mm', 0.37, 7.4, 0.1, 'convert.minRunPx', { decimals: 1, unit: ' mm' }),
     ],
   },
   'color-gosper': {
     controls: [
       range('order', 1, 6, 1, 'convert.gosperOrder', { hintKey: 'colorStyles.gosperOrderHint' }),
-      dual('spacing_min', 'spacing_max', 1, 8, 0.5, 'mono.spacingRange', { unit: 'px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3, 0.1, 'mono.spacingRange', { unit: 'mm' }),
     ],
   },
   'color-eulerian': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 10, 0.5, 'mono.spacingRange', { unit: 'px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' }),
       range('angle_step', 0, 90, 5, 'colorStyles.angleStep', { unit: '°' }),
       checkbox('crossed', 'convert.crossed'),
     ],
@@ -378,24 +378,24 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
     ],
   },
   'color-grid': {
-    controls: [dual('spacing_min', 'spacing_max', 1, 20, 0.5, 'mono.spacingRange', { unit: 'px' })],
+    controls: [dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', { unit: 'mm' })],
   },
   'color-brick': {
-    controls: [dual('cell_min', 'cell_max', 2, 30, 1, 'mono.cellRange', { unit: 'px' })],
+    controls: [dual('cell_min', 'cell_max', 0.74, 11, 0.1, 'mono.cellRange', { unit: 'mm' })],
   },
   'color-dashes': {
     controls: [
-      dual('spacing_min', 'spacing_max', 1, 10, 0.5, 'mono.spacingRange', { unit: 'px' }),
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' }),
       range('angle_step', 0, 90, 5, 'colorStyles.angleStep', { unit: '°' }),
-      range('dash_px', 0.5, 12, 0.5, 'convert.dashPx', { decimals: 1, unit: ' px' }),
-      range('gap_px', 0.5, 12, 0.5, 'convert.gapPx', { decimals: 1, unit: ' px' }),
+      range('dash_mm', 0.19, 4.5, 0.1, 'convert.dashPx', { decimals: 1, unit: ' mm' }),
+      range('gap_mm', 0.19, 4.5, 0.1, 'convert.gapPx', { decimals: 1, unit: ' mm' }),
     ],
   },
   'color-truchet': {
-    controls: [dual('cell_min', 'cell_max', 2, 30, 1, 'mono.cellRange', { unit: 'px' })],
+    controls: [dual('cell_min', 'cell_max', 0.74, 11, 0.1, 'mono.cellRange', { unit: 'mm' })],
   },
   'color-rings': {
-    controls: [dual('spacing_min', 'spacing_max', 1, 20, 0.5, 'mono.spacingRange', { unit: 'px' })],
+    controls: [dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', { unit: 'mm' })],
   },
   'color-sunburst': {
     controls: [
@@ -406,11 +406,11 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   },
   'color-circle-pack': {
     controls: [
-      dual('radius_min', 'radius_max', 2, 20, 0.5, 'colorStyles.radiusRange', {
-        unit: 'px',
+      dual('radius_min', 'radius_max', 0.74, 7.4, 0.1, 'colorStyles.radiusRange', {
+        unit: 'mm',
         hintKey: 'colorStyles.radiusRangeHint',
       }),
-      range('gap_px', 0, 6, 0.1, 'convert.gapPx', { decimals: 1, unit: ' px' }),
+      range('gap_mm', 0, 2.2, 0.1, 'convert.gapPx', { decimals: 1, unit: ' mm' }),
     ],
   },
 }

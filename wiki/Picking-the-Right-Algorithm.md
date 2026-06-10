@@ -112,12 +112,13 @@ Common knobs:
 - `density` (stippling, voronoi_stipple, tsp_opt, lowpoly) — fraction of
   region pixels that become dots / sample points
 - `angle_deg` (crosshatch, halftone, dashes) — primary stroke direction
-- `spacing_px` (crosshatch, scanlines, concentric_offset, moire, …) —
-  raster / hatch pitch
-- `cell_size_px` / `cell_px` (halftone, truchet, and other cell-based
-  patterns) — pattern cell size
-- `dot_radius_px` (stippling, voronoi_stipple) — pen-dot footprint
-- `step_px` (flowfield) — streamline integration step
+- `spacing_mm` (crosshatch, scanlines, concentric_offset, moire, …) —
+  raster / hatch pitch on paper (millimetres; constant across page
+  formats)
+- `cell_size_mm` / `cell_mm` (halftone, truchet, and other cell-based
+  patterns) — pattern cell size on paper
+- `dot_radius_mm` (stippling, voronoi_stipple) — pen-dot footprint
+- `step_mm` (flowfield) — streamline integration step
 - `iterations` (voronoi_stipple) and `method` (tsp_opt) — quality / time
   tradeoff
 - `seed` (randomised algorithms) — deterministic re-rolls

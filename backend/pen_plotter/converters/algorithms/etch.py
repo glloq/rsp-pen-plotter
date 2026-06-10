@@ -35,10 +35,10 @@ class EtchAlgorithm(RasterAlgorithm):
     tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=5, min=2, max=20, step=0.5),
-        OptionSpec(key="length_px", label="convert.strokeLen", type="number",
-                   default=9, min=2, max=40, step=1),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.9, min=0.74, max=7.4, step=0.1),
+        OptionSpec(key="length_mm", label="convert.strokeLen", type="number",
+                   default=3.3, min=0.74, max=15, step=0.1),
         OptionSpec(key="jitter", label="convert.jitter", type="number",
                    default=0.3, min=0, max=1, step=0.05),
         OptionSpec(key="seed", label="convert.seed", type="integer",

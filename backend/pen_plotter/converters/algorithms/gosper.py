@@ -127,8 +127,8 @@ class GosperFillAlgorithm(RasterAlgorithm):
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="order", label="convert.gosperOrder", type="integer",
                    default=4, min=1, max=6, step=1),
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.37, max=11, step=0.1),
         OptionSpec(key="rotation_deg", label="convert.angleDeg", type="number",
                    default=0, min=0, max=360, step=5),
     ]

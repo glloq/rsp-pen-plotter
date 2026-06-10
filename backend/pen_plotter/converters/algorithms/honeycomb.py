@@ -37,8 +37,8 @@ class HoneycombAlgorithm(RasterAlgorithm):
     tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="cell_px", label="convert.cellPx", type="integer",
-                   default=12, min=4, max=60, step=1),
+        OptionSpec(key="cell_mm", label="convert.cellPx", type="number",
+                   default=4.5, min=1.5, max=22, step=0.1),
         OptionSpec(key="mode", label="convert.mode", type="select",
                    default="grid", choices=["grid", "scaled"]),
     ]

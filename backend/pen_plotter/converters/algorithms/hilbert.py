@@ -159,10 +159,10 @@ class HilbertFillAlgorithm(RasterAlgorithm):
     tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1, max=30, step=0.5),
-        OptionSpec(key="min_run_px", label="convert.minRunPx", type="integer",
-                   default=3, min=1, max=20, step=1),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.37, max=11, step=0.1),
+        OptionSpec(key="min_run_mm", label="convert.minRunPx", type="number",
+                   default=1.1, min=0.37, max=7.4, step=0.1),
         # ``order`` overrides the auto-derived L-system depth; 0 = "auto",
         # 1..8 force that depth. Useful for tuning ink density on small
         # regions where the auto rule under-fills.

@@ -72,8 +72,8 @@ endpoint, the `/manifests/algorithms` JSON Schema (derived via
 
 ```python
 options_schema: ClassVar[list[OptionSpec]] = [
-    OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-               default=4, min=1, max=30, step=0.5),
+    OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+               default=1.5, min=0.37, max=11, step=0.1),
     OptionSpec(key="mode", label="convert.mode", type="select",
                default="rows", choices=["rows", "columns"]),
     OptionSpec(key="seed", label="convert.seed", type="integer",
@@ -87,9 +87,15 @@ options_schema: ClassVar[list[OptionSpec]] = [
 - `default` / `min` / `max` / `step` — numeric envelope
 - `choices` — allowed values for `select` knobs
 
-Convention: geometry knobs are **pixel-based** (`spacing_px`, `cell_px`,
-`dot_radius_px`, `step_px`, …) because algorithms run at segmentation
-resolution, not in millimetres.
+Convention: geometry knobs are declared in **millimetres**
+(`spacing_mm`, `cell_mm`, `dot_radius_mm`, `step_mm`, …) so the on-paper
+pitch survives page-format changes. Algorithms still *read* the pixel
+spelling (`options.get("spacing_px")`): the render pipeline converts
+every `*_mm` option into its `*_px` twin at the placement's raster
+scale before the algorithm runs (`convert_mm_options` in `_style.py`,
+fed by the `target_width_mm`/`target_height_mm` the frontend ships with
+each render). Raw `*_px` options remain accepted on the wire for saved
+settings.
 
 ## A worked example — horizontal stripes
 
@@ -116,8 +122,10 @@ class StripesAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = "Plain horizontal stripes clipped to the region."
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1, max=30, step=0.5),
+        # Declared in mm (UI contract); read below in px — the pipeline
+        # converts spacing_mm → spacing_px at the placement scale.
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.37, max=11, step=0.1),
     ]
 
     def render_layer(

@@ -37,12 +37,12 @@ class SpaceColonizationAlgorithm(RasterAlgorithm):
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="attractors", label="convert.attractors", type="integer",
                    default=700, min=100, max=4000, step=50),
-        OptionSpec(key="step_px", label="convert.stepPx", type="number",
-                   default=4, min=1, max=15, step=0.5),
-        OptionSpec(key="influence_px", label="convert.influencePx", type="number",
-                   default=40, min=5, max=200, step=1),
-        OptionSpec(key="kill_px", label="convert.killPx", type="number",
-                   default=6, min=2, max=40, step=1),
+        OptionSpec(key="step_mm", label="convert.stepPx", type="number",
+                   default=1.5, min=0.37, max=5.6, step=0.1),
+        OptionSpec(key="influence_mm", label="convert.influencePx", type="number",
+                   default=15, min=1.9, max=74, step=0.1),
+        OptionSpec(key="kill_mm", label="convert.killPx", type="number",
+                   default=2.2, min=0.74, max=15, step=0.1),
         OptionSpec(key="seed", label="convert.seed", type="integer",
                    default=0, min=0, step=1),
     ]

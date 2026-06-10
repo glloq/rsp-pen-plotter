@@ -73,8 +73,8 @@ class ContoursAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.37, max=11, step=0.1),
         OptionSpec(key="max_rings", label="convert.maxRings", type="integer",
                    default=20, min=1, max=100, step=1),
     ]

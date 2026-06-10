@@ -111,11 +111,11 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   direct: { id: 'direct', defaults: {}, schema: [] },
   halftone: {
     id: 'halftone',
-    defaults: { cell_size_px: 6, angle_deg: 0, glyph: 'dot' },
+    defaults: { cell_size_mm: 2.2, angle_deg: 0, glyph: 'dot' },
     schema: [
       // Backend clamps to ``max(2, ...)``: anything below collapses adjacent
       // dots into a solid fill, so the floor is 2 (was 1, silently clipped).
-      { key: 'cell_size_px', label: 'convert.cellSize', type: 'integer', min: 2, max: 64, step: 1 },
+      { key: 'cell_size_mm', label: 'convert.cellSize', type: 'number', min: 0.74, max: 24, step: 0.1 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       {
         key: 'glyph',
@@ -127,7 +127,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   stippling: {
     id: 'stippling',
-    defaults: { density: 0.02, dot_radius_px: 0.6, seed: 0 },
+    defaults: { density: 0.02, dot_radius_mm: 0.22, seed: 0 },
     schema: [
       {
         key: 'density',
@@ -138,11 +138,11 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         step: 0.001,
       },
       {
-        key: 'dot_radius_px',
+        key: 'dot_radius_mm',
         label: 'convert.dotRadius',
         type: 'number',
-        min: 0.1,
-        max: 5,
+        min: 0.04,
+        max: 1.9,
         step: 0.1,
       },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
@@ -150,9 +150,9 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   crosshatch: {
     id: 'crosshatch',
-    defaults: { spacing_px: 4, angle_deg: 45, crossed: false, joined: false },
+    defaults: { spacing_mm: 1.5, angle_deg: 45, crossed: false, joined: false },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
       // Stitches sweeps into boustrophedon zig-zags (the former
@@ -162,9 +162,9 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   contours: {
     id: 'contours',
-    defaults: { spacing_px: 4, max_rings: 20 },
+    defaults: { spacing_mm: 1.5, max_rings: 20 },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
       { key: 'max_rings', label: 'convert.maxRings', type: 'integer', min: 1, max: 100, step: 1 },
     ],
   },
@@ -180,24 +180,24 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     id: 'centerline',
     // ``stroke_width`` is injected from the pen slot at render time — no
     // operator knob (see backend ``_style.stroke_attr_px``).
-    defaults: { smooth: true, min_branch_px: 3 },
+    defaults: { smooth: true, min_branch_mm: 1.1 },
     schema: [
       { key: 'smooth', label: 'convert.smooth', type: 'boolean' },
       {
-        key: 'min_branch_px',
+        key: 'min_branch_mm',
         label: 'convert.minBranch',
-        type: 'integer',
+        type: 'number',
         min: 0,
-        max: 50,
-        step: 1,
+        max: 19,
+        step: 0.1,
       },
     ],
   },
   spiral: {
     id: 'spiral',
-    defaults: { spacing_px: 4, samples_per_turn: 64 },
+    defaults: { spacing_mm: 1.5, samples_per_turn: 64 },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
       {
         key: 'samples_per_turn',
         label: 'convert.samplesPerTurn',
@@ -210,17 +210,17 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   scanlines: {
     id: 'scanlines',
-    defaults: { spacing_px: 4, wave_amp_px: 0, wave_period_px: 12 },
+    defaults: { spacing_mm: 1.5, wave_amp_mm: 0, wave_period_mm: 4.5 },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'wave_amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 20, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
+      { key: 'wave_amp_mm', label: 'convert.waveAmp', type: 'number', min: 0, max: 7.4, step: 0.1 },
       {
-        key: 'wave_period_px',
+        key: 'wave_period_mm',
         label: 'convert.wavePeriod',
         type: 'number',
-        min: 2,
-        max: 50,
-        step: 0.5,
+        min: 0.74,
+        max: 19,
+        step: 0.1,
       },
     ],
   },
@@ -243,8 +243,8 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     id: 'flowfield',
     defaults: {
       mode: 'gradient',
-      seed_spacing_px: 6,
-      step_px: 0.8,
+      seed_spacing_mm: 2.2,
+      step_mm: 0.3,
       max_steps: 800,
       bidirectional: true,
       noise_scale: 32,
@@ -260,14 +260,14 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         choices: ['gradient', 'perlin'],
       },
       {
-        key: 'seed_spacing_px',
+        key: 'seed_spacing_mm',
         label: 'convert.spacing',
         type: 'number',
-        min: 2,
-        max: 30,
-        step: 0.5,
+        min: 0.74,
+        max: 11,
+        step: 0.1,
       },
-      { key: 'step_px', label: 'convert.stepPx', type: 'number', min: 0.2, max: 3, step: 0.1 },
+      { key: 'step_mm', label: 'convert.stepPx', type: 'number', min: 0.07, max: 1.1, step: 0.1 },
       {
         key: 'max_steps',
         label: 'convert.maxSteps',
@@ -290,10 +290,10 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   hilbert: {
     id: 'hilbert',
-    defaults: { spacing_px: 4, min_run_px: 3, order: 0, adaptive: false },
+    defaults: { spacing_mm: 1.5, min_run_mm: 1.1, order: 0, adaptive: false },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'min_run_px', label: 'convert.minRunPx', type: 'integer', min: 1, max: 20, step: 1 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
+      { key: 'min_run_mm', label: 'convert.minRunPx', type: 'number', min: 0.37, max: 7.4, step: 0.1 },
       // ``order`` overrides the auto-derived L-system depth (0 = auto, 1..8
       // force that depth). Operators can tune ink density on small regions
       // where the auto rule under-fills.
@@ -305,27 +305,27 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   gosper: {
     id: 'gosper',
-    defaults: { order: 4, spacing_px: 4, rotation_deg: 0 },
+    defaults: { order: 4, spacing_mm: 1.5, rotation_deg: 0 },
     schema: [
       { key: 'order', label: 'convert.gosperOrder', type: 'integer', min: 1, max: 6, step: 1 },
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
       { key: 'rotation_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 360, step: 5 },
     ],
   },
   eulerian_hatch: {
     id: 'eulerian_hatch',
-    defaults: { spacing_px: 4, angle_deg: 45, crossed: false },
+    defaults: { spacing_mm: 1.5, angle_deg: 45, crossed: false },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
     ],
   },
   concentric_offset: {
     id: 'concentric_offset',
-    defaults: { spacing_px: 3, max_rings: 50, bridge: true },
+    defaults: { spacing_mm: 1.1, max_rings: 50, bridge: true },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
       { key: 'max_rings', label: 'convert.maxRings', type: 'integer', min: 1, max: 200, step: 1 },
       { key: 'bridge', label: 'convert.bridge', type: 'boolean' },
     ],
@@ -380,7 +380,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   voronoi_stipple: {
     id: 'voronoi_stipple',
-    defaults: { density: 0.02, dot_radius_px: 0.6, iterations: 6, seed: 0 },
+    defaults: { density: 0.02, dot_radius_mm: 0.22, iterations: 6, seed: 0 },
     schema: [
       {
         key: 'density',
@@ -391,11 +391,11 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         step: 0.001,
       },
       {
-        key: 'dot_radius_px',
+        key: 'dot_radius_mm',
         label: 'convert.dotRadius',
         type: 'number',
-        min: 0.1,
-        max: 5,
+        min: 0.04,
+        max: 1.9,
         step: 0.1,
       },
       { key: 'iterations', label: 'convert.iterations', type: 'integer', min: 0, max: 30, step: 1 },
@@ -404,11 +404,11 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   squiggle: {
     id: 'squiggle',
-    defaults: { spacing_px: 4, amp_px: 1.4, period_px: 8, jitter: 0.4, mode: 'modulated', seed: 0 },
+    defaults: { spacing_mm: 1.5, amp_mm: 0.52, period_mm: 3, jitter: 0.4, mode: 'modulated', seed: 0 },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0.1, max: 8, step: 0.1 },
-      { key: 'period_px', label: 'convert.wavePeriod', type: 'number', min: 2, max: 40, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
+      { key: 'amp_mm', label: 'convert.waveAmp', type: 'number', min: 0.04, max: 3, step: 0.1 },
+      { key: 'period_mm', label: 'convert.wavePeriod', type: 'number', min: 0.74, max: 15, step: 0.1 },
       { key: 'jitter', label: 'convert.jitter', type: 'number', min: 0, max: 1, step: 0.05 },
       // ``modulated`` lets the amplitude track image tone; ``constant`` keeps
       // a uniform wiggle — better for pure-decoration fills where tone shouldn't
@@ -440,26 +440,26 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   scribble: {
     id: 'scribble',
     defaults: {
-      spacing_px: 4,
-      amp_px: 1.6,
-      overshoot_px: 3,
+      spacing_mm: 1.5,
+      amp_mm: 0.59,
+      overshoot_mm: 1.1,
       angle_deg: 45,
       crossed: false,
       seed: 0,
     },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
-      { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 8, step: 0.1 },
-      // ``overshoot_px`` is the random extension each stroke runs past the
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
+      { key: 'amp_mm', label: 'convert.waveAmp', type: 'number', min: 0, max: 3, step: 0.1 },
+      // ``overshoot_mm`` is the random extension each stroke runs past the
       // boundary — the "sketchy" feel of scribble fill. 0 = clean stops at
       // the boundary, higher values = scratchy / loose pencil.
       {
-        key: 'overshoot_px',
+        key: 'overshoot_mm',
         label: 'convert.overshoot',
         type: 'number',
         min: 0,
-        max: 20,
-        step: 0.5,
+        max: 7.4,
+        step: 0.1,
       },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
@@ -468,44 +468,44 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   grid: {
     id: 'grid',
-    defaults: { spacing_px: 6 },
+    defaults: { spacing_mm: 2.2 },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
     ],
   },
   brick: {
     id: 'brick',
-    defaults: { brick_w_px: 16, brick_h_px: 8 },
+    defaults: { brick_w_mm: 5.9, brick_h_mm: 3 },
     schema: [
-      { key: 'brick_w_px', label: 'convert.brickW', type: 'integer', min: 2, max: 60, step: 1 },
-      { key: 'brick_h_px', label: 'convert.brickH', type: 'integer', min: 2, max: 40, step: 1 },
+      { key: 'brick_w_mm', label: 'convert.brickW', type: 'number', min: 0.74, max: 22, step: 0.1 },
+      { key: 'brick_h_mm', label: 'convert.brickH', type: 'number', min: 0.74, max: 15, step: 0.1 },
     ],
   },
   dashes: {
     id: 'dashes',
-    defaults: { spacing_px: 5, angle_deg: 45, dash_px: 3, gap_px: 3, crossed: false },
+    defaults: { spacing_mm: 1.9, angle_deg: 45, dash_mm: 1.1, gap_mm: 1.1, crossed: false },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
-      { key: 'dash_px', label: 'convert.dashPx', type: 'number', min: 0.5, max: 20, step: 0.5 },
-      { key: 'gap_px', label: 'convert.gapPx', type: 'number', min: 0.5, max: 20, step: 0.5 },
+      { key: 'dash_mm', label: 'convert.dashPx', type: 'number', min: 0.19, max: 7.4, step: 0.1 },
+      { key: 'gap_mm', label: 'convert.gapPx', type: 'number', min: 0.19, max: 7.4, step: 0.1 },
       { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
     ],
   },
   truchet: {
     id: 'truchet',
-    defaults: { cell_px: 10, seed: 0, tile: 'diagonal' },
+    defaults: { cell_mm: 3.7, seed: 0, tile: 'diagonal' },
     schema: [
-      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 2, max: 40, step: 1 },
+      { key: 'cell_mm', label: 'convert.cellPx', type: 'number', min: 0.74, max: 15, step: 0.1 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
       { key: 'tile', label: 'convert.tile', type: 'select', choices: ['diagonal', 'arc', 'mixed'] },
     ],
   },
   rings: {
     id: 'rings',
-    defaults: { spacing_px: 6 },
+    defaults: { spacing_mm: 2.2 },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.37, max: 11, step: 0.1 },
     ],
   },
   sunburst: {
@@ -521,69 +521,69 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
     // Defaults aligned with the backend ``opts.get`` fallbacks
     // (``circle_pack.py``: 1.2 / 8.0) so the operator sees the same
     // packing the backend renders when no override is set.
-    defaults: { min_radius_px: 1.2, max_radius_px: 8.0, gap_px: 0.6, seed: 0 },
+    defaults: { min_radius_mm: 0.45, max_radius_mm: 3, gap_mm: 0.22, seed: 0 },
     schema: [
       {
-        key: 'min_radius_px',
+        key: 'min_radius_mm',
         label: 'convert.minRadius',
         type: 'number',
-        min: 0.5,
-        max: 10,
+        min: 0.19,
+        max: 3.7,
         step: 0.1,
       },
       {
-        key: 'max_radius_px',
+        key: 'max_radius_mm',
         label: 'convert.maxRadius',
         type: 'number',
-        min: 1,
-        max: 40,
-        step: 0.5,
+        min: 0.37,
+        max: 15,
+        step: 0.1,
       },
-      { key: 'gap_px', label: 'convert.gapPx', type: 'number', min: 0, max: 10, step: 0.1 },
+      { key: 'gap_mm', label: 'convert.gapPx', type: 'number', min: 0, max: 3.7, step: 0.1 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   ridge_lines: {
     id: 'ridge_lines',
-    defaults: { spacing_px: 6, amp_px: 10, smooth_px: 3, occlude: true, layout: 'rows' },
+    defaults: { spacing_mm: 2.2, amp_mm: 3.7, smooth_mm: 1.1, occlude: true, layout: 'rows' },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 40, step: 0.5 },
-      { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 60, step: 1 },
-      { key: 'smooth_px', label: 'convert.smooth', type: 'integer', min: 0, max: 20, step: 1 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.74, max: 15, step: 0.1 },
+      { key: 'amp_mm', label: 'convert.waveAmp', type: 'number', min: 0, max: 22, step: 0.1 },
+      { key: 'smooth_mm', label: 'convert.smooth', type: 'number', min: 0, max: 7.4, step: 0.1 },
       { key: 'occlude', label: 'convert.hiddenLines', type: 'boolean' },
       { key: 'layout', label: 'convert.mode', type: 'select', choices: ['rows', 'radial'] },
     ],
   },
   hitomezashi: {
     id: 'hitomezashi',
-    defaults: { cell_px: 8, seed: 0 },
+    defaults: { cell_mm: 3, seed: 0 },
     schema: [
-      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 3, max: 40, step: 1 },
+      { key: 'cell_mm', label: 'convert.cellPx', type: 'number', min: 1.1, max: 15, step: 0.1 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   cubic_disarray: {
     id: 'cubic_disarray',
-    defaults: { cell_px: 12, max_rotate_deg: 35, max_offset_px: 5, seed: 0 },
+    defaults: { cell_mm: 4.5, max_rotate_deg: 35, max_offset_mm: 1.9, seed: 0 },
     schema: [
-      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 4, max: 60, step: 1 },
+      { key: 'cell_mm', label: 'convert.cellPx', type: 'number', min: 1.5, max: 22, step: 0.1 },
       { key: 'max_rotate_deg', label: 'convert.rotateMax', type: 'number', min: 0, max: 90, step: 1 },
       {
-        key: 'max_offset_px',
+        key: 'max_offset_mm',
         label: 'convert.offsetMax',
         type: 'number',
         min: 0,
-        max: 30,
-        step: 0.5,
+        max: 11,
+        step: 0.1,
       },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   quadtree: {
     id: 'quadtree',
-    defaults: { min_cell_px: 6, split_threshold: 0.12 },
+    defaults: { min_cell_mm: 2.2, split_threshold: 0.12 },
     schema: [
-      { key: 'min_cell_px', label: 'convert.minCell', type: 'integer', min: 2, max: 64, step: 1 },
+      { key: 'min_cell_mm', label: 'convert.minCell', type: 'number', min: 0.74, max: 24, step: 0.1 },
       {
         key: 'split_threshold',
         label: 'convert.threshold',
@@ -596,23 +596,23 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   maze: {
     id: 'maze',
-    defaults: { cell_px: 8, seed: 0 },
+    defaults: { cell_mm: 3, seed: 0 },
     schema: [
-      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 3, max: 40, step: 1 },
+      { key: 'cell_mm', label: 'convert.cellPx', type: 'number', min: 1.1, max: 15, step: 0.1 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   phyllotaxis: {
     id: 'phyllotaxis',
-    defaults: { spacing_px: 7, dot_radius_px: 2.5, outline: false },
+    defaults: { spacing_mm: 2.6, dot_radius_mm: 0.93, outline: false },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 30, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.74, max: 11, step: 0.1 },
       {
-        key: 'dot_radius_px',
+        key: 'dot_radius_mm',
         label: 'convert.dotRadius',
         type: 'number',
-        min: 0.3,
-        max: 10,
+        min: 0.11,
+        max: 3.7,
         step: 0.1,
       },
       { key: 'outline', label: 'convert.outline', type: 'boolean' },
@@ -635,9 +635,9 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   curve_stitching: {
     id: 'curve_stitching',
-    defaults: { cell_px: 18, chords: 7, seed: 0 },
+    defaults: { cell_mm: 6.7, chords: 7, seed: 0 },
     schema: [
-      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 8, max: 80, step: 1 },
+      { key: 'cell_mm', label: 'convert.cellPx', type: 'number', min: 3, max: 30, step: 0.1 },
       { key: 'chords', label: 'convert.chords', type: 'integer', min: 3, max: 20, step: 1 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
@@ -653,7 +653,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   space_colonization: {
     id: 'space_colonization',
-    defaults: { attractors: 700, step_px: 4, influence_px: 40, kill_px: 6, seed: 0 },
+    defaults: { attractors: 700, step_mm: 1.5, influence_mm: 15, kill_mm: 2.2, seed: 0 },
     schema: [
       {
         key: 'attractors',
@@ -663,16 +663,16 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         max: 4000,
         step: 50,
       },
-      { key: 'step_px', label: 'convert.stepPx', type: 'number', min: 1, max: 15, step: 0.5 },
+      { key: 'step_mm', label: 'convert.stepPx', type: 'number', min: 0.37, max: 5.6, step: 0.1 },
       {
-        key: 'influence_px',
+        key: 'influence_mm',
         label: 'convert.influencePx',
         type: 'number',
-        min: 5,
-        max: 200,
-        step: 1,
+        min: 1.9,
+        max: 74,
+        step: 0.1,
       },
-      { key: 'kill_px', label: 'convert.killPx', type: 'number', min: 2, max: 40, step: 1 },
+      { key: 'kill_mm', label: 'convert.killPx', type: 'number', min: 0.74, max: 15, step: 0.1 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
@@ -685,15 +685,15 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   dither: {
     id: 'dither',
-    defaults: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' },
+    defaults: { cell_mm: 1.5, dot_radius_mm: 0.37, method: 'floyd' },
     schema: [
-      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 2, max: 20, step: 1 },
+      { key: 'cell_mm', label: 'convert.cellPx', type: 'number', min: 0.74, max: 7.4, step: 0.1 },
       {
-        key: 'dot_radius_px',
+        key: 'dot_radius_mm',
         label: 'convert.dotRadius',
         type: 'number',
-        min: 0.2,
-        max: 5,
+        min: 0.07,
+        max: 1.9,
         step: 0.1,
       },
       {
@@ -706,10 +706,10 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   etch: {
     id: 'etch',
-    defaults: { spacing_px: 5, length_px: 9, jitter: 0.3, seed: 0 },
+    defaults: { spacing_mm: 1.9, length_mm: 3.3, jitter: 0.3, seed: 0 },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 20, step: 0.5 },
-      { key: 'length_px', label: 'convert.strokeLen', type: 'number', min: 2, max: 40, step: 1 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.74, max: 7.4, step: 0.1 },
+      { key: 'length_mm', label: 'convert.strokeLen', type: 'number', min: 0.74, max: 15, step: 0.1 },
       { key: 'jitter', label: 'convert.jitter', type: 'number', min: 0, max: 1, step: 0.05 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
@@ -742,27 +742,27 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   superpixel_hatch: {
     id: 'superpixel_hatch',
-    defaults: { regions: 180, spacing_px: 4, seed: 0 },
+    defaults: { regions: 180, spacing_mm: 1.5, seed: 0 },
     schema: [
       { key: 'regions', label: 'convert.regions', type: 'integer', min: 20, max: 800, step: 10 },
       {
-        key: 'spacing_px',
+        key: 'spacing_mm',
         label: 'convert.spacing',
         type: 'number',
-        min: 1.5,
-        max: 20,
-        step: 0.5,
+        min: 0.56,
+        max: 7.4,
+        step: 0.1,
       },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
   moire: {
     id: 'moire',
-    defaults: { spacing_px: 5, mode: 'rings', offset_px: 14, delta_deg: 4 },
+    defaults: { spacing_mm: 1.9, mode: 'rings', offset_mm: 5.2, delta_deg: 4 },
     schema: [
-      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 20, step: 0.5 },
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.74, max: 7.4, step: 0.1 },
       { key: 'mode', label: 'convert.mode', type: 'select', choices: ['rings', 'lines'] },
-      { key: 'offset_px', label: 'convert.offsetPx', type: 'number', min: 0, max: 80, step: 1 },
+      { key: 'offset_mm', label: 'convert.offsetPx', type: 'number', min: 0, max: 30, step: 0.1 },
       {
         key: 'delta_deg',
         label: 'convert.angleDeg',
@@ -775,17 +775,17 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   weave: {
     id: 'weave',
-    defaults: { band_px: 12, gap_px: 2 },
+    defaults: { band_mm: 4.5, gap_mm: 0.74 },
     schema: [
-      { key: 'band_px', label: 'convert.bandPx', type: 'integer', min: 4, max: 60, step: 1 },
-      { key: 'gap_px', label: 'convert.gapPx', type: 'number', min: 0.5, max: 10, step: 0.5 },
+      { key: 'band_mm', label: 'convert.bandPx', type: 'number', min: 1.5, max: 22, step: 0.1 },
+      { key: 'gap_mm', label: 'convert.gapPx', type: 'number', min: 0.19, max: 3.7, step: 0.1 },
     ],
   },
   honeycomb: {
     id: 'honeycomb',
-    defaults: { cell_px: 12, mode: 'grid' },
+    defaults: { cell_mm: 4.5, mode: 'grid' },
     schema: [
-      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 4, max: 60, step: 1 },
+      { key: 'cell_mm', label: 'convert.cellPx', type: 'number', min: 1.5, max: 22, step: 0.1 },
       { key: 'mode', label: 'convert.mode', type: 'select', choices: ['grid', 'scaled'] },
     ],
   },
@@ -808,7 +808,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   attractor: {
     id: 'attractor',
-    defaults: { preset: 'dejong', points: 6000, dot_radius_px: 0.5, seed: 0 },
+    defaults: { preset: 'dejong', points: 6000, dot_radius_mm: 0.19, seed: 0 },
     schema: [
       {
         key: 'preset',
@@ -825,11 +825,11 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
         step: 500,
       },
       {
-        key: 'dot_radius_px',
+        key: 'dot_radius_mm',
         label: 'convert.dotRadius',
         type: 'number',
-        min: 0.2,
-        max: 3,
+        min: 0.07,
+        max: 1.1,
         step: 0.1,
       },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
@@ -837,10 +837,10 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   text_fill: {
     id: 'text_fill',
-    defaults: { text: 'OmniPlot ', font_size_px: 12, line_spacing: 1.25, threshold: 0.35 },
+    defaults: { text: 'OmniPlot ', font_size_mm: 4.5, line_spacing: 1.25, threshold: 0.35 },
     schema: [
       { key: 'text', label: 'convert.text', type: 'text' },
-      { key: 'font_size_px', label: 'convert.fontSize', type: 'number', min: 4, max: 60, step: 1 },
+      { key: 'font_size_mm', label: 'convert.fontSize', type: 'number', min: 1.5, max: 22, step: 0.1 },
       {
         key: 'line_spacing',
         label: 'convert.lineSpacing',
@@ -1007,8 +1007,8 @@ export function lerp(i: number, total: number, from: number, to: number): number
 // the fallback ``bandRecipe`` still uses.
 export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
   pencil: {
-    spacing_min: 2.5,
-    spacing_max: 6.5,
+    spacing_min: 0.93,
+    spacing_max: 2.4,
     // Limited to the four angles the chip picker exposes (0/45/90/135)
     // so the active state of each chip on first paint matches the
     // operator's intuition. The 30°/150° pair that lived here pre-
@@ -1018,8 +1018,8 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     crossed_on_darkest: true,
   },
   'halftone-shade': {
-    cell_min: 3,
-    cell_max: 9,
+    cell_min: 1.1,
+    cell_max: 3.3,
   },
   'stippling-shade': {
     density_min: 0.012,
@@ -1027,18 +1027,18 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     // (6%) read too faint to register as a dark tone; the slider now
     // reaches 0.5 so very dense stippling is reachable for true blacks.
     density_max: 0.15,
-    dot_radius: 0.5,
+    dot_radius: 0.19,
   },
   engraving: {
-    spacing_min: 1.8,
-    spacing_max: 5,
-    wave_min: 0.6,
-    wave_max: 1.6,
-    wave_period: 14,
+    spacing_min: 0.67,
+    spacing_max: 1.9,
+    wave_min: 0.22,
+    wave_max: 0.59,
+    wave_period: 5.2,
   },
   'contours-topo': {
-    spacing_min: 2.5,
-    spacing_max: 6,
+    spacing_min: 0.93,
+    spacing_max: 2.2,
     rings_min: 10,
     rings_max: 30,
   },
@@ -1052,8 +1052,8 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     // Open turn spacing so the per-pixel wobble is clearly visible (a
     // tight spiral merges into near-solid and hides the tone). Wobble's
     // spatial wavelength + a 0..1 strength on the per-pixel amplitude.
-    spacing_px: 14,
-    wavelength_px: 10,
+    spacing_mm: 5.2,
+    wavelength_mm: 3.7,
     tone_strength: 1,
   },
   'centerline-trace': {
@@ -1062,8 +1062,8 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
   'flowfield-master': {
     // Streamline seed spacing lerped dark→light (dense shadows, sparse
     // highlights).
-    spacing_min: 4,
-    spacing_max: 12,
+    spacing_min: 1.5,
+    spacing_max: 4.5,
   },
   'voronoi-shade': {
     // Aligned with ``stippling-shade`` — both expose the same density
@@ -1071,32 +1071,32 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     // dark→light tonal ramp between the two pointillist masters.
     density_min: 0.012,
     density_max: 0.15,
-    dot_radius: 0.5,
+    dot_radius: 0.19,
   },
   'hatch-fill': {
-    spacing_min: 2.5,
-    spacing_max: 6.5,
+    spacing_min: 0.93,
+    spacing_max: 2.4,
     angles: [45, 135, 0, 90],
     crossed_on_darkest: true,
   },
   'squiggle-shade': {
-    spacing_min: 3,
-    spacing_max: 7,
+    spacing_min: 1.1,
+    spacing_max: 2.6,
     // Wiggle amplitude lerped dark→light (wider in shadows).
-    wave_min: 0.8,
-    wave_max: 2.2,
-    wave_period: 8,
+    wave_min: 0.3,
+    wave_max: 0.82,
+    wave_period: 3,
   },
   'hilbert-fill': {
-    spacing_min: 3,
-    spacing_max: 8,
+    spacing_min: 1.1,
+    spacing_max: 3,
   },
   // gosper-fill intentionally has no operator knobs: its tone is driven by
   // the L-system order, which the registry's bandRecipe lerps across bands.
   // (spacing only scales the curve, so a spacing knob would be a no-op.)
   'concentric-rings': {
-    spacing_min: 3,
-    spacing_max: 6,
+    spacing_min: 1.1,
+    spacing_max: 2.2,
     rings_min: 12,
     rings_max: 50,
   },
@@ -1109,8 +1109,8 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     density_max: 0.04,
   },
   scribble: {
-    spacing_min: 2.5,
-    spacing_max: 6.5,
+    spacing_min: 0.93,
+    spacing_max: 2.4,
     angles: [45, 135, 0, 90],
     crossed_on_darkest: true,
   },
@@ -1130,87 +1130,87 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
     // factice.
   },
   'color-crosshatch': {
-    spacing_min: 2.5,
-    spacing_max: 6,
+    spacing_min: 0.93,
+    spacing_max: 2.2,
     angle_step: 45,
     crossed: false,
   },
   'color-stipple': {
     density_min: 0.02,
     density_max: 0.18,
-    dot_radius: 0.5,
+    dot_radius: 0.19,
     iterations: 4,
   },
   'color-halftone-cmyk': {
-    cell_size: 5,
+    cell_size: 1.9,
   },
   'color-contours-topo': {
-    spacing_min: 2.5,
-    spacing_max: 6,
+    spacing_min: 0.93,
+    spacing_max: 2.2,
     rings_min: 10,
     rings_max: 30,
   },
   'color-flowfield': {
-    seed_spacing_min: 6,
-    seed_spacing_max: 12,
-    step_px: 0.8,
+    seed_spacing_min: 2.2,
+    seed_spacing_max: 4.5,
+    step_mm: 0.3,
     max_steps: 600,
     noise_scale: 48,
     bidirectional: true,
   },
   'color-sketch': {
-    spacing_min: 3,
-    spacing_max: 6,
-    amp_min: 0.6,
-    amp_max: 1.8,
-    period_px: 8,
+    spacing_min: 1.1,
+    spacing_max: 2.2,
+    amp_min: 0.22,
+    amp_max: 0.67,
+    period_mm: 3,
     jitter: 0.45,
   },
   'color-spiral': {
-    spacing_min: 2,
-    spacing_max: 5,
+    spacing_min: 0.74,
+    spacing_max: 1.9,
     max_rings: 40,
   },
   'color-stippling-classic': {
     density_min: 0.02,
     density_max: 0.18,
-    dot_radius: 0.5,
+    dot_radius: 0.19,
   },
   'color-edges': {
     stroke_width: 0.8,
   },
   'color-centerline': {
     stroke_width: 0.8,
-    min_branch_px: 3,
+    min_branch_mm: 1.1,
   },
   'color-spiral-classic': {
-    spacing_min: 2,
-    spacing_max: 5,
+    spacing_min: 0.74,
+    spacing_max: 1.9,
     samples_per_turn: 64,
   },
   'color-scanlines': {
-    spacing_min: 2.5,
-    spacing_max: 6,
-    wave_amp_px: 0,
-    wave_period_px: 12,
+    spacing_min: 0.93,
+    spacing_max: 2.2,
+    wave_amp_mm: 0,
+    wave_period_mm: 4.5,
   },
   'color-tsp': {
     density_min: 0.02,
     density_max: 0.12,
   },
   'color-hilbert': {
-    spacing_min: 2.5,
-    spacing_max: 6,
-    min_run_px: 3,
+    spacing_min: 0.93,
+    spacing_max: 2.2,
+    min_run_mm: 1.1,
   },
   'color-gosper': {
     order: 4,
-    spacing_min: 3,
-    spacing_max: 5,
+    spacing_min: 1.1,
+    spacing_max: 1.9,
   },
   'color-eulerian': {
-    spacing_min: 2.5,
-    spacing_max: 6,
+    spacing_min: 0.93,
+    spacing_max: 2.2,
     angle_step: 45,
     crossed: false,
   },
@@ -1223,36 +1223,36 @@ export const MULTICOLOR_STYLE_DEFAULTS: Record<string, Record<string, unknown>> 
   // Geometric / generative colour masters — global knobs so the operator
   // can tune them across clusters like the hatch / stipple families.
   'color-grid': {
-    spacing_min: 3,
-    spacing_max: 7,
+    spacing_min: 1.1,
+    spacing_max: 2.6,
   },
   'color-brick': {
-    cell_min: 6,
-    cell_max: 12,
+    cell_min: 2.2,
+    cell_max: 4.5,
   },
   'color-dashes': {
-    spacing_min: 3,
-    spacing_max: 6,
+    spacing_min: 1.1,
+    spacing_max: 2.2,
     angle_step: 45,
-    dash_px: 3,
-    gap_px: 3,
+    dash_mm: 1.1,
+    gap_mm: 1.1,
   },
   'color-truchet': {
-    cell_min: 7,
-    cell_max: 14,
+    cell_min: 2.6,
+    cell_max: 5.2,
   },
   'color-rings': {
-    spacing_min: 4,
-    spacing_max: 8,
+    spacing_min: 1.5,
+    spacing_max: 3,
   },
   'color-sunburst': {
     rays_min: 60,
     rays_max: 160,
   },
   'color-circle-pack': {
-    radius_min: 3,
-    radius_max: 7,
-    gap_px: 0.6,
+    radius_min: 1.1,
+    radius_max: 2.6,
+    gap_mm: 0.22,
   },
 }
 
@@ -1290,15 +1290,15 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'crosshatch',
-    defaultAlgorithmOptions: { angle_deg: 45, spacing_px: 4, crossed: false },
+    defaultAlgorithmOptions: { angle_deg: 45, spacing_mm: 1.5, crossed: false },
     bandRecipe(i, total) {
       const angles = [45, 135, 0, 90, 30, 150]
       const angle = angles[i % angles.length] ?? 45
-      const spacing = lerp(i, total, 2.5, 6.5)
+      const spacing = lerp(i, total, 0.93, 2.4)
       const crossed = i === 0 && total > 1
       return {
         algorithm: 'crosshatch',
-        algorithm_options: { angle_deg: angle, spacing_px: spacing, crossed },
+        algorithm_options: { angle_deg: angle, spacing_mm: spacing, crossed },
       }
     },
   },
@@ -1321,10 +1321,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'halftone',
-    defaultAlgorithmOptions: { cell_size_px: 5 },
+    defaultAlgorithmOptions: { cell_size_mm: 1.9 },
     bandRecipe(i, total) {
-      const cell = lerp(i, total, 3, 9)
-      return { algorithm: 'halftone', algorithm_options: { cell_size_px: cell } }
+      const cell = lerp(i, total, 1.1, 3.3)
+      return { algorithm: 'halftone', algorithm_options: { cell_size_mm: cell } }
     },
   },
   {
@@ -1346,12 +1346,12 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'stippling',
-    defaultAlgorithmOptions: { density: 0.08, dot_radius_px: 0.5, seed: 0 },
+    defaultAlgorithmOptions: { density: 0.08, dot_radius_mm: 0.19, seed: 0 },
     bandRecipe(i, total) {
       const density = lerp(i, total, 0.15, 0.012)
       return {
         algorithm: 'stippling',
-        algorithm_options: { density, dot_radius_px: 0.5, seed: i * 7 + 13 },
+        algorithm_options: { density, dot_radius_mm: 0.19, seed: i * 7 + 13 },
       }
     },
   },
@@ -1372,13 +1372,13 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'scanlines',
-    defaultAlgorithmOptions: { spacing_px: 3, wave_amp_px: 0, wave_period_px: 12 },
+    defaultAlgorithmOptions: { spacing_mm: 1.1, wave_amp_mm: 0, wave_period_mm: 4.5 },
     bandRecipe(i, total) {
-      const spacing = lerp(i, total, 1.8, 5)
-      const wave = lerp(i, total, 0.6, 1.6)
+      const spacing = lerp(i, total, 0.67, 1.9)
+      const wave = lerp(i, total, 0.22, 0.59)
       return {
         algorithm: 'scanlines',
-        algorithm_options: { spacing_px: spacing, wave_amp_px: wave, wave_period_px: 14 },
+        algorithm_options: { spacing_mm: spacing, wave_amp_mm: wave, wave_period_mm: 5.2 },
       }
     },
   },
@@ -1401,13 +1401,13 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'contours',
-    defaultAlgorithmOptions: { spacing_px: 4, max_rings: 20 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, max_rings: 20 },
     bandRecipe(i, total) {
-      const spacing = lerp(i, total, 2.5, 6)
+      const spacing = lerp(i, total, 0.93, 2.2)
       const rings = Math.round(lerp(i, total, 30, 10))
       return {
         algorithm: 'contours',
-        algorithm_options: { spacing_px: spacing, max_rings: rings },
+        algorithm_options: { spacing_mm: spacing, max_rings: rings },
       }
     },
   },
@@ -1427,8 +1427,8 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
     defaultAlgorithm: 'flowfield',
     defaultAlgorithmOptions: {
-      seed_spacing_px: 6,
-      step_px: 0.8,
+      seed_spacing_mm: 2.2,
+      step_mm: 0.3,
       max_steps: 800,
       bidirectional: true,
       mode: 'gradient',
@@ -1438,12 +1438,12 @@ export const PRINT_STYLES: PrintStyle[] = [
       // Dark bands seed streamlines densely (small spacing), light bands
       // sparsely — the field follows the image gradient so strokes curve
       // along edges like a wind map.
-      const seedSpacing = lerp(i, total, 4, 12)
+      const seedSpacing = lerp(i, total, 1.5, 4.5)
       return {
         algorithm: 'flowfield',
         algorithm_options: {
-          seed_spacing_px: seedSpacing,
-          step_px: 0.8,
+          seed_spacing_mm: seedSpacing,
+          step_mm: 0.3,
           max_steps: 800,
           bidirectional: true,
           mode: 'gradient',
@@ -1467,7 +1467,7 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'voronoi_stipple',
-    defaultAlgorithmOptions: { density: 0.08, dot_radius_px: 0.5, iterations: 6, seed: 0 },
+    defaultAlgorithmOptions: { density: 0.08, dot_radius_mm: 0.19, iterations: 6, seed: 0 },
     bandRecipe(i, total) {
       // Like stippling-shade but the dots are Lloyd-relaxed → far more
       // even spacing, the "weighted Voronoi stipple" look. Density range
@@ -1476,7 +1476,7 @@ export const PRINT_STYLES: PrintStyle[] = [
       const density = lerp(i, total, 0.15, 0.012)
       return {
         algorithm: 'voronoi_stipple',
-        algorithm_options: { density, dot_radius_px: 0.5, iterations: 6, seed: i * 7 + 13 },
+        algorithm_options: { density, dot_radius_mm: 0.19, iterations: 6, seed: i * 7 + 13 },
       }
     },
   },
@@ -1495,17 +1495,17 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'eulerian_hatch',
-    defaultAlgorithmOptions: { spacing_px: 4, angle_deg: 45, crossed: false },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, angle_deg: 45, crossed: false },
     bandRecipe(i, total) {
       // Same rotating-angle idea as pencil, but the hatch lines are
       // stitched into one Eulerian path per layer → far fewer pen lifts.
       const angles = [45, 135, 0, 90, 30, 150]
       const angle = angles[i % angles.length] ?? 45
-      const spacing = lerp(i, total, 2.5, 6.5)
+      const spacing = lerp(i, total, 0.93, 2.4)
       const finalAngles = i === 0 && total > 1 ? [angle, (angle + 90) % 180] : [angle]
       return {
         algorithm: 'eulerian_hatch',
-        algorithm_options: { angles: finalAngles, spacing_px: spacing },
+        algorithm_options: { angles: finalAngles, spacing_mm: spacing },
       }
     },
   },
@@ -1524,18 +1524,18 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'squiggle',
-    defaultAlgorithmOptions: { spacing_px: 4, amp_px: 1.4, period_px: 8, jitter: 0.4, seed: 0 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, amp_mm: 0.52, period_mm: 3, jitter: 0.4, seed: 0 },
     bandRecipe(i, total) {
       // Wavy hand-drawn rows: dark bands pack tighter rows with a wider
       // wiggle, light bands relax to a thin near-straight line.
-      const spacing = Math.round(lerp(i, total, 3, 7))
-      const amp = lerp(i, total, 2.2, 0.8)
+      const spacing = Math.round(lerp(i, total, 1.1, 2.6) * 10) / 10
+      const amp = lerp(i, total, 0.82, 0.3)
       return {
         algorithm: 'squiggle',
         algorithm_options: {
-          spacing_px: spacing,
-          amp_px: amp,
-          period_px: 8,
+          spacing_mm: spacing,
+          amp_mm: amp,
+          period_mm: 3,
           jitter: 0.4,
           seed: i * 7 + 13,
         },
@@ -1557,14 +1557,14 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'hilbert',
-    defaultAlgorithmOptions: { spacing_px: 4, min_run_px: 3 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, min_run_mm: 1.1 },
     bandRecipe(i, total) {
       // Single continuous Hilbert curve fills each band; tighter spacing
       // on dark bands packs more ink.
-      const spacing = lerp(i, total, 3, 8)
+      const spacing = lerp(i, total, 1.1, 3)
       return {
         algorithm: 'hilbert',
-        algorithm_options: { spacing_px: spacing, min_run_px: 3 },
+        algorithm_options: { spacing_mm: spacing, min_run_mm: 1.1 },
       }
     },
   },
@@ -1583,7 +1583,7 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'gosper',
-    defaultAlgorithmOptions: { order: 4, spacing_px: 4, rotation_deg: 0 },
+    defaultAlgorithmOptions: { order: 4, spacing_mm: 1.5, rotation_deg: 0 },
     bandRecipe(i, total) {
       // Gosper (flowsnake) space-filling curve — a softer, hexagonal
       // cousin of Hilbert. Its density is set by the L-system ``order``
@@ -1593,7 +1593,7 @@ export const PRINT_STYLES: PrintStyle[] = [
       const order = Math.round(lerp(i, total, 4, 2))
       return {
         algorithm: 'gosper',
-        algorithm_options: { order, spacing_px: 4, rotation_deg: 0 },
+        algorithm_options: { order, spacing_mm: 1.5, rotation_deg: 0 },
       }
     },
   },
@@ -1612,15 +1612,15 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'concentric_offset',
-    defaultAlgorithmOptions: { spacing_px: 3, max_rings: 50, bridge: true },
+    defaultAlgorithmOptions: { spacing_mm: 1.1, max_rings: 50, bridge: true },
     bandRecipe(i, total) {
       // Erodes the region into nested offset rings stitched into a single
       // spiral path. Dark bands get tighter spacing and more rings.
-      const spacing = Math.round(lerp(i, total, 3, 6))
+      const spacing = Math.round(lerp(i, total, 1.1, 2.2) * 10) / 10
       const rings = Math.round(lerp(i, total, 50, 12))
       return {
         algorithm: 'concentric_offset',
-        algorithm_options: { spacing_px: spacing, max_rings: rings, bridge: true },
+        algorithm_options: { spacing_mm: spacing, max_rings: rings, bridge: true },
       }
     },
   },
@@ -1665,21 +1665,21 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'scribble',
-    defaultAlgorithmOptions: { spacing_px: 4, amp_px: 1.6, overshoot_px: 3, angle_deg: 45 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, amp_mm: 0.59, overshoot_mm: 1.1, angle_deg: 45 },
     bandRecipe(i, total) {
       // Loose hand-drawn hatching: tighter spacing on dark bands, plus a
       // crossing pass on the darkest band — like a sketch shading a shadow.
       const angles = [45, 135, 0, 90, 30, 150]
       const angle = angles[i % angles.length] ?? 45
-      const spacing = lerp(i, total, 2.5, 6.5)
+      const spacing = lerp(i, total, 0.93, 2.4)
       const finalAngles = i === 0 && total > 1 ? [angle, (angle + 90) % 180] : [angle]
       return {
         algorithm: 'scribble',
         algorithm_options: {
           angles: finalAngles,
-          spacing_px: spacing,
-          amp_px: 1.6,
-          overshoot_px: 3,
+          spacing_mm: spacing,
+          amp_mm: 0.59,
+          overshoot_mm: 1.1,
           seed: i * 7 + 13,
         },
       }
@@ -1730,11 +1730,11 @@ export const PRINT_STYLES: PrintStyle[] = [
       default_max_dimension_px: 2400,
     },
     defaultAlgorithm: 'crosshatch',
-    defaultAlgorithmOptions: { angle_deg: 45, spacing_px: 3, crossed: false },
+    defaultAlgorithmOptions: { angle_deg: 45, spacing_mm: 1.1, crossed: false },
     bandRecipe() {
       return {
         algorithm: 'crosshatch',
-        algorithm_options: { angle_deg: 45, spacing_px: 3, crossed: false },
+        algorithm_options: { angle_deg: 45, spacing_mm: 1.1, crossed: false },
       }
     },
   },
@@ -1781,18 +1781,18 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
     defaultAlgorithm: 'spiral',
     defaultAlgorithmOptions: {
-      spacing_px: 14,
+      spacing_mm: 5.2,
       samples_per_turn: 64,
-      wavelength_px: 10,
+      wavelength_mm: 3.7,
       tone_strength: 1,
     },
     bandRecipe() {
       return {
         algorithm: 'spiral',
         algorithm_options: {
-          spacing_px: 14,
+          spacing_mm: 5.2,
           samples_per_turn: 64,
-          wavelength_px: 10,
+          wavelength_mm: 3.7,
           tone_strength: 1,
         },
       }
@@ -1817,11 +1817,11 @@ export const PRINT_STYLES: PrintStyle[] = [
       default_max_dimension_px: 2400,
     },
     defaultAlgorithm: 'centerline',
-    defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+    defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_mm: 1.1 },
     bandRecipe() {
       return {
         algorithm: 'centerline',
-        algorithm_options: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+        algorithm_options: { stroke_width: 0.8, smooth: true, min_branch_mm: 1.1 },
       }
     },
   },
@@ -1901,10 +1901,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'ridge_lines',
-    defaultAlgorithmOptions: { spacing_px: 5, amp_px: 14, smooth_px: 3, occlude: true },
+    defaultAlgorithmOptions: { spacing_mm: 1.9, amp_mm: 5.2, smooth_mm: 1.1, occlude: true },
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
-      return { algorithm: 'ridge_lines', algorithm_options: { spacing_px: 5, amp_px: 14, smooth_px: 3, occlude: true } }
+      return { algorithm: 'ridge_lines', algorithm_options: { spacing_mm: 1.9, amp_mm: 5.2, smooth_mm: 1.1, occlude: true } }
     },
   },
   {
@@ -1922,10 +1922,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'dither',
-    defaultAlgorithmOptions: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' },
+    defaultAlgorithmOptions: { cell_mm: 1.5, dot_radius_mm: 0.37, method: 'floyd' },
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
-      return { algorithm: 'dither', algorithm_options: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' } }
+      return { algorithm: 'dither', algorithm_options: { cell_mm: 1.5, dot_radius_mm: 0.37, method: 'floyd' } }
     },
   },
   {
@@ -1943,10 +1943,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'etch',
-    defaultAlgorithmOptions: { spacing_px: 5, length_px: 10, jitter: 0.3, seed: 0 },
+    defaultAlgorithmOptions: { spacing_mm: 1.9, length_mm: 3.7, jitter: 0.3, seed: 0 },
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
-      return { algorithm: 'etch', algorithm_options: { spacing_px: 5, length_px: 10, jitter: 0.3, seed: 0 } }
+      return { algorithm: 'etch', algorithm_options: { spacing_mm: 1.9, length_mm: 3.7, jitter: 0.3, seed: 0 } }
     },
   },
   {
@@ -1985,10 +1985,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'hilbert',
-    defaultAlgorithmOptions: { adaptive: true, spacing_px: 4, min_run_px: 3 },
+    defaultAlgorithmOptions: { adaptive: true, spacing_mm: 1.5, min_run_mm: 1.1 },
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
-      return { algorithm: 'hilbert', algorithm_options: { adaptive: true, spacing_px: 4, min_run_px: 3 } }
+      return { algorithm: 'hilbert', algorithm_options: { adaptive: true, spacing_mm: 1.5, min_run_mm: 1.1 } }
     },
   },
   {
@@ -2006,10 +2006,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'quadtree',
-    defaultAlgorithmOptions: { min_cell_px: 5, split_threshold: 0.1 },
+    defaultAlgorithmOptions: { min_cell_mm: 1.9, split_threshold: 0.1 },
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
-      return { algorithm: 'quadtree', algorithm_options: { min_cell_px: 5, split_threshold: 0.1 } }
+      return { algorithm: 'quadtree', algorithm_options: { min_cell_mm: 1.9, split_threshold: 0.1 } }
     },
   },
   {
@@ -2027,10 +2027,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'phyllotaxis',
-    defaultAlgorithmOptions: { spacing_px: 6, dot_radius_px: 2.6, outline: false },
+    defaultAlgorithmOptions: { spacing_mm: 2.2, dot_radius_mm: 0.97, outline: false },
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
-      return { algorithm: 'phyllotaxis', algorithm_options: { spacing_px: 6, dot_radius_px: 2.6, outline: false } }
+      return { algorithm: 'phyllotaxis', algorithm_options: { spacing_mm: 2.2, dot_radius_mm: 0.97, outline: false } }
     },
   },
   {
@@ -2069,10 +2069,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'text_fill',
-    defaultAlgorithmOptions: { text: 'OmniPlot ', font_size_px: 11, line_spacing: 1.2, threshold: 0.3 },
+    defaultAlgorithmOptions: { text: 'OmniPlot ', font_size_mm: 4.1, line_spacing: 1.2, threshold: 0.3 },
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
-      return { algorithm: 'text_fill', algorithm_options: { text: 'OmniPlot ', font_size_px: 11, line_spacing: 1.2, threshold: 0.3 } }
+      return { algorithm: 'text_fill', algorithm_options: { text: 'OmniPlot ', font_size_mm: 4.1, line_spacing: 1.2, threshold: 0.3 } }
     },
   },
   {
@@ -2090,10 +2090,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'attractor',
-    defaultAlgorithmOptions: { preset: 'dejong', points: 9000, dot_radius_px: 0.5, seed: 0 },
+    defaultAlgorithmOptions: { preset: 'dejong', points: 9000, dot_radius_mm: 0.19, seed: 0 },
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
-      return { algorithm: 'attractor', algorithm_options: { preset: 'dejong', points: 9000, dot_radius_px: 0.5, seed: 0 } }
+      return { algorithm: 'attractor', algorithm_options: { preset: 'dejong', points: 9000, dot_radius_mm: 0.19, seed: 0 } }
     },
   },
   {
@@ -2111,10 +2111,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'superpixel_hatch',
-    defaultAlgorithmOptions: { regions: 220, spacing_px: 3.5, seed: 0 },
+    defaultAlgorithmOptions: { regions: 220, spacing_mm: 1.3, seed: 0 },
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
-      return { algorithm: 'superpixel_hatch', algorithm_options: { regions: 220, spacing_px: 3.5, seed: 0 } }
+      return { algorithm: 'superpixel_hatch', algorithm_options: { regions: 220, spacing_mm: 1.3, seed: 0 } }
     },
   },
   {
@@ -2247,17 +2247,17 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'crosshatch',
-    defaultAlgorithmOptions: { angle_deg: 45, spacing_px: 4, crossed: false },
+    defaultAlgorithmOptions: { angle_deg: 45, spacing_mm: 1.5, crossed: false },
     colorRecipe(i, total) {
       // Rotate the hatch angle per cluster so overlapping inks read as
       // distinct strokes. Darkest cluster gets the densest spacing so the
       // visual weight tracks the source-image luminance.
       const angles = [0, 45, 90, 135, 30, 75, 120, 165]
       const angle = angles[i % angles.length] ?? 45
-      const spacing = lerp(i, total, 2.5, 6)
+      const spacing = lerp(i, total, 0.93, 2.2)
       return {
         algorithm: 'crosshatch',
-        algorithm_options: { angle_deg: angle, spacing_px: spacing, crossed: false },
+        algorithm_options: { angle_deg: angle, spacing_mm: spacing, crossed: false },
       }
     },
   },
@@ -2276,7 +2276,7 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'voronoi_stipple',
-    defaultAlgorithmOptions: { density: 0.03, dot_radius_px: 0.5, iterations: 4, seed: 0 },
+    defaultAlgorithmOptions: { density: 0.03, dot_radius_mm: 0.19, iterations: 4, seed: 0 },
     colorRecipe(i, total) {
       // Darker clusters get denser dot fields. Voronoi relaxation keeps
       // spacing even within each cluster so overlapping inks don't clump.
@@ -2285,7 +2285,7 @@ export const PRINT_STYLES: PrintStyle[] = [
         algorithm: 'voronoi_stipple',
         algorithm_options: {
           density,
-          dot_radius_px: 0.5,
+          dot_radius_mm: 0.19,
           iterations: 4,
           seed: i * 13 + 7,
         },
@@ -2307,7 +2307,7 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'halftone',
-    defaultAlgorithmOptions: { cell_size_px: 5 },
+    defaultAlgorithmOptions: { cell_size_mm: 1.9 },
     colorRecipe(_i, _total, hex) {
       // CMYK printing convention: assign canonical screen angles by the
       // cluster's dominant primary. Falls back to 45° (the black plate
@@ -2328,7 +2328,7 @@ export const PRINT_STYLES: PrintStyle[] = [
       }
       return {
         algorithm: 'halftone',
-        algorithm_options: { cell_size_px: 5, angle_deg: angle },
+        algorithm_options: { cell_size_mm: 1.9, angle_deg: angle },
       }
     },
   },
@@ -2347,13 +2347,13 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'contours',
-    defaultAlgorithmOptions: { spacing_px: 4, max_rings: 20 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, max_rings: 20 },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 2.5, 6)
+      const spacing = lerp(i, total, 0.93, 2.2)
       const rings = Math.round(lerp(i, total, 30, 10))
       return {
         algorithm: 'contours',
-        algorithm_options: { spacing_px: spacing, max_rings: rings },
+        algorithm_options: { spacing_mm: spacing, max_rings: rings },
       }
     },
   },
@@ -2373,8 +2373,8 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
     defaultAlgorithm: 'flowfield',
     defaultAlgorithmOptions: {
-      seed_spacing_px: 8,
-      step_px: 0.8,
+      seed_spacing_mm: 3,
+      step_mm: 0.3,
       max_steps: 600,
       bidirectional: true,
       noise_scale: 48,
@@ -2389,8 +2389,8 @@ export const PRINT_STYLES: PrintStyle[] = [
       return {
         algorithm: 'flowfield',
         algorithm_options: {
-          seed_spacing_px: 6 + i * 2,
-          step_px: 0.8,
+          seed_spacing_mm: 2.2 + i * 2,
+          step_mm: 0.3,
           max_steps: 600,
           bidirectional: true,
           noise_scale: 48,
@@ -2416,9 +2416,9 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
     defaultAlgorithm: 'squiggle',
     defaultAlgorithmOptions: {
-      spacing_px: 4,
-      amp_px: 1.4,
-      period_px: 8,
+      spacing_mm: 1.5,
+      amp_mm: 0.52,
+      period_mm: 3,
       jitter: 0.45,
       mode: 'modulated',
       seed: 0,
@@ -2426,14 +2426,14 @@ export const PRINT_STYLES: PrintStyle[] = [
     colorRecipe(i, total) {
       // Loose, hand-drawn feel: amplitude shrinks for lighter clusters
       // so the wiggle reads as shading instead of dominant texture.
-      const amp = lerp(i, total, 1.8, 0.6)
-      const spacing = lerp(i, total, 3, 6)
+      const amp = lerp(i, total, 0.67, 0.22)
+      const spacing = lerp(i, total, 1.1, 2.2)
       return {
         algorithm: 'squiggle',
         algorithm_options: {
-          spacing_px: spacing,
-          amp_px: amp,
-          period_px: 8,
+          spacing_mm: spacing,
+          amp_mm: amp,
+          period_mm: 3,
           jitter: 0.45,
           mode: 'modulated',
           seed: i * 17 + 23,
@@ -2456,13 +2456,13 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'concentric_offset',
-    defaultAlgorithmOptions: { spacing_px: 3, max_rings: 40, bridge: true },
+    defaultAlgorithmOptions: { spacing_mm: 1.1, max_rings: 40, bridge: true },
     colorRecipe(i, total) {
       // Tighter rings on the darker cluster, looser on the light side.
-      const spacing = lerp(i, total, 2, 5)
+      const spacing = lerp(i, total, 0.74, 1.9)
       return {
         algorithm: 'concentric_offset',
-        algorithm_options: { spacing_px: spacing, max_rings: 40, bridge: true },
+        algorithm_options: { spacing_mm: spacing, max_rings: 40, bridge: true },
       }
     },
   },
@@ -2485,12 +2485,12 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'stippling',
-    defaultAlgorithmOptions: { density: 0.03, dot_radius_px: 0.5, seed: 0 },
+    defaultAlgorithmOptions: { density: 0.03, dot_radius_mm: 0.19, seed: 0 },
     colorRecipe(i, total) {
       const density = lerp(i, total, 0.18, 0.02)
       return {
         algorithm: 'stippling',
-        algorithm_options: { density, dot_radius_px: 0.5, seed: i * 7 + 13 },
+        algorithm_options: { density, dot_radius_mm: 0.19, seed: i * 7 + 13 },
       }
     },
   },
@@ -2531,11 +2531,11 @@ export const PRINT_STYLES: PrintStyle[] = [
       default_max_dimension_px: 2400,
     },
     defaultAlgorithm: 'centerline',
-    defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+    defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_mm: 1.1 },
     colorRecipe() {
       return {
         algorithm: 'centerline',
-        algorithm_options: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+        algorithm_options: { stroke_width: 0.8, smooth: true, min_branch_mm: 1.1 },
       }
     },
   },
@@ -2554,12 +2554,12 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'spiral',
-    defaultAlgorithmOptions: { spacing_px: 3, samples_per_turn: 64 },
+    defaultAlgorithmOptions: { spacing_mm: 1.1, samples_per_turn: 64 },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 2, 5)
+      const spacing = lerp(i, total, 0.74, 1.9)
       return {
         algorithm: 'spiral',
-        algorithm_options: { spacing_px: spacing, samples_per_turn: 64 },
+        algorithm_options: { spacing_mm: spacing, samples_per_turn: 64 },
       }
     },
   },
@@ -2578,12 +2578,12 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'scanlines',
-    defaultAlgorithmOptions: { spacing_px: 4, wave_amp_px: 0, wave_period_px: 12 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, wave_amp_mm: 0, wave_period_mm: 4.5 },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 2.5, 6)
+      const spacing = lerp(i, total, 0.93, 2.2)
       return {
         algorithm: 'scanlines',
-        algorithm_options: { spacing_px: spacing, wave_amp_px: 0, wave_period_px: 12 },
+        algorithm_options: { spacing_mm: spacing, wave_amp_mm: 0, wave_period_mm: 4.5 },
       }
     },
   },
@@ -2626,12 +2626,12 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'hilbert',
-    defaultAlgorithmOptions: { spacing_px: 4, min_run_px: 3 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, min_run_mm: 1.1 },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 2.5, 6)
+      const spacing = lerp(i, total, 0.93, 2.2)
       return {
         algorithm: 'hilbert',
-        algorithm_options: { spacing_px: spacing, min_run_px: 3 },
+        algorithm_options: { spacing_mm: spacing, min_run_mm: 1.1 },
       }
     },
   },
@@ -2650,13 +2650,13 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'gosper',
-    defaultAlgorithmOptions: { order: 4, spacing_px: 4, rotation_deg: 0 },
+    defaultAlgorithmOptions: { order: 4, spacing_mm: 1.5, rotation_deg: 0 },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 3, 5)
+      const spacing = lerp(i, total, 1.1, 1.9)
       // Rotate per cluster to avoid identical curves stacking exactly.
       return {
         algorithm: 'gosper',
-        algorithm_options: { order: 4, spacing_px: spacing, rotation_deg: (i * 30) % 360 },
+        algorithm_options: { order: 4, spacing_mm: spacing, rotation_deg: (i * 30) % 360 },
       }
     },
   },
@@ -2675,14 +2675,14 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'eulerian_hatch',
-    defaultAlgorithmOptions: { spacing_px: 4, angle_deg: 45, crossed: false },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, angle_deg: 45, crossed: false },
     colorRecipe(i, total) {
       const angles = [0, 45, 90, 135, 30, 75, 120, 165]
       const angle = angles[i % angles.length] ?? 45
-      const spacing = lerp(i, total, 2.5, 6)
+      const spacing = lerp(i, total, 0.93, 2.2)
       return {
         algorithm: 'eulerian_hatch',
-        algorithm_options: { spacing_px: spacing, angle_deg: angle, crossed: false },
+        algorithm_options: { spacing_mm: spacing, angle_deg: angle, crossed: false },
       }
     },
   },
@@ -2743,12 +2743,12 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'grid',
-    defaultAlgorithmOptions: { spacing_px: 5 },
+    defaultAlgorithmOptions: { spacing_mm: 1.9 },
     colorRecipe(i, total) {
       // Darker clusters get a tighter mesh so visual weight tracks the
       // source luminance.
-      const spacing = lerp(i, total, 3, 7)
-      return { algorithm: 'grid', algorithm_options: { spacing_px: spacing } }
+      const spacing = lerp(i, total, 1.1, 2.6)
+      return { algorithm: 'grid', algorithm_options: { spacing_mm: spacing } }
     },
   },
   {
@@ -2766,13 +2766,13 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'brick',
-    defaultAlgorithmOptions: { brick_w_px: 16, brick_h_px: 8 },
+    defaultAlgorithmOptions: { brick_w_mm: 5.9, brick_h_mm: 3 },
     colorRecipe(i, total) {
       // Smaller bricks (denser mortar) on darker clusters.
-      const h = Math.round(lerp(i, total, 6, 12))
+      const h = Math.round(lerp(i, total, 2.2, 4.5) * 10) / 10
       return {
         algorithm: 'brick',
-        algorithm_options: { brick_w_px: h * 2, brick_h_px: h },
+        algorithm_options: { brick_w_mm: h * 2, brick_h_mm: h },
       }
     },
   },
@@ -2791,16 +2791,16 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'dashes',
-    defaultAlgorithmOptions: { spacing_px: 5, angle_deg: 45, dash_px: 3, gap_px: 3 },
+    defaultAlgorithmOptions: { spacing_mm: 1.9, angle_deg: 45, dash_mm: 1.1, gap_mm: 1.1 },
     colorRecipe(i, total) {
       // Rotate the dash angle per cluster (like the crosshatch master) so
       // overlapping inks read as distinct stitch directions.
       const angles = [0, 45, 90, 135, 30, 75, 120, 165]
       const angle = angles[i % angles.length] ?? 45
-      const spacing = lerp(i, total, 3, 6)
+      const spacing = lerp(i, total, 1.1, 2.2)
       return {
         algorithm: 'dashes',
-        algorithm_options: { spacing_px: spacing, angle_deg: angle, dash_px: 3, gap_px: 3 },
+        algorithm_options: { spacing_mm: spacing, angle_deg: angle, dash_mm: 1.1, gap_mm: 1.1 },
       }
     },
   },
@@ -2819,14 +2819,14 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'truchet',
-    defaultAlgorithmOptions: { cell_px: 10, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 3.7, seed: 0 },
     colorRecipe(i, total) {
       // Finer tiles on darker clusters; per-cluster seed so the random
       // diagonals don't line up identically across inks.
-      const cell = Math.round(lerp(i, total, 7, 14))
+      const cell = Math.round(lerp(i, total, 2.6, 5.2) * 10) / 10
       return {
         algorithm: 'truchet',
-        algorithm_options: { cell_px: cell, seed: i * 13 + 7 },
+        algorithm_options: { cell_mm: cell, seed: i * 13 + 7 },
       }
     },
   },
@@ -2845,10 +2845,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'rings',
-    defaultAlgorithmOptions: { spacing_px: 6 },
+    defaultAlgorithmOptions: { spacing_mm: 2.2 },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 4, 8)
-      return { algorithm: 'rings', algorithm_options: { spacing_px: spacing } }
+      const spacing = lerp(i, total, 1.5, 3)
+      return { algorithm: 'rings', algorithm_options: { spacing_mm: spacing } }
     },
   },
   {
@@ -2888,17 +2888,17 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'circle_pack',
-    defaultAlgorithmOptions: { min_radius_px: 1.0, max_radius_px: 7, gap_px: 0.6, seed: 0 },
+    defaultAlgorithmOptions: { min_radius_mm: 0.37, max_radius_mm: 2.6, gap_mm: 0.22, seed: 0 },
     colorRecipe(i, total) {
       // Smaller bubbles on darker clusters → denser ink coverage. Attempts
       // auto-scale with region area on the backend, so the packing fills.
-      const maxR = lerp(i, total, 3, 7)
+      const maxR = lerp(i, total, 1.1, 2.6)
       return {
         algorithm: 'circle_pack',
         algorithm_options: {
-          min_radius_px: 1.0,
-          max_radius_px: maxR,
-          gap_px: 0.6,
+          min_radius_mm: 0.37,
+          max_radius_mm: maxR,
+          gap_mm: 0.22,
           seed: i * 17 + 5,
         },
       }
@@ -2921,12 +2921,12 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'ridge_lines',
-    defaultAlgorithmOptions: { spacing_px: 6, amp_px: 10, smooth_px: 3, occlude: true },
+    defaultAlgorithmOptions: { spacing_mm: 2.2, amp_mm: 3.7, smooth_mm: 1.1, occlude: true },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 4, 8)
+      const spacing = lerp(i, total, 1.5, 3)
       return {
         algorithm: 'ridge_lines',
-        algorithm_options: { spacing_px: spacing, amp_px: 10, smooth_px: 3, occlude: true },
+        algorithm_options: { spacing_mm: spacing, amp_mm: 3.7, smooth_mm: 1.1, occlude: true },
       }
     },
   },
@@ -2945,10 +2945,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'hitomezashi',
-    defaultAlgorithmOptions: { cell_px: 8, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 3, seed: 0 },
     colorRecipe(i, total) {
-      const cell = Math.round(lerp(i, total, 6, 12))
-      return { algorithm: 'hitomezashi', algorithm_options: { cell_px: cell, seed: i * 13 + 7 } }
+      const cell = Math.round(lerp(i, total, 2.2, 4.5) * 10) / 10
+      return { algorithm: 'hitomezashi', algorithm_options: { cell_mm: cell, seed: i * 13 + 7 } }
     },
   },
   {
@@ -2966,10 +2966,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'cubic_disarray',
-    defaultAlgorithmOptions: { cell_px: 12, max_rotate_deg: 35, max_offset_px: 5, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 4.5, max_rotate_deg: 35, max_offset_mm: 1.9, seed: 0 },
     colorRecipe(i, total) {
-      const cell = Math.round(lerp(i, total, 10, 16))
-      return { algorithm: 'cubic_disarray', algorithm_options: { cell_px: cell, max_rotate_deg: 35, max_offset_px: 5, seed: i * 13 + 7 } }
+      const cell = Math.round(lerp(i, total, 3.7, 5.9) * 10) / 10
+      return { algorithm: 'cubic_disarray', algorithm_options: { cell_mm: cell, max_rotate_deg: 35, max_offset_mm: 1.9, seed: i * 13 + 7 } }
     },
   },
   {
@@ -2987,10 +2987,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'quadtree',
-    defaultAlgorithmOptions: { min_cell_px: 6, split_threshold: 0.12 },
+    defaultAlgorithmOptions: { min_cell_mm: 2.2, split_threshold: 0.12 },
     colorRecipe(i, total) {
-      const minCell = Math.round(lerp(i, total, 4, 10))
-      return { algorithm: 'quadtree', algorithm_options: { min_cell_px: minCell, split_threshold: 0.12 } }
+      const minCell = Math.round(lerp(i, total, 1.5, 3.7) * 10) / 10
+      return { algorithm: 'quadtree', algorithm_options: { min_cell_mm: minCell, split_threshold: 0.12 } }
     },
   },
   {
@@ -3008,10 +3008,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'maze',
-    defaultAlgorithmOptions: { cell_px: 8, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 3, seed: 0 },
     colorRecipe(i, total) {
-      const cell = Math.round(lerp(i, total, 6, 12))
-      return { algorithm: 'maze', algorithm_options: { cell_px: cell, seed: i * 13 + 7 } }
+      const cell = Math.round(lerp(i, total, 2.2, 4.5) * 10) / 10
+      return { algorithm: 'maze', algorithm_options: { cell_mm: cell, seed: i * 13 + 7 } }
     },
   },
   {
@@ -3029,10 +3029,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'phyllotaxis',
-    defaultAlgorithmOptions: { spacing_px: 7, dot_radius_px: 2.5, outline: false },
+    defaultAlgorithmOptions: { spacing_mm: 2.6, dot_radius_mm: 0.93, outline: false },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 5, 9)
-      return { algorithm: 'phyllotaxis', algorithm_options: { spacing_px: spacing, dot_radius_px: 2.5, outline: false } }
+      const spacing = lerp(i, total, 1.9, 3.3)
+      return { algorithm: 'phyllotaxis', algorithm_options: { spacing_mm: spacing, dot_radius_mm: 0.93, outline: false } }
     },
   },
   {
@@ -3071,10 +3071,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'curve_stitching',
-    defaultAlgorithmOptions: { cell_px: 18, chords: 7, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 6.7, chords: 7, seed: 0 },
     colorRecipe(i, total) {
       const chords = Math.round(lerp(i, total, 10, 5))
-      return { algorithm: 'curve_stitching', algorithm_options: { cell_px: 18, chords, seed: i * 13 + 7 } }
+      return { algorithm: 'curve_stitching', algorithm_options: { cell_mm: 6.7, chords, seed: i * 13 + 7 } }
     },
   },
   {
@@ -3113,10 +3113,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'space_colonization',
-    defaultAlgorithmOptions: { attractors: 700, step_px: 4, influence_px: 40, kill_px: 6, seed: 0 },
+    defaultAlgorithmOptions: { attractors: 700, step_mm: 1.5, influence_mm: 15, kill_mm: 2.2, seed: 0 },
     colorRecipe(i, total) {
       const attractors = Math.round(lerp(i, total, 1200, 400))
-      return { algorithm: 'space_colonization', algorithm_options: { attractors, step_px: 4, influence_px: 40, kill_px: 6, seed: i * 13 + 7 } }
+      return { algorithm: 'space_colonization', algorithm_options: { attractors, step_mm: 1.5, influence_mm: 15, kill_mm: 2.2, seed: i * 13 + 7 } }
     },
   },
   {
@@ -3155,10 +3155,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'dither',
-    defaultAlgorithmOptions: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' },
+    defaultAlgorithmOptions: { cell_mm: 1.5, dot_radius_mm: 0.37, method: 'floyd' },
     colorRecipe(i, total) {
-      const cell = Math.round(lerp(i, total, 3, 6))
-      return { algorithm: 'dither', algorithm_options: { cell_px: cell, dot_radius_px: 1.0, method: 'floyd' } }
+      const cell = Math.round(lerp(i, total, 1.1, 2.2) * 10) / 10
+      return { algorithm: 'dither', algorithm_options: { cell_mm: cell, dot_radius_mm: 0.37, method: 'floyd' } }
     },
   },
   {
@@ -3176,10 +3176,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'etch',
-    defaultAlgorithmOptions: { spacing_px: 5, length_px: 9, jitter: 0.3, seed: 0 },
+    defaultAlgorithmOptions: { spacing_mm: 1.9, length_mm: 3.3, jitter: 0.3, seed: 0 },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 4, 7)
-      return { algorithm: 'etch', algorithm_options: { spacing_px: spacing, length_px: 9, jitter: 0.3, seed: i * 13 + 7 } }
+      const spacing = lerp(i, total, 1.5, 2.6)
+      return { algorithm: 'etch', algorithm_options: { spacing_mm: spacing, length_mm: 3.3, jitter: 0.3, seed: i * 13 + 7 } }
     },
   },
   {
@@ -3241,10 +3241,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'superpixel_hatch',
-    defaultAlgorithmOptions: { regions: 180, spacing_px: 4, seed: 0 },
+    defaultAlgorithmOptions: { regions: 180, spacing_mm: 1.5, seed: 0 },
     colorRecipe(i, total) {
       const regions = Math.round(lerp(i, total, 260, 120))
-      return { algorithm: 'superpixel_hatch', algorithm_options: { regions, spacing_px: 4, seed: i * 13 + 7 } }
+      return { algorithm: 'superpixel_hatch', algorithm_options: { regions, spacing_mm: 1.5, seed: i * 13 + 7 } }
     },
   },
   {
@@ -3262,10 +3262,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'moire',
-    defaultAlgorithmOptions: { spacing_px: 5, mode: 'rings', offset_px: 14, delta_deg: 4 },
+    defaultAlgorithmOptions: { spacing_mm: 1.9, mode: 'rings', offset_mm: 5.2, delta_deg: 4 },
     colorRecipe(i, total) {
-      const spacing = lerp(i, total, 4, 7)
-      return { algorithm: 'moire', algorithm_options: { spacing_px: spacing, mode: 'rings', offset_px: 14, delta_deg: 4 } }
+      const spacing = lerp(i, total, 1.5, 2.6)
+      return { algorithm: 'moire', algorithm_options: { spacing_mm: spacing, mode: 'rings', offset_mm: 5.2, delta_deg: 4 } }
     },
   },
   {
@@ -3283,10 +3283,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'weave',
-    defaultAlgorithmOptions: { band_px: 12, gap_px: 2 },
+    defaultAlgorithmOptions: { band_mm: 4.5, gap_mm: 0.74 },
     colorRecipe(i, total) {
-      const band = Math.round(lerp(i, total, 10, 16))
-      return { algorithm: 'weave', algorithm_options: { band_px: band, gap_px: 2 } }
+      const band = Math.round(lerp(i, total, 3.7, 5.9) * 10) / 10
+      return { algorithm: 'weave', algorithm_options: { band_mm: band, gap_mm: 0.74 } }
     },
   },
   {
@@ -3304,10 +3304,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'honeycomb',
-    defaultAlgorithmOptions: { cell_px: 12, mode: 'grid' },
+    defaultAlgorithmOptions: { cell_mm: 4.5, mode: 'grid' },
     colorRecipe(i, total) {
-      const cell = Math.round(lerp(i, total, 8, 16))
-      return { algorithm: 'honeycomb', algorithm_options: { cell_px: cell, mode: 'grid' } }
+      const cell = Math.round(lerp(i, total, 3, 5.9) * 10) / 10
+      return { algorithm: 'honeycomb', algorithm_options: { cell_mm: cell, mode: 'grid' } }
     },
   },
   {
@@ -3346,10 +3346,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'attractor',
-    defaultAlgorithmOptions: { preset: 'dejong', points: 6000, dot_radius_px: 0.5, seed: 0 },
+    defaultAlgorithmOptions: { preset: 'dejong', points: 6000, dot_radius_mm: 0.19, seed: 0 },
     colorRecipe(i, total) {
       const points = Math.round(lerp(i, total, 9000, 4000))
-      return { algorithm: 'attractor', algorithm_options: { preset: 'dejong', points, dot_radius_px: 0.5, seed: i * 13 + 7 } }
+      return { algorithm: 'attractor', algorithm_options: { preset: 'dejong', points, dot_radius_mm: 0.19, seed: i * 13 + 7 } }
     },
   },
   {
@@ -3367,10 +3367,10 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: false,
     },
     defaultAlgorithm: 'text_fill',
-    defaultAlgorithmOptions: { text: 'OmniPlot ', font_size_px: 12, line_spacing: 1.25, threshold: 0 },
+    defaultAlgorithmOptions: { text: 'OmniPlot ', font_size_mm: 4.5, line_spacing: 1.25, threshold: 0 },
     colorRecipe(i, total) {
-      const size = Math.round(lerp(i, total, 10, 16))
-      return { algorithm: 'text_fill', algorithm_options: { text: 'OmniPlot ', font_size_px: size, line_spacing: 1.25, threshold: 0 } }
+      const size = Math.round(lerp(i, total, 3.7, 5.9) * 10) / 10
+      return { algorithm: 'text_fill', algorithm_options: { text: 'OmniPlot ', font_size_mm: size, line_spacing: 1.25, threshold: 0 } }
     },
   },
   {
@@ -3437,7 +3437,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'halftone',
-    defaultAlgorithmOptions: { cell_size_px: 4 },
+    defaultAlgorithmOptions: { cell_size_mm: 1.5 },
   },
   {
     id: 'halftone-coarse',
@@ -3446,7 +3446,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'halftone',
-    defaultAlgorithmOptions: { cell_size_px: 10 },
+    defaultAlgorithmOptions: { cell_size_mm: 3.7 },
   },
   {
     id: 'stippling-portrait',
@@ -3455,7 +3455,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'stippling',
-    defaultAlgorithmOptions: { density: 0.03, dot_radius_px: 0.5, seed: 0 },
+    defaultAlgorithmOptions: { density: 0.03, dot_radius_mm: 0.19, seed: 0 },
   },
   {
     id: 'crosshatch-tech',
@@ -3464,7 +3464,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image', 'schematic'],
     scope: 'layer',
     defaultAlgorithm: 'crosshatch',
-    defaultAlgorithmOptions: { angle_deg: 45, spacing_px: 4, crossed: true },
+    defaultAlgorithmOptions: { angle_deg: 45, spacing_mm: 1.5, crossed: true },
   },
   {
     id: 'contours',
@@ -3473,7 +3473,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image', 'schematic'],
     scope: 'layer',
     defaultAlgorithm: 'contours',
-    defaultAlgorithmOptions: { spacing_px: 5, max_rings: 20 },
+    defaultAlgorithmOptions: { spacing_mm: 1.9, max_rings: 20 },
   },
   {
     id: 'edges',
@@ -3491,7 +3491,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'spiral',
-    defaultAlgorithmOptions: { spacing_px: 4, samples_per_turn: 64 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, samples_per_turn: 64 },
   },
   {
     id: 'scanlines',
@@ -3500,7 +3500,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'scanlines',
-    defaultAlgorithmOptions: { spacing_px: 4, wave_amp_px: 0, wave_period_px: 12 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, wave_amp_mm: 0, wave_period_mm: 4.5 },
   },
   {
     id: 'centerline-stroke',
@@ -3509,7 +3509,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image', 'schematic'],
     scope: 'layer',
     defaultAlgorithm: 'centerline',
-    defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_px: 3 },
+    defaultAlgorithmOptions: { stroke_width: 0.8, smooth: true, min_branch_mm: 1.1 },
   },
   {
     id: 'voronoi-stipple',
@@ -3518,7 +3518,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'voronoi_stipple',
-    defaultAlgorithmOptions: { density: 0.03, dot_radius_px: 0.5, iterations: 6, seed: 0 },
+    defaultAlgorithmOptions: { density: 0.03, dot_radius_mm: 0.19, iterations: 6, seed: 0 },
   },
   {
     id: 'squiggle',
@@ -3527,7 +3527,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'squiggle',
-    defaultAlgorithmOptions: { spacing_px: 4, amp_px: 1.4, period_px: 8, jitter: 0.4, seed: 0 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, amp_mm: 0.52, period_mm: 3, jitter: 0.4, seed: 0 },
   },
   {
     id: 'flowfield',
@@ -3537,8 +3537,8 @@ export const PRINT_STYLES: PrintStyle[] = [
     scope: 'layer',
     defaultAlgorithm: 'flowfield',
     defaultAlgorithmOptions: {
-      seed_spacing_px: 6,
-      step_px: 0.8,
+      seed_spacing_mm: 2.2,
+      step_mm: 0.3,
       max_steps: 800,
       bidirectional: true,
       noise_scale: 32,
@@ -3552,7 +3552,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'hilbert',
-    defaultAlgorithmOptions: { spacing_px: 4, min_run_px: 3 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, min_run_mm: 1.1 },
   },
   {
     id: 'gosper',
@@ -3561,7 +3561,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'gosper',
-    defaultAlgorithmOptions: { order: 4, spacing_px: 4, rotation_deg: 0 },
+    defaultAlgorithmOptions: { order: 4, spacing_mm: 1.5, rotation_deg: 0 },
   },
   {
     id: 'eulerian-hatch',
@@ -3570,7 +3570,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'eulerian_hatch',
-    defaultAlgorithmOptions: { spacing_px: 4, angle_deg: 45, crossed: false },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, angle_deg: 45, crossed: false },
   },
   {
     id: 'concentric-offset',
@@ -3579,7 +3579,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'concentric_offset',
-    defaultAlgorithmOptions: { spacing_px: 3, max_rings: 50, bridge: true },
+    defaultAlgorithmOptions: { spacing_mm: 1.1, max_rings: 50, bridge: true },
   },
   {
     id: 'tsp-opt',
@@ -3603,7 +3603,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image', 'schematic'],
     scope: 'layer',
     defaultAlgorithm: 'grid',
-    defaultAlgorithmOptions: { spacing_px: 6 },
+    defaultAlgorithmOptions: { spacing_mm: 2.2 },
   },
   {
     id: 'brick',
@@ -3612,7 +3612,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'brick',
-    defaultAlgorithmOptions: { brick_w_px: 16, brick_h_px: 8 },
+    defaultAlgorithmOptions: { brick_w_mm: 5.9, brick_h_mm: 3 },
   },
   {
     id: 'dashes',
@@ -3621,7 +3621,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image', 'schematic'],
     scope: 'layer',
     defaultAlgorithm: 'dashes',
-    defaultAlgorithmOptions: { spacing_px: 5, angle_deg: 45, dash_px: 3, gap_px: 3 },
+    defaultAlgorithmOptions: { spacing_mm: 1.9, angle_deg: 45, dash_mm: 1.1, gap_mm: 1.1 },
   },
   {
     id: 'truchet',
@@ -3630,7 +3630,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'truchet',
-    defaultAlgorithmOptions: { cell_px: 10, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 3.7, seed: 0 },
   },
   {
     id: 'rings',
@@ -3639,7 +3639,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'rings',
-    defaultAlgorithmOptions: { spacing_px: 6 },
+    defaultAlgorithmOptions: { spacing_mm: 2.2 },
   },
   {
     id: 'sunburst',
@@ -3657,7 +3657,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'circle_pack',
-    defaultAlgorithmOptions: { min_radius_px: 1.0, max_radius_px: 7, gap_px: 0.6, seed: 0 },
+    defaultAlgorithmOptions: { min_radius_mm: 0.37, max_radius_mm: 2.6, gap_mm: 0.22, seed: 0 },
   },
   // ===== LAYER STYLES — 2026-06 expert batches =====
   {
@@ -3667,7 +3667,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'ridge_lines',
-    defaultAlgorithmOptions: { spacing_px: 6, amp_px: 10, smooth_px: 3, occlude: true, layout: 'rows' },
+    defaultAlgorithmOptions: { spacing_mm: 2.2, amp_mm: 3.7, smooth_mm: 1.1, occlude: true, layout: 'rows' },
   },
   {
     id: 'hitomezashi',
@@ -3676,7 +3676,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'hitomezashi',
-    defaultAlgorithmOptions: { cell_px: 8, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 3, seed: 0 },
   },
   {
     id: 'cubic-disarray',
@@ -3685,7 +3685,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'cubic_disarray',
-    defaultAlgorithmOptions: { cell_px: 12, max_rotate_deg: 35, max_offset_px: 5, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 4.5, max_rotate_deg: 35, max_offset_mm: 1.9, seed: 0 },
   },
   {
     id: 'quadtree-blocks',
@@ -3694,7 +3694,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'quadtree',
-    defaultAlgorithmOptions: { min_cell_px: 6, split_threshold: 0.12 },
+    defaultAlgorithmOptions: { min_cell_mm: 2.2, split_threshold: 0.12 },
   },
   {
     id: 'maze',
@@ -3703,7 +3703,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'maze',
-    defaultAlgorithmOptions: { cell_px: 8, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 3, seed: 0 },
   },
   {
     id: 'phyllotaxis',
@@ -3712,7 +3712,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'phyllotaxis',
-    defaultAlgorithmOptions: { spacing_px: 7, dot_radius_px: 2.5, outline: false },
+    defaultAlgorithmOptions: { spacing_mm: 2.6, dot_radius_mm: 0.93, outline: false },
   },
   {
     id: 'voronoi-mosaic',
@@ -3730,7 +3730,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'curve_stitching',
-    defaultAlgorithmOptions: { cell_px: 18, chords: 7, seed: 0 },
+    defaultAlgorithmOptions: { cell_mm: 6.7, chords: 7, seed: 0 },
   },
   {
     id: 'string-art',
@@ -3748,7 +3748,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'space_colonization',
-    defaultAlgorithmOptions: { attractors: 700, step_px: 4, influence_px: 40, kill_px: 6, seed: 0 },
+    defaultAlgorithmOptions: { attractors: 700, step_mm: 1.5, influence_mm: 15, kill_mm: 2.2, seed: 0 },
   },
   {
     id: 'penrose',
@@ -3766,7 +3766,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'dither',
-    defaultAlgorithmOptions: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' },
+    defaultAlgorithmOptions: { cell_mm: 1.5, dot_radius_mm: 0.37, method: 'floyd' },
   },
   {
     id: 'etch-strokes',
@@ -3775,7 +3775,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'etch',
-    defaultAlgorithmOptions: { spacing_px: 5, length_px: 9, jitter: 0.3, seed: 0 },
+    defaultAlgorithmOptions: { spacing_mm: 1.9, length_mm: 3.3, jitter: 0.3, seed: 0 },
   },
   {
     id: 'noise-contours',
@@ -3802,7 +3802,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'superpixel_hatch',
-    defaultAlgorithmOptions: { regions: 180, spacing_px: 4, seed: 0 },
+    defaultAlgorithmOptions: { regions: 180, spacing_mm: 1.5, seed: 0 },
   },
   {
     id: 'moire',
@@ -3811,7 +3811,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'moire',
-    defaultAlgorithmOptions: { spacing_px: 5, mode: 'rings', offset_px: 14, delta_deg: 4 },
+    defaultAlgorithmOptions: { spacing_mm: 1.9, mode: 'rings', offset_mm: 5.2, delta_deg: 4 },
   },
   {
     id: 'weave',
@@ -3820,7 +3820,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'weave',
-    defaultAlgorithmOptions: { band_px: 12, gap_px: 2 },
+    defaultAlgorithmOptions: { band_mm: 4.5, gap_mm: 0.74 },
   },
   {
     id: 'honeycomb',
@@ -3829,7 +3829,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'honeycomb',
-    defaultAlgorithmOptions: { cell_px: 12, mode: 'grid' },
+    defaultAlgorithmOptions: { cell_mm: 4.5, mode: 'grid' },
   },
   {
     id: 'harmonograph',
@@ -3847,7 +3847,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'attractor',
-    defaultAlgorithmOptions: { preset: 'dejong', points: 6000, dot_radius_px: 0.5, seed: 0 },
+    defaultAlgorithmOptions: { preset: 'dejong', points: 6000, dot_radius_mm: 0.19, seed: 0 },
   },
   {
     id: 'text-fill',
@@ -3856,7 +3856,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'text_fill',
-    defaultAlgorithmOptions: { text: 'OmniPlot ', font_size_px: 12, line_spacing: 1.25, threshold: 0.35 },
+    defaultAlgorithmOptions: { text: 'OmniPlot ', font_size_mm: 4.5, line_spacing: 1.25, threshold: 0.35 },
   },
   {
     id: 'lsystem-dragon',
@@ -3892,7 +3892,7 @@ export const PRINT_STYLES: PrintStyle[] = [
     applicableTo: ['image'],
     scope: 'layer',
     defaultAlgorithm: 'scribble',
-    defaultAlgorithmOptions: { spacing_px: 4, amp_px: 1.6, overshoot_px: 3, seed: 0 },
+    defaultAlgorithmOptions: { spacing_mm: 1.5, amp_mm: 0.59, overshoot_mm: 1.1, seed: 0 },
   },
 ]
 

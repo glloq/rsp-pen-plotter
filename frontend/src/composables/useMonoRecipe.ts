@@ -25,6 +25,7 @@
 // ``buildBandRecipes`` does the dispatch and passes the inputs in.
 
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
+import { convertLegacyStyleKnobs, isLegacyKnobPayload } from '../lib/legacyKnobUnits'
 import {
   resolveMasterStyle,
   DEFAULT_MASTER_STYLE_ID,
@@ -45,12 +46,12 @@ export type MonoStyleKnobs = {
   wave_min?: number
   wave_max?: number
   density?: number
-  spacing_px?: number
+  spacing_mm?: number
   wave_period?: number
   // Tonal spiral: wobble spatial wavelength (px) + a 0..1 strength that
   // scales the per-pixel amplitude. Amplitude itself is computed in the
   // backend from the luminance map, not here.
-  wavelength_px?: number
+  wavelength_mm?: number
   tone_strength?: number
   dot_radius?: number
   stroke_width?: number
@@ -211,21 +212,21 @@ function recipeFromKnobs(
         knobs.angles && knobs.angles.length > 0
           ? knobs.angles
           : ((MONO_STYLE_DEFAULTS.pencil?.angles as number[] | undefined) ?? [45, 135])
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6.5)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.4)
       return {
         algorithm: 'crosshatch',
         algorithm_options: {
           angles: pickAnglesForBand(i, total, angles),
-          spacing_px: spacing,
+          spacing_mm: spacing,
           crossed: i === 0 && (knobs.crossed_on_darkest ?? true) && total > 1,
         },
       }
     }
     case 'halftone-shade': {
-      const cell = lerp(i, total, knobs.cell_min ?? 3, knobs.cell_max ?? 9)
+      const cell = lerp(i, total, knobs.cell_min ?? 1.1, knobs.cell_max ?? 3.3)
       return {
         algorithm: 'halftone',
-        algorithm_options: { cell_size_px: cell },
+        algorithm_options: { cell_size_mm: cell },
       }
     }
     case 'stippling-shade': {
@@ -237,30 +238,30 @@ function recipeFromKnobs(
         algorithm: 'stippling',
         algorithm_options: {
           density,
-          dot_radius_px: knobs.dot_radius ?? 0.5,
+          dot_radius_mm: knobs.dot_radius ?? 0.19,
           seed: i * 7 + 13,
         },
       }
     }
     case 'engraving': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 1.8, knobs.spacing_max ?? 5)
-      const wave = lerp(i, total, knobs.wave_min ?? 0.6, knobs.wave_max ?? 1.6)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.67, knobs.spacing_max ?? 1.9)
+      const wave = lerp(i, total, knobs.wave_min ?? 0.22, knobs.wave_max ?? 0.59)
       return {
         algorithm: 'scanlines',
         algorithm_options: {
-          spacing_px: spacing,
-          wave_amp_px: wave,
-          wave_period_px: knobs.wave_period ?? 14,
+          spacing_mm: spacing,
+          wave_amp_mm: wave,
+          wave_period_mm: knobs.wave_period ?? 5.2,
         },
       }
     }
     case 'contours-topo': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.2)
       // Darker bands → more rings; rings_max at i=0, rings_min at i=total-1.
       const rings = Math.round(lerp(i, total, knobs.rings_max ?? 30, knobs.rings_min ?? 10))
       return {
         algorithm: 'contours',
-        algorithm_options: { spacing_px: spacing, max_rings: rings },
+        algorithm_options: { spacing_mm: spacing, max_rings: rings },
       }
     }
     case 'tsp': {
@@ -282,9 +283,9 @@ function recipeFromKnobs(
       return {
         algorithm: 'spiral',
         algorithm_options: {
-          spacing_px: knobs.spacing_px ?? 14,
+          spacing_mm: knobs.spacing_mm ?? 5.2,
           samples_per_turn: 64,
-          wavelength_px: knobs.wavelength_px ?? 10,
+          wavelength_mm: knobs.wavelength_mm ?? 3.7,
           tone_strength: knobs.tone_strength ?? 1,
         },
       }
@@ -301,19 +302,19 @@ function recipeFromKnobs(
         algorithm_options: {
           stroke_width: knobs.stroke_width ?? 0.8,
           smooth: true,
-          min_branch_px: 3,
+          min_branch_mm: 3,
         },
       }
     }
     case 'flowfield-master': {
       // Streamline seed spacing: tight (dense) on dark bands, wide on
       // light bands. The field follows the image gradient.
-      const seedSpacing = lerp(i, total, knobs.spacing_min ?? 4, knobs.spacing_max ?? 12)
+      const seedSpacing = lerp(i, total, knobs.spacing_min ?? 1.5, knobs.spacing_max ?? 4.5)
       return {
         algorithm: 'flowfield',
         algorithm_options: {
-          seed_spacing_px: seedSpacing,
-          step_px: 0.8,
+          seed_spacing_mm: seedSpacing,
+          step_mm: 0.8,
           max_steps: 800,
           bidirectional: true,
           mode: 'gradient',
@@ -331,7 +332,7 @@ function recipeFromKnobs(
         algorithm: 'voronoi_stipple',
         algorithm_options: {
           density,
-          dot_radius_px: knobs.dot_radius ?? 0.5,
+          dot_radius_mm: knobs.dot_radius ?? 0.19,
           iterations: 6,
           seed: i * 7 + 13,
         },
@@ -346,35 +347,35 @@ function recipeFromKnobs(
         knobs.angles && knobs.angles.length > 0
           ? knobs.angles
           : ((MONO_STYLE_DEFAULTS['hatch-fill']?.angles as number[] | undefined) ?? [45, 135])
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6.5)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.4)
       const picked = pickAnglesForBand(i, total, angles)
       const crossed = i === 0 && (knobs.crossed_on_darkest ?? true) && total > 1
       const finalAngles = crossed ? [picked[0]!, (picked[0]! + 90) % 180] : picked
       return {
         algorithm: 'eulerian_hatch',
-        algorithm_options: { angles: finalAngles, spacing_px: spacing },
+        algorithm_options: { angles: finalAngles, spacing_mm: spacing },
       }
     }
     case 'squiggle-shade': {
-      const spacing = Math.round(lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 7))
+      const spacing = Math.round(lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.6) * 10) / 10
       // Wider wiggle on dark bands (wave_max at i=0) → thin line on light.
-      const amp = lerp(i, total, knobs.wave_max ?? 2.2, knobs.wave_min ?? 0.8)
+      const amp = lerp(i, total, knobs.wave_max ?? 0.82, knobs.wave_min ?? 0.3)
       return {
         algorithm: 'squiggle',
         algorithm_options: {
-          spacing_px: spacing,
-          amp_px: amp,
-          period_px: knobs.wave_period ?? 8,
+          spacing_mm: spacing,
+          amp_mm: amp,
+          period_mm: knobs.wave_period ?? 3,
           jitter: 0.4,
           seed: i * 7 + 13,
         },
       }
     }
     case 'hilbert-fill': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 8)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 3)
       return {
         algorithm: 'hilbert',
-        algorithm_options: { spacing_px: spacing, min_run_px: 3 },
+        algorithm_options: { spacing_mm: spacing, min_run_mm: 3 },
       }
     }
     // gosper-fill has no knob case: tone is driven by the L-system order,
@@ -382,11 +383,11 @@ function recipeFromKnobs(
     // entry, recipeFromKnobs receives undefined knobs and falls through to
     // style.bandRecipe — so it never reaches this switch.
     case 'concentric-rings': {
-      const spacing = Math.round(lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 6))
+      const spacing = Math.round(lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.2) * 10) / 10
       const rings = Math.round(lerp(i, total, knobs.rings_max ?? 50, knobs.rings_min ?? 12))
       return {
         algorithm: 'concentric_offset',
-        algorithm_options: { spacing_px: spacing, max_rings: rings, bridge: true },
+        algorithm_options: { spacing_mm: spacing, max_rings: rings, bridge: true },
       }
     }
     case 'tsp-optimized': {
@@ -417,7 +418,7 @@ function recipeFromKnobs(
         knobs.angles && knobs.angles.length > 0
           ? knobs.angles
           : ((MONO_STYLE_DEFAULTS.scribble?.angles as number[] | undefined) ?? [45, 135])
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6.5)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.4)
       const picked = pickAnglesForBand(i, total, angles)
       const crossed = i === 0 && (knobs.crossed_on_darkest ?? true) && total > 1
       const finalAngles = crossed ? [picked[0]!, (picked[0]! + 90) % 180] : picked
@@ -425,9 +426,9 @@ function recipeFromKnobs(
         algorithm: 'scribble',
         algorithm_options: {
           angles: finalAngles,
-          spacing_px: spacing,
-          amp_px: 1.6,
-          overshoot_px: 3,
+          spacing_mm: spacing,
+          amp_mm: 0.59,
+          overshoot_mm: 1.1,
           seed: i * 7 + 13,
         },
       }
@@ -562,13 +563,20 @@ export function rehydrateMonoFromOptions(opts: Record<string, unknown> | null | 
   const monoOpts = opts.mono_knobs
   if (monoOpts && typeof monoOpts === 'object') {
     const m = monoOpts as Partial<MonoKnobsDraft>
+    // Payloads saved before the 2026-06 physical-units migration carry
+    // px-scale knob values; rescale them once so the operator's tuning
+    // keeps its visual pitch under the mm engine.
+    const legacy = isLegacyKnobPayload(monoOpts as Record<string, unknown>)
     if (typeof m.ink_color === 'string') _mono.value.ink_color = m.ink_color
     if (m.perStyle && typeof m.perStyle === 'object') {
       for (const [styleId, knobs] of Object.entries(m.perStyle)) {
         if (knobs && typeof knobs === 'object') {
+          const bag = legacy
+            ? (convertLegacyStyleKnobs(knobs as Record<string, unknown>) as MonoStyleKnobs)
+            : (knobs as MonoStyleKnobs)
           _mono.value.perStyle[styleId] = {
             ...defaultMonoStyleKnobs(styleId),
-            ...(knobs as MonoStyleKnobs),
+            ...bag,
           }
         }
       }

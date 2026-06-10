@@ -303,8 +303,8 @@ class CenterlineAlgorithm(RasterAlgorithm):
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="smooth", label="convert.smooth", type="boolean", default=True),
-        OptionSpec(key="min_branch_px", label="convert.minBranch", type="integer",
-                   default=3, min=0, max=50, step=1),
+        OptionSpec(key="min_branch_mm", label="convert.minBranch", type="number",
+                   default=1.1, min=0, max=19, step=0.1),
     ]
 
     def render_layer(

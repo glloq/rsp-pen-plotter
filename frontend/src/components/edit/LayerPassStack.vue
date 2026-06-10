@@ -192,7 +192,7 @@ const passPresets: PassPreset[] = [
       { algorithm: 'edges', algorithm_options: { stroke_width: 0.8 } },
       {
         algorithm: 'crosshatch',
-        algorithm_options: { angle_deg: 45, spacing_px: 4, crossed: false },
+        algorithm_options: { angle_deg: 45, spacing_mm: 1.5, crossed: false },
       },
     ],
   },
@@ -202,11 +202,11 @@ const passPresets: PassPreset[] = [
     passes: [
       {
         algorithm: 'crosshatch',
-        algorithm_options: { angle_deg: 45, spacing_px: 4, crossed: false },
+        algorithm_options: { angle_deg: 45, spacing_mm: 1.5, crossed: false },
       },
       {
         algorithm: 'crosshatch',
-        algorithm_options: { angle_deg: 135, spacing_px: 4, crossed: false },
+        algorithm_options: { angle_deg: 135, spacing_mm: 1.5, crossed: false },
       },
     ],
   },
@@ -214,8 +214,8 @@ const passPresets: PassPreset[] = [
     id: 'contour-stipple',
     labelKey: 'passes.presetContourStipple',
     passes: [
-      { algorithm: 'contours', algorithm_options: { spacing_px: 5, max_rings: 12 } },
-      { algorithm: 'stippling', algorithm_options: { density: 0.02, dot_radius_px: 0.5, seed: 0 } },
+      { algorithm: 'contours', algorithm_options: { spacing_mm: 1.9, max_rings: 12 } },
+      { algorithm: 'stippling', algorithm_options: { density: 0.02, dot_radius_mm: 0.19, seed: 0 } },
     ],
   },
 ]

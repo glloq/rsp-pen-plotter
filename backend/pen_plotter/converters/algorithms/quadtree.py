@@ -33,8 +33,8 @@ class QuadtreeAlgorithm(RasterAlgorithm):
     tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="min_cell_px", label="convert.minCell", type="integer",
-                   default=6, min=2, max=64, step=1),
+        OptionSpec(key="min_cell_mm", label="convert.minCell", type="number",
+                   default=2.2, min=0.74, max=24, step=0.1),
         # Darkness (0..1) above which a cell keeps splitting. Lower =
         # deeper subdivision = darker, busier texture.
         OptionSpec(key="split_threshold", label="convert.threshold", type="number",

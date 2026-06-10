@@ -29,10 +29,10 @@ class WeaveAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="band_px", label="convert.bandPx", type="integer",
-                   default=12, min=4, max=60, step=1),
-        OptionSpec(key="gap_px", label="convert.gapPx", type="number",
-                   default=2, min=0.5, max=10, step=0.5),
+        OptionSpec(key="band_mm", label="convert.bandPx", type="number",
+                   default=4.5, min=1.5, max=22, step=0.1),
+        OptionSpec(key="gap_mm", label="convert.gapPx", type="number",
+                   default=0.74, min=0.19, max=3.7, step=0.1),
     ]
 
     def render_layer(

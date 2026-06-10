@@ -11,13 +11,13 @@
     "complexity": "low",
     "options": [
       {
-        "key": "cell_size_px",
+        "key": "cell_size_mm",
         "label": "convert.cellSize",
-        "type": "integer",
-        "default": 6,
-        "min": 2.0,
-        "max": 64.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 2.2,
+        "min": 0.74,
+        "max": 24.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -64,12 +64,12 @@
         "choices": null
       },
       {
-        "key": "dot_radius_px",
+        "key": "dot_radius_mm",
         "label": "convert.dotRadius",
         "type": "number",
-        "default": 0.6,
-        "min": 0.1,
-        "max": 5.0,
+        "default": 0.22,
+        "min": 0.04,
+        "max": 1.9,
         "step": 0.1,
         "choices": null
       },
@@ -91,13 +91,13 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -138,13 +138,13 @@
     "complexity": "low",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -181,13 +181,13 @@
         "choices": null
       },
       {
-        "key": "min_branch_px",
+        "key": "min_branch_mm",
         "label": "convert.minBranch",
-        "type": "integer",
-        "default": 3,
+        "type": "number",
+        "default": 1.1,
         "min": 0.0,
-        "max": 50.0,
-        "step": 1.0,
+        "max": 19.0,
+        "step": 0.1,
         "choices": null
       }
     ]
@@ -198,13 +198,13 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -225,33 +225,33 @@
     "complexity": "low",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "wave_amp_px",
+        "key": "wave_amp_mm",
         "label": "convert.waveAmp",
         "type": "number",
         "default": 0,
         "min": 0.0,
-        "max": 20.0,
-        "step": 0.5,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "wave_period_px",
+        "key": "wave_period_mm",
         "label": "convert.wavePeriod",
         "type": "number",
-        "default": 12,
-        "min": 2.0,
-        "max": 50.0,
-        "step": 0.5,
+        "default": 4.5,
+        "min": 0.74,
+        "max": 19.0,
+        "step": 0.1,
         "choices": null
       }
     ]
@@ -289,23 +289,23 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "min_run_px",
+        "key": "min_run_mm",
         "label": "convert.minRunPx",
-        "type": "integer",
-        "default": 3,
-        "min": 1.0,
-        "max": 20.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 1.1,
+        "min": 0.37,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -346,13 +346,13 @@
         "choices": null
       },
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -373,13 +373,13 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -410,13 +410,13 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 3,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 1.1,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -460,22 +460,22 @@
         ]
       },
       {
-        "key": "seed_spacing_px",
+        "key": "seed_spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 6,
-        "min": 2.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 2.2,
+        "min": 0.74,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "step_px",
+        "key": "step_mm",
         "label": "convert.stepPx",
         "type": "number",
-        "default": 0.8,
-        "min": 0.2,
-        "max": 3.0,
+        "default": 0.3,
+        "min": 0.07,
+        "max": 1.1,
         "step": 0.1,
         "choices": null
       },
@@ -608,12 +608,12 @@
         "choices": null
       },
       {
-        "key": "dot_radius_px",
+        "key": "dot_radius_mm",
         "label": "convert.dotRadius",
         "type": "number",
-        "default": 0.6,
-        "min": 0.1,
-        "max": 5.0,
+        "default": 0.22,
+        "min": 0.04,
+        "max": 1.9,
         "step": 0.1,
         "choices": null
       },
@@ -645,33 +645,33 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
-        "choices": null
-      },
-      {
-        "key": "amp_px",
-        "label": "convert.waveAmp",
-        "type": "number",
-        "default": 1.4,
-        "min": 0.1,
-        "max": 8.0,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 11.0,
         "step": 0.1,
         "choices": null
       },
       {
-        "key": "period_px",
+        "key": "amp_mm",
+        "label": "convert.waveAmp",
+        "type": "number",
+        "default": 0.52,
+        "min": 0.04,
+        "max": 3.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "period_mm",
         "label": "convert.wavePeriod",
         "type": "number",
-        "default": 8,
-        "min": 2.0,
-        "max": 40.0,
-        "step": 0.5,
+        "default": 3,
+        "min": 0.74,
+        "max": 15.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -742,33 +742,33 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
-        "choices": null
-      },
-      {
-        "key": "amp_px",
-        "label": "convert.waveAmp",
-        "type": "number",
-        "default": 1.6,
-        "min": 0.0,
-        "max": 8.0,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 11.0,
         "step": 0.1,
         "choices": null
       },
       {
-        "key": "overshoot_px",
+        "key": "amp_mm",
+        "label": "convert.waveAmp",
+        "type": "number",
+        "default": 0.59,
+        "min": 0.0,
+        "max": 3.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "overshoot_mm",
         "label": "convert.overshoot",
         "type": "number",
-        "default": 3,
+        "default": 1.1,
         "min": 0.0,
-        "max": 20.0,
-        "step": 0.5,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -809,13 +809,13 @@
     "complexity": "low",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 6,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 2.2,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       }
     ]
@@ -826,23 +826,23 @@
     "complexity": "low",
     "options": [
       {
-        "key": "brick_w_px",
+        "key": "brick_w_mm",
         "label": "convert.brickW",
-        "type": "integer",
-        "default": 16,
-        "min": 2.0,
-        "max": 60.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 5.9,
+        "min": 0.74,
+        "max": 22.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "brick_h_px",
+        "key": "brick_h_mm",
         "label": "convert.brickH",
-        "type": "integer",
-        "default": 8,
-        "min": 2.0,
-        "max": 40.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 3,
+        "min": 0.74,
+        "max": 15.0,
+        "step": 0.1,
         "choices": null
       }
     ]
@@ -853,13 +853,13 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 5,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 1.9,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -873,23 +873,23 @@
         "choices": null
       },
       {
-        "key": "dash_px",
+        "key": "dash_mm",
         "label": "convert.dashPx",
         "type": "number",
-        "default": 3,
-        "min": 0.5,
-        "max": 20.0,
-        "step": 0.5,
+        "default": 1.1,
+        "min": 0.19,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "gap_px",
+        "key": "gap_mm",
         "label": "convert.gapPx",
         "type": "number",
-        "default": 3,
-        "min": 0.5,
-        "max": 20.0,
-        "step": 0.5,
+        "default": 1.1,
+        "min": 0.19,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -910,13 +910,13 @@
     "complexity": "low",
     "options": [
       {
-        "key": "cell_px",
+        "key": "cell_mm",
         "label": "convert.cellPx",
-        "type": "integer",
-        "default": 10,
-        "min": 2.0,
-        "max": 40.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 3.7,
+        "min": 0.74,
+        "max": 15.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -951,13 +951,13 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 6,
-        "min": 1.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 2.2,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       }
     ]
@@ -985,32 +985,32 @@
     "complexity": "high",
     "options": [
       {
-        "key": "min_radius_px",
+        "key": "min_radius_mm",
         "label": "convert.minRadius",
         "type": "number",
-        "default": 1.2,
-        "min": 0.5,
-        "max": 10.0,
+        "default": 0.45,
+        "min": 0.19,
+        "max": 3.7,
         "step": 0.1,
         "choices": null
       },
       {
-        "key": "max_radius_px",
+        "key": "max_radius_mm",
         "label": "convert.maxRadius",
         "type": "number",
-        "default": 8.0,
-        "min": 1.0,
-        "max": 40.0,
-        "step": 0.5,
+        "default": 3,
+        "min": 0.37,
+        "max": 15.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "gap_px",
+        "key": "gap_mm",
         "label": "convert.gapPx",
         "type": "number",
-        "default": 0.6,
+        "default": 0.22,
         "min": 0.0,
-        "max": 10.0,
+        "max": 3.7,
         "step": 0.1,
         "choices": null
       },
@@ -1032,33 +1032,33 @@
     "complexity": "low",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 6,
-        "min": 2.0,
-        "max": 40.0,
-        "step": 0.5,
+        "default": 2.2,
+        "min": 0.74,
+        "max": 15.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "amp_px",
+        "key": "amp_mm",
         "label": "convert.waveAmp",
         "type": "number",
-        "default": 10,
+        "default": 3.7,
         "min": 0.0,
-        "max": 60.0,
-        "step": 1.0,
+        "max": 22.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "smooth_px",
+        "key": "smooth_mm",
         "label": "convert.smooth",
-        "type": "integer",
-        "default": 3,
+        "type": "number",
+        "default": 1.1,
         "min": 0.0,
-        "max": 20.0,
-        "step": 1.0,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1092,13 +1092,13 @@
     "complexity": "low",
     "options": [
       {
-        "key": "cell_px",
+        "key": "cell_mm",
         "label": "convert.cellPx",
-        "type": "integer",
-        "default": 8,
-        "min": 3.0,
-        "max": 40.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 3,
+        "min": 1.1,
+        "max": 15.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1119,13 +1119,13 @@
     "complexity": "low",
     "options": [
       {
-        "key": "cell_px",
+        "key": "cell_mm",
         "label": "convert.cellPx",
-        "type": "integer",
-        "default": 12,
-        "min": 4.0,
-        "max": 60.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 4.5,
+        "min": 1.5,
+        "max": 22.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1139,13 +1139,13 @@
         "choices": null
       },
       {
-        "key": "max_offset_px",
+        "key": "max_offset_mm",
         "label": "convert.offsetMax",
         "type": "number",
-        "default": 5,
+        "default": 1.9,
         "min": 0.0,
-        "max": 30.0,
-        "step": 0.5,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1166,13 +1166,13 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "min_cell_px",
+        "key": "min_cell_mm",
         "label": "convert.minCell",
-        "type": "integer",
-        "default": 6,
-        "min": 2.0,
-        "max": 64.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 2.2,
+        "min": 0.74,
+        "max": 24.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1193,13 +1193,13 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "cell_px",
+        "key": "cell_mm",
         "label": "convert.cellPx",
-        "type": "integer",
-        "default": 8,
-        "min": 3.0,
-        "max": 40.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 3,
+        "min": 1.1,
+        "max": 15.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1220,22 +1220,22 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 7,
-        "min": 2.0,
-        "max": 30.0,
-        "step": 0.5,
+        "default": 2.6,
+        "min": 0.74,
+        "max": 11.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "dot_radius_px",
+        "key": "dot_radius_mm",
         "label": "convert.dotRadius",
         "type": "number",
-        "default": 2.5,
-        "min": 0.3,
-        "max": 10.0,
+        "default": 0.93,
+        "min": 0.11,
+        "max": 3.7,
         "step": 0.1,
         "choices": null
       },
@@ -1284,13 +1284,13 @@
     "complexity": "low",
     "options": [
       {
-        "key": "cell_px",
+        "key": "cell_mm",
         "label": "convert.cellPx",
-        "type": "integer",
-        "default": 18,
-        "min": 8.0,
-        "max": 80.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 6.7,
+        "min": 3.0,
+        "max": 30.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1368,33 +1368,33 @@
         "choices": null
       },
       {
-        "key": "step_px",
+        "key": "step_mm",
         "label": "convert.stepPx",
         "type": "number",
-        "default": 4,
-        "min": 1.0,
-        "max": 15.0,
-        "step": 0.5,
+        "default": 1.5,
+        "min": 0.37,
+        "max": 5.6,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "influence_px",
+        "key": "influence_mm",
         "label": "convert.influencePx",
         "type": "number",
-        "default": 40,
-        "min": 5.0,
-        "max": 200.0,
-        "step": 1.0,
+        "default": 15,
+        "min": 1.9,
+        "max": 74.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "kill_px",
+        "key": "kill_mm",
         "label": "convert.killPx",
         "type": "number",
-        "default": 6,
-        "min": 2.0,
-        "max": 40.0,
-        "step": 1.0,
+        "default": 2.2,
+        "min": 0.74,
+        "max": 15.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1432,22 +1432,22 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "cell_px",
+        "key": "cell_mm",
         "label": "convert.cellPx",
-        "type": "integer",
-        "default": 4,
-        "min": 2.0,
-        "max": 20.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 1.5,
+        "min": 0.74,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "dot_radius_px",
+        "key": "dot_radius_mm",
         "label": "convert.dotRadius",
         "type": "number",
-        "default": 1.0,
-        "min": 0.2,
-        "max": 5.0,
+        "default": 0.37,
+        "min": 0.07,
+        "max": 1.9,
         "step": 0.1,
         "choices": null
       },
@@ -1473,23 +1473,23 @@
     "complexity": "medium",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 5,
-        "min": 2.0,
-        "max": 20.0,
-        "step": 0.5,
+        "default": 1.9,
+        "min": 0.74,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "length_px",
+        "key": "length_mm",
         "label": "convert.strokeLen",
         "type": "number",
-        "default": 9,
-        "min": 2.0,
-        "max": 40.0,
-        "step": 1.0,
+        "default": 3.3,
+        "min": 0.74,
+        "max": 15.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1617,13 +1617,13 @@
         "choices": null
       },
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 4,
-        "min": 1.5,
-        "max": 20.0,
-        "step": 0.5,
+        "default": 1.5,
+        "min": 0.56,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1644,13 +1644,13 @@
     "complexity": "low",
     "options": [
       {
-        "key": "spacing_px",
+        "key": "spacing_mm",
         "label": "convert.spacing",
         "type": "number",
-        "default": 5,
-        "min": 2.0,
-        "max": 20.0,
-        "step": 0.5,
+        "default": 1.9,
+        "min": 0.74,
+        "max": 7.4,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1667,13 +1667,13 @@
         ]
       },
       {
-        "key": "offset_px",
+        "key": "offset_mm",
         "label": "convert.offsetPx",
         "type": "number",
-        "default": 14,
+        "default": 5.2,
         "min": 0.0,
-        "max": 80.0,
-        "step": 1.0,
+        "max": 30.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1694,23 +1694,23 @@
     "complexity": "low",
     "options": [
       {
-        "key": "band_px",
+        "key": "band_mm",
         "label": "convert.bandPx",
-        "type": "integer",
-        "default": 12,
-        "min": 4.0,
-        "max": 60.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 4.5,
+        "min": 1.5,
+        "max": 22.0,
+        "step": 0.1,
         "choices": null
       },
       {
-        "key": "gap_px",
+        "key": "gap_mm",
         "label": "convert.gapPx",
         "type": "number",
-        "default": 2,
-        "min": 0.5,
-        "max": 10.0,
-        "step": 0.5,
+        "default": 0.74,
+        "min": 0.19,
+        "max": 3.7,
+        "step": 0.1,
         "choices": null
       }
     ]
@@ -1721,13 +1721,13 @@
     "complexity": "low",
     "options": [
       {
-        "key": "cell_px",
+        "key": "cell_mm",
         "label": "convert.cellPx",
-        "type": "integer",
-        "default": 12,
-        "min": 4.0,
-        "max": 60.0,
-        "step": 1.0,
+        "type": "number",
+        "default": 4.5,
+        "min": 1.5,
+        "max": 22.0,
+        "step": 0.1,
         "choices": null
       },
       {
@@ -1821,12 +1821,12 @@
         "choices": null
       },
       {
-        "key": "dot_radius_px",
+        "key": "dot_radius_mm",
         "label": "convert.dotRadius",
         "type": "number",
-        "default": 0.5,
-        "min": 0.2,
-        "max": 3.0,
+        "default": 0.19,
+        "min": 0.07,
+        "max": 1.1,
         "step": 0.1,
         "choices": null
       },
@@ -1858,13 +1858,13 @@
         "choices": null
       },
       {
-        "key": "font_size_px",
+        "key": "font_size_mm",
         "label": "convert.fontSize",
         "type": "number",
-        "default": 12,
-        "min": 4.0,
-        "max": 60.0,
-        "step": 1.0,
+        "default": 4.5,
+        "min": 1.5,
+        "max": 22.0,
+        "step": 0.1,
         "choices": null
       },
       {
