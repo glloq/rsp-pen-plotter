@@ -20,7 +20,7 @@ import { ALGORITHMS, type AlgoOption, type AlgorithmSpec } from './printRegistry
 interface SnapshotOption {
   key: string
   label: string
-  type: 'number' | 'integer' | 'boolean' | 'select'
+  type: 'number' | 'integer' | 'boolean' | 'select' | 'text'
   default: unknown
   min: number | null
   max: number | null

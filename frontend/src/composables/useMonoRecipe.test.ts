@@ -7,6 +7,7 @@ import {
   interpolatedBandOptions,
   isMonoDirty,
   markMonoCommitted,
+  monoRecipeForBand,
   rehydrateMonoFromOptions,
   resetMonoRecipe,
   setMonoBandOverride,
@@ -288,5 +289,34 @@ describe('interpolatedBandOptions ignores perBand pins', () => {
     const opts = interpolatedBandOptions(1, 3)
     expect(opts.wave_period_px).not.toBe(999)
     expect(typeof opts.spacing_px).toBe('number')
+  })
+})
+
+describe('generic algoOverrides knob (2026-06 tonal masters)', () => {
+  beforeEach(() => {
+    resetMonoRecipe()
+    markMonoCommitted()
+  })
+
+  it('merges algoOverrides over the registry bandRecipe defaults', () => {
+    // ridge-pulsar has no bespoke case in recipeFromKnobs — the default
+    // branch must merge the schema-form overrides over bandRecipe().
+    setMonoMasterStyleId('ridge-pulsar')
+    setMonoKnob('ridge-pulsar', 'algoOverrides', { amp_px: 22, occlude: false })
+    const recipe = monoRecipeForBand(0, 1)
+    expect(recipe).not.toBeNull()
+    expect(recipe!.algorithm).toBe('ridge_lines')
+    expect(recipe!.algorithm_options.amp_px).toBe(22)
+    expect(recipe!.algorithm_options.occlude).toBe(false)
+    // Untouched options keep the registry default.
+    expect(recipe!.algorithm_options.spacing_px).toBe(5)
+  })
+
+  it('without overrides the registry bandRecipe passes through untouched', () => {
+    setMonoMasterStyleId('dither-print')
+    const recipe = monoRecipeForBand(0, 1)
+    expect(recipe).not.toBeNull()
+    expect(recipe!.algorithm).toBe('dither')
+    expect(recipe!.algorithm_options.method).toBe('floyd')
   })
 })

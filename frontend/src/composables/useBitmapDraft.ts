@@ -253,6 +253,9 @@ export function defaultCurves(): CurvesDraft {
 // would make pinning the i-th cluster meaningful without exposing the
 // cluster's source colour first).
 export type MulticolorStyleKnobs = {
+  // Generic per-algorithm overrides for colour masters without bespoke
+  // slider wiring — same contract as ``MonoStyleKnobs.algoOverrides``.
+  algoOverrides?: Record<string, unknown>
   spacing_min?: number
   spacing_max?: number
   density_min?: number
@@ -1091,8 +1094,16 @@ function colorRecipeFromKnobs(
         },
       }
     }
-    default:
-      return style.colorRecipe ? style.colorRecipe(i, total, hex) : null
+    default: {
+      const base = style.colorRecipe ? style.colorRecipe(i, total, hex) : null
+      if (!base) return null
+      const extra = knobs?.algoOverrides
+      if (!extra || Object.keys(extra).length === 0) return base
+      return {
+        algorithm: base.algorithm,
+        algorithm_options: { ...base.algorithm_options, ...extra },
+      }
+    }
   }
 }
 

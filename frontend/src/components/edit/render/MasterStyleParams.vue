@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { resolveMasterStyle, type SegmentationMethod } from '../../../data/printRegistry'
+import { getAlgorithm, resolveMasterStyle, type SegmentationMethod } from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { useJobStore } from '../../../stores/job'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
+import AlgoParamsForm from '../AlgoParamsForm.vue'
 import DualRangeSlider from './DualRangeSlider.vue'
 
 // Per-style knobs exposed by the active master style. Two paths:
@@ -94,6 +95,27 @@ function setKnob<K extends string>(key: K, value: unknown): void {
       recipeResolver: (index, total) => draft.monoRecipeForBand(index, total),
     })
   }
+}
+
+// ---- Generic schema-driven knobs (masters without bespoke sliders) ----
+// The 2026-06 tonal masters (ridge-pulsar, dither-print, …) don't get a
+// hand-built slider block: the same schema-driven AlgoParamsForm the
+// Layers tab uses renders their algorithm's full option set, and each
+// edit lands in ``knobs.algoOverrides`` which the band recipe merges
+// over the registry defaults.
+const genericAlgoValues = computed<Record<string, unknown>>(() => ({
+  ...style.value.defaultAlgorithmOptions,
+  ...(knobs.value.algoOverrides ?? {}),
+}))
+
+// Hide the fallback card entirely for algorithms without operator
+// knobs (e.g. ``direct``) — an empty bordered block reads as a bug.
+const genericHasKnobs = computed(
+  () => (getAlgorithm(style.value.defaultAlgorithm)?.schema.length ?? 0) > 0,
+)
+
+function setAlgoOverride(key: string, value: unknown): void {
+  setKnob('algoOverrides', { ...(knobs.value.algoOverrides ?? {}), [key]: value })
 }
 
 // ---- Pencil angle chips ----
@@ -597,6 +619,21 @@ function bandSwatchStyle(i: number): Record<string, string> {
         :value="knobs.stroke_width ?? 0.8"
         class="w-full accent-emerald-500"
         @input="(e) => setKnob('stroke_width', Number((e.target as HTMLInputElement).value))"
+      />
+    </div>
+
+    <!-- ===== Generic fallback: schema-driven form for masters without a
+         bespoke slider block (2026-06 tonal masters + any future ones).
+         Same AlgoParamsForm as the Layers tab, so every option the
+         algorithm declares is reachable from the Style tab. ===== -->
+    <div v-else-if="genericHasKnobs" class="space-y-2 border-t border-slate-800 pt-3">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400">
+        {{ t('mono.styleSettings') }}
+      </p>
+      <AlgoParamsForm
+        :algorithm="style.defaultAlgorithm"
+        :values="genericAlgoValues"
+        @update="setAlgoOverride"
       />
     </div>
 

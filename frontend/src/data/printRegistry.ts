@@ -52,6 +52,37 @@ export type AlgorithmId =
   | 'rings'
   | 'sunburst'
   | 'circle_pack'
+  // 2026-06 expert-style batch — see ``backend/.../algorithms/{ridge_lines,
+  // hitomezashi,cubic_disarray,quadtree,maze,phyllotaxis,voronoi_mosaic,
+  // curve_stitching,string_art,space_colonization,penrose}.py``.
+  | 'ridge_lines'
+  | 'hitomezashi'
+  | 'cubic_disarray'
+  | 'quadtree'
+  | 'maze'
+  | 'phyllotaxis'
+  | 'voronoi_mosaic'
+  | 'curve_stitching'
+  | 'string_art'
+  | 'space_colonization'
+  | 'penrose'
+  // 2026-06 expert-style batch 2 — see ``backend/.../algorithms/{dither,
+  // etch,noise_contours,reaction_diffusion,superpixel_hatch,moire,weave,
+  // honeycomb,harmonograph,attractor,text_fill}.py``.
+  | 'dither'
+  | 'etch'
+  | 'noise_contours'
+  | 'reaction_diffusion'
+  | 'superpixel_hatch'
+  | 'moire'
+  | 'weave'
+  | 'honeycomb'
+  | 'harmonograph'
+  | 'attractor'
+  | 'text_fill'
+  // 2026-06 expert-style batch 3.
+  | 'lsystem'
+  | 'chladni'
 
 export interface AlgoOption {
   key: string
@@ -61,8 +92,9 @@ export interface AlgoOption {
   // ``integer`` is rendered like ``number`` but the input is restricted
   // to whole values (the backend casts via ``int(opts.get(...))``).
   // ``select`` exposes ``choices`` as a dropdown for enum-typed knobs
-  // (e.g. tsp_opt's ``method``, flowfield's ``mode``).
-  type: 'number' | 'integer' | 'boolean' | 'select'
+  // (e.g. tsp_opt's ``method``, flowfield's ``mode``). ``text`` is a
+  // free-form string (e.g. text_fill's repeated text).
+  type: 'number' | 'integer' | 'boolean' | 'select' | 'text'
   min?: number
   max?: number
   step?: number
@@ -79,12 +111,18 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   direct: { id: 'direct', defaults: {}, schema: [] },
   halftone: {
     id: 'halftone',
-    defaults: { cell_size_px: 6, angle_deg: 0 },
+    defaults: { cell_size_px: 6, angle_deg: 0, glyph: 'dot' },
     schema: [
       // Backend clamps to ``max(2, ...)``: anything below collapses adjacent
       // dots into a solid fill, so the floor is 2 (was 1, silently clipped).
       { key: 'cell_size_px', label: 'convert.cellSize', type: 'integer', min: 2, max: 64, step: 1 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
+      {
+        key: 'glyph',
+        label: 'convert.glyph',
+        type: 'select',
+        choices: ['dot', 'ring', 'square', 'diamond', 'cross'],
+      },
     ],
   },
   stippling: {
@@ -112,11 +150,14 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   crosshatch: {
     id: 'crosshatch',
-    defaults: { spacing_px: 4, angle_deg: 45, crossed: false },
+    defaults: { spacing_px: 4, angle_deg: 45, crossed: false, joined: false },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
       { key: 'angle_deg', label: 'convert.angleDeg', type: 'number', min: 0, max: 180, step: 1 },
       { key: 'crossed', label: 'convert.crossed', type: 'boolean' },
+      // Stitches sweeps into boustrophedon zig-zags (the former
+      // ``eulerian_hatch`` entry, folded in as an option).
+      { key: 'joined', label: 'convert.joined', type: 'boolean' },
     ],
   },
   contours: {
@@ -249,7 +290,7 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   hilbert: {
     id: 'hilbert',
-    defaults: { spacing_px: 4, min_run_px: 3, order: 0 },
+    defaults: { spacing_px: 4, min_run_px: 3, order: 0, adaptive: false },
     schema: [
       { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 1, max: 30, step: 0.5 },
       { key: 'min_run_px', label: 'convert.minRunPx', type: 'integer', min: 1, max: 20, step: 1 },
@@ -257,6 +298,9 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       // force that depth). Operators can tune ink density on small regions
       // where the auto rule under-fills.
       { key: 'order', label: 'convert.hilbertOrder', type: 'integer', min: 0, max: 8, step: 1 },
+      // Tone-adaptive traversal: deeper recursion (tighter curve) where
+      // the region is darker.
+      { key: 'adaptive', label: 'convert.adaptive', type: 'boolean' },
     ],
   },
   gosper: {
@@ -450,10 +494,11 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
   },
   truchet: {
     id: 'truchet',
-    defaults: { cell_px: 10, seed: 0 },
+    defaults: { cell_px: 10, seed: 0, tile: 'diagonal' },
     schema: [
       { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 2, max: 40, step: 1 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+      { key: 'tile', label: 'convert.tile', type: 'select', choices: ['diagonal', 'arc', 'mixed'] },
     ],
   },
   rings: {
@@ -498,7 +543,356 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
     ],
   },
+  ridge_lines: {
+    id: 'ridge_lines',
+    defaults: { spacing_px: 6, amp_px: 10, smooth_px: 3, occlude: true, layout: 'rows' },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 40, step: 0.5 },
+      { key: 'amp_px', label: 'convert.waveAmp', type: 'number', min: 0, max: 60, step: 1 },
+      { key: 'smooth_px', label: 'convert.smooth', type: 'integer', min: 0, max: 20, step: 1 },
+      { key: 'occlude', label: 'convert.hiddenLines', type: 'boolean' },
+      { key: 'layout', label: 'convert.mode', type: 'select', choices: ['rows', 'radial'] },
+    ],
+  },
+  hitomezashi: {
+    id: 'hitomezashi',
+    defaults: { cell_px: 8, seed: 0 },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 3, max: 40, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  cubic_disarray: {
+    id: 'cubic_disarray',
+    defaults: { cell_px: 12, max_rotate_deg: 35, max_offset_px: 5, seed: 0 },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 4, max: 60, step: 1 },
+      { key: 'max_rotate_deg', label: 'convert.rotateMax', type: 'number', min: 0, max: 90, step: 1 },
+      {
+        key: 'max_offset_px',
+        label: 'convert.offsetMax',
+        type: 'number',
+        min: 0,
+        max: 30,
+        step: 0.5,
+      },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  quadtree: {
+    id: 'quadtree',
+    defaults: { min_cell_px: 6, split_threshold: 0.12 },
+    schema: [
+      { key: 'min_cell_px', label: 'convert.minCell', type: 'integer', min: 2, max: 64, step: 1 },
+      {
+        key: 'split_threshold',
+        label: 'convert.threshold',
+        type: 'number',
+        min: 0.01,
+        max: 0.9,
+        step: 0.01,
+      },
+    ],
+  },
+  maze: {
+    id: 'maze',
+    defaults: { cell_px: 8, seed: 0 },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 3, max: 40, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  phyllotaxis: {
+    id: 'phyllotaxis',
+    defaults: { spacing_px: 7, dot_radius_px: 2.5, outline: false },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 30, step: 0.5 },
+      {
+        key: 'dot_radius_px',
+        label: 'convert.dotRadius',
+        type: 'number',
+        min: 0.3,
+        max: 10,
+        step: 0.1,
+      },
+      { key: 'outline', label: 'convert.outline', type: 'boolean' },
+    ],
+  },
+  voronoi_mosaic: {
+    id: 'voronoi_mosaic',
+    defaults: { density: 0.004, seed: 0 },
+    schema: [
+      {
+        key: 'density',
+        label: 'convert.density',
+        type: 'number',
+        min: 0.0005,
+        max: 0.05,
+        step: 0.0005,
+      },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  curve_stitching: {
+    id: 'curve_stitching',
+    defaults: { cell_px: 18, chords: 7, seed: 0 },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 8, max: 80, step: 1 },
+      { key: 'chords', label: 'convert.chords', type: 'integer', min: 3, max: 20, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  string_art: {
+    id: 'string_art',
+    defaults: { pegs: 96, lines: 350, fade: 0.25 },
+    schema: [
+      { key: 'pegs', label: 'convert.pegs', type: 'integer', min: 24, max: 240, step: 4 },
+      { key: 'lines', label: 'convert.lineCount', type: 'integer', min: 50, max: 1500, step: 10 },
+      { key: 'fade', label: 'convert.fade', type: 'number', min: 0.05, max: 1, step: 0.05 },
+    ],
+  },
+  space_colonization: {
+    id: 'space_colonization',
+    defaults: { attractors: 700, step_px: 4, influence_px: 40, kill_px: 6, seed: 0 },
+    schema: [
+      {
+        key: 'attractors',
+        label: 'convert.attractors',
+        type: 'integer',
+        min: 100,
+        max: 4000,
+        step: 50,
+      },
+      { key: 'step_px', label: 'convert.stepPx', type: 'number', min: 1, max: 15, step: 0.5 },
+      {
+        key: 'influence_px',
+        label: 'convert.influencePx',
+        type: 'number',
+        min: 5,
+        max: 200,
+        step: 1,
+      },
+      { key: 'kill_px', label: 'convert.killPx', type: 'number', min: 2, max: 40, step: 1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  penrose: {
+    id: 'penrose',
+    defaults: { divisions: 6 },
+    schema: [
+      { key: 'divisions', label: 'convert.divisions', type: 'integer', min: 2, max: 9, step: 1 },
+    ],
+  },
+  dither: {
+    id: 'dither',
+    defaults: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 2, max: 20, step: 1 },
+      {
+        key: 'dot_radius_px',
+        label: 'convert.dotRadius',
+        type: 'number',
+        min: 0.2,
+        max: 5,
+        step: 0.1,
+      },
+      {
+        key: 'method',
+        label: 'convert.ditherMethod',
+        type: 'select',
+        choices: ['floyd', 'atkinson', 'bayer'],
+      },
+    ],
+  },
+  etch: {
+    id: 'etch',
+    defaults: { spacing_px: 5, length_px: 9, jitter: 0.3, seed: 0 },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 20, step: 0.5 },
+      { key: 'length_px', label: 'convert.strokeLen', type: 'number', min: 2, max: 40, step: 1 },
+      { key: 'jitter', label: 'convert.jitter', type: 'number', min: 0, max: 1, step: 0.05 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  noise_contours: {
+    id: 'noise_contours',
+    defaults: { levels: 12, noise_scale: 60, noise_amp: 0.35, seed: 0 },
+    schema: [
+      { key: 'levels', label: 'convert.levels', type: 'integer', min: 3, max: 40, step: 1 },
+      {
+        key: 'noise_scale',
+        label: 'convert.noiseScale',
+        type: 'number',
+        min: 10,
+        max: 300,
+        step: 5,
+      },
+      { key: 'noise_amp', label: 'convert.noiseAmp', type: 'number', min: 0, max: 2, step: 0.05 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  reaction_diffusion: {
+    id: 'reaction_diffusion',
+    defaults: { pattern: 'spots', steps: 2500, seed: 0 },
+    schema: [
+      { key: 'pattern', label: 'convert.pattern', type: 'select', choices: ['spots', 'stripes'] },
+      { key: 'steps', label: 'convert.maxSteps', type: 'integer', min: 500, max: 8000, step: 100 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  superpixel_hatch: {
+    id: 'superpixel_hatch',
+    defaults: { regions: 180, spacing_px: 4, seed: 0 },
+    schema: [
+      { key: 'regions', label: 'convert.regions', type: 'integer', min: 20, max: 800, step: 10 },
+      {
+        key: 'spacing_px',
+        label: 'convert.spacing',
+        type: 'number',
+        min: 1.5,
+        max: 20,
+        step: 0.5,
+      },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  moire: {
+    id: 'moire',
+    defaults: { spacing_px: 5, mode: 'rings', offset_px: 14, delta_deg: 4 },
+    schema: [
+      { key: 'spacing_px', label: 'convert.spacing', type: 'number', min: 2, max: 20, step: 0.5 },
+      { key: 'mode', label: 'convert.mode', type: 'select', choices: ['rings', 'lines'] },
+      { key: 'offset_px', label: 'convert.offsetPx', type: 'number', min: 0, max: 80, step: 1 },
+      {
+        key: 'delta_deg',
+        label: 'convert.angleDeg',
+        type: 'number',
+        min: 0.5,
+        max: 20,
+        step: 0.5,
+      },
+    ],
+  },
+  weave: {
+    id: 'weave',
+    defaults: { band_px: 12, gap_px: 2 },
+    schema: [
+      { key: 'band_px', label: 'convert.bandPx', type: 'integer', min: 4, max: 60, step: 1 },
+      { key: 'gap_px', label: 'convert.gapPx', type: 'number', min: 0.5, max: 10, step: 0.5 },
+    ],
+  },
+  honeycomb: {
+    id: 'honeycomb',
+    defaults: { cell_px: 12, mode: 'grid' },
+    schema: [
+      { key: 'cell_px', label: 'convert.cellPx', type: 'integer', min: 4, max: 60, step: 1 },
+      { key: 'mode', label: 'convert.mode', type: 'select', choices: ['grid', 'scaled'] },
+    ],
+  },
+  harmonograph: {
+    id: 'harmonograph',
+    defaults: { freq_ratio: 2.01, damping: 0.004, turns: 40, seed: 0 },
+    schema: [
+      { key: 'freq_ratio', label: 'convert.freqRatio', type: 'number', min: 1, max: 5, step: 0.01 },
+      {
+        key: 'damping',
+        label: 'convert.damping',
+        type: 'number',
+        min: 0.0005,
+        max: 0.02,
+        step: 0.0005,
+      },
+      { key: 'turns', label: 'convert.turns', type: 'integer', min: 5, max: 150, step: 5 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  attractor: {
+    id: 'attractor',
+    defaults: { preset: 'dejong', points: 6000, dot_radius_px: 0.5, seed: 0 },
+    schema: [
+      {
+        key: 'preset',
+        label: 'convert.pattern',
+        type: 'select',
+        choices: ['dejong', 'clifford'],
+      },
+      {
+        key: 'points',
+        label: 'convert.maxPoints',
+        type: 'integer',
+        min: 500,
+        max: 20000,
+        step: 500,
+      },
+      {
+        key: 'dot_radius_px',
+        label: 'convert.dotRadius',
+        type: 'number',
+        min: 0.2,
+        max: 3,
+        step: 0.1,
+      },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  text_fill: {
+    id: 'text_fill',
+    defaults: { text: 'OmniPlot ', font_size_px: 12, line_spacing: 1.25, threshold: 0.35 },
+    schema: [
+      { key: 'text', label: 'convert.text', type: 'text' },
+      { key: 'font_size_px', label: 'convert.fontSize', type: 'number', min: 4, max: 60, step: 1 },
+      {
+        key: 'line_spacing',
+        label: 'convert.lineSpacing',
+        type: 'number',
+        min: 0.8,
+        max: 3,
+        step: 0.05,
+      },
+      {
+        key: 'threshold',
+        label: 'convert.threshold',
+        type: 'number',
+        min: 0,
+        max: 0.95,
+        step: 0.05,
+      },
+    ],
+  },
+  lsystem: {
+    id: 'lsystem',
+    defaults: { preset: 'dragon', iterations: 0 },
+    schema: [
+      {
+        key: 'preset',
+        label: 'convert.pattern',
+        type: 'select',
+        choices: ['dragon', 'plant', 'koch', 'sierpinski'],
+      },
+      { key: 'iterations', label: 'convert.iterations', type: 'integer', min: 0, max: 12, step: 1 },
+    ],
+  },
+  chladni: {
+    id: 'chladni',
+    defaults: { m: 3, n: 5, modes: 1 },
+    schema: [
+      { key: 'm', label: 'convert.modeM', type: 'integer', min: 1, max: 12, step: 1 },
+      { key: 'n', label: 'convert.modeN', type: 'integer', min: 1, max: 12, step: 1 },
+      { key: 'modes', label: 'convert.levels', type: 'integer', min: 1, max: 7, step: 1 },
+    ],
+  },
 }
+
+// Backend-flagged duplicates: still registered (persisted layers keep
+// rendering, ``getAlgorithm`` keeps resolving them) but pickers must not
+// offer them for new layers. Mirrors ``_HIDDEN`` in
+// ``backend/pen_plotter/converters/algorithms/__init__.py``.
+export const HIDDEN_ALGORITHMS: ReadonlySet<AlgorithmId> = new Set([
+  'tsp',
+  'grid',
+  'eulerian_hatch',
+  'contours',
+])
 
 export function getAlgorithm(id: string | null | undefined): AlgorithmSpec | null {
   if (!id) return null
@@ -1491,6 +1885,280 @@ export const PRINT_STYLES: PrintStyle[] = [
       return { algorithm: 'direct', algorithm_options: {} }
     },
   },
+  // ===== MASTER STYLES — tonal singles (2026-06 expert batches) =====
+  {
+    id: 'ridge-pulsar',
+    labelKey: 'mono.modes.ridgePulsar',
+    descriptionKey: 'mono.modes.ridgePulsarDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'ridge_lines',
+    defaultAlgorithmOptions: { spacing_px: 5, amp_px: 14, smooth_px: 3, occlude: true },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'ridge_lines', algorithm_options: { spacing_px: 5, amp_px: 14, smooth_px: 3, occlude: true } }
+    },
+  },
+  {
+    id: 'dither-print',
+    labelKey: 'mono.modes.ditherPrint',
+    descriptionKey: 'mono.modes.ditherPrintDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'dither',
+    defaultAlgorithmOptions: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'dither', algorithm_options: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' } }
+    },
+  },
+  {
+    id: 'etch-burin',
+    labelKey: 'mono.modes.etchBurin',
+    descriptionKey: 'mono.modes.etchBurinDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'etch',
+    defaultAlgorithmOptions: { spacing_px: 5, length_px: 10, jitter: 0.3, seed: 0 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'etch', algorithm_options: { spacing_px: 5, length_px: 10, jitter: 0.3, seed: 0 } }
+    },
+  },
+  {
+    id: 'string-thread',
+    labelKey: 'mono.modes.stringThread',
+    descriptionKey: 'mono.modes.stringThreadDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'string_art',
+    defaultAlgorithmOptions: { pegs: 120, lines: 450, fade: 0.22 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'string_art', algorithm_options: { pegs: 120, lines: 450, fade: 0.22 } }
+    },
+  },
+  {
+    id: 'hilbert-adaptive',
+    labelKey: 'mono.modes.hilbertAdaptive',
+    descriptionKey: 'mono.modes.hilbertAdaptiveDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'hilbert',
+    defaultAlgorithmOptions: { adaptive: true, spacing_px: 4, min_run_px: 3 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'hilbert', algorithm_options: { adaptive: true, spacing_px: 4, min_run_px: 3 } }
+    },
+  },
+  {
+    id: 'quadtree-mosaic',
+    labelKey: 'mono.modes.quadtreeMosaic',
+    descriptionKey: 'mono.modes.quadtreeMosaicDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'quadtree',
+    defaultAlgorithmOptions: { min_cell_px: 5, split_threshold: 0.1 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'quadtree', algorithm_options: { min_cell_px: 5, split_threshold: 0.1 } }
+    },
+  },
+  {
+    id: 'phyllotaxis-bloom',
+    labelKey: 'mono.modes.phyllotaxisBloom',
+    descriptionKey: 'mono.modes.phyllotaxisBloomDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'phyllotaxis',
+    defaultAlgorithmOptions: { spacing_px: 6, dot_radius_px: 2.6, outline: false },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'phyllotaxis', algorithm_options: { spacing_px: 6, dot_radius_px: 2.6, outline: false } }
+    },
+  },
+  {
+    id: 'voronoi-shatter',
+    labelKey: 'mono.modes.voronoiShatter',
+    descriptionKey: 'mono.modes.voronoiShatterDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'voronoi_mosaic',
+    defaultAlgorithmOptions: { density: 0.006, seed: 0 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'voronoi_mosaic', algorithm_options: { density: 0.006, seed: 0 } }
+    },
+  },
+  {
+    id: 'text-shading',
+    labelKey: 'mono.modes.textShading',
+    descriptionKey: 'mono.modes.textShadingDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'text_fill',
+    defaultAlgorithmOptions: { text: 'OmniPlot ', font_size_px: 11, line_spacing: 1.2, threshold: 0.3 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'text_fill', algorithm_options: { text: 'OmniPlot ', font_size_px: 11, line_spacing: 1.2, threshold: 0.3 } }
+    },
+  },
+  {
+    id: 'attractor-smoke',
+    labelKey: 'mono.modes.attractorSmoke',
+    descriptionKey: 'mono.modes.attractorSmokeDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'attractor',
+    defaultAlgorithmOptions: { preset: 'dejong', points: 9000, dot_radius_px: 0.5, seed: 0 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'attractor', algorithm_options: { preset: 'dejong', points: 9000, dot_radius_px: 0.5, seed: 0 } }
+    },
+  },
+  {
+    id: 'superpixel-paint',
+    labelKey: 'mono.modes.superpixelPaint',
+    descriptionKey: 'mono.modes.superpixelPaintDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'superpixel_hatch',
+    defaultAlgorithmOptions: { regions: 220, spacing_px: 3.5, seed: 0 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'superpixel_hatch', algorithm_options: { regions: 220, spacing_px: 3.5, seed: 0 } }
+    },
+  },
+  {
+    id: 'noise-topo',
+    labelKey: 'mono.modes.noiseTopo',
+    descriptionKey: 'mono.modes.noiseTopoDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'noise_contours',
+    defaultAlgorithmOptions: { levels: 14, noise_scale: 70, noise_amp: 0.4, seed: 0 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'noise_contours', algorithm_options: { levels: 14, noise_scale: 70, noise_amp: 0.4, seed: 0 } }
+    },
+  },
+  {
+    id: 'coral-growth',
+    labelKey: 'mono.modes.coralGrowth',
+    descriptionKey: 'mono.modes.coralGrowthDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'reaction_diffusion',
+    defaultAlgorithmOptions: { pattern: 'spots', steps: 2500, seed: 0 },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'reaction_diffusion', algorithm_options: { pattern: 'spots', steps: 2500, seed: 0 } }
+    },
+  },
   // ============== MASTER STYLES — multicolor ==============
   // Mirror of the mono master family for multicolour mode: each style
   // owns its segmentation (kmeans by default) and a ``colorRecipe`` the
@@ -2237,6 +2905,521 @@ export const PRINT_STYLES: PrintStyle[] = [
     },
   },
 
+  // ===== MASTER STYLES — multicolor (2026-06 expert batches) =====
+  {
+    id: 'color-ridge-lines',
+    labelKey: 'colorStyles.ridgeLines',
+    descriptionKey: 'colorStyles.ridgeLinesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'ridge_lines',
+    defaultAlgorithmOptions: { spacing_px: 6, amp_px: 10, smooth_px: 3, occlude: true },
+    colorRecipe(i, total) {
+      const spacing = lerp(i, total, 4, 8)
+      return {
+        algorithm: 'ridge_lines',
+        algorithm_options: { spacing_px: spacing, amp_px: 10, smooth_px: 3, occlude: true },
+      }
+    },
+  },
+  {
+    id: 'color-hitomezashi',
+    labelKey: 'colorStyles.hitomezashi',
+    descriptionKey: 'colorStyles.hitomezashiDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'hitomezashi',
+    defaultAlgorithmOptions: { cell_px: 8, seed: 0 },
+    colorRecipe(i, total) {
+      const cell = Math.round(lerp(i, total, 6, 12))
+      return { algorithm: 'hitomezashi', algorithm_options: { cell_px: cell, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-cubic-disarray',
+    labelKey: 'colorStyles.cubicDisarray',
+    descriptionKey: 'colorStyles.cubicDisarrayDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'cubic_disarray',
+    defaultAlgorithmOptions: { cell_px: 12, max_rotate_deg: 35, max_offset_px: 5, seed: 0 },
+    colorRecipe(i, total) {
+      const cell = Math.round(lerp(i, total, 10, 16))
+      return { algorithm: 'cubic_disarray', algorithm_options: { cell_px: cell, max_rotate_deg: 35, max_offset_px: 5, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-quadtree',
+    labelKey: 'colorStyles.quadtree',
+    descriptionKey: 'colorStyles.quadtreeDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'quadtree',
+    defaultAlgorithmOptions: { min_cell_px: 6, split_threshold: 0.12 },
+    colorRecipe(i, total) {
+      const minCell = Math.round(lerp(i, total, 4, 10))
+      return { algorithm: 'quadtree', algorithm_options: { min_cell_px: minCell, split_threshold: 0.12 } }
+    },
+  },
+  {
+    id: 'color-maze',
+    labelKey: 'colorStyles.maze',
+    descriptionKey: 'colorStyles.mazeDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'maze',
+    defaultAlgorithmOptions: { cell_px: 8, seed: 0 },
+    colorRecipe(i, total) {
+      const cell = Math.round(lerp(i, total, 6, 12))
+      return { algorithm: 'maze', algorithm_options: { cell_px: cell, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-phyllotaxis',
+    labelKey: 'colorStyles.phyllotaxis',
+    descriptionKey: 'colorStyles.phyllotaxisDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'phyllotaxis',
+    defaultAlgorithmOptions: { spacing_px: 7, dot_radius_px: 2.5, outline: false },
+    colorRecipe(i, total) {
+      const spacing = lerp(i, total, 5, 9)
+      return { algorithm: 'phyllotaxis', algorithm_options: { spacing_px: spacing, dot_radius_px: 2.5, outline: false } }
+    },
+  },
+  {
+    id: 'color-voronoi-mosaic',
+    labelKey: 'colorStyles.voronoiMosaic',
+    descriptionKey: 'colorStyles.voronoiMosaicDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'voronoi_mosaic',
+    defaultAlgorithmOptions: { density: 0.004, seed: 0 },
+    colorRecipe(i, total) {
+      const density = lerp(i, total, 0.008, 0.002)
+      return { algorithm: 'voronoi_mosaic', algorithm_options: { density, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-curve-stitching',
+    labelKey: 'colorStyles.curveStitching',
+    descriptionKey: 'colorStyles.curveStitchingDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'curve_stitching',
+    defaultAlgorithmOptions: { cell_px: 18, chords: 7, seed: 0 },
+    colorRecipe(i, total) {
+      const chords = Math.round(lerp(i, total, 10, 5))
+      return { algorithm: 'curve_stitching', algorithm_options: { cell_px: 18, chords, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-string-art',
+    labelKey: 'colorStyles.stringArt',
+    descriptionKey: 'colorStyles.stringArtDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'string_art',
+    defaultAlgorithmOptions: { pegs: 96, lines: 350, fade: 0.25 },
+    colorRecipe(i, total) {
+      const lines = Math.round(lerp(i, total, 500, 200))
+      return { algorithm: 'string_art', algorithm_options: { pegs: 96, lines, fade: 0.25 } }
+    },
+  },
+  {
+    id: 'color-space-colonization',
+    labelKey: 'colorStyles.spaceColonization',
+    descriptionKey: 'colorStyles.spaceColonizationDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'space_colonization',
+    defaultAlgorithmOptions: { attractors: 700, step_px: 4, influence_px: 40, kill_px: 6, seed: 0 },
+    colorRecipe(i, total) {
+      const attractors = Math.round(lerp(i, total, 1200, 400))
+      return { algorithm: 'space_colonization', algorithm_options: { attractors, step_px: 4, influence_px: 40, kill_px: 6, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-penrose',
+    labelKey: 'colorStyles.penrose',
+    descriptionKey: 'colorStyles.penroseDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'penrose',
+    defaultAlgorithmOptions: { divisions: 6 },
+    colorRecipe(i, total) {
+      const divisions = Math.round(lerp(i, total, 7, 5))
+      return { algorithm: 'penrose', algorithm_options: { divisions } }
+    },
+  },
+  {
+    id: 'color-dither',
+    labelKey: 'colorStyles.dither',
+    descriptionKey: 'colorStyles.ditherDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'dither',
+    defaultAlgorithmOptions: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' },
+    colorRecipe(i, total) {
+      const cell = Math.round(lerp(i, total, 3, 6))
+      return { algorithm: 'dither', algorithm_options: { cell_px: cell, dot_radius_px: 1.0, method: 'floyd' } }
+    },
+  },
+  {
+    id: 'color-etch',
+    labelKey: 'colorStyles.etch',
+    descriptionKey: 'colorStyles.etchDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'etch',
+    defaultAlgorithmOptions: { spacing_px: 5, length_px: 9, jitter: 0.3, seed: 0 },
+    colorRecipe(i, total) {
+      const spacing = lerp(i, total, 4, 7)
+      return { algorithm: 'etch', algorithm_options: { spacing_px: spacing, length_px: 9, jitter: 0.3, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-noise-contours',
+    labelKey: 'colorStyles.noiseContours',
+    descriptionKey: 'colorStyles.noiseContoursDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'noise_contours',
+    defaultAlgorithmOptions: { levels: 12, noise_scale: 60, noise_amp: 0.35, seed: 0 },
+    colorRecipe(i, total) {
+      const levels = Math.round(lerp(i, total, 16, 8))
+      return { algorithm: 'noise_contours', algorithm_options: { levels, noise_scale: 60, noise_amp: 0.35, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-reaction-diffusion',
+    labelKey: 'colorStyles.reactionDiffusion',
+    descriptionKey: 'colorStyles.reactionDiffusionDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'reaction_diffusion',
+    defaultAlgorithmOptions: { pattern: 'spots', steps: 2500, seed: 0 },
+    colorRecipe(i, _total) {
+      return {
+        algorithm: 'reaction_diffusion',
+        algorithm_options: { pattern: i % 2 === 0 ? 'spots' : 'stripes', steps: 2200, seed: i * 13 + 7 },
+      }
+    },
+  },
+  {
+    id: 'color-superpixel-hatch',
+    labelKey: 'colorStyles.superpixelHatch',
+    descriptionKey: 'colorStyles.superpixelHatchDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'superpixel_hatch',
+    defaultAlgorithmOptions: { regions: 180, spacing_px: 4, seed: 0 },
+    colorRecipe(i, total) {
+      const regions = Math.round(lerp(i, total, 260, 120))
+      return { algorithm: 'superpixel_hatch', algorithm_options: { regions, spacing_px: 4, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-moire',
+    labelKey: 'colorStyles.moire',
+    descriptionKey: 'colorStyles.moireDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'moire',
+    defaultAlgorithmOptions: { spacing_px: 5, mode: 'rings', offset_px: 14, delta_deg: 4 },
+    colorRecipe(i, total) {
+      const spacing = lerp(i, total, 4, 7)
+      return { algorithm: 'moire', algorithm_options: { spacing_px: spacing, mode: 'rings', offset_px: 14, delta_deg: 4 } }
+    },
+  },
+  {
+    id: 'color-weave',
+    labelKey: 'colorStyles.weave',
+    descriptionKey: 'colorStyles.weaveDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'weave',
+    defaultAlgorithmOptions: { band_px: 12, gap_px: 2 },
+    colorRecipe(i, total) {
+      const band = Math.round(lerp(i, total, 10, 16))
+      return { algorithm: 'weave', algorithm_options: { band_px: band, gap_px: 2 } }
+    },
+  },
+  {
+    id: 'color-honeycomb',
+    labelKey: 'colorStyles.honeycomb',
+    descriptionKey: 'colorStyles.honeycombDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'honeycomb',
+    defaultAlgorithmOptions: { cell_px: 12, mode: 'grid' },
+    colorRecipe(i, total) {
+      const cell = Math.round(lerp(i, total, 8, 16))
+      return { algorithm: 'honeycomb', algorithm_options: { cell_px: cell, mode: 'grid' } }
+    },
+  },
+  {
+    id: 'color-harmonograph',
+    labelKey: 'colorStyles.harmonograph',
+    descriptionKey: 'colorStyles.harmonographDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'harmonograph',
+    defaultAlgorithmOptions: { freq_ratio: 2.01, damping: 0.004, turns: 40, seed: 0 },
+    colorRecipe(i, total) {
+      const turns = Math.round(lerp(i, total, 60, 25))
+      return { algorithm: 'harmonograph', algorithm_options: { freq_ratio: 2.01, damping: 0.004, turns, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-attractor',
+    labelKey: 'colorStyles.attractor',
+    descriptionKey: 'colorStyles.attractorDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'attractor',
+    defaultAlgorithmOptions: { preset: 'dejong', points: 6000, dot_radius_px: 0.5, seed: 0 },
+    colorRecipe(i, total) {
+      const points = Math.round(lerp(i, total, 9000, 4000))
+      return { algorithm: 'attractor', algorithm_options: { preset: 'dejong', points, dot_radius_px: 0.5, seed: i * 13 + 7 } }
+    },
+  },
+  {
+    id: 'color-text-fill',
+    labelKey: 'colorStyles.textFill',
+    descriptionKey: 'colorStyles.textFillDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'text_fill',
+    defaultAlgorithmOptions: { text: 'OmniPlot ', font_size_px: 12, line_spacing: 1.25, threshold: 0 },
+    colorRecipe(i, total) {
+      const size = Math.round(lerp(i, total, 10, 16))
+      return { algorithm: 'text_fill', algorithm_options: { text: 'OmniPlot ', font_size_px: size, line_spacing: 1.25, threshold: 0 } }
+    },
+  },
+  {
+    id: 'color-lsystem',
+    labelKey: 'colorStyles.lsystem',
+    descriptionKey: 'colorStyles.lsystemDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'lsystem',
+    defaultAlgorithmOptions: { preset: 'dragon', iterations: 0 },
+    colorRecipe(i, _total) {
+      const presets = ['dragon', 'sierpinski', 'koch', 'plant']
+      return {
+        algorithm: 'lsystem',
+        algorithm_options: { preset: presets[i % presets.length]!, iterations: 0 },
+      }
+    },
+  },
+  {
+    id: 'color-chladni',
+    labelKey: 'colorStyles.chladni',
+    descriptionKey: 'colorStyles.chladniDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'multicolor',
+    segmentation: {
+      method: 'kmeans',
+      default_num_colors: 4,
+      drop_background: true,
+      background_luminance: 0.92,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'chladni',
+    defaultAlgorithmOptions: { m: 3, n: 5, modes: 1 },
+    colorRecipe(i, _total) {
+      return {
+        algorithm: 'chladni',
+        algorithm_options: { m: 2 + (i % 4), n: 4 + (i % 5), modes: 1 },
+      }
+    },
+  },
   // ============== LAYER STYLES — per-layer presets ==============
   {
     id: 'direct',
@@ -2476,6 +3659,241 @@ export const PRINT_STYLES: PrintStyle[] = [
     defaultAlgorithm: 'circle_pack',
     defaultAlgorithmOptions: { min_radius_px: 1.0, max_radius_px: 7, gap_px: 0.6, seed: 0 },
   },
+  // ===== LAYER STYLES — 2026-06 expert batches =====
+  {
+    id: 'ridge-lines',
+    labelKey: 'printStyles.ridgeLines',
+    descriptionKey: 'printStyles.ridgeLinesDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'ridge_lines',
+    defaultAlgorithmOptions: { spacing_px: 6, amp_px: 10, smooth_px: 3, occlude: true, layout: 'rows' },
+  },
+  {
+    id: 'hitomezashi',
+    labelKey: 'printStyles.hitomezashi',
+    descriptionKey: 'printStyles.hitomezashiDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'hitomezashi',
+    defaultAlgorithmOptions: { cell_px: 8, seed: 0 },
+  },
+  {
+    id: 'cubic-disarray',
+    labelKey: 'printStyles.cubicDisarray',
+    descriptionKey: 'printStyles.cubicDisarrayDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'cubic_disarray',
+    defaultAlgorithmOptions: { cell_px: 12, max_rotate_deg: 35, max_offset_px: 5, seed: 0 },
+  },
+  {
+    id: 'quadtree-blocks',
+    labelKey: 'printStyles.quadtree',
+    descriptionKey: 'printStyles.quadtreeDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'quadtree',
+    defaultAlgorithmOptions: { min_cell_px: 6, split_threshold: 0.12 },
+  },
+  {
+    id: 'maze',
+    labelKey: 'printStyles.maze',
+    descriptionKey: 'printStyles.mazeDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'maze',
+    defaultAlgorithmOptions: { cell_px: 8, seed: 0 },
+  },
+  {
+    id: 'phyllotaxis',
+    labelKey: 'printStyles.phyllotaxis',
+    descriptionKey: 'printStyles.phyllotaxisDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'phyllotaxis',
+    defaultAlgorithmOptions: { spacing_px: 7, dot_radius_px: 2.5, outline: false },
+  },
+  {
+    id: 'voronoi-mosaic',
+    labelKey: 'printStyles.voronoiMosaic',
+    descriptionKey: 'printStyles.voronoiMosaicDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'voronoi_mosaic',
+    defaultAlgorithmOptions: { density: 0.004, seed: 0 },
+  },
+  {
+    id: 'curve-stitching',
+    labelKey: 'printStyles.curveStitching',
+    descriptionKey: 'printStyles.curveStitchingDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'curve_stitching',
+    defaultAlgorithmOptions: { cell_px: 18, chords: 7, seed: 0 },
+  },
+  {
+    id: 'string-art',
+    labelKey: 'printStyles.stringArt',
+    descriptionKey: 'printStyles.stringArtDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'string_art',
+    defaultAlgorithmOptions: { pegs: 96, lines: 350, fade: 0.25 },
+  },
+  {
+    id: 'space-colonization',
+    labelKey: 'printStyles.spaceColonization',
+    descriptionKey: 'printStyles.spaceColonizationDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'space_colonization',
+    defaultAlgorithmOptions: { attractors: 700, step_px: 4, influence_px: 40, kill_px: 6, seed: 0 },
+  },
+  {
+    id: 'penrose',
+    labelKey: 'printStyles.penrose',
+    descriptionKey: 'printStyles.penroseDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'penrose',
+    defaultAlgorithmOptions: { divisions: 6 },
+  },
+  {
+    id: 'dither-retro',
+    labelKey: 'printStyles.dither',
+    descriptionKey: 'printStyles.ditherDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'dither',
+    defaultAlgorithmOptions: { cell_px: 4, dot_radius_px: 1.0, method: 'floyd' },
+  },
+  {
+    id: 'etch-strokes',
+    labelKey: 'printStyles.etch',
+    descriptionKey: 'printStyles.etchDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'etch',
+    defaultAlgorithmOptions: { spacing_px: 5, length_px: 9, jitter: 0.3, seed: 0 },
+  },
+  {
+    id: 'noise-contours',
+    labelKey: 'printStyles.noiseContours',
+    descriptionKey: 'printStyles.noiseContoursDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'noise_contours',
+    defaultAlgorithmOptions: { levels: 12, noise_scale: 60, noise_amp: 0.35, seed: 0 },
+  },
+  {
+    id: 'reaction-diffusion',
+    labelKey: 'printStyles.reactionDiffusion',
+    descriptionKey: 'printStyles.reactionDiffusionDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'reaction_diffusion',
+    defaultAlgorithmOptions: { pattern: 'spots', steps: 2500, seed: 0 },
+  },
+  {
+    id: 'superpixel-hatch',
+    labelKey: 'printStyles.superpixelHatch',
+    descriptionKey: 'printStyles.superpixelHatchDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'superpixel_hatch',
+    defaultAlgorithmOptions: { regions: 180, spacing_px: 4, seed: 0 },
+  },
+  {
+    id: 'moire',
+    labelKey: 'printStyles.moire',
+    descriptionKey: 'printStyles.moireDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'moire',
+    defaultAlgorithmOptions: { spacing_px: 5, mode: 'rings', offset_px: 14, delta_deg: 4 },
+  },
+  {
+    id: 'weave',
+    labelKey: 'printStyles.weave',
+    descriptionKey: 'printStyles.weaveDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'weave',
+    defaultAlgorithmOptions: { band_px: 12, gap_px: 2 },
+  },
+  {
+    id: 'honeycomb',
+    labelKey: 'printStyles.honeycomb',
+    descriptionKey: 'printStyles.honeycombDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'honeycomb',
+    defaultAlgorithmOptions: { cell_px: 12, mode: 'grid' },
+  },
+  {
+    id: 'harmonograph',
+    labelKey: 'printStyles.harmonograph',
+    descriptionKey: 'printStyles.harmonographDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'harmonograph',
+    defaultAlgorithmOptions: { freq_ratio: 2.01, damping: 0.004, turns: 40, seed: 0 },
+  },
+  {
+    id: 'attractor',
+    labelKey: 'printStyles.attractor',
+    descriptionKey: 'printStyles.attractorDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'attractor',
+    defaultAlgorithmOptions: { preset: 'dejong', points: 6000, dot_radius_px: 0.5, seed: 0 },
+  },
+  {
+    id: 'text-fill',
+    labelKey: 'printStyles.textFill',
+    descriptionKey: 'printStyles.textFillDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'text_fill',
+    defaultAlgorithmOptions: { text: 'OmniPlot ', font_size_px: 12, line_spacing: 1.25, threshold: 0.35 },
+  },
+  {
+    id: 'lsystem-dragon',
+    labelKey: 'printStyles.lsystem',
+    descriptionKey: 'printStyles.lsystemDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'lsystem',
+    defaultAlgorithmOptions: { preset: 'dragon', iterations: 0 },
+  },
+  {
+    id: 'chladni',
+    labelKey: 'printStyles.chladni',
+    descriptionKey: 'printStyles.chladniDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'chladni',
+    defaultAlgorithmOptions: { m: 3, n: 5, modes: 1 },
+  },
+  {
+    id: 'lowpoly-wireframe',
+    labelKey: 'printStyles.lowpoly',
+    descriptionKey: 'printStyles.lowpolyDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'lowpoly',
+    defaultAlgorithmOptions: { density: 0.02, seed: 0 },
+  },
+  {
+    id: 'scribble-sketch',
+    labelKey: 'printStyles.scribbleSketch',
+    descriptionKey: 'printStyles.scribbleSketchDesc',
+    applicableTo: ['image'],
+    scope: 'layer',
+    defaultAlgorithm: 'scribble',
+    defaultAlgorithmOptions: { spacing_px: 4, amp_px: 1.6, overshoot_px: 3, seed: 0 },
+  },
 ]
 
 // Default master style applied when the operator first switches to
@@ -2507,6 +3925,19 @@ export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   // they map to themselves — this keeps the "every mono master is
   // reachable from a legacy id" invariant (printRegistry.test.ts) intact
   // while still resolving cleanly on rehydration.
+  'ridge-pulsar': 'ridge-pulsar',
+  'dither-print': 'dither-print',
+  'etch-burin': 'etch-burin',
+  'string-thread': 'string-thread',
+  'hilbert-adaptive': 'hilbert-adaptive',
+  'quadtree-mosaic': 'quadtree-mosaic',
+  'phyllotaxis-bloom': 'phyllotaxis-bloom',
+  'voronoi-shatter': 'voronoi-shatter',
+  'text-shading': 'text-shading',
+  'attractor-smoke': 'attractor-smoke',
+  'superpixel-paint': 'superpixel-paint',
+  'noise-topo': 'noise-topo',
+  'coral-growth': 'coral-growth',
   'flowfield-master': 'flowfield-master',
   'voronoi-shade': 'voronoi-shade',
   'hatch-fill': 'hatch-fill',

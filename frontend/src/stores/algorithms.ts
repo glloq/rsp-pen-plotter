@@ -36,6 +36,7 @@ export const useAlgorithmsStore = defineStore('algorithms', () => {
       description: e.description,
       kind: e.kind as AlgorithmKind,
       complexity: e.complexity as AlgorithmComplexity,
+      hidden: e.hidden,
     })),
   )
 

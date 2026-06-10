@@ -24,6 +24,7 @@ from typing import Any
 
 from pen_plotter.converters.algorithms import (
     algorithm_complexity,
+    algorithm_hidden,
     algorithm_kind,
     available_algorithms,
     get_algorithm,
@@ -32,7 +33,13 @@ from pen_plotter.manifests import Manifest, ManifestEntry, ManifestMeta, registe
 
 # Manifest schema version for this domain. Bump when the entry shape
 # changes in a way that requires the frontend to upgrade.
-ALGORITHMS_MANIFEST_VERSION = 2
+# v3: ``hidden`` flag (duplicate consolidation) + the 2026-06 expert
+# style batch (ridge_lines … penrose).
+# v4: second style batch (dither … text_fill) + the ``text`` option
+# type (free-form string knobs, e.g. text_fill's ``text``).
+# v5: third batch (lsystem, chladni) + adaptive hilbert / radial
+# ridge_lines options.
+ALGORITHMS_MANIFEST_VERSION = 5
 
 
 class AlgorithmManifestEntry(ManifestEntry):
@@ -42,6 +49,10 @@ class AlgorithmManifestEntry(ManifestEntry):
     description: str = ""
     kind: str = "fill"
     complexity: str = "medium"
+    # Hidden algorithms stay registered (persisted layers / presets keep
+    # rendering) but the editor's pickers don't offer them for new
+    # layers — each duplicates a visible entry (e.g. tsp → tsp_opt).
+    hidden: bool = False
     params: dict[str, Any] = {}
     recommended_presets: list[str] = []
 
@@ -78,6 +89,7 @@ def algorithms_manifest() -> Manifest[AlgorithmManifestEntry]:
             description=algo.description,
             kind=algorithm_kind(algo.name),
             complexity=algorithm_complexity(algo.name),
+            hidden=algorithm_hidden(algo.name),
             params=_params_schema(algo.name),
         )
         for algo in available_algorithms()

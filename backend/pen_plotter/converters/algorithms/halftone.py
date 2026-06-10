@@ -19,6 +19,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import stroke_attr_px
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -41,6 +42,13 @@ class HalftoneAlgorithm(RasterAlgorithm):
         OptionSpec(
             key="angle_deg", label="convert.angleDeg", type="number",
             default=0, min=0, max=180, step=1,
+        ),
+        # Glyph drawn at each lattice point. ``dot`` is the classic filled
+        # circle; the others trade ink coverage for a graphic texture while
+        # keeping the same tonal mapping (glyph size ∝ √coverage).
+        OptionSpec(
+            key="glyph", label="convert.glyph", type="select",
+            default="dot", choices=["dot", "ring", "square", "diamond", "cross"],
         ),
     ]
 
@@ -67,24 +75,54 @@ class HalftoneAlgorithm(RasterAlgorithm):
         opts = options or {}
         cell = max(2, int(opts.get("cell_size_px", 6)))
         angle = float(opts.get("angle_deg", 0.0))
+        glyph = str(opts.get("glyph", "dot"))
         coverage = mask.astype(np.float64)
 
         if abs(angle % 180.0) < 1e-9:
-            dots = self._axis_aligned_dots(coverage, cell)
+            centres = self._axis_aligned_dots(coverage, cell)
         else:
-            dots = self._rotated_dots(coverage, cell, angle)
+            centres = self._rotated_dots(coverage, cell, angle)
 
+        shapes = "".join(self._glyph_svg(glyph, cx, cy, r) for cx, cy, r in centres)
+        if glyph == "dot":
+            attrs = f"fill={quoteattr(color_hex)}"
+        else:
+            # Outline glyphs: the pen traces the shape instead of
+            # spiralling it solid — stroke, no fill.
+            attrs = (
+                f'fill="none" stroke={quoteattr(color_hex)} '
+                f'stroke-width="{stroke_attr_px(opts):.3f}"'
+            )
+        return f"<g inkscape:label={quoteattr(label)} {attrs}>" + shapes + "</g>"
+
+    @staticmethod
+    def _glyph_svg(glyph: str, cx: float, cy: float, r: float) -> str:
+        """SVG fragment for one lattice glyph of half-extent ``r``."""
+        if glyph in ("dot", "ring"):
+            return f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{r:.2f}"/>'
+        if glyph == "square":
+            return (
+                f'<rect x="{cx - r:.2f}" y="{cy - r:.2f}" '
+                f'width="{2 * r:.2f}" height="{2 * r:.2f}"/>'
+            )
+        if glyph == "diamond":
+            return (
+                f'<path d="M {cx:.2f} {cy - r:.2f} L {cx + r:.2f} {cy:.2f} '
+                f'L {cx:.2f} {cy + r:.2f} L {cx - r:.2f} {cy:.2f} Z"/>'
+            )
+        # cross: two perpendicular strokes through the centre.
         return (
-            f"<g inkscape:label={quoteattr(label)} fill={quoteattr(color_hex)}>"
-            + "".join(dots)
-            + "</g>"
+            f'<path d="M {cx - r:.2f} {cy:.2f} H {cx + r:.2f} '
+            f'M {cx:.2f} {cy - r:.2f} V {cy + r:.2f}"/>'
         )
 
     @staticmethod
-    def _axis_aligned_dots(coverage: NDArray[np.float64], cell: int) -> list[str]:
-        """Original (unrotated) dot grid — preserved byte-for-byte."""
+    def _axis_aligned_dots(
+        coverage: NDArray[np.float64], cell: int
+    ) -> list[tuple[float, float, float]]:
+        """Original (unrotated) dot lattice as ``(cx, cy, radius)`` tuples."""
         height, width = coverage.shape
-        dots: list[str] = []
+        dots: list[tuple[float, float, float]] = []
         for y in range(0, height, cell):
             for x in range(0, width, cell):
                 block = coverage[y : y + cell, x : x + cell]
@@ -94,11 +132,13 @@ class HalftoneAlgorithm(RasterAlgorithm):
                 radius = (cell / 2.0) * np.sqrt(frac)
                 cx = x + block.shape[1] / 2.0
                 cy = y + block.shape[0] / 2.0
-                dots.append(f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="{radius:.2f}"/>')
+                dots.append((cx, cy, float(radius)))
         return dots
 
     @staticmethod
-    def _rotated_dots(coverage: NDArray[np.float64], cell: int, angle_deg: float) -> list[str]:
+    def _rotated_dots(
+        coverage: NDArray[np.float64], cell: int, angle_deg: float
+    ) -> list[tuple[float, float, float]]:
         """Dot grid sampled on a lattice rotated by ``angle_deg``.
 
         Dot centres walk a square lattice in the rotated frame; coverage at
@@ -121,7 +161,7 @@ class HalftoneAlgorithm(RasterAlgorithm):
         limit = math.hypot(width, height) / 2.0 + cell
         coords = np.arange(-limit, limit + cell, cell)
 
-        dots: list[str] = []
+        dots: list[tuple[float, float, float]] = []
         for v in coords:
             for u in coords:
                 x = cx0 + u * cos_t - v * sin_t
@@ -140,5 +180,5 @@ class HalftoneAlgorithm(RasterAlgorithm):
                 if frac <= 0.0:
                     continue
                 radius = half * math.sqrt(frac)
-                dots.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{radius:.2f}"/>')
+                dots.append((x, y, radius))
         return dots

@@ -90,6 +90,11 @@ class CrosshatchAlgorithm(RasterAlgorithm):
             default=45, min=0, max=180, step=1,
         ),
         OptionSpec(key="crossed", label="convert.crossed", type="boolean", default=False),
+        # ``joined`` stitches consecutive sweep segments into boustrophedon
+        # zig-zags (the eulerian_hatch geometry) — same look on paper,
+        # drastically fewer pen-lifts. Kept as an option here so the picker
+        # shows one hatch entry instead of two near-identical cards.
+        OptionSpec(key="joined", label="convert.joined", type="boolean", default=False),
     ]
 
     def render_layer(
@@ -101,6 +106,16 @@ class CrosshatchAlgorithm(RasterAlgorithm):
         options: dict[str, Any] | None = None,
     ) -> str:
         opts = options or {}
+        if bool(opts.get("joined", False)):
+            # Delegate to the boustrophedon variant — identical sweep
+            # geometry, segments stitched into continuous zig-zags.
+            from pen_plotter.converters.algorithms.eulerian_hatch import (
+                EulerianHatchAlgorithm,
+            )
+
+            return EulerianHatchAlgorithm().render_layer(
+                mask, color_hex, label, options=options
+            )
         spacing = floored_spacing(max(1.0, float(opts.get("spacing_px", 4.0))), opts)
         bool_mask = mask.astype(bool)
 

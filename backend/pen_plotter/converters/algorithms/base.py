@@ -17,7 +17,7 @@ from typing import Any, ClassVar, Literal
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
-OptionType = Literal["number", "integer", "boolean", "select"]
+OptionType = Literal["number", "integer", "boolean", "select", "text"]
 
 
 class OptionSpec(BaseModel):
@@ -54,6 +54,8 @@ class OptionSpec(BaseModel):
                 "enum": list(self.choices or []),
                 "default": self.default,
             }
+        if self.type == "text":
+            return {"type": "string", "default": self.default}
         # number / integer share the numeric envelope; ``integer`` adds
         # the integer constraint so callers (zod, ajv) reject decimals.
         schema: dict[str, Any] = {
@@ -78,6 +80,10 @@ class RasterAlgorithm(ABC):
     # without exposed options (or pre-schema ones during a partial
     # migration) keep working — they just won't appear in the form.
     options_schema: ClassVar[list[OptionSpec]] = []
+    # True when the algorithm reads the per-pixel luminance map the
+    # render pipeline injects as ``options["_tone"]`` (0=black..1=white).
+    # The pipeline only pays the dict-copy for algorithms that opt in.
+    tone_aware: ClassVar[bool] = False
 
     @abstractmethod
     def render_layer(

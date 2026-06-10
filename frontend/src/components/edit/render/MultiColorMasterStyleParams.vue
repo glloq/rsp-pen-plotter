@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { resolveMulticolorStyle } from '../../../data/printRegistry'
+import { getAlgorithm, resolveMulticolorStyle } from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { useJobStore } from '../../../stores/job'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
+import AlgoParamsForm from '../AlgoParamsForm.vue'
 import DualRangeSlider from './DualRangeSlider.vue'
 
 // Per-style operator knobs for the multicolour master family — twin of
@@ -52,6 +53,25 @@ function setKnob<K extends string>(key: K, value: unknown): void {
         draft.multicolorRecipeForCluster(index, total, hex),
     })
   }
+}
+
+// ---- Generic schema-driven knobs (colour masters without bespoke
+// sliders — the 2026-06 batches). Twin of MasterStyleParams' fallback:
+// the schema-driven AlgoParamsForm writes into ``knobs.algoOverrides``
+// and the colour recipe merges those over the registry defaults.
+const genericAlgoValues = computed<Record<string, unknown>>(() => ({
+  ...style.value.defaultAlgorithmOptions,
+  ...(knobs.value.algoOverrides ?? {}),
+}))
+
+// Hide the fallback card entirely for algorithms without operator
+// knobs (e.g. ``direct``) — an empty bordered block reads as a bug.
+const genericHasKnobs = computed(
+  () => (getAlgorithm(style.value.defaultAlgorithm)?.schema.length ?? 0) > 0,
+)
+
+function setAlgoOverride(key: string, value: unknown): void {
+  setKnob('algoOverrides', { ...(knobs.value.algoOverrides ?? {}), [key]: value })
 }
 
 // Cluster count surfaced at the top so the operator gets the same
@@ -1047,6 +1067,19 @@ const effectiveColorCount = computed(() => props.bitmap.num_colors)
           @input="(e) => setKnob('gap_px', Number((e.target as HTMLInputElement).value))"
         />
       </div>
+    </div>
+
+    <!-- ===== Generic fallback: schema-driven form for colour masters
+         without a bespoke slider block (2026-06 batches + future). ===== -->
+    <div v-else-if="genericHasKnobs" class="space-y-2 border-t border-slate-800 pt-3">
+      <p class="text-[10px] uppercase tracking-wider text-slate-400">
+        {{ t('mono.styleSettings') }}
+      </p>
+      <AlgoParamsForm
+        :algorithm="style.defaultAlgorithm"
+        :values="genericAlgoValues"
+        @update="setAlgoOverride"
+      />
     </div>
 
     <p class="text-[10px] text-slate-500">

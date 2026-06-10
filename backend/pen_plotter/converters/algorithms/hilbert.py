@@ -107,13 +107,55 @@ def _component_polylines(
     return polylines
 
 
+def _adaptive_hilbert(
+    x0: float,
+    y0: float,
+    xi: tuple[float, float],
+    yj: tuple[float, float],
+    depth: int,
+    min_cell: float,
+    darkness_mean,
+    out: list[tuple[float, float]],
+) -> None:
+    """Hilbert traversal that recurses deeper where the cell is darker.
+
+    ``xi`` / ``yj`` are the cell's edge vectors in the curve's local
+    frame (the canonical recursive construction). A cell stops splitting
+    when it reaches ``min_cell`` or its mean darkness no longer warrants
+    the next level — the same darkness > min_cell/size rule the
+    ``quadtree`` algorithm uses, so tone maps to local curve density
+    while the traversal order keeps the whole path connected.
+    """
+    size = max(abs(xi[0]) + abs(yj[0]), abs(xi[1]) + abs(yj[1]))
+    # 1.4 (not 2.0): lets the darkest cells subdivide all the way down to
+    # ~min_cell, matching the non-adaptive curve's density at full black.
+    if depth > 0 and size > 1.4 * min_cell:
+        cx0 = x0 + min(xi[0], 0.0) + min(yj[0], 0.0)
+        cy0 = y0 + min(xi[1], 0.0) + min(yj[1], 0.0)
+        if darkness_mean(cx0, cy0, size) > min_cell / size:
+            hx, hy = xi[0] / 2.0, xi[1] / 2.0
+            jx, jy = yj[0] / 2.0, yj[1] / 2.0
+            _adaptive_hilbert(x0, y0, (jx, jy), (hx, hy), depth - 1,
+                              min_cell, darkness_mean, out)
+            _adaptive_hilbert(x0 + hx, y0 + hy, (hx, hy), (jx, jy), depth - 1,
+                              min_cell, darkness_mean, out)
+            _adaptive_hilbert(x0 + hx + jx, y0 + hy + jy, (hx, hy), (jx, jy),
+                              depth - 1, min_cell, darkness_mean, out)
+            _adaptive_hilbert(x0 + hx + 2 * jx, y0 + hy + 2 * jy, (-jx, -jy),
+                              (-hx, -hy), depth - 1, min_cell, darkness_mean, out)
+            return
+    out.append((x0 + (xi[0] + yj[0]) / 2.0, y0 + (xi[1] + yj[1]) / 2.0))
+
+
 class HilbertFillAlgorithm(RasterAlgorithm):
     """Fills each connected component with a single Hilbert-curve stroke."""
 
     name: ClassVar[str] = "hilbert"
     description: ClassVar[str] = (
-        "Fill regions with a Hilbert space-filling curve — one continuous stroke per region."
+        "Fill regions with a Hilbert space-filling curve — one continuous "
+        "stroke per region, optionally tone-adaptive."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="spacing_px", label="convert.spacing", type="number",
@@ -125,6 +167,11 @@ class HilbertFillAlgorithm(RasterAlgorithm):
         # regions where the auto rule under-fills.
         OptionSpec(key="order", label="convert.hilbertOrder", type="integer",
                    default=0, min=0, max=8, step=1),
+        # Adaptive mode: the curve recurses deeper (tighter) where the
+        # region is darker — tone becomes local curve density while the
+        # path stays a single connected stroke.
+        OptionSpec(key="adaptive", label="convert.adaptive", type="boolean",
+                   default=False),
     ]
 
     def render_layer(
@@ -150,14 +197,76 @@ class HilbertFillAlgorithm(RasterAlgorithm):
         if not bool_mask.any():
             return group_open + "</g>"
 
-        polylines = _component_polylines(
-            bool_mask,
-            spacing_px=spacing,
-            min_run_px=min_run,
-            order_override=order_int,
-        )
+        if bool(opts.get("adaptive", False)):
+            polylines = self._adaptive_polylines(
+                bool_mask, opts, spacing_px=spacing, min_run_px=min_run
+            )
+        else:
+            polylines = _component_polylines(
+                bool_mask,
+                spacing_px=spacing,
+                min_run_px=min_run,
+                order_override=order_int,
+            )
         parts = []
         for poly in polylines:
             pts = " ".join(f"{x:.2f},{y:.2f}" for x, y in poly)
             parts.append(f'<polyline points="{pts}"/>')
         return group_open + "".join(parts) + "</g>"
+
+    @staticmethod
+    def _adaptive_polylines(
+        mask: NDArray[np.bool_],
+        opts: dict[str, Any],
+        *,
+        spacing_px: float,
+        min_run_px: int,
+    ) -> list[list[tuple[float, float]]]:
+        """Tone-adaptive traversal over the mask's bounding square."""
+        height, width = mask.shape
+        ys, xs = np.where(mask)
+        x_min, x_max = int(xs.min()), int(xs.max())
+        y_min, y_max = int(ys.min()), int(ys.max())
+        side = float(max(x_max - x_min + 1, y_max - y_min + 1))
+
+        tone = opts.get("_tone")
+        if tone is not None:
+            darkness = 1.0 - np.clip(np.asarray(tone, dtype=np.float64), 0.0, 1.0)
+            darkness = darkness * mask
+        else:
+            darkness = mask.astype(np.float64)
+        sat = np.zeros((height + 1, width + 1), dtype=np.float64)
+        sat[1:, 1:] = darkness.cumsum(axis=0).cumsum(axis=1)
+
+        def darkness_mean(cx0: float, cy0: float, size: float) -> float:
+            ax0 = max(0, min(width, int(cx0)))
+            ay0 = max(0, min(height, int(cy0)))
+            ax1 = max(0, min(width, int(cx0 + size) + 1))
+            ay1 = max(0, min(height, int(cy0 + size) + 1))
+            area = (ay1 - ay0) * (ax1 - ax0)
+            if area <= 0:
+                return 0.0
+            total = sat[ay1, ax1] - sat[ay0, ax1] - sat[ay1, ax0] + sat[ay0, ax0]
+            return float(total / area)
+
+        max_depth = min(9, max(1, math.ceil(math.log2(max(2.0, side / spacing_px)))))
+        points: list[tuple[float, float]] = []
+        _adaptive_hilbert(
+            float(x_min), float(y_min), (side, 0.0), (0.0, side),
+            max_depth, max(1.0, spacing_px), darkness_mean, points,
+        )
+
+        polylines: list[list[tuple[float, float]]] = []
+        run: list[tuple[float, float]] = []
+        for px, py in points:
+            ix = int(round(px))
+            iy = int(round(py))
+            if 0 <= ix < width and 0 <= iy < height and mask[iy, ix]:
+                run.append((px, py))
+            elif run:
+                if len(run) >= max(2, min_run_px):
+                    polylines.append(run)
+                run = []
+        if len(run) >= max(2, min_run_px):
+            polylines.append(run)
+        return polylines

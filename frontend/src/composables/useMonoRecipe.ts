@@ -56,6 +56,11 @@ export type MonoStyleKnobs = {
   stroke_width?: number
   angles?: number[]
   crossed_on_darkest?: boolean
+  // Generic per-algorithm overrides for masters without bespoke slider
+  // wiring (the 2026-06 tonal masters): the Style tab renders the
+  // schema-driven AlgoParamsForm and writes each knob here; the recipe
+  // merges them over the registry ``bandRecipe`` output.
+  algoOverrides?: Record<string, unknown>
   // Sparse map of literal per-band overrides. When present, the band
   // index in the map bypasses the interpolation pipeline and uses the
   // recorded ``algorithm_options`` verbatim (the "Advanced" drawer's
@@ -427,8 +432,16 @@ function recipeFromKnobs(
         },
       }
     }
-    default:
-      return style.bandRecipe ? style.bandRecipe(i, total) : null
+    default: {
+      const base = style.bandRecipe ? style.bandRecipe(i, total) : null
+      if (!base) return null
+      const extra = knobs?.algoOverrides
+      if (!extra || Object.keys(extra).length === 0) return base
+      return {
+        algorithm: base.algorithm,
+        algorithm_options: { ...base.algorithm_options, ...extra },
+      }
+    }
   }
 }
 
