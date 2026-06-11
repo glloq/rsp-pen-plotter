@@ -279,6 +279,33 @@ onBeforeUnmount(() => {
   if (poolRefreshTimer !== null) window.clearTimeout(poolRefreshTimer)
 })
 
+// Per-layer ink assignment → preview coupling. The LayerCard picker
+// writes ``assigned_color_hex`` through the job store, which re-renders
+// the COMMITTED placement SVG — but this modal displays its own
+// adapted render (``renderedSvg``), so the operator assigned an ink
+// and saw nothing change. Re-run the adapted render (it ships
+// ``inkColorsFor`` with every /rerender) whenever any layer's assigned
+// ink moves. Debounced so a quick run through several layers renders
+// once.
+let inkRerenderTimer: number | null = null
+watch(
+  () =>
+    (job.selectedPlacement?.layers ?? [])
+      .map((l) => `${l.layer_id}:${l.assigned_color_hex ?? ''}`)
+      .join('|'),
+  (next, prev) => {
+    if (next === prev || !decision.value) return
+    if (inkRerenderTimer !== null) window.clearTimeout(inkRerenderTimer)
+    inkRerenderTimer = window.setTimeout(() => {
+      inkRerenderTimer = null
+      void rerenderOnly()
+    }, 300)
+  },
+)
+onBeforeUnmount(() => {
+  if (inkRerenderTimer !== null) window.clearTimeout(inkRerenderTimer)
+})
+
 /**
  * Render-only path used both by ``resolveAndPreview`` (after the policy
  * lands) and by ``customStyles`` mutations (where the resolver result
@@ -383,7 +410,20 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
   // those fresh assigned hexes to ``/rerender`` (via
   // ``inkColorsFor``) so the SVG it returns uses the colours that
   // will actually be drawn.
-  await paletteSource.update(mode === 'machine_only' ? 'pens' : 'union')
+  //
+  // "Palette libre" means the operator's available-colours INVENTORY,
+  // not the pens∪inventory union: the union let the machine's mounted
+  // pen colours leak into the segmentation pool, so the preview showed
+  // colours outside the list the operator curated ("ça me donne des
+  // couleurs en dehors des couleurs dispo"). Union stays the fallback
+  // when the inventory is empty so the button is never a no-op.
+  await paletteSource.update(
+    mode === 'machine_only'
+      ? 'pens'
+      : availableColors.ordered.length > 0
+        ? 'available'
+        : 'union',
+  )
   await nextTick()
   void resolveAndPreview()
 }
