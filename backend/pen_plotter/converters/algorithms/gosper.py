@@ -19,7 +19,11 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
+from pen_plotter.converters.algorithms._style import (
+    floored_spacing,
+    stroke_attr_px,
+    tone_darkness,
+)
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 _RULES = {
@@ -60,6 +64,7 @@ def _component_polylines(
     spacing_px: float,
     order: int,
     rotation_deg: float,
+    keep: NDArray[np.bool_] | None = None,
 ) -> list[list[tuple[float, float]]]:
     try:
         from scipy.ndimage import label as nd_label
@@ -103,6 +108,8 @@ def _component_polylines(
         inside = (ix >= 0) & (ix < mask.shape[1]) & (iy >= 0) & (iy < mask.shape[0])
         on_mask = np.zeros_like(inside)
         on_mask[inside] = mask[iy[inside], ix[inside]]
+        if keep is not None:
+            on_mask[inside] &= keep[iy[inside], ix[inside]]
         run: list[tuple[float, float]] = []
         for k in range(len(on_mask)):
             if on_mask[k]:
@@ -123,6 +130,7 @@ class GosperFillAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Fill regions with a Gosper flowsnake — organic hexagonal space-filling stroke."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="order", label="convert.gosperOrder", type="integer",
@@ -155,9 +163,33 @@ class GosperFillAlgorithm(RasterAlgorithm):
         if not bool_mask.any():
             return group_open + "</g>"
 
-        polys = _component_polylines(
-            bool_mask, spacing_px=spacing, order=order, rotation_deg=rotation
-        )
+        # Tonal shading: the base curve skips the highlights, and a second
+        # rotated flowsnake overlays the darkest areas for a two-level
+        # density ramp. Without a usable tone map the single full-mask
+        # curve renders exactly as before.
+        darkness = tone_darkness(bool_mask, opts)
+        if darkness is None:
+            polys = _component_polylines(
+                bool_mask, spacing_px=spacing, order=order, rotation_deg=rotation
+            )
+        else:
+            polys = _component_polylines(
+                bool_mask,
+                spacing_px=spacing,
+                order=order,
+                rotation_deg=rotation,
+                keep=darkness >= 0.1,
+            )
+            dark_mask = bool_mask & (darkness >= 0.6)
+            if dark_mask.any():
+                polys.extend(
+                    _component_polylines(
+                        dark_mask,
+                        spacing_px=spacing,
+                        order=order,
+                        rotation_deg=rotation + 30.0,
+                    )
+                )
         parts = []
         for poly in polys:
             pts = " ".join(f"{x:.2f},{y:.2f}" for x, y in poly)

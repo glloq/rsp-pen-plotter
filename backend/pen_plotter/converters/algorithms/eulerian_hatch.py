@@ -17,8 +17,13 @@ from xml.sax.saxutils import quoteattr
 
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._hatch import angle_taken, tone_hatch_passes
 from pen_plotter.converters.algorithms._hatch import sweep_segments as _sweep_segments
-from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
+from pen_plotter.converters.algorithms._style import (
+    floored_spacing,
+    stroke_attr_px,
+    tone_darkness,
+)
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -87,6 +92,7 @@ class EulerianHatchAlgorithm(RasterAlgorithm):
         "Parallel hatches stitched into one continuous zig-zag per island — "
         "drastically fewer pen-lifts than crosshatch."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
@@ -124,10 +130,30 @@ class EulerianHatchAlgorithm(RasterAlgorithm):
             return group_open + "</g>"
 
         parts: list[str] = []
-        for a in angles:
-            sweeps = _sweep_segments(bool_mask, a, spacing)
+
+        def _emit(sub_mask: NDArray[Any], a: float) -> None:
+            sweeps = _sweep_segments(sub_mask, a, spacing)
             polys = _connect_boustrophedon(sweeps, connect_threshold=connect_threshold)
             for poly in polys:
                 pts = " ".join(f"{x:.2f},{y:.2f}" for x, y in poly)
                 parts.append(f'<polyline points="{pts}"/>')
+
+        darkness = tone_darkness(bool_mask, opts)
+        if darkness is None:
+            for a in angles:
+                _emit(bool_mask, a)
+        else:
+            # Same tonal band build-up as crosshatch: highlights stay
+            # blank, darker bands stack rotated zig-zag passes.
+            used = list(angles)
+            for sub, offset in tone_hatch_passes(bool_mask, darkness):
+                if offset == 0.0:
+                    for a in angles:
+                        _emit(sub, a)
+                    continue
+                extra = angles[0] + offset
+                if angle_taken(extra, used):
+                    continue
+                used.append(extra)
+                _emit(sub, extra)
         return group_open + "".join(parts) + "</g>"

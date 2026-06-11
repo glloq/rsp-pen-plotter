@@ -19,7 +19,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._style import stroke_attr_px
+from pen_plotter.converters.algorithms._style import stroke_attr_px, tone_darkness
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -31,6 +31,7 @@ class HalftoneAlgorithm(RasterAlgorithm):
         "Fill regions with a regular grid of variable-size dots, "
         "optionally rotated to a per-ink screen angle."
     )
+    tone_aware: ClassVar[bool] = True
     options_schema: ClassVar[list[OptionSpec]] = [
         # ``cell_size_px`` floor is 2 — anything below collapses adjacent
         # dots into a solid fill, so the backend clamps to 2. Front-facing
@@ -76,12 +77,25 @@ class HalftoneAlgorithm(RasterAlgorithm):
         cell = max(2, int(opts.get("cell_size_px", 6)))
         angle = float(opts.get("angle_deg", 0.0))
         glyph = str(opts.get("glyph", "dot"))
-        coverage = mask.astype(np.float64)
+        bool_mask = mask.astype(bool)
+        # Tonal screening — the actual definition of a halftone: dot size
+        # follows the cell's mean darkness, not just its mask coverage.
+        # Without a usable tone map the coverage stays binary and the
+        # output is identical to the legacy fill.
+        darkness = tone_darkness(bool_mask, opts)
+        if darkness is None:
+            coverage = bool_mask.astype(np.float64)
+            min_frac = 0.0
+        else:
+            coverage = darkness * bool_mask
+            # Cull near-invisible specks the tonal highlights would
+            # otherwise scatter everywhere.
+            min_frac = 0.02
 
         if abs(angle % 180.0) < 1e-9:
-            centres = self._axis_aligned_dots(coverage, cell)
+            centres = self._axis_aligned_dots(coverage, cell, min_frac=min_frac)
         else:
-            centres = self._rotated_dots(coverage, cell, angle)
+            centres = self._rotated_dots(coverage, cell, angle, min_frac=min_frac)
 
         shapes = "".join(self._glyph_svg(glyph, cx, cy, r) for cx, cy, r in centres)
         if glyph == "dot":
@@ -118,7 +132,7 @@ class HalftoneAlgorithm(RasterAlgorithm):
 
     @staticmethod
     def _axis_aligned_dots(
-        coverage: NDArray[np.float64], cell: int
+        coverage: NDArray[np.float64], cell: int, *, min_frac: float = 0.0
     ) -> list[tuple[float, float, float]]:
         """Original (unrotated) dot lattice as ``(cx, cy, radius)`` tuples."""
         height, width = coverage.shape
@@ -127,7 +141,7 @@ class HalftoneAlgorithm(RasterAlgorithm):
             for x in range(0, width, cell):
                 block = coverage[y : y + cell, x : x + cell]
                 frac = float(block.mean())
-                if frac <= 0.0:
+                if frac <= min_frac:
                     continue
                 radius = (cell / 2.0) * np.sqrt(frac)
                 cx = x + block.shape[1] / 2.0
@@ -137,7 +151,7 @@ class HalftoneAlgorithm(RasterAlgorithm):
 
     @staticmethod
     def _rotated_dots(
-        coverage: NDArray[np.float64], cell: int, angle_deg: float
+        coverage: NDArray[np.float64], cell: int, angle_deg: float, *, min_frac: float = 0.0
     ) -> list[tuple[float, float, float]]:
         """Dot grid sampled on a lattice rotated by ``angle_deg``.
 
@@ -177,7 +191,7 @@ class HalftoneAlgorithm(RasterAlgorithm):
                 total = sat[cy1i, cx1i] - sat[cy0i, cx1i] - sat[cy1i, cx0i] + sat[cy0i, cx0i]
                 area = (cy1i - cy0i) * (cx1i - cx0i)
                 frac = total / area
-                if frac <= 0.0:
+                if frac <= min_frac:
                     continue
                 radius = half * math.sqrt(frac)
                 dots.append((x, y, radius))

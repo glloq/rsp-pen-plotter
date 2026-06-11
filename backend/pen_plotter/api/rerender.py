@@ -24,6 +24,7 @@ from pen_plotter.application.file_library import (
 )
 from pen_plotter.converters.bitmap import (
     BitmapConverter,
+    _requested_num_bands,
     pick_effective_segmentation,
 )
 from pen_plotter.core.sanitize import sanitize_svg
@@ -231,6 +232,10 @@ def _maybe_reseg_for_line_art_overrides(
     if cached_opts.mono_ink_color is None:
         return entry
     # Look for an override that would trigger the line-art auto-switch.
+    # ``num_bands`` rides along: a cached multi-band luminance
+    # segmentation is intentional tonal structure the auto-switch must
+    # not collapse (mirrors ``pick_effective_segmentation``'s rule).
+    cached_bands = _requested_num_bands(cached_opts.segmentation_options)
     needs_resegment = False
     for spec in overrides.values():
         algo = spec.get("algorithm")
@@ -240,6 +245,7 @@ def _maybe_reseg_for_line_art_overrides(
                 algorithm=algo,
                 mono_ink_color=cached_opts.mono_ink_color,
                 segmentation_method=cached_opts.segmentation_method,
+                num_bands=cached_bands,
             )
             == "otsu"
             and cached_opts.segmentation_method != "otsu"
@@ -254,6 +260,7 @@ def _maybe_reseg_for_line_art_overrides(
                     algorithm=sub_algo,
                     mono_ink_color=cached_opts.mono_ink_color,
                     segmentation_method=cached_opts.segmentation_method,
+                    num_bands=cached_bands,
                 )
                 == "otsu"
                 and cached_opts.segmentation_method != "otsu"

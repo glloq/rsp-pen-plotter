@@ -97,6 +97,24 @@ const EXPECTED_MONO: Record<string, string[]> = {
   ],
   outline: ['range:stroke_width:0.4..2@0.1'],
   'centerline-trace': ['range:stroke_width:0.4..2@0.1'],
+  // Phase-2 banded patterns (2026-06) — conventions mirror the colour
+  // twins (color-truchet, color-rings, color-sunburst, …).
+  'truchet-tiles': ['dual:cell_min..cell_max:0.74..11@0.1'],
+  'maze-walk': ['dual:cell_min..cell_max:1.5..7.4@0.1'],
+  'basket-weave': ['dual:band_min..band_max:1.5..11@0.1'],
+  'stitch-rows': ['dual:cell_min..cell_max:1.5..7.4@0.1'],
+  'bubble-pack': ['dual:radius_min..radius_max:0.74..7.4@0.1', 'range:gap_mm:0..2.2@0.1'],
+  'brick-courses': ['dual:cell_min..cell_max:0.74..11@0.1'],
+  'dash-shading': [
+    ANGLES,
+    'dual:spacing_min..spacing_max:0.37..3.7@0.1',
+    'range:dash_mm:0.19..4.5@0.1',
+  ],
+  'vinyl-rings': ['dual:spacing_min..spacing_max:0.37..7.4@0.1'],
+  'sunburst-rays': ['dual:rays_min..rays_max:8..360@4'],
+  'thread-fans': ['dual:cell_min..cell_max:2.2..11@0.1', 'range:chords:3..12@1'],
+  'moire-beat': ['dual:spacing_min..spacing_max:0.37..3.7@0.1'],
+  'penrose-facets': ['range:divisions:4..8@1'],
 }
 
 // Transcribed 1:1 from the deleted template blocks of

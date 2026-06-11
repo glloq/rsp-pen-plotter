@@ -14,13 +14,18 @@ result is clean even for concave shapes.
 
 from __future__ import annotations
 
+import math
 from typing import Any, ClassVar
 from xml.sax.saxutils import quoteattr
 
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
+from pen_plotter.converters.algorithms._style import (
+    floored_spacing,
+    stroke_attr_px,
+    tone_darkness,
+)
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -53,6 +58,47 @@ def _longest_contour(mask: NDArray[np.bool_]) -> list[tuple[float, float]]:
     longest = max(contours, key=len)
     # find_contours returns (row, col) pairs; swap to (x=col, y=row).
     return [(float(c), float(r)) for r, c in longest]
+
+
+def _tone_wobble(
+    poly: list[tuple[float, float]],
+    darkness: NDArray[np.float64],
+    *,
+    amp_px: float,
+    wavelength_px: float,
+) -> list[tuple[float, float]]:
+    """Add a perpendicular sine wobble whose amplitude follows darkness.
+
+    The same tonal trick the ``spiral`` algorithm uses, applied to the
+    morphological rings: highlights keep clean offset rings, shadows
+    buzz with a fat wiggle that reads darker on paper. The wobble
+    amplitude is capped below the ring spacing so neighbouring rings
+    never collide.
+    """
+    if len(poly) < 3:
+        return poly
+    pts = np.asarray(poly, dtype=np.float64)
+    diffs = np.diff(pts, axis=0)
+    seg_len = np.hypot(diffs[:, 0], diffs[:, 1])
+    arc = np.concatenate(([0.0], np.cumsum(seg_len)))
+    # Central-difference tangents -> unit normals.
+    tangents = np.empty_like(pts)
+    tangents[1:-1] = pts[2:] - pts[:-2]
+    tangents[0] = pts[1] - pts[0]
+    tangents[-1] = pts[-1] - pts[-2]
+    norms = np.hypot(tangents[:, 0], tangents[:, 1])
+    norms[norms == 0] = 1.0
+    nx = -tangents[:, 1] / norms
+    ny = tangents[:, 0] / norms
+    height, width = darkness.shape
+    ix = np.clip(np.round(pts[:, 0]).astype(np.intp), 0, width - 1)
+    iy = np.clip(np.round(pts[:, 1]).astype(np.intp), 0, height - 1)
+    local = darkness[iy, ix]
+    offset = amp_px * local * np.sin(2.0 * math.pi * arc / wavelength_px)
+    out = pts.copy()
+    out[:, 0] += nx * offset
+    out[:, 1] += ny * offset
+    return [(float(x), float(y)) for x, y in out]
 
 
 def _nearest_index(target: tuple[float, float], poly: list[tuple[float, float]]) -> int:
@@ -102,6 +148,7 @@ class ConcentricOffsetAlgorithm(RasterAlgorithm):
         "Spiral inward via morphological erosion — near-continuous stroke, "
         "very few pen-lifts per region."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
@@ -138,6 +185,10 @@ class ConcentricOffsetAlgorithm(RasterAlgorithm):
         except ImportError:
             return group_open + "</g>"
 
+        # Tonal rings: a perpendicular wobble whose amplitude follows the
+        # local darkness, capped at ~45% of the ring spacing so rings
+        # never collide. No usable tone map -> clean legacy rings.
+        darkness = tone_darkness(bool_mask, opts)
         components, count = nd_label(bool_mask)
         parts: list[str] = []
         for comp_idx in range(1, count + 1):
@@ -148,6 +199,13 @@ class ConcentricOffsetAlgorithm(RasterAlgorithm):
                 max_rings=max_rings,
                 bridge=bridge,
             ):
+                if darkness is not None:
+                    poly = _tone_wobble(
+                        poly,
+                        darkness,
+                        amp_px=0.45 * spacing,
+                        wavelength_px=max(6.0, 3.0 * spacing),
+                    )
                 pts = " ".join(f"{x:.2f},{y:.2f}" for x, y in poly)
                 parts.append(f'<polyline points="{pts}"/>')
         return group_open + "".join(parts) + "</g>"

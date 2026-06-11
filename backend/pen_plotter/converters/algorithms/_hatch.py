@@ -14,6 +14,52 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 
+# Tonal hatch bands shared by crosshatch / eulerian_hatch / scribble:
+# pixels lighter than the highlight cutoff stay unhatched, then each
+# darkness threshold adds one extra pass at the paired angle offset —
+# the classic "angled hatches per tonal band" shading build-up.
+TONE_HIGHLIGHT_CUTOFF = 0.08
+_TONE_PASS_LEVELS: tuple[tuple[float, float], ...] = (
+    (0.45, 90.0),
+    (0.7, 45.0),
+    (0.88, 135.0),
+)
+
+
+def tone_hatch_passes(
+    mask: NDArray[np.bool_],
+    darkness: NDArray[np.float64],
+) -> list[tuple[NDArray[np.bool_], float]]:
+    """Split a tonal fill into ``(submask, angle_offset_deg)`` hatch passes.
+
+    The first pass (offset ``0.0``) covers everything above the
+    highlight cutoff and is drawn at the caller's own angle(s); each
+    further pass restricts to the darker submask and should be drawn
+    rotated by the returned offset relative to the base angle. Empty
+    darker bands are omitted.
+    """
+    passes: list[tuple[NDArray[np.bool_], float]] = [
+        (mask & (darkness >= TONE_HIGHLIGHT_CUTOFF), 0.0)
+    ]
+    for threshold, offset in _TONE_PASS_LEVELS:
+        sub = mask & (darkness >= threshold)
+        if sub.any():
+            passes.append((sub, offset))
+    return passes
+
+
+def angle_taken(angle_deg: float, used: list[float], *, tolerance: float = 1.0) -> bool:
+    """True when ``angle_deg`` duplicates an already-used hatch direction.
+
+    Hatch direction is modulo 180° (a sweep at θ and θ+180° draws the
+    same lines), so the comparison wraps accordingly.
+    """
+    for u in used:
+        diff = abs((angle_deg - u) % 180.0)
+        if diff < tolerance or diff > 180.0 - tolerance:
+            return True
+    return False
+
 
 def sweep_segments(
     mask: NDArray[np.bool_],

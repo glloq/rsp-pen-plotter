@@ -39,25 +39,25 @@ Each carries:
 | Name | Kind | Complexity | What it does |
 | --- | --- | --- | --- |
 | `direct` | fill | low | potrace outline of tonal masks |
-| `halftone` | fill | low | regular grid of variable-size dots, optional per-ink screen angle |
-| `stippling` | fill | medium | randomly scattered dot field by intensity |
-| `crosshatch` | fill | medium | parallel strokes, optional crossed 90° pass and `joined` zig-zag mode |
-| `contours` *(hidden)* | lines | low | concentric inner outlines — topographic-map feel |
+| `halftone` | fill | low | regular grid of variable-size dots, optional per-ink screen angle (tone-aware: dot size follows cell darkness) |
+| `stippling` | fill | medium | randomly scattered dot field by intensity (tone-aware: dots pulled toward dark pixels) |
+| `crosshatch` | fill | medium | parallel strokes, optional crossed 90° pass and `joined` zig-zag mode (tone-aware: extra rotated passes per darkness band) |
+| `contours` *(hidden)* | lines | low | concentric inner outlines — topographic-map feel (tone-aware: luminance iso-lines) |
 | `edges` | lines | low | traced region boundary — line-art / technical style |
 | `centerline` | lines | medium | medial-skeleton single-stroke polylines |
 | `spiral` | mono_stroke | medium | single Archimedean spiral clipped to the mask, tone-modulated |
-| `scanlines` | mono_stroke | low | horizontal scan lines, flat or sinusoidal |
+| `scanlines` | mono_stroke | low | horizontal scan lines, flat or sinusoidal (tone-aware: wave amplitude follows darkness) |
 | `tsp` *(hidden)* | mono_stroke | high | legacy greedy nearest-neighbour tour through stipple points |
 | `hilbert` | mono_stroke | medium | Hilbert space-filling curve, optionally tone-adaptive |
-| `gosper` | mono_stroke | medium | Gosper / flowsnake space-filling stroke |
-| `eulerian_hatch` *(hidden)* | fill | medium | hatches stitched into one continuous zig-zag per island |
-| `concentric_offset` | mono_stroke | medium | inward erosion spiral — very few pen-lifts |
+| `gosper` | mono_stroke | medium | Gosper / flowsnake space-filling stroke (tone-aware: blank highlights + rotated dark overlay) |
+| `eulerian_hatch` *(hidden)* | fill | medium | hatches stitched into one continuous zig-zag per island (tone-aware: extra rotated passes per darkness band) |
+| `concentric_offset` | mono_stroke | medium | inward erosion spiral — very few pen-lifts (tone-aware: ring wobble follows darkness) |
 | `flowfield` | fill | high | streamlines following the image gradient or smooth noise (tone-aware) |
-| `tsp_opt` | mono_stroke | high | TSP tour with 2-opt / MST optimisation, kd-tree neighbours |
+| `tsp_opt` | mono_stroke | high | TSP tour with 2-opt / MST optimisation, kd-tree neighbours (tone-aware: seeds weighted by darkness) |
 | `voronoi_stipple` | fill | high | centroidal Voronoi stippling, darkness-weighted (tone-aware) |
-| `squiggle` | mono_stroke | medium | wiggly lines with amplitude / frequency drift |
-| `lowpoly` | lines | high | Delaunay triangulation over sampled points, drawn as edges |
-| `scribble` | fill | medium | wobbly, overshooting strokes — loose pencil feel |
+| `squiggle` | mono_stroke | medium | wiggly lines with amplitude / frequency drift (tone-aware: both follow darkness) |
+| `lowpoly` | lines | high | Delaunay triangulation over sampled points, drawn as edges (tone-aware: smaller facets where darker) |
+| `scribble` | fill | medium | wobbly, overshooting strokes — loose pencil feel (tone-aware: extra crossing passes per darkness band) |
 | `grid` *(hidden)* | lines | low | square mesh of horizontal + vertical strokes |
 | `brick` | lines | low | running-bond courses with staggered joints |
 | `dashes` | fill | medium | hatch sweep chopped into short dashes |

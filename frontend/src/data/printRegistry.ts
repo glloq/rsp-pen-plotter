@@ -1114,6 +1114,22 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     angles: [45, 135, 0, 90],
     crossed_on_darkest: true,
   },
+  // Phase-2 banded patterns (2026-06): the dual ranges feed the same
+  // dark→light lerp the registry ``bandRecipe`` defaults encode, so the
+  // sliders and the hardcoded recipes always agree on which knob is the
+  // tonal axis.
+  'truchet-tiles': { cell_min: 2.2, cell_max: 5.2 },
+  'maze-walk': { cell_min: 2.2, cell_max: 4.5 },
+  'basket-weave': { band_min: 3, band_max: 6.7 },
+  'stitch-rows': { cell_min: 2.2, cell_max: 4.5 },
+  'bubble-pack': { radius_min: 1.5, radius_max: 3.7, gap_mm: 0.22 },
+  'brick-courses': { cell_min: 2.2, cell_max: 4.5 },
+  'dash-shading': { spacing_min: 1.1, spacing_max: 2.6, angles: [45, 135, 0, 90], dash_mm: 1.1 },
+  'vinyl-rings': { spacing_min: 1.1, spacing_max: 3 },
+  'sunburst-rays': { rays_min: 70, rays_max: 220 },
+  'thread-fans': { cell_min: 4.5, cell_max: 8, chords: 9 },
+  'moire-beat': { spacing_min: 1.1, spacing_max: 2.6 },
+  'penrose-facets': { divisions: 7 },
 }
 
 // Defaults for the multicolour master family. Mirrors MONO_STYLE_DEFAULTS:
@@ -1557,14 +1573,18 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'hilbert',
-    defaultAlgorithmOptions: { spacing_mm: 1.5, min_run_mm: 1.1 },
+    // adaptive: the curve recurses deeper where the image is darker, so
+    // the single-band default still shades the source tone instead of
+    // filling the silhouette at uniform density.
+    defaultAlgorithmOptions: { spacing_mm: 1.5, min_run_mm: 1.1, adaptive: true },
     bandRecipe(i, total) {
       // Single continuous Hilbert curve fills each band; tighter spacing
-      // on dark bands packs more ink.
+      // on dark bands packs more ink, and adaptive recursion shades the
+      // tone within each band.
       const spacing = lerp(i, total, 1.1, 3)
       return {
         algorithm: 'hilbert',
-        algorithm_options: { spacing_mm: spacing, min_run_mm: 1.1 },
+        algorithm_options: { spacing_mm: spacing, min_run_mm: 1.1, adaptive: true },
       }
     },
   },
@@ -2157,6 +2177,425 @@ export const PRINT_STYLES: PrintStyle[] = [
     bandRecipe() {
       // Single tonal band — the injected luminance map does the shading.
       return { algorithm: 'reaction_diffusion', algorithm_options: { pattern: 'spots', steps: 2500, seed: 0 } }
+    },
+  },
+  // ===== MASTER STYLES — phase-2 mono batch (2026-06): tonal singles =====
+  // Three tone-aware algorithms that until now only had multicolour
+  // masters. Same contract as the expert tonal singles above: one
+  // luminance band, the injected tone map does the shading.
+  {
+    id: 'schotter-tumble',
+    labelKey: 'mono.modes.schotterTumble',
+    descriptionKey: 'mono.modes.schotterTumbleDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'cubic_disarray',
+    defaultAlgorithmOptions: { cell_mm: 4.5, max_rotate_deg: 35, max_offset_mm: 1.9, seed: 0 },
+    bandRecipe() {
+      // Single tonal band — squares tumble harder where the image is darker.
+      return { algorithm: 'cubic_disarray', algorithm_options: { cell_mm: 4.5, max_rotate_deg: 35, max_offset_mm: 1.9, seed: 0 } }
+    },
+  },
+  {
+    id: 'vein-growth',
+    labelKey: 'mono.modes.veinGrowth',
+    descriptionKey: 'mono.modes.veinGrowthDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'space_colonization',
+    defaultAlgorithmOptions: { attractors: 700, step_mm: 1.5, influence_mm: 15, kill_mm: 2.2, seed: 0 },
+    bandRecipe() {
+      // Single tonal band — veins grow toward the dark areas.
+      return { algorithm: 'space_colonization', algorithm_options: { attractors: 700, step_mm: 1.5, influence_mm: 15, kill_mm: 2.2, seed: 0 } }
+    },
+  },
+  {
+    id: 'honeycomb-tone',
+    labelKey: 'mono.modes.honeycombTone',
+    descriptionKey: 'mono.modes.honeycombToneDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'honeycomb',
+    // 'scaled' is the tone-aware mode: hex cells shrink where darker.
+    defaultAlgorithmOptions: { cell_mm: 4.5, mode: 'scaled' },
+    bandRecipe() {
+      return { algorithm: 'honeycomb', algorithm_options: { cell_mm: 4.5, mode: 'scaled' } }
+    },
+  },
+  // ===== MASTER STYLES — phase-2 mono batch (2026-06): banded patterns =====
+  // Generative patterns whose geometry knob (cell / pitch / count) maps
+  // tone naturally: the band recipe lerps it dark→light, so the default
+  // single band renders the pattern at its darkest setting and the
+  // shading slider buys tonal depth band by band.
+  {
+    id: 'truchet-tiles',
+    labelKey: 'mono.modes.truchetTiles',
+    descriptionKey: 'mono.modes.truchetTilesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'truchet',
+    defaultAlgorithmOptions: { cell_mm: 3.7, seed: 0, tile: 'diagonal' },
+    bandRecipe(i, total) {
+      // Smaller tiles read darker; each band re-rolls its own seed.
+      const cell = lerp(i, total, 2.2, 5.2)
+      return { algorithm: 'truchet', algorithm_options: { cell_mm: cell, seed: i * 7 + 13, tile: 'diagonal' } }
+    },
+  },
+  {
+    id: 'maze-walk',
+    labelKey: 'mono.modes.mazeWalk',
+    descriptionKey: 'mono.modes.mazeWalkDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'maze',
+    defaultAlgorithmOptions: { cell_mm: 3, seed: 0 },
+    bandRecipe(i, total) {
+      // Tighter corridors pack more wall ink into the dark bands.
+      const cell = lerp(i, total, 2.2, 4.5)
+      return { algorithm: 'maze', algorithm_options: { cell_mm: cell, seed: i * 7 + 13 } }
+    },
+  },
+  {
+    id: 'basket-weave',
+    labelKey: 'mono.modes.basketWeave',
+    descriptionKey: 'mono.modes.basketWeaveDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'weave',
+    defaultAlgorithmOptions: { band_mm: 4.5, gap_mm: 0.74 },
+    bandRecipe(i, total) {
+      // Narrower ribbons interlace more often — denser weave reads darker.
+      const band = lerp(i, total, 3, 6.7)
+      return { algorithm: 'weave', algorithm_options: { band_mm: band, gap_mm: 0.74 } }
+    },
+  },
+  {
+    id: 'stitch-rows',
+    labelKey: 'mono.modes.stitchRows',
+    descriptionKey: 'mono.modes.stitchRowsDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'hitomezashi',
+    defaultAlgorithmOptions: { cell_mm: 3, seed: 0 },
+    bandRecipe(i, total) {
+      // Finer stitch pitch on the dark bands.
+      const cell = lerp(i, total, 2.2, 4.5)
+      return { algorithm: 'hitomezashi', algorithm_options: { cell_mm: cell, seed: i * 7 + 13 } }
+    },
+  },
+  {
+    id: 'bubble-pack',
+    labelKey: 'mono.modes.bubblePack',
+    descriptionKey: 'mono.modes.bubblePackDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'circle_pack',
+    defaultAlgorithmOptions: { min_radius_mm: 0.45, max_radius_mm: 3, gap_mm: 0.22, seed: 0 },
+    bandRecipe(i, total) {
+      // Smaller bubbles pack more outline ink per area — darker bands
+      // cap the radius low, light bands stay airy.
+      const maxR = lerp(i, total, 1.5, 3.7)
+      const minR = lerp(i, total, 0.3, 0.6)
+      return {
+        algorithm: 'circle_pack',
+        algorithm_options: { min_radius_mm: minR, max_radius_mm: maxR, gap_mm: 0.22, seed: i * 7 + 13 },
+      }
+    },
+  },
+  {
+    id: 'brick-courses',
+    labelKey: 'mono.modes.brickCourses',
+    descriptionKey: 'mono.modes.brickCoursesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'brick',
+    defaultAlgorithmOptions: { brick_w_mm: 5.9, brick_h_mm: 3 },
+    bandRecipe(i, total) {
+      // Shorter courses = more joints per area = darker texture.
+      const h = lerp(i, total, 2.2, 4.5)
+      return { algorithm: 'brick', algorithm_options: { brick_w_mm: h * 2, brick_h_mm: h } }
+    },
+  },
+  {
+    id: 'dash-shading',
+    labelKey: 'mono.modes.dashShading',
+    descriptionKey: 'mono.modes.dashShadingDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'dashes',
+    defaultAlgorithmOptions: { spacing_mm: 1.9, angle_deg: 45, dash_mm: 1.1, gap_mm: 1.1, crossed: false },
+    bandRecipe(i, total) {
+      // Rotating angle per band like pencil; tighter rows + smaller gaps
+      // pack more dashes into the shadows.
+      const angles = [45, 135, 0, 90]
+      const angle = angles[i % angles.length] ?? 45
+      const spacing = lerp(i, total, 1.1, 2.6)
+      const gap = lerp(i, total, 0.74, 1.9)
+      return {
+        algorithm: 'dashes',
+        algorithm_options: { spacing_mm: spacing, angle_deg: angle, dash_mm: 1.1, gap_mm: gap, crossed: false },
+      }
+    },
+  },
+  {
+    id: 'vinyl-rings',
+    labelKey: 'mono.modes.vinylRings',
+    descriptionKey: 'mono.modes.vinylRingsDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'rings',
+    defaultAlgorithmOptions: { spacing_mm: 2.2 },
+    bandRecipe(i, total) {
+      // Groove pitch tightens on the dark bands.
+      const spacing = lerp(i, total, 1.1, 3)
+      return { algorithm: 'rings', algorithm_options: { spacing_mm: spacing } }
+    },
+  },
+  {
+    id: 'sunburst-rays',
+    labelKey: 'mono.modes.sunburstRays',
+    descriptionKey: 'mono.modes.sunburstRaysDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'sunburst',
+    defaultAlgorithmOptions: { rays: 120 },
+    bandRecipe(i, total) {
+      // More rays fan into the dark bands.
+      const rays = Math.round(lerp(i, total, 220, 70))
+      return { algorithm: 'sunburst', algorithm_options: { rays } }
+    },
+  },
+  {
+    id: 'thread-fans',
+    labelKey: 'mono.modes.threadFans',
+    descriptionKey: 'mono.modes.threadFansDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'curve_stitching',
+    defaultAlgorithmOptions: { cell_mm: 6.7, chords: 7, seed: 0 },
+    bandRecipe(i, total) {
+      // Smaller cells with more chords per fan read darker.
+      const cell = lerp(i, total, 4.5, 8)
+      const chords = Math.round(lerp(i, total, 9, 5))
+      return { algorithm: 'curve_stitching', algorithm_options: { cell_mm: cell, chords, seed: i * 7 + 13 } }
+    },
+  },
+  {
+    id: 'moire-beat',
+    labelKey: 'mono.modes.moireBeat',
+    descriptionKey: 'mono.modes.moireBeatDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'moire',
+    defaultAlgorithmOptions: { spacing_mm: 1.9, mode: 'rings', offset_mm: 5.2, delta_deg: 4 },
+    bandRecipe(i, total) {
+      // Tighter gratings beat into denser fringes on the dark bands.
+      const spacing = lerp(i, total, 1.1, 2.6)
+      return {
+        algorithm: 'moire',
+        algorithm_options: { spacing_mm: spacing, mode: 'rings', offset_mm: 5.2, delta_deg: 4 },
+      }
+    },
+  },
+  {
+    id: 'penrose-facets',
+    labelKey: 'mono.modes.penroseFacets',
+    descriptionKey: 'mono.modes.penroseFacetsDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'penrose',
+    defaultAlgorithmOptions: { divisions: 6 },
+    bandRecipe(i, total) {
+      // One extra subdivision on the darkest bands — smaller rhombi,
+      // denser edges. (Each division multiplies the tile count, so the
+      // lerp stays in a narrow 5..7 window.)
+      const divisions = Math.round(lerp(i, total, 7, 5))
+      return { algorithm: 'penrose', algorithm_options: { divisions } }
+    },
+  },
+  // ===== MASTER STYLES — phase-2 mono batch (2026-06): binary patterns =====
+  // Pure generative figures with no meaningful tone mapping: the subject
+  // is split from the paper with a plain threshold (same contract as the
+  // binary masters above) and the figure fills the ink region.
+  {
+    id: 'dragon-curve',
+    labelKey: 'mono.modes.dragonCurve',
+    descriptionKey: 'mono.modes.dragonCurveDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'thresholds',
+      default_threshold: 0.5,
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'lsystem',
+    // iterations 0 = auto depth from the region size.
+    defaultAlgorithmOptions: { preset: 'dragon', iterations: 0 },
+    bandRecipe() {
+      return { algorithm: 'lsystem', algorithm_options: { preset: 'dragon', iterations: 0 } }
+    },
+  },
+  {
+    id: 'chladni-plate',
+    labelKey: 'mono.modes.chladniPlate',
+    descriptionKey: 'mono.modes.chladniPlateDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'thresholds',
+      default_threshold: 0.5,
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'chladni',
+    defaultAlgorithmOptions: { m: 3, n: 5, modes: 1 },
+    bandRecipe() {
+      return { algorithm: 'chladni', algorithm_options: { m: 3, n: 5, modes: 1 } }
+    },
+  },
+  {
+    id: 'pendulum-trace',
+    labelKey: 'mono.modes.pendulumTrace',
+    descriptionKey: 'mono.modes.pendulumTraceDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'thresholds',
+      default_threshold: 0.5,
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'harmonograph',
+    defaultAlgorithmOptions: { freq_ratio: 2.01, damping: 0.004, turns: 40, seed: 0 },
+    bandRecipe() {
+      return { algorithm: 'harmonograph', algorithm_options: { freq_ratio: 2.01, damping: 0.004, turns: 40, seed: 0 } }
     },
   },
   // ============== MASTER STYLES — multicolor ==============
@@ -3953,6 +4392,26 @@ export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   lowpoly: 'lowpoly',
   scribble: 'scribble',
   'otsu-binary': 'otsu-binary',
+  // Phase-2 mono batch (2026-06) — identity entries so the coverage
+  // guarantee (every mono master reachable from a legacy id) holds.
+  'schotter-tumble': 'schotter-tumble',
+  'vein-growth': 'vein-growth',
+  'honeycomb-tone': 'honeycomb-tone',
+  'truchet-tiles': 'truchet-tiles',
+  'maze-walk': 'maze-walk',
+  'basket-weave': 'basket-weave',
+  'stitch-rows': 'stitch-rows',
+  'bubble-pack': 'bubble-pack',
+  'brick-courses': 'brick-courses',
+  'dash-shading': 'dash-shading',
+  'vinyl-rings': 'vinyl-rings',
+  'sunburst-rays': 'sunburst-rays',
+  'thread-fans': 'thread-fans',
+  'moire-beat': 'moire-beat',
+  'penrose-facets': 'penrose-facets',
+  'dragon-curve': 'dragon-curve',
+  'chladni-plate': 'chladni-plate',
+  'pendulum-trace': 'pendulum-trace',
 }
 
 // ---- Query helpers ----
