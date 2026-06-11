@@ -979,8 +979,12 @@ export const useJobStore = defineStore('job', () => {
     // Picking a new ink for a layer (assigned_color_hex / color_assignment)
     // changes what the rendered SVG should look like. Schedule a debounced
     // rerender so the canvas reflects the new colour without waiting for
-    // the next algorithm tweak.
+    // the next algorithm tweak. Same display-priority trap as
+    // ``applyLayerAlgorithm``: the live /preview SVG ignores per-layer ink
+    // assignments and would keep masking the recoloured /rerender result
+    // in the expert editor, so clear it first.
     if ('assigned_color_hex' in patch || 'color_assignment' in patch) {
+      clearLivePreviewSvg()
       scheduleRerender(250)
     }
   }

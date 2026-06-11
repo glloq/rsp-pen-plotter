@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useJobStore, type Placement } from './job'
+import { useEditState } from '../composables/useEditState'
 import type { LayerInfo } from '../api/client'
 
 function makeLayer(over: Partial<LayerInfo> = {}): LayerInfo {
@@ -101,6 +102,38 @@ describe('resnapAutoLayers', () => {
 
     expect(store.placements[0]!.layers[0]!.assigned_color_hex).toBe('#00ff00')
     expect(store.placements[1]!.layers[0]!.assigned_color_hex).toBe('#ff0000')
+  })
+})
+
+describe('updateLayer ink change → preview wash-out', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('clears the live preview SVG when a layer ink changes', () => {
+    // The live /preview SVG ignores per-layer ink assignments and has
+    // display priority in the editor, so a stale one would mask the
+    // recoloured /rerender result (expert mode showed no change).
+    const store = useJobStore()
+    const placement = makePlacement()
+    store.placements = [placement]
+    store.selectPlacement(placement.id)
+    useEditState().previewSvg.value = '<svg>stale</svg>'
+
+    store.updateLayer('layer-1', { assigned_color_hex: '#ff0000' })
+
+    expect(store.placements[0]!.layers[0]!.assigned_color_hex).toBe('#ff0000')
+    expect(useEditState().previewSvg.value).toBe('')
+  })
+
+  it('leaves the live preview SVG alone for non-colour patches', () => {
+    const store = useJobStore()
+    const placement = makePlacement()
+    store.placements = [placement]
+    store.selectPlacement(placement.id)
+    useEditState().previewSvg.value = '<svg>live</svg>'
+
+    store.updateLayer('layer-1', { target_pen_slot: 2 })
+
+    expect(useEditState().previewSvg.value).toBe('<svg>live</svg>')
   })
 })
 
