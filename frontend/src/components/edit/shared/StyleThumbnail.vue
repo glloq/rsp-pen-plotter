@@ -70,6 +70,7 @@ const STYLE_GLYPHS: Record<string, { color: string; glyph: string }> = {
   text_fill: { color: '#475569', glyph: 'A' },
   lsystem: { color: '#22c55e', glyph: 'ϡ' },
   chladni: { color: '#0ea5e9', glyph: '✣' },
+  sine_halftone: { color: '#f472b6', glyph: '∾' },
 }
 
 const meta = computed(() => STYLE_GLYPHS[props.algorithm] ?? { color: '#475569', glyph: '?' })

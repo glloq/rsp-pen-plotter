@@ -49,6 +49,7 @@ from pen_plotter.converters.algorithms.ridge_lines import RidgeLinesAlgorithm
 from pen_plotter.converters.algorithms.rings import RingsAlgorithm
 from pen_plotter.converters.algorithms.scanlines import ScanlinesAlgorithm
 from pen_plotter.converters.algorithms.scribble import ScribbleAlgorithm
+from pen_plotter.converters.algorithms.sine_halftone import SineHalftoneAlgorithm
 from pen_plotter.converters.algorithms.space_colonization import SpaceColonizationAlgorithm
 from pen_plotter.converters.algorithms.spiral import SpiralAlgorithm
 from pen_plotter.converters.algorithms.squiggle import SquiggleAlgorithm
@@ -130,6 +131,7 @@ _ALGORITHMS: dict[str, RasterAlgorithm] = {
         TextFillAlgorithm(),
         LSystemAlgorithm(),
         ChladniAlgorithm(),
+        SineHalftoneAlgorithm(),
     )
 }
 
@@ -165,6 +167,7 @@ _KINDS: dict[str, AlgorithmKind] = {
     "tsp_opt": "mono_stroke",
     "voronoi_stipple": "fill",
     "squiggle": "mono_stroke",
+    "sine_halftone": "mono_stroke",
     "lowpoly": "lines",
     "scribble": "fill",
     "grid": "lines",
@@ -223,6 +226,7 @@ _COMPLEXITY: dict[str, AlgorithmComplexity] = {
     "tsp_opt": "high",  # 2-opt sweep with kd-tree neighbours
     "voronoi_stipple": "high",  # Lloyd relaxation iterations
     "squiggle": "medium",  # sub-pixel sampling per scan row
+    "sine_halftone": "medium",  # sub-pixel sampling per scan row
     "lowpoly": "high",  # Delaunay triangulation over sampled points
     "scribble": "medium",  # wobble polyline per scan run
     "grid": "low",  # two clipped line sweeps

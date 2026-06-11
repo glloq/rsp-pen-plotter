@@ -384,7 +384,9 @@
       "smokeClifford": "Fumée de Clifford",
       "smokeCliffordDesc": "Orbite de l'attracteur de Clifford dispersée en filaments de fumée.",
       "turingStripes": "Rayures de Turing",
-      "turingStripesDesc": "Motif de rayures (réaction-diffusion) cultivé dans la région."
+      "turingStripesDesc": "Motif de rayures (réaction-diffusion) cultivé dans la région.",
+      "soundWave": "Onde sonore",
+      "soundWaveDesc": "Ondes dont la fréquence et l'amplitude suivent le ton — les ombres vibrent, les hautes lumières s'aplanissent."
     },
     "inkColor": "Couleur d'encre",
     "inkColorHint": "Couleur unique utilisée pour tracer toutes les bandes — les niveaux de gris sont simulés par la densité de l'algorithme.",

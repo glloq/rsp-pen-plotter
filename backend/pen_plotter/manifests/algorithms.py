@@ -44,7 +44,9 @@ from pen_plotter.manifests import Manifest, ManifestEntry, ManifestMeta, registe
 # raster pixels per placement at render time (``convert_mm_options``)
 # so the on-paper pitch survives page-format changes. The ``*_px``
 # spellings remain accepted on the wire for saved settings.
-ALGORITHMS_MANIFEST_VERSION = 6
+# v7: ``sine_halftone`` (tone-driven frequency-modulated waves — the
+# sound-wave portrait).
+ALGORITHMS_MANIFEST_VERSION = 7
 
 
 class AlgorithmManifestEntry(ManifestEntry):

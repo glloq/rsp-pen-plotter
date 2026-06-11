@@ -32,14 +32,14 @@ Switching surface preserves all of the above.
 
 Day to day you rarely pick a raw algorithm: you pick a **print style** — a
 named bundle of algorithm + options (and, for master styles, the
-segmentation too). All 166 styles live in one registry,
+segmentation too). All 167 styles live in one registry,
 `frontend/src/data/printRegistry.ts`, split by **scope**:
 
-- **Master styles** (`scope: 'master'`, 115 entries) own the whole result:
+- **Master styles** (`scope: 'master'`, 116 entries) own the whole result:
   segmentation method, default algorithm, and a per-band / per-cluster
   recipe applied to every produced layer. They come in two families,
   switched by the colour-mode toggle on the **Style tab**:
-  - 64 **tonal (monochrome)** masters — Pencil, Halftone shaded,
+  - 65 **tonal (monochrome)** masters — Pencil, Halftone shaded,
     Stippling shaded, Engraving, Outline, Etch burin, String thread,
     Coral growth, Truchet tiles, Maze, Basket weave, Dragon curve, …
     driven by luminance-bands / threshold / Otsu segmentation. Pencil

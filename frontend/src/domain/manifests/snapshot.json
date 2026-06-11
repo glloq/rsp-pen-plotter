@@ -2,7 +2,7 @@
   "algorithms": {
     "meta": {
       "domain": "algorithms",
-      "manifest_version": 6,
+      "manifest_version": 7,
       "schema_semver": "0.2.0",
       "generated_at": "1970-01-01T00:00:00+00:00",
       "deprecations": [],
@@ -2075,6 +2075,47 @@
               "maximum": 7.0,
               "multipleOf": 1.0,
               "x-label": "convert.levels"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "sine_halftone",
+        "version": 1,
+        "deprecated": false,
+        "name": "sine_halftone",
+        "description": "Horizontal waves whose frequency and amplitude follow the tone \u2014 the sound-wave portrait.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "spacing_mm": {
+              "type": "number",
+              "default": 1.9,
+              "minimum": 0.74,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.spacing"
+            },
+            "amp_mm": {
+              "type": "number",
+              "default": 0.74,
+              "minimum": 0.07,
+              "maximum": 3.7,
+              "multipleOf": 0.1,
+              "x-label": "convert.waveAmp"
+            },
+            "period_mm": {
+              "type": "number",
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
+              "x-label": "convert.wavePeriod"
             }
           },
           "additionalProperties": true

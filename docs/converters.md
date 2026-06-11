@@ -27,8 +27,8 @@ immediately).
 
 For bitmap input, the operator picks a raster-art strategy in the editor.
 Algorithms are registered by name in
-`backend/pen_plotter/converters/algorithms/__init__.py` — 51 registered, of
-which 47 are visible in the editor's pickers (see the hidden flag below).
+`backend/pen_plotter/converters/algorithms/__init__.py` — 52 registered, of
+which 48 are visible in the editor's pickers (see the hidden flag below).
 Each carries:
 
 - a **kind** — `fill` (packs ink across a region), `lines` (discrete
@@ -56,6 +56,7 @@ Each carries:
 | `tsp_opt` | mono_stroke | high | TSP tour with 2-opt / MST optimisation, kd-tree neighbours (tone-aware: seeds weighted by darkness) |
 | `voronoi_stipple` | fill | high | centroidal Voronoi stippling, darkness-weighted (tone-aware) |
 | `squiggle` | mono_stroke | medium | wiggly lines with amplitude / frequency drift (tone-aware: both follow darkness) |
+| `sine_halftone` | mono_stroke | medium | frequency-modulated waves — the sound-wave portrait (tone-aware: frequency + amplitude follow darkness) |
 | `lowpoly` | lines | high | Delaunay triangulation over sampled points, drawn as edges (tone-aware: smaller facets where darker) |
 | `scribble` | fill | medium | wobbly, overshooting strokes — loose pencil feel (tone-aware: extra crossing passes per darkness band) |
 | `grid` *(hidden)* | lines | low | square mesh of horizontal + vertical strokes |

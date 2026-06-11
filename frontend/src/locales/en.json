@@ -384,7 +384,9 @@
       "smokeClifford": "Clifford smoke",
       "smokeCliffordDesc": "Clifford-attractor orbit scattered as smoky filaments.",
       "turingStripes": "Turing stripes",
-      "turingStripesDesc": "Reaction-diffusion stripe pattern grown inside the region."
+      "turingStripesDesc": "Reaction-diffusion stripe pattern grown inside the region.",
+      "soundWave": "Sound wave",
+      "soundWaveDesc": "Waves whose frequency and amplitude follow the tone — shadows buzz, highlights flatten."
     },
     "inkColor": "Ink color",
     "inkColorHint": "Single colour every band is traced with — grey levels come from the algorithm's density variation.",

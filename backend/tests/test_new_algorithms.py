@@ -93,6 +93,7 @@ def test_registry_lists_all_algorithms() -> None:
         "text_fill",
         "lsystem",
         "chladni",
+        "sine_halftone",
     }
 
 

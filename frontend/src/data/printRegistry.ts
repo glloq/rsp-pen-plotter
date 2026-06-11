@@ -83,6 +83,8 @@ export type AlgorithmId =
   // 2026-06 expert-style batch 3.
   | 'lsystem'
   | 'chladni'
+  // 2026-06 new-algorithm batch.
+  | 'sine_halftone'
 
 export interface AlgoOption {
   key: string
@@ -400,6 +402,15 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       },
       { key: 'iterations', label: 'convert.iterations', type: 'integer', min: 0, max: 30, step: 1 },
       { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  sine_halftone: {
+    id: 'sine_halftone',
+    defaults: { spacing_mm: 1.9, amp_mm: 0.74, period_mm: 1.5 },
+    schema: [
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.74, max: 11, step: 0.1 },
+      { key: 'amp_mm', label: 'convert.waveAmp', type: 'number', min: 0.07, max: 3.7, step: 0.1 },
+      { key: 'period_mm', label: 'convert.wavePeriod', type: 'number', min: 0.37, max: 7.4, step: 0.1 },
     ],
   },
   squiggle: {
@@ -2860,6 +2871,28 @@ export const PRINT_STYLES: PrintStyle[] = [
       return { algorithm: 'reaction_diffusion', algorithm_options: { pattern: 'stripes', steps: 2500, seed: 0 } }
     },
   },
+  // ===== MASTER STYLES — new-algorithm batch (2026-06) =====
+  {
+    id: 'sound-wave',
+    labelKey: 'mono.modes.soundWave',
+    descriptionKey: 'mono.modes.soundWaveDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'sine_halftone',
+    defaultAlgorithmOptions: { spacing_mm: 1.9, amp_mm: 0.74, period_mm: 1.5 },
+    bandRecipe() {
+      // Single tonal band — frequency + amplitude modulation does the shading.
+      return { algorithm: 'sine_halftone', algorithm_options: { spacing_mm: 1.9, amp_mm: 0.74, period_mm: 1.5 } }
+    },
+  },
   // ============== MASTER STYLES — multicolor ==============
   // Mirror of the mono master family for multicolour mode: each style
   // owns its segmentation (kmeans by default) and a ``colorRecipe`` the
@@ -4687,6 +4720,7 @@ export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   'wind-field': 'wind-field',
   'smoke-clifford': 'smoke-clifford',
   'turing-stripes': 'turing-stripes',
+  'sound-wave': 'sound-wave',
 }
 
 // ---- Query helpers ----
