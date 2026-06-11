@@ -540,6 +540,35 @@ function recipeFromKnobs(
       const divisions = Math.round(lerp(i, total, dark, Math.max(4, dark - 2)))
       return { algorithm: 'penrose', algorithm_options: { divisions } }
     }
+    // ---- Variant batch (2026-06): banded select-option twins ----
+    case 'ring-halftone': {
+      const cell = lerp(i, total, knobs.cell_min ?? 1.1, knobs.cell_max ?? 3.3)
+      return {
+        algorithm: 'halftone',
+        algorithm_options: { cell_size_mm: cell, glyph: 'ring' },
+      }
+    }
+    case 'cross-stitch': {
+      const cell = lerp(i, total, knobs.cell_min ?? 1.5, knobs.cell_max ?? 3.7)
+      return {
+        algorithm: 'halftone',
+        algorithm_options: { cell_size_mm: cell, glyph: 'cross' },
+      }
+    }
+    case 'truchet-pipes': {
+      const cell = lerp(i, total, knobs.cell_min ?? 2.2, knobs.cell_max ?? 5.2)
+      return {
+        algorithm: 'truchet',
+        algorithm_options: { cell_mm: cell, seed: i * 7 + 13, tile: 'arc' },
+      }
+    }
+    case 'moire-lines': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.6)
+      return {
+        algorithm: 'moire',
+        algorithm_options: { spacing_mm: spacing, mode: 'lines', offset_mm: 5.2, delta_deg: 4 },
+      }
+    }
     default: {
       const base = style.bandRecipe ? style.bandRecipe(i, total) : null
       if (!base) return null

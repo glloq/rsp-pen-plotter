@@ -303,6 +303,28 @@ describe('buildMonoBandRecipes', () => {
     expect((pen![1]!.algorithm_options as Record<string, unknown>).divisions).toBe(6)
   })
 
+  it('keeps the variant select option on the knob-driven path', () => {
+    // The variant twins differ from their siblings only by a fixed
+    // select option — the knob case must carry it on every band, or the
+    // style silently degrades into its sibling.
+    const expectations = [
+      ['ring-halftone', 'halftone', 'glyph', 'ring'],
+      ['cross-stitch', 'halftone', 'glyph', 'cross'],
+      ['truchet-pipes', 'truchet', 'tile', 'arc'],
+      ['moire-lines', 'moire', 'mode', 'lines'],
+    ] as const
+    for (const [styleId, algo, key, value] of expectations) {
+      setMonoMasterStyleId(styleId)
+      setMonoKnob(styleId, styleId === 'moire-lines' ? 'spacing_min' : 'cell_min', 2)
+      const recipes = buildMonoBandRecipes('luminance_bands', 2)
+      expect(recipes!.length).toBe(2)
+      for (const r of recipes!) {
+        expect(r.algorithm).toBe(algo)
+        expect((r.algorithm_options as Record<string, unknown>)[key]).toBe(value)
+      }
+    }
+  })
+
   it('keeps hilbert-fill adaptive on the knob-driven path (tonal single band)', () => {
     // Regression: the registry bandRecipe sets adaptive: true, but the
     // knob path used to drop it — flat fill at the 1-band default.

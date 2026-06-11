@@ -1130,6 +1130,11 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
   'thread-fans': { cell_min: 4.5, cell_max: 8, chords: 9 },
   'moire-beat': { spacing_min: 1.1, spacing_max: 2.6 },
   'penrose-facets': { divisions: 7 },
+  // Variant batch (2026-06): banded select-option twins.
+  'ring-halftone': { cell_min: 1.1, cell_max: 3.3 },
+  'cross-stitch': { cell_min: 1.5, cell_max: 3.7 },
+  'truchet-pipes': { cell_min: 2.2, cell_max: 5.2 },
+  'moire-lines': { spacing_min: 1.1, spacing_max: 2.6 },
 }
 
 // Defaults for the multicolour master family. Mirrors MONO_STYLE_DEFAULTS:
@@ -2596,6 +2601,263 @@ export const PRINT_STYLES: PrintStyle[] = [
     defaultAlgorithmOptions: { freq_ratio: 2.01, damping: 0.004, turns: 40, seed: 0 },
     bandRecipe() {
       return { algorithm: 'harmonograph', algorithm_options: { freq_ratio: 2.01, damping: 0.004, turns: 40, seed: 0 } }
+    },
+  },
+  // ===== MASTER STYLES — variant batch (2026-06): select-option twins =====
+  // Same algorithms, different ``select`` option — each renders a look
+  // distinct enough on paper to deserve its own gallery card. Pure
+  // registry entries: zero backend code.
+  {
+    id: 'fern-growth',
+    labelKey: 'mono.modes.fernGrowth',
+    descriptionKey: 'mono.modes.fernGrowthDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'thresholds',
+      default_threshold: 0.5,
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'lsystem',
+    defaultAlgorithmOptions: { preset: 'plant', iterations: 0 },
+    bandRecipe() {
+      return { algorithm: 'lsystem', algorithm_options: { preset: 'plant', iterations: 0 } }
+    },
+  },
+  {
+    id: 'koch-island',
+    labelKey: 'mono.modes.kochIsland',
+    descriptionKey: 'mono.modes.kochIslandDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'thresholds',
+      default_threshold: 0.5,
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'lsystem',
+    defaultAlgorithmOptions: { preset: 'koch', iterations: 0 },
+    bandRecipe() {
+      return { algorithm: 'lsystem', algorithm_options: { preset: 'koch', iterations: 0 } }
+    },
+  },
+  {
+    id: 'sierpinski-sweep',
+    labelKey: 'mono.modes.sierpinskiSweep',
+    descriptionKey: 'mono.modes.sierpinskiSweepDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'thresholds',
+      default_threshold: 0.5,
+      drop_background: true,
+      background_luminance: 0.55,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'lsystem',
+    defaultAlgorithmOptions: { preset: 'sierpinski', iterations: 0 },
+    bandRecipe() {
+      return { algorithm: 'lsystem', algorithm_options: { preset: 'sierpinski', iterations: 0 } }
+    },
+  },
+  {
+    id: 'ring-halftone',
+    labelKey: 'mono.modes.ringHalftone',
+    descriptionKey: 'mono.modes.ringHalftoneDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'halftone',
+    // 'ring' glyph: the pen traces hollow circles instead of spiralling
+    // dots solid — same tonal mapping (size ∝ darkness), airier look.
+    defaultAlgorithmOptions: { cell_size_mm: 1.9, glyph: 'ring' },
+    bandRecipe(i, total) {
+      const cell = lerp(i, total, 1.1, 3.3)
+      return { algorithm: 'halftone', algorithm_options: { cell_size_mm: cell, glyph: 'ring' } }
+    },
+  },
+  {
+    id: 'cross-stitch',
+    labelKey: 'mono.modes.crossStitch',
+    descriptionKey: 'mono.modes.crossStitchDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'halftone',
+    defaultAlgorithmOptions: { cell_size_mm: 2.2, glyph: 'cross' },
+    bandRecipe(i, total) {
+      const cell = lerp(i, total, 1.5, 3.7)
+      return { algorithm: 'halftone', algorithm_options: { cell_size_mm: cell, glyph: 'cross' } }
+    },
+  },
+  {
+    id: 'truchet-pipes',
+    labelKey: 'mono.modes.truchetPipes',
+    descriptionKey: 'mono.modes.truchetPipesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'truchet',
+    // 'arc' tiles — the classic Smith quarter-circle pipes.
+    defaultAlgorithmOptions: { cell_mm: 3.7, seed: 0, tile: 'arc' },
+    bandRecipe(i, total) {
+      const cell = lerp(i, total, 2.2, 5.2)
+      return { algorithm: 'truchet', algorithm_options: { cell_mm: cell, seed: i * 7 + 13, tile: 'arc' } }
+    },
+  },
+  {
+    id: 'moire-lines',
+    labelKey: 'mono.modes.moireLines',
+    descriptionKey: 'mono.modes.moireLinesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: true,
+    },
+    defaultAlgorithm: 'moire',
+    defaultAlgorithmOptions: { spacing_mm: 1.9, mode: 'lines', offset_mm: 5.2, delta_deg: 4 },
+    bandRecipe(i, total) {
+      const spacing = lerp(i, total, 1.1, 2.6)
+      return {
+        algorithm: 'moire',
+        algorithm_options: { spacing_mm: spacing, mode: 'lines', offset_mm: 5.2, delta_deg: 4 },
+      }
+    },
+  },
+  {
+    id: 'ridge-radial',
+    labelKey: 'mono.modes.ridgeRadial',
+    descriptionKey: 'mono.modes.ridgeRadialDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'ridge_lines',
+    defaultAlgorithmOptions: { spacing_mm: 1.9, amp_mm: 5.2, smooth_mm: 1.1, occlude: true, layout: 'radial' },
+    bandRecipe() {
+      // Single tonal band — the injected luminance map does the shading.
+      return { algorithm: 'ridge_lines', algorithm_options: { spacing_mm: 1.9, amp_mm: 5.2, smooth_mm: 1.1, occlude: true, layout: 'radial' } }
+    },
+  },
+  {
+    id: 'bayer-print',
+    labelKey: 'mono.modes.bayerPrint',
+    descriptionKey: 'mono.modes.bayerPrintDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'dither',
+    defaultAlgorithmOptions: { cell_mm: 1.5, dot_radius_mm: 0.37, method: 'bayer' },
+    bandRecipe() {
+      return { algorithm: 'dither', algorithm_options: { cell_mm: 1.5, dot_radius_mm: 0.37, method: 'bayer' } }
+    },
+  },
+  {
+    id: 'wind-field',
+    labelKey: 'mono.modes.windField',
+    descriptionKey: 'mono.modes.windFieldDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'flowfield',
+    // Perlin mode: streamlines ride smooth noise instead of the image
+    // gradient; tone still drives the seed density (tone-aware).
+    defaultAlgorithmOptions: { mode: 'perlin', seed_spacing_mm: 2.2, step_mm: 0.8, max_steps: 800, bidirectional: true, noise_scale: 48, seed: 0 },
+    bandRecipe() {
+      return { algorithm: 'flowfield', algorithm_options: { mode: 'perlin', seed_spacing_mm: 2.2, step_mm: 0.8, max_steps: 800, bidirectional: true, noise_scale: 48, seed: 0 } }
+    },
+  },
+  {
+    id: 'smoke-clifford',
+    labelKey: 'mono.modes.smokeClifford',
+    descriptionKey: 'mono.modes.smokeCliffordDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'attractor',
+    defaultAlgorithmOptions: { preset: 'clifford', points: 9000, dot_radius_mm: 0.19, seed: 0 },
+    bandRecipe() {
+      return { algorithm: 'attractor', algorithm_options: { preset: 'clifford', points: 9000, dot_radius_mm: 0.19, seed: 0 } }
+    },
+  },
+  {
+    id: 'turing-stripes',
+    labelKey: 'mono.modes.turingStripes',
+    descriptionKey: 'mono.modes.turingStripesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'reaction_diffusion',
+    defaultAlgorithmOptions: { pattern: 'stripes', steps: 2500, seed: 0 },
+    bandRecipe() {
+      return { algorithm: 'reaction_diffusion', algorithm_options: { pattern: 'stripes', steps: 2500, seed: 0 } }
     },
   },
   // ============== MASTER STYLES — multicolor ==============
@@ -4412,6 +4674,19 @@ export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   'dragon-curve': 'dragon-curve',
   'chladni-plate': 'chladni-plate',
   'pendulum-trace': 'pendulum-trace',
+  // Variant batch (2026-06) — identity entries (same coverage guarantee).
+  'fern-growth': 'fern-growth',
+  'koch-island': 'koch-island',
+  'sierpinski-sweep': 'sierpinski-sweep',
+  'ring-halftone': 'ring-halftone',
+  'cross-stitch': 'cross-stitch',
+  'truchet-pipes': 'truchet-pipes',
+  'moire-lines': 'moire-lines',
+  'ridge-radial': 'ridge-radial',
+  'bayer-print': 'bayer-print',
+  'wind-field': 'wind-field',
+  'smoke-clifford': 'smoke-clifford',
+  'turing-stripes': 'turing-stripes',
 }
 
 // ---- Query helpers ----

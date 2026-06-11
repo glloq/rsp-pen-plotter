@@ -312,6 +312,30 @@ export const MONO_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   'penrose-facets': {
     controls: [range('divisions', 4, 8, 1, 'convert.divisions')],
   },
+  // Variant batch (2026-06): banded select-option twins reuse their
+  // siblings' knob shapes (the fixed select option lives in the recipe).
+  'ring-halftone': {
+    controls: [
+      dual('cell_min', 'cell_max', 0.74, 5.2, 0.1, 'mono.cellRange', {
+        unit: 'mm',
+        hintKey: 'mono.cellRangeHint',
+      }),
+    ],
+  },
+  'cross-stitch': {
+    controls: [
+      dual('cell_min', 'cell_max', 0.74, 5.2, 0.1, 'mono.cellRange', {
+        unit: 'mm',
+        hintKey: 'mono.cellRangeHint',
+      }),
+    ],
+  },
+  'truchet-pipes': {
+    controls: [dual('cell_min', 'cell_max', 0.74, 11, 0.1, 'mono.cellRange', { unit: 'mm' })],
+  },
+  'moire-lines': {
+    controls: [dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' })],
+  },
 }
 
 // ---- Multicolour master family ----

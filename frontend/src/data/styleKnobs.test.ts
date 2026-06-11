@@ -115,6 +115,11 @@ const EXPECTED_MONO: Record<string, string[]> = {
   'thread-fans': ['dual:cell_min..cell_max:2.2..11@0.1', 'range:chords:3..12@1'],
   'moire-beat': ['dual:spacing_min..spacing_max:0.37..3.7@0.1'],
   'penrose-facets': ['range:divisions:4..8@1'],
+  // Variant batch (2026-06): banded select-option twins.
+  'ring-halftone': ['dual:cell_min..cell_max:0.74..5.2@0.1'],
+  'cross-stitch': ['dual:cell_min..cell_max:0.74..5.2@0.1'],
+  'truchet-pipes': ['dual:cell_min..cell_max:0.74..11@0.1'],
+  'moire-lines': ['dual:spacing_min..spacing_max:0.37..3.7@0.1'],
 }
 
 // Transcribed 1:1 from the deleted template blocks of
