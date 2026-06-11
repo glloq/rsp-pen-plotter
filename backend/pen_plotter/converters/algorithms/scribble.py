@@ -83,15 +83,15 @@ class ScribbleAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1, max=30, step=0.5),
-        OptionSpec(key="amp_px", label="convert.waveAmp", type="number",
-                   default=1.6, min=0, max=8, step=0.1),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.37, max=11, step=0.1),
+        OptionSpec(key="amp_mm", label="convert.waveAmp", type="number",
+                   default=0.59, min=0, max=3, step=0.1),
         # ``overshoot_px`` is the random extension each stroke runs past the
         # region boundary — the "sketchy" feel of scribble fill. 0 = clean
         # stops at the boundary, high values = scratchy / loose pencil.
-        OptionSpec(key="overshoot_px", label="convert.overshoot", type="number",
-                   default=3, min=0, max=20, step=0.5),
+        OptionSpec(key="overshoot_mm", label="convert.overshoot", type="number",
+                   default=1.1, min=0, max=7.4, step=0.1),
         OptionSpec(key="angle_deg", label="convert.angleDeg", type="number",
                    default=45, min=0, max=180, step=1),
         OptionSpec(key="crossed", label="convert.crossed", type="boolean", default=False),

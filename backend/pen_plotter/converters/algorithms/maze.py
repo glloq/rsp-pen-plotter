@@ -29,8 +29,8 @@ class MazeAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="cell_px", label="convert.cellPx", type="integer",
-                   default=8, min=3, max=40, step=1),
+        OptionSpec(key="cell_mm", label="convert.cellPx", type="number",
+                   default=3, min=1.1, max=15, step=0.1),
         OptionSpec(key="seed", label="convert.seed", type="integer",
                    default=0, min=0, step=1),
     ]

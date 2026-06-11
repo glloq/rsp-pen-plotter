@@ -26,12 +26,12 @@ class ScanlinesAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = "Horizontal scan lines clipped to the mask — flat or sinusoidal."
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1, max=30, step=0.5),
-        OptionSpec(key="wave_amp_px", label="convert.waveAmp", type="number",
-                   default=0, min=0, max=20, step=0.5),
-        OptionSpec(key="wave_period_px", label="convert.wavePeriod", type="number",
-                   default=12, min=2, max=50, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.37, max=11, step=0.1),
+        OptionSpec(key="wave_amp_mm", label="convert.waveAmp", type="number",
+                   default=0, min=0, max=7.4, step=0.1),
+        OptionSpec(key="wave_period_mm", label="convert.wavePeriod", type="number",
+                   default=4.5, min=0.74, max=19, step=0.1),
     ]
 
     def render_layer(

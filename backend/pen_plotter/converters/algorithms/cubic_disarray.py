@@ -31,12 +31,12 @@ class CubicDisarrayAlgorithm(RasterAlgorithm):
     tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="cell_px", label="convert.cellPx", type="integer",
-                   default=12, min=4, max=60, step=1),
+        OptionSpec(key="cell_mm", label="convert.cellPx", type="number",
+                   default=4.5, min=1.5, max=22, step=0.1),
         OptionSpec(key="max_rotate_deg", label="convert.rotateMax", type="number",
                    default=35, min=0, max=90, step=1),
-        OptionSpec(key="max_offset_px", label="convert.offsetMax", type="number",
-                   default=5, min=0, max=30, step=0.5),
+        OptionSpec(key="max_offset_mm", label="convert.offsetMax", type="number",
+                   default=1.9, min=0, max=11, step=0.1),
         OptionSpec(key="seed", label="convert.seed", type="integer",
                    default=0, min=0, step=1),
     ]

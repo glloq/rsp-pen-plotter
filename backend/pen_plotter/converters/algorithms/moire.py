@@ -38,12 +38,12 @@ class MoireAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=5, min=2, max=20, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.9, min=0.74, max=7.4, step=0.1),
         OptionSpec(key="mode", label="convert.mode", type="select",
                    default="rings", choices=["rings", "lines"]),
-        OptionSpec(key="offset_px", label="convert.offsetPx", type="number",
-                   default=14, min=0, max=80, step=1),
+        OptionSpec(key="offset_mm", label="convert.offsetPx", type="number",
+                   default=5.2, min=0, max=30, step=0.1),
         OptionSpec(key="delta_deg", label="convert.angleDeg", type="number",
                    default=4, min=0.5, max=20, step=0.5),
     ]

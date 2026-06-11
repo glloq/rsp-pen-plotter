@@ -42,10 +42,12 @@ async def test_algorithms_carry_options_schema() -> None:
     by_name = {item["name"]: item for item in response.json()}
 
     # Spot-check a few well-known schemas to lock the wire contract.
+    # Length knobs are millimetres since manifest v6 (2.2 mm ≈ the old
+    # 6 px default at the A4 reference scale).
     halftone = by_name["halftone"]
     halftone_keys = {opt["key"]: opt for opt in halftone["options"]}
-    assert halftone_keys["cell_size_px"]["min"] == 2  # backend clamps to 2
-    assert halftone_keys["cell_size_px"]["default"] == 6
+    assert halftone_keys["cell_size_mm"]["min"] == 0.74  # backend clamps to 2 px
+    assert halftone_keys["cell_size_mm"]["default"] == 2.2
 
     tsp_opt = by_name["tsp_opt"]
     method = next(o for o in tsp_opt["options"] if o["key"] == "method")

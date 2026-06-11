@@ -50,8 +50,8 @@ class TruchetAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="cell_px", label="convert.cellPx", type="integer",
-                   default=10, min=2, max=40, step=1),
+        OptionSpec(key="cell_mm", label="convert.cellPx", type="number",
+                   default=3.7, min=0.74, max=15, step=0.1),
         OptionSpec(key="seed", label="convert.seed", type="integer",
                    default=0, min=0, step=1),
         # ``diagonal`` is the classic slash maze; ``arc`` swaps each tile

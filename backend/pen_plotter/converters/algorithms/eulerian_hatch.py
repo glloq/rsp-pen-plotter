@@ -89,8 +89,8 @@ class EulerianHatchAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.37, max=11, step=0.1),
         OptionSpec(key="angle_deg", label="convert.angleDeg", type="number",
                    default=45, min=0, max=180, step=1),
         OptionSpec(key="crossed", label="convert.crossed", type="boolean", default=False),

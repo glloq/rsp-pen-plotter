@@ -43,8 +43,8 @@ class GridAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=6, min=1, max=30, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=2.2, min=0.37, max=11, step=0.1),
     ]
 
     def render_layer(

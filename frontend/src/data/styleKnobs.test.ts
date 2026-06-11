@@ -47,39 +47,52 @@ function inventory(family: MasterStyleFamily, styleId: string): string[] | undef
   return config.controls.map(describeControl)
 }
 
-// Transcribed 1:1 from the deleted template blocks of
-// MasterStyleParams.vue (724-line version). Styles absent from this
+// Transcribed from the deleted template blocks of MasterStyleParams.vue
+// (724-line version), converted to millimetres in the 2026-06 physical
+// units migration (1 px ≈ 0.371 mm at the A4 reference scale). Styles absent from this
 // table (e.g. gosper-fill, the 2026-06 tonal masters) had no bespoke
 // block and rendered the schema-driven AlgoParamsForm fallback — they
 // must keep resolving to "no descriptor set".
 const ANGLES = 'angles:angles:[0,30,45,90,135,150]max4'
 const EXPECTED_MONO: Record<string, string[]> = {
-  pencil: [ANGLES, 'dual:spacing_min..spacing_max:1..10@0.5', 'check:crossed_on_darkest'],
-  'hatch-fill': [ANGLES, 'dual:spacing_min..spacing_max:1..10@0.5', 'check:crossed_on_darkest'],
-  scribble: [ANGLES, 'dual:spacing_min..spacing_max:1..10@0.5', 'check:crossed_on_darkest'],
-  'halftone-shade': ['dual:cell_min..cell_max:2..14@1'],
-  'stippling-shade': ['dual:density_min..density_max:0.005..0.5@0.002', 'range:dot_radius:0.3..1.5@0.05'],
-  'voronoi-shade': ['dual:density_min..density_max:0.005..0.5@0.002', 'range:dot_radius:0.3..1.5@0.05'],
+  pencil: [ANGLES, 'dual:spacing_min..spacing_max:0.37..3.7@0.1', 'check:crossed_on_darkest'],
+  'hatch-fill': [ANGLES, 'dual:spacing_min..spacing_max:0.37..3.7@0.1', 'check:crossed_on_darkest'],
+  scribble: [ANGLES, 'dual:spacing_min..spacing_max:0.37..3.7@0.1', 'check:crossed_on_darkest'],
+  'halftone-shade': ['dual:cell_min..cell_max:0.74..5.2@0.1'],
+  'stippling-shade': [
+    'dual:density_min..density_max:0.005..0.5@0.002',
+    'range:dot_radius:0.11..0.56@0.1',
+  ],
+  'voronoi-shade': [
+    'dual:density_min..density_max:0.005..0.5@0.002',
+    'range:dot_radius:0.11..0.56@0.1',
+  ],
   engraving: [
-    'dual:spacing_min..spacing_max:1..8@0.5',
-    'dual:wave_min..wave_max:0..3@0.1',
-    'range:wave_period:8..20@1',
+    'dual:spacing_min..spacing_max:0.37..3@0.1',
+    'dual:wave_min..wave_max:0..1.1@0.1',
+    'range:wave_period:3..7.4@0.1',
   ],
   'squiggle-shade': [
-    'dual:spacing_min..spacing_max:1..8@0.5',
-    'dual:wave_min..wave_max:0..3@0.1',
-    'range:wave_period:8..20@1',
+    'dual:spacing_min..spacing_max:0.37..3@0.1',
+    'dual:wave_min..wave_max:0..1.1@0.1',
+    'range:wave_period:3..7.4@0.1',
   ],
-  'contours-topo': ['dual:spacing_min..spacing_max:1..8@0.5', 'dual:rings_min..rings_max:5..40@1'],
-  'concentric-rings': ['dual:spacing_min..spacing_max:1..10@1', 'dual:rings_min..rings_max:2..80@1'],
+  'contours-topo': [
+    'dual:spacing_min..spacing_max:0.37..3@0.1',
+    'dual:rings_min..rings_max:5..40@1',
+  ],
+  'concentric-rings': [
+    'dual:spacing_min..spacing_max:0.37..3.7@0.1',
+    'dual:rings_min..rings_max:2..80@1',
+  ],
   lowpoly: ['dual:density_min..density_max:0.002..0.1@0.002'],
-  'flowfield-master': ['dual:spacing_min..spacing_max:1..20@0.5'],
-  'hilbert-fill': ['dual:spacing_min..spacing_max:1..20@0.5'],
+  'flowfield-master': ['dual:spacing_min..spacing_max:0.37..7.4@0.1'],
+  'hilbert-fill': ['dual:spacing_min..spacing_max:0.37..7.4@0.1'],
   tsp: ['range:density:0.01..0.1@0.005'],
   'tsp-optimized': ['range:density:0.01..0.1@0.005'],
   'spiral-master': [
-    'range:spacing_px:3..30@1',
-    'range:wavelength_px:2..24@1',
+    'range:spacing_mm:1.1..11@0.1',
+    'range:wavelength_mm:0.74..8.9@0.1',
     'range:tone_strength:0..1@0.05',
   ],
   outline: ['range:stroke_width:0.4..2@0.1'],
@@ -92,54 +105,57 @@ const EXPECTED_MULTI: Record<string, string[]> = {
   'color-flat': ['placeholder'],
   'color-flat-lab': ['placeholder'],
   'color-crosshatch': [
-    'dual:spacing_min..spacing_max:1..10@0.5',
+    'dual:spacing_min..spacing_max:0.37..3.7@0.1',
     'range:angle_step:0..90@5',
     'check:crossed',
   ],
   'color-stipple': [
     'dual:density_min..density_max:0.005..0.3@0.001',
-    'range:dot_radius:0.3..1.5@0.05',
+    'range:dot_radius:0.11..0.56@0.1',
     'range:iterations:0..20@1',
   ],
-  'color-halftone-cmyk': ['range:cell_size:2..14@1'],
+  'color-halftone-cmyk': ['range:cell_size:0.74..5.2@0.1'],
   'color-contours-topo': [
-    'dual:spacing_min..spacing_max:1..8@0.5',
+    'dual:spacing_min..spacing_max:0.37..3@0.1',
     'dual:rings_min..rings_max:5..40@1',
   ],
   'color-flowfield': [
-    'dual:seed_spacing_min..seed_spacing_max:2..30@0.5',
-    'range:step_px:0.2..3@0.1',
+    'dual:seed_spacing_min..seed_spacing_max:0.74..11@0.1',
+    'range:step_mm:0.07..1.1@0.1',
     'range:max_steps:100..2000@50',
     'range:noise_scale:4..128@2',
     'check:bidirectional',
   ],
   'color-sketch': [
-    'dual:spacing_min..spacing_max:1..10@0.5',
-    'dual:amp_min..amp_max:0.2..4@0.1',
-    'range:period_px:2..20@0.5',
+    'dual:spacing_min..spacing_max:0.37..3.7@0.1',
+    'dual:amp_min..amp_max:0.07..1.5@0.1',
+    'range:period_mm:0.74..7.4@0.1',
     'range:jitter:0..1@0.05',
   ],
-  'color-spiral': ['dual:spacing_min..spacing_max:1..8@0.5', 'range:max_rings:5..120@1'],
+  'color-spiral': ['dual:spacing_min..spacing_max:0.37..3@0.1', 'range:max_rings:5..120@1'],
   'color-stippling-classic': [
     'dual:density_min..density_max:0.005..0.3@0.001',
-    'range:dot_radius:0.3..1.5@0.05',
+    'range:dot_radius:0.11..0.56@0.1',
   ],
   'color-edges': ['range:stroke_width:0.4..2@0.1'],
-  'color-centerline': ['range:stroke_width:0.4..2@0.1', 'range:min_branch_px:1..20@1'],
+  'color-centerline': ['range:stroke_width:0.4..2@0.1', 'range:min_branch_mm:0.37..7.4@0.1'],
   'color-spiral-classic': [
-    'dual:spacing_min..spacing_max:1..8@0.5',
+    'dual:spacing_min..spacing_max:0.37..3@0.1',
     'range:samples_per_turn:16..256@4',
   ],
   'color-scanlines': [
-    'dual:spacing_min..spacing_max:1..10@0.5',
-    'range:wave_amp_px:0..6@0.2',
-    'range:wave_period_px:2..40@1',
+    'dual:spacing_min..spacing_max:0.37..3.7@0.1',
+    'range:wave_amp_mm:0..2.2@0.1',
+    'range:wave_period_mm:0.74..15@0.1',
   ],
   'color-tsp': ['dual:density_min..density_max:0.005..0.3@0.001'],
-  'color-hilbert': ['dual:spacing_min..spacing_max:1..10@0.5', 'range:min_run_px:1..20@1'],
-  'color-gosper': ['range:order:1..6@1', 'dual:spacing_min..spacing_max:1..8@0.5'],
+  'color-hilbert': [
+    'dual:spacing_min..spacing_max:0.37..3.7@0.1',
+    'range:min_run_mm:0.37..7.4@0.1',
+  ],
+  'color-gosper': ['range:order:1..6@1', 'dual:spacing_min..spacing_max:0.37..3@0.1'],
   'color-eulerian': [
-    'dual:spacing_min..spacing_max:1..10@0.5',
+    'dual:spacing_min..spacing_max:0.37..3.7@0.1',
     'range:angle_step:0..90@5',
     'check:crossed',
   ],
@@ -148,18 +164,18 @@ const EXPECTED_MULTI: Record<string, string[]> = {
     'range:max_points:500..20000@500',
     'range:time_budget_s:0.2..6@0.1',
   ],
-  'color-grid': ['dual:spacing_min..spacing_max:1..20@0.5'],
-  'color-brick': ['dual:cell_min..cell_max:2..30@1'],
+  'color-grid': ['dual:spacing_min..spacing_max:0.37..7.4@0.1'],
+  'color-brick': ['dual:cell_min..cell_max:0.74..11@0.1'],
   'color-dashes': [
-    'dual:spacing_min..spacing_max:1..10@0.5',
+    'dual:spacing_min..spacing_max:0.37..3.7@0.1',
     'range:angle_step:0..90@5',
-    'range:dash_px:0.5..12@0.5',
-    'range:gap_px:0.5..12@0.5',
+    'range:dash_mm:0.19..4.5@0.1',
+    'range:gap_mm:0.19..4.5@0.1',
   ],
-  'color-truchet': ['dual:cell_min..cell_max:2..30@1'],
-  'color-rings': ['dual:spacing_min..spacing_max:1..20@0.5'],
+  'color-truchet': ['dual:cell_min..cell_max:0.74..11@0.1'],
+  'color-rings': ['dual:spacing_min..spacing_max:0.37..7.4@0.1'],
   'color-sunburst': ['dual:rays_min..rays_max:8..360@4'],
-  'color-circle-pack': ['dual:radius_min..radius_max:2..20@0.5', 'range:gap_px:0..6@0.1'],
+  'color-circle-pack': ['dual:radius_min..radius_max:0.74..7.4@0.1', 'range:gap_mm:0..2.2@0.1'],
 }
 
 function i18nHas(dict: Record<string, unknown>, key: string): boolean {

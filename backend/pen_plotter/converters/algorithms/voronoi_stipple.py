@@ -38,8 +38,8 @@ class VoronoiStippleAlgorithm(RasterAlgorithm):
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="density", label="convert.density", type="number",
                    default=0.02, min=0.001, max=0.5, step=0.001),
-        OptionSpec(key="dot_radius_px", label="convert.dotRadius", type="number",
-                   default=0.6, min=0.1, max=5, step=0.1),
+        OptionSpec(key="dot_radius_mm", label="convert.dotRadius", type="number",
+                   default=0.22, min=0.04, max=1.9, step=0.1),
         OptionSpec(key="iterations", label="convert.iterations", type="integer",
                    default=6, min=0, max=30, step=1),
         OptionSpec(key="seed", label="convert.seed", type="integer",

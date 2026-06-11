@@ -82,16 +82,16 @@ function onSimplifyChange(event: Event): void {
               {{ t('svg.minBranch') }}
             </label>
             <span class="font-mono text-[10px] text-slate-400">
-              {{ curves.centerline_min_branch_px }} px
+              {{ curves.centerline_min_branch_mm }} mm
             </span>
           </div>
           <input
             id="svg-min-branch"
-            v-model.number="curves.centerline_min_branch_px"
+            v-model.number="curves.centerline_min_branch_mm"
             type="range"
-            min="1"
-            max="10"
-            step="1"
+            min="0.2"
+            max="3.7"
+            step="0.1"
             class="w-full accent-emerald-500"
           />
           <p class="text-[10px] leading-snug text-slate-500">

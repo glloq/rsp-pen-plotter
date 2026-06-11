@@ -26,19 +26,19 @@ test('Spiral (tonal) feeds spacing + wavelength + strength', () => {
   d.bitmap.value.segmentation_method = 'luminance_bands'
   d.bitmap.value.num_bands = 1
   d.monoMasterStyleId.value = 'spiral-master'
-  d.setMonoKnob('spiral-master', 'spacing_px', 5.5)
-  d.setMonoKnob('spiral-master', 'wavelength_px', 10)
+  d.setMonoKnob('spiral-master', 'spacing_mm', 5.5)
+  d.setMonoKnob('spiral-master', 'wavelength_mm', 10)
   d.setMonoKnob('spiral-master', 'tone_strength', 0.6)
   const payload = d.buildBitmapOptions()
   const recipes = payload.band_recipes as Array<Record<string, unknown>>
   expect(recipes[0]!.algorithm).toBe('spiral')
   const o = recipes[0]!.algorithm_options as Record<string, unknown>
-  expect(o.spacing_px).toBe(5.5)
-  expect(o.wavelength_px).toBe(10)
+  expect(o.spacing_mm).toBe(5.5)
+  expect(o.wavelength_mm).toBe(10)
   expect(o.tone_strength).toBe(0.6)
 })
 
-test('Engraving wave_period overrides scanlines wave_period_px', () => {
+test('Engraving wave_period overrides scanlines wave_period_mm', () => {
   const d = useBitmapDraft()
   d.bitmap.value.segmentation_method = 'luminance_bands'
   d.bitmap.value.num_bands = 3
@@ -49,7 +49,7 @@ test('Engraving wave_period overrides scanlines wave_period_px', () => {
   expect(recipes.length).toBe(3)
   for (const r of recipes) {
     expect(r.algorithm).toBe('scanlines')
-    expect((r.algorithm_options as Record<string, unknown>).wave_period_px).toBe(18)
+    expect((r.algorithm_options as Record<string, unknown>).wave_period_mm).toBe(18)
   }
 })
 

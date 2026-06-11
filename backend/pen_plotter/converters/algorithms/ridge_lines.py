@@ -47,12 +47,12 @@ class RidgeLinesAlgorithm(RasterAlgorithm):
     tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=6, min=2, max=40, step=0.5),
-        OptionSpec(key="amp_px", label="convert.waveAmp", type="number",
-                   default=10, min=0, max=60, step=1),
-        OptionSpec(key="smooth_px", label="convert.smooth", type="integer",
-                   default=3, min=0, max=20, step=1),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=2.2, min=0.74, max=15, step=0.1),
+        OptionSpec(key="amp_mm", label="convert.waveAmp", type="number",
+                   default=3.7, min=0, max=22, step=0.1),
+        OptionSpec(key="smooth_mm", label="convert.smooth", type="number",
+                   default=1.1, min=0, max=7.4, step=0.1),
         OptionSpec(key="occlude", label="convert.hiddenLines", type="boolean",
                    default=True),
         # ``rows`` is the classic horizontal pulsar plot; ``radial`` bends

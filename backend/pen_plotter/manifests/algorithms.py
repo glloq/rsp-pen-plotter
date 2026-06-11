@@ -39,7 +39,12 @@ from pen_plotter.manifests import Manifest, ManifestEntry, ManifestMeta, registe
 # type (free-form string knobs, e.g. text_fill's ``text``).
 # v5: third batch (lsystem, chladni) + adaptive hilbert / radial
 # ridge_lines options.
-ALGORITHMS_MANIFEST_VERSION = 5
+# v6: physical units — every length option formerly in raster pixels
+# (``*_px``) is now declared in millimetres (``*_mm``), converted to
+# raster pixels per placement at render time (``convert_mm_options``)
+# so the on-paper pitch survives page-format changes. The ``*_px``
+# spellings remain accepted on the wire for saved settings.
+ALGORITHMS_MANIFEST_VERSION = 6
 
 
 class AlgorithmManifestEntry(ManifestEntry):

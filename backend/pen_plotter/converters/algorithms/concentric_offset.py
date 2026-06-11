@@ -104,8 +104,8 @@ class ConcentricOffsetAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=3, min=1, max=30, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.1, min=0.37, max=11, step=0.1),
         OptionSpec(key="max_rings", label="convert.maxRings", type="integer",
                    default=50, min=1, max=200, step=1),
         OptionSpec(key="bridge", label="convert.bridge", type="boolean", default=True),

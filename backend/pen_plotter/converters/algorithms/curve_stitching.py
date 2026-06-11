@@ -29,8 +29,8 @@ class CurveStitchingAlgorithm(RasterAlgorithm):
     )
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="cell_px", label="convert.cellPx", type="integer",
-                   default=18, min=8, max=80, step=1),
+        OptionSpec(key="cell_mm", label="convert.cellPx", type="number",
+                   default=6.7, min=3, max=30, step=0.1),
         OptionSpec(key="chords", label="convert.chords", type="integer",
                    default=7, min=3, max=20, step=1),
         OptionSpec(key="seed", label="convert.seed", type="integer",

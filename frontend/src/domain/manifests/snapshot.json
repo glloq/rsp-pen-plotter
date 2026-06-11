@@ -2,7 +2,7 @@
   "algorithms": {
     "meta": {
       "domain": "algorithms",
-      "manifest_version": 5,
+      "manifest_version": 6,
       "schema_semver": "0.2.0",
       "generated_at": "1970-01-01T00:00:00+00:00",
       "deprecations": [],
@@ -37,12 +37,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "cell_size_px": {
-              "type": "integer",
-              "default": 6,
-              "minimum": 2.0,
-              "maximum": 64.0,
-              "multipleOf": 1.0,
+            "cell_size_mm": {
+              "type": "number",
+              "default": 2.2,
+              "minimum": 0.74,
+              "maximum": 24.0,
+              "multipleOf": 0.1,
               "x-label": "convert.cellSize"
             },
             "angle_deg": {
@@ -90,11 +90,11 @@
               "multipleOf": 0.001,
               "x-label": "convert.density"
             },
-            "dot_radius_px": {
+            "dot_radius_mm": {
               "type": "number",
-              "default": 0.6,
-              "minimum": 0.1,
-              "maximum": 5.0,
+              "default": 0.22,
+              "minimum": 0.04,
+              "maximum": 1.9,
               "multipleOf": 0.1,
               "x-label": "convert.dotRadius"
             },
@@ -122,12 +122,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
             "angle_deg": {
@@ -165,12 +165,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
             "max_rings": {
@@ -219,12 +219,12 @@
               "default": true,
               "x-label": "convert.smooth"
             },
-            "min_branch_px": {
-              "type": "integer",
-              "default": 3,
+            "min_branch_mm": {
+              "type": "number",
+              "default": 1.1,
               "minimum": 0.0,
-              "maximum": 50.0,
-              "multipleOf": 1.0,
+              "maximum": 19.0,
+              "multipleOf": 0.1,
               "x-label": "convert.minBranch"
             }
           },
@@ -244,12 +244,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
             "samples_per_turn": {
@@ -277,28 +277,28 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
-            "wave_amp_px": {
+            "wave_amp_mm": {
               "type": "number",
               "default": 0,
               "minimum": 0.0,
-              "maximum": 20.0,
-              "multipleOf": 0.5,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.waveAmp"
             },
-            "wave_period_px": {
+            "wave_period_mm": {
               "type": "number",
-              "default": 12,
-              "minimum": 2.0,
-              "maximum": 50.0,
-              "multipleOf": 0.5,
+              "default": 4.5,
+              "minimum": 0.74,
+              "maximum": 19.0,
+              "multipleOf": 0.1,
               "x-label": "convert.wavePeriod"
             }
           },
@@ -350,20 +350,20 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
-            "min_run_px": {
-              "type": "integer",
-              "default": 3,
-              "minimum": 1.0,
-              "maximum": 20.0,
-              "multipleOf": 1.0,
+            "min_run_mm": {
+              "type": "number",
+              "default": 1.1,
+              "minimum": 0.37,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.minRunPx"
             },
             "order": {
@@ -404,12 +404,12 @@
               "multipleOf": 1.0,
               "x-label": "convert.gosperOrder"
             },
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
             "rotation_deg": {
@@ -437,12 +437,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
             "angle_deg": {
@@ -475,12 +475,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 3,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.1,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
             "max_rings": {
@@ -522,19 +522,19 @@
               "default": "gradient",
               "x-label": "convert.flowMode"
             },
-            "seed_spacing_px": {
+            "seed_spacing_mm": {
               "type": "number",
-              "default": 6,
-              "minimum": 2.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 2.2,
+              "minimum": 0.74,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
-            "step_px": {
+            "step_mm": {
               "type": "number",
-              "default": 0.8,
-              "minimum": 0.2,
-              "maximum": 3.0,
+              "default": 0.3,
+              "minimum": 0.07,
+              "maximum": 1.1,
               "multipleOf": 0.1,
               "x-label": "convert.stepPx"
             },
@@ -654,11 +654,11 @@
               "multipleOf": 0.001,
               "x-label": "convert.density"
             },
-            "dot_radius_px": {
+            "dot_radius_mm": {
               "type": "number",
-              "default": 0.6,
-              "minimum": 0.1,
-              "maximum": 5.0,
+              "default": 0.22,
+              "minimum": 0.04,
+              "maximum": 1.9,
               "multipleOf": 0.1,
               "x-label": "convert.dotRadius"
             },
@@ -694,28 +694,28 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
-            "amp_px": {
+            "amp_mm": {
               "type": "number",
-              "default": 1.4,
-              "minimum": 0.1,
-              "maximum": 8.0,
+              "default": 0.52,
+              "minimum": 0.04,
+              "maximum": 3.0,
               "multipleOf": 0.1,
               "x-label": "convert.waveAmp"
             },
-            "period_px": {
+            "period_mm": {
               "type": "number",
-              "default": 8,
-              "minimum": 2.0,
-              "maximum": 40.0,
-              "multipleOf": 0.5,
+              "default": 3,
+              "minimum": 0.74,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
               "x-label": "convert.wavePeriod"
             },
             "jitter": {
@@ -791,28 +791,28 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
-            "amp_px": {
+            "amp_mm": {
               "type": "number",
-              "default": 1.6,
+              "default": 0.59,
               "minimum": 0.0,
-              "maximum": 8.0,
+              "maximum": 3.0,
               "multipleOf": 0.1,
               "x-label": "convert.waveAmp"
             },
-            "overshoot_px": {
+            "overshoot_mm": {
               "type": "number",
-              "default": 3,
+              "default": 1.1,
               "minimum": 0.0,
-              "maximum": 20.0,
-              "multipleOf": 0.5,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.overshoot"
             },
             "angle_deg": {
@@ -852,12 +852,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 6,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 2.2,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             }
           },
@@ -877,20 +877,20 @@
         "params": {
           "type": "object",
           "properties": {
-            "brick_w_px": {
-              "type": "integer",
-              "default": 16,
-              "minimum": 2.0,
-              "maximum": 60.0,
-              "multipleOf": 1.0,
+            "brick_w_mm": {
+              "type": "number",
+              "default": 5.9,
+              "minimum": 0.74,
+              "maximum": 22.0,
+              "multipleOf": 0.1,
               "x-label": "convert.brickW"
             },
-            "brick_h_px": {
-              "type": "integer",
-              "default": 8,
-              "minimum": 2.0,
-              "maximum": 40.0,
-              "multipleOf": 1.0,
+            "brick_h_mm": {
+              "type": "number",
+              "default": 3,
+              "minimum": 0.74,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
               "x-label": "convert.brickH"
             }
           },
@@ -910,12 +910,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 5,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 1.9,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
             "angle_deg": {
@@ -926,20 +926,20 @@
               "multipleOf": 1.0,
               "x-label": "convert.angleDeg"
             },
-            "dash_px": {
+            "dash_mm": {
               "type": "number",
-              "default": 3,
-              "minimum": 0.5,
-              "maximum": 20.0,
-              "multipleOf": 0.5,
+              "default": 1.1,
+              "minimum": 0.19,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.dashPx"
             },
-            "gap_px": {
+            "gap_mm": {
               "type": "number",
-              "default": 3,
-              "minimum": 0.5,
-              "maximum": 20.0,
-              "multipleOf": 0.5,
+              "default": 1.1,
+              "minimum": 0.19,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.gapPx"
             },
             "crossed": {
@@ -964,12 +964,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "cell_px": {
-              "type": "integer",
-              "default": 10,
-              "minimum": 2.0,
-              "maximum": 40.0,
-              "multipleOf": 1.0,
+            "cell_mm": {
+              "type": "number",
+              "default": 3.7,
+              "minimum": 0.74,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
               "x-label": "convert.cellPx"
             },
             "seed": {
@@ -1006,12 +1006,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 6,
-              "minimum": 1.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 2.2,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             }
           },
@@ -1056,27 +1056,27 @@
         "params": {
           "type": "object",
           "properties": {
-            "min_radius_px": {
+            "min_radius_mm": {
               "type": "number",
-              "default": 1.2,
-              "minimum": 0.5,
-              "maximum": 10.0,
+              "default": 0.45,
+              "minimum": 0.19,
+              "maximum": 3.7,
               "multipleOf": 0.1,
               "x-label": "convert.minRadius"
             },
-            "max_radius_px": {
+            "max_radius_mm": {
               "type": "number",
-              "default": 8.0,
-              "minimum": 1.0,
-              "maximum": 40.0,
-              "multipleOf": 0.5,
+              "default": 3,
+              "minimum": 0.37,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
               "x-label": "convert.maxRadius"
             },
-            "gap_px": {
+            "gap_mm": {
               "type": "number",
-              "default": 0.6,
+              "default": 0.22,
               "minimum": 0.0,
-              "maximum": 10.0,
+              "maximum": 3.7,
               "multipleOf": 0.1,
               "x-label": "convert.gapPx"
             },
@@ -1104,28 +1104,28 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 6,
-              "minimum": 2.0,
-              "maximum": 40.0,
-              "multipleOf": 0.5,
+              "default": 2.2,
+              "minimum": 0.74,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
-            "amp_px": {
+            "amp_mm": {
               "type": "number",
-              "default": 10,
+              "default": 3.7,
               "minimum": 0.0,
-              "maximum": 60.0,
-              "multipleOf": 1.0,
+              "maximum": 22.0,
+              "multipleOf": 0.1,
               "x-label": "convert.waveAmp"
             },
-            "smooth_px": {
-              "type": "integer",
-              "default": 3,
+            "smooth_mm": {
+              "type": "number",
+              "default": 1.1,
               "minimum": 0.0,
-              "maximum": 20.0,
-              "multipleOf": 1.0,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.smooth"
             },
             "occlude": {
@@ -1159,12 +1159,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "cell_px": {
-              "type": "integer",
-              "default": 8,
-              "minimum": 3.0,
-              "maximum": 40.0,
-              "multipleOf": 1.0,
+            "cell_mm": {
+              "type": "number",
+              "default": 3,
+              "minimum": 1.1,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
               "x-label": "convert.cellPx"
             },
             "seed": {
@@ -1191,12 +1191,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "cell_px": {
-              "type": "integer",
-              "default": 12,
-              "minimum": 4.0,
-              "maximum": 60.0,
-              "multipleOf": 1.0,
+            "cell_mm": {
+              "type": "number",
+              "default": 4.5,
+              "minimum": 1.5,
+              "maximum": 22.0,
+              "multipleOf": 0.1,
               "x-label": "convert.cellPx"
             },
             "max_rotate_deg": {
@@ -1207,12 +1207,12 @@
               "multipleOf": 1.0,
               "x-label": "convert.rotateMax"
             },
-            "max_offset_px": {
+            "max_offset_mm": {
               "type": "number",
-              "default": 5,
+              "default": 1.9,
               "minimum": 0.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.offsetMax"
             },
             "seed": {
@@ -1239,12 +1239,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "min_cell_px": {
-              "type": "integer",
-              "default": 6,
-              "minimum": 2.0,
-              "maximum": 64.0,
-              "multipleOf": 1.0,
+            "min_cell_mm": {
+              "type": "number",
+              "default": 2.2,
+              "minimum": 0.74,
+              "maximum": 24.0,
+              "multipleOf": 0.1,
               "x-label": "convert.minCell"
             },
             "split_threshold": {
@@ -1272,12 +1272,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "cell_px": {
-              "type": "integer",
-              "default": 8,
-              "minimum": 3.0,
-              "maximum": 40.0,
-              "multipleOf": 1.0,
+            "cell_mm": {
+              "type": "number",
+              "default": 3,
+              "minimum": 1.1,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
               "x-label": "convert.cellPx"
             },
             "seed": {
@@ -1304,19 +1304,19 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 7,
-              "minimum": 2.0,
-              "maximum": 30.0,
-              "multipleOf": 0.5,
+              "default": 2.6,
+              "minimum": 0.74,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
-            "dot_radius_px": {
+            "dot_radius_mm": {
               "type": "number",
-              "default": 2.5,
-              "minimum": 0.3,
-              "maximum": 10.0,
+              "default": 0.93,
+              "minimum": 0.11,
+              "maximum": 3.7,
               "multipleOf": 0.1,
               "x-label": "convert.dotRadius"
             },
@@ -1374,12 +1374,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "cell_px": {
-              "type": "integer",
-              "default": 18,
-              "minimum": 8.0,
-              "maximum": 80.0,
-              "multipleOf": 1.0,
+            "cell_mm": {
+              "type": "number",
+              "default": 6.7,
+              "minimum": 3.0,
+              "maximum": 30.0,
+              "multipleOf": 0.1,
               "x-label": "convert.cellPx"
             },
             "chords": {
@@ -1463,28 +1463,28 @@
               "multipleOf": 50.0,
               "x-label": "convert.attractors"
             },
-            "step_px": {
+            "step_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.0,
-              "maximum": 15.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 5.6,
+              "multipleOf": 0.1,
               "x-label": "convert.stepPx"
             },
-            "influence_px": {
+            "influence_mm": {
               "type": "number",
-              "default": 40,
-              "minimum": 5.0,
-              "maximum": 200.0,
-              "multipleOf": 1.0,
+              "default": 15,
+              "minimum": 1.9,
+              "maximum": 74.0,
+              "multipleOf": 0.1,
               "x-label": "convert.influencePx"
             },
-            "kill_px": {
+            "kill_mm": {
               "type": "number",
-              "default": 6,
-              "minimum": 2.0,
-              "maximum": 40.0,
-              "multipleOf": 1.0,
+              "default": 2.2,
+              "minimum": 0.74,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
               "x-label": "convert.killPx"
             },
             "seed": {
@@ -1536,19 +1536,19 @@
         "params": {
           "type": "object",
           "properties": {
-            "cell_px": {
-              "type": "integer",
-              "default": 4,
-              "minimum": 2.0,
-              "maximum": 20.0,
-              "multipleOf": 1.0,
+            "cell_mm": {
+              "type": "number",
+              "default": 1.5,
+              "minimum": 0.74,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.cellPx"
             },
-            "dot_radius_px": {
+            "dot_radius_mm": {
               "type": "number",
-              "default": 1.0,
-              "minimum": 0.2,
-              "maximum": 5.0,
+              "default": 0.37,
+              "minimum": 0.07,
+              "maximum": 1.9,
               "multipleOf": 0.1,
               "x-label": "convert.dotRadius"
             },
@@ -1579,20 +1579,20 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 5,
-              "minimum": 2.0,
-              "maximum": 20.0,
-              "multipleOf": 0.5,
+              "default": 1.9,
+              "minimum": 0.74,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
-            "length_px": {
+            "length_mm": {
               "type": "number",
-              "default": 9,
-              "minimum": 2.0,
-              "maximum": 40.0,
-              "multipleOf": 1.0,
+              "default": 3.3,
+              "minimum": 0.74,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
               "x-label": "convert.strokeLen"
             },
             "jitter": {
@@ -1724,12 +1724,12 @@
               "multipleOf": 10.0,
               "x-label": "convert.regions"
             },
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 4,
-              "minimum": 1.5,
-              "maximum": 20.0,
-              "multipleOf": 0.5,
+              "default": 1.5,
+              "minimum": 0.56,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
             "seed": {
@@ -1756,12 +1756,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "spacing_px": {
+            "spacing_mm": {
               "type": "number",
-              "default": 5,
-              "minimum": 2.0,
-              "maximum": 20.0,
-              "multipleOf": 0.5,
+              "default": 1.9,
+              "minimum": 0.74,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
               "x-label": "convert.spacing"
             },
             "mode": {
@@ -1773,12 +1773,12 @@
               "default": "rings",
               "x-label": "convert.mode"
             },
-            "offset_px": {
+            "offset_mm": {
               "type": "number",
-              "default": 14,
+              "default": 5.2,
               "minimum": 0.0,
-              "maximum": 80.0,
-              "multipleOf": 1.0,
+              "maximum": 30.0,
+              "multipleOf": 0.1,
               "x-label": "convert.offsetPx"
             },
             "delta_deg": {
@@ -1806,20 +1806,20 @@
         "params": {
           "type": "object",
           "properties": {
-            "band_px": {
-              "type": "integer",
-              "default": 12,
-              "minimum": 4.0,
-              "maximum": 60.0,
-              "multipleOf": 1.0,
+            "band_mm": {
+              "type": "number",
+              "default": 4.5,
+              "minimum": 1.5,
+              "maximum": 22.0,
+              "multipleOf": 0.1,
               "x-label": "convert.bandPx"
             },
-            "gap_px": {
+            "gap_mm": {
               "type": "number",
-              "default": 2,
-              "minimum": 0.5,
-              "maximum": 10.0,
-              "multipleOf": 0.5,
+              "default": 0.74,
+              "minimum": 0.19,
+              "maximum": 3.7,
+              "multipleOf": 0.1,
               "x-label": "convert.gapPx"
             }
           },
@@ -1839,12 +1839,12 @@
         "params": {
           "type": "object",
           "properties": {
-            "cell_px": {
-              "type": "integer",
-              "default": 12,
-              "minimum": 4.0,
-              "maximum": 60.0,
-              "multipleOf": 1.0,
+            "cell_mm": {
+              "type": "number",
+              "default": 4.5,
+              "minimum": 1.5,
+              "maximum": 22.0,
+              "multipleOf": 0.1,
               "x-label": "convert.cellPx"
             },
             "mode": {
@@ -1938,11 +1938,11 @@
               "multipleOf": 500.0,
               "x-label": "convert.maxPoints"
             },
-            "dot_radius_px": {
+            "dot_radius_mm": {
               "type": "number",
-              "default": 0.5,
-              "minimum": 0.2,
-              "maximum": 3.0,
+              "default": 0.19,
+              "minimum": 0.07,
+              "maximum": 1.1,
               "multipleOf": 0.1,
               "x-label": "convert.dotRadius"
             },
@@ -1975,12 +1975,12 @@
               "default": "OmniPlot ",
               "x-label": "convert.text"
             },
-            "font_size_px": {
+            "font_size_mm": {
               "type": "number",
-              "default": 12,
-              "minimum": 4.0,
-              "maximum": 60.0,
-              "multipleOf": 1.0,
+              "default": 4.5,
+              "minimum": 1.5,
+              "maximum": 22.0,
+              "multipleOf": 0.1,
               "x-label": "convert.fontSize"
             },
             "line_spacing": {

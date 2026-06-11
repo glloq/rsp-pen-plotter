@@ -42,8 +42,8 @@ class AttractorAlgorithm(RasterAlgorithm):
                    default="dejong", choices=["dejong", "clifford"]),
         OptionSpec(key="points", label="convert.maxPoints", type="integer",
                    default=6000, min=500, max=20000, step=500),
-        OptionSpec(key="dot_radius_px", label="convert.dotRadius", type="number",
-                   default=0.5, min=0.2, max=3, step=0.1),
+        OptionSpec(key="dot_radius_mm", label="convert.dotRadius", type="number",
+                   default=0.19, min=0.07, max=1.1, step=0.1),
         OptionSpec(key="seed", label="convert.seed", type="integer",
                    default=0, min=0, step=1),
     ]

@@ -85,6 +85,7 @@ describe('rehydrateMonoFromOptions', () => {
     rehydrateMonoFromOptions({
       mono_knobs: {
         ink_color: '#112233',
+        knob_units: 'mm',
         perStyle: {
           engraving: { wave_period: 22 },
         },
@@ -95,6 +96,21 @@ describe('rehydrateMonoFromOptions', () => {
     expect(mono.perStyle.engraving!.wave_period).toBe(22)
     // Untouched fields still pick up their MONO_STYLE_DEFAULTS value.
     expect(mono.perStyle.engraving!.spacing_min).toBeDefined()
+  })
+
+  it('rescales px-era mono_knobs payloads (no knob_units marker) into mm', () => {
+    rehydrateMonoFromOptions({
+      mono_knobs: {
+        ink_color: '#112233',
+        perStyle: {
+          // 22 px at the A4 reference scale (297 mm / 800 px) ≈ 8.17 mm.
+          engraving: { wave_period: 22, spacing_min: 2.5 },
+        },
+      },
+    })
+    const mono = useMonoRecipe().mono.value
+    expect(mono.perStyle.engraving!.wave_period).toBeCloseTo(8.17, 2)
+    expect(mono.perStyle.engraving!.spacing_min).toBeCloseTo(0.93, 2)
   })
 
   it('mono_ink_color at the top level wins over mono_knobs.ink_color', () => {
@@ -161,7 +177,7 @@ describe('buildMonoBandRecipes', () => {
     expect(recipes!.length).toBe(3)
     for (const r of recipes!) {
       expect(r.algorithm).toBe('scanlines')
-      expect((r.algorithm_options as Record<string, unknown>).wave_period_px).toBe(17)
+      expect((r.algorithm_options as Record<string, unknown>).wave_period_mm).toBe(17)
     }
   })
 
@@ -189,7 +205,7 @@ describe('buildMonoBandRecipes', () => {
     for (const r of flow!) {
       expect(r.algorithm).toBe('flowfield')
       // Both endpoints pinned to 5 → every band lands on 5 regardless of lerp.
-      expect((r.algorithm_options as Record<string, unknown>).seed_spacing_px).toBeCloseTo(5)
+      expect((r.algorithm_options as Record<string, unknown>).seed_spacing_mm).toBeCloseTo(5)
     }
 
     setMonoMasterStyleId('voronoi-shade')
@@ -260,16 +276,16 @@ describe('buildMonoBandRecipes', () => {
 
   it('honours a perBand override on the pinned band only', () => {
     setMonoMasterStyleId('engraving')
-    setMonoBandOverride('engraving', 1, { wave_period_px: 99, spacing_px: 4 })
+    setMonoBandOverride('engraving', 1, { wave_period_mm: 99, spacing_mm: 4 })
 
     const recipes = buildMonoBandRecipes('luminance_bands', 3)
     expect(recipes!.length).toBe(3)
     const pinned = recipes![1]!.algorithm_options as Record<string, unknown>
-    expect(pinned.wave_period_px).toBe(99)
-    expect(pinned.spacing_px).toBe(4)
+    expect(pinned.wave_period_mm).toBe(99)
+    expect(pinned.spacing_mm).toBe(4)
     // Bands 0 and 2 still go through the interpolation pipeline.
     const band0 = recipes![0]!.algorithm_options as Record<string, unknown>
-    expect(band0.wave_period_px).not.toBe(99)
+    expect(band0.wave_period_mm).not.toBe(99)
   })
 })
 
@@ -284,11 +300,11 @@ describe('interpolatedBandOptions ignores perBand pins', () => {
     // the pin diverges from. Pinning band 1 must not leak into the
     // pre-fill returned by ``interpolatedBandOptions(1, 3)``.
     setMonoMasterStyleId('engraving')
-    setMonoBandOverride('engraving', 1, { wave_period_px: 999 })
+    setMonoBandOverride('engraving', 1, { wave_period_mm: 999 })
 
     const opts = interpolatedBandOptions(1, 3)
-    expect(opts.wave_period_px).not.toBe(999)
-    expect(typeof opts.spacing_px).toBe('number')
+    expect(opts.wave_period_mm).not.toBe(999)
+    expect(typeof opts.spacing_mm).toBe('number')
   })
 })
 
@@ -302,14 +318,15 @@ describe('generic algoOverrides knob (2026-06 tonal masters)', () => {
     // ridge-pulsar has no bespoke case in recipeFromKnobs — the default
     // branch must merge the schema-form overrides over bandRecipe().
     setMonoMasterStyleId('ridge-pulsar')
-    setMonoKnob('ridge-pulsar', 'algoOverrides', { amp_px: 22, occlude: false })
+    setMonoKnob('ridge-pulsar', 'algoOverrides', { amp_mm: 22, occlude: false })
     const recipe = monoRecipeForBand(0, 1)
     expect(recipe).not.toBeNull()
     expect(recipe!.algorithm).toBe('ridge_lines')
-    expect(recipe!.algorithm_options.amp_px).toBe(22)
+    expect(recipe!.algorithm_options.amp_mm).toBe(22)
     expect(recipe!.algorithm_options.occlude).toBe(false)
-    // Untouched options keep the registry default.
-    expect(recipe!.algorithm_options.spacing_px).toBe(5)
+    // Untouched options keep the registry default (1.9 mm ≈ the old
+    // 5 px pitch at the A4 reference scale).
+    expect(recipe!.algorithm_options.spacing_mm).toBe(1.9)
   })
 
   it('without overrides the registry bandRecipe passes through untouched', () => {

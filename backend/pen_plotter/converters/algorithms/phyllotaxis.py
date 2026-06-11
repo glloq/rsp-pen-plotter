@@ -37,10 +37,10 @@ class PhyllotaxisAlgorithm(RasterAlgorithm):
 
     options_schema: ClassVar[list[OptionSpec]] = [
         # Average distance between consecutive ring points.
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=7, min=2, max=30, step=0.5),
-        OptionSpec(key="dot_radius_px", label="convert.dotRadius", type="number",
-                   default=2.5, min=0.3, max=10, step=0.1),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=2.6, min=0.74, max=11, step=0.1),
+        OptionSpec(key="dot_radius_mm", label="convert.dotRadius", type="number",
+                   default=0.93, min=0.11, max=3.7, step=0.1),
         # Draw rings (outlines) instead of filled dots.
         OptionSpec(key="outline", label="convert.outline", type="boolean",
                    default=False),

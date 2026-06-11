@@ -70,10 +70,10 @@ class DitherAlgorithm(RasterAlgorithm):
     tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="cell_px", label="convert.cellPx", type="integer",
-                   default=4, min=2, max=20, step=1),
-        OptionSpec(key="dot_radius_px", label="convert.dotRadius", type="number",
-                   default=1.0, min=0.2, max=5, step=0.1),
+        OptionSpec(key="cell_mm", label="convert.cellPx", type="number",
+                   default=1.5, min=0.74, max=7.4, step=0.1),
+        OptionSpec(key="dot_radius_mm", label="convert.dotRadius", type="number",
+                   default=0.37, min=0.07, max=1.9, step=0.1),
         OptionSpec(key="method", label="convert.ditherMethod", type="select",
                    default="floyd", choices=["floyd", "atkinson", "bayer"]),
     ]

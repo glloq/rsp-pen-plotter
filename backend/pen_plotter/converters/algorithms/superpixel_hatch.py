@@ -37,8 +37,8 @@ class SuperpixelHatchAlgorithm(RasterAlgorithm):
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="regions", label="convert.regions", type="integer",
                    default=180, min=20, max=800, step=10),
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1.5, max=20, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.56, max=7.4, step=0.1),
         OptionSpec(key="seed", label="convert.seed", type="integer",
                    default=0, min=0, step=1),
     ]

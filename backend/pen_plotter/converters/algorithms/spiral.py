@@ -28,8 +28,8 @@ class SpiralAlgorithm(RasterAlgorithm):
     tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
-        OptionSpec(key="spacing_px", label="convert.spacing", type="number",
-                   default=4, min=1, max=30, step=0.5),
+        OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
+                   default=1.5, min=0.37, max=11, step=0.1),
         OptionSpec(key="samples_per_turn", label="convert.samplesPerTurn",
                    type="integer", default=64, min=16, max=256, step=1),
     ]

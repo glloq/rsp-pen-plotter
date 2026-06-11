@@ -78,6 +78,7 @@ describe('mono_knobs rehydrate', () => {
         last_options: {
           mono_knobs: {
             ink_color: '#112233',
+            knob_units: 'mm',
             perStyle: {
               engraving: { wave_period: 22 },
             },
@@ -161,7 +162,7 @@ describe('mono dirty tracking', () => {
   it('setMonoBandOverride participates in dirty tracking', () => {
     const d = useBitmapDraft()
     d.markCommitted()
-    d.setMonoBandOverride('engraving', 1, { spacing_px: 3.5 })
+    d.setMonoBandOverride('engraving', 1, { spacing_mm: 3.5 })
     expect(d.isDirty.value).toBe(true)
   })
 })
@@ -178,11 +179,11 @@ describe('interpolatedBandOptions', () => {
     d.bitmap.value.segmentation_method = 'luminance_bands'
     d.bitmap.value.num_bands = 3
     d.setMasterStyle('engraving')
-    d.setMonoBandOverride('engraving', 1, { wave_period_px: 999 })
+    d.setMonoBandOverride('engraving', 1, { wave_period_mm: 999 })
 
     const opts = d.interpolatedBandOptions(1, 3)
-    expect(opts.wave_period_px).not.toBe(999)
-    expect(typeof opts.spacing_px).toBe('number')
+    expect(opts.wave_period_mm).not.toBe(999)
+    expect(typeof opts.spacing_mm).toBe('number')
   })
 })
 
@@ -194,14 +195,14 @@ describe('setMonoBandOverride pin & clear', () => {
     d.bitmap.value.segmentation_method = 'luminance_bands'
     d.bitmap.value.num_bands = 3
     d.setMasterStyle('engraving')
-    d.setMonoBandOverride('engraving', 1, { wave_period_px: 99, spacing_px: 4 })
+    d.setMonoBandOverride('engraving', 1, { wave_period_mm: 99, spacing_mm: 4 })
 
     const payload = d.buildBitmapOptions()
     const recipes = payload.band_recipes as Array<Record<string, unknown>>
     expect(recipes.length).toBe(3)
     const pinnedOpts = recipes[1]!.algorithm_options as Record<string, unknown>
-    expect(pinnedOpts.wave_period_px).toBe(99)
-    expect(pinnedOpts.spacing_px).toBe(4)
+    expect(pinnedOpts.wave_period_mm).toBe(99)
+    expect(pinnedOpts.spacing_mm).toBe(4)
   })
 })
 

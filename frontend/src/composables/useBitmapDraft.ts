@@ -33,6 +33,11 @@
 // builder.
 
 import { computed, ref } from 'vue'
+import {
+  KNOB_UNITS_MM,
+  convertLegacyStyleKnobs,
+  isLegacyKnobPayload,
+} from '../lib/legacyKnobUnits'
 import type { SegmentationMethod } from '../api/client'
 import {
   resolveMasterStyle,
@@ -148,7 +153,7 @@ export type CurvesDraft = {
   // cleaned up. The algorithm's hard-coded default was 3; exposing it
   // here lets the operator dial it down for technical drawings where
   // every dimension tick matters.
-  centerline_min_branch_px: number
+  centerline_min_branch_mm: number
   simplify_tolerance_mm: number
   curve_fit: boolean
 }
@@ -240,7 +245,7 @@ export function defaultCurves(): CurvesDraft {
     // old default of 3 provided. Verified on a 3200×2400 mechanical
     // drawing JPG: 1 vs 3 ≈ +250 % polyline count, all of which trace
     // real geometry the operator wants on paper.
-    centerline_min_branch_px: 1,
+    centerline_min_branch_mm: 0.37,
     simplify_tolerance_mm: 0.05,
     curve_fit: false,
   }
@@ -271,11 +276,11 @@ export type MulticolorStyleKnobs = {
   cell_size?: number
   angle_step?: number
   crossed?: boolean
-  step_px?: number
+  step_mm?: number
   max_steps?: number
   noise_scale?: number
   bidirectional?: boolean
-  period_px?: number
+  period_mm?: number
   jitter?: number
   max_rings?: number
   // Knobs shared by the second-wave colour masters (edges, centerline,
@@ -283,11 +288,11 @@ export type MulticolorStyleKnobs = {
   // hatch). Each keeps the same naming as its mono counterpart so the
   // params card stays readable when the cards share sliders.
   stroke_width?: number
-  min_branch_px?: number
+  min_branch_mm?: number
   samples_per_turn?: number
-  wave_amp_px?: number
-  wave_period_px?: number
-  min_run_px?: number
+  wave_amp_mm?: number
+  wave_period_mm?: number
+  min_run_mm?: number
   order?: number
   max_points?: number
   time_budget_s?: number
@@ -296,8 +301,8 @@ export type MulticolorStyleKnobs = {
   // ranges lerp dark→light like spacing does on the hatch families.
   cell_min?: number
   cell_max?: number
-  dash_px?: number
-  gap_px?: number
+  dash_mm?: number
+  gap_mm?: number
   rays_min?: number
   rays_max?: number
   radius_min?: number
@@ -478,10 +483,17 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   }
   const curvesOpts = (opts as Record<string, unknown>).curves
   if (curvesOpts && typeof curvesOpts === 'object') {
+    const bag = { ...(curvesOpts as Record<string, unknown>) }
+    // px-era saves carried ``centerline_min_branch_px``; map it onto
+    // the mm field at the migration's reference scale.
+    if (typeof bag.centerline_min_branch_px === 'number' && !('centerline_min_branch_mm' in bag)) {
+      bag.centerline_min_branch_mm =
+        Math.round((bag.centerline_min_branch_px as number) * (297 / 800) * 100) / 100
+    }
     const fresh = defaultCurves() as Record<string, unknown>
     for (const key of Object.keys(fresh)) {
-      if (key in (curvesOpts as Record<string, unknown>)) {
-        fresh[key] = (curvesOpts as Record<string, unknown>)[key]
+      if (key in bag) {
+        fresh[key] = bag[key]
       }
     }
     _curves.value = fresh as unknown as CurvesDraft
@@ -491,12 +503,19 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
   const multiOpts = (opts as Record<string, unknown>).multicolor_knobs
   if (multiOpts && typeof multiOpts === 'object') {
     const m = multiOpts as Partial<MulticolorKnobsDraft>
+    // Payloads saved before the 2026-06 physical-units migration carry
+    // px-scale knob values; rescale them once so the operator's tuning
+    // keeps its visual pitch under the mm engine.
+    const legacy = isLegacyKnobPayload(multiOpts as Record<string, unknown>)
     if (m.perStyle && typeof m.perStyle === 'object') {
       for (const [styleId, knobs] of Object.entries(m.perStyle)) {
         if (knobs && typeof knobs === 'object') {
+          const bag = legacy
+            ? (convertLegacyStyleKnobs(knobs as Record<string, unknown>) as MulticolorStyleKnobs)
+            : (knobs as MulticolorStyleKnobs)
           _multicolor.value.perStyle[styleId] = {
             ...defaultMulticolorStyleKnobs(styleId),
-            ...(knobs as MulticolorStyleKnobs),
+            ...bag,
           }
         }
       }
@@ -831,12 +850,12 @@ function colorRecipeFromKnobs(
       // identical to the propagation path. A raw ``i * step`` collapsed
       // distinct clusters onto the same angle at the default (0/90/0/90).
       const angle = ((baseAngles[i % baseAngles.length] ?? 0) + i * (step - 45)) % 180
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.2)
       return {
         algorithm: 'crosshatch',
         algorithm_options: {
           angle_deg: ((angle % 180) + 180) % 180,
-          spacing_px: spacing,
+          spacing_mm: spacing,
           crossed: knobs.crossed ?? false,
         },
       }
@@ -850,7 +869,7 @@ function colorRecipeFromKnobs(
         algorithm: 'voronoi_stipple',
         algorithm_options: {
           density,
-          dot_radius_px: knobs.dot_radius ?? 0.5,
+          dot_radius_mm: knobs.dot_radius ?? 0.19,
           iterations: knobs.iterations ?? 4,
           seed: i * 13 + 7,
         },
@@ -873,27 +892,27 @@ function colorRecipeFromKnobs(
       return {
         algorithm: 'halftone',
         algorithm_options: {
-          cell_size_px: knobs.cell_size ?? 5,
+          cell_size_mm: knobs.cell_size ?? 1.9,
           angle_deg: angle,
         },
       }
     }
     case 'color-contours-topo': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.2)
       // Darker clusters get more rings.
       const rings = Math.round(lerp(i, total, knobs.rings_max ?? 30, knobs.rings_min ?? 10))
       return {
         algorithm: 'contours',
-        algorithm_options: { spacing_px: spacing, max_rings: rings },
+        algorithm_options: { spacing_mm: spacing, max_rings: rings },
       }
     }
     case 'color-flowfield': {
-      const seedSpacing = lerp(i, total, knobs.seed_spacing_min ?? 6, knobs.seed_spacing_max ?? 12)
+      const seedSpacing = lerp(i, total, knobs.seed_spacing_min ?? 2.2, knobs.seed_spacing_max ?? 4.5)
       return {
         algorithm: 'flowfield',
         algorithm_options: {
-          seed_spacing_px: seedSpacing,
-          step_px: knobs.step_px ?? 0.8,
+          seed_spacing_mm: seedSpacing,
+          step_mm: knobs.step_mm ?? 0.3,
           max_steps: knobs.max_steps ?? 600,
           bidirectional: knobs.bidirectional ?? true,
           noise_scale: knobs.noise_scale ?? 48,
@@ -903,14 +922,14 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-sketch': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 6)
-      const amp = lerp(i, total, knobs.amp_max ?? 1.8, knobs.amp_min ?? 0.6)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.2)
+      const amp = lerp(i, total, knobs.amp_max ?? 0.67, knobs.amp_min ?? 0.22)
       return {
         algorithm: 'squiggle',
         algorithm_options: {
-          spacing_px: spacing,
-          amp_px: amp,
-          period_px: knobs.period_px ?? 8,
+          spacing_mm: spacing,
+          amp_mm: amp,
+          period_mm: knobs.period_mm ?? 3,
           jitter: knobs.jitter ?? 0.45,
           mode: 'modulated',
           seed: i * 17 + 23,
@@ -918,11 +937,11 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-spiral': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2, knobs.spacing_max ?? 5)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.74, knobs.spacing_max ?? 1.9)
       return {
         algorithm: 'concentric_offset',
         algorithm_options: {
-          spacing_px: spacing,
+          spacing_mm: spacing,
           max_rings: knobs.max_rings ?? 40,
           bridge: true,
         },
@@ -934,7 +953,7 @@ function colorRecipeFromKnobs(
         algorithm: 'stippling',
         algorithm_options: {
           density,
-          dot_radius_px: knobs.dot_radius ?? 0.5,
+          dot_radius_mm: knobs.dot_radius ?? 0.19,
           seed: i * 7 + 13,
         },
       }
@@ -954,30 +973,30 @@ function colorRecipeFromKnobs(
           // Prefer the operator-visible SvgTab slider over the legacy
           // per-style knob so the "Détails fins" control behaves
           // consistently across mono and multicolor centerline paths.
-          // ``_curves.value.centerline_min_branch_px`` defaults to 3 so
+          // ``_curves.value.centerline_min_branch_mm`` carries the SVG-tab
           // existing rehydrated drafts keep their behaviour.
-          min_branch_px: _curves.value.centerline_min_branch_px ?? knobs.min_branch_px ?? 3,
+          min_branch_mm: _curves.value.centerline_min_branch_mm ?? knobs.min_branch_mm ?? 1.1,
         },
       }
     }
     case 'color-spiral-classic': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2, knobs.spacing_max ?? 5)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.74, knobs.spacing_max ?? 1.9)
       return {
         algorithm: 'spiral',
         algorithm_options: {
-          spacing_px: spacing,
+          spacing_mm: spacing,
           samples_per_turn: knobs.samples_per_turn ?? 64,
         },
       }
     }
     case 'color-scanlines': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.2)
       return {
         algorithm: 'scanlines',
         algorithm_options: {
-          spacing_px: spacing,
-          wave_amp_px: knobs.wave_amp_px ?? 0,
-          wave_period_px: knobs.wave_period_px ?? 12,
+          spacing_mm: spacing,
+          wave_amp_mm: knobs.wave_amp_mm ?? 0,
+          wave_period_mm: knobs.wave_period_mm ?? 4.5,
         },
       }
     }
@@ -989,22 +1008,22 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-hilbert': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.2)
       return {
         algorithm: 'hilbert',
         algorithm_options: {
-          spacing_px: spacing,
-          min_run_px: knobs.min_run_px ?? 3,
+          spacing_mm: spacing,
+          min_run_mm: knobs.min_run_mm ?? 1.1,
         },
       }
     }
     case 'color-gosper': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 5)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 1.9)
       return {
         algorithm: 'gosper',
         algorithm_options: {
           order: knobs.order ?? 4,
-          spacing_px: spacing,
+          spacing_mm: spacing,
           rotation_deg: (i * 30) % 360,
         },
       }
@@ -1016,11 +1035,11 @@ function colorRecipeFromKnobs(
       // so the default lands on the registry fallback's 0/45/90/135 set
       // instead of collapsing clusters onto a 0/90 pair.
       const angle = ((baseAngles[i % baseAngles.length] ?? 0) + i * (step - 45)) % 180
-      const spacing = lerp(i, total, knobs.spacing_min ?? 2.5, knobs.spacing_max ?? 6)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.2)
       return {
         algorithm: 'eulerian_hatch',
         algorithm_options: {
-          spacing_px: spacing,
+          spacing_mm: spacing,
           angle_deg: ((angle % 180) + 180) % 180,
           crossed: knobs.crossed ?? false,
         },
@@ -1040,41 +1059,41 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-grid': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 7)
-      return { algorithm: 'grid', algorithm_options: { spacing_px: spacing } }
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.6)
+      return { algorithm: 'grid', algorithm_options: { spacing_mm: spacing } }
     }
     case 'color-brick': {
-      const h = Math.round(lerp(i, total, knobs.cell_min ?? 6, knobs.cell_max ?? 12))
+      const h = Math.round(lerp(i, total, knobs.cell_min ?? 2.2, knobs.cell_max ?? 4.5) * 10) / 10
       return {
         algorithm: 'brick',
-        algorithm_options: { brick_w_px: h * 2, brick_h_px: h },
+        algorithm_options: { brick_w_mm: h * 2, brick_h_mm: h },
       }
     }
     case 'color-dashes': {
       const baseAngles = [0, 45, 90, 135, 30, 75, 120, 165]
       const step = knobs.angle_step ?? 45
       const angle = (i * step + (baseAngles[i % baseAngles.length] ?? 0)) % 180
-      const spacing = lerp(i, total, knobs.spacing_min ?? 3, knobs.spacing_max ?? 6)
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.2)
       return {
         algorithm: 'dashes',
         algorithm_options: {
-          spacing_px: spacing,
+          spacing_mm: spacing,
           angle_deg: angle,
-          dash_px: knobs.dash_px ?? 3,
-          gap_px: knobs.gap_px ?? 3,
+          dash_mm: knobs.dash_mm ?? 1.1,
+          gap_mm: knobs.gap_mm ?? 1.1,
         },
       }
     }
     case 'color-truchet': {
-      const cell = Math.round(lerp(i, total, knobs.cell_min ?? 7, knobs.cell_max ?? 14))
+      const cell = Math.round(lerp(i, total, knobs.cell_min ?? 2.6, knobs.cell_max ?? 5.2) * 10) / 10
       return {
         algorithm: 'truchet',
-        algorithm_options: { cell_px: cell, seed: i * 13 + 7 },
+        algorithm_options: { cell_mm: cell, seed: i * 13 + 7 },
       }
     }
     case 'color-rings': {
-      const spacing = lerp(i, total, knobs.spacing_min ?? 4, knobs.spacing_max ?? 8)
-      return { algorithm: 'rings', algorithm_options: { spacing_px: spacing } }
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.5, knobs.spacing_max ?? 3)
+      return { algorithm: 'rings', algorithm_options: { spacing_mm: spacing } }
     }
     case 'color-sunburst': {
       // Darker clusters get a denser ray fan (rays_max), lighter ones sparser.
@@ -1083,13 +1102,13 @@ function colorRecipeFromKnobs(
     }
     case 'color-circle-pack': {
       // Darker clusters → smaller bubbles (radius_min) so coverage reads denser.
-      const maxR = lerp(i, total, knobs.radius_min ?? 3, knobs.radius_max ?? 7)
+      const maxR = lerp(i, total, knobs.radius_min ?? 1.1, knobs.radius_max ?? 2.6)
       return {
         algorithm: 'circle_pack',
         algorithm_options: {
-          min_radius_px: 1.0,
-          max_radius_px: maxR,
-          gap_px: knobs.gap_px ?? 0.6,
+          min_radius_mm: 0.37,
+          max_radius_mm: maxR,
+          gap_mm: knobs.gap_mm ?? 0.22,
           seed: i * 17 + 5,
         },
       }
@@ -1133,7 +1152,7 @@ export function buildBitmapOptions(): Record<string, unknown> {
   // a single global flag rather than a per-band concern.
   const algo = c.centerline_mode ? 'centerline' : b.algorithm
   const algoOpts = c.centerline_mode
-    ? { stroke_width: 0.8, smooth: true, min_branch_px: c.centerline_min_branch_px }
+    ? { stroke_width: 0.8, smooth: true, min_branch_mm: c.centerline_min_branch_mm }
     : buildAlgorithmOptions()
   // ``fixed_palette`` with an empty palette is a configuration gap: the
   // operator picked the mode but has neither installed pens
@@ -1191,11 +1210,19 @@ export function buildBitmapOptions(): Record<string, unknown> {
     // per-band overrides). Backend ignores the field; the frontend
     // rehydrate path reads it back. Deep clone so persisted snapshots
     // don't share refs with the live draft.
-    mono_knobs: JSON.parse(JSON.stringify(_mono.value)) as MonoKnobsDraft,
+    // ``knob_units`` marks the payload as millimetre-scale so the
+    // rehydrate path can convert px-era saves exactly once.
+    mono_knobs: {
+      ...(JSON.parse(JSON.stringify(_mono.value)) as MonoKnobsDraft),
+      knob_units: KNOB_UNITS_MM,
+    },
     // Multicolour knob set — same persistence contract as ``mono_knobs``.
     // Backend ignores the field; the frontend rehydrate path reads it
     // back so per-style range sliders survive a round-trip.
-    multicolor_knobs: JSON.parse(JSON.stringify(_multicolor.value)) as MulticolorKnobsDraft,
+    multicolor_knobs: {
+      ...(JSON.parse(JSON.stringify(_multicolor.value)) as MulticolorKnobsDraft),
+      knob_units: KNOB_UNITS_MM,
+    },
   }
   // Only ship ``mono_ink_color`` in monochrome mode; multicolor keeps
   // its per-cluster palette colours.
