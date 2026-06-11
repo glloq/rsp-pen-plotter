@@ -85,6 +85,10 @@ export type AlgorithmId =
   | 'chladni'
   // 2026-06 new-algorithm batch.
   | 'sine_halftone'
+  | 'ascii_shade'
+  | 'lichtenberg'
+  | 'warp_grid'
+  | 'scallop'
 
 export interface AlgoOption {
   key: string
@@ -411,6 +415,37 @@ export const ALGORITHMS: Record<AlgorithmId, AlgorithmSpec> = {
       { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.74, max: 11, step: 0.1 },
       { key: 'amp_mm', label: 'convert.waveAmp', type: 'number', min: 0.07, max: 3.7, step: 0.1 },
       { key: 'period_mm', label: 'convert.wavePeriod', type: 'number', min: 0.37, max: 7.4, step: 0.1 },
+    ],
+  },
+  ascii_shade: {
+    id: 'ascii_shade',
+    defaults: { cell_mm: 3.7 },
+    schema: [
+      { key: 'cell_mm', label: 'convert.cellSize', type: 'number', min: 1.5, max: 15, step: 0.1 },
+    ],
+  },
+  lichtenberg: {
+    id: 'lichtenberg',
+    defaults: { branches: 24, step_mm: 1.1, seed: 0 },
+    schema: [
+      { key: 'branches', label: 'convert.branches', type: 'integer', min: 2, max: 120, step: 1 },
+      { key: 'step_mm', label: 'convert.stepPx', type: 'number', min: 0.37, max: 3.7, step: 0.1 },
+      { key: 'seed', label: 'convert.seed', type: 'integer', min: 0, step: 1 },
+    ],
+  },
+  warp_grid: {
+    id: 'warp_grid',
+    defaults: { spacing_mm: 1.9, strength_mm: 3.7 },
+    schema: [
+      { key: 'spacing_mm', label: 'convert.spacing', type: 'number', min: 0.74, max: 11, step: 0.1 },
+      { key: 'strength_mm', label: 'convert.warpStrength', type: 'number', min: 0.37, max: 11, step: 0.1 },
+    ],
+  },
+  scallop: {
+    id: 'scallop',
+    defaults: { scale_mm: 4.5 },
+    schema: [
+      { key: 'scale_mm', label: 'convert.cellSize', type: 'number', min: 1.5, max: 15, step: 0.1 },
     ],
   },
   squiggle: {
@@ -2893,6 +2928,87 @@ export const PRINT_STYLES: PrintStyle[] = [
       return { algorithm: 'sine_halftone', algorithm_options: { spacing_mm: 1.9, amp_mm: 0.74, period_mm: 1.5 } }
     },
   },
+  {
+    id: 'ascii-art',
+    labelKey: 'mono.modes.asciiArt',
+    descriptionKey: 'mono.modes.asciiArtDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'ascii_shade',
+    defaultAlgorithmOptions: { cell_mm: 3.7 },
+    bandRecipe() {
+      // Single tonal band — the glyph ramp does the shading.
+      return { algorithm: 'ascii_shade', algorithm_options: { cell_mm: 3.7 } }
+    },
+  },
+  {
+    id: 'lightning',
+    labelKey: 'mono.modes.lightning',
+    descriptionKey: 'mono.modes.lightningDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'lichtenberg',
+    defaultAlgorithmOptions: { branches: 24, step_mm: 1.1, seed: 0 },
+    bandRecipe() {
+      return { algorithm: 'lichtenberg', algorithm_options: { branches: 24, step_mm: 1.1, seed: 0 } }
+    },
+  },
+  {
+    id: 'op-art-warp',
+    labelKey: 'mono.modes.opArtWarp',
+    descriptionKey: 'mono.modes.opArtWarpDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'warp_grid',
+    defaultAlgorithmOptions: { spacing_mm: 1.9, strength_mm: 3.7 },
+    bandRecipe() {
+      return { algorithm: 'warp_grid', algorithm_options: { spacing_mm: 1.9, strength_mm: 3.7 } }
+    },
+  },
+  {
+    id: 'fish-scales',
+    labelKey: 'mono.modes.fishScales',
+    descriptionKey: 'mono.modes.fishScalesDesc',
+    applicableTo: ['image'],
+    scope: 'master',
+    mode: 'monochrome',
+    segmentation: {
+      method: 'luminance_bands',
+      default_num_bands: 1,
+      drop_background: true,
+      background_luminance: 0.85,
+      knob_bands: false,
+    },
+    defaultAlgorithm: 'scallop',
+    defaultAlgorithmOptions: { scale_mm: 4.5 },
+    bandRecipe() {
+      return { algorithm: 'scallop', algorithm_options: { scale_mm: 4.5 } }
+    },
+  },
   // ============== MASTER STYLES — multicolor ==============
   // Mirror of the mono master family for multicolour mode: each style
   // owns its segmentation (kmeans by default) and a ``colorRecipe`` the
@@ -4721,6 +4837,10 @@ export const LEGACY_MASTER_ID_MAP: Record<string, string> = {
   'smoke-clifford': 'smoke-clifford',
   'turing-stripes': 'turing-stripes',
   'sound-wave': 'sound-wave',
+  'ascii-art': 'ascii-art',
+  lightning: 'lightning',
+  'op-art-warp': 'op-art-warp',
+  'fish-scales': 'fish-scales',
 }
 
 // ---- Query helpers ----

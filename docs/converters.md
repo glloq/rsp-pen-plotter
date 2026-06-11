@@ -27,8 +27,8 @@ immediately).
 
 For bitmap input, the operator picks a raster-art strategy in the editor.
 Algorithms are registered by name in
-`backend/pen_plotter/converters/algorithms/__init__.py` — 52 registered, of
-which 48 are visible in the editor's pickers (see the hidden flag below).
+`backend/pen_plotter/converters/algorithms/__init__.py` — 56 registered, of
+which 52 are visible in the editor's pickers (see the hidden flag below).
 Each carries:
 
 - a **kind** — `fill` (packs ink across a region), `lines` (discrete
@@ -57,6 +57,10 @@ Each carries:
 | `voronoi_stipple` | fill | high | centroidal Voronoi stippling, darkness-weighted (tone-aware) |
 | `squiggle` | mono_stroke | medium | wiggly lines with amplitude / frequency drift (tone-aware: both follow darkness) |
 | `sine_halftone` | mono_stroke | medium | frequency-modulated waves — the sound-wave portrait (tone-aware: frequency + amplitude follow darkness) |
+| `ascii_shade` | fill | low | typewriter-art glyph grid — density ramp picked per cell (tone-aware) |
+| `lichtenberg` | lines | medium | jagged discharge trees seeking the dark, forking in shadows (tone-aware) |
+| `warp_grid` | lines | medium | op-art mesh pushed along the tone gradient — bulges around dark masses (tone-aware) |
+| `scallop` | lines | low | staggered fish-scale arcs, extra nested ribs where darker (tone-aware) |
 | `lowpoly` | lines | high | Delaunay triangulation over sampled points, drawn as edges (tone-aware: smaller facets where darker) |
 | `scribble` | fill | medium | wobbly, overshooting strokes — loose pencil feel (tone-aware: extra crossing passes per darkness band) |
 | `grid` *(hidden)* | lines | low | square mesh of horizontal + vertical strokes |

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pen_plotter.converters.algorithms.ascii_shade import AsciiShadeAlgorithm
 from pen_plotter.converters.algorithms.attractor import AttractorAlgorithm
 from pen_plotter.converters.algorithms.base import RasterAlgorithm
 from pen_plotter.converters.algorithms.brick import BrickAlgorithm
@@ -36,6 +37,7 @@ from pen_plotter.converters.algorithms.harmonograph import HarmonographAlgorithm
 from pen_plotter.converters.algorithms.hilbert import HilbertFillAlgorithm
 from pen_plotter.converters.algorithms.hitomezashi import HitomezashiAlgorithm
 from pen_plotter.converters.algorithms.honeycomb import HoneycombAlgorithm
+from pen_plotter.converters.algorithms.lichtenberg import LichtenbergAlgorithm
 from pen_plotter.converters.algorithms.lowpoly import LowPolyAlgorithm
 from pen_plotter.converters.algorithms.lsystem import LSystemAlgorithm
 from pen_plotter.converters.algorithms.maze import MazeAlgorithm
@@ -47,6 +49,7 @@ from pen_plotter.converters.algorithms.quadtree import QuadtreeAlgorithm
 from pen_plotter.converters.algorithms.reaction_diffusion import ReactionDiffusionAlgorithm
 from pen_plotter.converters.algorithms.ridge_lines import RidgeLinesAlgorithm
 from pen_plotter.converters.algorithms.rings import RingsAlgorithm
+from pen_plotter.converters.algorithms.scallop import ScallopAlgorithm
 from pen_plotter.converters.algorithms.scanlines import ScanlinesAlgorithm
 from pen_plotter.converters.algorithms.scribble import ScribbleAlgorithm
 from pen_plotter.converters.algorithms.sine_halftone import SineHalftoneAlgorithm
@@ -63,6 +66,7 @@ from pen_plotter.converters.algorithms.tsp import TspAlgorithm
 from pen_plotter.converters.algorithms.tsp_opt import TspOptimizedAlgorithm
 from pen_plotter.converters.algorithms.voronoi_mosaic import VoronoiMosaicAlgorithm
 from pen_plotter.converters.algorithms.voronoi_stipple import VoronoiStippleAlgorithm
+from pen_plotter.converters.algorithms.warp_grid import WarpGridAlgorithm
 from pen_plotter.converters.algorithms.weave import WeaveAlgorithm
 
 AlgorithmKind = Literal["fill", "lines", "mono_stroke"]
@@ -132,6 +136,10 @@ _ALGORITHMS: dict[str, RasterAlgorithm] = {
         LSystemAlgorithm(),
         ChladniAlgorithm(),
         SineHalftoneAlgorithm(),
+        AsciiShadeAlgorithm(),
+        LichtenbergAlgorithm(),
+        WarpGridAlgorithm(),
+        ScallopAlgorithm(),
     )
 }
 
@@ -168,6 +176,10 @@ _KINDS: dict[str, AlgorithmKind] = {
     "voronoi_stipple": "fill",
     "squiggle": "mono_stroke",
     "sine_halftone": "mono_stroke",
+    "ascii_shade": "fill",
+    "lichtenberg": "lines",
+    "warp_grid": "lines",
+    "scallop": "lines",
     "lowpoly": "lines",
     "scribble": "fill",
     "grid": "lines",
@@ -227,6 +239,10 @@ _COMPLEXITY: dict[str, AlgorithmComplexity] = {
     "voronoi_stipple": "high",  # Lloyd relaxation iterations
     "squiggle": "medium",  # sub-pixel sampling per scan row
     "sine_halftone": "medium",  # sub-pixel sampling per scan row
+    "ascii_shade": "low",
+    "lichtenberg": "medium",  # bounded random walk (hard step budget)
+    "warp_grid": "medium",  # per-pixel line sampling + gaussian field
+    "scallop": "low",
     "lowpoly": "high",  # Delaunay triangulation over sampled points
     "scribble": "medium",  # wobble polyline per scan run
     "grid": "low",  # two clipped line sweeps

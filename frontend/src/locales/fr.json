@@ -386,7 +386,15 @@
       "turingStripes": "Rayures de Turing",
       "turingStripesDesc": "Motif de rayures (réaction-diffusion) cultivé dans la région.",
       "soundWave": "Onde sonore",
-      "soundWaveDesc": "Ondes dont la fréquence et l'amplitude suivent le ton — les ombres vibrent, les hautes lumières s'aplanissent."
+      "soundWaveDesc": "Ondes dont la fréquence et l'amplitude suivent le ton — les ombres vibrent, les hautes lumières s'aplanissent.",
+      "asciiArt": "Trame ASCII",
+      "asciiArtDesc": "Portrait machine à écrire — chaque cellule trace un glyphe choisi selon son ton.",
+      "lightning": "Éclairs de Lichtenberg",
+      "lightningDesc": "Branches de décharge déchiquetées attirées par le sombre, bifurquant dans les ombres.",
+      "opArtWarp": "Grille déformée",
+      "opArtWarpDesc": "Grille op-art poussée le long du gradient de ton — le maillage gonfle autour des masses sombres.",
+      "fishScales": "Écailles",
+      "fishScalesDesc": "Arcs en tuiles décalées ; les ombres imbriquent des nervures supplémentaires dans chaque écaille."
     },
     "inkColor": "Couleur d'encre",
     "inkColorHint": "Couleur unique utilisée pour tracer toutes les bandes — les niveaux de gris sont simulés par la densité de l'algorithme.",
@@ -1193,7 +1201,9 @@
     "text": "Texte",
     "adaptive": "Adaptatif au ton",
     "modeM": "Mode m",
-    "modeN": "Mode n"
+    "modeN": "Mode n",
+    "branches": "Branches",
+    "warpStrength": "Force de déformation (mm)"
   },
   "profile": {
     "title": "Profil machine",

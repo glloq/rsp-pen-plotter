@@ -46,7 +46,11 @@ from pen_plotter.manifests import Manifest, ManifestEntry, ManifestMeta, registe
 # spellings remain accepted on the wire for saved settings.
 # v7: ``sine_halftone`` (tone-driven frequency-modulated waves — the
 # sound-wave portrait).
-ALGORITHMS_MANIFEST_VERSION = 7
+# v8: new-algorithm batch 2 — ``ascii_shade`` (density-ramp glyph
+# grid), ``lichtenberg`` (darkness-seeking discharge trees),
+# ``warp_grid`` (op-art mesh warped along the tone gradient) and
+# ``scallop`` (fish-scale arcs with tone-nested ribs).
+ALGORITHMS_MANIFEST_VERSION = 8
 
 
 class AlgorithmManifestEntry(ManifestEntry):
