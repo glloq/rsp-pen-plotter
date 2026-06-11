@@ -13,6 +13,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEstimatedProgress } from '../../composables/useEstimatedProgress'
 import { useProgressiveStream } from '../../composables/useProgressiveStream'
+import { applyPreviewStrokeFloor } from '../../lib/previewStrokeFloor'
 import { useJobStore } from '../../stores/job'
 
 export interface SheetOutlineShape {
@@ -445,13 +446,52 @@ watch(
   () => {
     // The v-html commit happens during the same flush; defer to the
     // next microtask so the DOM is in place when we walk it.
-    void Promise.resolve().then(applyOpacityOverlay)
+    void Promise.resolve().then(() => {
+      applyOpacityOverlay()
+      applyStrokeFloor()
+    })
   },
 )
 watch(
   () => job.layers.map((l) => `${l.layer_id}:${l.opacity_percent ?? 100}`).join('|'),
   () => applyOpacityOverlay(),
 )
+
+// =========================================================================
+// Display-time stroke floor.
+// The render carries true-to-life pen widths (a 0.5 mm tip on an A2-fit
+// placement is well under one device pixel at fit zoom), and sub-pixel
+// strokes anti-alias into pale, washed-out colours — operators read it
+// as "the preview is transparent". Floor every stroke at ~0.8 device px
+// so colours stay legible; zooming in past the floor restores the exact
+// physical widths (the floor is recomputed per zoom level from each
+// SVG's on-screen size). Cosmetic only — the SVG string sent to
+// /generate is untouched.
+function applyStrokeFloor(): void {
+  const root = previewRoot.value
+  if (!root) return
+  for (const svg of Array.from(root.querySelectorAll('svg'))) {
+    const rect = svg.getBoundingClientRect()
+    if (!rect.width) continue
+    applyPreviewStrokeFloor(svg as SVGSVGElement, rect.width)
+  }
+}
+
+// Zoom / pane-size / sheet changes all move the on-screen scale, so the
+// floor must be recomputed. Debounced: wheel-zoom fires per tick and a
+// dense SVG walk per tick would stutter; 120 ms after the last change
+// is invisible to the operator.
+let strokeFloorTimer: number | null = null
+watch([zoom, paneWidth, paneHeight, artworkStyle], () => {
+  if (strokeFloorTimer !== null) window.clearTimeout(strokeFloorTimer)
+  strokeFloorTimer = window.setTimeout(() => {
+    strokeFloorTimer = null
+    applyStrokeFloor()
+  }, 120)
+})
+onBeforeUnmount(() => {
+  if (strokeFloorTimer !== null) window.clearTimeout(strokeFloorTimer)
+})
 
 const streamLabel = computed<string>(() => {
   const payload = stream.lastProgress.value?.payload

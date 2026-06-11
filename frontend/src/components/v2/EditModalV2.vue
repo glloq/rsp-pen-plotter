@@ -26,6 +26,7 @@ import type {
   PolicyPass,
   SourceKind,
 } from '../../domain/policy/schemas'
+import { resolveEffectivePalette } from '../../lib/effectivePalette'
 import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
@@ -186,10 +187,97 @@ async function resolveAndPreview(): Promise<void> {
   }
   resolving.value = false
 
+  // Apply the decision's segmentation BEFORE rendering: the resolver
+  // recommends ``fixed_palette`` for bitmaps, but /rerender only
+  // re-inks the clusters the original /upload produced — with the
+  // default 4-colour kmeans, picking 6 inks still rendered 4 muddy
+  // clusters snapped to whatever pool colour was nearest ("I selected
+  // 6 colours and the preview only shows one"). Re-converting against
+  // the operator's actual palette makes the cluster set BE the chosen
+  // colours, so the preview (and Generate) use every selected ink.
+  await ensureSegmentationMatchesDecision(controller)
+  if (controller.signal.aborted) return
+
   // Now render the adapted result. Keep the previous render visible
   // until the new one lands to avoid a flash back to the original.
   await renderAdaptedPreview(controller)
 }
+
+// ============================ PALETTE → SEGMENTATION ===================
+// The pool the operator is actually pointing at: machine pens, the
+// available-colours inventory, or their union, per the global palette
+// source. Mirrors ``stores/job.currentEffectivePalette`` so the
+// segmentation below lands on exactly the swatches the chips show.
+const effectivePool = computed<string[]>(() => {
+  const pens = (job.selectedProfile?.pens ?? [])
+    .filter((p) => p.installed && p.color)
+    .map((p) => p.color)
+  const available = availableColors.ordered.map((c) => c.hex)
+  return resolveEffectivePalette(paletteSource.source, pens, available)
+})
+
+/**
+ * Re-convert the placement when the resolver wants ``fixed_palette``
+ * but the cached segmentation was built with something else (or an
+ * older pool). Round-trips /upload with the placement's own source
+ * bytes so the new cluster set, layers and rerender cache all match
+ * the operator's palette. Skipped (cheap) when the persisted
+ * ``last_options`` already carry the same palette, so this runs once
+ * per placement × pool, not on every preview.
+ */
+async function ensureSegmentationMatchesDecision(controller: AbortController): Promise<void> {
+  const d = decision.value
+  if (!d || d.segmentation_method !== 'fixed_palette') return
+  const placement = job.selectedPlacement
+  if (!placement || !placement.source_mime.startsWith('image/')) return
+  const pool = effectivePool.value.map((h) => h.toLowerCase())
+  // A 0/1-colour pool can't drive a multicolour split — keep whatever
+  // segmentation the upload picked (mono pipelines own that case).
+  if (pool.length < 2) return
+  const last = (placement.last_options ?? {}) as Record<string, unknown>
+  const lastPalette = (
+    ((last.segmentation_options as { palette?: string[] } | undefined)?.palette ?? []) as string[]
+  ).map((h) => h.toLowerCase())
+  if (
+    last.segmentation_method === 'fixed_palette' &&
+    lastPalette.length === pool.length &&
+    lastPalette.every((h, i) => h === pool[i])
+  ) {
+    return
+  }
+  await fileManager.ensureSelectedFile()
+  const file = fileManager.selectedFile.value
+  if (!file || controller.signal.aborted) return
+  previewLoading.value = true
+  const options = {
+    ...(fileManager.buildOptions() ?? {}),
+    segmentation_method: 'fixed_palette',
+    segmentation_options: { palette: pool },
+    num_colors: pool.length,
+  }
+  await job.upload(file, options)
+}
+
+// Inventory edits / palette-source flips while the modal is open move
+// the pool under the decision — refresh the conversion + preview so
+// the chips and the render keep matching what the operator just
+// picked. Debounced: an inventory editing session mutates the pool
+// once per swatch.
+let poolRefreshTimer: number | null = null
+watch(
+  () => effectivePool.value.join('|'),
+  (next, prev) => {
+    if (next === prev || !decision.value) return
+    if (poolRefreshTimer !== null) window.clearTimeout(poolRefreshTimer)
+    poolRefreshTimer = window.setTimeout(() => {
+      poolRefreshTimer = null
+      void resolveAndPreview()
+    }, 300)
+  },
+)
+onBeforeUnmount(() => {
+  if (poolRefreshTimer !== null) window.clearTimeout(poolRefreshTimer)
+})
 
 /**
  * Render-only path used both by ``resolveAndPreview`` (after the policy
