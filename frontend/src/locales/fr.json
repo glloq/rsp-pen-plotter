@@ -913,7 +913,13 @@
     "collapseAll": "Tout replier",
     "collapseAllHint": "Réduire chaque carte calque à son en-tête",
     "summary": "Total",
-    "expectedHint": "Nombre de calques que cette image produira au moment d'Appliquer"
+    "expectedHint": "Nombre de calques que cette image produira au moment d'Appliquer",
+    "sectionColor": "Couleur & stylo",
+    "sectionPath": "Tracé",
+    "quickNav": "Aller à",
+    "groupColors": "Couleurs",
+    "groupOrder": "Ordre",
+    "groupView": "Affichage"
   },
   "passes": {
     "title": "Passes",
