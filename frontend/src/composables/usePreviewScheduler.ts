@@ -23,7 +23,6 @@
 import { computed, ref } from 'vue'
 import { previewBitmap, previewText, type PreviewResponse } from '../api/client'
 import { sanitizeSvgCached } from '../lib/sanitizeSvg'
-import { useToastStore } from '../stores/toasts'
 
 export interface PreviewSchedulerOptions {
   // Returns the current file to preview, or null when there's nothing
@@ -61,17 +60,6 @@ export interface PreviewSchedulerOptions {
   // so per-pass thumbnails (added in Phase 3) can use a longer window
   // if needed.
   debounceMs?: number
-  // Localised template "{seconds}s" used in the progress toast that
-  // surfaces a long-running render. Defaults to a plain "Rendering
-  // preview… ({seconds}s)" string when omitted, so the composable
-  // stays vue-i18n-free.
-  progressMessage?: (seconds: number) => string
-  // Localised label for the toast's cancel button.
-  cancelLabel?: string
-  // After how many ms the progress toast appears. Renders that finish
-  // under this threshold never surface a toast — keeps the UI calm
-  // for the typical sub-second case.
-  toastDelayMs?: number
   // Selects which backend endpoint feeds the preview. ``'bitmap'`` hits
   // ``/preview`` (k-means + per-cluster algorithm); ``'text'`` hits
   // ``/preview-text`` (Hershey single-stroke layout). The scheduler
@@ -93,57 +81,10 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
   // without the lexical-closure guarantee we rely on today), the
   // revision compare drops it before it can clobber the latest result.
   let latestRevision = 0
-  // Progress toast bookkeeping. The toast only appears if the render
-  // takes longer than ``toastDelayMs`` and lives until the round-trip
-  // resolves (success / error / cancel). Tick interval refreshes the
-  // toast message with the elapsed seconds so the operator sees
-  // forward motion even on slow renders.
-  let toastId: number | null = null
-  let toastTick: ReturnType<typeof setInterval> | null = null
-  let toastDelayTimer: ReturnType<typeof setTimeout> | null = null
-
-  const toasts = useToastStore()
-
-  function formatProgress(seconds: number): string {
-    return opts.progressMessage ? opts.progressMessage(seconds) : `Rendering preview… (${seconds}s)`
-  }
-
-  function dismissToast(): void {
-    if (toastDelayTimer) {
-      clearTimeout(toastDelayTimer)
-      toastDelayTimer = null
-    }
-    if (toastTick) {
-      clearInterval(toastTick)
-      toastTick = null
-    }
-    if (toastId !== null) {
-      toasts.dismiss(toastId)
-      toastId = null
-    }
-  }
-
-  function startToast(): void {
-    dismissToast()
-    const startedAt = Date.now()
-    const delay = opts.toastDelayMs ?? 800
-    toastDelayTimer = setTimeout(() => {
-      toastDelayTimer = null
-      // Show toast only if the render hasn't already finished by now.
-      if (!previewLoading.value) return
-      toastId = toasts.progress(formatProgress(0), {
-        label: opts.cancelLabel ?? 'Cancel',
-        onClick: () => cancel(),
-      })
-      toastTick = setInterval(() => {
-        if (toastId === null) return
-        const seconds = Math.round((Date.now() - startedAt) / 1000)
-        // ``progress`` toasts have ttl=0 so update() with ttl=0 again
-        // keeps them sticky while just refreshing the message.
-        toasts.update(toastId, 'progress', formatProgress(seconds), 0)
-      }, 1000)
-    }, delay)
-  }
+  // No progress toast here: the scheduler only runs while the edit
+  // modal is open (``shouldRun`` guard in useFileManager), where
+  // EditPreviewPane already shows a loading overlay with a progress
+  // bar — the bottom-right toast just duplicated it.
 
   const previewSvg = computed<string>(() => {
     if (!previewResult.value) return ''
@@ -159,7 +100,6 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
     const myRevision = ++latestRevision
     previewLoading.value = true
     previewError.value = null
-    startToast()
     try {
       const mode = opts.modeGetter?.() ?? 'bitmap'
       let result: PreviewResponse
@@ -205,13 +145,12 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
         previewError.value = e.message || opts.failedMessage || 'preview failed'
       }
     } finally {
-      // Same identity guard as previewLoading: a superseded run A must
-      // not dismiss the toast / delay timer belonging to the newer run B
-      // (B called startToast() when it took over the controller slot).
+      // Identity guard: a superseded run A must not clear the loading
+      // flag belonging to the newer run B (B took over the controller
+      // slot when it started).
       if (controller === c) {
         controller = null
         previewLoading.value = false
-        dismissToast()
       }
     }
   }
@@ -246,7 +185,6 @@ export function usePreviewScheduler(opts: PreviewSchedulerOptions) {
     // ``aborted`` race window is still rejected by the staleness guard.
     latestRevision++
     previewLoading.value = false
-    dismissToast()
   }
 
   function retry(): void {

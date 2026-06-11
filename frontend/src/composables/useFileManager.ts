@@ -163,13 +163,12 @@ export function useFileManager(t?: Translator, options: UseFileManagerOptions = 
       // through to ``/upload`` (the bitmap-form preview only makes sense
       // when there's a raster to segment).
       //
-      // The ``editModalOpen`` guard is what prevents the "Calcul de
-      // l'aperçu…" toast from firing when the operator deletes a
-      // placement or drops a library file onto the sheet: those flows
-      // mutate ``selectedPlacementId`` (and via the watcher below the
-      // draft + the in-memory file), but with the modal closed the
-      // preview SVG is never on screen — running it just wastes a
-      // round-trip and surfaces a toast for nothing.
+      // The ``editModalOpen`` guard prevents a /preview round-trip
+      // from firing when the operator deletes a placement or drops a
+      // library file onto the sheet: those flows mutate
+      // ``selectedPlacementId`` (and via the watcher below the draft +
+      // the in-memory file), but with the modal closed the preview SVG
+      // is never on screen — running it just wastes a round-trip.
       shouldRun: () => ui.editModalOpen && (kind.value === 'bitmap' || kind.value === 'typography'),
       modeGetter: () => (kind.value === 'typography' ? 'text' : 'bitmap'),
       qualityGetter: () => edit.previewQuality.value,
@@ -177,13 +176,6 @@ export function useFileManager(t?: Translator, options: UseFileManagerOptions = 
       timeoutMessage:
         t?.('upload.previewTimeout') ??
         'Preview too slow — lower the detail tier or hit Apply to render anyway.',
-      // Long-render progress toast wiring. Toast appears after 800ms
-      // (so quick renders never surface one), ticks every second so the
-      // operator sees the elapsed time, and exposes a cancel button
-      // that aborts the in-flight /preview round-trip.
-      progressMessage: (seconds: number) =>
-        t?.('upload.previewProgress', { seconds }) ?? `Rendering preview… (${seconds}s)`,
-      cancelLabel: t?.('upload.previewCancel') ?? 'Cancel',
     })
   }
   const previewer = _previewer
