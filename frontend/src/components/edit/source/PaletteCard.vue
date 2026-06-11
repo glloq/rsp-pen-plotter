@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import { nextPadColor, rec709Luminance, uniquePalette } from '../../../lib/paletteColors'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 
 // Palette card: pen-following vs manual mode plus the editable colour
@@ -18,6 +19,8 @@ interface BitmapDraft {
   segmentation_method: SegmentationMethod
   num_colors: number
   palette: string[]
+  drop_background: boolean
+  background_luminance: number
   // Other fields exist on the parent draft but aren't read here.
   [key: string]: unknown
 }
@@ -75,7 +78,10 @@ function selectManual(): void {
 }
 
 function addPaletteColour(): void {
-  props.bitmap.palette = [...props.bitmap.palette, '#888888']
+  // Distinct default per added chip: a repeated ``#888888`` merged into
+  // one rendered layer (identical ``color-888888`` labels) so adding
+  // colours never increased the visible count.
+  props.bitmap.palette = [...props.bitmap.palette, nextPadColor(props.bitmap.palette)]
   // Pinning a colour implies fixed_palette — kmeans would ignore the
   // entry. Only rewrite when leaving the empty state (palette was
   // previously empty so no SvgTab choice could be in flight); once
@@ -101,6 +107,25 @@ function updatePaletteColour(i: number, value: string): void {
   next[i] = value
   props.bitmap.palette = next
 }
+
+// Palette entries the backend's drop-background filter will silently
+// skip: with ``drop_background`` on, any layer whose colour sits at or
+// above ``background_luminance`` is treated as paper and never drawn.
+// Light pens (pale yellow, light grey…) used to just vanish with no
+// explanation — surface them so the operator knows why a colour is
+// missing from the preview.
+const droppedAsBackground = computed<string[]>(() => {
+  if (!props.bitmap.drop_background) return []
+  if (
+    props.bitmap.segmentation_method !== 'fixed_palette' &&
+    props.bitmap.segmentation_method !== 'palette_dither'
+  ) {
+    return []
+  }
+  return uniquePalette(props.bitmap.palette).filter(
+    (hex) => rec709Luminance(hex) >= props.bitmap.background_luminance,
+  )
+})
 </script>
 
 <template>
@@ -225,6 +250,24 @@ function updatePaletteColour(i: number, value: string): void {
         </div>
       </div>
     </div>
+
+    <p
+      v-if="droppedAsBackground.length > 0"
+      class="flex flex-wrap items-center gap-1 rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-[11px] text-amber-200"
+    >
+      ⚠ {{ t('palette.droppedAsBackground') }}
+      <span
+        v-for="hex in droppedAsBackground"
+        :key="hex"
+        class="inline-flex items-center gap-1 rounded border border-amber-800 bg-slate-900 px-1 py-0.5"
+      >
+        <span
+          class="inline-block h-2.5 w-2.5 rounded border border-slate-600"
+          :style="{ backgroundColor: hex }"
+        />
+        <span class="font-mono text-[10px]">{{ hex }}</span>
+      </span>
+    </p>
 
     <p
       v-if="manualSwapCount > 0"

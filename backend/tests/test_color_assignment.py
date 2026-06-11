@@ -119,6 +119,68 @@ def test_auto_assign_clears_when_pool_is_empty() -> None:
     assert result[0].color_assignment == "auto"
 
 
+def test_auto_assign_keeps_inks_distinct_while_pool_allows() -> None:
+    """Similar centroids spread over distinct inks instead of stacking.
+
+    Regression for the >4-colour collapse: 6 k-means clusters against a
+    6-pen rack used to pile several clusters onto the same nearest pen,
+    so the editor displayed only 2-3 colours. With unique matching every
+    cluster gets its own ink as long as the pool is big enough.
+    """
+    layers = [
+        _layer("L1", "#1a1a1a"),
+        _layer("L2", "#2a2a2a"),  # both greys are nearest to #000000
+        _layer("L3", "#d01010"),
+        _layer("L4", "#e03030"),  # both reds are nearest to #ff0000
+        _layer("L5", "#1040d0"),
+        _layer("L6", "#3060e0"),  # both blues are nearest to #0000ff
+    ]
+    pool = ["#000000", "#555555", "#ff0000", "#aa3333", "#0000ff", "#3355aa"]
+    result = auto_assign_layer_colors(layers, pool)
+    assigned = [layer.assigned_color_hex for layer in result]
+    assert None not in assigned
+    assert len(set(assigned)) == 6, f"expected 6 distinct inks, got {assigned}"
+
+
+def test_auto_assign_reuses_inks_only_after_pool_exhausted() -> None:
+    """More clusters than inks → everyone still gets the closest leftover."""
+    layers = [
+        _layer("L1", "#ff0000"),
+        _layer("L2", "#fa0505"),
+        _layer("L3", "#0000ff"),
+    ]
+    pool = ["#ff0000", "#0000ff"]
+    result = auto_assign_layer_colors(layers, pool)
+    assigned = [layer.assigned_color_hex for layer in result]
+    # The two distinct inks are both used before any reuse happens.
+    assert set(assigned) == {"#ff0000", "#0000ff"}
+    # The blue cluster keeps the blue ink (never displaced by the reds).
+    assert assigned[2] == "#0000ff"
+
+
+def test_auto_assign_manual_pick_consumes_its_pool_entry() -> None:
+    """A pinned ink is treated as used so auto rows spread over the rest."""
+    layers = [
+        # Operator pinned the black pen on this layer...
+        _layer("L1", "#101010", assigned="#000000", color_assignment="manual"),
+        # ...so this near-black auto layer must take the other dark ink.
+        _layer("L2", "#151515"),
+    ]
+    pool = ["#000000", "#333333"]
+    result = auto_assign_layer_colors(layers, pool)
+    assert result[0].assigned_color_hex == "#000000"
+    assert result[0].color_assignment == "manual"
+    assert result[1].assigned_color_hex == "#333333"
+
+
+def test_auto_assign_duplicate_pool_entries_allow_that_many_uses() -> None:
+    """Two identical pens in the rack really can serve two layers."""
+    layers = [_layer("L1", "#0a0a0a"), _layer("L2", "#111111")]
+    pool = ["#000000", "#000000"]
+    result = auto_assign_layer_colors(layers, pool)
+    assert [layer.assigned_color_hex for layer in result] == ["#000000", "#000000"]
+
+
 def test_auto_assign_does_not_mutate_inputs() -> None:
     """The helper returns a fresh list; inputs survive untouched.
 

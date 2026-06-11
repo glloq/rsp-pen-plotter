@@ -350,6 +350,13 @@ class BitmapConverter(Converter):
                 background_luminance=opts.background_luminance,
                 n_init=n_init,
             )
+        # Collapse palette entries with identical RGB before anything keys
+        # on the per-cluster hex: duplicates (repeated entries in a manual
+        # fixed palette, twin installed pens, k-means centroids rounding to
+        # the same triplet) would otherwise emit two layers with the same
+        # ``color-{hex}`` label and collide in every label-keyed map
+        # (band-recipe overrides, ink/width maps, frontend layer ids).
+        labels, palette = _seg_mod.merge_duplicate_colours(labels, palette)
         if opts.min_region_pixels > 0:
             with traced_span(
                 "pipeline.bitmap.drop_small_regions",

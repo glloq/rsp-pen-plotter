@@ -39,6 +39,7 @@ import {
   isLegacyKnobPayload,
 } from '../lib/legacyKnobUnits'
 import type { SegmentationMethod } from '../api/client'
+import { uniquePalette } from '../lib/paletteColors'
 import {
   resolveMasterStyle,
   resolveMulticolorStyle,
@@ -795,15 +796,17 @@ function buildBandRecipes(): Array<Record<string, unknown>> | undefined {
   if (!style.colorRecipe && !(style.id in MULTICOLOR_STYLE_DEFAULTS)) return undefined
   const b = _bitmap.value
   // For kmeans the cluster count is num_colors; for fixed_palette it's
-  // the palette length. luminance_bands / thresholds aren't valid
+  // the palette length (deduped — the backend merges identical entries
+  // into one layer). luminance_bands / thresholds aren't valid
   // multicolour segmentations, so they only show up if the operator
-  // hand-picked a method that doesn't match the master — fall through
-  // to a sensible default in that case.
-  let total = 4
+  // hand-picked a method that doesn't match the master — fall back to
+  // the operator's num_colors in that case (NOT a hardcoded 4, which
+  // silently truncated the recipes when more colours were requested).
+  let total = b.num_colors >= 1 && b.num_colors <= 16 ? b.num_colors : 4
   if (b.segmentation_method === 'kmeans' || b.segmentation_method === 'kmeans_lab')
     total = b.num_colors
   else if (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither')
-    total = b.palette.length
+    total = uniquePalette(b.palette).length
   if (total < 1) return undefined
   const knobs = _multicolor.value.perStyle[style.id]
   return Array.from({ length: total }, (_, i) => {
@@ -849,7 +852,11 @@ function colorRecipeFromKnobs(
       // fallback (0/45/90/135…) — keeping this knob-driven path visually
       // identical to the propagation path. A raw ``i * step`` collapsed
       // distinct clusters onto the same angle at the default (0/90/0/90).
-      const angle = ((baseAngles[i % baseAngles.length] ?? 0) + i * (step - 45)) % 180
+      // Clusters past the 8-angle base list get a half-step (7.5°) shift
+      // per wrap so 9-16 colour jobs keep distinct hatch directions
+      // instead of repeating the first eight angles verbatim.
+      const wrapOffset = Math.floor(i / baseAngles.length) * 7.5
+      const angle = ((baseAngles[i % baseAngles.length] ?? 0) + wrapOffset + i * (step - 45)) % 180
       const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.2)
       return {
         algorithm: 'crosshatch',
@@ -1033,8 +1040,10 @@ function colorRecipeFromKnobs(
       const step = knobs.angle_step ?? 45
       // Same rotation scheme as color-crosshatch: offset by (step - 45)
       // so the default lands on the registry fallback's 0/45/90/135 set
-      // instead of collapsing clusters onto a 0/90 pair.
-      const angle = ((baseAngles[i % baseAngles.length] ?? 0) + i * (step - 45)) % 180
+      // instead of collapsing clusters onto a 0/90 pair, plus a 7.5°
+      // shift per 8-cluster wrap so 9-16 colour jobs stay distinct.
+      const wrapOffset = Math.floor(i / baseAngles.length) * 7.5
+      const angle = ((baseAngles[i % baseAngles.length] ?? 0) + wrapOffset + i * (step - 45)) % 180
       const spacing = lerp(i, total, knobs.spacing_min ?? 0.93, knobs.spacing_max ?? 2.2)
       return {
         algorithm: 'eulerian_hatch',
@@ -1072,13 +1081,18 @@ function colorRecipeFromKnobs(
     case 'color-dashes': {
       const baseAngles = [0, 45, 90, 135, 30, 75, 120, 165]
       const step = knobs.angle_step ?? 45
-      const angle = (i * step + (baseAngles[i % baseAngles.length] ?? 0)) % 180
+      // Same scheme as color-crosshatch: the previous ``i * step + base``
+      // collapsed clusters onto a 0/90 pair at the default step (45) —
+      // i=0→0, i=1→90, i=2→180≡0, i=3→270≡90 — so 4+ colour jobs
+      // rendered with only two visible dash directions.
+      const wrapOffset = Math.floor(i / baseAngles.length) * 7.5
+      const angle = ((baseAngles[i % baseAngles.length] ?? 0) + wrapOffset + i * (step - 45)) % 180
       const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.2)
       return {
         algorithm: 'dashes',
         algorithm_options: {
           spacing_mm: spacing,
-          angle_deg: angle,
+          angle_deg: ((angle % 180) + 180) % 180,
           dash_mm: knobs.dash_mm ?? 1.1,
           gap_mm: knobs.gap_mm ?? 1.1,
         },
@@ -1280,7 +1294,9 @@ const _expectedLayerCount = computed<number>(() => {
     return 1
   }
   if (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither')
-    return b.palette.length
+    // Deduped: the backend merges identical palette entries into a
+    // single cluster/layer, so repeated chips don't inflate the count.
+    return uniquePalette(b.palette).length
   return b.num_colors
 })
 

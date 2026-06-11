@@ -36,7 +36,7 @@ import {
   mmPerViewBoxUnit,
   strokeWidthMmByHex,
 } from '../lib/penWidth'
-import { nearestPoolHex } from '../lib/nearestColor'
+import { assignPoolHexes } from '../lib/nearestColor'
 import { resolveEffectivePalette } from '../lib/effectivePalette'
 import { usePaletteSourceStore } from './paletteSource'
 import { useAvailableColorsStore } from './availableColors'
@@ -1003,22 +1003,35 @@ export const useJobStore = defineStore('job', () => {
     return resolveEffectivePalette(source, pens, available)
   }
 
-  // Re-snap every ``auto`` layer (across ALL placements) to the nearest hex
-  // in the active pool, preserving ``manual`` overrides. Called when the
+  // Re-assign every ``auto`` layer (across ALL placements) to an ink from
+  // the active pool, preserving ``manual`` overrides. Called when the
   // operator changes the palette source or swaps the installed pens so the
   // assigned colours follow the pool they just selected — without this the
   // colours stayed pinned to whatever the profile-agnostic upload picked.
-  // An empty pool clears the auto value (assigned_color_hex = null), which
-  // matches the backend's fallback to the raw centroid.
+  // Uses the same unique-while-possible greedy matching as the backend's
+  // ``auto_assign_layer_colors`` (per placement) so 6 clusters against 6
+  // pens come out as 6 distinct inks instead of piling onto the 2-3
+  // nearest pens. An empty pool clears the auto value
+  // (assigned_color_hex = null), which matches the backend's fallback to
+  // the raw centroid.
   function resnapAutoLayers(poolOverride?: readonly string[]): void {
     const pool = poolOverride ?? currentEffectivePalette()
     let changed = false
     placements.value = placements.value.map((p) => {
+      const assignments = pool.length
+        ? assignPoolHexes(
+            p.layers.map((layer) => ({
+              sourceHex: layer.source_color,
+              pinnedHex: layer.color_assignment === 'manual' ? layer.assigned_color_hex : null,
+            })),
+            pool,
+          )
+        : p.layers.map(() => null)
       let touched = false
-      const layers = p.layers.map((layer) => {
+      const layers = p.layers.map((layer, i) => {
         if (layer.color_assignment === 'manual') return layer
-        const next = pool.length ? nearestPoolHex(layer.source_color, pool) : null
-        if ((layer.assigned_color_hex ?? null) === (next ?? null)) return layer
+        const next = assignments[i] ?? null
+        if ((layer.assigned_color_hex ?? null) === next) return layer
         touched = true
         return { ...layer, assigned_color_hex: next, color_assignment: 'auto' as const }
       })

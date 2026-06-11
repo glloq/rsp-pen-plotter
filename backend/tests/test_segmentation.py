@@ -174,6 +174,59 @@ def test_merge_similar_colours_noop_under_threshold() -> None:
     assert np.array_equal(new_palette, palette)
 
 
+def test_merge_duplicate_colours_collapses_identical_entries() -> None:
+    """Exact-RGB duplicates merge into the first occurrence."""
+    labels = np.array([[0, 1], [2, 3]], dtype=np.intp)
+    palette = np.array(
+        [
+            [136, 136, 136],  # grey
+            [255, 0, 0],  # red
+            [136, 136, 136],  # duplicate grey → merges into cluster 0
+            [0, 0, 255],  # blue
+        ],
+        dtype=np.uint8,
+    )
+    new_labels, new_palette = segmentation.merge_duplicate_colours(labels, palette)
+    assert len(new_palette) == 3
+    # The duplicate grey's pixels now carry the first grey's cluster index.
+    assert new_labels[1, 0] == new_labels[0, 0]
+    # Remaining entries keep their colours (red / blue intact).
+    assert [tuple(rgb) for rgb in new_palette] == [
+        (136, 136, 136),
+        (255, 0, 0),
+        (0, 0, 255),
+    ]
+
+
+def test_merge_duplicate_colours_noop_without_duplicates() -> None:
+    labels = np.array([[0, 1]], dtype=np.intp)
+    palette = np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8)
+    new_labels, new_palette = segmentation.merge_duplicate_colours(labels, palette)
+    assert np.array_equal(new_labels, labels)
+    assert np.array_equal(new_palette, palette)
+
+
+def test_bitmap_converter_dedupes_duplicate_palette_labels() -> None:
+    """A fixed palette with repeated entries emits each label only once.
+
+    Regression for the >4-colour collapse: the editor used to pad a
+    manual palette with repeated ``#888888`` chips, producing two
+    ``color-888888`` groups whose label-keyed overrides collided.
+    """
+    image = _gradient_image(width=16, height=16)
+    result = BitmapConverter().convert(
+        _png_bytes(image),
+        options={
+            "algorithm": "direct",
+            "segmentation_method": "fixed_palette",
+            "segmentation_options": {"palette": ["#000000", "#888888", "#888888", "#ffffff"]},
+            "drop_background": False,
+        },
+        fast=True,
+    )
+    assert result.svg.count('inkscape:label="color-888888"') == 1
+
+
 def test_bitmap_converter_routes_through_luminance_bands() -> None:
     """End-to-end: BitmapConverter respects the segmentation method choice."""
     image = _gradient_image(width=16, height=16)

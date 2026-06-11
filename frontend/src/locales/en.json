@@ -437,7 +437,8 @@
     "autoHint": "Automatic (k-means) extraction of the chosen number of colours — each colour becomes a layer.",
     "noPensInstalled": "No pens are marked as installed in the active profile.",
     "slotTooltip": "Slot {index} — {color}",
-    "manualSwap": "{count} of {total} colours have no pen slot — {count} manual swap(s) will be requested during the plot (only {slots} slots available)."
+    "manualSwap": "{count} of {total} colours have no pen slot — {count} manual swap(s) will be requested during the plot (only {slots} slots available).",
+    "droppedAsBackground": "These light colours sit above the background threshold and will be skipped as paper:"
   },
   "colorStyles": {
     "flat": "Flat colours",
@@ -462,6 +463,7 @@
     "spiralDesc": "Concentric offset rings per colour with spacing adapted to density.",
     "numColors": "Colour count",
     "numColorsHint": "How many K-means clusters to extract — each cluster becomes one layer.",
+    "numColorsCapped": "{requested} colours requested but only {available} distinct pen colours are available — install more pens or switch the palette to Auto / Manual.",
     "numColorsLocked": "Locked to the manual palette. Edit the colour list below.",
     "flatNoKnobs": "No knobs for flat colours — each cluster is traced as-is.",
     "crosshatchSpacingHint": "Tight spacing (darker clusters) → loose (lighter clusters).",

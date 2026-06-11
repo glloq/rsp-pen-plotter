@@ -135,3 +135,72 @@ test('color-eulerian band recipes give distinct angles per cluster at default st
   const angles = recipes.map((r) => (r.algorithm_options as Record<string, unknown>).angle_deg)
   expect(angles).toEqual([0, 45, 90, 135])
 })
+
+// >4-colour regression suite: band recipes must track the operator's
+// colour count past the historical default of 4, for every method that
+// can carry a multicolour job.
+
+test('kmeans band recipes track num_colors above 4 (6, 8, 16)', () => {
+  const d = useBitmapDraft()
+  for (const n of [6, 8, 16]) {
+    d.rehydrateDraft({ placement: null, installedPenColors: [] })
+    d.bitmap.value.segmentation_method = 'kmeans'
+    d.bitmap.value.num_colors = n
+    d.setMulticolorMasterStyle('color-crosshatch', { force: true })
+    const recipes = d.buildBitmapOptions().band_recipes as Array<Record<string, unknown>>
+    expect(recipes.length).toBe(n)
+  }
+})
+
+test('color-crosshatch keeps 16 clusters on 16 distinct hatch angles', () => {
+  const d = useBitmapDraft()
+  d.rehydrateDraft({ placement: null, installedPenColors: [] })
+  d.bitmap.value.segmentation_method = 'kmeans'
+  d.bitmap.value.num_colors = 16
+  d.setMulticolorMasterStyle('color-crosshatch', { force: true })
+  const recipes = d.buildBitmapOptions().band_recipes as Array<Record<string, unknown>>
+  const angles = recipes.map((r) => (r.algorithm_options as Record<string, unknown>).angle_deg)
+  // Past the 8-angle base list the wrap offset (7.5°/wrap) keeps every
+  // cluster on its own direction instead of repeating the first eight.
+  expect(new Set(angles).size).toBe(16)
+})
+
+test('color-dashes gives distinct angles per cluster at default step', () => {
+  const d = useBitmapDraft()
+  d.rehydrateDraft({ placement: null, installedPenColors: [] })
+  d.bitmap.value.segmentation_method = 'kmeans'
+  d.bitmap.value.num_colors = 6
+  d.setMulticolorMasterStyle('color-dashes', { force: true })
+  const recipes = d.buildBitmapOptions().band_recipes as Array<Record<string, unknown>>
+  const angles = recipes.map((r) => (r.algorithm_options as Record<string, unknown>).angle_deg)
+  // The old ``i * step + base`` collapsed the default step onto 0/90.
+  expect(new Set(angles).size).toBe(6)
+})
+
+test('fixed_palette band recipes follow the deduped palette length', () => {
+  const d = useBitmapDraft()
+  d.rehydrateDraft({ placement: null, installedPenColors: [] })
+  d.setMulticolorMasterStyle('color-crosshatch', { force: true })
+  d.bitmap.value.segmentation_method = 'fixed_palette'
+  // 6 chips with one duplicate → the backend merges to 5 layers.
+  d.bitmap.value.palette = ['#000000', '#ff0000', '#00ff00', '#0000ff', '#888888', '#888888']
+  d.bitmap.value.num_colors = 6
+  const recipes = d.buildBitmapOptions().band_recipes as Array<Record<string, unknown>>
+  expect(recipes.length).toBe(5)
+  expect(d.expectedLayerCount.value).toBe(5)
+})
+
+test('band recipes fall back to num_colors (not 4) on a mismatched method', () => {
+  const d = useBitmapDraft()
+  d.rehydrateDraft({ placement: null, installedPenColors: [] })
+  d.setMulticolorMasterStyle('color-crosshatch', { force: true })
+  // Operator hand-picked a method outside the multicolour family on the
+  // SVG tab (a generic multi-cut thresholds split); the recipe count
+  // must still honour their colour count instead of the historical
+  // hardcoded 4.
+  d.bitmap.value.segmentation_method = 'thresholds'
+  d.bitmap.value.thresholds = [0.3, 0.6]
+  d.bitmap.value.num_colors = 6
+  const recipes = d.buildBitmapOptions().band_recipes as Array<Record<string, unknown>>
+  expect(recipes.length).toBe(6)
+})
