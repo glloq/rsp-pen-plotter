@@ -913,7 +913,13 @@
     "collapseAll": "Collapse all",
     "collapseAllHint": "Reduce every layer card to its header",
     "summary": "Total",
-    "expectedHint": "Layers this image will produce when you Apply"
+    "expectedHint": "Layers this image will produce when you Apply",
+    "sectionColor": "Colour & pen",
+    "sectionPath": "Path",
+    "quickNav": "Jump to",
+    "groupColors": "Colours",
+    "groupOrder": "Order",
+    "groupView": "View"
   },
   "passes": {
     "title": "Passes",

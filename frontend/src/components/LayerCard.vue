@@ -147,6 +147,7 @@ const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }
 
 <template>
   <div
+    :data-layer-card="layer.layer_id"
     class="rounded border bg-slate-800 px-3 py-2 space-y-2 transition"
     :class="
       isSelected
@@ -168,290 +169,298 @@ const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }
       @update:visible="(v) => (visible = v)"
     />
 
-    <div v-if="!collapsed" class="grid grid-cols-2 gap-2 text-xs">
-      <!-- Multi-pen machines: explicit slot assignment. -->
-      <label v-if="store.isMultiColor" class="text-slate-400">
-        <span class="flex items-center gap-1">
-          {{ t('layers.penSlot') }}
-          <span
-            v-if="selectedPen"
-            class="inline-block h-3 w-3 rounded-full border border-slate-600"
-            :style="{ backgroundColor: selectedPen.color }"
-          />
-          <!-- Nearest-pen badge: shown only when no slot is assigned
+    <div v-if="!collapsed" class="space-y-3">
+      <!-- ============================ COULEUR & STYLO ===================
+           Which ink draws this layer and, on multi-pen machines, which
+           carousel slot carries it. Grouped first because it answers the
+           operator's primary question ("what colour is this?") before
+           any path-level tuning. -->
+      <section class="space-y-2">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          {{ t('layers.sectionColor') }}
+        </p>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <!-- Multi-pen machines: explicit slot assignment. -->
+          <label v-if="store.isMultiColor" class="text-slate-400">
+            <span class="flex items-center gap-1">
+              {{ t('layers.penSlot') }}
+              <span
+                v-if="selectedPen"
+                class="inline-block h-3 w-3 rounded-full border border-slate-600"
+                :style="{ backgroundColor: selectedPen.color }"
+              />
+              <!-- Nearest-pen badge: shown only when no slot is assigned
                yet and the closest installed pen is far enough from the
                source colour to deserve attention. Click to auto-assign
                the suggested slot. ``exact``/``close`` matches stay
                silent; we don't want to nag for matches the operator
                wouldn't second-guess. -->
-          <button
-            v-if="penMatch && penMatch.severity !== 'none' && layer.target_pen_slot === null"
-            type="button"
-            class="inline-flex items-center gap-1 rounded border px-1 py-px text-[9px] font-mono transition"
-            :class="
-              penMatch.severity === 'far'
-                ? 'border-amber-700 bg-amber-950/40 text-amber-200 hover:bg-amber-950'
-                : penMatch.severity === 'wrong'
-                  ? 'border-red-700 bg-red-950/40 text-red-200 hover:bg-red-950'
-                  : 'border-emerald-700 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-950'
-            "
-            :title="
-              t('layers.nearestPenHint', {
-                slot: penMatch.pen?.index ?? '?',
-                color: penMatch.pen?.color ?? '',
-                distance: Math.round(penMatch.distance),
-              })
-            "
-            @click="applyNearestPen"
-          >
-            <span
-              v-if="penMatch.pen"
-              class="inline-block h-2 w-2 rounded-full border border-slate-600"
-              :style="{ backgroundColor: penMatch.pen.color }"
+              <button
+                v-if="penMatch && penMatch.severity !== 'none' && layer.target_pen_slot === null"
+                type="button"
+                class="inline-flex items-center gap-1 rounded border px-1 py-px text-[9px] font-mono transition"
+                :class="
+                  penMatch.severity === 'far'
+                    ? 'border-amber-700 bg-amber-950/40 text-amber-200 hover:bg-amber-950'
+                    : penMatch.severity === 'wrong'
+                      ? 'border-red-700 bg-red-950/40 text-red-200 hover:bg-red-950'
+                      : 'border-emerald-700 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-950'
+                "
+                :title="
+                  t('layers.nearestPenHint', {
+                    slot: penMatch.pen?.index ?? '?',
+                    color: penMatch.pen?.color ?? '',
+                    distance: Math.round(penMatch.distance),
+                  })
+                "
+                @click="applyNearestPen"
+              >
+                <span
+                  v-if="penMatch.pen"
+                  class="inline-block h-2 w-2 rounded-full border border-slate-600"
+                  :style="{ backgroundColor: penMatch.pen.color }"
+                />
+                <span>≈ #{{ penMatch.pen?.index ?? '?' }}</span>
+              </button>
+            </span>
+            <select
+              :value="layer.target_pen_slot ?? ''"
+              class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
+              @change="onPenSlot"
+            >
+              <option value="">{{ t('layers.none') }}</option>
+              <option v-for="pen in penSlots" :key="pen.index" :value="pen.index">
+                {{ pen.index }} — {{ pen.name }}
+              </option>
+            </select>
+            <p
+              v-if="showPenWarning && penMatch && penMatch.pen"
+              class="mt-0.5 text-[10px] text-amber-300"
+            >
+              {{
+                t('layers.penWarning', {
+                  color: swatchColor,
+                  slot: penMatch.pen.index,
+                  penColor: penMatch.pen.color,
+                })
+              }}
+            </p>
+            <p
+              v-else-if="showPenWarning && penMatch && !penMatch.pen"
+              class="mt-0.5 text-[10px] text-red-300"
+            >
+              {{ t('layers.penWarningNone') }}
+            </p>
+          </label>
+          <!-- Mono-pen machines: colour label used in the pause prompt. -->
+          <label v-else class="text-slate-400">
+            <span class="flex items-center gap-1">
+              {{ t('layers.colorLabel') }}
+              <span
+                class="inline-block h-3 w-3 rounded-full border border-slate-600"
+                :style="{ backgroundColor: swatchColor }"
+              />
+            </span>
+            <input
+              type="text"
+              :value="layer.color_label ?? ''"
+              :placeholder="layer.source_color"
+              class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
+              @change="onColorLabel"
             />
-            <span>≈ #{{ penMatch.pen?.index ?? '?' }}</span>
-          </button>
-        </span>
-        <select
-          :value="layer.target_pen_slot ?? ''"
-          class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
-          @change="onPenSlot"
-        >
-          <option value="">{{ t('layers.none') }}</option>
-          <option v-for="pen in penSlots" :key="pen.index" :value="pen.index">
-            {{ pen.index }} — {{ pen.name }}
-          </option>
-        </select>
-        <p
-          v-if="showPenWarning && penMatch && penMatch.pen"
-          class="mt-0.5 text-[10px] text-amber-300"
-        >
-          {{
-            t('layers.penWarning', {
-              color: swatchColor,
-              slot: penMatch.pen.index,
-              penColor: penMatch.pen.color,
-            })
-          }}
-        </p>
-        <p
-          v-else-if="showPenWarning && penMatch && !penMatch.pen"
-          class="mt-0.5 text-[10px] text-red-300"
-        >
-          {{ t('layers.penWarningNone') }}
-        </p>
-      </label>
-      <!-- Mono-pen machines: colour label used in the pause prompt. -->
-      <label v-else class="text-slate-400">
-        <span class="flex items-center gap-1">
-          {{ t('layers.colorLabel') }}
-          <span
-            class="inline-block h-3 w-3 rounded-full border border-slate-600"
-            :style="{ backgroundColor: swatchColor }"
-          />
-        </span>
-        <input
-          type="text"
-          :value="layer.color_label ?? ''"
-          :placeholder="layer.source_color"
-          class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
-          @change="onColorLabel"
-        />
-      </label>
+          </label>
+        </div>
 
-      <label class="text-slate-400">
-        {{ t('layers.speed') }}
-        <input
-          type="number"
-          min="1"
-          :value="layer.drawing_speed_mm_s ?? ''"
-          :placeholder="t('layers.default')"
-          class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
-          @change="onSpeed"
+        <!-- Per-layer colour assignment: shows the snapped ink + lets the
+             operator override from the active palette pool. -->
+        <AssignedColorPicker
+          :layer="layer"
+          :effective-palette="effectivePalette"
+          @pick="onColorPick"
+          @reset="onColorReset"
         />
-      </label>
-      <label class="text-slate-400">
-        {{ t('layers.simplify') }}
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          :value="layer.simplify_tolerance_mm"
-          class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
-          @change="onSimplify"
-        />
-      </label>
-      <label class="flex items-end gap-2 text-slate-400">
-        <input
-          type="checkbox"
-          :checked="layer.optimize"
-          class="h-4 w-4 accent-emerald-500"
-          @change="onOptimize"
-        />
-        {{ t('layers.optimize') }}
-      </label>
-      <!-- Opacity slider (preview only): 100 = solid, lower fades the
+      </section>
+
+      <!-- ============================ TRACÉ =============================
+           Path-level tuning that changes how the pen physically draws
+           this layer: drawing speed, curve simplification, travel
+           optimisation, preview opacity and the pen-change pause. -->
+      <section class="space-y-2 border-t border-slate-700/60 pt-2.5">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          {{ t('layers.sectionPath') }}
+        </p>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <label class="text-slate-400">
+            {{ t('layers.speed') }}
+            <input
+              type="number"
+              min="1"
+              :value="layer.drawing_speed_mm_s ?? ''"
+              :placeholder="t('layers.default')"
+              class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
+              @change="onSpeed"
+            />
+          </label>
+          <label class="text-slate-400">
+            {{ t('layers.simplify') }}
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              :value="layer.simplify_tolerance_mm"
+              class="mt-0.5 w-full rounded bg-slate-900 border border-slate-700 px-1 py-0.5 text-slate-100"
+              @change="onSimplify"
+            />
+          </label>
+          <label class="flex items-end gap-2 text-slate-400">
+            <input
+              type="checkbox"
+              :checked="layer.optimize"
+              class="h-4 w-4 accent-emerald-500"
+              @change="onOptimize"
+            />
+            {{ t('layers.optimize') }}
+          </label>
+          <!-- Opacity slider (preview only): 100 = solid, lower fades the
            layer to preview dilute-ink / watercolor passes. Persists on
            the placement via ``updateLayer`` but the G-code generator
            ignores it — it's a visual cue, not a hardware setting. -->
-      <label class="col-span-2 text-slate-400">
-        <span class="flex items-center gap-1">
-          {{ t('layers.opacity') }}
-          <span class="font-mono text-[10px] text-slate-500"
-            >{{ layer.opacity_percent ?? 100 }}%</span
-          >
-        </span>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          step="5"
-          :value="layer.opacity_percent ?? 100"
-          class="mt-0.5 w-full accent-emerald-500"
-          :data-test="`layer-opacity-${layer.layer_id}`"
-          @input="onOpacity"
-        />
-      </label>
-    </div>
-
-    <!-- Per-layer colour assignment: shows the snapped ink + lets the
-         operator override from the active palette pool. Hidden when
-         collapsed to keep the row compact. -->
-    <AssignedColorPicker
-      v-if="!collapsed"
-      :layer="layer"
-      :effective-palette="effectivePalette"
-      @pick="onColorPick"
-      @reset="onColorReset"
-    />
-
-    <!-- Print-style picker: tile grid for bitmap-derived layers. The
-         schema-driven advanced form below is gated behind "Advanced".
-         Multi-pass mode lifts the layer into a stacked-algorithms editor
-         so the same colour can be drawn with several visual effects in
-         one ink. -->
-    <div v-if="!collapsed && isBitmapLayer" class="space-y-1.5">
-      <div
-        class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500"
-      >
-        <span>{{ t('layers.printStyle') }}</span>
-        <div class="flex items-center gap-1">
-          <button
-            v-if="!isMultiPass"
-            type="button"
-            class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300 hover:border-emerald-600 hover:text-emerald-200"
-            :title="t('passes.enableHint')"
-            @click="enableMultiPass"
-          >
-            + {{ t('passes.enable') }}
-          </button>
-          <button
-            type="button"
-            class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
-            @click="showAdvanced = !showAdvanced"
-          >
-            {{ showAdvanced ? t('layers.advancedHide') : t('layers.advancedShow') }}
-          </button>
+          <label class="col-span-2 text-slate-400">
+            <span class="flex items-center gap-1">
+              {{ t('layers.opacity') }}
+              <span class="font-mono text-[10px] text-slate-500"
+                >{{ layer.opacity_percent ?? 100 }}%</span
+              >
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              :value="layer.opacity_percent ?? 100"
+              class="mt-0.5 w-full accent-emerald-500"
+              :data-test="`layer-opacity-${layer.layer_id}`"
+              @input="onOpacity"
+            />
+          </label>
         </div>
-      </div>
 
-      <!-- Single-style picker: hidden while multi-pass is active so the
+        <!-- Pen-change pause: how the run behaves right before this
+             colour is drawn (auto / always / never). -->
+        <div class="flex items-center gap-1.5 text-[10px] text-slate-500">
+          <span>{{ t('layers.pauseBefore') }}</span>
+          <div class="flex overflow-hidden rounded border border-slate-700">
+            <button
+              v-for="choice in pauseChoices"
+              :key="choice.value"
+              type="button"
+              class="px-2 py-0.5 transition"
+              :class="
+                layer.pause_before === choice.value
+                  ? 'bg-slate-700 text-slate-100'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+              "
+              :title="t(choice.key)"
+              @click="setPause(choice.value)"
+            >
+              <span aria-hidden="true">{{ choice.icon }}</span>
+              <span class="ml-1">{{ t(choice.key) }}</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ RENDU =============================
+           How the source pixels become strokes for this layer: the
+           print-style tile grid, optional multi-pass stack, and the
+           power-user algorithm picker + its schema-driven knobs. Bitmap
+           layers only — vector / text layers keep their source paths. -->
+      <section v-if="isBitmapLayer" class="space-y-1.5 border-t border-slate-700/60 pt-2.5">
+        <div
+          class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500"
+        >
+          <span>{{ t('layers.printStyle') }}</span>
+          <div class="flex items-center gap-1">
+            <button
+              v-if="!isMultiPass"
+              type="button"
+              class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300 hover:border-emerald-600 hover:text-emerald-200"
+              :title="t('passes.enableHint')"
+              @click="enableMultiPass"
+            >
+              + {{ t('passes.enable') }}
+            </button>
+            <button
+              type="button"
+              class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
+              @click="showAdvanced = !showAdvanced"
+            >
+              {{ showAdvanced ? t('layers.advancedHide') : t('layers.advancedShow') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Single-style picker: hidden while multi-pass is active so the
            operator isn't editing two sources of truth at once. -->
-      <PrintStylePicker
-        v-if="!isMultiPass"
-        :kind="styleKind"
-        :current-algorithm="currentAlgorithm"
-        @select="onPickStyle"
-        @reset="onResetStyle"
-      />
+        <PrintStylePicker
+          v-if="!isMultiPass"
+          :kind="styleKind"
+          :current-algorithm="currentAlgorithm"
+          @select="onPickStyle"
+          @reset="onResetStyle"
+        />
 
-      <!-- Multi-pass stack: ordered list of algorithms drawn against the
+        <!-- Multi-pass stack: ordered list of algorithms drawn against the
            same colour mask. Drag the ⠿ handle to reorder; the first
            pass plots first, the last on top. -->
-      <LayerPassStack
-        v-else
-        :passes="currentPasses"
-        :layer-id="layer.layer_id"
-        @update="onUpdatePasses"
-      />
-    </div>
+        <LayerPassStack
+          v-else
+          :passes="currentPasses"
+          :layer-id="layer.layer_id"
+          @update="onUpdatePasses"
+        />
+        <!-- Power-user algorithm picker, grouped by family (fill / lines /
+           mono_stroke). Behind "Advanced" — the tile grid above already
+           covers the common styles; this is the escape hatch for an
+           operator hunting a specific algorithm. -->
+        <label v-if="showAdvanced" class="flex items-center gap-1.5 text-[10px] text-slate-500">
+          <span>{{ t('layers.renderAlgorithm') }}</span>
+          <select
+            :value="currentAlgorithm"
+            class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100"
+            @change="onAlgorithm"
+          >
+            <option value="">{{ t('layers.defaultAlgo') }}</option>
+            <optgroup
+              v-for="group in algorithmsByKind"
+              :key="group.kind"
+              :label="t(`layers.algorithmKind.${group.kind}`, group.kind)"
+            >
+              <option v-for="algo in group.algos" :key="algo.name" :value="algo.name">
+                {{ algo.name }}
+              </option>
+            </optgroup>
+          </select>
+        </label>
 
-    <div
-      v-if="!collapsed"
-      class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-slate-500"
-    >
-      <!-- Power-user algorithm dropdown stays available for non-bitmap
-           layers (no print-style picker) and behind "Advanced" otherwise.
-           Grouped by family (fill / lines / mono_stroke) per the wiki
-           contract: an operator scanning for "another hatching style"
-           lands in the right ``<optgroup>`` instead of paging through 20
-           flat entries. -->
-      <label v-if="isBitmapLayer && showAdvanced" class="flex items-center gap-1.5">
-        <span>{{ t('layers.renderAlgorithm') }}</span>
-        <select
-          :value="currentAlgorithm"
-          class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100"
-          @change="onAlgorithm"
+        <!-- Per-algorithm settings: schema-driven inline form, shared
+             with PassList so the same knobs appear wherever an algorithm
+             is editable. Hidden unless "Advanced" is open AND the
+             selected algorithm actually has options. -->
+        <div
+          v-if="!isMultiPass && showAdvanced && currentAlgoSpec && currentAlgoSpec.schema.length"
+          class="rounded border border-slate-700 bg-slate-900/50 p-2"
         >
-          <option value="">{{ t('layers.defaultAlgo') }}</option>
-          <optgroup
-            v-for="group in algorithmsByKind"
-            :key="group.kind"
-            :label="t(`layers.algorithmKind.${group.kind}`, group.kind)"
-          >
-            <option v-for="algo in group.algos" :key="algo.name" :value="algo.name">
-              {{ algo.name }}
-            </option>
-          </optgroup>
-        </select>
-      </label>
-
-      <div class="flex items-center gap-1.5">
-        <span>{{ t('layers.pauseBefore') }}</span>
-        <div class="flex overflow-hidden rounded border border-slate-700">
-          <button
-            v-for="choice in pauseChoices"
-            :key="choice.value"
-            type="button"
-            class="px-2 py-0.5 transition"
-            :class="
-              layer.pause_before === choice.value
-                ? 'bg-slate-700 text-slate-100'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-            "
-            :title="t(choice.key)"
-            @click="setPause(choice.value)"
-          >
-            <span aria-hidden="true">{{ choice.icon }}</span>
-            <span class="ml-1">{{ t(choice.key) }}</span>
-          </button>
+          <p class="mb-1.5 text-[10px] uppercase tracking-wider text-slate-500">
+            {{ t('layers.algoSettings', { algorithm: currentAlgorithm }) }}
+          </p>
+          <AlgoParamsForm
+            :algorithm="currentAlgorithm"
+            :values="currentAlgoOptions"
+            @update="onAlgoOption"
+          />
         </div>
-      </div>
-    </div>
-
-    <!-- Per-algorithm settings: schema-driven inline form, shared with
-         PassList so the same knobs appear wherever an algorithm is
-         editable. Hidden unless the user opens "Advanced" AND the
-         selected algorithm actually has options. -->
-    <div
-      v-if="
-        !collapsed &&
-        isBitmapLayer &&
-        !isMultiPass &&
-        showAdvanced &&
-        currentAlgoSpec &&
-        currentAlgoSpec.schema.length
-      "
-      class="rounded border border-slate-700 bg-slate-900/50 p-2"
-    >
-      <p class="mb-1.5 text-[10px] uppercase tracking-wider text-slate-500">
-        {{ t('layers.algoSettings', { algorithm: currentAlgorithm }) }}
-      </p>
-      <AlgoParamsForm
-        :algorithm="currentAlgorithm"
-        :values="currentAlgoOptions"
-        @update="onAlgoOption"
-      />
+      </section>
     </div>
   </div>
 </template>
