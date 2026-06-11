@@ -1,6 +1,6 @@
 # Picking the right algorithm
 
-OmniPlot ships 47 visible raster algorithms (51 registered — four legacy
+OmniPlot ships 52 visible raster algorithms (56 registered — four legacy
 duplicates are hidden from the pickers, see below). This page is a
 decision tree, not a catalogue — for the full algorithm table see
 [`docs/converters.md`](../docs/converters.md).

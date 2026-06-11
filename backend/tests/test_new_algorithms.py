@@ -93,6 +93,11 @@ def test_registry_lists_all_algorithms() -> None:
         "text_fill",
         "lsystem",
         "chladni",
+        "sine_halftone",
+        "ascii_shade",
+        "lichtenberg",
+        "warp_grid",
+        "scallop",
     }
 
 

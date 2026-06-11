@@ -1957,5 +1957,140 @@
         "choices": null
       }
     ]
+  },
+  {
+    "name": "sine_halftone",
+    "kind": "mono_stroke",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_mm",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 1.9,
+        "min": 0.74,
+        "max": 11.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "amp_mm",
+        "label": "convert.waveAmp",
+        "type": "number",
+        "default": 0.74,
+        "min": 0.07,
+        "max": 3.7,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "period_mm",
+        "label": "convert.wavePeriod",
+        "type": "number",
+        "default": 1.5,
+        "min": 0.37,
+        "max": 7.4,
+        "step": 0.1,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "ascii_shade",
+    "kind": "fill",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "cell_mm",
+        "label": "convert.cellSize",
+        "type": "number",
+        "default": 3.7,
+        "min": 1.5,
+        "max": 15.0,
+        "step": 0.1,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "lichtenberg",
+    "kind": "lines",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "branches",
+        "label": "convert.branches",
+        "type": "integer",
+        "default": 24,
+        "min": 2.0,
+        "max": 120.0,
+        "step": 1.0,
+        "choices": null
+      },
+      {
+        "key": "step_mm",
+        "label": "convert.stepPx",
+        "type": "number",
+        "default": 1.1,
+        "min": 0.37,
+        "max": 3.7,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "seed",
+        "label": "convert.seed",
+        "type": "integer",
+        "default": 0,
+        "min": 0.0,
+        "max": null,
+        "step": 1.0,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "warp_grid",
+    "kind": "lines",
+    "complexity": "medium",
+    "options": [
+      {
+        "key": "spacing_mm",
+        "label": "convert.spacing",
+        "type": "number",
+        "default": 1.9,
+        "min": 0.74,
+        "max": 11.0,
+        "step": 0.1,
+        "choices": null
+      },
+      {
+        "key": "strength_mm",
+        "label": "convert.warpStrength",
+        "type": "number",
+        "default": 3.7,
+        "min": 0.37,
+        "max": 11.0,
+        "step": 0.1,
+        "choices": null
+      }
+    ]
+  },
+  {
+    "name": "scallop",
+    "kind": "lines",
+    "complexity": "low",
+    "options": [
+      {
+        "key": "scale_mm",
+        "label": "convert.cellSize",
+        "type": "number",
+        "default": 4.5,
+        "min": 1.5,
+        "max": 15.0,
+        "step": 0.1,
+        "choices": null
+      }
+    ]
   }
 ]

@@ -2,7 +2,7 @@
   "algorithms": {
     "meta": {
       "domain": "algorithms",
-      "manifest_version": 6,
+      "manifest_version": 8,
       "schema_semver": "0.2.0",
       "generated_at": "1970-01-01T00:00:00+00:00",
       "deprecations": [],
@@ -2075,6 +2075,170 @@
               "maximum": 7.0,
               "multipleOf": 1.0,
               "x-label": "convert.levels"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "sine_halftone",
+        "version": 1,
+        "deprecated": false,
+        "name": "sine_halftone",
+        "description": "Horizontal waves whose frequency and amplitude follow the tone \u2014 the sound-wave portrait.",
+        "kind": "mono_stroke",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "spacing_mm": {
+              "type": "number",
+              "default": 1.9,
+              "minimum": 0.74,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.spacing"
+            },
+            "amp_mm": {
+              "type": "number",
+              "default": 0.74,
+              "minimum": 0.07,
+              "maximum": 3.7,
+              "multipleOf": 0.1,
+              "x-label": "convert.waveAmp"
+            },
+            "period_mm": {
+              "type": "number",
+              "default": 1.5,
+              "minimum": 0.37,
+              "maximum": 7.4,
+              "multipleOf": 0.1,
+              "x-label": "convert.wavePeriod"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "ascii_shade",
+        "version": 1,
+        "deprecated": false,
+        "name": "ascii_shade",
+        "description": "Typewriter-art shading \u2014 each grid cell draws one glyph from a density ramp picked by its darkness.",
+        "kind": "fill",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "cell_mm": {
+              "type": "number",
+              "default": 3.7,
+              "minimum": 1.5,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.cellSize"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "lichtenberg",
+        "version": 1,
+        "deprecated": false,
+        "name": "lichtenberg",
+        "description": "Lichtenberg figures \u2014 jagged discharge branches seeking the dark, forking where the image is darkest.",
+        "kind": "lines",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "branches": {
+              "type": "integer",
+              "default": 24,
+              "minimum": 2.0,
+              "maximum": 120.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.branches"
+            },
+            "step_mm": {
+              "type": "number",
+              "default": 1.1,
+              "minimum": 0.37,
+              "maximum": 3.7,
+              "multipleOf": 0.1,
+              "x-label": "convert.stepPx"
+            },
+            "seed": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0.0,
+              "multipleOf": 1.0,
+              "x-label": "convert.seed"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "warp_grid",
+        "version": 1,
+        "deprecated": false,
+        "name": "warp_grid",
+        "description": "Op-art mesh \u2014 grid lines pushed along the tone gradient, bulging around dark masses.",
+        "kind": "lines",
+        "complexity": "medium",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "spacing_mm": {
+              "type": "number",
+              "default": 1.9,
+              "minimum": 0.74,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.spacing"
+            },
+            "strength_mm": {
+              "type": "number",
+              "default": 3.7,
+              "minimum": 0.37,
+              "maximum": 11.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.warpStrength"
+            }
+          },
+          "additionalProperties": true
+        },
+        "recommended_presets": []
+      },
+      {
+        "id": "scallop",
+        "version": 1,
+        "deprecated": false,
+        "name": "scallop",
+        "description": "Fish-scale arcs in staggered rows \u2014 darker areas nest extra ribs inside each scale.",
+        "kind": "lines",
+        "complexity": "low",
+        "hidden": false,
+        "params": {
+          "type": "object",
+          "properties": {
+            "scale_mm": {
+              "type": "number",
+              "default": 4.5,
+              "minimum": 1.5,
+              "maximum": 15.0,
+              "multipleOf": 0.1,
+              "x-label": "convert.cellSize"
             }
           },
           "additionalProperties": true
