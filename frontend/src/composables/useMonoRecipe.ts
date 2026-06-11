@@ -57,6 +57,17 @@ export type MonoStyleKnobs = {
   stroke_width?: number
   angles?: number[]
   crossed_on_darkest?: boolean
+  // Phase-2 banded patterns (2026-06).
+  band_min?: number
+  band_max?: number
+  radius_min?: number
+  radius_max?: number
+  gap_mm?: number
+  rays_min?: number
+  rays_max?: number
+  chords?: number
+  divisions?: number
+  dash_mm?: number
   // Generic per-algorithm overrides for masters without bespoke slider
   // wiring (the 2026-06 tonal masters): the Style tab renders the
   // schema-driven AlgoParamsForm and writes each knob here; the recipe
@@ -373,9 +384,11 @@ function recipeFromKnobs(
     }
     case 'hilbert-fill': {
       const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 3)
+      // adaptive: the curve recurses deeper where the image is darker —
+      // keeps the single-band default tonal (mirrors the registry recipe).
       return {
         algorithm: 'hilbert',
-        algorithm_options: { spacing_mm: spacing, min_run_mm: 3 },
+        algorithm_options: { spacing_mm: spacing, min_run_mm: 3, adaptive: true },
       }
     }
     // gosper-fill has no knob case: tone is driven by the L-system order,
@@ -432,6 +445,100 @@ function recipeFromKnobs(
           seed: i * 7 + 13,
         },
       }
+    }
+    // ---- Phase-2 banded patterns (2026-06) ----
+    // Each case mirrors its registry ``bandRecipe``: the dual-range knob
+    // pair replaces the hardcoded lerp bounds; fixed companions keep the
+    // registry values.
+    case 'truchet-tiles': {
+      const cell = lerp(i, total, knobs.cell_min ?? 2.2, knobs.cell_max ?? 5.2)
+      return {
+        algorithm: 'truchet',
+        algorithm_options: { cell_mm: cell, seed: i * 7 + 13, tile: 'diagonal' },
+      }
+    }
+    case 'maze-walk': {
+      const cell = lerp(i, total, knobs.cell_min ?? 2.2, knobs.cell_max ?? 4.5)
+      return { algorithm: 'maze', algorithm_options: { cell_mm: cell, seed: i * 7 + 13 } }
+    }
+    case 'basket-weave': {
+      const band = lerp(i, total, knobs.band_min ?? 3, knobs.band_max ?? 6.7)
+      return { algorithm: 'weave', algorithm_options: { band_mm: band, gap_mm: 0.74 } }
+    }
+    case 'stitch-rows': {
+      const cell = lerp(i, total, knobs.cell_min ?? 2.2, knobs.cell_max ?? 4.5)
+      return { algorithm: 'hitomezashi', algorithm_options: { cell_mm: cell, seed: i * 7 + 13 } }
+    }
+    case 'bubble-pack': {
+      // Radius cap lerped dark→light; the floor tracks the cap so dark
+      // bands pack small dense bubbles without sub-pen-width specks.
+      const cap = lerp(i, total, knobs.radius_min ?? 1.5, knobs.radius_max ?? 3.7)
+      return {
+        algorithm: 'circle_pack',
+        algorithm_options: {
+          min_radius_mm: Math.max(0.19, cap * 0.2),
+          max_radius_mm: cap,
+          gap_mm: knobs.gap_mm ?? 0.22,
+          seed: i * 7 + 13,
+        },
+      }
+    }
+    case 'brick-courses': {
+      const h = lerp(i, total, knobs.cell_min ?? 2.2, knobs.cell_max ?? 4.5)
+      return { algorithm: 'brick', algorithm_options: { brick_w_mm: h * 2, brick_h_mm: h } }
+    }
+    case 'dash-shading': {
+      const angles =
+        knobs.angles && knobs.angles.length > 0
+          ? knobs.angles
+          : ((MONO_STYLE_DEFAULTS['dash-shading']?.angles as number[] | undefined) ?? [45, 135])
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.6)
+      const gap = lerp(i, total, 0.74, 1.9)
+      const picked = pickAnglesForBand(i, total, angles)
+      return {
+        algorithm: 'dashes',
+        algorithm_options: {
+          spacing_mm: spacing,
+          angle_deg: picked[0] ?? 45,
+          dash_mm: knobs.dash_mm ?? 1.1,
+          gap_mm: gap,
+          crossed: false,
+        },
+      }
+    }
+    case 'vinyl-rings': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 3)
+      return { algorithm: 'rings', algorithm_options: { spacing_mm: spacing } }
+    }
+    case 'sunburst-rays': {
+      // More rays on the dark bands (rays_max at i=0).
+      const rays = Math.round(lerp(i, total, knobs.rays_max ?? 220, knobs.rays_min ?? 70))
+      return { algorithm: 'sunburst', algorithm_options: { rays } }
+    }
+    case 'thread-fans': {
+      const cell = lerp(i, total, knobs.cell_min ?? 4.5, knobs.cell_max ?? 8)
+      // The chords knob sets the darkest band; light bands relax by 4
+      // chords (floored) so the fans thin out with the tone.
+      const dark = knobs.chords ?? 9
+      const chords = Math.round(lerp(i, total, dark, Math.max(3, dark - 4)))
+      return {
+        algorithm: 'curve_stitching',
+        algorithm_options: { cell_mm: cell, chords, seed: i * 7 + 13 },
+      }
+    }
+    case 'moire-beat': {
+      const spacing = lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.6)
+      return {
+        algorithm: 'moire',
+        algorithm_options: { spacing_mm: spacing, mode: 'rings', offset_mm: 5.2, delta_deg: 4 },
+      }
+    }
+    case 'penrose-facets': {
+      // The divisions knob sets the darkest band; lighter bands drop up
+      // to two subdivision levels (each level multiplies the tile count).
+      const dark = knobs.divisions ?? 7
+      const divisions = Math.round(lerp(i, total, dark, Math.max(4, dark - 2)))
+      return { algorithm: 'penrose', algorithm_options: { divisions } }
     }
     default: {
       const base = style.bandRecipe ? style.bandRecipe(i, total) : null

@@ -249,6 +249,69 @@ export const MONO_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   },
   outline: STROKE_ONLY,
   'centerline-trace': STROKE_ONLY,
+  // Phase-2 banded patterns (2026-06): each dual range drives the
+  // dark→light lerp of the style's tonal knob; conventions mirror the
+  // colour twins (color-truchet, color-rings, color-sunburst, …).
+  'truchet-tiles': {
+    controls: [dual('cell_min', 'cell_max', 0.74, 11, 0.1, 'mono.cellRange', { unit: 'mm' })],
+  },
+  'maze-walk': {
+    controls: [dual('cell_min', 'cell_max', 1.5, 7.4, 0.1, 'mono.cellRange', { unit: 'mm' })],
+  },
+  'basket-weave': {
+    controls: [dual('band_min', 'band_max', 1.5, 11, 0.1, 'convert.bandPx', { unit: 'mm' })],
+  },
+  'stitch-rows': {
+    controls: [dual('cell_min', 'cell_max', 1.5, 7.4, 0.1, 'mono.cellRange', { unit: 'mm' })],
+  },
+  'bubble-pack': {
+    controls: [
+      dual('radius_min', 'radius_max', 0.74, 7.4, 0.1, 'colorStyles.radiusRange', {
+        unit: 'mm',
+        hintKey: 'colorStyles.radiusRangeHint',
+      }),
+      range('gap_mm', 0, 2.2, 0.1, 'convert.gapPx', { decimals: 1, unit: ' mm' }),
+    ],
+  },
+  'brick-courses': {
+    controls: [dual('cell_min', 'cell_max', 0.74, 11, 0.1, 'mono.cellRange', { unit: 'mm' })],
+  },
+  'dash-shading': {
+    controls: [
+      {
+        kind: 'angle-set',
+        key: 'angles',
+        choices: [0, 30, 45, 90, 135, 150],
+        maxSelected: 4,
+        labelKey: 'mono.angles',
+        hintKey: 'mono.anglesHint',
+      },
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+      range('dash_mm', 0.19, 4.5, 0.1, 'convert.dashPx', { decimals: 1, unit: ' mm' }),
+    ],
+  },
+  'vinyl-rings': {
+    controls: [dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', { unit: 'mm' })],
+  },
+  'sunburst-rays': {
+    controls: [
+      dual('rays_min', 'rays_max', 8, 360, 4, 'colorStyles.raysRange', {
+        hintKey: 'colorStyles.raysRangeHint',
+      }),
+    ],
+  },
+  'thread-fans': {
+    controls: [
+      dual('cell_min', 'cell_max', 2.2, 11, 0.1, 'mono.cellRange', { unit: 'mm' }),
+      range('chords', 3, 12, 1, 'convert.chords'),
+    ],
+  },
+  'moire-beat': {
+    controls: [dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' })],
+  },
+  'penrose-facets': {
+    controls: [range('divisions', 4, 8, 1, 'convert.divisions')],
+  },
 }
 
 // ---- Multicolour master family ----

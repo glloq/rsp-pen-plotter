@@ -248,6 +248,70 @@ describe('buildMonoBandRecipes', () => {
     expect((sc1.angles as number[]).length).toBe(1)
   })
 
+  it('drives the phase-2 banded patterns from their knobs', () => {
+    // Cell-size family: the dual range reaches the emitted cell_mm and
+    // the darkest band gets the smaller (denser) cell.
+    for (const [styleId, algo] of [
+      ['truchet-tiles', 'truchet'],
+      ['maze-walk', 'maze'],
+      ['stitch-rows', 'hitomezashi'],
+    ] as const) {
+      setMonoMasterStyleId(styleId)
+      setMonoKnob(styleId, 'cell_min', 2)
+      setMonoKnob(styleId, 'cell_max', 6)
+      const recipes = buildMonoBandRecipes('luminance_bands', 3)
+      expect(recipes!.length).toBe(3)
+      expect(recipes!.every((r) => r.algorithm === algo)).toBe(true)
+      const dark = recipes![0]!.algorithm_options as Record<string, unknown>
+      const light = recipes![2]!.algorithm_options as Record<string, unknown>
+      expect(dark.cell_mm as number).toBeCloseTo(2)
+      expect(light.cell_mm as number).toBeCloseTo(6)
+    }
+
+    // Sunburst: more rays on the darkest band (rays_max end of the lerp).
+    setMonoMasterStyleId('sunburst-rays')
+    setMonoKnob('sunburst-rays', 'rays_min', 40)
+    setMonoKnob('sunburst-rays', 'rays_max', 300)
+    const sun = buildMonoBandRecipes('luminance_bands', 2)
+    expect((sun![0]!.algorithm_options as Record<string, unknown>).rays).toBe(300)
+    expect((sun![1]!.algorithm_options as Record<string, unknown>).rays).toBe(40)
+
+    // Bubble pack: the radius floor tracks the lerped cap.
+    setMonoMasterStyleId('bubble-pack')
+    setMonoKnob('bubble-pack', 'radius_min', 1)
+    setMonoKnob('bubble-pack', 'radius_max', 4)
+    const bub = buildMonoBandRecipes('luminance_bands', 2)
+    const bubDark = bub![0]!.algorithm_options as Record<string, unknown>
+    expect(bubDark.max_radius_mm as number).toBeCloseTo(1)
+    expect(bubDark.min_radius_mm as number).toBeCloseTo(0.2)
+
+    // Dash shading rotates its hatch angle per band like pencil.
+    setMonoMasterStyleId('dash-shading')
+    const dash = buildMonoBandRecipes('luminance_bands', 2)
+    expect(dash!.every((r) => r.algorithm === 'dashes')).toBe(true)
+    const dashAngles = dash!.map(
+      (r) => (r.algorithm_options as Record<string, unknown>).angle_deg,
+    )
+    expect(new Set(dashAngles).size).toBe(2)
+
+    // Penrose: the divisions knob sets the darkest band, lighter bands
+    // drop subdivision levels.
+    setMonoMasterStyleId('penrose-facets')
+    setMonoKnob('penrose-facets', 'divisions', 8)
+    const pen = buildMonoBandRecipes('luminance_bands', 2)
+    expect((pen![0]!.algorithm_options as Record<string, unknown>).divisions).toBe(8)
+    expect((pen![1]!.algorithm_options as Record<string, unknown>).divisions).toBe(6)
+  })
+
+  it('keeps hilbert-fill adaptive on the knob-driven path (tonal single band)', () => {
+    // Regression: the registry bandRecipe sets adaptive: true, but the
+    // knob path used to drop it — flat fill at the 1-band default.
+    setMonoMasterStyleId('hilbert-fill')
+    const recipes = buildMonoBandRecipes('luminance_bands', 1)
+    expect(recipes!.length).toBe(1)
+    expect((recipes![0]!.algorithm_options as Record<string, unknown>).adaptive).toBe(true)
+  })
+
   it('emits one direct recipe for the silhouette binary style', () => {
     setMonoMasterStyleId('silhouette')
     const recipes = buildMonoBandRecipes('thresholds', 4)

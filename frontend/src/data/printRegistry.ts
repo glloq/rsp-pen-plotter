@@ -1114,6 +1114,22 @@ export const MONO_STYLE_DEFAULTS: Record<string, Record<string, unknown>> = {
     angles: [45, 135, 0, 90],
     crossed_on_darkest: true,
   },
+  // Phase-2 banded patterns (2026-06): the dual ranges feed the same
+  // dark→light lerp the registry ``bandRecipe`` defaults encode, so the
+  // sliders and the hardcoded recipes always agree on which knob is the
+  // tonal axis.
+  'truchet-tiles': { cell_min: 2.2, cell_max: 5.2 },
+  'maze-walk': { cell_min: 2.2, cell_max: 4.5 },
+  'basket-weave': { band_min: 3, band_max: 6.7 },
+  'stitch-rows': { cell_min: 2.2, cell_max: 4.5 },
+  'bubble-pack': { radius_min: 1.5, radius_max: 3.7, gap_mm: 0.22 },
+  'brick-courses': { cell_min: 2.2, cell_max: 4.5 },
+  'dash-shading': { spacing_min: 1.1, spacing_max: 2.6, angles: [45, 135, 0, 90], dash_mm: 1.1 },
+  'vinyl-rings': { spacing_min: 1.1, spacing_max: 3 },
+  'sunburst-rays': { rays_min: 70, rays_max: 220 },
+  'thread-fans': { cell_min: 4.5, cell_max: 8, chords: 9 },
+  'moire-beat': { spacing_min: 1.1, spacing_max: 2.6 },
+  'penrose-facets': { divisions: 7 },
 }
 
 // Defaults for the multicolour master family. Mirrors MONO_STYLE_DEFAULTS:
