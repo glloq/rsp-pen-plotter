@@ -11,6 +11,12 @@ vi.mock('../../api/client', () => ({
   // directly (not via ``api.post``), so the mock must provide it for
   // the size→render coupling test below.
   rerenderJob: vi.fn(),
+  // The palette-source store persists through these wrappers and
+  // REVERTS its optimistic value when the call throws — they must
+  // resolve for the "Palette libre → available" test to observe the
+  // new source.
+  getPaletteSource: vi.fn().mockResolvedValue({ source: 'pens' }),
+  setPaletteSource: vi.fn().mockResolvedValue(undefined),
 }))
 
 import { api, rerenderJob } from '../../api/client'
@@ -263,6 +269,79 @@ describe('EditModalV2 (beginner single-screen)', () => {
       segmentation_options: { palette: hexes },
       num_colors: 6,
     })
+  })
+
+  it('"Palette libre" points the pool at the inventory, not the pens∪inventory union', async () => {
+    const { useAvailableColorsStore } = await import('../../stores/availableColors')
+    const { usePaletteSourceStore } = await import('../../stores/paletteSource')
+    const inventory = useAvailableColorsStore()
+    inventory.colors = [
+      {
+        color_id: 'id-0',
+        hex: '#ff0000',
+        name: 'rouge',
+        position: 0,
+        stroke_width_mm: 0.5,
+        odometer_mm: 0,
+        created_at: '',
+      },
+    ]
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    await wrapper.find('[data-test="palette-free"]').trigger('click')
+    await flushPromises()
+    expect(usePaletteSourceStore().source).toBe('available')
+  })
+
+  it('re-renders the adapted preview when a layer ink assignment changes', async () => {
+    const { useJobStore } = await import('../../stores/job')
+    const job = useJobStore()
+    const id = job.addEmptyPlacement()
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            job_id: 'job-1',
+            rerenderable: true,
+            source_file: 'photo.jpg',
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>',
+            layers: [
+              {
+                layer_id: 'color-112233',
+                source_color: '#112233',
+                target_pen_slot: null,
+                draw_order: 0,
+                total_length_mm: 100,
+                path_count: 1,
+                bbox: { x_min: 0, y_min: 0, x_max: 100, y_max: 100 },
+                optimize: true,
+                simplify_tolerance_mm: 0,
+                drawing_speed_mm_s: null,
+                color_label: null,
+                pause_before: 'auto',
+                assigned_color_hex: null,
+                color_assignment: 'auto',
+              },
+            ],
+          }
+        : p,
+    )
+    mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    vi.mocked(rerenderJob).mockClear()
+
+    // The LayerCard picker path: assign an inventory ink to the layer.
+    job.updateLayer('color-112233', { assigned_color_hex: '#ff0000', color_assignment: 'manual' })
+    // Debounced watcher (300 ms) + the modal's adapted render.
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    await flushPromises()
+    const calls = vi.mocked(rerenderJob).mock.calls
+    expect(calls.length).toBeGreaterThanOrEqual(1)
+    // The adapted render ships the assignment as layer_ink_colors (5th arg).
+    const inkArgs = calls.map((c) => c[4]).filter(Boolean)
+    expect(inkArgs.some((m) => (m as Record<string, string>)['color-112233'] === '#ff0000')).toBe(
+      true,
+    )
   })
 
   it('skips the re-segmentation when the cache already matches the palette', async () => {
