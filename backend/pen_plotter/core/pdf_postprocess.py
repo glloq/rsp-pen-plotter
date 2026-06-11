@@ -66,6 +66,7 @@ _BITMAP_FORWARD_KEYS: tuple[str, ...] = (
     "segmentation_options",
     "min_region_pixels",
     "merge_delta_e",
+    "ink_pool",
     "mono_ink_color",
     "preprocess",
 )

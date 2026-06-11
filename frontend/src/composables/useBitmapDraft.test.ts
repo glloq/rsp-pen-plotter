@@ -190,6 +190,68 @@ test('fixed_palette band recipes follow the deduped palette length', () => {
   expect(d.expectedLayerCount.value).toBe(5)
 })
 
+test('pens-follow palette wires as kmeans_lab + ink_pool (not fixed_palette)', () => {
+  const d = useBitmapDraft()
+  const pens = ['#000000', '#ff0000', '#0000cc', '#888888', '#44dd44', '#ffcc00']
+  d.rehydrateDraft({ placement: null, installedPenColors: pens })
+  d.setMulticolorMasterStyle('color-flat', { force: true })
+  d.paletteFollowsPens.value = true
+  // Mirror what the StyleTab watcher writes in pens mode.
+  d.bitmap.value.segmentation_method = 'fixed_palette'
+  d.bitmap.value.palette = [...pens]
+  d.bitmap.value.num_colors = 6
+  const payload = d.buildBitmapOptions()
+  // Colour-distance snapping starves saturated pens on low-saturation
+  // photos; the wire ships perceptual clustering + the ink remap so
+  // every requested pen shows up whatever the source colours are.
+  expect(payload.segmentation_method).toBe('kmeans_lab')
+  expect(payload.num_colors).toBe(6)
+  expect(payload.ink_pool).toEqual(pens)
+  expect(payload.segmentation_options).toEqual({})
+})
+
+test('manual fixed palette still wires as fixed_palette (no ink_pool)', () => {
+  const d = useBitmapDraft()
+  d.rehydrateDraft({ placement: null, installedPenColors: [] })
+  d.setMulticolorMasterStyle('color-flat', { force: true })
+  d.paletteFollowsPens.value = false
+  d.bitmap.value.segmentation_method = 'fixed_palette'
+  d.bitmap.value.palette = ['#000000', '#ff0000', '#0000cc']
+  const payload = d.buildBitmapOptions()
+  expect(payload.segmentation_method).toBe('fixed_palette')
+  expect(payload.ink_pool).toBeUndefined()
+  expect((payload.segmentation_options as Record<string, unknown>).palette).toEqual([
+    '#000000',
+    '#ff0000',
+    '#0000cc',
+  ])
+})
+
+test('rehydrate restores pens mode from a persisted ink_pool', () => {
+  const d = useBitmapDraft()
+  const pens = ['#000000', '#ff0000', '#0000cc', '#888888', '#44dd44', '#ffcc00']
+  const placement = {
+    last_options: {
+      segmentation_method: 'kmeans_lab',
+      num_colors: 4,
+      // Pool truncated to the first 4 pens by the colour-count slider.
+      ink_pool: pens.slice(0, 4),
+      segmentation_options: {},
+    },
+  }
+  d.rehydrateDraft({
+    placement: placement as never,
+    installedPenColors: pens,
+  })
+  // Draft-internal pens-mode representation restored: fixed_palette +
+  // the pool as palette + follows-pens inferred by prefix match (the
+  // pool is the first N pens, not the full rack).
+  expect(d.bitmap.value.segmentation_method).toBe('fixed_palette')
+  expect(d.bitmap.value.palette).toEqual(pens.slice(0, 4))
+  expect(d.paletteFollowsPens.value).toBe(true)
+  expect(d.bitmap.value.num_colors).toBe(4)
+})
+
 test('band recipes fall back to num_colors (not 4) on a mismatched method', () => {
   const d = useBitmapDraft()
   d.rehydrateDraft({ placement: null, installedPenColors: [] })

@@ -227,6 +227,65 @@ def test_bitmap_converter_dedupes_duplicate_palette_labels() -> None:
     assert result.svg.count('inkscape:label="color-888888"') == 1
 
 
+def test_bitmap_converter_ink_pool_remaps_clusters_to_pens() -> None:
+    """``ink_pool`` draws every cluster with a distinct operator ink.
+
+    Regression for the "more colours changes nothing" report: a
+    low-saturation photo segmented with ``fixed_palette`` sends every
+    pixel to the black/grey pens, so adding red/blue/green pens never
+    changed the preview. With kmeans_lab + ink_pool the clusters are
+    tonal and each one is remapped to its own pen.
+    """
+    import re
+
+    # Low-saturation source: three grey/brown tones on a white background.
+    arr = np.full((24, 24, 3), 245, dtype=np.uint8)
+    arr[4:20, 2:9] = (40, 32, 25)
+    arr[4:20, 9:16] = (110, 84, 60)
+    arr[4:20, 16:23] = (190, 160, 90)
+    image = Image.fromarray(arr)
+
+    pool = ["#000000", "#ff0000", "#0000cc", "#ffcc00"]
+    result = BitmapConverter().convert(
+        _png_bytes(image),
+        options={
+            "algorithm": "direct",
+            "segmentation_method": "kmeans_lab",
+            "num_colors": 4,
+            "ink_pool": pool,
+            "drop_background": True,
+            "background_luminance": 0.92,
+        },
+        fast=True,
+    )
+    labels = set(re.findall(r'inkscape:label="color-([0-9a-f]{6})"', result.svg))
+    # Every rendered layer carries a pool ink (background was dropped).
+    assert labels, "expected at least one rendered layer"
+    assert labels <= {h.lstrip("#") for h in pool}
+    # The three tones spread over three distinct inks instead of piling
+    # onto the closest grey.
+    assert len(labels) >= 3
+
+
+def test_bitmap_converter_ink_pool_skips_inks_lighter_than_background() -> None:
+    """Near-white inks would be re-dropped as background — warn, don't assign."""
+    image = _gradient_image(width=16, height=16)
+    result = BitmapConverter().convert(
+        _png_bytes(image),
+        options={
+            "algorithm": "direct",
+            "segmentation_method": "kmeans_lab",
+            "num_colors": 3,
+            "ink_pool": ["#000000", "#fafafa"],
+            "drop_background": True,
+            "background_luminance": 0.92,
+        },
+        fast=True,
+    )
+    assert "color-fafafa" not in result.svg
+    assert any("#fafafa" in w for w in result.warnings)
+
+
 def test_bitmap_converter_routes_through_luminance_bands() -> None:
     """End-to-end: BitmapConverter respects the segmentation method choice."""
     image = _gradient_image(width=16, height=16)
