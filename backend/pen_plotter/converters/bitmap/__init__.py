@@ -27,9 +27,13 @@ keep working unchanged thanks to the re-exports below.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    import numpy as np
+    from numpy.typing import NDArray
 
 from pen_plotter.converters.base import ConversionResult, Converter
 
@@ -79,6 +83,80 @@ _EXPLICIT_SEGMENTATION_METHODS: frozenset[str] = frozenset(
 # can pick Max (4800) / Ultra (8192) in the SVG tab; the floor only
 # raises, never lowers.
 LINE_ART_MIN_DIMENSION_PX = 2400
+
+
+def _remap_palette_to_inks(
+    labels: NDArray[np.intp],
+    palette: NDArray[np.uint8],
+    ink_pool: list[str],
+    *,
+    drop_background: bool,
+    background_luminance: float,
+) -> tuple[NDArray[np.intp], NDArray[np.uint8], list[str]]:
+    """Rewrite rendered clusters' palette colours to distinct pool inks.
+
+    Clusters are walked darkest-first (the layer order) and matched to
+    pool entries by greedy-unique ΔE 2000 (``assign_pool_inks``), so N
+    clusters against N pens come out as N distinct inks regardless of
+    the source image's saturation. Background-dropped clusters keep
+    their centroid so the downstream drop filter still recognises
+    them; inks bright enough to be re-dropped as background are
+    excluded from the pool (with a warning) instead of silently
+    producing an invisible layer.
+    """
+    # Late imports: ``pen_plotter.application.__init__`` pulls in service
+    # modules that import this package — a module-level import would be
+    # circular. numpy / segmentation follow the same late-import pattern
+    # the ``convert`` method already uses.
+    import numpy as np
+
+    from pen_plotter.application.color_assignment import assign_pool_inks
+    from pen_plotter.converters import segmentation as _seg_mod
+
+    warnings: list[str] = []
+    luminance = palette.astype(np.float64) @ _REC709 / 255.0
+    kept = [
+        cluster
+        for cluster in layer_order(labels, palette)
+        if not (drop_background and luminance[cluster] >= background_luminance)
+    ]
+    pool = list(ink_pool)
+    if drop_background:
+        too_light = [h for h in pool if _ink_luminance(h) >= background_luminance]
+        if too_light:
+            warnings.append(
+                "Inks at or above the background-luminance threshold were "
+                f"skipped (they would render as dropped background): {', '.join(too_light)}"
+            )
+            pool = [h for h in pool if h not in too_light]
+    if not kept or not pool:
+        return labels, palette, warnings
+
+    sources = ["#{:02x}{:02x}{:02x}".format(*palette[c].astype(int)) for c in kept]
+    assigned = assign_pool_inks(sources, pool)
+    new_palette = palette.copy()
+    for cluster, ink in zip(kept, assigned, strict=True):
+        if ink is None:
+            continue
+        body = ink.lstrip("#")
+        new_palette[cluster] = (
+            int(body[0:2], 16),
+            int(body[2:4], 16),
+            int(body[4:6], 16),
+        )
+    # More clusters than inks → reuse produced duplicate rows; merge so
+    # the shared pen draws one layer instead of two colliding labels.
+    new_labels, new_palette = _seg_mod.merge_duplicate_colours(labels, new_palette)
+    return new_labels, new_palette, warnings
+
+
+def _ink_luminance(hex_value: str) -> float:
+    """Rec.709 luminance (0..1) of a ``#rrggbb`` ink, plain weighted sum."""
+    body = hex_value.lstrip("#")
+    if len(body) == 3:
+        body = "".join(ch * 2 for ch in body)
+    r, g, b = int(body[0:2], 16), int(body[2:4], 16), int(body[4:6], 16)
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
 
 
 def pick_effective_segmentation(
@@ -164,6 +242,20 @@ class BitmapOptions(BaseModel):
     # only the uniform default and the operator only sees the real
     # result after Apply.
     band_recipes: list[dict[str, Any]] | None = None
+    # Operator ink pool ("use my N pens"). When non-empty, each rendered
+    # cluster's palette colour is remapped to a distinct pool ink via
+    # greedy-unique ΔE 2000 assignment (darkest cluster first), so every
+    # requested pen shows up in the output even on a low-saturation
+    # source — colour-distance segmentation (``fixed_palette``) sends a
+    # grey photo's every pixel to the black/grey pens and leaves the
+    # saturated ones empty no matter how many the operator picks.
+    # Background-dropped clusters keep their centroid (so the drop
+    # filter still recognises them) and inks bright enough to be
+    # re-dropped as background are excluded from the assignment pool.
+    # Because the remap rewrites the segmentation palette itself, the
+    # ``color-{hex}`` labels, ``extract_layers`` colours, /rerender
+    # repaints and G-code pen matching all see the inks natively.
+    ink_pool: list[str] = Field(default_factory=list)
     # Force every rendered ``<g>`` to use this single ink colour for its
     # ``stroke=`` attribute, regardless of the cluster's source-image
     # palette RGB. Set by the frontend when ``_printMode === 'monochrome'``
@@ -371,6 +463,26 @@ class BitmapConverter(Converter):
                 labels, palette = _seg_mod.merge_similar_colours(
                     labels, palette, opts.merge_delta_e
                 )
+        # Operator ink pool: rewrite each rendered cluster's colour to a
+        # distinct pool ink (greedy-unique ΔE 2000, darkest first) so the
+        # output uses the operator's actual pens whatever the source
+        # image's colours are. Runs after every merge step so the
+        # assignment sees the final cluster set, and before band_recipes
+        # / SegmentationResult so labels and the rerender cache carry the
+        # ink colours natively.
+        ink_warnings: list[str] = []
+        if opts.ink_pool:
+            with traced_span(
+                "pipeline.bitmap.remap_palette_to_inks",
+                ink_pool_size=len(opts.ink_pool),
+            ):
+                labels, palette, ink_warnings = _remap_palette_to_inks(
+                    labels,
+                    palette,
+                    opts.ink_pool,
+                    drop_background=opts.drop_background,
+                    background_luminance=opts.background_luminance,
+                )
         height, width = labels.shape
         # Per-pixel luminance of the (preprocessed, downscaled) image — the
         # tonal-spiral renderer samples it to modulate the wobble per pixel.
@@ -428,7 +540,7 @@ class BitmapConverter(Converter):
             ConversionResult(
                 svg=svg,
                 source_mime="image/svg+xml",
-                warnings=[*line_art_warnings, *warnings],
+                warnings=[*line_art_warnings, *ink_warnings, *warnings],
             ),
             seg,
         )

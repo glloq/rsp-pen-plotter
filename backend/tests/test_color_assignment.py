@@ -9,6 +9,7 @@ upload + generate to read the active inventory.
 from __future__ import annotations
 
 from pen_plotter.application.color_assignment import (
+    assign_pool_inks,
     auto_assign_layer_colors,
     nearest_pool_hex,
 )
@@ -179,6 +180,24 @@ def test_auto_assign_duplicate_pool_entries_allow_that_many_uses() -> None:
     pool = ["#000000", "#000000"]
     result = auto_assign_layer_colors(layers, pool)
     assert [layer.assigned_color_hex for layer in result] == ["#000000", "#000000"]
+
+
+def test_assign_pool_inks_unique_then_nearest() -> None:
+    """The pure helper spreads sources over distinct inks, reuses after."""
+    out = assign_pool_inks(["#101010", "#151515", "#181818"], ["#000000", "#333333"])
+    # Both inks are used before any reuse; nobody is left unassigned.
+    assert set(out) == {"#000000", "#333333"}
+    assert None not in out
+
+
+def test_assign_pool_inks_consumed_entries_unavailable() -> None:
+    """``consumed`` hexes mark pool slots as taken before matching."""
+    out = assign_pool_inks(["#101010"], ["#000000", "#333333"], consumed=["#000000"])
+    assert out == ["#333333"]
+
+
+def test_assign_pool_inks_empty_pool_returns_nones() -> None:
+    assert assign_pool_inks(["#123456"], []) == [None]
 
 
 def test_auto_assign_does_not_mutate_inputs() -> None:

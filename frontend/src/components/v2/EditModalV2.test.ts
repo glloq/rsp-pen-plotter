@@ -264,9 +264,12 @@ describe('EditModalV2 (beginner single-screen)', () => {
     // Vue's reactivity may hand back a proxy of the File; compare by
     // identity-relevant fields instead of reference.
     expect((file as File).name).toBe(sourceFile.name)
+    // Perceptual clustering + ink remap (not fixed_palette): the
+    // nearest-colour snap starved every saturated pen on
+    // low-saturation photos, so adding inks changed nothing on screen.
     expect(options).toMatchObject({
-      segmentation_method: 'fixed_palette',
-      segmentation_options: { palette: hexes },
+      segmentation_method: 'kmeans_lab',
+      ink_pool: hexes,
       num_colors: 6,
     })
   })
@@ -370,8 +373,8 @@ describe('EditModalV2 (beginner single-screen)', () => {
             source_mime: 'image/jpeg',
             last_file: new File(['x'], 'photo.jpg', { type: 'image/jpeg' }),
             last_options: {
-              segmentation_method: 'fixed_palette',
-              segmentation_options: { palette: hexes },
+              segmentation_method: 'kmeans_lab',
+              ink_pool: hexes,
             },
           }
         : p,

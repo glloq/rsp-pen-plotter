@@ -187,14 +187,16 @@ async function resolveAndPreview(): Promise<void> {
   }
   resolving.value = false
 
-  // Apply the decision's segmentation BEFORE rendering: the resolver
-  // recommends ``fixed_palette`` for bitmaps, but /rerender only
+  // Apply the decision's segmentation BEFORE rendering: /rerender only
   // re-inks the clusters the original /upload produced — with the
   // default 4-colour kmeans, picking 6 inks still rendered 4 muddy
   // clusters snapped to whatever pool colour was nearest ("I selected
-  // 6 colours and the preview only shows one"). Re-converting against
-  // the operator's actual palette makes the cluster set BE the chosen
-  // colours, so the preview (and Generate) use every selected ink.
+  // 6 colours and the preview only shows one"). Re-converting with
+  // perceptual clustering (k = pool size) + the backend's ``ink_pool``
+  // remap makes every cluster draw with its own pool ink — including on
+  // low-saturation photos, where the previous fixed_palette approach
+  // sent every pixel to the black/grey pens and left the saturated
+  // ones empty no matter how many the operator picked.
   await ensureSegmentationMatchesDecision(controller)
   if (controller.signal.aborted) return
 
@@ -217,13 +219,17 @@ const effectivePool = computed<string[]>(() => {
 })
 
 /**
- * Re-convert the placement when the resolver wants ``fixed_palette``
- * but the cached segmentation was built with something else (or an
- * older pool). Round-trips /upload with the placement's own source
+ * Re-convert the placement when the resolver wants a palette-driven
+ * split but the cached segmentation was built with something else (or
+ * an older pool). Round-trips /upload with the placement's own source
  * bytes so the new cluster set, layers and rerender cache all match
- * the operator's palette. Skipped (cheap) when the persisted
- * ``last_options`` already carry the same palette, so this runs once
- * per placement × pool, not on every preview.
+ * the operator's pool. The conversion is perceptual clustering
+ * (``kmeans_lab``, k = pool size) + the backend's ``ink_pool`` remap —
+ * each cluster draws with its own distinct pool ink, which keeps
+ * working on low-saturation photos where the previous ``fixed_palette``
+ * nearest-colour snap starved every non-grey pen. Skipped (cheap) when
+ * the persisted ``last_options`` already carry the same pool, so this
+ * runs once per placement × pool, not on every preview.
  */
 async function ensureSegmentationMatchesDecision(controller: AbortController): Promise<void> {
   const d = decision.value
@@ -234,14 +240,17 @@ async function ensureSegmentationMatchesDecision(controller: AbortController): P
   // A 0/1-colour pool can't drive a multicolour split — keep whatever
   // segmentation the upload picked (mono pipelines own that case).
   if (pool.length < 2) return
+  // The backend caps kmeans cluster counts; 16 distinct inks is already
+  // beyond any practical pen-plotter magazine.
+  const numColors = Math.min(pool.length, 16)
   const last = (placement.last_options ?? {}) as Record<string, unknown>
-  const lastPalette = (
-    ((last.segmentation_options as { palette?: string[] } | undefined)?.palette ?? []) as string[]
-  ).map((h) => h.toLowerCase())
+  const lastPool = (Array.isArray(last.ink_pool) ? (last.ink_pool as string[]) : []).map((h) =>
+    h.toLowerCase(),
+  )
   if (
-    last.segmentation_method === 'fixed_palette' &&
-    lastPalette.length === pool.length &&
-    lastPalette.every((h, i) => h === pool[i])
+    last.segmentation_method === 'kmeans_lab' &&
+    lastPool.length === pool.length &&
+    lastPool.every((h, i) => h === pool[i])
   ) {
     return
   }
@@ -251,9 +260,10 @@ async function ensureSegmentationMatchesDecision(controller: AbortController): P
   previewLoading.value = true
   const options = {
     ...(fileManager.buildOptions() ?? {}),
-    segmentation_method: 'fixed_palette',
-    segmentation_options: { palette: pool },
-    num_colors: pool.length,
+    segmentation_method: 'kmeans_lab',
+    segmentation_options: {},
+    num_colors: numColors,
+    ink_pool: pool,
   }
   await job.upload(file, options)
 }

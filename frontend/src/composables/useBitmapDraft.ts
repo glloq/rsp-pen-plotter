@@ -482,6 +482,23 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
       _bitmap.value.palette.every((c, i) => c === ctx.installedPenColors[i])
     _paletteFollowsPens.value = sameAsPens
   }
+  // Pens-follow placements persist their pool as ``ink_pool`` (wired as
+  // kmeans_lab + ink remap; see buildBitmapOptions). Restore the draft's
+  // internal pens-mode representation: ``fixed_palette`` + the pool as
+  // palette, with the follows-pens flag inferred by prefix-matching the
+  // installed pens (the pool is the first N distinct pen colours, so a
+  // strict full-array equality would break for N < installed count).
+  const inkPool = (opts as Record<string, unknown>).ink_pool
+  if (Array.isArray(inkPool) && inkPool.length > 0) {
+    _bitmap.value.palette = [...(inkPool as string[])]
+    _bitmap.value.segmentation_method = 'fixed_palette'
+    const pens = uniquePalette(ctx.installedPenColors)
+    _paletteFollowsPens.value =
+      _bitmap.value.palette.length <= pens.length &&
+      _bitmap.value.palette.every(
+        (c, i) => c.toLowerCase() === (pens[i] ?? '').toLowerCase(),
+      )
+  }
   const curvesOpts = (opts as Record<string, unknown>).curves
   if (curvesOpts && typeof curvesOpts === 'object') {
     const bag = { ...(curvesOpts as Record<string, unknown>) }
@@ -1182,7 +1199,29 @@ export function buildBitmapOptions(): Record<string, unknown> {
   const paletteMethodEmpty =
     (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither') &&
     b.palette.length === 0
-  const wireMethod = paletteMethodEmpty ? 'kmeans' : b.segmentation_method
+  // Pens-follow multicolour ("use my N pens") wires as perceptual
+  // clustering + ink remap instead of colour-distance snapping:
+  // ``fixed_palette`` sends a low-saturation photo's every pixel to the
+  // black/grey pens and leaves the saturated ones empty no matter how
+  // many colours the operator asks for. ``kmeans_lab`` with k = N plus
+  // the backend's ``ink_pool`` remap (greedy-unique ΔE 2000) instead
+  // splits the image into N perceptual clusters and draws each with its
+  // own pen — every requested ink shows up in the preview whatever the
+  // source colours are. The draft keeps ``fixed_palette`` as its
+  // internal pens-mode representation; only the wire payload differs
+  // (same pattern as the empty-palette kmeans downgrade above).
+  const pensInkPool =
+    _printMode.value === 'multicolor' &&
+    _paletteFollowsPens.value &&
+    b.segmentation_method === 'fixed_palette' &&
+    b.palette.length >= 2
+      ? uniquePalette(b.palette)
+      : null
+  const wireMethod = pensInkPool
+    ? 'kmeans_lab'
+    : paletteMethodEmpty
+      ? 'kmeans'
+      : b.segmentation_method
   // num_colors only feeds the kmeans family (RGB + Lab); in mono /
   // luminance_bands / thresholds / palette modes the backend reads
   // num_bands / levels / palette and ignores num_colors. Skipping it
@@ -1192,7 +1231,8 @@ export function buildBitmapOptions(): Record<string, unknown> {
     _printMode.value === 'multicolor' && (wireMethod === 'kmeans' || wireMethod === 'kmeans_lab')
   const payload: Record<string, unknown> = {
     algorithm: algo,
-    ...(shipsNumColors ? { num_colors: b.num_colors } : {}),
+    ...(shipsNumColors ? { num_colors: pensInkPool ? pensInkPool.length : b.num_colors } : {}),
+    ...(pensInkPool ? { ink_pool: pensInkPool } : {}),
     max_dimension_px: b.max_dimension_px,
     drop_background: b.drop_background,
     background_luminance: b.background_luminance,
