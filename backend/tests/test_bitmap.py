@@ -537,6 +537,41 @@ def test_auto_switch_covers_full_lines_algorithm_family() -> None:
         ) == "luminance_bands", f"fill-family {algo!r} must not auto-switch"
 
 
+def test_auto_switch_respects_multi_band_luminance() -> None:
+    """``num_bands >= 2`` is intentional tonal structure: the degenerate
+    single-cluster pathology the auto-switch fixes doesn't exist there,
+    and the pattern members of the lines family (truchet, maze, weave,
+    …) read the bands as a dark→light tile-scale ramp via band recipes.
+    Collapsing them to Otsu would turn the shading slider into a no-op.
+    """
+    from pen_plotter.converters.bitmap import pick_effective_segmentation
+
+    for algo in ("truchet", "maze", "weave", "contours", "centerline"):
+        assert pick_effective_segmentation(
+            algorithm=algo,
+            mono_ink_color="#000000",
+            segmentation_method="luminance_bands",
+            num_bands=4,
+        ) == "luminance_bands", f"{algo!r} must keep multi-band luminance segmentation"
+        # The single-band default (explicit 1 or unspecified) still
+        # auto-switches — that's the degenerate case the rule exists for.
+        for bands in (1, None):
+            assert pick_effective_segmentation(
+                algorithm=algo,
+                mono_ink_color="#000000",
+                segmentation_method="luminance_bands",
+                num_bands=bands,
+            ) == "otsu", f"{algo!r} must still auto-switch at a single band"
+    # kmeans stays eligible for the override whatever the band count
+    # says — bands are a luminance_bands-only concept.
+    assert pick_effective_segmentation(
+        algorithm="truchet",
+        mono_ink_color="#000000",
+        segmentation_method="kmeans",
+        num_bands=4,
+    ) == "otsu"
+
+
 def test_centerline_palette_segmentation_is_respected() -> None:
     """An operator who explicitly picks ``fixed_palette``, ``palette_dither``
     or ``thresholds`` is encoding a deliberate tuning choice we mustn't

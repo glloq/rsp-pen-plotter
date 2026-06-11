@@ -75,6 +75,15 @@ _EXPLICIT_SEGMENTATION_METHODS: frozenset[str] = frozenset(
 )
 
 
+def _requested_num_bands(segmentation_options: dict[str, Any] | None) -> int | None:
+    """Extract a sane ``num_bands`` from raw segmentation options, or ``None``."""
+    raw = (segmentation_options or {}).get("num_bands")
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 # Minimum segmentation-canvas size when the line-art auto-switch fires.
 # Matches the editor's "High" detail tier — empirically the threshold
 # where 1-2 px lines on a 3000-wide technical drawing JPG stop being
@@ -164,6 +173,7 @@ def pick_effective_segmentation(
     algorithm: str,
     mono_ink_color: str | None,
     segmentation_method: SegmentationMethod,
+    num_bands: int | None = None,
 ) -> SegmentationMethod:
     """Resolve the effective segmentation for a given option set.
 
@@ -182,7 +192,13 @@ def pick_effective_segmentation(
 
     Explicit picks of ``otsu`` / ``fixed_palette`` / ``palette_dither``
     / ``thresholds`` encode an intentional tuning we shouldn't
-    second-guess and are returned unchanged.
+    second-guess and are returned unchanged. The same goes for
+    **multi-band** luminance segmentation (``num_bands >= 2``): the
+    degenerate single-cluster pathology the auto-switch fixes doesn't
+    exist there — the bands carry real tonal structure that the pattern
+    members of the lines family (truchet, maze, weave, …) read as a
+    dark→light tile-scale ramp via band recipes, so collapsing them to
+    a binary mask would turn the operator's shading slider into a no-op.
 
     Shared between the upload path (``segment_and_render``) and the
     /rerender path (``api.rerender``) so per-layer algorithm overrides
@@ -199,6 +215,8 @@ def pick_effective_segmentation(
     if segmentation_method in _EXPLICIT_SEGMENTATION_METHODS:
         return segmentation_method
     if _KINDS.get(algorithm) != "lines":
+        return segmentation_method
+    if segmentation_method == "luminance_bands" and (num_bands or 1) >= 2:
         return segmentation_method
     return "otsu"
 
@@ -388,6 +406,7 @@ class BitmapConverter(Converter):
             algorithm=opts.algorithm,
             mono_ink_color=opts.mono_ink_color,
             segmentation_method=opts.segmentation_method,
+            num_bands=_requested_num_bands(opts.segmentation_options),
         )
         # When the line-art auto-switch fires, the operator's intent is
         # "faithfully reproduce every stroke" — and the biggest detail
