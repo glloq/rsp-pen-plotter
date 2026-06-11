@@ -2251,9 +2251,10 @@ export const PRINT_STYLES: PrintStyle[] = [
     colorRecipe(i, total) {
       // Rotate the hatch angle per cluster so overlapping inks read as
       // distinct strokes. Darkest cluster gets the densest spacing so the
-      // visual weight tracks the source-image luminance.
+      // visual weight tracks the source-image luminance. Past the 8-angle
+      // base list a 7.5° shift per wrap keeps 9-16 colour jobs distinct.
       const angles = [0, 45, 90, 135, 30, 75, 120, 165]
-      const angle = angles[i % angles.length] ?? 45
+      const angle = ((angles[i % angles.length] ?? 45) + Math.floor(i / angles.length) * 7.5) % 180
       const spacing = lerp(i, total, 0.93, 2.2)
       return {
         algorithm: 'crosshatch',
@@ -2678,7 +2679,8 @@ export const PRINT_STYLES: PrintStyle[] = [
     defaultAlgorithmOptions: { spacing_mm: 1.5, angle_deg: 45, crossed: false },
     colorRecipe(i, total) {
       const angles = [0, 45, 90, 135, 30, 75, 120, 165]
-      const angle = angles[i % angles.length] ?? 45
+      // Same 7.5° wrap shift as color-crosshatch for 9-16 colour jobs.
+      const angle = ((angles[i % angles.length] ?? 45) + Math.floor(i / angles.length) * 7.5) % 180
       const spacing = lerp(i, total, 0.93, 2.2)
       return {
         algorithm: 'eulerian_hatch',
@@ -2794,9 +2796,10 @@ export const PRINT_STYLES: PrintStyle[] = [
     defaultAlgorithmOptions: { spacing_mm: 1.9, angle_deg: 45, dash_mm: 1.1, gap_mm: 1.1 },
     colorRecipe(i, total) {
       // Rotate the dash angle per cluster (like the crosshatch master) so
-      // overlapping inks read as distinct stitch directions.
+      // overlapping inks read as distinct stitch directions, with the
+      // same 7.5° wrap shift past eight clusters.
       const angles = [0, 45, 90, 135, 30, 75, 120, 165]
-      const angle = angles[i % angles.length] ?? 45
+      const angle = ((angles[i % angles.length] ?? 45) + Math.floor(i / angles.length) * 7.5) % 180
       const spacing = lerp(i, total, 1.1, 2.2)
       return {
         algorithm: 'dashes',

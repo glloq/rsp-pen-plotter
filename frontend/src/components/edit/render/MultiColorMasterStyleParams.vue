@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveMulticolorStyle } from '../../../data/printRegistry'
+import { nextPadColor, uniquePalette } from '../../../lib/paletteColors'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { useJobStore } from '../../../stores/job'
@@ -100,15 +101,44 @@ const numColors = computed({
       if (current.length > target) {
         props.bitmap.palette = current.slice(0, target)
       } else if (current.length < target) {
+        // Pad with *distinct* defaults: repeated ``#888888`` chips used
+        // to merge into a single rendered layer (identical labels) while
+        // the grey stole every mid-tone pixel — asking for 6 colours
+        // displayed fewer than 4.
         const padded = [...current]
-        while (padded.length < target) padded.push('#888888')
+        while (padded.length < target) padded.push(nextPadColor(padded))
         props.bitmap.palette = padded
       }
     }
   },
 })
 
-const effectiveColorCount = computed(() => props.bitmap.num_colors)
+// What the segmentation will actually produce, as opposed to what the
+// slider asks for: palette-driven methods walk the (deduped) palette,
+// so a pens-following palette capped at the installed-pen count wins
+// over a higher ``num_colors``.
+const effectiveColorCount = computed(() => {
+  const b = props.bitmap
+  if (
+    (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither') &&
+    b.palette.length > 0
+  ) {
+    return uniquePalette(b.palette).length
+  }
+  return b.num_colors
+})
+
+// Pens-following palettes silently cap at the installed-pen count; the
+// slider used to keep displaying the requested value with no hint of
+// why nothing changed past N. Surface the cap explicitly.
+const pensCapShortfall = computed(() => {
+  if (!draft.paletteFollowsPens.value) return 0
+  const b = props.bitmap
+  if (b.segmentation_method !== 'fixed_palette' && b.segmentation_method !== 'palette_dither')
+    return 0
+  if (!b.palette.length) return 0
+  return Math.max(0, b.num_colors - uniquePalette(b.palette).length)
+})
 </script>
 
 <template>
@@ -133,6 +163,17 @@ const effectiveColorCount = computed(() => props.bitmap.num_colors)
       />
       <p class="text-[10px] text-slate-500">
         {{ t('colorStyles.numColorsHint') }}
+      </p>
+      <p
+        v-if="pensCapShortfall > 0"
+        class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-[10px] leading-snug text-amber-200"
+      >
+        {{
+          t('colorStyles.numColorsCapped', {
+            requested: bitmap.num_colors,
+            available: effectiveColorCount,
+          })
+        }}
       </p>
     </div>
 

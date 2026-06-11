@@ -127,3 +127,84 @@ export function nearestPoolHex(sourceHex: string, pool: readonly string[]): stri
   // Shared canonicaliser (lib/penWidth): lowercase #rrggbb, #rgb expanded.
   return canonicalHex(pool[bestIdx]!)
 }
+
+export interface PoolAssignmentItem {
+  /** Cluster centroid the assignment is computed from. */
+  sourceHex: string
+  /**
+   * Operator-pinned ink (manual override). The item keeps its pin (the
+   * result slot is ``null``) but the matching pool entry is consumed so
+   * the auto rows spread over the remaining inks.
+   */
+  pinnedHex?: string | null
+}
+
+/**
+ * Frontend mirror of the backend's ``auto_assign_layer_colors``: match
+ * each item to a pool ink, keeping inks **distinct** while unused pool
+ * entries remain.
+ *
+ * A plain per-item nearest-match collapses distinct clusters onto the
+ * same ink as soon as the cluster count grows past the pool's spread
+ * (6 clusters / 4 pens → 2-3 visible colours). Items are matched
+ * greedily by ascending ΔE 2000 without reusing a pool entry; once the
+ * pool is exhausted the leftovers fall back to plain nearest-match.
+ * Duplicate pool entries count as that many uses (two identical pens
+ * really can serve two layers).
+ *
+ * @returns One entry per item, aligned by index: the canonical assigned
+ *   hex for auto items, ``null`` for pinned items (keep the pin) or
+ *   when the pool is empty.
+ */
+export function assignPoolHexes(
+  items: readonly PoolAssignmentItem[],
+  pool: readonly string[],
+): (string | null)[] {
+  const result: (string | null)[] = items.map(() => null)
+  if (!pool.length) return result
+  const poolHex = pool.map((h) => canonicalHex(h))
+  const poolLab = poolHex.map((h) => hexToLab(h))
+  const available = poolHex.map(() => true)
+
+  const autoIndices: number[] = []
+  for (let i = 0; i < items.length; i++) {
+    const pinned = items[i]!.pinnedHex
+    if (pinned) {
+      const key = canonicalHex(pinned)
+      const j = poolHex.findIndex((h, idx) => available[idx] && h === key)
+      if (j >= 0) available[j] = false
+      continue
+    }
+    autoIndices.push(i)
+  }
+  if (!autoIndices.length) return result
+
+  // Globally-greedy unique matching: smallest remaining (item, ink) ΔE
+  // wins. The pair list is tiny (≤16 clusters × a pen rack), so the
+  // full sort costs nothing.
+  const pairs: Array<{ row: number; col: number; d: number }> = []
+  for (let r = 0; r < autoIndices.length; r++) {
+    const lab = hexToLab(items[autoIndices[r]!]!.sourceHex)
+    for (let c = 0; c < poolLab.length; c++) {
+      pairs.push({ row: r, col: c, d: deltaE2000(lab, poolLab[c]!) })
+    }
+  }
+  pairs.sort((a, b) => a.d - b.d)
+  const rowDone = autoIndices.map(() => false)
+  let remaining = autoIndices.length
+  for (const { row, col } of pairs) {
+    if (remaining === 0 || !available.includes(true)) break
+    if (rowDone[row] || !available[col]) continue
+    result[autoIndices[row]!] = poolHex[col]!
+    rowDone[row] = true
+    available[col] = false
+    remaining -= 1
+  }
+  // Pool exhausted → plain nearest for whoever is left.
+  for (let r = 0; r < autoIndices.length; r++) {
+    if (!rowDone[r]) {
+      result[autoIndices[r]!] = nearestPoolHex(items[autoIndices[r]!]!.sourceHex, poolHex)
+    }
+  }
+  return result
+}

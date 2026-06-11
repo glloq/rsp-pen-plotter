@@ -419,6 +419,38 @@ def drop_small_regions(labels: NDArray[np.intp], min_pixels: int) -> NDArray[np.
     return out
 
 
+def merge_duplicate_colours(
+    labels: NDArray[np.intp], palette: NDArray[np.uint8]
+) -> tuple[NDArray[np.intp], NDArray[np.uint8]]:
+    """Collapse palette entries with *identical* RGB into one cluster.
+
+    Duplicate entries arise from operator palettes that repeat a colour
+    (two identical pens, a hand-edited fixed palette) and — rarely —
+    from k-means centroids rounding to the same uint8 triplet. Left
+    alone they produce two layers with the same ``color-{hex}`` label,
+    which collides everywhere labels are used as keys (band-recipe
+    overrides, per-layer ink/width maps, the frontend's layer ids).
+    Exact-match merging is semantically lossless: with nearest-colour
+    snapping the later duplicate never wins a pixel anyway.
+    """
+    if len(palette) <= 1:
+        return labels, palette
+    seen: dict[tuple[int, int, int], int] = {}
+    keep: list[int] = []
+    lut = np.empty(len(palette), dtype=np.intp)
+    for i, rgb in enumerate(palette):
+        key = (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+        if key in seen:
+            lut[i] = seen[key]
+        else:
+            seen[key] = len(keep)
+            lut[i] = len(keep)
+            keep.append(i)
+    if len(keep) == len(palette):
+        return labels, palette
+    return lut[labels], palette[keep]
+
+
 def merge_similar_colours(
     labels: NDArray[np.intp], palette: NDArray[np.uint8], threshold: float
 ) -> tuple[NDArray[np.intp], NDArray[np.uint8]]:

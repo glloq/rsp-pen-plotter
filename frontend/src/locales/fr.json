@@ -437,7 +437,8 @@
     "autoHint": "Extraction automatique (K-means) du nombre de couleurs choisi — chaque couleur devient un calque.",
     "noPensInstalled": "Aucun pen n'est marqué comme installé dans le profil actif.",
     "slotTooltip": "Slot {index} — {color}",
-    "manualSwap": "{count} couleur(s) sur {total} n'ont pas de slot — {count} échange(s) manuel(s) seront demandés pendant le tracé ({slots} slots disponibles)."
+    "manualSwap": "{count} couleur(s) sur {total} n'ont pas de slot — {count} échange(s) manuel(s) seront demandés pendant le tracé ({slots} slots disponibles).",
+    "droppedAsBackground": "Ces couleurs claires dépassent le seuil de fond et seront ignorées comme papier :"
   },
   "colorStyles": {
     "flat": "Aplats",
@@ -462,6 +463,7 @@
     "spiralDesc": "Spirales concentriques offset par couleur — espacement adapté à la densité.",
     "numColors": "Nombre de couleurs",
     "numColorsHint": "Combien de clusters K-means extraire de l'image — chaque cluster devient un calque.",
+    "numColorsCapped": "{requested} couleurs demandées mais seulement {available} couleurs de stylos distinctes disponibles — installez d'autres stylos ou passez la palette en Auto / Manuel.",
     "numColorsLocked": "Verrouillé sur la palette manuelle. Modifie la liste des couleurs en-dessous.",
     "flatNoKnobs": "Pas de paramètres pour les aplats — chaque cluster est tracé tel quel.",
     "crosshatchSpacingHint": "Espacement serré (clusters sombres) → large (clusters clairs).",

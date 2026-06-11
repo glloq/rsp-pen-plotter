@@ -181,11 +181,24 @@ def nearest_pool_hex(source_hex: str, pool: list[str]) -> _NearestResult | None:
 def auto_assign_layer_colors(
     layers: list[LayerInfo], pool: list[str], *, force: bool = False
 ) -> list[LayerInfo]:
-    """Snap every layer's ``source_color`` to the nearest pool hex.
+    """Assign each layer an ink from ``pool``, keeping inks distinct.
+
+    A plain per-layer nearest-match collapses distinct clusters onto the
+    same ink as soon as the cluster count grows past the pool's spread
+    (6 clusters / 4 pens → 2-3 visible colours): several centroids share
+    one nearest pen and the preview repaints them identically. Instead,
+    auto rows are matched greedily by ascending ΔE 2000 **without
+    reusing a pool entry** while unused entries remain — so N clusters
+    against N+ pens always come out as N distinct inks. Only once the
+    pool is exhausted do the remaining layers fall back to plain
+    nearest-match (reuse allowed). Duplicate pool entries count as that
+    many uses, matching a rack with two identical pens.
 
     Args:
         layers: Layer records, possibly carrying manual overrides
             (``color_assignment == "manual"``) that this call must preserve.
+            Preserved manual picks consume their matching pool entry so the
+            auto rows spread over the remaining inks.
         pool: Candidate hexes for the snap. When empty the assignment is
             cleared (``assigned_color_hex = None``) so the G-code path
             falls back to the raw centroid.
@@ -197,25 +210,72 @@ def auto_assign_layer_colors(
         A new list (the inputs are not mutated) with ``assigned_color_hex``
         + ``color_assignment`` filled in per layer.
     """
+    if not pool:
+        # No pool to snap against → drop any stale auto value so the
+        # downstream rendering uses ``source_color`` cleanly.
+        return [
+            layer
+            if (not force and layer.color_assignment == "manual")
+            else layer.model_copy(update={"assigned_color_hex": None, "color_assignment": "auto"})
+            for layer in layers
+        ]
+
+    pool_hex = [_normalise_hex(h) for h in pool]
+    pool_lab = _hexes_to_lab(pool_hex)
+    available = [True] * len(pool_hex)
+
+    auto_indices: list[int] = []
+    for idx, layer in enumerate(layers):
+        if not force and layer.color_assignment == "manual":
+            # A pinned ink consumes one matching pool entry so the auto
+            # rows spread over the rest of the rack.
+            if layer.assigned_color_hex:
+                pinned = _normalise_hex(layer.assigned_color_hex)
+                for j, h in enumerate(pool_hex):
+                    if available[j] and h == pinned:
+                        available[j] = False
+                        break
+            continue
+        auto_indices.append(idx)
+
+    # Distance matrix auto-rows × pool, then globally-greedy unique
+    # matching: repeatedly take the smallest remaining (layer, ink) ΔE
+    # among unassigned layers and unused entries. Greedy (not Hungarian)
+    # keeps the code obvious; with the handful of pens/clusters involved
+    # the difference is imperceptible.
+    assigned: dict[int, str] = {}
+    if auto_indices:
+        src_lab = _hexes_to_lab([layers[i].source_color for i in auto_indices])
+        n, k = len(auto_indices), len(pool_hex)
+        dist = np.empty((n, k), dtype=np.float64)
+        for col in range(k):
+            dist[:, col] = _delta_e_2000(src_lab, np.broadcast_to(pool_lab[col], src_lab.shape))
+        order = np.dstack(np.unravel_index(np.argsort(dist, axis=None), dist.shape))[0]
+        row_done = [False] * n
+        remaining = n
+        for row, col in order:
+            if remaining == 0 or not any(available):
+                break
+            if row_done[row] or not available[col]:
+                continue
+            assigned[auto_indices[int(row)]] = pool_hex[int(col)]
+            row_done[int(row)] = True
+            available[int(col)] = False
+            remaining -= 1
+
     out: list[LayerInfo] = []
-    for layer in layers:
+    for idx, layer in enumerate(layers):
         if not force and layer.color_assignment == "manual":
             out.append(layer)
             continue
-        if not pool:
-            # No pool to snap against → drop any stale auto value so the
-            # downstream rendering uses ``source_color`` cleanly.
-            out.append(
-                layer.model_copy(update={"assigned_color_hex": None, "color_assignment": "auto"})
-            )
-            continue
-        nearest = nearest_pool_hex(layer.source_color, pool)
+        hex_value = assigned.get(idx)
+        if hex_value is None:
+            # Pool exhausted (more clusters than inks) → plain nearest.
+            nearest = nearest_pool_hex(layer.source_color, pool_hex)
+            hex_value = nearest.hex if nearest else None
         out.append(
             layer.model_copy(
-                update={
-                    "assigned_color_hex": nearest.hex if nearest else None,
-                    "color_assignment": "auto",
-                }
+                update={"assigned_color_hex": hex_value, "color_assignment": "auto"}
             )
         )
     return out

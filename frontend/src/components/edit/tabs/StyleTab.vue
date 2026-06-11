@@ -5,6 +5,7 @@ import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { useFileManager } from '../../../composables/useFileManager'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { resolveEffectivePalette } from '../../../lib/effectivePalette'
+import { uniquePalette } from '../../../lib/paletteColors'
 import { useAvailableColorsStore } from '../../../stores/availableColors'
 import { useJobStore } from '../../../stores/job'
 import { usePaletteSourceStore } from '../../../stores/paletteSource'
@@ -78,8 +79,13 @@ watch(
   ([follows, colors, n]) => {
     if (printMode.value !== 'multicolor') return
     if (follows && colors.length) {
-      const limit = Math.min(colors.length, Math.max(1, Number(n) || colors.length))
-      bitmap.value.palette = colors.slice(0, limit)
+      // Dedupe before slicing: two installed pens with the same ink
+      // would otherwise eat two of the operator's N colour slots while
+      // rendering as a single layer (the backend merges identical
+      // palette entries).
+      const distinct = uniquePalette(colors)
+      const limit = Math.min(distinct.length, Math.max(1, Number(n) || distinct.length))
+      bitmap.value.palette = distinct.slice(0, limit)
       bitmap.value.segmentation_method = 'fixed_palette'
     }
   },
