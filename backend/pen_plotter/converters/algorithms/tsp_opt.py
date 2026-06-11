@@ -26,6 +26,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import tone_darkness
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 from pen_plotter.core.tsp import (
     mst_dfs_tour,
@@ -78,6 +79,7 @@ class TspOptimizedAlgorithm(RasterAlgorithm):
         "TSP-art with 2-opt or MST optimisation — shorter total travel than the "
         "legacy greedy tour."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="density", label="convert.density", type="number",
@@ -121,7 +123,17 @@ class TspOptimizedAlgorithm(RasterAlgorithm):
         if n == 0:
             return group_open + "</g>"
         target = max(2, min(max_points, int(n * density)))
-        if poisson:
+        # Tone wins over Poisson-disk: the classic TSP-art look needs the
+        # stipple seeds pulled toward dark pixels so the single tour
+        # weaves dense where the image is dark. Without a usable tone
+        # map (or with a uniform region) the legacy sampling applies.
+        darkness = tone_darkness(bool_mask, opts)
+        if darkness is not None:
+            rng = np.random.default_rng(seed)
+            weights = np.clip(darkness[ys, xs], 1e-3, None)
+            choice = rng.choice(n, size=min(target, n), replace=False, p=weights / weights.sum())
+            points = np.column_stack([xs[choice], ys[choice]]).astype(np.float64)
+        elif poisson:
             points = _poisson_sample(ys, xs, target=target, seed=seed)
         else:
             rng = np.random.default_rng(seed)

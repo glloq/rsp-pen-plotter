@@ -7,11 +7,13 @@ match. Two flavours via ``mode``:
 
 - ``constant``  : every line uses the same wiggle parameters — same
   texture as a noisy oscilloscope.
-- ``modulated`` : amplitude grows with the local horizontal run length
-  so dense areas of the mask get bolder squiggles, mimicking the way a
-  hand-drawn shading wiggle gets fatter where it has more room. This is
-  the default — it's the variant that reads as ``squiggle`` rather than
-  ``noisy lines``.
+- ``modulated`` : amplitude (and wiggle frequency) follow the local
+  image darkness when the pipeline injects a tone map — the classic
+  squiggle-portrait look where shadows buzz and highlights calm down.
+  Without a tone map the amplitude grows with the local horizontal run
+  length instead, mimicking the way a hand-drawn shading wiggle gets
+  fatter where it has more room. This is the default — it's the variant
+  that reads as ``squiggle`` rather than ``noisy lines``.
 
 Unlike ``scanlines``, each on-mask row run becomes a *single* polyline
 densified at sub-pixel steps so the wave is smooth even with large
@@ -28,7 +30,11 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
+from pen_plotter.converters.algorithms._style import (
+    floored_spacing,
+    stroke_attr_px,
+    tone_darkness,
+)
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -39,6 +45,7 @@ class SquiggleAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Wiggly horizontal lines with amplitude / frequency drift — " "hand-drawn squiggle look."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
@@ -93,6 +100,9 @@ class SquiggleAlgorithm(RasterAlgorithm):
         bool_mask = mask.astype(bool)
         height, width = bool_mask.shape
         rng = np.random.default_rng(seed)
+        # ``modulated`` follows the injected tone map when one is usable:
+        # darkness drives both amplitude and wiggle frequency per sample.
+        darkness = tone_darkness(bool_mask, opts) if mode == "modulated" else None
 
         # Sub-pixel sampling step along x: 0.5 px is enough for the
         # amplitudes we expose without producing crazy SVG sizes.
@@ -129,24 +139,35 @@ class SquiggleAlgorithm(RasterAlgorithm):
                 run_len = end - start
                 if run_len < 2:
                     continue
-                # Modulated amplitude: grows toward the middle of the
-                # run and tapers at the edges so squiggles look like
-                # they fit the available room.
-                if mode == "modulated":
+                # Modulated amplitude: follows the tone map when one is
+                # available (shadows buzz, highlights calm down); falls
+                # back to growing toward the middle of the run so
+                # squiggles look like they fit the available room.
+                if mode == "modulated" and darkness is None:
                     eff_amp = amp * min(1.0, run_len / (3.0 * local_period))
                 else:
                     eff_amp = amp
                 points: list[tuple[float, float]] = []
                 xx = float(start)
+                # Accumulated phase lets the wiggle frequency chirp with
+                # local darkness without tearing the waveform.
+                acc = phase
                 while xx <= end - 1:
                     # Sin + small secondary harmonic for non-mechanical
                     # feel. The harmonic adds the dwn-up flick a hand
                     # makes between waves.
-                    t = (xx - start) / local_period
-                    wiggle = math.sin(2 * math.pi * t + phase) + 0.3 * math.sin(
-                        4 * math.pi * t + phase * 1.7
-                    )
-                    points.append((xx, float(y) + eff_amp * wiggle * 0.7))
+                    if darkness is not None:
+                        d = float(darkness[y, min(int(xx), width - 1)])
+                        local_amp = eff_amp * (0.1 + 0.9 * d)
+                        acc += 2 * math.pi * (0.6 + 1.2 * d) * sample_step / local_period
+                        wiggle = math.sin(acc) + 0.3 * math.sin(2 * acc + phase * 0.7)
+                    else:
+                        local_amp = eff_amp
+                        t = (xx - start) / local_period
+                        wiggle = math.sin(2 * math.pi * t + phase) + 0.3 * math.sin(
+                            4 * math.pi * t + phase * 1.7
+                        )
+                    points.append((xx, float(y) + local_amp * wiggle * 0.7))
                     xx += sample_step
                 if len(points) >= 2:
                     polylines.append(points)

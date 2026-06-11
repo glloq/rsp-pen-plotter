@@ -22,7 +22,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._style import stroke_attr_px
+from pen_plotter.converters.algorithms._style import stroke_attr_px, tone_darkness
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -34,6 +34,7 @@ class LowPolyAlgorithm(RasterAlgorithm):
         "Low-poly facets — a Delaunay triangulation of scattered points, "
         "drawn as edges. Denser points read darker."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="density", label="convert.density", type="number",
@@ -86,7 +87,17 @@ class LowPolyAlgorithm(RasterAlgorithm):
 
         count = max(3, int(ys.size * density))
         rng = np.random.default_rng(seed)
-        idx = rng.choice(ys.size, size=min(count, ys.size), replace=False)
+        # Tone pulls sample points toward darker pixels — smaller facets
+        # (denser edges) where the image is dark, coarse facets in the
+        # highlights — without changing the total point budget.
+        darkness = tone_darkness(bool_mask, opts)
+        if darkness is None:
+            idx = rng.choice(ys.size, size=min(count, ys.size), replace=False)
+        else:
+            weights = np.clip(darkness[ys, xs], 1e-3, None)
+            idx = rng.choice(
+                ys.size, size=min(count, ys.size), replace=False, p=weights / weights.sum()
+            )
         pts = np.column_stack([xs[idx], ys[idx]]).astype(np.float64)
         # Collinear or duplicate-heavy samples make Delaunay throw; bail to
         # an empty group rather than propagate a QhullError.

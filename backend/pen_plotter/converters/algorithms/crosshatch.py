@@ -14,8 +14,16 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._hatch import sweep_segments
-from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
+from pen_plotter.converters.algorithms._hatch import (
+    angle_taken,
+    sweep_segments,
+    tone_hatch_passes,
+)
+from pen_plotter.converters.algorithms._style import (
+    floored_spacing,
+    stroke_attr_px,
+    tone_darkness,
+)
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -41,6 +49,7 @@ class CrosshatchAlgorithm(RasterAlgorithm):
         "Parallel pen strokes (optional crossed 90° pass) — disconnected runs, "
         "more pen-lifts than eulerian_hatch but simpler to tune per layer."
     )
+    tone_aware: ClassVar[bool] = True
     # ``angles`` (a list of 1–4 hatch angles for darkening passes inside a
     # single layer) is *also* accepted, but it's an internal hook used by
     # master styles — not surfaced as a standalone form field. The legacy
@@ -99,8 +108,25 @@ class CrosshatchAlgorithm(RasterAlgorithm):
                 angles = [float(opts.get("angle_deg", 45.0))]
 
         segments: list[tuple[float, float, float, float]] = []
-        for a in angles:
-            segments.extend(_line_segments(bool_mask, a, spacing))
+        darkness = tone_darkness(bool_mask, opts)
+        if darkness is None:
+            for a in angles:
+                segments.extend(_line_segments(bool_mask, a, spacing))
+        else:
+            # Tonal shading: highlights stay unhatched, mid-tones get the
+            # operator's angle(s), darker bands stack extra rotated passes
+            # — hand-shading build-up instead of a uniform fill.
+            used = list(angles)
+            for sub, offset in tone_hatch_passes(bool_mask, darkness):
+                if offset == 0.0:
+                    for a in angles:
+                        segments.extend(_line_segments(sub, a, spacing))
+                    continue
+                extra = angles[0] + offset
+                if angle_taken(extra, used):
+                    continue
+                used.append(extra)
+                segments.extend(_line_segments(sub, extra, spacing))
 
         paths = "".join(
             f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}"/>'

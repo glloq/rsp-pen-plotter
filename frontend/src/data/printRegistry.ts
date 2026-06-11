@@ -1557,14 +1557,18 @@ export const PRINT_STYLES: PrintStyle[] = [
       knob_bands: true,
     },
     defaultAlgorithm: 'hilbert',
-    defaultAlgorithmOptions: { spacing_mm: 1.5, min_run_mm: 1.1 },
+    // adaptive: the curve recurses deeper where the image is darker, so
+    // the single-band default still shades the source tone instead of
+    // filling the silhouette at uniform density.
+    defaultAlgorithmOptions: { spacing_mm: 1.5, min_run_mm: 1.1, adaptive: true },
     bandRecipe(i, total) {
       // Single continuous Hilbert curve fills each band; tighter spacing
-      // on dark bands packs more ink.
+      // on dark bands packs more ink, and adaptive recursion shades the
+      // tone within each band.
       const spacing = lerp(i, total, 1.1, 3)
       return {
         algorithm: 'hilbert',
-        algorithm_options: { spacing_mm: spacing, min_run_mm: 1.1 },
+        algorithm_options: { spacing_mm: spacing, min_run_mm: 1.1, adaptive: true },
       }
     },
   },

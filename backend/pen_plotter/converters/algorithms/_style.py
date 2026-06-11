@@ -21,6 +21,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
+from numpy.typing import NDArray
+
 DEFAULT_STROKE_WIDTH_PX = 0.8
 
 # Fallback physical reference when the caller provides no placement
@@ -92,3 +95,39 @@ def floored_spacing(spacing: float, options: dict[str, Any] | None) -> float:
     """
     pen = pen_width_px(options)
     return max(spacing, pen) if pen is not None else spacing
+
+
+def tone_darkness(
+    mask: NDArray[np.bool_],
+    options: dict[str, Any] | None,
+    *,
+    min_range: float = 0.08,
+) -> NDArray[np.float64] | None:
+    """Normalised in-mask darkness from the injected ``_tone`` map, or ``None``.
+
+    Returns a float array (same shape as ``mask``, 0 = lightest .. 1 =
+    darkest *within this region*) when the pipeline injected a usable
+    luminance map AND the region actually has tonal contrast. The map is
+    contrast-stretched between the region's 2nd and 98th luminance
+    percentiles so a low-contrast source still spans the full tonal
+    range of the texture.
+
+    Returns ``None`` when the map is absent, malformed, or the region is
+    (near-)uniform — below ``min_range`` of luminance spread there is no
+    tone worth encoding. Callers then keep their legacy non-tonal
+    rendering, so flat fills and multicolour cluster regions (whose
+    pixels share one colour, hence one luminance) render exactly as
+    before the tonal upgrade.
+    """
+    tone = (options or {}).get("_tone")
+    if not isinstance(tone, np.ndarray) or tone.shape != mask.shape:
+        return None
+    if not mask.any():
+        return None
+    values = np.clip(tone[mask].astype(np.float64), 0.0, 1.0)
+    low, high = np.percentile(values, [2.0, 98.0])
+    if high - low < min_range:
+        return None
+    stretched = (high - np.clip(tone.astype(np.float64), 0.0, 1.0)) / (high - low)
+    out: NDArray[np.float64] = np.clip(stretched, 0.0, 1.0)
+    return out

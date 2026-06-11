@@ -23,7 +23,12 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
+from pen_plotter.converters.algorithms._hatch import angle_taken, tone_hatch_passes
+from pen_plotter.converters.algorithms._style import (
+    floored_spacing,
+    stroke_attr_px,
+    tone_darkness,
+)
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 from pen_plotter.converters.algorithms.crosshatch import _line_segments
 
@@ -81,6 +86,7 @@ class ScribbleAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Sketchy hand-drawn hatching — wobbly, overshooting strokes for a loose pencil feel."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
@@ -149,9 +155,30 @@ class ScribbleAlgorithm(RasterAlgorithm):
         )
 
         strokes = []
-        for a in angles:
-            for x1, y1, x2, y2 in _line_segments(bool_mask, a, spacing):
+
+        def _emit(sub_mask: NDArray[Any], a: float) -> None:
+            for x1, y1, x2, y2 in _line_segments(sub_mask, a, spacing):
                 poly = _scribble_polyline(x1, y1, x2, y2, amp, overshoot, rng)
                 if poly is not None:
                     strokes.append(poly)
+
+        darkness = tone_darkness(bool_mask, opts)
+        if darkness is None:
+            for a in angles:
+                _emit(bool_mask, a)
+        else:
+            # Tonal band build-up shared with crosshatch: highlights stay
+            # paper-white, darker bands stack extra crossing scribbles —
+            # the way a pencil sketch deepens a shadow.
+            used = list(angles)
+            for sub, offset in tone_hatch_passes(bool_mask, darkness):
+                if offset == 0.0:
+                    for a in angles:
+                        _emit(sub, a)
+                    continue
+                extra = angles[0] + offset
+                if angle_taken(extra, used):
+                    continue
+                used.append(extra)
+                _emit(sub, extra)
         return group_open + "".join(strokes) + "</g>"

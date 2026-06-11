@@ -15,7 +15,11 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
+from pen_plotter.converters.algorithms._style import (
+    floored_spacing,
+    stroke_attr_px,
+    tone_darkness,
+)
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -24,6 +28,7 @@ class ScanlinesAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "scanlines"
     description: ClassVar[str] = "Horizontal scan lines clipped to the mask — flat or sinusoidal."
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
@@ -48,6 +53,12 @@ class ScanlinesAlgorithm(RasterAlgorithm):
         wave_period = max(1.0, float(opts.get("wave_period_px", 12.0)))
         bool_mask = mask.astype(bool)
         height, width = bool_mask.shape
+        # With a usable tone map the wave amplitude follows the local
+        # darkness — flat trace in the highlights, full swing in the
+        # shadows (the engraving / oscilloscope-portrait look). Flat
+        # lines (wave_amp 0) have no amplitude to modulate and keep the
+        # legacy fast path.
+        darkness = tone_darkness(bool_mask, opts) if wave_amp > 0 else None
 
         polylines: list[list[tuple[float, float]]] = []
         # Walk every ``spacing``-th row and emit one polyline per on-mask run.
@@ -69,9 +80,10 @@ class ScanlinesAlgorithm(RasterAlgorithm):
             current: list[tuple[float, float]] = []
             for x in range(width):
                 if row[x]:
-                    offset = (
-                        wave_amp * math.sin(2 * math.pi * x / wave_period) if wave_amp > 0 else 0.0
-                    )
+                    amp = wave_amp
+                    if darkness is not None:
+                        amp *= 0.15 + 0.85 * float(darkness[y, x])
+                    offset = amp * math.sin(2 * math.pi * x / wave_period)
                     current.append((float(x), float(y) + offset))
                 elif current:
                     if len(current) >= 2:

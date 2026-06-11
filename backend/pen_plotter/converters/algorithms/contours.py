@@ -13,7 +13,11 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
-from pen_plotter.converters.algorithms._style import floored_spacing, stroke_attr_px
+from pen_plotter.converters.algorithms._style import (
+    floored_spacing,
+    stroke_attr_px,
+    tone_darkness,
+)
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -71,6 +75,7 @@ class ContoursAlgorithm(RasterAlgorithm):
     description: ClassVar[str] = (
         "Fill regions with concentric inner outlines — a topographic-map feel."
     )
+    tone_aware: ClassVar[bool] = True
 
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(key="spacing_mm", label="convert.spacing", type="number",
@@ -93,16 +98,31 @@ class ContoursAlgorithm(RasterAlgorithm):
         bool_mask = mask.astype(bool)
 
         paths: list[str] = []
-        current = bool_mask
-        for _ in range(max_rings):
-            if not current.any():
-                break
-            for poly in _boundary_polylines(current):
-                pts = " ".join(f"{x},{y}" for x, y in poly)
-                paths.append(f'<polygon points="{pts}"/>')
-            # Erode ``spacing`` times to inset the next ring.
-            for _step in range(spacing):
-                current = _erode(current)
+        darkness = tone_darkness(bool_mask, opts)
+        if darkness is not None:
+            # Tonal mode: the rings are luminance iso-lines — the actual
+            # topographic map of the image's tone, instead of erosion
+            # rings that only follow the silhouette. ``max_rings`` sets
+            # the number of elevation levels.
+            for k in range(max_rings):
+                level = (k + 1.0) / (max_rings + 1.0)
+                ring_mask = bool_mask & (darkness >= level)
+                if not ring_mask.any():
+                    break
+                for poly in _boundary_polylines(ring_mask):
+                    pts = " ".join(f"{x},{y}" for x, y in poly)
+                    paths.append(f'<polygon points="{pts}"/>')
+        else:
+            current = bool_mask
+            for _ in range(max_rings):
+                if not current.any():
+                    break
+                for poly in _boundary_polylines(current):
+                    pts = " ".join(f"{x},{y}" for x, y in poly)
+                    paths.append(f'<polygon points="{pts}"/>')
+                # Erode ``spacing`` times to inset the next ring.
+                for _step in range(spacing):
+                    current = _erode(current)
 
         return (
             f"<g inkscape:label={quoteattr(label)} stroke={quoteattr(color_hex)} "

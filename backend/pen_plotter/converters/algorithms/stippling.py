@@ -12,6 +12,7 @@ from xml.sax.saxutils import quoteattr
 import numpy as np
 from numpy.typing import NDArray
 
+from pen_plotter.converters.algorithms._style import tone_darkness
 from pen_plotter.converters.algorithms.base import OptionSpec, RasterAlgorithm
 
 
@@ -20,6 +21,7 @@ class StipplingAlgorithm(RasterAlgorithm):
 
     name: ClassVar[str] = "stippling"
     description: ClassVar[str] = "Fill regions with randomly scattered dots."
+    tone_aware: ClassVar[bool] = True
     options_schema: ClassVar[list[OptionSpec]] = [
         OptionSpec(
             key="density", label="convert.density", type="number",
@@ -60,14 +62,25 @@ class StipplingAlgorithm(RasterAlgorithm):
         radius = float(opts.get("dot_radius_px", 0.6))
         seed = int(opts.get("seed", 0))
 
-        ys, xs = np.nonzero(mask)
+        bool_mask = mask.astype(bool)
+        ys, xs = np.nonzero(bool_mask)
         group_open = f"<g inkscape:label={quoteattr(label)} fill={quoteattr(color_hex)}>"
         if ys.size == 0 or density <= 0.0:
             return group_open + "</g>"
 
         count = max(1, int(ys.size * density))
         rng = np.random.default_rng(seed)
-        idx = rng.choice(ys.size, size=min(count, ys.size), replace=False)
+        # Tone redistributes the same dot budget toward darker pixels
+        # (the density knob still sets the total ink); without a usable
+        # tone map the sample stays uniform, exactly as before.
+        darkness = tone_darkness(bool_mask, opts)
+        if darkness is None:
+            idx = rng.choice(ys.size, size=min(count, ys.size), replace=False)
+        else:
+            weights = np.clip(darkness[ys, xs], 1e-3, None)
+            idx = rng.choice(
+                ys.size, size=min(count, ys.size), replace=False, p=weights / weights.sum()
+            )
         dots = [
             f'<circle cx="{float(xs[i]) + 0.5:.2f}" '
             f'cy="{float(ys[i]) + 0.5:.2f}" r="{radius:.2f}"/>'

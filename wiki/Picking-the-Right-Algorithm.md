@@ -96,11 +96,17 @@ The wizard recommends one of these for each (source, goal) pair:
 - **text_fill** — repeated single-stroke text as the shading texture;
   typewriter-art
 
-> **Tone awareness.** Many algorithms (including `flowfield` and
-> `voronoi_stipple` since the audit-fix batch) read the per-pixel luminance
+> **Tone awareness.** Most fill algorithms read the per-pixel luminance
 > map the pipeline injects alongside the mask — dark areas get denser
 > strokes or dots automatically, so the result follows the source image's
-> structure rather than just the region silhouette.
+> structure rather than just the region silhouette. The 2026-06 tonal
+> batch extended this to the classic fills (`crosshatch`, `halftone`,
+> `stippling`, `scanlines`, `squiggle`, `scribble`, `lowpoly`, `gosper`,
+> `concentric_offset`, `contours`, `eulerian_hatch`, `tsp_opt`), so the
+> shaded monochrome masters shade correctly even at the default single
+> luminance band instead of producing a flat uniform fill. Regions with
+> no tonal contrast (logos, multicolour clusters) render exactly as
+> before.
 
 ## Tuning
 
