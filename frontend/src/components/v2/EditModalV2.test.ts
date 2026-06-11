@@ -212,6 +212,99 @@ describe('EditModalV2 (beginner single-screen)', () => {
     expect(lastCall[5]).toMatchObject({ width_mm: 420, height_mm: 420 })
   })
 
+  it('re-segments against the operator palette when the decision wants fixed_palette', async () => {
+    // 6 colours in the inventory + palette source "union": the resolver
+    // decision (fixed_palette) must trigger a re-conversion against
+    // those 6 colours — re-inking the original 4-cluster kmeans cache
+    // collapsed most layers onto black ("I picked 6 colours, the
+    // preview only shows one").
+    const { useJobStore } = await import('../../stores/job')
+    const { useAvailableColorsStore } = await import('../../stores/availableColors')
+    const { usePaletteSourceStore } = await import('../../stores/paletteSource')
+    const job = useJobStore()
+    const palette = usePaletteSourceStore()
+    palette.source = 'union'
+    const inventory = useAvailableColorsStore()
+    const hexes = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff']
+    inventory.colors = hexes.map((hex, i) => ({
+      color_id: `id-${i}`,
+      hex,
+      name: `c${i}`,
+      position: i,
+      stroke_width_mm: 0.5,
+      odometer_mm: 0,
+      created_at: '',
+    }))
+    const id = job.addEmptyPlacement()
+    const sourceFile = new File(['x'], 'photo.jpg', { type: 'image/jpeg' })
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            source_file: 'photo.jpg',
+            source_mime: 'image/jpeg',
+            last_file: sourceFile,
+            last_options: { segmentation_method: 'kmeans', num_colors: 4 },
+          }
+        : p,
+    )
+    const uploadSpy = vi.spyOn(job, 'upload').mockResolvedValue()
+
+    mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    expect(uploadSpy).toHaveBeenCalledTimes(1)
+    const [file, options] = uploadSpy.mock.calls[0]!
+    // Vue's reactivity may hand back a proxy of the File; compare by
+    // identity-relevant fields instead of reference.
+    expect((file as File).name).toBe(sourceFile.name)
+    expect(options).toMatchObject({
+      segmentation_method: 'fixed_palette',
+      segmentation_options: { palette: hexes },
+      num_colors: 6,
+    })
+  })
+
+  it('skips the re-segmentation when the cache already matches the palette', async () => {
+    const { useJobStore } = await import('../../stores/job')
+    const { useAvailableColorsStore } = await import('../../stores/availableColors')
+    const { usePaletteSourceStore } = await import('../../stores/paletteSource')
+    const job = useJobStore()
+    usePaletteSourceStore().source = 'union'
+    const inventory = useAvailableColorsStore()
+    const hexes = ['#ff0000', '#00ff00', '#0000ff']
+    inventory.colors = hexes.map((hex, i) => ({
+      color_id: `id-${i}`,
+      hex,
+      name: `c${i}`,
+      position: i,
+      stroke_width_mm: 0.5,
+      odometer_mm: 0,
+      created_at: '',
+    }))
+    const id = job.addEmptyPlacement()
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            source_file: 'photo.jpg',
+            source_mime: 'image/jpeg',
+            last_file: new File(['x'], 'photo.jpg', { type: 'image/jpeg' }),
+            last_options: {
+              segmentation_method: 'fixed_palette',
+              segmentation_options: { palette: hexes },
+            },
+          }
+        : p,
+    )
+    const uploadSpy = vi.spyOn(job, 'upload').mockResolvedValue()
+
+    mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    expect(uploadSpy).not.toHaveBeenCalled()
+  })
+
   it('exposes zoom controls and updates the zoom level on click', async () => {
     const wrapper = mountModal(PLACEMENT_PROPS)
     await flushPromises()
