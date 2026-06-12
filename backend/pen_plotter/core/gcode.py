@@ -18,6 +18,7 @@ from pen_plotter.core.arcs import ArcTo, fit_arcs
 from pen_plotter.core.layers import labeled_group_fragments
 from pen_plotter.core.pause_logic import (
     effective_layer_pen,
+    initial_slot_inks,
     installed_pen_hex_slots,
     should_pause,
 )
@@ -404,6 +405,14 @@ def _generate_gcode_impl(
     # core.pause_logic so the two sites can't drift.
     pen_hex_to_slot = installed_pen_hex_slots(pens)
 
+    # Per-slot ink tracking: which colour each magazine slot currently
+    # carries, updated as layers draw. A layer whose effective colour
+    # differs from its slot's current ink is a RE-INK — the operator
+    # swaps the pen in that slot mid-print, which is what lets a plan
+    # use more colours than the magazine has slots. Mirrored in
+    # core.preflight so ``pen_changes`` matches the emitted prompts.
+    slot_inks = initial_slot_inks(pens)
+
     if not bounds.empty:
         for layer in layer_geometry:
             setting = overrides.get(layer.label)
@@ -429,6 +438,18 @@ def _generate_gcode_impl(
                 pen_hex_to_slot=pen_hex_to_slot,
             )
 
+            # Re-ink detection: the layer reuses a slot whose current
+            # ink (initially the mounted pen, then whatever the last
+            # layer drew with) is a different colour. The prompt below
+            # must then name the WANTED ink, not the pen that used to
+            # live in the slot.
+            slot_reinked = (
+                effective_slot is not None
+                and effective_color is not None
+                and slot_inks.get(effective_slot) is not None
+                and slot_inks[effective_slot] != effective_color.lower()
+            )
+
             decision = should_pause(
                 slot=effective_slot,
                 source_color=effective_color,
@@ -437,19 +458,28 @@ def _generate_gcode_impl(
                 previous_color=previous_color,
                 mono_pen=mono_pen,
                 tool_change_method=profile.tool_change_method,
+                slot_reinked=slot_reinked,
             )
             if decision.pause:
                 method = profile.tool_change_method
                 travel_feed = profile.travel_speed_mm_s * 60.0
                 park_x: float | None
                 park_y: float | None
-                if decision.slot_changed:
+                if decision.slot_changed or decision.slot_reinked:
                     prompt_pen = pens.get(effective_slot) if effective_slot is not None else None
-                    pen_name = (
-                        prompt_pen.name
-                        if prompt_pen and prompt_pen.name
-                        else f"Pen {effective_slot}"
-                    )
+                    if decision.slot_reinked and effective_color:
+                        # Slot swap mid-print: tell the operator which
+                        # ink to LOAD, not which pen used to be there.
+                        # Keep the hex alongside a named label so the
+                        # frontend swap modal can render a swatch.
+                        if color_label and color_label.lower() != effective_color.lower():
+                            pen_name = f"{color_label} {effective_color}"
+                        else:
+                            pen_name = effective_color
+                    elif prompt_pen and prompt_pen.name:
+                        pen_name = prompt_pen.name
+                    else:
+                        pen_name = f"Pen {effective_slot}"
                     magazine_mode = method in ("carousel", "rack")
                     pen_missing = prompt_pen is None or not prompt_pen.installed
                     if magazine_mode and pen_missing:
@@ -464,7 +494,13 @@ def _generate_gcode_impl(
                         # halts on any sender. Positions are machine
                         # coordinates and bypass the drawing transform.
                         target_color = (
-                            prompt_pen.color if prompt_pen and prompt_pen.color else effective_color
+                            effective_color
+                            if decision.slot_reinked and effective_color
+                            else (
+                                prompt_pen.color
+                                if prompt_pen and prompt_pen.color
+                                else effective_color
+                            )
                         ) or "#000000"
                         load_label = (
                             f"{prompt_pen.name} {target_color}"
@@ -536,6 +572,10 @@ def _generate_gcode_impl(
                 previous_slot = effective_slot
             if effective_color is not None:
                 previous_color = effective_color
+            # The slot now carries this layer's ink (after the swap the
+            # pause above asked for, or unchanged when no re-ink).
+            if effective_slot is not None and effective_color is not None:
+                slot_inks[effective_slot] = effective_color.lower()
 
             # Always emit a layer-info marker so downstream consumers (the
             # simulator UI in particular) can attribute every G-code line

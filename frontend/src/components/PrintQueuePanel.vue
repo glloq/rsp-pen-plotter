@@ -15,6 +15,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { PrintRun } from '../api/client'
 import { confirmAction } from '../composables/confirm'
+import { ensureMagazineLoaded } from '../composables/magazineGate'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
@@ -52,19 +53,31 @@ function logOdometerForCurrentJob(): void {
 
 async function sendNow(): Promise<void> {
   if (!job.gcode) return
-  const confirmed = await confirmAction({
-    title: t('confirm.sendJobTitle'),
-    message: t('confirm.sendJobMsg'),
-    confirmLabel: t('plotter.sendJob'),
-    cancelLabel: t('confirm.cancel'),
-  })
-  if (confirmed) {
-    logOdometerForCurrentJob()
-    plotter.run(job.gcode)
+  // Magazine gate first (multi-pen multicolour jobs): the modal asks
+  // to load the planned inks and carries its own launch button; the
+  // generic confirm only runs when the gate was skipped.
+  const gate = await ensureMagazineLoaded()
+  if (gate === 'cancelled') return
+  if (gate === 'skipped') {
+    const confirmed = await confirmAction({
+      title: t('confirm.sendJobTitle'),
+      message: t('confirm.sendJobMsg'),
+      confirmLabel: t('plotter.sendJob'),
+      cancelLabel: t('confirm.cancel'),
+    })
+    if (!confirmed) return
   }
+  if (!job.gcode) return
+  logOdometerForCurrentJob()
+  void plotter.run(job.gcode)
 }
 
 async function enqueue(): Promise<void> {
+  if (!job.gcode) return
+  // Same gate as the direct send: a queued run will pause on the same
+  // swap prompts, so the magazine must match the plan before enqueue.
+  const gate = await ensureMagazineLoaded()
+  if (gate === 'cancelled') return
   if (!job.gcode) return
   logOdometerForCurrentJob()
   const name = job.job?.source_file ?? 'job'

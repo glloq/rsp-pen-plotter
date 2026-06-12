@@ -967,6 +967,29 @@
     "homeTitle": "Origine machine",
     "homeMsg": "Déplacer le traceur vers sa position d'origine ?"
   },
+  "magazinePlan": {
+    "title": "Préparer le magasin",
+    "summary": "{inks} encre(s) · {slots} slot(s)",
+    "initialTitle": "À monter avant de lancer :",
+    "swapsTitle": "Échanges pendant le tracé ({count}) :",
+    "pauseNote": "Le tracé se mettra en pause à chaque échange et indiquera la couleur à monter.",
+    "noPauseSupport": "Ce profil machine ne supporte pas les pauses de changement d'outil (tool_change: none) — les échanges en cours de tracé sont impossibles. Réduisez le nombre de couleurs ou changez de profil.",
+    "fromInventory": "Piocher dans les couleurs disponibles",
+    "fromInventoryHint": "Réassigne les encres des calques (hors choix manuels) depuis l'inventaire des couleurs disponibles, indépendamment des stylos actuellement montés.",
+    "apply": "Appliquer ce plan",
+    "applying": "Application…",
+    "applied": "Plan appliqué : slots assignés aux calques et magasin mis à jour dans le profil.",
+    "applyFailed": "Impossible d'appliquer le plan magasin.",
+    "ready": "Magasin prêt",
+    "launchTitle": "Charger le magasin",
+    "launchIntro": "Monte ces couleurs dans les slots indiqués avant de lancer. Tu peux changer le slot de chaque couleur si besoin.",
+    "slotLabel": "Slot",
+    "slotPick": "Slot pour {name}",
+    "launchConfirm": "C'est chargé — lancer l'impression",
+    "launchPreparing": "Préparation…",
+    "launchCancel": "Annuler",
+    "launchRegenFailed": "La régénération du G-code a échoué après la mise à jour du magasin — impression annulée."
+  },
   "preflight": {
     "button": "Vérification pré-tracé",
     "running": "Vérification…",
@@ -1575,6 +1598,7 @@
   "swap": {
     "title": "Changement de stylo requis",
     "parkedHint": "La tête s'est garée à la position de changement. Change le stylo, puis reprends.",
+    "slotBadge": "Slot {slot}",
     "resume": "J'ai changé le stylo — Reprendre",
     "cancel": "Annuler le run"
   },

@@ -267,10 +267,14 @@ describe('EditModalV2 (beginner single-screen)', () => {
     // Perceptual clustering + ink remap (not fixed_palette): the
     // nearest-colour snap starved every saturated pen on
     // low-saturation photos, so adding inks changed nothing on screen.
+    // num_colors = pool + 1: with drop_background (the default) the
+    // paper-white background wins a cluster of its own before being
+    // dropped — asking for exactly pool-size clusters silently cost
+    // one ink ("6 couleurs dispo, 5 dessinées").
     expect(options).toMatchObject({
       segmentation_method: 'kmeans_lab',
       ink_pool: hexes,
-      num_colors: 6,
+      num_colors: 7,
     })
   })
 

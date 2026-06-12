@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { confirmAction } from '../composables/confirm'
+import { ensureMagazineLoaded } from '../composables/magazineGate'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useUiStore, type CanvasTab } from '../stores/ui'
@@ -46,13 +47,22 @@ const canStartPrint = computed(() => Boolean(job.gcode) && plotterStatus.value.c
 
 async function startPrint(): Promise<void> {
   if (!job.gcode || !plotterStatus.value.connected) return
-  const confirmed = await confirmAction({
-    title: t('confirm.sendJobTitle'),
-    message: t('confirm.sendJobMsg'),
-    confirmLabel: t('plotter.sendJob'),
-    cancelLabel: t('confirm.cancel'),
-  })
-  if (confirmed) await plotter.run(job.gcode)
+  // Magazine gate first (multi-pen multicolour jobs): the modal asks
+  // to load the planned inks and carries its own launch button; the
+  // generic confirm only runs when the gate was skipped.
+  const gate = await ensureMagazineLoaded()
+  if (gate === 'cancelled') return
+  if (gate === 'skipped') {
+    const confirmed = await confirmAction({
+      title: t('confirm.sendJobTitle'),
+      message: t('confirm.sendJobMsg'),
+      confirmLabel: t('plotter.sendJob'),
+      cancelLabel: t('confirm.cancel'),
+    })
+    if (!confirmed) return
+  }
+  // Re-read the G-code: confirming the gate may have regenerated it.
+  if (job.gcode) await plotter.run(job.gcode)
 }
 </script>
 

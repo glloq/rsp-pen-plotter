@@ -240,9 +240,6 @@ async function ensureSegmentationMatchesDecision(controller: AbortController): P
   // A 0/1-colour pool can't drive a multicolour split — keep whatever
   // segmentation the upload picked (mono pipelines own that case).
   if (pool.length < 2) return
-  // The backend caps kmeans cluster counts; 16 distinct inks is already
-  // beyond any practical pen-plotter magazine.
-  const numColors = Math.min(pool.length, 16)
   const last = (placement.last_options ?? {}) as Record<string, unknown>
   const lastPool = (Array.isArray(last.ink_pool) ? (last.ink_pool as string[]) : []).map((h) =>
     h.toLowerCase(),
@@ -258,8 +255,18 @@ async function ensureSegmentationMatchesDecision(controller: AbortController): P
   const file = fileManager.selectedFile.value
   if (!file || controller.signal.aborted) return
   previewLoading.value = true
+  const built = (fileManager.buildOptions() ?? {}) as Record<string, unknown>
+  // One EXTRA cluster when drop_background is on: the paper-white
+  // background legitimately wins a k-means cluster of its own before
+  // being dropped at render time, so asking for exactly ``pool.length``
+  // clusters silently cost one ink ("6 couleurs dispo, 5 dessinées" —
+  // verified end-to-end on a 6-band test image). The backend caps k at
+  // the image's distinct colours, so the +1 is harmless on flat
+  // sources; 16 stays the hard ceiling.
+  const dropBackground = built.drop_background !== false
+  const numColors = Math.min(pool.length + (dropBackground ? 1 : 0), 16)
   const options = {
-    ...(fileManager.buildOptions() ?? {}),
+    ...built,
     segmentation_method: 'kmeans_lab',
     segmentation_options: {},
     num_colors: numColors,

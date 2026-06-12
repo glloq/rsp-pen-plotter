@@ -44,6 +44,23 @@ def installed_pen_hex_slots(pens: Mapping[int, PenSlot]) -> dict[str, int]:
     return mapping
 
 
+def initial_slot_inks(pens: Mapping[int, PenSlot]) -> dict[int, str]:
+    """Lower-cased ink currently loaded in each installed magazine slot.
+
+    Seed state for the per-slot ink tracking that drives the
+    ``slot_reinked`` pause flag: both :mod:`core.gcode` and
+    :mod:`core.preflight` walk the layer sequence updating this dict
+    with each layer's effective colour, so a later layer that reuses a
+    slot with a different ink is detected identically in both places
+    (the preflight ``pen_changes`` count must match the emitted M0s).
+    """
+    return {
+        pen_index: slot_pen.color.lower()
+        for pen_index, slot_pen in pens.items()
+        if slot_pen.installed and slot_pen.color
+    }
+
+
 def effective_layer_pen(
     *,
     slot: int | None,
@@ -90,6 +107,11 @@ class PauseDecision:
     slot_changed: bool
     color_changed: bool
     first_pose: bool
+    # The layer reuses a magazine slot whose currently-loaded ink is a
+    # DIFFERENT colour — the operator must swap the pen in that slot
+    # before this layer draws. This is what lets a plan use more
+    # colours than the magazine has slots.
+    slot_reinked: bool = False
 
 
 def should_pause(
@@ -101,6 +123,7 @@ def should_pause(
     previous_color: str | None,
     mono_pen: bool,
     tool_change_method: str,
+    slot_reinked: bool = False,
 ) -> PauseDecision:
     """Decide whether the engine should pause before this layer.
 
@@ -120,6 +143,12 @@ def should_pause(
             is unconditionally suppressed when this is ``"none"``,
             matching the behaviour of profiles that declare they do
             not support tool changes at all.
+        slot_reinked: The layer targets a slot whose currently-loaded
+            ink differs from the layer's effective colour (computed by
+            the caller, which tracks per-slot ink across the layer
+            sequence). Forces a pause under ``auto`` even when the
+            slot index itself didn't change, so an ink-loading plan
+            can cycle more colours than the magazine has slots.
 
     Returns:
         A :class:`PauseDecision` carrying both the boolean and the
@@ -136,13 +165,20 @@ def should_pause(
     pause = (
         tool_change_method != "none"
         and pause_before != "never"
-        and (pause_before == "always" or slot_changed or color_changed or first_pose)
+        and (
+            pause_before == "always"
+            or slot_changed
+            or color_changed
+            or first_pose
+            or slot_reinked
+        )
     )
     return PauseDecision(
         pause=pause,
         slot_changed=slot_changed,
         color_changed=color_changed,
         first_pose=first_pose,
+        slot_reinked=slot_reinked,
     )
 
 
