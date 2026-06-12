@@ -533,7 +533,7 @@
     "spiralDesc": "Concentric offset rings per colour with spacing adapted to density.",
     "numColors": "Colour count",
     "numColorsHint": "How many K-means clusters to extract — each cluster becomes one layer.",
-    "numColorsCapped": "{requested} colours requested but only {available} distinct pen colours are available — install more pens or switch the palette to Auto / Manual.",
+    "numColorsCapped": "{requested} colours requested but the active palette only holds {available} distinct colours — add colours in Plotter ▸ Colours (or mount more pens) to go further.",
     "numColorsRendered": "Preview: {rendered} colour(s) actually rendered out of {requested} requested — near-identical hues are merged and very light areas are treated as background.",
     "numColorsPoolCapped": "{requested} colours requested but you only own {pool} distinct ink(s) — beyond that, several layers will share the same ink. Add colours in Plotter ▸ Colours (or switch the palette source) to go further.",
     "numColorsLocked": "Locked to the manual palette. Edit the colour list below.",

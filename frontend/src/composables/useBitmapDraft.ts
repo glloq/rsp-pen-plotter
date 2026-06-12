@@ -1229,9 +1229,17 @@ export function buildBitmapOptions(): Record<string, unknown> {
   // backend validation tightens unknown-field handling.
   const shipsNumColors =
     _printMode.value === 'multicolor' && (wireMethod === 'kmeans' || wireMethod === 'kmeans_lab')
+  // Pool path asks for ONE extra k-means cluster when drop_background
+  // is on: the paper-white background legitimately wins a cluster of
+  // its own before being dropped at render time, so k = pool size
+  // silently cost one ink (verified end-to-end on a banded test image
+  // — same fix as the assisted modal's re-segmentation).
+  const poolNumColors = pensInkPool
+    ? Math.min(pensInkPool.length + (b.drop_background ? 1 : 0), 16)
+    : b.num_colors
   const payload: Record<string, unknown> = {
     algorithm: algo,
-    ...(shipsNumColors ? { num_colors: pensInkPool ? pensInkPool.length : b.num_colors } : {}),
+    ...(shipsNumColors ? { num_colors: poolNumColors } : {}),
     ...(pensInkPool ? { ink_pool: pensInkPool } : {}),
     max_dimension_px: b.max_dimension_px,
     drop_background: b.drop_background,
