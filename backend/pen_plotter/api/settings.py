@@ -22,7 +22,13 @@ router = APIRouter()
 
 PaletteSource = Literal["pens", "available", "union"]
 _PALETTE_SOURCE_KEY = "palette_source"
-_PALETTE_SOURCE_DEFAULT: PaletteSource = "pens"
+# ``union`` (mounted pens ∪ available-colours inventory) by default:
+# the magazine only constrains PRINT time — the ink-loading plan and
+# mid-print swap pauses cycle any owned ink through the slots — so
+# capping the EDITING pool at the mounted pens (the old ``pens``
+# default) silently limited every file to the slot count and snapped
+# previews onto whatever happened to be mounted.
+_PALETTE_SOURCE_DEFAULT: PaletteSource = "union"
 
 
 class PaletteSourceResponse(BaseModel):

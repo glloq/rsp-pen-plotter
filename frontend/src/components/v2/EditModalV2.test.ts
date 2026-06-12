@@ -148,6 +148,11 @@ describe('EditModalV2 (beginner single-screen)', () => {
   })
 
   it('re-resolves when the operator switches the palette source', async () => {
+    // Start from the legacy ``pens`` source so the modal opens in
+    // machine_only and clicking "free" is an actual switch (the global
+    // default is now ``union`` → the modal would open in free already).
+    const { usePaletteSourceStore } = await import('../../stores/paletteSource')
+    usePaletteSourceStore().source = 'pens'
     const wrapper = mountModal(PLACEMENT_PROPS)
     await flushPromises()
     vi.mocked(api.post).mockClear()
@@ -293,6 +298,9 @@ describe('EditModalV2 (beginner single-screen)', () => {
         created_at: '',
       },
     ]
+    // Open from ``pens`` so clicking "free" is an actual switch (the
+    // global default is now ``union`` → the modal opens in free mode).
+    usePaletteSourceStore().source = 'pens'
     const wrapper = mountModal(PLACEMENT_PROPS)
     await flushPromises()
     await wrapper.find('[data-test="palette-free"]').trigger('click')

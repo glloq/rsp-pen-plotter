@@ -205,7 +205,10 @@ test('pens-follow palette wires as kmeans_lab + ink_pool (not fixed_palette)', (
   // photos; the wire ships perceptual clustering + the ink remap so
   // every requested pen shows up whatever the source colours are.
   expect(payload.segmentation_method).toBe('kmeans_lab')
-  expect(payload.num_colors).toBe(6)
+  // Pool size + 1: drop_background (default on) lets the paper-white
+  // background win its own cluster before being dropped, so k = pool
+  // size silently cost one ink.
+  expect(payload.num_colors).toBe(7)
   expect(payload.ink_pool).toEqual(pens)
   expect(payload.segmentation_options).toEqual({})
 })

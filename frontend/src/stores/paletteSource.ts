@@ -20,10 +20,12 @@ import { i18n } from '../i18n'
 import { useToastStore } from './toasts'
 
 export const usePaletteSourceStore = defineStore('paletteSource', () => {
-  // Optimistic default: ``pens`` is what the editor used to apply
-  // before the source toggle existed, so the UI behaves identically
-  // until the GET round-trip lands.
-  const source = ref<PaletteSource>('pens')
+  // Optimistic default: mirrors the backend's ``union`` default (pens ∪
+  // inventory) so the UI behaves identically until the GET round-trip
+  // lands. The magazine only constrains print time (loading plan +
+  // mid-print swaps), so the editing pool should never be capped at
+  // the mounted pens by default.
+  const source = ref<PaletteSource>('union')
   const loading = ref(false)
   const loaded = ref(false)
 

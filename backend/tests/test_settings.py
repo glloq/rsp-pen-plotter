@@ -21,18 +21,22 @@ def _client() -> httpx.AsyncClient:
 
 @pytest.fixture(autouse=True)
 def _reset_palette_source() -> None:
-    """Wipe the stored palette source before each test so order doesn't matter."""
-    set_setting("palette_source", "pens")
+    """Reset the stored palette source before each test so order doesn't matter."""
+    set_setting("palette_source", "union")
     yield
 
 
 @pytest.mark.asyncio
-async def test_default_palette_source_is_pens() -> None:
-    """An unset / never-written setting reads back as the default ``pens``."""
+async def test_default_palette_source_is_union() -> None:
+    """An unset / never-written setting reads back as the default ``union``.
+
+    The magazine only constrains print time (loading plan + mid-print
+    swaps), so the editing pool spans pens ∪ inventory out of the box.
+    """
     async with _client() as client:
         resp = await client.get("/settings/palette-source")
         assert resp.status_code == 200
-        assert resp.json() == {"source": "pens"}
+        assert resp.json() == {"source": "union"}
 
 
 @pytest.mark.asyncio
@@ -67,4 +71,4 @@ async def test_corrupt_stored_value_degrades_to_default() -> None:
     async with _client() as client:
         resp = await client.get("/settings/palette-source")
         assert resp.status_code == 200
-        assert resp.json() == {"source": "pens"}
+        assert resp.json() == {"source": "union"}
