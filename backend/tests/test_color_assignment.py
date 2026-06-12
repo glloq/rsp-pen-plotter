@@ -120,31 +120,36 @@ def test_auto_assign_clears_when_pool_is_empty() -> None:
     assert result[0].color_assignment == "auto"
 
 
-def test_auto_assign_keeps_inks_distinct_while_pool_allows() -> None:
-    """Similar centroids spread over distinct inks instead of stacking.
+def test_auto_assign_distinct_colours_keep_distinct_inks() -> None:
+    """Genuinely distinct image colours map to their own inks.
 
-    Regression for the >4-colour collapse: 6 k-means clusters against a
-    6-pen rack used to pile several clusters onto the same nearest pen,
-    so the editor displayed only 2-3 colours. With unique matching every
-    cluster gets its own ink as long as the pool is big enough.
+    Nearest-match already yields N distinct inks when the pool spans the
+    image's N colours — no distinct-forcing needed. Six well-separated
+    clusters against a matching six-pen rack each snap to their own pen.
     """
     layers = [
-        _layer("L1", "#1a1a1a"),
-        _layer("L2", "#2a2a2a"),  # both greys are nearest to #000000
-        _layer("L3", "#d01010"),
-        _layer("L4", "#e03030"),  # both reds are nearest to #ff0000
-        _layer("L5", "#1040d0"),
-        _layer("L6", "#3060e0"),  # both blues are nearest to #0000ff
+        _layer("L1", "#e03030"),  # red
+        _layer("L2", "#30c030"),  # green
+        _layer("L3", "#3030e0"),  # blue
+        _layer("L4", "#e0e030"),  # yellow
+        _layer("L5", "#e030e0"),  # magenta
+        _layer("L6", "#30e0e0"),  # cyan
     ]
-    pool = ["#000000", "#555555", "#ff0000", "#aa3333", "#0000ff", "#3355aa"]
+    pool = ["#ff0000", "#00c000", "#0000ff", "#ffff00", "#ff00ff", "#00ffff"]
     result = auto_assign_layer_colors(layers, pool)
     assigned = [layer.assigned_color_hex for layer in result]
     assert None not in assigned
     assert len(set(assigned)) == 6, f"expected 6 distinct inks, got {assigned}"
 
 
-def test_auto_assign_reuses_inks_only_after_pool_exhausted() -> None:
-    """More clusters than inks → everyone still gets the closest leftover."""
+def test_auto_assign_close_clusters_share_the_same_ink() -> None:
+    """Near-identical clusters reuse one ink instead of being scattered.
+
+    Faithfulness over pen-spread: three near-identical reds against a
+    pool with one good red all draw that red (merged downstream) rather
+    than being painted with unrelated inks to look distinct — the
+    "couleurs de la preview ne correspondent pas à l'image" report.
+    """
     layers = [
         _layer("L1", "#ff0000"),
         _layer("L2", "#fa0505"),
@@ -153,25 +158,23 @@ def test_auto_assign_reuses_inks_only_after_pool_exhausted() -> None:
     pool = ["#ff0000", "#0000ff"]
     result = auto_assign_layer_colors(layers, pool)
     assigned = [layer.assigned_color_hex for layer in result]
-    # The two distinct inks are both used before any reuse happens.
-    assert set(assigned) == {"#ff0000", "#0000ff"}
-    # The blue cluster keeps the blue ink (never displaced by the reds).
-    assert assigned[2] == "#0000ff"
+    assert assigned == ["#ff0000", "#ff0000", "#0000ff"]
 
 
-def test_auto_assign_manual_pick_consumes_its_pool_entry() -> None:
-    """A pinned ink is treated as used so auto rows spread over the rest."""
+def test_auto_assign_preserves_manual_pick() -> None:
+    """A manual override is left untouched; auto rows take their nearest."""
     layers = [
         # Operator pinned the black pen on this layer...
         _layer("L1", "#101010", assigned="#000000", color_assignment="manual"),
-        # ...so this near-black auto layer must take the other dark ink.
+        # ...and this near-black auto layer takes its nearest ink, which
+        # is the same black (reuse allowed — both regions are near-black).
         _layer("L2", "#151515"),
     ]
     pool = ["#000000", "#333333"]
     result = auto_assign_layer_colors(layers, pool)
     assert result[0].assigned_color_hex == "#000000"
     assert result[0].color_assignment == "manual"
-    assert result[1].assigned_color_hex == "#333333"
+    assert result[1].assigned_color_hex == "#000000"
 
 
 def test_auto_assign_duplicate_pool_entries_allow_that_many_uses() -> None:
@@ -182,12 +185,11 @@ def test_auto_assign_duplicate_pool_entries_allow_that_many_uses() -> None:
     assert [layer.assigned_color_hex for layer in result] == ["#000000", "#000000"]
 
 
-def test_assign_pool_inks_unique_then_nearest() -> None:
-    """The pure helper spreads sources over distinct inks, reuses after."""
+def test_assign_pool_inks_nearest_with_reuse() -> None:
+    """The pure helper maps each source to its nearest ink, reuse allowed."""
     out = assign_pool_inks(["#101010", "#151515", "#181818"], ["#000000", "#333333"])
-    # Both inks are used before any reuse; nobody is left unassigned.
-    assert set(out) == {"#000000", "#333333"}
-    assert None not in out
+    # All three near-blacks are closest to #000000 → they share it.
+    assert out == ["#000000", "#000000", "#000000"]
 
 
 def test_assign_pool_inks_does_not_scatter_close_clusters_to_far_inks() -> None:
@@ -196,32 +198,13 @@ def test_assign_pool_inks_does_not_scatter_close_clusters_to_far_inks() -> None:
     Regression for "les couleurs de la preview ne correspondent pas à
     l'image": three greens against a pool whose only green is ``#00aa00``
     used to be forced onto black/blue to stay distinct, so green regions
-    rendered as black and blue. With the ΔE threshold the two greens that
-    can't get the green ink fall back to nearest (the green, reused)
-    rather than an unrelated ink. The red still snaps to red.
+    rendered as black and blue. Nearest-match (reuse allowed) keeps all
+    three on the green; the red still snaps to red.
     """
     sources = ["#1f6f3f", "#2e8b57", "#3cb371", "#c0392b"]
     pool = ["#000000", "#ff0000", "#0000ff", "#00aa00"]
     out = assign_pool_inks(sources, pool)
     assert out == ["#00aa00", "#00aa00", "#00aa00", "#ff0000"]
-
-
-def test_assign_pool_inks_still_spreads_when_distinct_match_is_plausible() -> None:
-    """Distinctness is kept while the unique ink stays perceptually close.
-
-    The threshold must not over-fire: two similar blues against two
-    blue-ish inks should still land on *distinct* inks (both within the
-    ΔE budget), preserving the multi-pen spread the unique matching is
-    there to give.
-    """
-    out = assign_pool_inks(["#1f3fa0", "#3f6fd0"], ["#0000ff", "#3366cc"])
-    assert out == ["#0000ff", "#3366cc"]
-
-
-def test_assign_pool_inks_consumed_entries_unavailable() -> None:
-    """``consumed`` hexes mark pool slots as taken before matching."""
-    out = assign_pool_inks(["#101010"], ["#000000", "#333333"], consumed=["#000000"])
-    assert out == ["#333333"]
 
 
 def test_assign_pool_inks_empty_pool_returns_nones() -> None:
