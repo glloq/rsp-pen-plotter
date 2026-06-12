@@ -115,7 +115,23 @@ export function useLayerCardState(layer: Ref<LayerInfo>) {
     set: (value: boolean) => store.setVisibility(layer.value.layer_id, value),
   })
 
-  const label = computed(() => formatLayerLabel(layer.value.layer_id))
+  // Header label + swatch. ``formatLayerLabel`` parses the layer_id —
+  // for colour clusters that hex is the segmentation CENTROID, a stable
+  // identity key that is *not* what gets drawn once an ink is assigned.
+  // Showing the raw centroid here while the picker below, the nav rail
+  // and the modal's ink chips all show ``assigned_color_hex`` read as
+  // "the layer colours don't match what's offered" — so the header
+  // mirrors the assigned ink whenever one exists and only falls back to
+  // the centroid before assignment.
+  const label = computed(() => {
+    const base = formatLayerLabel(layer.value.layer_id)
+    const ink = layer.value.assigned_color_hex
+    if (base.kind === 'color' && ink) {
+      const hex = ink.toLowerCase()
+      return { ...base, display: hex, color: hex }
+    }
+    return base
+  })
   const swatchColor = computed(() => label.value.color ?? layer.value.source_color)
 
   const penSlotCount = computed(() => store.selectedProfile?.pen_slot_count ?? 0)

@@ -534,6 +534,7 @@
     "numColors": "Colour count",
     "numColorsHint": "How many K-means clusters to extract — each cluster becomes one layer.",
     "numColorsCapped": "{requested} colours requested but only {available} distinct pen colours are available — install more pens or switch the palette to Auto / Manual.",
+    "numColorsRendered": "Preview: {rendered} colour(s) actually rendered out of {requested} requested — near-identical hues are merged and very light areas are treated as background.",
     "numColorsLocked": "Locked to the manual palette. Edit the colour list below.",
     "flatNoKnobs": "No knobs for flat colours — each cluster is traced as-is.",
     "crosshatchSpacingHint": "Tight spacing (darker clusters) → loose (lighter clusters).",

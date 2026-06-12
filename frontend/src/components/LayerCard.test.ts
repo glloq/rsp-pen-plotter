@@ -146,4 +146,38 @@ describe('LayerCard', () => {
     expect(text).toContain('always')
     expect(text).toContain('never')
   })
+
+  it('shows the assigned ink (not the centroid) in the header of a colour layer', () => {
+    // Regression: the header swatch/label used to render the cluster
+    // centroid baked into the layer_id while the picker, nav rail and
+    // modal chips all showed ``assigned_color_hex`` — the layers tab
+    // looked like it used different colours than everywhere else.
+    const layer = {
+      ...makeLayer(),
+      layer_id: 'color-112233',
+      source_color: '#112233',
+      assigned_color_hex: '#FF0000',
+      color_assignment: 'auto',
+    } as LayerInfo
+    const wrapper = mount(LayerCard, {
+      props: { layer },
+      global: { plugins: [i18n] },
+    })
+    expect(wrapper.text()).toContain('#ff0000')
+    expect(wrapper.text()).not.toContain('#112233')
+  })
+
+  it('falls back to the centroid before any ink is assigned', () => {
+    const layer = {
+      ...makeLayer(),
+      layer_id: 'color-112233',
+      source_color: '#112233',
+      assigned_color_hex: null,
+    } as LayerInfo
+    const wrapper = mount(LayerCard, {
+      props: { layer },
+      global: { plugins: [i18n] },
+    })
+    expect(wrapper.text()).toContain('#112233')
+  })
 })

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { nextPadColor, uniquePalette } from '../../../lib/paletteColors'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import { useFileManager } from '../../../composables/useFileManager'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 
 // Cluster-count slider, extracted from ``MultiColorMasterStyleParams``
@@ -35,6 +36,9 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const draft = useBitmapDraft()
+// Non-owner handle on the shared previewer so the slider can compare
+// "requested" with what the live /preview ACTUALLY rendered.
+const fm = useFileManager(t)
 
 const numColors = computed({
   get: () => props.bitmap.num_colors,
@@ -82,6 +86,21 @@ const effectiveColorCount = computed(() => {
   return b.num_colors
 })
 
+// What the live /preview actually rendered. The backend legitimately
+// produces FEWER clusters than requested — k is capped at the image's
+// distinct colours, near-identical hues merge (ΔE threshold), and
+// light clusters are dropped as background — but without surfacing
+// that here the operator reads "I selected 6, it shows 4" as a bug.
+// ``null`` until a preview lands; the previewer singleton is cleared
+// on placement switch so a stale count can't leak across files.
+const renderedCount = computed<number | null>(() => {
+  const palette = fm.previewResult?.value?.palette
+  return palette && palette.length > 0 ? palette.length : null
+})
+const renderedDiffers = computed<boolean>(
+  () => renderedCount.value !== null && renderedCount.value !== effectiveColorCount.value,
+)
+
 // Pens-following palettes silently cap at the installed-pen count; the
 // slider used to keep displaying the requested value with no hint of
 // why nothing changed past N. Surface the cap explicitly.
@@ -115,6 +134,18 @@ const pensCapShortfall = computed(() => {
     />
     <p class="text-[10px] text-slate-500">
       {{ t('colorStyles.numColorsHint') }}
+    </p>
+    <p
+      v-if="renderedDiffers"
+      class="rounded border border-slate-700 bg-slate-900/60 px-2 py-1 text-[10px] leading-snug text-slate-300"
+      data-test="num-colors-rendered"
+    >
+      {{
+        t('colorStyles.numColorsRendered', {
+          requested: effectiveColorCount,
+          rendered: renderedCount,
+        })
+      }}
     </p>
     <p
       v-if="pensCapShortfall > 0"

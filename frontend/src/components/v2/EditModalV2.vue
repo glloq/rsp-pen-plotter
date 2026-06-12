@@ -27,6 +27,7 @@ import type {
   SourceKind,
 } from '../../domain/policy/schemas'
 import { resolveEffectivePalette } from '../../lib/effectivePalette'
+import { assignPoolHexes } from '../../lib/nearestColor'
 import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
@@ -522,8 +523,19 @@ const inkSwatches = computed<InkSwatch[]>(() => {
   // pas à jour" the operator flagged.
   const livePalette = fileManager.previewResult?.value?.palette ?? null
   if (uiMode.isExpert && livePalette && livePalette.length > 0) {
+    // The /preview palette carries the raw segmentation CENTROIDS (the
+    // expert draft doesn't ship ``ink_pool``), but after Apply the job
+    // store re-snaps every layer onto the active pool. Run the same
+    // greedy-unique ΔE matching here so the chips show the inks the
+    // print will actually use — otherwise the strip "proposes" colours
+    // that never match the layer cards after committing.
+    const pool = effectivePool.value
+    const snapped = assignPoolHexes(
+      livePalette.map((entry) => ({ sourceHex: entry.color })),
+      pool,
+    )
     return livePalette.map((entry, idx) => {
-      const hex = entry.color
+      const hex = snapped[idx] ?? entry.color
       const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
       const name = namedMatch ?? hex
       // Synthesise a stable layerId so the v-for keys stay stable
@@ -535,7 +547,9 @@ const inkSwatches = computed<InkSwatch[]>(() => {
         name,
         displayName: name,
         displayHex: namedMatch ? hex : '',
-        isFallback: false,
+        // No pool ink to draw this cluster with (empty pool) — same
+        // "load the magazine" affordance as the committed-layer branch.
+        isFallback: snapped[idx] === null,
       }
     })
   }
