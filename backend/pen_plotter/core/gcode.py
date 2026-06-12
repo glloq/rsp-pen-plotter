@@ -470,7 +470,12 @@ def _generate_gcode_impl(
                     if decision.slot_reinked and effective_color:
                         # Slot swap mid-print: tell the operator which
                         # ink to LOAD, not which pen used to be there.
-                        pen_name = color_label or effective_color
+                        # Keep the hex alongside a named label so the
+                        # frontend swap modal can render a swatch.
+                        if color_label and color_label.lower() != effective_color.lower():
+                            pen_name = f"{color_label} {effective_color}"
+                        else:
+                            pen_name = effective_color
                     elif prompt_pen and prompt_pen.name:
                         pen_name = prompt_pen.name
                     else:

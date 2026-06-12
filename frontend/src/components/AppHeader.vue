@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { confirmAction } from '../composables/confirm'
+import { ensureMagazineLoaded } from '../composables/magazineGate'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useQueueStore } from '../stores/queue'
@@ -52,13 +53,23 @@ async function onPlay(): Promise<void> {
     return
   }
   if (!job.gcode) return
-  const confirmed = await confirmAction({
-    title: t('confirm.sendJobTitle'),
-    message: t('confirm.sendJobMsg'),
-    confirmLabel: t('plotter.sendJob'),
-    cancelLabel: t('confirm.cancel'),
-  })
-  if (confirmed) await plotter.run(job.gcode)
+  // Magazine gate: on multi-pen multicolour jobs, ask the operator to
+  // load the planned inks (with slot remapping) before sending. The
+  // modal carries its own launch button, so the generic confirm only
+  // runs when the gate was skipped (mono / single-ink jobs).
+  const gate = await ensureMagazineLoaded()
+  if (gate === 'cancelled') return
+  if (gate === 'skipped') {
+    const confirmed = await confirmAction({
+      title: t('confirm.sendJobTitle'),
+      message: t('confirm.sendJobMsg'),
+      confirmLabel: t('plotter.sendJob'),
+      cancelLabel: t('confirm.cancel'),
+    })
+    if (!confirmed) return
+  }
+  // Re-read the G-code: confirming the gate may have regenerated it.
+  if (job.gcode) await plotter.run(job.gcode)
 }
 
 async function onPause(): Promise<void> {

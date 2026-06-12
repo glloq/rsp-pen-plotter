@@ -363,9 +363,10 @@ def test_slot_reink_pause_names_the_wanted_ink() -> None:
     # First two layers use the mounted pens — prompts carry the profile names.
     assert "; Change to pen slot 0 (Black)" in gcode
     assert "; Change to pen slot 1 (Red)" in gcode
-    # Third layer re-inks slot 0: the prompt names the wanted ink, not
-    # the pen that used to live there.
-    assert "; Change to pen slot 0 (Vert prairie)" in gcode
+    # Third layer re-inks slot 0: the prompt names the wanted ink (label
+    # + hex so the UI can render a swatch), not the pen that used to
+    # live there.
+    assert "; Change to pen slot 0 (Vert prairie #00ff00)" in gcode
 
 
 def test_consecutive_same_slot_reink_still_pauses() -> None:

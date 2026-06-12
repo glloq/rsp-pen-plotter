@@ -6,6 +6,7 @@ import AppHeader from './components/AppHeader.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import FilesPane from './components/FilesPane.vue'
+import MagazineLoadModal from './components/MagazineLoadModal.vue'
 import SwapPromptModal from './components/SwapPromptModal.vue'
 import Toasts from './components/Toasts.vue'
 import UpdateProgressModal from './components/UpdateProgressModal.vue'
@@ -388,6 +389,7 @@ onBeforeUnmount(() => {
     <UpdateProgressModal />
     <GenerateProgressModal />
     <UploadProgressModal />
+    <MagazineLoadModal />
     <SwapPromptModal />
     <Toasts />
     <PerfOverlay v-if="perfEnabled" />

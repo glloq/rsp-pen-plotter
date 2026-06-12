@@ -16,15 +16,42 @@
 
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAvailableColorsStore } from '../stores/availableColors'
 import { useQueueStore } from '../stores/queue'
 
 const { t } = useI18n()
 const queue = useQueueStore()
+const availableColors = useAvailableColorsStore()
 
 // Show only when the live run is paused *for a swap* (a plain operator
 // pause carries no ``swap_prompt`` and must not pop this modal).
 const run = computed(() => queue.active[0] ?? null)
 const visible = computed(() => run.value?.state === 'paused' && Boolean(run.value?.swap_prompt))
+
+// Visual slot + ink extraction. The prompt is backend-built text
+// ("Insert pen slot 2: Vert prairie #00ff00", "Change pen to Red
+// (#ff0000)", "Load … into magazine slot 1, …") — parse the magazine
+// slot and the ink so the operator gets a swatch + slot badge, not
+// just a sentence. The hex comes from the prompt itself when present,
+// else from an inventory name appearing in the text (longest match so
+// "Vert prairie foncé" wins over "Vert prairie").
+const promptText = computed<string>(() => run.value?.swap_prompt ?? '')
+const promptSlot = computed<number | null>(() => {
+  const m = /(?:pen|magazine)\s+slot\s+(\d+)/i.exec(promptText.value)
+  return m ? Number(m[1]) : null
+})
+const promptHex = computed<string | null>(() => {
+  const direct = /#[0-9a-fA-F]{6}\b/.exec(promptText.value)
+  if (direct) return direct[0].toLowerCase()
+  const text = promptText.value.toLowerCase()
+  let best: { hex: string; len: number } | null = null
+  for (const entry of availableColors.colors) {
+    const name = entry.name?.trim().toLowerCase()
+    if (!name || !text.includes(name)) continue
+    if (!best || name.length > best.len) best = { hex: entry.hex, len: name.length }
+  }
+  return best?.hex ?? null
+})
 
 async function resume(): Promise<void> {
   if (run.value) await queue.act(run.value.id, 'resume')
@@ -61,6 +88,35 @@ async function cancel(): Promise<void> {
       >
         {{ run.swap_prompt }}
       </p>
+
+      <!-- Visual "which slot, which colour" row, parsed from the prompt
+           so the operator can match the swatch against the physical pen
+           without reading the sentence twice. -->
+      <div
+        v-if="promptSlot !== null || promptHex"
+        class="mt-2 flex items-center justify-center gap-2"
+        data-test="swap-prompt-visual"
+      >
+        <span
+          v-if="promptSlot !== null"
+          class="rounded border border-slate-600 bg-slate-800 px-2 py-1 font-mono text-xs text-slate-200"
+          data-test="swap-prompt-slot"
+        >
+          {{ t('swap.slotBadge', { slot: promptSlot }) }}
+        </span>
+        <span
+          v-if="promptHex"
+          class="inline-flex items-center gap-1.5 rounded border border-slate-600 bg-slate-800 px-2 py-1"
+        >
+          <span
+            class="inline-block h-4 w-4 rounded border border-slate-500"
+            :style="{ backgroundColor: promptHex }"
+            data-test="swap-prompt-swatch"
+            aria-hidden="true"
+          />
+          <span class="font-mono text-xs text-slate-300">{{ promptHex }}</span>
+        </span>
+      </div>
 
       <p class="mt-3 text-[11px] text-slate-400">{{ t('swap.parkedHint') }}</p>
 

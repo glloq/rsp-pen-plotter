@@ -980,7 +980,15 @@
     "applying": "Application…",
     "applied": "Plan appliqué : slots assignés aux calques et magasin mis à jour dans le profil.",
     "applyFailed": "Impossible d'appliquer le plan magasin.",
-    "ready": "Magasin prêt"
+    "ready": "Magasin prêt",
+    "launchTitle": "Charger le magasin",
+    "launchIntro": "Monte ces couleurs dans les slots indiqués avant de lancer. Tu peux changer le slot de chaque couleur si besoin.",
+    "slotLabel": "Slot",
+    "slotPick": "Slot pour {name}",
+    "launchConfirm": "C'est chargé — lancer l'impression",
+    "launchPreparing": "Préparation…",
+    "launchCancel": "Annuler",
+    "launchRegenFailed": "La régénération du G-code a échoué après la mise à jour du magasin — impression annulée."
   },
   "preflight": {
     "button": "Vérification pré-tracé",
@@ -1590,6 +1598,7 @@
   "swap": {
     "title": "Changement de stylo requis",
     "parkedHint": "La tête s'est garée à la position de changement. Change le stylo, puis reprends.",
+    "slotBadge": "Slot {slot}",
     "resume": "J'ai changé le stylo — Reprendre",
     "cancel": "Annuler le run"
   },

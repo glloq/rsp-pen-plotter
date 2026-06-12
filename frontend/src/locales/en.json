@@ -980,7 +980,15 @@
     "applying": "Applying…",
     "applied": "Plan applied: slots assigned to layers and magazine updated in the profile.",
     "applyFailed": "Couldn't apply the magazine plan.",
-    "ready": "Magazine ready"
+    "ready": "Magazine ready",
+    "launchTitle": "Load the magazine",
+    "launchIntro": "Mount these colours into the listed slots before starting. You can change each colour's slot if needed.",
+    "slotLabel": "Slot",
+    "slotPick": "Slot for {name}",
+    "launchConfirm": "Loaded — start the print",
+    "launchPreparing": "Preparing…",
+    "launchCancel": "Cancel",
+    "launchRegenFailed": "G-code regeneration failed after the magazine update — print aborted."
   },
   "preflight": {
     "button": "Preflight check",
@@ -1590,6 +1598,7 @@
   "swap": {
     "title": "Pen change required",
     "parkedHint": "The head has parked at the pen-change position. Swap the pen, then resume.",
+    "slotBadge": "Slot {slot}",
     "resume": "I changed the pen — Resume",
     "cancel": "Cancel run"
   },
