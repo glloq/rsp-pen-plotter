@@ -111,6 +111,9 @@ def preflight_report(
     # reuses a slot with a different colour triggers a re-ink pause,
     # which must be counted here too.
     slot_inks = initial_slot_inks(pens)
+    # Slots the plan actually draws from — feeds the rack-calibration
+    # warning below (a host swap can only travel to calibrated slots).
+    used_slots: set[int] = set()
 
     for layer in geometry:
         setting = overrides.get(layer.label)
@@ -153,6 +156,7 @@ def preflight_report(
             pen_changes += 1
         if effective_slot is not None:
             previous_slot = effective_slot
+            used_slots.add(effective_slot)
         if effective_color is not None:
             previous_color = effective_color
         if effective_slot is not None and effective_color is not None:
@@ -180,6 +184,26 @@ def preflight_report(
 
     for slot in missing:
         warnings.append(f"Pen slot {slot} is assigned but not installed in the magazine.")
+
+    # Host (rack) swaps travel to each slot's CALIBRATED position; the
+    # strategy silently skips move steps for uncalibrated slots, which
+    # reads as "the head never goes to the rack". Surface it before the
+    # run instead.
+    if profile.tool_change_method == "rack":
+        swap = profile.effective_capabilities().tool_change.host_swap
+        needs_positions = bool(
+            swap
+            and any(s.kind in ("move_to_old_slot", "move_to_new_slot") for s in swap.steps)
+        )
+        if needs_positions:
+            for slot in sorted(used_slots):
+                pen = pens.get(slot)
+                if pen is None or pen.position is None:
+                    warnings.append(
+                        f"Pen slot {slot} has no calibrated magazine position; "
+                        "the host swap sequence will skip its move steps. "
+                        "Calibrate it in the Colours tab."
+                    )
 
     if bounds.empty:
         width_mm = height_mm = scale = 0.0

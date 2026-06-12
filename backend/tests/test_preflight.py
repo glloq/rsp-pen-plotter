@@ -132,3 +132,46 @@ def test_pen_changes_counts_slot_reink_pauses() -> None:
     report = preflight_report(TWO_LAYERS, profile, layers=layers)
     # Slot 0 first pose + the re-ink swap.
     assert report.pen_changes == 2
+
+
+def test_rack_without_calibrated_positions_warns() -> None:
+    """Host (rack) swaps travel to calibrated slot positions; an
+    uncalibrated slot silently skips its move steps, so preflight must
+    flag every used slot that has no position."""
+    from pen_plotter.domain.capability import derive_capabilities
+    from pen_plotter.domain.capability import HostSwapPlan, HostSwapStep
+    from pen_plotter.models import PenSlot
+
+    caps = derive_capabilities("rack", 2)
+    caps.tool_change.host_swap = HostSwapPlan(
+        steps=[
+            HostSwapStep(kind="head_up"),
+            HostSwapStep(kind="move_to_new_slot"),
+            HostSwapStep(kind="grab"),
+        ]
+    )
+    profile = _profile().model_copy(
+        update={
+            "tool_change_method": "rack",
+            "pen_slot_count": 2,
+            "capabilities": caps,
+            "pens": [
+                # Slot 0 calibrated, slot 1 not.
+                PenSlot(
+                    index=0,
+                    name="Black",
+                    color="#000000",
+                    installed=True,
+                    position={"x": 10, "y": 5},
+                ),
+                PenSlot(index=1, name="Red", color="#ff0000", installed=True),
+            ],
+        }
+    )
+    layers = [
+        LayerGeneration(layer_id="red", target_pen_slot=0),
+        LayerGeneration(layer_id="blue", target_pen_slot=1),
+    ]
+    report = preflight_report(TWO_LAYERS, profile, layers=layers)
+    assert any("slot 1 has no calibrated magazine position" in w for w in report.warnings)
+    assert not any("slot 0 has no calibrated" in w for w in report.warnings)

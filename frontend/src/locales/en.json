@@ -1380,7 +1380,7 @@
     },
     "penCount": "Number of pens",
     "penCountMagazineHint": "How many slots are available in the magazine.",
-    "penCountManualHint": "How many pens you alternate between by hand.",
+    "penCountManualHint": "How many pens you alternate between by hand. 1 = a single holder: the plotter pauses at every colour change and names the ink to mount.",
     "penChangePosition": "Pen-change position",
     "penChangePositionHint": "Where the head parks (machine coordinates) before a manual swap so you can reach the pen. Leave blank to park at the workspace home corner.",
     "monoNote": "Single-colour mode: only one pen is used.",

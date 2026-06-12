@@ -106,10 +106,20 @@ async function onWizardConfirm(capabilities: MachineCapabilities): Promise<void>
     toasts.error(t('plotter.newPlotterNoBase'))
     return
   }
+  // ``tool_change_command`` is mode-dependent (same rule as the
+  // ProfilePenFields mode switch): firmware needs a swap trigger the
+  // controller understands — inheriting the base profile's ``M0``
+  // would feed-hold the machine with no prompt — while every other
+  // mode wants the portable ``M0`` pause boundary.
+  const mode = capabilities.tool_change.mode
+  const baseCmd = (base.tool_change_command ?? '').trim()
+  const toolChangeCommand =
+    mode === 'firmware' ? (!baseCmd || baseCmd === 'M0' ? 'M6 T{slot}' : baseCmd) : 'M0'
   const next = {
     ...base,
     name,
-    tool_change_method: toolChangeMethodFor(capabilities.tool_change.mode),
+    tool_change_method: toolChangeMethodFor(mode),
+    tool_change_command: toolChangeCommand,
     pen_slot_count: Math.max(1, capabilities.max_pens_in_magazine),
     capabilities,
   }

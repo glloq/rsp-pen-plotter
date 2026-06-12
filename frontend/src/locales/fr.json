@@ -1380,7 +1380,7 @@
     },
     "penCount": "Nombre de stylos",
     "penCountMagazineHint": "Nombre d'emplacements disponibles dans le magasin.",
-    "penCountManualHint": "Nombre de stylos entre lesquels tu alternes manuellement.",
+    "penCountManualHint": "Nombre de stylos entre lesquels tu alternes manuellement. 1 = un seul porte-stylo : le traceur s'arrête à chaque changement de couleur et t'indique l'encre à monter.",
     "penChangePosition": "Position de changement de stylo",
     "penChangePositionHint": "Où la tête se gare (coordonnées machine) avant un changement manuel, pour accéder au stylo. Laisser vide pour se garer au coin home de l'espace de travail.",
     "monoNote": "Mode mono couleur : un seul stylo est utilisé.",
