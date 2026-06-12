@@ -213,6 +213,44 @@ test('pens-follow palette wires as kmeans_lab + ink_pool (not fixed_palette)', (
   expect(payload.segmentation_options).toEqual({})
 })
 
+test('pens-follow ships the FULL rack as ink_pool, num_colors caps the clusters', () => {
+  // Regression for "blue drawn as red, green as yellow": reducing the
+  // colour count truncated the display palette to the first N magazine
+  // slots and sent THAT as the ink_pool, so clusters could only snap to
+  // the first few inks. The full rack must reach the backend so every
+  // cluster lands on its perceptually-nearest owned ink; num_colors only
+  // caps how many clusters the image is reduced to.
+  const d = useBitmapDraft()
+  const fullRack = [
+    '#000000',
+    '#ffffff',
+    '#ff0000',
+    '#ffff00',
+    '#00ff00',
+    '#0000ff',
+    '#ff00ff',
+    '#00ffff',
+    '#ff8800',
+    '#8800ff',
+    '#888888',
+  ]
+  d.rehydrateDraft({ placement: null, installedPenColors: fullRack })
+  d.setMulticolorMasterStyle('color-flat', { force: true })
+  d.paletteFollowsPens.value = true
+  d.bitmap.value.segmentation_method = 'fixed_palette'
+  // What the StyleTab watcher writes: full rack in pensFullPool, palette
+  // truncated to num_colors for the colour-count displays.
+  d.pensFullPool.value = [...fullRack]
+  d.bitmap.value.palette = fullRack.slice(0, 4)
+  d.bitmap.value.num_colors = 4
+  const payload = d.buildBitmapOptions()
+  expect(payload.segmentation_method).toBe('kmeans_lab')
+  // ink_pool is the WHOLE rack — blue/green stay reachable.
+  expect(payload.ink_pool).toEqual(fullRack)
+  // num_colors = chosen 4 (+1 for the dropped background), NOT the rack size.
+  expect(payload.num_colors).toBe(5)
+})
+
 test('manual fixed palette still wires as fixed_palette (no ink_pool)', () => {
   const d = useBitmapDraft()
   d.rehydrateDraft({ placement: null, installedPenColors: [] })

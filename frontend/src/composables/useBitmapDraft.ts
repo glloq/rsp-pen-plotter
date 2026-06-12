@@ -350,6 +350,16 @@ const _multicolorMasterStyleId = ref<string>(DEFAULT_MULTICOLOR_STYLE_ID)
 const _multicolor = ref<MulticolorKnobsDraft>(defaultMulticolor())
 const _paletteFollowsPens = ref<boolean>(true)
 
+// Full owned ink pool (pens ∪ inventory, per the palette source) the
+// "follow pens" multicolour path snaps clusters against. Kept separate
+// from ``_bitmap.palette`` — which StyleTab truncates to ``num_colors``
+// so the colour-count displays read right — because the ink_pool sent to
+// the backend must stay the WHOLE rack: truncating it made every cluster
+// snap onto the first N magazine slots, so blue drew as red / green as
+// yellow when the matching inks sat further down the rack. StyleTab keeps
+// this in sync with the effective palette; ``buildOptions`` reads it.
+const _pensFullPool = ref<string[]>([])
+
 // Tracks the segmentation knobs the operator manually changed since the
 // last preset/print-mode application. Used by ``setSegmentationFromStyle``
 // to warn (via toast) when an automatic action — switching master style,
@@ -1210,13 +1220,21 @@ export function buildBitmapOptions(): Record<string, unknown> {
   // source colours are. The draft keeps ``fixed_palette`` as its
   // internal pens-mode representation; only the wire payload differs
   // (same pattern as the empty-palette kmeans downgrade above).
-  const pensInkPool =
+  // ink_pool is the WHOLE owned rack (``_pensFullPool``), not the
+  // truncated display palette: snapping clusters against only the first N
+  // magazine slots drew blue as red / green as yellow when the matching
+  // inks sat further down the rack. ``num_colors`` (below) still controls
+  // how many clusters the image is reduced to; the full pool only widens
+  // WHICH inks each cluster can land on. Falls back to ``b.palette`` when
+  // StyleTab hasn't populated the full pool yet (e.g. rehydrate).
+  const pensPathActive =
     _printMode.value === 'multicolor' &&
     _paletteFollowsPens.value &&
     b.segmentation_method === 'fixed_palette' &&
     b.palette.length >= 2
-      ? uniquePalette(b.palette)
-      : null
+  const pensInkPool = pensPathActive
+    ? uniquePalette(_pensFullPool.value.length >= 2 ? _pensFullPool.value : b.palette)
+    : null
   const wireMethod = pensInkPool
     ? 'kmeans_lab'
     : paletteMethodEmpty
@@ -1234,8 +1252,17 @@ export function buildBitmapOptions(): Record<string, unknown> {
   // its own before being dropped at render time, so k = pool size
   // silently cost one ink (verified end-to-end on a banded test image
   // — same fix as the assisted modal's re-segmentation).
+  // Cluster count = the operator's chosen colour count (NOT the pool
+  // size — forcing k = rack size over-segmented the image into spurious
+  // inks). Capped at the pool size (can't draw more distinct colours than
+  // inks owned) and the k-means ceiling of 16; +1 for the background
+  // cluster k-means spends before drop_background removes it.
   const poolNumColors = pensInkPool
-    ? Math.min(pensInkPool.length + (b.drop_background ? 1 : 0), 16)
+    ? Math.min(
+        b.num_colors + (b.drop_background ? 1 : 0),
+        pensInkPool.length + (b.drop_background ? 1 : 0),
+        16,
+      )
     : b.num_colors
   const payload: Record<string, unknown> = {
     algorithm: algo,
@@ -1415,6 +1442,7 @@ export function useBitmapDraft() {
     monoMasterStyleId: _monoMasterStyleId,
     multicolorMasterStyleId: _multicolorMasterStyleId,
     paletteFollowsPens: _paletteFollowsPens,
+    pensFullPool: _pensFullPool,
     committed: _committed,
     isDirty: _isDirty,
     printMode: _printMode,
