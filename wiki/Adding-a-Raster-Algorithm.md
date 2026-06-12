@@ -223,7 +223,7 @@ Run the suite with `cd backend && uv run pytest`.
 
 ## Ship the contract changes
 
-Recent algorithm batches all required these three steps — CI fails without
+Recent algorithm batches all required these four steps — CI fails without
 them:
 
 1. **Bump the manifest version** — `ALGORITHMS_MANIFEST_VERSION` in
@@ -235,7 +235,13 @@ them:
    (the offline fallback the manifest client bundles at build time). The
    same drift check compares the backend manifests against this snapshot,
    so a stale file fails CI.
-3. **Mirror the schema in the print registry** —
+3. **Raise the frontend version ceiling** — `SUPPORTED_MANIFEST_VERSION`
+   in `frontend/src/domain/manifests/schemas.ts` must be bumped to the
+   new `ALGORITHMS_MANIFEST_VERSION`, otherwise the frontend rejects the
+   live manifest at runtime ("manifest algorithms version N not
+   supported") and silently degrades to its cache/snapshot fallback. The
+   drift check also compares this ceiling against the backend version.
+4. **Mirror the schema in the print registry** —
    `frontend/src/data/printRegistry.ts`: add the id to the `AlgorithmId`
    union and an `AlgorithmSpec` entry (defaults + knob schema) to
    `ALGORITHMS`. To make the algorithm pickable in one click, also add a

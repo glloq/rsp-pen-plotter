@@ -1834,7 +1834,8 @@
     },
     "manifest": {
       "fallbackCache": "Manifestes algorithmes servis depuis le cache local — backend indisponible.",
-      "fallbackSnapshot": "Manifestes algorithmes servis depuis le snapshot embarqué — la dernière liste à jour n'a pas pu être chargée."
+      "fallbackSnapshot": "Manifestes algorithmes servis depuis le snapshot embarqué — la dernière liste à jour n'a pas pu être chargée.",
+      "fallbackVersion": "Le backend publie un manifeste d'algorithmes plus récent que cette interface — rechargez la page après mise à jour de l'interface."
     },
     "perf": {
       "title": "perf",

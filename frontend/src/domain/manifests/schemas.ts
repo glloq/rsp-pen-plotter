@@ -66,7 +66,9 @@ export type AlgorithmsManifest = z.infer<typeof AlgorithmsManifestSchema>
 export const SUPPORTED_MANIFEST_VERSION: Record<string, number> = {
   // v6: length options declared in millimetres (``*_mm``) instead of
   // raster pixels — see backend ``ALGORITHMS_MANIFEST_VERSION``.
-  algorithms: 6,
+  // v7–v8: additive algorithm batches (sine_halftone; ascii_shade,
+  // lichtenberg, warp_grid, scallop) — entry shape unchanged.
+  algorithms: 8,
   system: 1,
 }
 
