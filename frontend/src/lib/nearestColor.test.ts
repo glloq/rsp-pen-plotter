@@ -70,4 +70,24 @@ describe('assignPoolHexes', () => {
   it('returns all nulls for an empty pool', () => {
     expect(assignPoolHexes([{ sourceHex: '#abcdef' }], [])).toEqual([null])
   })
+
+  it('does not scatter close clusters onto far inks (ΔE threshold)', () => {
+    // Three greens against a pool whose only green is #00aa00 used to be
+    // forced onto black/blue to stay distinct (greens drawn as black/blue
+    // in the preview). The two that can't get the green ink now reuse it.
+    const items = [
+      { sourceHex: '#1f6f3f' },
+      { sourceHex: '#2e8b57' },
+      { sourceHex: '#3cb371' },
+      { sourceHex: '#c0392b' },
+    ]
+    const out = assignPoolHexes(items, ['#000000', '#ff0000', '#0000ff', '#00aa00'])
+    expect(out).toEqual(['#00aa00', '#00aa00', '#00aa00', '#ff0000'])
+  })
+
+  it('still spreads when the distinct match stays perceptually close', () => {
+    const items = [{ sourceHex: '#1f3fa0' }, { sourceHex: '#3f6fd0' }]
+    const out = assignPoolHexes(items, ['#0000ff', '#3366cc'])
+    expect(out).toEqual(['#0000ff', '#3366cc'])
+  })
 })

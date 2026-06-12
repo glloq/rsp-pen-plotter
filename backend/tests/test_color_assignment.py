@@ -190,6 +190,34 @@ def test_assign_pool_inks_unique_then_nearest() -> None:
     assert None not in out
 
 
+def test_assign_pool_inks_does_not_scatter_close_clusters_to_far_inks() -> None:
+    """Near-identical clusters reuse the one matching ink, not far ones.
+
+    Regression for "les couleurs de la preview ne correspondent pas à
+    l'image": three greens against a pool whose only green is ``#00aa00``
+    used to be forced onto black/blue to stay distinct, so green regions
+    rendered as black and blue. With the ΔE threshold the two greens that
+    can't get the green ink fall back to nearest (the green, reused)
+    rather than an unrelated ink. The red still snaps to red.
+    """
+    sources = ["#1f6f3f", "#2e8b57", "#3cb371", "#c0392b"]
+    pool = ["#000000", "#ff0000", "#0000ff", "#00aa00"]
+    out = assign_pool_inks(sources, pool)
+    assert out == ["#00aa00", "#00aa00", "#00aa00", "#ff0000"]
+
+
+def test_assign_pool_inks_still_spreads_when_distinct_match_is_plausible() -> None:
+    """Distinctness is kept while the unique ink stays perceptually close.
+
+    The threshold must not over-fire: two similar blues against two
+    blue-ish inks should still land on *distinct* inks (both within the
+    ΔE budget), preserving the multi-pen spread the unique matching is
+    there to give.
+    """
+    out = assign_pool_inks(["#1f3fa0", "#3f6fd0"], ["#0000ff", "#3366cc"])
+    assert out == ["#0000ff", "#3366cc"]
+
+
 def test_assign_pool_inks_consumed_entries_unavailable() -> None:
     """``consumed`` hexes mark pool slots as taken before matching."""
     out = assign_pool_inks(["#101010"], ["#000000", "#333333"], consumed=["#000000"])
