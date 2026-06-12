@@ -98,6 +98,15 @@ const effectivePalette = computed<string[]>(() =>
   resolveEffectivePalette(paletteSource.source, installedPenColors.value, availableHexes.value),
 )
 
+// Manual-pick strip: always the full magazine ∪ inventory union. The
+// global palette source only narrows the AUTO pool (what the resnap /
+// "↻ auto" button reads); an explicit manual override should offer
+// every ink the operator owns — with source 'pens' the picker used to
+// show only the magazine colours and hid the rest of the inventory.
+const pickerPalette = computed<string[]>(() =>
+  resolveEffectivePalette('union', installedPenColors.value, availableHexes.value),
+)
+
 function onColorPick(payload: { hex: string; assignment: ColorAssignment }): void {
   store.updateLayer(props.layer.layer_id, {
     assigned_color_hex: payload.hex,
@@ -276,6 +285,7 @@ const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }
         <AssignedColorPicker
           :layer="layer"
           :effective-palette="effectivePalette"
+          :picker-palette="pickerPalette"
           @pick="onColorPick"
           @reset="onColorReset"
         />
