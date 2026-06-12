@@ -1056,7 +1056,8 @@ watch(
       :aria-label="t('v2.modal.title')"
     >
       <header class="modal-v2__header">
-        <h2 class="modal-v2__title">{{ t('v2.modal.title') }}</h2>
+        <!-- No visible title (operator feedback) — the dialog keeps its
+             accessible name via the aria-label above. -->
 
         <!-- Preflight + cost chips live in the header so the operator
              can read "am I ready, what will it cost?" at a glance
@@ -1579,11 +1580,6 @@ watch(
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid #334155;
-}
-.modal-v2__title {
-  margin: 0;
-  font-size: 1rem;
-  flex-shrink: 0;
 }
 /* Preflight + estimate chip strip — lives in the header so the
    operator reads "am I ready, what will it cost?" at a glance
