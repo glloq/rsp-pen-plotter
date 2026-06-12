@@ -967,6 +967,21 @@
     "homeTitle": "Home axes",
     "homeMsg": "Move the plotter to its home position?"
   },
+  "magazinePlan": {
+    "title": "Prepare the magazine",
+    "summary": "{inks} ink(s) · {slots} slot(s)",
+    "initialTitle": "Mount before starting:",
+    "swapsTitle": "Mid-print swaps ({count}):",
+    "pauseNote": "The print pauses at each swap and names the ink to mount.",
+    "noPauseSupport": "This machine profile declares no tool-change support (tool_change: none) — mid-print swaps are impossible. Reduce the colour count or switch profiles.",
+    "fromInventory": "Pick from available colours",
+    "fromInventoryHint": "Re-derives layer inks (manual picks aside) from the available-colours inventory, regardless of the pens currently mounted.",
+    "apply": "Apply this plan",
+    "applying": "Applying…",
+    "applied": "Plan applied: slots assigned to layers and magazine updated in the profile.",
+    "applyFailed": "Couldn't apply the magazine plan.",
+    "ready": "Magazine ready"
+  },
   "preflight": {
     "button": "Preflight check",
     "running": "Checking…",

@@ -316,3 +316,81 @@ def test_generate_gcode_from_geometry_matches_svg_path() -> None:
     assert via_ir_moves, "IR path must emit moves"
     # Equal move count: the geometry is preserved end to end.
     assert len(direct_moves) == len(via_ir_moves)
+
+
+THREE_LAYERS = (
+    f'<svg {NS} viewBox="0 0 100 100">'
+    '<g inkscape:label="a" stroke="#ff0000"><path d="M10 10 L90 10"/></g>'
+    '<g inkscape:label="b" stroke="#00ff00"><path d="M10 50 L90 50"/></g>'
+    '<g inkscape:label="c" stroke="#0000ff"><path d="M10 90 L90 90"/></g>'
+    "</svg>"
+)
+
+
+def _two_slot_profile():
+    from pen_plotter.models import PenSlot
+
+    return _profile().model_copy(
+        update={
+            "pen_slot_count": 2,
+            "pens": [
+                PenSlot(index=0, name="Black", color="#000000", installed=True),
+                PenSlot(index=1, name="Red", color="#ff0000", installed=True),
+            ],
+        }
+    )
+
+
+def test_slot_reink_pause_names_the_wanted_ink() -> None:
+    """Reusing a magazine slot with a different assigned colour pauses
+    and prompts for the NEW ink — this is what lets an ink-loading plan
+    cycle more colours than the magazine has slots.
+    """
+    gcode = generate_gcode(
+        THREE_LAYERS,
+        _two_slot_profile(),
+        layers=[
+            LayerGeneration(layer_id="a", target_pen_slot=0, assigned_color_hex="#000000"),
+            LayerGeneration(layer_id="b", target_pen_slot=1, assigned_color_hex="#ff0000"),
+            LayerGeneration(
+                layer_id="c",
+                target_pen_slot=0,
+                assigned_color_hex="#00ff00",
+                color_label="Vert prairie",
+            ),
+        ],
+    )
+    # First two layers use the mounted pens — prompts carry the profile names.
+    assert "; Change to pen slot 0 (Black)" in gcode
+    assert "; Change to pen slot 1 (Red)" in gcode
+    # Third layer re-inks slot 0: the prompt names the wanted ink, not
+    # the pen that used to live there.
+    assert "; Change to pen slot 0 (Vert prairie)" in gcode
+
+
+def test_consecutive_same_slot_reink_still_pauses() -> None:
+    """Two consecutive layers on the SAME slot with different assigned
+    colours must pause between them (slot unchanged, ink changed)."""
+    gcode = generate_gcode(
+        TWO_LAYERS,
+        _two_slot_profile(),
+        layers=[
+            LayerGeneration(layer_id="red", target_pen_slot=0, assigned_color_hex="#000000"),
+            LayerGeneration(layer_id="blue", target_pen_slot=0, assigned_color_hex="#00aaff"),
+        ],
+    )
+    assert "; Change to pen slot 0 (Black)" in gcode
+    assert "; Change to pen slot 0 (#00aaff)" in gcode
+
+
+def test_same_slot_same_ink_does_not_reink_pause() -> None:
+    """Re-using the slot with the SAME ink stays pause-free (auto)."""
+    gcode = generate_gcode(
+        TWO_LAYERS,
+        _two_slot_profile(),
+        layers=[
+            LayerGeneration(layer_id="red", target_pen_slot=0, assigned_color_hex="#000000"),
+            LayerGeneration(layer_id="blue", target_pen_slot=0, assigned_color_hex="#000000"),
+        ],
+    )
+    assert gcode.count("; Change to pen slot 0") == 1

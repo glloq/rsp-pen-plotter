@@ -107,3 +107,28 @@ def test_assigned_color_pen_changes_match_gcode_prompts() -> None:
     prompts = sum(1 for line in gcode.splitlines() if line.startswith("; Change"))
     assert prompts == 2
     assert report.pen_changes == prompts
+
+
+def test_pen_changes_counts_slot_reink_pauses() -> None:
+    """The preflight pen_changes count must include re-ink pauses
+    (slot reused with a different assigned colour) so it matches the
+    number of prompts the generated program actually contains."""
+    from pen_plotter.models import PenSlot
+
+    profile = _profile().model_copy(
+        update={
+            "pen_slot_count": 2,
+            "pens": [
+                PenSlot(index=0, name="Black", color="#000000", installed=True),
+                PenSlot(index=1, name="Red", color="#ff0000", installed=True),
+            ],
+        }
+    )
+    layers = [
+        LayerGeneration(layer_id="red", target_pen_slot=0, assigned_color_hex="#000000"),
+        # Same slot, different ink → re-ink pause.
+        LayerGeneration(layer_id="blue", target_pen_slot=0, assigned_color_hex="#00aaff"),
+    ]
+    report = preflight_report(TWO_LAYERS, profile, layers=layers)
+    # Slot 0 first pose + the re-ink swap.
+    assert report.pen_changes == 2

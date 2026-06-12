@@ -11,6 +11,7 @@ import { useJobStore } from '../stores/job'
 import { createLayerSelection, LayerSelectionKey } from '../composables/useLayerSelection'
 import LayerCard from './LayerCard.vue'
 import LayerBulkBar from './edit/LayerBulkBar.vue'
+import MagazinePlanPanel from './edit/MagazinePlanPanel.vue'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -243,6 +244,12 @@ function jumpToLayer(id: string): void {
         <span class="font-mono">{{ chip.index }}</span>
       </button>
     </div>
+
+    <!-- Magazine preparation: which inks to mount in which slots for
+         THIS file (picked from the inventory), plus the mid-print swap
+         schedule when the file uses more inks than the magazine has
+         slots. Multi-pen machines only. -->
+    <MagazinePlanPanel />
 
     <!-- Layer actions, grouped by intent so the row reads as organised
          clusters (assign colours · reorder · view) instead of a wall of

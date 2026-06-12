@@ -19,6 +19,7 @@ from pen_plotter.core.gcode import (
 )
 from pen_plotter.core.pause_logic import (
     effective_layer_pen,
+    initial_slot_inks,
     installed_pen_hex_slots,
     should_pause,
 )
@@ -106,6 +107,10 @@ def preflight_report(
     accel = profile.acceleration_mm_s2
     mono_pen = profile.pen_slot_count <= 1
     pen_hex_to_slot = installed_pen_hex_slots(pens)
+    # Per-slot ink tracking, mirrored from core.gcode: a layer that
+    # reuses a slot with a different colour triggers a re-ink pause,
+    # which must be counted here too.
+    slot_inks = initial_slot_inks(pens)
 
     for layer in geometry:
         setting = overrides.get(layer.label)
@@ -129,6 +134,12 @@ def preflight_report(
             assigned_color_hex=assigned_hex,
             pen_hex_to_slot=pen_hex_to_slot,
         )
+        slot_reinked = (
+            effective_slot is not None
+            and effective_color is not None
+            and slot_inks.get(effective_slot) is not None
+            and slot_inks[effective_slot] != effective_color.lower()
+        )
         if should_pause(
             slot=effective_slot,
             source_color=effective_color,
@@ -137,12 +148,15 @@ def preflight_report(
             previous_color=previous_color,
             mono_pen=mono_pen,
             tool_change_method=profile.tool_change_method,
+            slot_reinked=slot_reinked,
         ).pause:
             pen_changes += 1
         if effective_slot is not None:
             previous_slot = effective_slot
         if effective_color is not None:
             previous_color = effective_color
+        if effective_slot is not None and effective_color is not None:
+            slot_inks[effective_slot] = effective_color.lower()
 
         override_speed = setting.drawing_speed_mm_s if setting else None
         speed = max(override_speed or profile.drawing_speed_mm_s, 1e-9)
