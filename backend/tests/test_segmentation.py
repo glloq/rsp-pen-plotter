@@ -228,13 +228,15 @@ def test_bitmap_converter_dedupes_duplicate_palette_labels() -> None:
 
 
 def test_bitmap_converter_ink_pool_remaps_clusters_to_pens() -> None:
-    """``ink_pool`` draws every cluster with a distinct operator ink.
+    """``ink_pool`` draws every cluster with its NEAREST operator ink.
 
     Regression for the "more colours changes nothing" report: a
     low-saturation photo segmented with ``fixed_palette`` sends every
     pixel to the black/grey pens, so adding red/blue/green pens never
     changed the preview. With kmeans_lab + ink_pool the clusters are
-    tonal and each one is remapped to its own pen.
+    tonal and each is remapped to its nearest pool ink (reuse allowed) —
+    faithful to the image rather than scattered onto unrelated inks to
+    look distinct.
     """
     import re
 
@@ -262,9 +264,12 @@ def test_bitmap_converter_ink_pool_remaps_clusters_to_pens() -> None:
     # Every rendered layer carries a pool ink (background was dropped).
     assert labels, "expected at least one rendered layer"
     assert labels <= {h.lstrip("#") for h in pool}
-    # The three tones spread over three distinct inks instead of piling
-    # onto the closest grey.
-    assert len(labels) >= 3
+    # Tonal mapping works: the dark browns collapse onto black and the
+    # light tan onto yellow, proving the pool inks are actually used (not
+    # everything piled on one ink). The two darks sharing black is the
+    # faithful result — there's no brown pen to tell them apart.
+    assert "000000" in labels
+    assert "ffcc00" in labels
 
 
 def test_bitmap_converter_ink_pool_skips_inks_lighter_than_background() -> None:

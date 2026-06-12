@@ -36,20 +36,6 @@ from numpy.typing import NDArray
 
 from pen_plotter.models import LayerInfo
 
-# Above this ΔE 2000 the distinct-forcing in :func:`assign_pool_inks`
-# stops fighting to keep inks unique: rendering a cluster as an ink that
-# far away is perceptually a *different colour*, not a faithful stand-in.
-# Beyond the threshold the source falls back to plain nearest-match
-# (reuse allowed), so e.g. three greens against a one-green pool all draw
-# green instead of being scattered onto black/blue to stay distinct
-# ("les couleurs de la preview ne correspondent pas à l'image"). Picked
-# between the legit spread we want to keep (≈24 ΔE) and the egregious
-# forces we want to drop (≈37+ ΔE). Dropping a far distinct match never
-# worsens fidelity — the fallback picks the global nearest, which is by
-# definition ≤ the rejected distance — it only trades distinctness for
-# faithfulness when the two genuinely conflict.
-DISTINCT_MATCH_MAX_DELTA_E = 32.0
-
 
 def _hex_to_rgb(hex_value: str) -> tuple[int, int, int]:
     """Lower / strip / parse ``#rrggbb`` → ``(r, g, b)`` ints in 0..255."""
@@ -192,31 +178,28 @@ def nearest_pool_hex(source_hex: str, pool: list[str]) -> _NearestResult | None:
     return _NearestResult(hex=_normalise_hex(pool[idx]), delta_e=float(distances[idx]))
 
 
-def assign_pool_inks(
-    source_hexes: list[str], pool: list[str], *, consumed: list[str] | None = None
-) -> list[str | None]:
-    """Match each source colour to a pool ink, keeping inks distinct.
+def assign_pool_inks(source_hexes: list[str], pool: list[str]) -> list[str | None]:
+    """Match each source colour to its perceptually-nearest pool ink.
 
-    A plain per-source nearest-match collapses distinct clusters onto
-    the same ink as soon as the cluster count grows past the pool's
-    spread (6 clusters / 4 pens → 2-3 visible colours). Sources are
-    matched greedily by ascending ΔE 2000 **without reusing a pool
-    entry** while unused entries remain; once the pool is exhausted the
-    leftovers fall back to plain nearest-match (reuse allowed).
-    Duplicate pool entries count as that many uses.
+    Plain nearest-match in CIE Lab ΔE 2000, **reuse allowed**: two source
+    colours that are both closest to the same ink both get that ink (and
+    are merged into one rendered layer downstream). This keeps the
+    rendered colours faithful to the image — a pool that doesn't span the
+    source's colours collapses onto the closest inks instead of being
+    scattered onto unrelated ones to look "distinct".
 
-    Distinctness is only worth forcing while the unique ink is still a
-    plausible stand-in: a candidate beyond ``DISTINCT_MATCH_MAX_DELTA_E``
-    is rejected and the source falls back to its plain nearest (reuse
-    allowed) instead of being scattered onto an unrelated ink to stay
-    unique. This keeps a pool that doesn't span the image's colours from
-    drawing greens as blue/black in the preview.
+    Faithfulness is deliberate over pen-spread: an earlier version forced
+    distinct inks so a 6-pen rack always showed 6 colours, but that drew
+    near-identical clusters (a noisy red region, three close greens) as
+    wildly different inks — "les couleurs de la preview ne correspondent
+    pas à l'image". When the image genuinely has N distinct colours and
+    the pool spans them, nearest-match already yields N distinct inks; to
+    use more pens, raise the segmentation colour count so there really are
+    that many clusters to draw.
 
     Args:
         source_hexes: Colours to assign (typically cluster centroids).
         pool: Candidate inks. Empty → every result is ``None``.
-        consumed: Hexes already taken (e.g. manual pins); each entry
-            marks one matching pool slot as unavailable.
 
     Returns:
         One canonical ``#rrggbb`` per source, aligned by index (``None``
@@ -227,61 +210,21 @@ def assign_pool_inks(
         return result
     pool_hex = [_normalise_hex(h) for h in pool]
     pool_lab = _hexes_to_lab(pool_hex)
-    available = [True] * len(pool_hex)
-    for pinned in consumed or []:
-        key = _normalise_hex(pinned)
-        for j, h in enumerate(pool_hex):
-            if available[j] and h == key:
-                available[j] = False
-                break
-
-    # Distance matrix sources × pool, then globally-greedy unique
-    # matching: repeatedly take the smallest remaining (source, ink) ΔE
-    # among unassigned sources and unused entries. Greedy (not
-    # Hungarian) keeps the code obvious; with the handful of
-    # pens/clusters involved the difference is imperceptible.
     src_lab = _hexes_to_lab([_normalise_hex(h) for h in source_hexes])
-    n, k = len(source_hexes), len(pool_hex)
-    dist = np.empty((n, k), dtype=np.float64)
-    for col in range(k):
-        dist[:, col] = _delta_e_2000(src_lab, np.broadcast_to(pool_lab[col], src_lab.shape))
-    order = np.dstack(np.unravel_index(np.argsort(dist, axis=None), dist.shape))[0]
-    row_done = [False] * n
-    remaining = n
-    for row, col in order:
-        if remaining == 0 or not any(available):
-            break
-        # ``order`` is sorted by ascending ΔE, so the first pair past the
-        # threshold means every remaining unique candidate is "a different
-        # colour". Stop forcing distinctness and let the leftovers take
-        # their plain nearest below (reuse allowed) — faithfulness wins
-        # over spreading once the spread would lie about the colour.
-        if dist[row, col] > DISTINCT_MATCH_MAX_DELTA_E:
-            break
-        if row_done[row] or not available[col]:
-            continue
-        result[int(row)] = pool_hex[int(col)]
-        row_done[int(row)] = True
-        available[int(col)] = False
-        remaining -= 1
-    # Pool exhausted (or only far candidates left) → plain nearest for
-    # whoever is unassigned.
-    for row in range(n):
-        if not row_done[row]:
-            nearest = nearest_pool_hex(source_hexes[row], pool_hex)
-            result[row] = nearest.hex if nearest else None
+    for row in range(len(source_hexes)):
+        distances = _delta_e_2000(np.broadcast_to(src_lab[row], pool_lab.shape), pool_lab)
+        result[row] = pool_hex[int(np.argmin(distances))]
     return result
 
 
 def auto_assign_layer_colors(
     layers: list[LayerInfo], pool: list[str], *, force: bool = False
 ) -> list[LayerInfo]:
-    """Assign each layer an ink from ``pool``, keeping inks distinct.
+    """Snap each layer to its perceptually-nearest ink in ``pool``.
 
     Thin layer-record wrapper over :func:`assign_pool_inks`: manual rows
-    (``color_assignment == "manual"``) are preserved and their pinned
-    hex consumes the matching pool entry so the auto rows spread over
-    the remaining inks.
+    (``color_assignment == "manual"``) are preserved untouched; every
+    other row takes its nearest pool ink (reuse allowed, so faithful).
 
     Args:
         layers: Layer records, possibly carrying manual overrides
@@ -307,18 +250,12 @@ def auto_assign_layer_colors(
             for layer in layers
         ]
 
-    auto_indices: list[int] = []
-    consumed: list[str] = []
-    for idx, layer in enumerate(layers):
-        if not force and layer.color_assignment == "manual":
-            if layer.assigned_color_hex:
-                consumed.append(layer.assigned_color_hex)
-            continue
-        auto_indices.append(idx)
-
-    assigned = assign_pool_inks(
-        [layers[i].source_color for i in auto_indices], pool, consumed=consumed
-    )
+    auto_indices: list[int] = [
+        idx
+        for idx, layer in enumerate(layers)
+        if force or layer.color_assignment != "manual"
+    ]
+    assigned = assign_pool_inks([layers[i].source_color for i in auto_indices], pool)
     by_index = dict(zip(auto_indices, assigned, strict=True))
 
     out: list[LayerInfo] = []

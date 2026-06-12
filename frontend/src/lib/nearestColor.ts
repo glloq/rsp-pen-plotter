@@ -7,15 +7,6 @@
 
 import { canonicalHex } from './penWidth'
 
-// Mirror of ``color_assignment.DISTINCT_MATCH_MAX_DELTA_E``: above this
-// ΔE 2000 the distinct-forcing in ``assignPoolHexes`` gives up and falls
-// back to plain nearest-match (reuse allowed). Keeps a pool that doesn't
-// span the image's colours from scattering near-identical clusters onto
-// unrelated inks just to keep them unique (greens drawn as blue/black).
-// Must stay in lock-step with the backend constant so the frontend
-// resnap and the backend segmentation land on the same assignment.
-const DISTINCT_MATCH_MAX_DELTA_E = 32.0
-
 function hexToRgb(hex: string): [number, number, number] {
   const body = hex.replace(/^#/, '').toLowerCase()
   const expanded =
@@ -149,23 +140,18 @@ export interface PoolAssignmentItem {
 }
 
 /**
- * Frontend mirror of the backend's ``auto_assign_layer_colors``: match
- * each item to a pool ink, keeping inks **distinct** while unused pool
- * entries remain.
+ * Frontend mirror of the backend's ``assign_pool_inks``: snap each item
+ * to its perceptually-nearest pool ink (CIE Lab ΔE 2000, **reuse
+ * allowed**). Pinned items keep their pin (result slot ``null``).
  *
- * A plain per-item nearest-match collapses distinct clusters onto the
- * same ink as soon as the cluster count grows past the pool's spread
- * (6 clusters / 4 pens → 2-3 visible colours). Items are matched
- * greedily by ascending ΔE 2000 without reusing a pool entry; once the
- * pool is exhausted the leftovers fall back to plain nearest-match.
- * Duplicate pool entries count as that many uses (two identical pens
- * really can serve two layers).
- *
- * Distinctness is only forced while the unique ink stays a plausible
- * stand-in: a candidate beyond ``DISTINCT_MATCH_MAX_DELTA_E`` is rejected
- * and the item falls back to its plain nearest (reuse allowed) instead of
- * being scattered onto an unrelated ink — so a pool that doesn't span the
- * image's colours no longer draws greens as blue/black.
+ * Reuse over distinctness is deliberate: two clusters that are both
+ * closest to the same ink both draw that ink (merged into one layer
+ * downstream) instead of one being scattered onto an unrelated ink to
+ * look "distinct". A pool that doesn't span the image's colours
+ * therefore collapses onto the closest inks rather than painting greens
+ * as blue/black. When the image genuinely has N distinct colours and the
+ * pool spans them, nearest-match already yields N distinct inks; to use
+ * more pens, raise the segmentation colour count.
  *
  * @returns One entry per item, aligned by index: the canonical assigned
  *   hex for auto items, ``null`` for pinned items (keep the pin) or
@@ -178,54 +164,10 @@ export function assignPoolHexes(
   const result: (string | null)[] = items.map(() => null)
   if (!pool.length) return result
   const poolHex = pool.map((h) => canonicalHex(h))
-  const poolLab = poolHex.map((h) => hexToLab(h))
-  const available = poolHex.map(() => true)
-
-  const autoIndices: number[] = []
   for (let i = 0; i < items.length; i++) {
-    const pinned = items[i]!.pinnedHex
-    if (pinned) {
-      const key = canonicalHex(pinned)
-      const j = poolHex.findIndex((h, idx) => available[idx] && h === key)
-      if (j >= 0) available[j] = false
-      continue
-    }
-    autoIndices.push(i)
-  }
-  if (!autoIndices.length) return result
-
-  // Globally-greedy unique matching: smallest remaining (item, ink) ΔE
-  // wins. The pair list is tiny (≤16 clusters × a pen rack), so the
-  // full sort costs nothing.
-  const pairs: Array<{ row: number; col: number; d: number }> = []
-  for (let r = 0; r < autoIndices.length; r++) {
-    const lab = hexToLab(items[autoIndices[r]!]!.sourceHex)
-    for (let c = 0; c < poolLab.length; c++) {
-      pairs.push({ row: r, col: c, d: deltaE2000(lab, poolLab[c]!) })
-    }
-  }
-  pairs.sort((a, b) => a.d - b.d)
-  const rowDone = autoIndices.map(() => false)
-  let remaining = autoIndices.length
-  for (const { row, col, d } of pairs) {
-    if (remaining === 0 || !available.includes(true)) break
-    // Pairs are sorted ascending, so the first one past the threshold
-    // means every remaining unique candidate is "a different colour":
-    // stop forcing distinctness and let the leftovers take their plain
-    // nearest below (reuse allowed) rather than lie about the colour.
-    if (d > DISTINCT_MATCH_MAX_DELTA_E) break
-    if (rowDone[row] || !available[col]) continue
-    result[autoIndices[row]!] = poolHex[col]!
-    rowDone[row] = true
-    available[col] = false
-    remaining -= 1
-  }
-  // Pool exhausted (or only far candidates left) → plain nearest for
-  // whoever is unassigned.
-  for (let r = 0; r < autoIndices.length; r++) {
-    if (!rowDone[r]) {
-      result[autoIndices[r]!] = nearestPoolHex(items[autoIndices[r]!]!.sourceHex, poolHex)
-    }
+    // Pinned items keep their manual override — leave the slot null.
+    if (items[i]!.pinnedHex) continue
+    result[i] = nearestPoolHex(items[i]!.sourceHex, poolHex)
   }
   return result
 }

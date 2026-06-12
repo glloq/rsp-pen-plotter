@@ -31,34 +31,35 @@ describe('nearestPoolHex', () => {
 // greedy matching — regression suite for the >4-colour collapse where 6
 // clusters against 6 pens piled onto the 2-3 nearest pens.
 describe('assignPoolHexes', () => {
-  it('keeps inks distinct while unused pool entries remain', () => {
+  it('maps genuinely distinct colours to their own inks', () => {
+    // Nearest-match already yields N distinct inks when the pool spans
+    // the image's colours — no distinct-forcing needed.
     const items = [
-      { sourceHex: '#1a1a1a' },
-      { sourceHex: '#2a2a2a' }, // both greys nearest to #000000
-      { sourceHex: '#d01010' },
-      { sourceHex: '#e03030' }, // both reds nearest to #ff0000
-      { sourceHex: '#1040d0' },
-      { sourceHex: '#3060e0' }, // both blues nearest to #0000ff
+      { sourceHex: '#e03030' },
+      { sourceHex: '#30c030' },
+      { sourceHex: '#3030e0' },
+      { sourceHex: '#e0e030' },
+      { sourceHex: '#e030e0' },
+      { sourceHex: '#30e0e0' },
     ]
-    const pool = ['#000000', '#555555', '#ff0000', '#aa3333', '#0000ff', '#3355aa']
+    const pool = ['#ff0000', '#00c000', '#0000ff', '#ffff00', '#ff00ff', '#00ffff']
     const out = assignPoolHexes(items, pool)
     expect(out).not.toContain(null)
     expect(new Set(out).size).toBe(6)
   })
 
-  it('reuses inks only once the pool is exhausted', () => {
+  it('close clusters share the same ink instead of being scattered', () => {
     const items = [{ sourceHex: '#ff0000' }, { sourceHex: '#fa0505' }, { sourceHex: '#0000ff' }]
     const out = assignPoolHexes(items, ['#ff0000', '#0000ff'])
-    expect(new Set(out)).toEqual(new Set(['#ff0000', '#0000ff']))
-    // The blue cluster keeps the blue ink (never displaced by the reds).
-    expect(out[2]).toBe('#0000ff')
+    // Both reds take the red ink (merged downstream); blue takes blue.
+    expect(out).toEqual(['#ff0000', '#ff0000', '#0000ff'])
   })
 
-  it('pinned items consume their pool entry and stay untouched', () => {
+  it('pinned items stay untouched; auto rows take their nearest', () => {
     const items = [{ sourceHex: '#101010', pinnedHex: '#000000' }, { sourceHex: '#151515' }]
     const out = assignPoolHexes(items, ['#000000', '#333333'])
     expect(out[0]).toBeNull() // keep the pin
-    expect(out[1]).toBe('#333333') // black is taken → next dark ink
+    expect(out[1]).toBe('#000000') // nearest ink (reuse allowed)
   })
 
   it('duplicate pool entries allow that many uses', () => {
@@ -71,10 +72,10 @@ describe('assignPoolHexes', () => {
     expect(assignPoolHexes([{ sourceHex: '#abcdef' }], [])).toEqual([null])
   })
 
-  it('does not scatter close clusters onto far inks (ΔE threshold)', () => {
+  it('does not scatter close clusters onto far inks', () => {
     // Three greens against a pool whose only green is #00aa00 used to be
     // forced onto black/blue to stay distinct (greens drawn as black/blue
-    // in the preview). The two that can't get the green ink now reuse it.
+    // in the preview). Nearest-match keeps all three on the green.
     const items = [
       { sourceHex: '#1f6f3f' },
       { sourceHex: '#2e8b57' },
@@ -83,11 +84,5 @@ describe('assignPoolHexes', () => {
     ]
     const out = assignPoolHexes(items, ['#000000', '#ff0000', '#0000ff', '#00aa00'])
     expect(out).toEqual(['#00aa00', '#00aa00', '#00aa00', '#ff0000'])
-  })
-
-  it('still spreads when the distinct match stays perceptually close', () => {
-    const items = [{ sourceHex: '#1f3fa0' }, { sourceHex: '#3f6fd0' }]
-    const out = assignPoolHexes(items, ['#0000ff', '#3366cc'])
-    expect(out).toEqual(['#0000ff', '#3366cc'])
   })
 })
