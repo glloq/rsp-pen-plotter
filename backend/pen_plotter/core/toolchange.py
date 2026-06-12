@@ -156,14 +156,37 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
                     if context.slot_index is not None:
                         context = context.model_copy(update={"from_slot_index": last_slot})
                         last_slot = context.slot_index
-                    plan = orchestrator.plan(context)
-                    pending = SwapAction(
-                        kind=_PAUSE_KIND_TO_ACTION[plan.pause_kind],  # type: ignore[arg-type]
-                        prompt=plan.operator_prompt,
-                        commands=[
-                            SwapCommandLine(send=c.send, wait_ms=c.wait_ms) for c in plan.commands
-                        ],
-                    )
+                    try:
+                        plan = orchestrator.plan(context)
+                    except ValueError:
+                        # The profile declares an automated magazine but
+                        # carries no usable swap sequence (e.g. switched
+                        # to host/rack without authoring the steps).
+                        # Degrade to a manual pause so the run is still
+                        # printable instead of failing the enqueue with
+                        # an opaque 500 — the operator swaps by hand.
+                        label = context.pen_label or context.pen_color or "pen"
+                        head = (
+                            f"Insert pen slot {context.slot_index}: {label}"
+                            if context.slot_index is not None
+                            else f"Change pen to {label}"
+                        )
+                        pending = SwapAction(
+                            kind="operator_confirm",
+                            prompt=(
+                                f"{head} — automated swap is not configured for "
+                                "this profile; swap by hand, then press Resume."
+                            ),
+                        )
+                    else:
+                        pending = SwapAction(
+                            kind=_PAUSE_KIND_TO_ACTION[plan.pause_kind],  # type: ignore[arg-type]
+                            prompt=plan.operator_prompt,
+                            commands=[
+                                SwapCommandLine(send=c.send, wait_ms=c.wait_ms)
+                                for c in plan.commands
+                            ],
+                        )
         if not code:
             continue
         if pending is not None:

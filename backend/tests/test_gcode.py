@@ -462,3 +462,30 @@ def test_guided_swap_actions_reink_is_operator_confirm_on_carousel() -> None:
     assert reink.kind == "operator_confirm"
     assert "Bleu ciel #00aaff" in (reink.prompt or "")
     assert "slot 0" in (reink.prompt or "")
+
+
+def test_misconfigured_rack_degrades_to_operator_pause() -> None:
+    """A rack/host profile with NO authored swap sequence used to make
+    ``guided_swap_actions`` raise at enqueue (opaque 500). It must
+    degrade to a manual operator pause so the run stays printable."""
+    from pen_plotter.core.toolchange import guided_swap_actions
+    from pen_plotter.domain.capability import derive_capabilities
+
+    caps = derive_capabilities("rack", 2)
+    caps.tool_change.host_swap = None
+    caps.tool_change.host_macro = []
+    profile = _two_slot_profile().model_copy(
+        update={"tool_change_method": "rack", "capabilities": caps}
+    )
+    gcode = generate_gcode(
+        TWO_LAYERS,
+        profile,
+        layers=[
+            LayerGeneration(layer_id="red", target_pen_slot=0),
+            LayerGeneration(layer_id="blue", target_pen_slot=1),
+        ],
+    )
+    actions = list(guided_swap_actions(gcode, profile).values())
+    assert len(actions) == 2
+    assert all(a.kind == "operator_confirm" for a in actions)
+    assert "swap by hand" in (actions[0].prompt or "")

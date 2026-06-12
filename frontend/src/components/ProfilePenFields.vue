@@ -479,7 +479,12 @@ const zWarning = computed<string | null>(() => {
 
 function clampPenCount(): void {
   const n = Math.floor(props.draft.pen_slot_count)
-  props.draft.pen_slot_count = Math.min(MAX_PEN_SLOTS, Math.max(2, Number.isFinite(n) ? n : 2))
+  // Manual machines can run a SINGLE holder: the operator swaps inks by
+  // hand and the run pauses per colour change (the AxiDraw workflow).
+  // Motorised magazines (firmware / host) need at least two physical
+  // slots for an automated swap to mean anything.
+  const min = colorMode.value === 'manual' ? 1 : 2
+  props.draft.pen_slot_count = Math.min(MAX_PEN_SLOTS, Math.max(min, Number.isFinite(n) ? n : min))
   ensureCaps().max_pens_in_magazine = Math.max(1, props.draft.pen_slot_count)
 }
 
@@ -521,8 +526,13 @@ function setMode(mode: ColorMode): void {
 
   if (mode === 'mono') {
     props.draft.pen_slot_count = 1
+  } else if (mode === 'manual') {
+    // Manual swaps work from a single holder (colour-change pauses) up
+    // to a hand-served magazine (slot pauses) — keep the operator's
+    // count, just make it sane.
+    if (props.draft.pen_slot_count < 1) props.draft.pen_slot_count = 1
   } else if (props.draft.pen_slot_count < 2) {
-    // Multicolour needs at least two pens — seed a sensible default.
+    // A motorised magazine needs at least two slots to swap between.
     props.draft.pen_slot_count = 2
   }
   caps.max_pens_in_magazine = Math.max(1, props.draft.pen_slot_count)
@@ -624,7 +634,7 @@ function onChangePos(axis: 'x' | 'y', raw: string): void {
           <input
             v-model.number="draft.pen_slot_count"
             type="number"
-            min="2"
+            :min="colorMode === 'manual' ? 1 : 2"
             :max="MAX_PEN_SLOTS"
             class="mt-1 w-28 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
             @change="clampPenCount"

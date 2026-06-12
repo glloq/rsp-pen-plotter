@@ -99,6 +99,17 @@ describe('ProfilePenFields mode switching', () => {
     expect(draft.capabilities?.tool_change.host_swap?.steps.length).toBeGreaterThan(0)
   })
 
+  it('manual mode keeps a single holder (AxiDraw-style colour pauses)', async () => {
+    // 1 slot + manual_pause is the mono manual-swap workflow: the run
+    // pauses per COLOUR change. The mode switch used to force the count
+    // to 2, silently flipping the pause semantics to slot-based.
+    const draft = makeDraft({ tool_change_method: 'none', pen_slot_count: 1 })
+    const wrapper = mountFields(draft)
+    await modeButton(wrapper, 1).trigger('click') // manual
+    expect(draft.tool_change_method).toBe('manual_pause')
+    expect(draft.pen_slot_count).toBe(1)
+  })
+
   it('mono mode drops to one slot and M0', async () => {
     const draft = makeDraft({ tool_change_command: 'M6 T{slot}' })
     const wrapper = mountFields(draft)
