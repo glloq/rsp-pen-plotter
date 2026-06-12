@@ -27,6 +27,7 @@ import type {
   SourceKind,
 } from '../../domain/policy/schemas'
 import { resolveEffectivePalette } from '../../lib/effectivePalette'
+import { assignPoolHexes } from '../../lib/nearestColor'
 import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
@@ -522,8 +523,19 @@ const inkSwatches = computed<InkSwatch[]>(() => {
   // pas à jour" the operator flagged.
   const livePalette = fileManager.previewResult?.value?.palette ?? null
   if (uiMode.isExpert && livePalette && livePalette.length > 0) {
+    // The /preview palette carries the raw segmentation CENTROIDS (the
+    // expert draft doesn't ship ``ink_pool``), but after Apply the job
+    // store re-snaps every layer onto the active pool. Run the same
+    // greedy-unique ΔE matching here so the chips show the inks the
+    // print will actually use — otherwise the strip "proposes" colours
+    // that never match the layer cards after committing.
+    const pool = effectivePool.value
+    const snapped = assignPoolHexes(
+      livePalette.map((entry) => ({ sourceHex: entry.color })),
+      pool,
+    )
     return livePalette.map((entry, idx) => {
-      const hex = entry.color
+      const hex = snapped[idx] ?? entry.color
       const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
       const name = namedMatch ?? hex
       // Synthesise a stable layerId so the v-for keys stay stable
@@ -535,7 +547,9 @@ const inkSwatches = computed<InkSwatch[]>(() => {
         name,
         displayName: name,
         displayHex: namedMatch ? hex : '',
-        isFallback: false,
+        // No pool ink to draw this cluster with (empty pool) — same
+        // "load the magazine" affordance as the committed-layer branch.
+        isFallback: snapped[idx] === null,
       }
     })
   }
@@ -1056,7 +1070,8 @@ watch(
       :aria-label="t('v2.modal.title')"
     >
       <header class="modal-v2__header">
-        <h2 class="modal-v2__title">{{ t('v2.modal.title') }}</h2>
+        <!-- No visible title (operator feedback) — the dialog keeps its
+             accessible name via the aria-label above. -->
 
         <!-- Preflight + cost chips live in the header so the operator
              can read "am I ready, what will it cost?" at a glance
@@ -1579,11 +1594,6 @@ watch(
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid #334155;
-}
-.modal-v2__title {
-  margin: 0;
-  font-size: 1rem;
-  flex-shrink: 0;
 }
 /* Preflight + estimate chip strip — lives in the header so the
    operator reads "am I ready, what will it cost?" at a glance
