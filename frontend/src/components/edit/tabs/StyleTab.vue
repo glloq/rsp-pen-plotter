@@ -10,6 +10,7 @@ import { useAvailableColorsStore } from '../../../stores/availableColors'
 import { useJobStore } from '../../../stores/job'
 import { usePaletteSourceStore } from '../../../stores/paletteSource'
 import ColorModeCard from '../colors/ColorModeCard.vue'
+import ColorCountSlider from '../render/ColorCountSlider.vue'
 import MasterStylePicker from '../render/MasterStylePicker.vue'
 import MasterStyleParams from '../render/MasterStyleParams.vue'
 import MultiColorMasterStyleParams from '../render/MultiColorMasterStyleParams.vue'
@@ -180,16 +181,18 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
 
     <template v-else>
       <div class="card space-y-3 text-xs">
+        <!-- Colour count first, then the style that draws those
+             colours — the count constrains which styles make sense,
+             so the operator decides it before picking a style. -->
+        <ColorCountSlider :bitmap="bitmap" />
+
         <MasterStylePicker
           mode="multicolor"
           :model-value="draft.multicolorMasterStyleId.value"
           @update:model-value="onMulticolorMasterStyleChange"
         />
 
-        <MultiColorMasterStyleParams
-          :bitmap="bitmap"
-          :style-id="draft.multicolorMasterStyleId.value"
-        />
+        <MultiColorMasterStyleParams :style-id="draft.multicolorMasterStyleId.value" />
       </div>
 
       <PaletteCard

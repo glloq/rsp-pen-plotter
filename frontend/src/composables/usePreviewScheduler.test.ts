@@ -12,7 +12,6 @@ vi.mock('../api/client', async (importOriginal) => {
 })
 
 import { usePreviewScheduler } from './usePreviewScheduler'
-import { useToastStore } from '../stores/toasts'
 
 function makeScheduler() {
   return usePreviewScheduler({
@@ -20,7 +19,6 @@ function makeScheduler() {
     algorithmGetter: () => 'crosshatch',
     optionsBuilder: () => ({}),
     shouldRun: () => true,
-    toastDelayMs: 100,
   })
 }
 
@@ -34,7 +32,7 @@ function deferred<T>() {
 
 const RESULT = { svg: '<svg/>', elapsed_ms: 5, palette: [], warnings: [], cached: false }
 
-describe('usePreviewScheduler toast lifecycle', () => {
+describe('usePreviewScheduler loading lifecycle', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     previewBitmap.mockReset()
@@ -45,8 +43,7 @@ describe('usePreviewScheduler toast lifecycle', () => {
     vi.useRealTimers()
   })
 
-  it("a superseded run does not dismiss the newer run's toast", async () => {
-    const toasts = useToastStore()
+  it("a superseded run does not clear the newer run's loading flag", async () => {
     const scheduler = makeScheduler()
 
     // Run A: never-resolving until we say so.
@@ -58,34 +55,29 @@ describe('usePreviewScheduler toast lifecycle', () => {
     const b = deferred<typeof RESULT>()
     previewBitmap.mockReturnValueOnce(b.promise)
     scheduler.schedule({ immediate: true })
-
-    // B's toast appears after the delay.
-    await vi.advanceTimersByTimeAsync(150)
-    expect(toasts.toasts.some((t) => t.kind === 'progress')).toBe(true)
+    expect(scheduler.previewLoading.value).toBe(true)
 
     // A settles late (it was aborted/superseded) — its finally must NOT
-    // kill B's toast.
+    // clear B's loading flag.
     a.resolve(RESULT)
     await vi.advanceTimersByTimeAsync(0)
-    expect(toasts.toasts.some((t) => t.kind === 'progress')).toBe(true)
+    expect(scheduler.previewLoading.value).toBe(true)
 
-    // B settles → its own toast goes away.
+    // B settles → loading clears and B's result wins.
     b.resolve(RESULT)
     await vi.advanceTimersByTimeAsync(0)
-    expect(toasts.toasts.some((t) => t.kind === 'progress')).toBe(false)
+    expect(scheduler.previewLoading.value).toBe(false)
     expect(scheduler.previewResult.value).toEqual(RESULT)
   })
 
-  it('dismisses the toast when the (only) run finishes', async () => {
-    const toasts = useToastStore()
+  it('clears the loading flag when the (only) run finishes', async () => {
     const scheduler = makeScheduler()
     const a = deferred<typeof RESULT>()
     previewBitmap.mockReturnValueOnce(a.promise)
     scheduler.schedule({ immediate: true })
-    await vi.advanceTimersByTimeAsync(150)
-    expect(toasts.toasts.some((t) => t.kind === 'progress')).toBe(true)
+    expect(scheduler.previewLoading.value).toBe(true)
     a.resolve(RESULT)
     await vi.advanceTimersByTimeAsync(0)
-    expect(toasts.toasts.some((t) => t.kind === 'progress')).toBe(false)
+    expect(scheduler.previewLoading.value).toBe(false)
   })
 })

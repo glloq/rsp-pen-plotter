@@ -170,7 +170,7 @@ const droppedAsBackground = computed<string[]>(() => {
     </div>
 
     <!-- Number of colours lives on a single slider in
-         ``MultiColorMasterStyleParams`` (just below the style picker)
+         ``ColorCountSlider`` (just above the style picker)
          so the operator has one knob, not two. In pens mode the
          StyleTab watcher truncates the palette to ``num_colors``; in
          auto mode num_colors drives k-means; in manual mode the slider
