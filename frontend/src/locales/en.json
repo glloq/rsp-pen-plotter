@@ -1834,7 +1834,8 @@
     },
     "manifest": {
       "fallbackCache": "Algorithm manifest served from local cache — backend offline.",
-      "fallbackSnapshot": "Algorithm manifest served from the bundled snapshot — couldn't load the latest list."
+      "fallbackSnapshot": "Algorithm manifest served from the bundled snapshot — couldn't load the latest list.",
+      "fallbackVersion": "The backend publishes a newer algorithms manifest than this UI — reload the page after updating the frontend."
     },
     "perf": {
       "title": "perf",

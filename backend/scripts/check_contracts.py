@@ -8,6 +8,12 @@ Compares every backend manifest against the snapshot committed at
    conscious bump.
 2. **Stale snapshot** — backend manifest_version is **higher** than
    the snapshot's. Requires re-running ``npm run gen:manifests``.
+3. **Stale frontend cap** — backend manifest_version is higher than
+   the ``SUPPORTED_MANIFEST_VERSION`` ceiling declared in
+   ``frontend/src/domain/manifests/schemas.ts``. Without the bump the
+   frontend rejects the live manifest at runtime and silently degrades
+   to its cache/snapshot fallback (the "manifest version N not
+   supported" banner).
 
 When the snapshot is **lower** (i.e. backend was bumped + snapshot
 refreshed in the same PR), the check is happy — we're on the
@@ -20,6 +26,7 @@ that the failure message tells the contributor what to do.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -28,6 +35,33 @@ from pen_plotter.manifests_seed import register_default_manifests
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = REPO_ROOT / "frontend" / "src" / "domain" / "manifests" / "snapshot.json"
+FRONTEND_SCHEMAS = REPO_ROOT / "frontend" / "src" / "domain" / "manifests" / "schemas.ts"
+
+
+def _frontend_supported_versions(schemas_ts: Path) -> dict[str, int]:
+    """Parse ``SUPPORTED_MANIFEST_VERSION`` out of the frontend schemas.
+
+    Textual extraction (no TS tooling in this venv): grab the object
+    literal that follows the constant name and collect its
+    ``domain: N`` pairs. Comments inside the literal are fine — they
+    never match the key/value pattern. Returns an empty dict when the
+    file or the constant is missing so the caller can decide whether
+    that is fatal.
+    """
+    if not schemas_ts.exists():
+        return {}
+    text = schemas_ts.read_text()
+    match = re.search(
+        r"SUPPORTED_MANIFEST_VERSION[^{]*\{(?P<body>[^}]*)\}",
+        text,
+        re.DOTALL,
+    )
+    if not match:
+        return {}
+    return {
+        m.group(1): int(m.group(2))
+        for m in re.finditer(r"^\s*(\w+):\s*(\d+)", match.group("body"), re.MULTILINE)
+    }
 
 
 def _entries_signature(payload: dict[str, object]) -> set[str]:
@@ -59,16 +93,33 @@ def check() -> int:
         return 1
 
     failures: list[str] = []
+    frontend_supported = _frontend_supported_versions(FRONTEND_SCHEMAS)
 
     for domain in available_domains():
         backend = get_manifest(domain).model_dump(mode="json")
+        b_ver = int(backend["meta"]["manifest_version"])
+        # The frontend only pins domains it actively version-gates
+        # (``assertSupportedVersion`` skips unknown domains), so a
+        # missing key is fine — but a pinned ceiling below the backend
+        # version means the live manifest gets rejected at runtime.
+        supported = frontend_supported.get(domain)
+        if supported is not None and b_ver > supported:
+            schemas_location = (
+                FRONTEND_SCHEMAS.relative_to(REPO_ROOT)
+                if FRONTEND_SCHEMAS.is_relative_to(REPO_ROOT)
+                else FRONTEND_SCHEMAS
+            )
+            failures.append(
+                f"[{domain}] backend manifest_version={b_ver} > frontend "
+                f"SUPPORTED_MANIFEST_VERSION={supported}; bump the ceiling in "
+                f"{schemas_location} (and adapt the UI if the entry shape changed)."
+            )
         snap = snapshot.get(domain)
         if not isinstance(snap, dict):
             failures.append(
                 f"[{domain}] missing from snapshot — add to npm run gen:manifests output."
             )
             continue
-        b_ver = int(backend["meta"]["manifest_version"])
         s_ver = int(snap["meta"]["manifest_version"])
         if b_ver < s_ver:
             failures.append(

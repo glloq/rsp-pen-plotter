@@ -19,6 +19,13 @@ const { t } = useI18n()
 const visible = computed(() => props.source !== 'live')
 
 const message = computed(() => {
+  // A version mismatch is not "backend offline" — the backend answered
+  // fine, it just publishes a manifest newer than this frontend build
+  // can read. Telling the operator the backend is down sends them
+  // debugging the wrong thing; what they need is a UI update/reload.
+  if (props.error?.name === 'ManifestVersionMismatchError') {
+    return t('v2.manifest.fallbackVersion')
+  }
   if (props.source === 'cache') return t('v2.manifest.fallbackCache')
   if (props.source === 'snapshot') return t('v2.manifest.fallbackSnapshot')
   return ''
