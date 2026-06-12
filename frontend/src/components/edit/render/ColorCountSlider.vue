@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { nextPadColor, uniquePalette } from '../../../lib/paletteColors'
+import { resolveEffectivePalette } from '../../../lib/effectivePalette'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { useFileManager } from '../../../composables/useFileManager'
+import { useAvailableColorsStore } from '../../../stores/availableColors'
+import { useJobStore } from '../../../stores/job'
+import { usePaletteSourceStore } from '../../../stores/paletteSource'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 
 // Cluster-count slider, extracted from ``MultiColorMasterStyleParams``
@@ -40,6 +44,25 @@ const draft = useBitmapDraft()
 // "requested" with what the live /preview ACTUALLY rendered.
 const fm = useFileManager(t)
 
+// The ink pool the operator actually owns (pens / inventory / union per
+// the palette source). This is the hard ceiling on DISTINCT drawn
+// colours: clusters beyond it can only reuse inks already in the pool,
+// whatever the slider asks for.
+const job = useJobStore()
+const paletteSource = usePaletteSourceStore()
+const availableColorsStore = useAvailableColorsStore()
+onMounted(() => {
+  if (!paletteSource.loaded) void paletteSource.refresh()
+  if (!availableColorsStore.loaded) void availableColorsStore.refresh()
+})
+const effectivePool = computed<string[]>(() => {
+  const pens = (job.selectedProfile?.pens ?? [])
+    .filter((p) => p.installed && p.color)
+    .map((p) => p.color)
+  const available = availableColorsStore.ordered.map((c) => c.hex)
+  return uniquePalette(resolveEffectivePalette(paletteSource.source, pens, available))
+})
+
 const numColors = computed({
   get: () => props.bitmap.num_colors,
   set: (v: number) => {
@@ -59,12 +82,19 @@ const numColors = computed({
       if (current.length > target) {
         props.bitmap.palette = current.slice(0, target)
       } else if (current.length < target) {
-        // Pad with *distinct* defaults: repeated ``#888888`` chips used
-        // to merge into a single rendered layer (identical labels) while
-        // the grey stole every mid-tone pixel — asking for 6 colours
-        // displayed fewer than 4.
+        // Pad with inks the operator actually OWNS first (unused pool
+        // colours, in pool order): raising the count then genuinely
+        // adds new drawable colours. Synthetic ``nextPadColor`` greys
+        // only kick in once the pool is exhausted — they used to come
+        // first, which made "more colours" produce muddy chips that
+        // all re-snapped onto the same few real inks (the "doublons
+        // avec la même couleur" report).
+        const used = new Set(current.map((h) => h.toLowerCase()))
+        const unusedPool = effectivePool.value.filter((h) => !used.has(h.toLowerCase()))
         const padded = [...current]
-        while (padded.length < target) padded.push(nextPadColor(padded))
+        while (padded.length < target) {
+          padded.push(unusedPool.shift() ?? nextPadColor(padded))
+        }
         props.bitmap.palette = padded
       }
     }
@@ -112,6 +142,18 @@ const pensCapShortfall = computed(() => {
   if (!b.palette.length) return 0
   return Math.max(0, b.num_colors - uniquePalette(b.palette).length)
 })
+
+// Generic ink-pool ceiling (every other multicolour mode): the number
+// of DISTINCT drawn colours can never exceed the inks the operator
+// owns — extra clusters re-snap onto the same pool inks ("doublons
+// avec la même couleur") or merge back. Say it, and point at the fix
+// (grow the inventory) instead of letting the slider look broken.
+const poolCapShortfall = computed(() => {
+  if (draft.paletteFollowsPens.value) return 0 // pens message above owns that case
+  const pool = effectivePool.value.length
+  if (pool === 0) return 0
+  return Math.max(0, props.bitmap.num_colors - pool)
+})
 </script>
 
 <template>
@@ -155,6 +197,18 @@ const pensCapShortfall = computed(() => {
         t('colorStyles.numColorsCapped', {
           requested: bitmap.num_colors,
           available: effectiveColorCount,
+        })
+      }}
+    </p>
+    <p
+      v-if="poolCapShortfall > 0"
+      class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-[10px] leading-snug text-amber-200"
+      data-test="num-colors-pool-capped"
+    >
+      {{
+        t('colorStyles.numColorsPoolCapped', {
+          requested: bitmap.num_colors,
+          pool: effectivePool.length,
         })
       }}
     </p>

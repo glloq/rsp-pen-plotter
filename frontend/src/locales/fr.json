@@ -535,6 +535,7 @@
     "numColorsHint": "Combien de clusters K-means extraire de l'image — chaque cluster devient un calque.",
     "numColorsCapped": "{requested} couleurs demandées mais seulement {available} couleurs de stylos distinctes disponibles — installez d'autres stylos ou passez la palette en Auto / Manuel.",
     "numColorsRendered": "Aperçu : {rendered} couleur(s) réellement rendue(s) sur {requested} demandée(s) — les teintes trop proches sont fusionnées et les zones trop claires sont traitées comme du fond.",
+    "numColorsPoolCapped": "{requested} couleurs demandées mais tu ne possèdes que {pool} encre(s) distincte(s) — au-delà, plusieurs calques partageront la même encre. Ajoute des couleurs dans Traceur ▸ Couleurs (ou change la source de palette) pour aller plus loin.",
     "numColorsLocked": "Verrouillé sur la palette manuelle. Modifie la liste des couleurs en-dessous.",
     "flatNoKnobs": "Pas de paramètres pour les aplats — chaque cluster est tracé tel quel.",
     "crosshatchSpacingHint": "Espacement serré (clusters sombres) → large (clusters clairs).",
