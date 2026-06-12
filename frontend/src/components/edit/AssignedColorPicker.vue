@@ -23,8 +23,17 @@ const availableColorsStore = useAvailableColorsStore()
 
 const props = defineProps<{
   layer: LayerInfo
-  /** Active palette pool resolved from the source toggle + pens + inventory. */
+  /** Active palette pool resolved from the source toggle + pens + inventory.
+   *  Drives the "↻ auto" nearest-match so it stays consistent with the
+   *  job store's own resnap logic. */
   effectivePalette: readonly string[]
+  /** Full colour set offered for MANUAL picks — magazine ∪ inventory,
+   *  regardless of the global palette source. A manual override is an
+   *  explicit operator choice, so the strip must show every ink they
+   *  own, not just the pool the auto-snap reads from ("dans la partie
+   *  calque il n'y a que les couleurs du magasin"). Falls back to
+   *  ``effectivePalette`` when omitted. */
+  pickerPalette?: readonly string[]
 }>()
 
 const emit = defineEmits<{
@@ -53,6 +62,9 @@ function labelFor(hex: string): string {
 
 const currentHex = computed<string | null>(() => props.layer.assigned_color_hex)
 const isManual = computed(() => props.layer.color_assignment === 'manual')
+
+// Swatches offered for a manual pick.
+const swatches = computed<readonly string[]>(() => props.pickerPalette ?? props.effectivePalette)
 
 function onPick(hex: string): void {
   emit('pick', { hex, assignment: 'manual' })
@@ -106,12 +118,13 @@ function onResetAuto(): void {
       </span>
     </div>
 
-    <!-- Picker: clickable swatches from the effective palette. -->
-    <div v-if="effectivePalette.length" class="space-y-1">
+    <!-- Picker: clickable swatches — every ink the operator owns
+         (magazine ∪ inventory), independent of the auto-snap pool. -->
+    <div v-if="swatches.length" class="space-y-1">
       <p class="text-[10px] text-slate-500">{{ t('assignedColor.pickHint') }}</p>
       <div class="flex flex-wrap gap-1">
         <button
-          v-for="hex in effectivePalette"
+          v-for="hex in swatches"
           :key="hex"
           type="button"
           class="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded border transition"

@@ -474,7 +474,7 @@ describe('EditModalV2 (beginner single-screen)', () => {
   it('hides the intent grid and mounts the expert panel when uiMode is expert', async () => {
     // The header toggle / "Ouvrir l'éditeur complet" button flips
     // uiMode.mode to 'expert'; the modal must respond by swapping its
-    // body to the per-layer LayersSection + PresetPanel surface and
+    // body to the per-layer LayersSection tab surface and
     // hiding the assisted intent / palette / style-stack fieldsets.
     // Without this swap, the bottom-half audit found, the toggle was a
     // placeholder. Lock the behaviour in a test so a future refactor

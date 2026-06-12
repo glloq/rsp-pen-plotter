@@ -46,7 +46,6 @@ import ImageTab from '../edit/tabs/ImageTab.vue'
 import SvgTab from '../edit/tabs/SvgTab.vue'
 import StyleTab from '../edit/tabs/StyleTab.vue'
 import TextTab from '../edit/tabs/TextTab.vue'
-import PresetPanel from './PresetPanel.vue'
 import SheetPicker from './SheetPicker.vue'
 import { BEGINNER_STYLES, type CustomStyleSelection } from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
@@ -1268,7 +1267,7 @@ watch(
           <!-- Controls block: condensed under the preview. In
                assisted mode this is the intent + palette + custom-
                style stack; in expert mode it's the V1 tab strip
-               (Image / SVG / Style / Text / Layers + PresetPanel). -->
+               (Image / SVG / Style / Text / Layers). -->
           <div class="modal-v2__controls-block">
             <!-- Expert surface: V1-style tab strip (Image / SVG / Style /
              Text / Layers) restored from the audit. Each tab carries
@@ -1295,7 +1294,6 @@ watch(
                 <TextTab v-else-if="activeExpertTab === 'text'" />
                 <LayersSection v-else-if="activeExpertTab === 'layers'" />
               </div>
-              <PresetPanel />
             </section>
 
             <!-- Assisted surface: intent + palette + custom-style stack.
