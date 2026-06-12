@@ -85,6 +85,13 @@ watch(
       // rendering as a single layer (the backend merges identical
       // palette entries).
       const distinct = uniquePalette(colors)
+      // The FULL rack feeds the backend's ink_pool (which inks each
+      // cluster can snap to). Without this the truncated palette below
+      // capped the pool at the first N slots, so blue drew as red /
+      // green as yellow when the matching pens sat further down the rack.
+      draft.pensFullPool.value = distinct
+      // The truncated palette only drives the colour-count displays
+      // (num_colors), not which inks are reachable.
       const limit = Math.min(distinct.length, Math.max(1, Number(n) || distinct.length))
       bitmap.value.palette = distinct.slice(0, limit)
       bitmap.value.segmentation_method = 'fixed_palette'
