@@ -482,16 +482,20 @@ def _generate_gcode_impl(
                         pen_name = f"Pen {effective_slot}"
                     magazine_mode = method in ("carousel", "rack")
                     pen_missing = prompt_pen is None or not prompt_pen.installed
-                    if magazine_mode and pen_missing:
+                    if magazine_mode and (pen_missing or decision.slot_reinked):
                         # The colour this layer needs isn't loaded in the
-                        # magazine. An automated carousel/rack swap can't
-                        # fetch a pen that isn't physically there, so fall
-                        # back to an operator *load* pause: park the head
-                        # clear of the drawing and prompt the operator to
-                        # load the ink (which lives in the available-colours
+                        # magazine — either the slot has no installed pen,
+                        # or it's a RE-INK (the slot still holds a
+                        # different colour). An automated carousel/rack
+                        # swap can't fetch a pen that isn't physically
+                        # there: firing the firmware/host sequence would
+                        # silently draw with the OLD ink. Fall back to an
+                        # operator *load* pause: park the head clear of
+                        # the drawing and prompt the operator to load the
+                        # ink (which lives in the available-colours
                         # inventory) into this slot before resuming. The
-                        # boundary is a plain M0 so a downloaded program also
-                        # halts on any sender. Positions are machine
+                        # boundary is a plain M0 so a downloaded program
+                        # also halts on any sender. Positions are machine
                         # coordinates and bypass the drawing transform.
                         target_color = (
                             effective_color
@@ -502,11 +506,15 @@ def _generate_gcode_impl(
                                 else effective_color
                             )
                         ) or "#000000"
-                        load_label = (
-                            f"{prompt_pen.name} {target_color}"
-                            if prompt_pen and prompt_pen.name
-                            else target_color
-                        )
+                        if decision.slot_reinked and effective_color:
+                            # ``pen_name`` already carries the WANTED ink
+                            # ("label hex"); naming the old slot pen here
+                            # would tell the operator to load the wrong one.
+                            load_label = pen_name
+                        elif prompt_pen and prompt_pen.name:
+                            load_label = f"{prompt_pen.name} {target_color}"
+                        else:
+                            load_label = target_color
                         park_x, park_y = pen_change_point(profile)
                         out.append(
                             pen_load_t.render(

@@ -483,6 +483,12 @@ function clampPenCount(): void {
   ensureCaps().max_pens_in_magazine = Math.max(1, props.draft.pen_slot_count)
 }
 
+// Default firmware swap trigger seeded when entering firmware mode.
+// ``{slot}`` is substituted by the backend's FirmwareStrategy at swap
+// time; matches the input's placeholder so the operator sees a working
+// example instead of a leftover pause command.
+const FIRMWARE_TRIGGER_SEED = 'M6 T{slot}'
+
 function setMode(mode: ColorMode): void {
   const target = modes.find((m) => m.id === mode)
   if (!target) return
@@ -494,6 +500,24 @@ function setMode(mode: ColorMode): void {
   props.draft.tool_change_method = target.method
   tc.mode = target.tooling
   tc.command_source = target.source
+
+  // ``tool_change_command`` plays two different roles: the pause
+  // boundary in the emitted G-code (manual / host / mono → ``M0``,
+  // which any sender honours and the streamer intercepts) and the
+  // firmware's swap trigger (firmware → e.g. ``M6 T{slot}``). A mode
+  // switch that leaves the other role's value behind breaks the run:
+  // a leftover ``M0`` sent as a "firmware trigger" feed-holds the
+  // controller with no operator prompt, and a leftover firmware
+  // trigger in a manual/host profile means the emitted boundary never
+  // pauses on a bare sender. Entering firmware seeds the example
+  // trigger only over a pause command (a custom trigger typed earlier
+  // is kept); leaving firmware always restores ``M0``.
+  const cmd = props.draft.tool_change_command.trim()
+  if (mode === 'firmware') {
+    if (!cmd || cmd === 'M0') props.draft.tool_change_command = FIRMWARE_TRIGGER_SEED
+  } else if (cmd !== 'M0') {
+    props.draft.tool_change_command = 'M0'
+  }
 
   if (mode === 'mono') {
     props.draft.pen_slot_count = 1

@@ -395,3 +395,70 @@ def test_same_slot_same_ink_does_not_reink_pause() -> None:
         ],
     )
     assert gcode.count("; Change to pen slot 0") == 1
+
+
+def test_magazine_reink_pauses_for_operator_load() -> None:
+    """Carousel/rack magazines can't fetch an ink that isn't physically
+    loaded: a re-ink boundary (slot reused with a different colour) must
+    emit an operator LOAD pause, not the automated firmware/host swap —
+    that swap would silently keep drawing with the old ink.
+    """
+    for method in ("carousel", "rack"):
+        profile = _two_slot_profile().model_copy(
+            update={"tool_change_method": method, "capabilities": None}
+        )
+        gcode = generate_gcode(
+            TWO_LAYERS,
+            profile,
+            layers=[
+                LayerGeneration(layer_id="red", target_pen_slot=0, assigned_color_hex="#000000"),
+                LayerGeneration(
+                    layer_id="blue",
+                    target_pen_slot=0,
+                    assigned_color_hex="#00aaff",
+                    color_label="Bleu ciel",
+                ),
+            ],
+        )
+        assert "Load pen slot 0 (Bleu ciel #00aaff) into magazine" in gcode, method
+        assert "; Change to pen slot 0 (Bleu ciel" not in gcode, method
+
+
+def test_guided_swap_actions_reink_is_operator_confirm_on_carousel() -> None:
+    """At stream time the re-ink load boundary halts for the operator
+    even on an automated magazine, while the regular first-use swap
+    stays an automated firmware action.
+    """
+    from pen_plotter.core.toolchange import guided_swap_actions
+
+    profile = _two_slot_profile().model_copy(
+        update={
+            "tool_change_method": "carousel",
+            "tool_change_command": "M6 T{slot}",
+            "capabilities": None,
+        }
+    )
+    gcode = generate_gcode(
+        TWO_LAYERS,
+        profile,
+        layers=[
+            LayerGeneration(layer_id="red", target_pen_slot=0, assigned_color_hex="#000000"),
+            LayerGeneration(
+                layer_id="blue",
+                target_pen_slot=0,
+                assigned_color_hex="#00aaff",
+                color_label="Bleu ciel",
+            ),
+        ],
+    )
+    actions = list(guided_swap_actions(gcode, profile).values())
+    assert len(actions) == 2
+    first, reink = actions
+    # First use of slot 0: the carousel swaps by itself, with the slot
+    # substituted into the firmware trigger.
+    assert first.kind == "firmware"
+    assert [c.send for c in first.commands] == ["M6 T0"]
+    # Re-ink: operator pause naming the ink to load.
+    assert reink.kind == "operator_confirm"
+    assert "Bleu ciel #00aaff" in (reink.prompt or "")
+    assert "slot 0" in (reink.prompt or "")
