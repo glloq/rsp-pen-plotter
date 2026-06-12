@@ -966,23 +966,6 @@
     "homeTitle": "Origine machine",
     "homeMsg": "Déplacer le traceur vers sa position d'origine ?"
   },
-  "presets": {
-    "title": "Préréglages",
-    "hint": "Réutilise les réglages d'un placement précédent.",
-    "namePlaceholder": "Nom du préréglage",
-    "descPlaceholder": "Description (optionnelle)",
-    "save": "Enregistrer",
-    "saving": "Enregistrement…",
-    "savedToast": "Préréglage enregistré",
-    "deletedToast": "Préréglage « {name} » supprimé",
-    "appliedToast": "Préréglage « {name} » appliqué",
-    "builtin": "Intégrés",
-    "user": "Mes préréglages",
-    "delete": "Supprimer ce préréglage",
-    "deleteFor": "Supprimer le préréglage {name}",
-    "empty": "Aucun préréglage disponible.",
-    "nothingToSave": "Sélectionne une placement et règle au moins un algorithme par calque pour pouvoir l'enregistrer comme préréglage."
-  },
   "preflight": {
     "button": "Vérification pré-tracé",
     "running": "Vérification…",
