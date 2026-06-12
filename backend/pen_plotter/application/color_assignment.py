@@ -36,6 +36,20 @@ from numpy.typing import NDArray
 
 from pen_plotter.models import LayerInfo
 
+# Above this ΔE 2000 the distinct-forcing in :func:`assign_pool_inks`
+# stops fighting to keep inks unique: rendering a cluster as an ink that
+# far away is perceptually a *different colour*, not a faithful stand-in.
+# Beyond the threshold the source falls back to plain nearest-match
+# (reuse allowed), so e.g. three greens against a one-green pool all draw
+# green instead of being scattered onto black/blue to stay distinct
+# ("les couleurs de la preview ne correspondent pas à l'image"). Picked
+# between the legit spread we want to keep (≈24 ΔE) and the egregious
+# forces we want to drop (≈37+ ΔE). Dropping a far distinct match never
+# worsens fidelity — the fallback picks the global nearest, which is by
+# definition ≤ the rejected distance — it only trades distinctness for
+# faithfulness when the two genuinely conflict.
+DISTINCT_MATCH_MAX_DELTA_E = 32.0
+
 
 def _hex_to_rgb(hex_value: str) -> tuple[int, int, int]:
     """Lower / strip / parse ``#rrggbb`` → ``(r, g, b)`` ints in 0..255."""
@@ -191,6 +205,13 @@ def assign_pool_inks(
     leftovers fall back to plain nearest-match (reuse allowed).
     Duplicate pool entries count as that many uses.
 
+    Distinctness is only worth forcing while the unique ink is still a
+    plausible stand-in: a candidate beyond ``DISTINCT_MATCH_MAX_DELTA_E``
+    is rejected and the source falls back to its plain nearest (reuse
+    allowed) instead of being scattered onto an unrelated ink to stay
+    unique. This keeps a pool that doesn't span the image's colours from
+    drawing greens as blue/black in the preview.
+
     Args:
         source_hexes: Colours to assign (typically cluster centroids).
         pool: Candidate inks. Empty → every result is ``None``.
@@ -230,13 +251,21 @@ def assign_pool_inks(
     for row, col in order:
         if remaining == 0 or not any(available):
             break
+        # ``order`` is sorted by ascending ΔE, so the first pair past the
+        # threshold means every remaining unique candidate is "a different
+        # colour". Stop forcing distinctness and let the leftovers take
+        # their plain nearest below (reuse allowed) — faithfulness wins
+        # over spreading once the spread would lie about the colour.
+        if dist[row, col] > DISTINCT_MATCH_MAX_DELTA_E:
+            break
         if row_done[row] or not available[col]:
             continue
         result[int(row)] = pool_hex[int(col)]
         row_done[int(row)] = True
         available[int(col)] = False
         remaining -= 1
-    # Pool exhausted → plain nearest for whoever is left.
+    # Pool exhausted (or only far candidates left) → plain nearest for
+    # whoever is unassigned.
     for row in range(n):
         if not row_done[row]:
             nearest = nearest_pool_hex(source_hexes[row], pool_hex)

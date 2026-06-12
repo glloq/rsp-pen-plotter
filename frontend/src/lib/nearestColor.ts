@@ -7,6 +7,15 @@
 
 import { canonicalHex } from './penWidth'
 
+// Mirror of ``color_assignment.DISTINCT_MATCH_MAX_DELTA_E``: above this
+// ΔE 2000 the distinct-forcing in ``assignPoolHexes`` gives up and falls
+// back to plain nearest-match (reuse allowed). Keeps a pool that doesn't
+// span the image's colours from scattering near-identical clusters onto
+// unrelated inks just to keep them unique (greens drawn as blue/black).
+// Must stay in lock-step with the backend constant so the frontend
+// resnap and the backend segmentation land on the same assignment.
+const DISTINCT_MATCH_MAX_DELTA_E = 32.0
+
 function hexToRgb(hex: string): [number, number, number] {
   const body = hex.replace(/^#/, '').toLowerCase()
   const expanded =
@@ -152,6 +161,12 @@ export interface PoolAssignmentItem {
  * Duplicate pool entries count as that many uses (two identical pens
  * really can serve two layers).
  *
+ * Distinctness is only forced while the unique ink stays a plausible
+ * stand-in: a candidate beyond ``DISTINCT_MATCH_MAX_DELTA_E`` is rejected
+ * and the item falls back to its plain nearest (reuse allowed) instead of
+ * being scattered onto an unrelated ink — so a pool that doesn't span the
+ * image's colours no longer draws greens as blue/black.
+ *
  * @returns One entry per item, aligned by index: the canonical assigned
  *   hex for auto items, ``null`` for pinned items (keep the pin) or
  *   when the pool is empty.
@@ -192,15 +207,21 @@ export function assignPoolHexes(
   pairs.sort((a, b) => a.d - b.d)
   const rowDone = autoIndices.map(() => false)
   let remaining = autoIndices.length
-  for (const { row, col } of pairs) {
+  for (const { row, col, d } of pairs) {
     if (remaining === 0 || !available.includes(true)) break
+    // Pairs are sorted ascending, so the first one past the threshold
+    // means every remaining unique candidate is "a different colour":
+    // stop forcing distinctness and let the leftovers take their plain
+    // nearest below (reuse allowed) rather than lie about the colour.
+    if (d > DISTINCT_MATCH_MAX_DELTA_E) break
     if (rowDone[row] || !available[col]) continue
     result[autoIndices[row]!] = poolHex[col]!
     rowDone[row] = true
     available[col] = false
     remaining -= 1
   }
-  // Pool exhausted → plain nearest for whoever is left.
+  // Pool exhausted (or only far candidates left) → plain nearest for
+  // whoever is unassigned.
   for (let r = 0; r < autoIndices.length; r++) {
     if (!rowDone[r]) {
       result[autoIndices[r]!] = nearestPoolHex(items[autoIndices[r]!]!.sourceHex, poolHex)
