@@ -772,7 +772,7 @@
     "estimate": "Est.",
     "estimatePending": "— generate to estimate",
     "estimatePendingHint": "Generate the G-code to get a realistic time estimate (includes pen-up travel and tool changes).",
-    "penChanges": "Pen changes"
+    "penChanges": "Colour changes"
   },
   "settings": {
     "title": "Settings",
@@ -997,7 +997,7 @@
     "failed": "Preflight check failed.",
     "size": "Drawing size",
     "estimate": "Estimated time",
-    "penChanges": "Pen changes",
+    "penChanges": "Colour changes",
     "missingPens": "Pen slot(s) {slots} are assigned but not installed; install them or reassign before generating."
   },
   "generate": {

@@ -772,7 +772,7 @@
     "estimate": "Estimé",
     "estimatePending": "— générez pour estimer",
     "estimatePendingHint": "Générez le G-code pour obtenir une estimation réaliste du temps (inclut les déplacements à vide et les changements d'outil).",
-    "penChanges": "Changements"
+    "penChanges": "Changements de couleur"
   },
   "settings": {
     "title": "Réglages",
@@ -997,7 +997,7 @@
     "failed": "Échec de la vérification pré-tracé.",
     "size": "Dimensions du dessin",
     "estimate": "Durée estimée",
-    "penChanges": "Changements de stylo",
+    "penChanges": "Changements de couleur",
     "missingPens": "Le(s) emplacement(s) {slots} sont assignés mais non installés ; installez-les ou réassignez avant de générer."
   },
   "generate": {
