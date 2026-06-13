@@ -328,7 +328,15 @@ export async function optimizeToolpaths(
   layers: LayerOptimization[],
   signal?: AbortSignal,
 ): Promise<OptimizeResponse> {
-  const response = await api.post<OptimizeResponse>('/optimize', { svg, layers }, { signal })
+  // No client timeout: toolpath optimisation (vpype linemerge/sort) on a
+  // complex drawing — a photo rendered as crosshatch/contours fill is
+  // thousands of paths — routinely runs past the default 30 s on a
+  // Raspberry Pi. Hitting that ceiling aborted the request with a bare
+  // network error (no backend detail), surfacing as the generic "Échec
+  // de l'optimisation" with no cause. Cancellation still works via the
+  // AbortSignal; the backend runs the work in a threadpool. Mirrors the
+  // ``/rerender`` call below.
+  const response = await api.post<OptimizeResponse>('/optimize', { svg, layers }, { signal, timeout: 0 })
   return response.data
 }
 
@@ -352,7 +360,10 @@ export async function generateGcode(
   options: { allowMissingSlots?: boolean } = {},
 ): Promise<GenerateResponse> {
   const body = options.allowMissingSlots ? { ...plan, allow_missing_slots: true } : plan
-  const response = await api.post<GenerateResponse>('/generate', body, { signal })
+  // No client timeout (see ``optimizeToolpaths``): generating G-code for a
+  // multi-layer plan on a Pi can exceed the default 30 s; the AbortSignal
+  // still cancels it.
+  const response = await api.post<GenerateResponse>('/generate', body, { signal, timeout: 0 })
   return response.data
 }
 
@@ -420,7 +431,10 @@ export async function preflightCheck(
   plan: PrintPlan,
   signal?: AbortSignal,
 ): Promise<PreflightReport> {
-  const response = await api.post<PreflightReport>('/preflight', plan, { signal })
+  // No client timeout (see ``optimizeToolpaths``): preflight resolves the
+  // whole plan and can run long on a big multi-placement scene; the
+  // AbortSignal still cancels it.
+  const response = await api.post<PreflightReport>('/preflight', plan, { signal, timeout: 0 })
   return response.data
 }
 
