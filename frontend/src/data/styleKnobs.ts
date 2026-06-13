@@ -26,6 +26,7 @@
 //     defaults so the fallback chain always terminates.
 
 import { MONO_STYLE_DEFAULTS, MULTICOLOR_STYLE_DEFAULTS } from './printRegistry'
+import { penMarkFloorMm } from '../lib/penWidth'
 
 export interface DualRangeKnob {
   kind: 'dual-range'
@@ -54,6 +55,15 @@ export interface RangeKnob {
   unit?: string
   /** Render the readout as ``Math.round(v * 100)%`` (0..1 knobs). */
   percent?: boolean
+  /**
+   * Marks a knob whose value is a physical mark size in mm, so the
+   * renderer can raise its lower bound to the pen actually in use — you
+   * cannot draw a dot or line thinner than the pen's tip. ``'width'``
+   * floors at the pen tip diameter (a line width); ``'radius'`` floors
+   * at half the tip diameter (a dot radius). The descriptor's static
+   * ``min`` stays the absolute floor when no pen width is known.
+   */
+  penFloor?: 'width' | 'radius'
 }
 
 export interface CheckboxKnob {
@@ -108,7 +118,7 @@ function range(
   max: number,
   step: number,
   labelKey: string,
-  extra: Partial<Pick<RangeKnob, 'decimals' | 'unit' | 'percent' | 'hintKey'>> = {},
+  extra: Partial<Pick<RangeKnob, 'decimals' | 'unit' | 'percent' | 'hintKey' | 'penFloor'>> = {},
 ): RangeKnob {
   return { kind: 'range', key, min, max, step, labelKey, ...extra }
 }
@@ -138,8 +148,14 @@ const HATCH_FAMILY: StyleKnobConfig = {
   ],
 }
 
-const DOT_RADIUS = range('dot_radius', 0.11, 0.56, 0.1, 'mono.dotRadius', { decimals: 2 })
-const STROKE_WIDTH = range('stroke_width', 0.4, 2.0, 0.1, 'mono.strokeWidth', { decimals: 2 })
+const DOT_RADIUS = range('dot_radius', 0.11, 0.56, 0.1, 'mono.dotRadius', {
+  decimals: 2,
+  penFloor: 'radius',
+})
+const STROKE_WIDTH = range('stroke_width', 0.4, 2.0, 0.1, 'mono.strokeWidth', {
+  decimals: 2,
+  penFloor: 'width',
+})
 
 // Stippling / Voronoi shade: density range + dot radius.
 const STIPPLE_MONO: StyleKnobConfig = {
@@ -291,7 +307,9 @@ export const MONO_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
     ],
   },
   'vinyl-rings': {
-    controls: [dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', { unit: 'mm' })],
+    controls: [
+      dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+    ],
   },
   'sunburst-rays': {
     controls: [
@@ -307,7 +325,9 @@ export const MONO_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
     ],
   },
   'moire-beat': {
-    controls: [dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' })],
+    controls: [
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+    ],
   },
   'penrose-facets': {
     controls: [range('divisions', 4, 8, 1, 'convert.divisions')],
@@ -334,7 +354,9 @@ export const MONO_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
     controls: [dual('cell_min', 'cell_max', 0.74, 11, 0.1, 'mono.cellRange', { unit: 'mm' })],
   },
   'moire-lines': {
-    controls: [dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' })],
+    controls: [
+      dual('spacing_min', 'spacing_max', 0.37, 3.7, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+    ],
   },
 }
 
@@ -420,7 +442,10 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
   },
   'color-edges': { controls: [STROKE_WIDTH] },
   'color-centerline': {
-    controls: [STROKE_WIDTH, range('min_branch_mm', 0.37, 7.4, 0.1, 'convert.minBranch', { decimals: 1, unit: ' mm' })],
+    controls: [
+      STROKE_WIDTH,
+      range('min_branch_mm', 0.37, 7.4, 0.1, 'convert.minBranch', { decimals: 1, unit: ' mm' }),
+    ],
   },
   'color-spiral-classic': {
     controls: [
@@ -465,7 +490,9 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
     ],
   },
   'color-grid': {
-    controls: [dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', { unit: 'mm' })],
+    controls: [
+      dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+    ],
   },
   'color-brick': {
     controls: [dual('cell_min', 'cell_max', 0.74, 11, 0.1, 'mono.cellRange', { unit: 'mm' })],
@@ -482,7 +509,9 @@ export const MULTICOLOR_STYLE_KNOBS: Record<string, StyleKnobConfig> = {
     controls: [dual('cell_min', 'cell_max', 0.74, 11, 0.1, 'mono.cellRange', { unit: 'mm' })],
   },
   'color-rings': {
-    controls: [dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', { unit: 'mm' })],
+    controls: [
+      dual('spacing_min', 'spacing_max', 0.37, 7.4, 0.1, 'mono.spacingRange', { unit: 'mm' }),
+    ],
   },
   'color-sunburst': {
     controls: [
@@ -522,4 +551,17 @@ export function styleKnobDefaults(
 /** Knob-store keys a descriptor reads/writes (dual-range → two). */
 export function knobKeys(d: KnobDescriptor): string[] {
   return d.kind === 'dual-range' ? [d.keyMin, d.keyMax] : [d.key]
+}
+
+/**
+ * Lower bound (mm) for a range knob once the pen in use is taken into
+ * account. A ``penFloor`` knob can't go below the physical mark the pen
+ * makes: ``'width'`` floors at the tip diameter, ``'radius'`` at half it
+ * (a dot's radius). Falls back to the descriptor's static ``min`` for
+ * non-physical knobs or when no positive pen width is known.
+ */
+export function effectiveRangeMin(ctl: RangeKnob, minPenWidthMm?: number | null): number {
+  if (!ctl.penFloor) return ctl.min
+  const floor = penMarkFloorMm(ctl.penFloor, minPenWidthMm)
+  return floor === null ? ctl.min : Math.max(ctl.min, floor)
 }

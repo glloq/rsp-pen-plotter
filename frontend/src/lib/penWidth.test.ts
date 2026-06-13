@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import {
+  ALGO_PEN_FLOOR_KEYS,
   applyPhysicalStrokeWidth,
   canonicalHex,
   layerStrokeWidthsPx,
   mmPerViewBoxUnit,
   parsePenWidthMm,
+  penMarkFloorMm,
   strokeWidthMmByHex,
 } from './penWidth'
 
@@ -120,5 +122,27 @@ describe('layerStrokeWidthsPx', () => {
   it('is empty when scale invalid or inventory empty', () => {
     expect(layerStrokeWidthsPx(layers, new Map(), 0.5)).toEqual({})
     expect(layerStrokeWidthsPx(layers, new Map([['#ff0000', 1]]), 0)).toEqual({})
+  })
+})
+
+describe('penMarkFloorMm', () => {
+  it('floors a line width at the full tip diameter', () => {
+    expect(penMarkFloorMm('width', 0.8)).toBe(0.8)
+  })
+
+  it('floors a dot radius at half the tip diameter', () => {
+    expect(penMarkFloorMm('radius', 0.8)).toBe(0.4)
+  })
+
+  it('returns null when no positive pen width is known', () => {
+    expect(penMarkFloorMm('width', null)).toBeNull()
+    expect(penMarkFloorMm('radius', undefined)).toBeNull()
+    expect(penMarkFloorMm('width', 0)).toBeNull()
+    expect(penMarkFloorMm('width', -1)).toBeNull()
+  })
+
+  it('maps the schema option keys that name a physical mark', () => {
+    expect(ALGO_PEN_FLOOR_KEYS.dot_radius_mm).toBe('radius')
+    expect(ALGO_PEN_FLOOR_KEYS.stroke_width).toBe('width')
   })
 })

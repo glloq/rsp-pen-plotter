@@ -17,6 +17,36 @@
 const DEFAULT_STROKE_WIDTH_MM = 0.5
 
 /**
+ * A physical mark a pen lays down: a line/stroke ``'width'`` (floors at
+ * the tip diameter) or a dot ``'radius'`` (floors at half the diameter).
+ */
+export type PenMarkKind = 'radius' | 'width'
+
+/**
+ * The mm floor a ``kind`` of mark can't go below for a pen whose tip is
+ * ``minPenWidthMm`` across — you can't draw a line thinner than the tip,
+ * nor a dot whose radius is under half the tip. Returns ``null`` when no
+ * positive pen width is known (caller keeps its own bound).
+ */
+export function penMarkFloorMm(kind: PenMarkKind, minPenWidthMm?: number | null): number | null {
+  if (typeof minPenWidthMm !== 'number' || !(minPenWidthMm > 0)) return null
+  return kind === 'radius' ? minPenWidthMm / 2 : minPenWidthMm
+}
+
+/**
+ * Algorithm-schema option keys (``AlgoOption.key``) that name a physical
+ * pen mark, so the schema-driven form (``AlgoParamsForm``) can raise
+ * their lower bound to the pen in use — the same floor the master-style
+ * ``dot_radius`` / ``stroke_width`` knobs get. ``stroke_width`` is listed
+ * for robustness even though edges/centerline currently inject it from
+ * the pen slot rather than exposing a schema knob.
+ */
+export const ALGO_PEN_FLOOR_KEYS: Readonly<Record<string, PenMarkKind>> = {
+  dot_radius_mm: 'radius',
+  stroke_width: 'width',
+}
+
+/**
  * Parse a stroke-width form field into a positive number of mm, or
  * ``null`` when blank / invalid.
  *

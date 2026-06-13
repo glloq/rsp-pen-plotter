@@ -33,6 +33,8 @@ interface BitmapLike {
 const props = defineProps<{
   bitmap: BitmapLike
   styleId: string
+  /** Pen tip diameter (mm) of the mono ink, floors physical mark knobs. */
+  minPenWidthMm?: number | null
 }>()
 
 const { t } = useI18n()
@@ -204,7 +206,13 @@ function bandSwatchStyle(i: number): Record<string, string> {
     </div>
 
     <!-- ===== Per-style knob block — declarative (data/styleKnobs.ts) ===== -->
-    <MasterStyleKnobs family="mono" :style-id="styleId" :knobs="knobs" @set="setKnob" />
+    <MasterStyleKnobs
+      family="mono"
+      :style-id="styleId"
+      :knobs="knobs"
+      :min-pen-width-mm="minPenWidthMm"
+      @set="setKnob"
+    />
 
     <!-- ===== Advanced mode toggle + per-band drawer ===== -->
     <div v-if="usesBands && knobBands" class="border-t border-slate-800 pt-3">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   getAlgorithm,
@@ -7,6 +7,7 @@ import {
   resolveMulticolorStyle,
 } from '../../../data/printRegistry'
 import {
+  effectiveRangeMin,
   resolveStyleKnobConfig,
   styleKnobDefaults,
   type AngleSetKnob,
@@ -32,6 +33,13 @@ const props = defineProps<{
   family: MasterStyleFamily
   styleId: string
   knobs: Record<string, unknown>
+  /**
+   * Pen tip diameter (mm) of the colour(s) this style draws with, used
+   * to floor the physical mark-size knobs (``dot_radius``,
+   * ``stroke_width``) — you can't draw thinner than the pen. ``null`` /
+   * ``undefined`` (pen width unknown) leaves the descriptor bounds as-is.
+   */
+  minPenWidthMm?: number | null
 }>()
 
 const emit = defineEmits<{ set: [key: string, value: unknown] }>()
@@ -58,13 +66,43 @@ function num(key: string): number {
   return typeof v === 'number' ? v : 0
 }
 
+// Slider lower bound for a range knob, raised to the pen's physical mark
+// size when the knob is a dot radius / line width (see ``penFloor``).
+function rangeMin(ctl: RangeKnob): number {
+  return effectiveRangeMin(ctl, props.minPenWidthMm)
+}
+
+// Current value clamped up to the pen floor so the readout and thumb
+// never show a thinner mark than the pen can make, even if the stored
+// knob predates the pen choice.
+function rangeValue(ctl: RangeKnob): number {
+  return Math.max(num(ctl.key), rangeMin(ctl))
+}
+
+// Persist the floor: when a stored physical knob sits below the pen's
+// mark size, raise it so the preview and generated gcode match the
+// slider rather than silently drawing at the (clamped-up) tip width.
+// Runs off a watcher — never during render — and settles in one pass
+// because the emitted value equals the new floor.
+watch(
+  [config, () => props.minPenWidthMm, () => props.knobs],
+  () => {
+    for (const ctl of config.value?.controls ?? []) {
+      if (ctl.kind !== 'range' || !ctl.penFloor) continue
+      const floor = rangeMin(ctl)
+      if (num(ctl.key) < floor) emit('set', ctl.key, floor)
+    }
+  },
+  { immediate: true, deep: true },
+)
+
 function bool(key: string): boolean {
   const v = props.knobs[key] ?? defaults.value[key]
   return typeof v === 'boolean' ? v : false
 }
 
 function rangeDisplay(ctl: RangeKnob): string {
-  const v = num(ctl.key)
+  const v = rangeValue(ctl)
   let text: string
   if (ctl.percent) text = `${Math.round(v * 100)}%`
   else if (ctl.decimals !== undefined) text = v.toFixed(ctl.decimals)
@@ -162,10 +200,10 @@ function setAlgoOverride(key: string, value: unknown): void {
         </p>
         <input
           type="range"
-          :min="ctl.min"
+          :min="rangeMin(ctl)"
           :max="ctl.max"
           :step="ctl.step"
-          :value="num(ctl.key)"
+          :value="rangeValue(ctl)"
           class="w-full accent-emerald-500"
           @input="(e) => emit('set', ctl.key, Number((e.target as HTMLInputElement).value))"
         />
@@ -222,6 +260,7 @@ function setAlgoOverride(key: string, value: unknown): void {
     <AlgoParamsForm
       :algorithm="style.defaultAlgorithm"
       :values="genericAlgoValues"
+      :min-pen-width-mm="minPenWidthMm"
       @update="setAlgoOverride"
     />
   </div>
