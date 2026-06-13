@@ -260,6 +260,7 @@ function setAlgoOverride(key: string, value: unknown): void {
     <AlgoParamsForm
       :algorithm="style.defaultAlgorithm"
       :values="genericAlgoValues"
+      :min-pen-width-mm="minPenWidthMm"
       @update="setAlgoOverride"
     />
   </div>
