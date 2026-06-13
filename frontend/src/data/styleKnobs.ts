@@ -54,6 +54,15 @@ export interface RangeKnob {
   unit?: string
   /** Render the readout as ``Math.round(v * 100)%`` (0..1 knobs). */
   percent?: boolean
+  /**
+   * Marks a knob whose value is a physical mark size in mm, so the
+   * renderer can raise its lower bound to the pen actually in use — you
+   * cannot draw a dot or line thinner than the pen's tip. ``'width'``
+   * floors at the pen tip diameter (a line width); ``'radius'`` floors
+   * at half the tip diameter (a dot radius). The descriptor's static
+   * ``min`` stays the absolute floor when no pen width is known.
+   */
+  penFloor?: 'width' | 'radius'
 }
 
 export interface CheckboxKnob {
@@ -108,7 +117,7 @@ function range(
   max: number,
   step: number,
   labelKey: string,
-  extra: Partial<Pick<RangeKnob, 'decimals' | 'unit' | 'percent' | 'hintKey'>> = {},
+  extra: Partial<Pick<RangeKnob, 'decimals' | 'unit' | 'percent' | 'hintKey' | 'penFloor'>> = {},
 ): RangeKnob {
   return { kind: 'range', key, min, max, step, labelKey, ...extra }
 }
@@ -138,8 +147,14 @@ const HATCH_FAMILY: StyleKnobConfig = {
   ],
 }
 
-const DOT_RADIUS = range('dot_radius', 0.11, 0.56, 0.1, 'mono.dotRadius', { decimals: 2 })
-const STROKE_WIDTH = range('stroke_width', 0.4, 2.0, 0.1, 'mono.strokeWidth', { decimals: 2 })
+const DOT_RADIUS = range('dot_radius', 0.11, 0.56, 0.1, 'mono.dotRadius', {
+  decimals: 2,
+  penFloor: 'radius',
+})
+const STROKE_WIDTH = range('stroke_width', 0.4, 2.0, 0.1, 'mono.strokeWidth', {
+  decimals: 2,
+  penFloor: 'width',
+})
 
 // Stippling / Voronoi shade: density range + dot radius.
 const STIPPLE_MONO: StyleKnobConfig = {
@@ -522,4 +537,19 @@ export function styleKnobDefaults(
 /** Knob-store keys a descriptor reads/writes (dual-range → two). */
 export function knobKeys(d: KnobDescriptor): string[] {
   return d.kind === 'dual-range' ? [d.keyMin, d.keyMax] : [d.key]
+}
+
+/**
+ * Lower bound (mm) for a range knob once the pen in use is taken into
+ * account. A ``penFloor`` knob can't go below the physical mark the pen
+ * makes: ``'width'`` floors at the tip diameter, ``'radius'`` at half it
+ * (a dot's radius). Falls back to the descriptor's static ``min`` for
+ * non-physical knobs or when no positive pen width is known.
+ */
+export function effectiveRangeMin(ctl: RangeKnob, minPenWidthMm?: number | null): number {
+  if (!ctl.penFloor || !(typeof minPenWidthMm === 'number') || !(minPenWidthMm > 0)) {
+    return ctl.min
+  }
+  const floor = ctl.penFloor === 'radius' ? minPenWidthMm / 2 : minPenWidthMm
+  return Math.max(ctl.min, floor)
 }

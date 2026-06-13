@@ -7,11 +7,13 @@ import {
 import {
   MONO_STYLE_KNOBS,
   MULTICOLOR_STYLE_KNOBS,
+  effectiveRangeMin,
   knobKeys,
   resolveStyleKnobConfig,
   styleKnobDefaults,
   type KnobDescriptor,
   type MasterStyleFamily,
+  type RangeKnob,
 } from './styleKnobs'
 import en from '../locales/en.json'
 import fr from '../locales/fr.json'
@@ -316,4 +318,58 @@ describe('styleKnobs', () => {
       })
     })
   }
+})
+
+describe('effectiveRangeMin (pen-width floor)', () => {
+  const width: RangeKnob = {
+    kind: 'range',
+    key: 'stroke_width',
+    min: 0.4,
+    max: 2.0,
+    step: 0.1,
+    labelKey: 'mono.strokeWidth',
+    penFloor: 'width',
+  }
+  const radius: RangeKnob = {
+    kind: 'range',
+    key: 'dot_radius',
+    min: 0.11,
+    max: 0.56,
+    step: 0.1,
+    labelKey: 'mono.dotRadius',
+    penFloor: 'radius',
+  }
+  const plain: RangeKnob = {
+    kind: 'range',
+    key: 'density',
+    min: 0.01,
+    max: 0.1,
+    step: 0.005,
+    labelKey: 'mono.dotDensity',
+  }
+
+  it('floors a line-width knob at the pen tip diameter', () => {
+    // 0.8 mm pen > the 0.4 descriptor min → tip diameter wins.
+    expect(effectiveRangeMin(width, 0.8)).toBe(0.8)
+  })
+
+  it('floors a dot-radius knob at half the pen tip diameter', () => {
+    // A 0.8 mm tip can't make a dot smaller than 0.4 mm radius.
+    expect(effectiveRangeMin(radius, 0.8)).toBe(0.4)
+  })
+
+  it('keeps the descriptor min when the pen is thinner than the floor', () => {
+    expect(effectiveRangeMin(width, 0.2)).toBe(0.4)
+    expect(effectiveRangeMin(radius, 0.1)).toBe(0.11)
+  })
+
+  it('ignores knobs without a penFloor', () => {
+    expect(effectiveRangeMin(plain, 0.8)).toBe(0.01)
+  })
+
+  it('falls back to the descriptor min when no pen width is known', () => {
+    expect(effectiveRangeMin(width, null)).toBe(0.4)
+    expect(effectiveRangeMin(width, undefined)).toBe(0.4)
+    expect(effectiveRangeMin(width, 0)).toBe(0.4)
+  })
 })

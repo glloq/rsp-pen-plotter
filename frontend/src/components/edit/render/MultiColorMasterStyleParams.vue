@@ -17,6 +17,12 @@ import MasterStyleKnobs from './MasterStyleKnobs.vue'
 
 const props = defineProps<{
   styleId: string
+  /**
+   * Smallest pen tip diameter (mm) among the colours this style draws
+   * with — floors the physical mark knobs (``dot_radius``,
+   * ``stroke_width``) at the thinnest mark any installed pen can make.
+   */
+  minPenWidthMm?: number | null
 }>()
 
 const { t } = useI18n()
@@ -60,7 +66,13 @@ function setKnob<K extends string>(key: K, value: unknown): void {
 <template>
   <div class="space-y-3">
     <!-- ===== Per-style knob block — declarative (data/styleKnobs.ts) ===== -->
-    <MasterStyleKnobs family="multicolor" :style-id="styleId" :knobs="knobs" @set="setKnob" />
+    <MasterStyleKnobs
+      family="multicolor"
+      :style-id="styleId"
+      :knobs="knobs"
+      :min-pen-width-mm="minPenWidthMm"
+      @set="setKnob"
+    />
 
     <p class="text-[10px] text-slate-500">
       {{ style.descriptionKey ? t(style.descriptionKey) : '' }}

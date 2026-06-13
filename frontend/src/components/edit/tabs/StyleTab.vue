@@ -6,6 +6,7 @@ import { useFileManager } from '../../../composables/useFileManager'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { resolveEffectivePalette } from '../../../lib/effectivePalette'
 import { uniquePalette } from '../../../lib/paletteColors'
+import { canonicalHex, strokeWidthMmByHex } from '../../../lib/penWidth'
 import { useAvailableColorsStore } from '../../../stores/availableColors'
 import { useJobStore } from '../../../stores/job'
 import { usePaletteSourceStore } from '../../../stores/paletteSource'
@@ -64,6 +65,29 @@ const availableHexes = computed<string[]>(() => availableColorsStore.ordered.map
 const effectivePalette = computed<string[]>(() =>
   resolveEffectivePalette(paletteSource.source, installedPenColors.value, availableHexes.value),
 )
+
+// Pen tip diameters (mm) keyed by colour, from the owned-ink inventory.
+// These floor the per-style "dot radius" / "stroke width" knobs at the
+// physical mark the chosen pen makes — you can't draw thinner than the
+// tip. ``null`` when the colour carries no declared width.
+const strokeWidthByHex = computed(() => strokeWidthMmByHex(availableColorsStore.colors))
+
+const monoPenWidthMm = computed<number | null>(
+  () => strokeWidthByHex.value.get(canonicalHex(draft.mono.value.ink_color)) ?? null,
+)
+
+// Multicolour: floor at the THINNEST pen in the effective palette — the
+// global knob applies to every colour, and the thinnest mark achievable
+// across them is set by the finest tip. Thicker pens simply draw their
+// own (wider) tip regardless of the knob.
+const multicolorPenWidthMm = computed<number | null>(() => {
+  let min: number | null = null
+  for (const hex of effectivePalette.value) {
+    const w = strokeWidthByHex.value.get(canonicalHex(hex))
+    if (w !== undefined && (min === null || w < min)) min = w
+  }
+  return min
+})
 
 // When the operator turned ``palette-follows-pens`` on AND the
 // effective palette has at least one chip, mirror it into the draft
@@ -176,7 +200,11 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
           @update:model-value="onMasterStyleChange"
         />
 
-        <MasterStyleParams :bitmap="bitmap" :style-id="draft.monoMasterStyleId.value" />
+        <MasterStyleParams
+          :bitmap="bitmap"
+          :style-id="draft.monoMasterStyleId.value"
+          :min-pen-width-mm="monoPenWidthMm"
+        />
 
         <p
           class="rounded border border-slate-700 bg-slate-900/40 px-2 py-1 text-[10px] leading-snug text-slate-400"
@@ -199,7 +227,10 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
           @update:model-value="onMulticolorMasterStyleChange"
         />
 
-        <MultiColorMasterStyleParams :style-id="draft.multicolorMasterStyleId.value" />
+        <MultiColorMasterStyleParams
+          :style-id="draft.multicolorMasterStyleId.value"
+          :min-pen-width-mm="multicolorPenWidthMm"
+        />
       </div>
 
       <PaletteCard
