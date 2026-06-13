@@ -19,7 +19,7 @@ const i18n = createI18n({
         estimate: 'Est.',
         estimatePending: '— generate to estimate',
         estimatePendingHint: 'Generate the G-code for a realistic estimate.',
-        penChanges: 'Pen changes',
+        penChanges: 'Colour changes',
       },
       sheet: { outOfBounds: 'Out of bounds' },
       preflight: { missingPens: 'Install pen {slots}' },
@@ -160,8 +160,8 @@ describe('AppFooter', () => {
     expect(wrapper.find('[data-test="footer-estimate-pending"]').exists()).toBe(false)
     // 125 s → 2m 05s.
     expect(wrapper.text()).toContain('2m 05s')
-    // Pen changes come from the same preflight report.
-    expect(wrapper.text()).toContain('Pen changes')
+    // Colour changes come from the same preflight report.
+    expect(wrapper.text()).toContain('Colour changes')
     expect(wrapper.text()).toContain('3')
   })
 

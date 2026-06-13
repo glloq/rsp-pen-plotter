@@ -772,7 +772,7 @@
     "estimate": "Est.",
     "estimatePending": "— generate to estimate",
     "estimatePendingHint": "Generate the G-code to get a realistic time estimate (includes pen-up travel and tool changes).",
-    "penChanges": "Pen changes"
+    "penChanges": "Colour changes"
   },
   "settings": {
     "title": "Settings",
@@ -913,7 +913,7 @@
     "rerenderFailed": "Layer re-render failed.",
     "rerenderUnavailable": "Re-rendering is unavailable; re-upload the file to apply the new style.",
     "rerenderCacheMiss": "Server-side cache expired — click Apply to run the full render.",
-    "generateMovedHint": "Generate G-code lives in the Plan header — close this dialog and click the green button on the top-right of the preview.",
+    "generateHint": "Click \"Generate G-code\" at the top of the preview to run optimisation, preflight and generation.",
     "algoSettings": "{algorithm} settings",
     "nearestPenHint": "Pen #{slot} ({color}) — distance {distance}. Click to assign.",
     "penWarning": "Source colour {color} has no perfect pen — closest is slot #{slot} ({penColor}).",
@@ -997,7 +997,7 @@
     "failed": "Preflight check failed.",
     "size": "Drawing size",
     "estimate": "Estimated time",
-    "penChanges": "Pen changes",
+    "penChanges": "Colour changes",
     "missingPens": "Pen slot(s) {slots} are assigned but not installed; install them or reassign before generating."
   },
   "generate": {

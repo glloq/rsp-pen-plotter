@@ -69,10 +69,13 @@ function formatDuration(seconds: number): string {
         </ul>
       </div>
 
+      <!-- Pre-generation guidance only: once metrics / preflight land
+           the panel speaks for itself, so the hint would just be noise. -->
       <p
+        v-if="!store.metrics && !store.preflight"
         class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400"
       >
-        {{ t('layers.generateMovedHint') }}
+        {{ t('layers.generateHint') }}
       </p>
 
       <p

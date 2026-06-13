@@ -109,9 +109,9 @@ async function onStop(): Promise<void> {
       <span
         class="rounded bg-sky-900/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-300"
         data-test="header-version-badge"
-        title="v0.2 wired"
+        title="v0.3"
       >
-        v0.2
+        v0.3
       </span>
     </div>
 
