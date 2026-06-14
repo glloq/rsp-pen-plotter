@@ -418,10 +418,15 @@ function applyOpacityOverlay(): void {
   // N queries. Defaults the implicit 100 % case so groups whose layer
   // we don't recognise stay at 1.0 instead of inheriting a stale value
   // left over from a previous SVG.
+  // A hidden layer (the ink chip's eye toggle) collapses to opacity 0 so
+  // the colour disappears from the preview entirely — the backend
+  // /rerender still returns every layer, so this client-side overlay is
+  // what actually realises the "cacher cette couleur" affordance.
   const opacityById = new Map<string, number>()
   for (const layer of job.layers) {
     const pct = layer.opacity_percent ?? 100
-    opacityById.set(layer.layer_id, Math.max(0, Math.min(100, pct)) / 100)
+    const visible = job.isVisible(layer.layer_id)
+    opacityById.set(layer.layer_id, visible ? Math.max(0, Math.min(100, pct)) / 100 : 0)
   }
   // The bitmap / vector / text pipelines all label each per-layer
   // group with ``inkscape:label="color-XXXXXX"`` (= layer_id). The
@@ -453,7 +458,10 @@ watch(
   },
 )
 watch(
-  () => job.layers.map((l) => `${l.layer_id}:${l.opacity_percent ?? 100}`).join('|'),
+  () =>
+    job.layers
+      .map((l) => `${l.layer_id}:${l.opacity_percent ?? 100}:${job.isVisible(l.layer_id) ? 1 : 0}`)
+      .join('|'),
   () => applyOpacityOverlay(),
 )
 

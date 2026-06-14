@@ -483,6 +483,118 @@ describe('EditModalV2 (beginner single-screen)', () => {
     // tests (useBitmapDraft.test.ts).
   })
 
+  it('toggles layer visibility from the ink chip eye', async () => {
+    const { useJobStore } = await import('../../stores/job')
+    const job = useJobStore()
+    const id = job.addEmptyPlacement()
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            job_id: 'job-1',
+            rerenderable: true,
+            source_file: 'photo.jpg',
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>',
+            layers: [
+              {
+                layer_id: 'color-112233',
+                source_color: '#112233',
+                target_pen_slot: null,
+                draw_order: 0,
+                total_length_mm: 100,
+                path_count: 1,
+                bbox: { x_min: 0, y_min: 0, x_max: 100, y_max: 100 },
+                optimize: true,
+                simplify_tolerance_mm: 0,
+                drawing_speed_mm_s: null,
+                color_label: null,
+                pause_before: 'auto',
+                assigned_color_hex: null,
+                color_assignment: 'auto',
+              },
+            ],
+          }
+        : p,
+    )
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    expect(job.isVisible('color-112233')).toBe(true)
+    await wrapper.find('[data-test="modal-v2-ink-color-112233"]').trigger('click')
+    // The eye writes straight to the visibility map — no rerender needed,
+    // EditPreviewPane folds it into its opacity overlay.
+    expect(job.isVisible('color-112233')).toBe(false)
+  })
+
+  it('quick-picks a new ink for a layer from the chip dropdown', async () => {
+    const { useJobStore } = await import('../../stores/job')
+    const { useAvailableColorsStore } = await import('../../stores/availableColors')
+    const job = useJobStore()
+    const inventory = useAvailableColorsStore()
+    inventory.colors = [
+      {
+        color_id: 'id-0',
+        hex: '#ff0000',
+        name: 'rouge',
+        position: 0,
+        stroke_width_mm: 0.5,
+        odometer_mm: 0,
+        created_at: '',
+      },
+    ]
+    const id = job.addEmptyPlacement()
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            job_id: 'job-1',
+            rerenderable: true,
+            source_file: 'photo.jpg',
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>',
+            layers: [
+              {
+                layer_id: 'color-112233',
+                source_color: '#112233',
+                target_pen_slot: null,
+                draw_order: 0,
+                total_length_mm: 100,
+                path_count: 1,
+                bbox: { x_min: 0, y_min: 0, x_max: 100, y_max: 100 },
+                optimize: true,
+                simplify_tolerance_mm: 0,
+                drawing_speed_mm_s: null,
+                color_label: null,
+                pause_before: 'auto',
+                assigned_color_hex: null,
+                color_assignment: 'auto',
+              },
+            ],
+          }
+        : p,
+    )
+    const wrapper = mountModal({ ...PLACEMENT_PROPS, attachTo: document.body })
+    await flushPromises()
+
+    // The dropdown is teleported to <body> (so the scrollable preview
+    // column can't clip it), so we assert against document.body, not the
+    // wrapper subtree.
+    const menuSel = '[data-test="modal-v2-ink-menu-color-112233"]'
+    expect(document.body.querySelector(menuSel)).toBeNull()
+    await wrapper.find('[data-test="modal-v2-ink-more-color-112233"]').trigger('click')
+    expect(document.body.querySelector(menuSel)).not.toBeNull()
+
+    const pick = document.body.querySelector<HTMLElement>(
+      '[data-test="modal-v2-ink-pick-color-112233-ff0000"]',
+    )!
+    pick.click()
+    await nextTick()
+    const layer = job.selectedPlacement!.layers[0]!
+    expect(layer.assigned_color_hex).toBe('#ff0000')
+    expect(layer.color_assignment).toBe('manual')
+    // Picking closes the menu.
+    expect(document.body.querySelector(menuSel)).toBeNull()
+    wrapper.unmount()
+  })
+
   it('hides the intent grid and mounts the expert panel when uiMode is expert', async () => {
     // The header toggle / "Ouvrir l'éditeur complet" button flips
     // uiMode.mode to 'expert'; the modal must respond by swapping its
