@@ -23,6 +23,7 @@
 import { ref, type ComputedRef, type Ref } from 'vue'
 import { resolveAlgorithmPolicy } from '../domain/policy/client'
 import type { Goal, PaletteMode, PolicyDecision, PolicyPass, SourceKind } from '../domain/policy/schemas'
+import { errorMessage } from '../lib/errorMessage'
 import { useJobStore } from '../stores/job'
 
 export type PreviewInvalidation = 'render-only' | 'segment-and-render' | 'resolve-and-segment'
@@ -58,10 +59,6 @@ export interface PreviewPipelineDeps {
   ) => Promise<void>
   /** Debounce window for non-immediate schedules. Defaults to 300 ms. */
   debounceMs?: number
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {

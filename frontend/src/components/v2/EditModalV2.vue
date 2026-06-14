@@ -41,6 +41,7 @@ import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimat
 import { useFileManager } from '../../composables/useFileManager'
 import { useEditorPaletteSegmentation } from '../../composables/useEditorPaletteSegmentation'
 import { useEditorPreviewPipeline } from '../../composables/useEditorPreviewPipeline'
+import { useEditorConfirmation } from '../../composables/useEditorConfirmation'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayersSection from '../LayersSection.vue'
 import EditTabs, { type EditTabId } from '../edit/EditTabs.vue'
@@ -113,23 +114,10 @@ const goal = ref<Goal>('balanced')
 // lands the pane falls back to the original placement SVG so it's never
 // blank.
 
-// True while an expert draft is being committed and ``confirm`` is
-// waiting on it. Locks the footer actions (Apply / Generate) so the
-// operator can't double-fire mid-upload, and is what lets ``confirm``
-// await the upload before emitting — otherwise the parent could start
-// generating G-code from the pre-apply SVG.
-const applying = ref(false)
-// Reason the last expert apply failed, surfaced in the footer. Cleared
-// when a fresh apply starts. Non-null means ``confirm`` aborted instead
-// of generating from un-applied changes.
-const applyError = ref<string | null>(null)
-
-// Normalise an unknown thrown value to a human string without assuming
-// it's an ``Error`` (a rejected fetch / string throw would crash the
-// ``(err as Error).message`` cast).
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
+// The expert-apply + confirm logic — ``applying``, ``applyError``,
+// ``applyExpertDraft`` and ``confirm`` — lives in
+// ``useEditorConfirmation``, wired up below once ``bitmapDraft`` and
+// ``fileManager`` exist.
 
 const INTENTS: readonly Goal[] = ['fast', 'balanced', 'quality'] as const
 
@@ -219,71 +207,6 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
   // source change above, but ``schedule`` clears its pending debounce so
   // the two collapse into a single resolve instead of a double render.
   schedule('resolve-and-segment', { immediate: true })
-}
-
-async function applyExpertDraft(): Promise<boolean> {
-  // Commit the V1 draft mutations (image preprocess, segmentation
-  // method, master style, typography) back to the placement by
-  // re-running /upload with the freshly built options bundle. The
-  // ``useFileManager.uploadSelected`` path is what the V1 modal's
-  // "Apply" button drove; we reuse it verbatim so the existing
-  // confirmation modal (overwrite warning, multi-pass reupload
-  // warning) shows up in the same shape the operator already knows.
-  // No-op when nothing is dirty so a stray click can't trigger a
-  // pointless re-upload.
-  //
-  // Returns whether the placement is safe to generate from: ``true``
-  // when there was nothing to apply or the upload landed, ``false``
-  // when the upload threw (``applyError`` then carries the reason and
-  // ``confirm`` must not emit). ``applying`` gates the footer buttons
-  // for the duration so a second click can't race a re-upload.
-  if (!bitmapDraft.isDirty.value) return true
-  applying.value = true
-  applyError.value = null
-  try {
-    await fileManager.uploadSelected()
-    return true
-  } catch (err) {
-    applyError.value = errorMessage(err)
-    return false
-  } finally {
-    applying.value = false
-  }
-}
-
-async function confirm(): Promise<void> {
-  if (!hasPlacement.value || !decision.value || applying.value) return
-  // In expert mode, an operator who tweaked the image / SVG / style
-  // cards expects their changes to land in the final G-code. Commit
-  // any pending draft mutations through the V1 ``uploadSelected`` path
-  // and AWAIT it before the V2 confirm fires, so the placement the
-  // parent receives is the freshly-converted one — never the pre-apply
-  // SVG. If the upload fails we surface ``applyError`` and bail without
-  // emitting, so a network hiccup can't generate from un-applied work.
-  if (uiMode.isExpert) {
-    const ok = await applyExpertDraft()
-    if (!ok) return
-    // ``applyExpertDraft`` may have re-uploaded and rehydrated the
-    // placement; re-check before emitting against possibly-cleared state.
-    if (!hasPlacement.value || !decision.value) return
-  }
-  if (customStylesActive.value) {
-    // Override the resolver's algorithm pick with the operator's manual
-    // stack while keeping every other field the resolver decided
-    // (segmentation method, quality tier, fallback chain, …). First
-    // pass mirrors ``default_algorithm`` / ``default_options`` per the
-    // PolicyDecision contract (see schemas.ts ``default_passes`` doc).
-    const passes = customPasses.value
-    const first = passes[0]!
-    emit('confirm', {
-      ...decision.value,
-      default_algorithm: first.algorithm,
-      default_options: first.algorithm_options,
-      default_passes: passes,
-    })
-    return
-  }
-  emit('confirm', decision.value)
 }
 
 // Swatches shown under the preview: one per layer of the active
@@ -704,6 +627,21 @@ watch(
 // expert tabs already mutate this singleton via their own imports;
 // reading it here is a no-op for the wiring.
 const bitmapDraft = useBitmapDraft()
+
+// Race-safe Generate: in expert mode this awaits the dirty-draft upload
+// before emitting ``confirm`` so the parent never generates from the
+// pre-apply SVG. Owns ``applying`` / ``applyError`` (read by the footer).
+const { applying, applyError, applyExpertDraft, confirm } = useEditorConfirmation({
+  isExpert: computed(() => uiMode.isExpert),
+  hasPlacement,
+  decision,
+  isDirty: bitmapDraft.isDirty,
+  customStylesActive,
+  customPasses,
+  fileManager,
+  onConfirm: (d) => emit('confirm', d),
+})
+
 const showTextTab = computed<boolean>(() => fileManager.kind.value === 'typography')
 const defaultExpertTab = computed<EditTabId>(() => {
   if (fileManager.kind.value === 'typography') return 'text'
