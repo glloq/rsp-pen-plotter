@@ -14,7 +14,7 @@
 // click. Power-user details (algorithme, couches, raisonnement) move to
 // the full editor, reachable via "Ouvrir l'éditeur complet".
 
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { libraryFilePreviewImageUrl, type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
@@ -47,6 +47,7 @@ import type { EditTabId } from '../edit/EditTabs.vue'
 import SheetPicker from './SheetPicker.vue'
 import { BEGINNER_STYLES, deriveBeginnerStack, type CustomStyleSelection } from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
+import EditorExpertPanel from './EditorExpertPanel.vue'
 import EditorHeader from './EditorHeader.vue'
 import EditorFooter from './EditorFooter.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
@@ -76,19 +77,6 @@ const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'confirm', decision: PolicyDecision): void
 }>()
-
-// Expert-mode surfaces are async-loaded: they pull in the heavy V1 source
-// cards (preprocess, segmentation, master style, typography) that an
-// assisted-mode operator never touches. Lazy-loading keeps them out of
-// the modal's initial chunk so the default (assisted) open stays light;
-// they fetch the first time the operator flips to expert. All render
-// behind ``v-if="uiMode.isExpert"`` so there's no flash on first paint.
-const EditTabs = defineAsyncComponent(() => import('../edit/EditTabs.vue'))
-const ImageTab = defineAsyncComponent(() => import('../edit/tabs/ImageTab.vue'))
-const SvgTab = defineAsyncComponent(() => import('../edit/tabs/SvgTab.vue'))
-const StyleTab = defineAsyncComponent(() => import('../edit/tabs/StyleTab.vue'))
-const TextTab = defineAsyncComponent(() => import('../edit/tabs/TextTab.vue'))
-const LayersSection = defineAsyncComponent(() => import('../LayersSection.vue'))
 
 const { t } = useI18n()
 const ui = useUiStore()
@@ -738,6 +726,7 @@ watch(
     <div
       ref="dialogRoot"
       class="modal-v2"
+      :class="{ 'is-expert': uiMode.isExpert }"
       role="dialog"
       aria-modal="true"
       :aria-label="t('v2.modal.title')"
@@ -904,25 +893,13 @@ watch(
              dropped. The preview pane on the left stays mounted in
              both modes so the operator never loses sight of the
              result. -->
-            <section
+            <EditorExpertPanel
               v-if="uiMode.isExpert"
-              class="modal-v2__expert"
-              data-test="modal-v2-expert-panel"
-            >
-              <EditTabs
-                :model-value="activeExpertTab"
-                :layer-count="props.layers?.length ?? 0"
-                :show-text="showTextTab"
-                @update:model-value="selectExpertTab"
-              />
-              <div class="modal-v2__expert-body">
-                <ImageTab v-if="activeExpertTab === 'image'" />
-                <SvgTab v-else-if="activeExpertTab === 'svg'" />
-                <StyleTab v-else-if="activeExpertTab === 'style'" />
-                <TextTab v-else-if="activeExpertTab === 'text'" />
-                <LayersSection v-else-if="activeExpertTab === 'layers'" />
-              </div>
-            </section>
+              :active-tab="activeExpertTab"
+              :layer-count="props.layers?.length ?? 0"
+              :show-text="showTextTab"
+              @update:active-tab="selectExpertTab"
+            />
 
             <!-- Assisted surface: intent + palette + custom-style stack.
              Single-screen, three clicks max to a usable Generate. -->
@@ -1095,10 +1072,11 @@ watch(
   color: #f1f5f9;
 }
 /* Expert mode used to widen the modal here; the base ``.modal-v2``
-   rule already maxes at 1280 px for both modes so the split has
-   room either way. Kept the selector for future expert-only style
-   overrides. */
-.modal-v2:has(.modal-v2__expert) {
+   rule already maxes at 1280 px for both modes so the split has room
+   either way. Kept the hook (now a plain ``is-expert`` class rather than
+   ``:has(.modal-v2__expert)``, since the expert panel moved into its own
+   scoped component) for future expert-only style overrides. */
+.modal-v2.is-expert {
   width: min(98vw, 1280px);
 }
 
@@ -1143,11 +1121,7 @@ watch(
 /* The expert-mode controls drawer inside the right column. No own
    surface: the tabs and cards inside carry their slate-800 panels
    directly on the modal's slate-900 background, like the main view. */
-.modal-v2__expert {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
+/* Expert surface (tab strip + tab content) lives in EditorExpertPanel.vue. */
 
 /* Narrow viewports (tablet portrait, phones): collapse to a single
    column so the operator can still reach every control. */
