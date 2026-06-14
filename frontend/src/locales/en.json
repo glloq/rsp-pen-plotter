@@ -242,6 +242,7 @@
   "mono": {
     "pen": "Pen",
     "penNotInstalled": "Slot not marked as installed",
+    "penHint": "Choose which magazine slot draws this ink.",
     "modeLabel": "Render mode",
     "shades": "Number of shades",
     "shadesHint": "1 = a single layer, a single pen (no shading). Increase to split the image into grey bands — each band adds a layer and carries its own algorithm tuned by the chosen mode.",
@@ -496,7 +497,8 @@
     "multicolor": "Multi-colour",
     "multicolorHint": "Split the image into one layer per detected colour.",
     "monochrome": "Monochrome",
-    "monochromeHint": "Draw everything on a single layer with one pen."
+    "monochromeHint": "Draw everything on a single layer with one pen.",
+    "modeHint": "Switch any time — your colour and style settings are kept."
   },
   "palette": {
     "title": "Palette",
@@ -1081,6 +1083,7 @@
     "maxDim": "Max size (px)",
     "dropBackground": "Drop background",
     "bgLuminance": "Background threshold",
+    "bgLuminanceHint": "Pixels brighter than this (0–1) count as background when dropping it.",
     "cellSize": "Cell size (mm)",
     "density": "Density",
     "dotRadius": "Dot radius (mm)",
@@ -1137,7 +1140,9 @@
     "addColour": "Add colour",
     "postProcess": "Post-processing",
     "minRegion": "Min region (px)",
+    "minRegionHint": "Drop colour regions smaller than this many pixels (removes speckle).",
     "mergeDeltaE": "Merge ΔE",
+    "mergeDeltaEHint": "Merge palette colours closer than this perceptual distance (ΔE).",
     "render": "Render algorithm",
     "kind_fill": "Fill",
     "kind_lines": "Lines",

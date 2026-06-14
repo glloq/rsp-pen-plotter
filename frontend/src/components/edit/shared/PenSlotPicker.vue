@@ -71,5 +71,8 @@ function setSlot(index: number): void {
         <span v-if="!slot.installed" class="text-[9px] text-amber-400">·</span>
       </button>
     </div>
+    <p v-if="showLabel !== false" class="text-[10px] leading-snug text-slate-500">
+      {{ t('mono.penHint') }}
+    </p>
   </div>
 </template>

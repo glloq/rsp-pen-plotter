@@ -226,7 +226,42 @@ structurel (préalable utile à P1/P3) ; P4–P5 sont du polissage.
 
 ## 6. Effort & vérification
 
-Livrable **purement documentaire** — aucun fichier `.vue` modifié, aucun test/build à
-exécuter. Chaque constat cite un fichier (et une ligne quand pertinent) vérifiable, et
-chaque recommandation Pn renvoie aux fichiers concernés et à un axe. L'implémentation
-des P1–P5 fera l'objet d'une itération séparée, sur décision de l'opérateur.
+Chaque constat cite un fichier (et une ligne quand pertinent) vérifiable, et chaque
+recommandation Pn renvoie aux fichiers concernés et à un axe.
+
+---
+
+## 7. Statut : implémenté (2026-06)
+
+Les P1–P5 sont appliqués dans la même branche que cet audit.
+
+Deux primitives partagées ont été ajoutées sous `components/edit/shared/` :
+
+- **`LabeledSlider.vue`** — slider unifié : libellé (texte ou slot `#label`),
+  saisie numérique éditable + unité à droite (ou lecture seule via `formatValue`),
+  et hint optionnel. (P1)
+- **`CollapsibleCard.vue`** — carte slate unique avec en-tête repliable persistant
+  (`useAccordionPersistence`) et bouton **reset par section** optionnel
+  (`resettable` / `canReset`). (P2 + P3)
+
+Migrations :
+
+- **P1 (saisie numérique)** — `BasicAdjustmentsCard`, `LevelsCard`, `FiltersCard`
+  (via `LabeledSlider`) ; le rendu déclaratif des knobs `MasterStyleKnobs` (sliders
+  `range` non-`percent`) ; `MasterStyleParams` (bandes + seuil) ; `ColorCountSlider`
+  (nombre de couleurs) ; sliders `min-branch` et simplification de `SvgTab`.
+- **P2 (carte unique + repli)** — les 4 cartes Image, `SegmentationMethodCard` et
+  `PostProcessCard` passent par `CollapsibleCard` ; les sections avancées
+  *Mise en page* et *Page* de `TypographyCard` deviennent repliables (repliées par
+  défaut), les essentiels *Police* restent à plat.
+- **P3 (unités/bornes + reset)** — unités sur `PostProcessCard` (px, ΔE, 0–1) et
+  `LayerCard` (mm/s, mm) ; reset par section sur les 4 cartes Image et
+  `PostProcessCard` (en plus du reset global de l'onglet Image).
+- **P4 (aide)** — hints ajoutés à `ColorModeCard` (`printMode.modeHint`),
+  `PenSlotPicker` (`mono.penHint`) et aux champs de `PostProcessCard`
+  (`convert.minRegionHint` / `mergeDeltaEHint` / `bgLuminanceHint`). Le pattern
+  d'alertes conditionnelles de `ColorCountSlider` reste la référence.
+- **P5 (contrôle réservé)** — le toggle curve-fit désactivé de `SvgTab` est remplacé
+  par une note discrète non interactive avec tag « bientôt ».
+
+Vérifié : `vue-tsc --noEmit` ✓, `vitest run` (657 tests) ✓, `vite build` ✓, lint ✓.

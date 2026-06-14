@@ -301,7 +301,7 @@ const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }
         </p>
         <div class="grid grid-cols-2 gap-2 text-xs">
           <label class="text-slate-400">
-            {{ t('layers.speed') }}
+            {{ t('layers.speed') }} <span class="font-mono text-[10px] text-slate-500">mm/s</span>
             <input
               type="number"
               min="1"
@@ -312,7 +312,7 @@ const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }
             />
           </label>
           <label class="text-slate-400">
-            {{ t('layers.simplify') }}
+            {{ t('layers.simplify') }} <span class="font-mono text-[10px] text-slate-500">mm</span>
             <input
               type="number"
               min="0"

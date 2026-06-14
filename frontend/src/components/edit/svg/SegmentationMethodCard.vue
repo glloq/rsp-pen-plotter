@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import type { SegmentationMethod } from '../../../api/client'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
-import { useAccordionPersistence } from '../../../composables/useAccordionPersistence'
+import CollapsibleCard from '../shared/CollapsibleCard.vue'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 
 // Segmentation method picker + the primary parameter for the chosen
@@ -35,7 +35,6 @@ const props = defineProps<{
 const { t } = useI18n()
 const draft = useBitmapDraft()
 
-const expanded = useAccordionPersistence('segmentation', true)
 const SEG_METHODS: SegmentationMethod[] = [
   'kmeans',
   'kmeans_lab',
@@ -85,17 +84,12 @@ function commitThresholdOrder(): void {
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800">
-    <button
-      type="button"
-      class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
-      :aria-expanded="expanded"
-      @click="expanded = !expanded"
-    >
-      {{ t('convert.segmentation') }}
-      <span class="text-slate-500">{{ expanded ? '−' : '+' }}</span>
-    </button>
-    <div v-if="expanded" class="space-y-2 border-t border-slate-700 p-3 text-xs">
+  <CollapsibleCard
+    card-key="segmentation"
+    :title="t('convert.segmentation')"
+    :default-expanded="true"
+  >
+    <div class="space-y-2">
       <p
         v-if="isDocument"
         class="rounded border border-slate-700 bg-slate-900/50 px-2 py-1 text-[11px] leading-snug text-slate-400"
@@ -213,5 +207,5 @@ function commitThresholdOrder(): void {
         {{ t('convert.paletteDitherNote') }}
       </p>
     </div>
-  </div>
+  </CollapsibleCard>
 </template>
