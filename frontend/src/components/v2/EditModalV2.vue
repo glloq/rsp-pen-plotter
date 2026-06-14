@@ -1140,22 +1140,6 @@ watch(
 }
 /* Header (preflight/cost chips, mode toggle, close) lives in
    EditorHeader.vue. */
-.ghost-btn {
-  border: 1px solid #334155;
-  background: #1e293b;
-  color: #e2e8f0;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-.ghost-btn:hover:not(:disabled) {
-  background: #334155;
-}
-.ghost-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
 
 /* Preview pane, zoom/pan, sheet outline, view toggle, gesture hint
    and spinner all live in EditPreviewPane.vue now. */
@@ -1310,48 +1294,9 @@ watch(
   outline-offset: 2px;
 }
 
-/* Footer: Annuler on the left, expert link + Generate on the right. */
-/* Footer (Cancel / Apply / Generate) lives in EditorFooter.vue. */
+/* Footer (Cancel / Apply / Generate) lives in EditorFooter.vue.
+   Header preflight + estimate chips live in EditorHeader.vue. */
 
-/* Estimate + compatibility row. */
-.modal-v2__estimate {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin: 0.5rem 0 0.6rem;
-}
-.modal-v2__estimate-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.modal-v2__estimate-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  align-items: center;
-}
-.modal-v2__estimate-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid #334155;
-  border-radius: 999px;
-  background: #1e293b;
-  font-size: 0.75rem;
-  color: #cbd5e1;
-  font-variant-numeric: tabular-nums;
-}
-.modal-v2__estimate-icon {
-  font-size: 0.85rem;
-  line-height: 1;
-}
 /* Ink chips now act as visibility toggles. */
 .modal-v2__ink-item {
   position: relative;
@@ -1425,68 +1370,6 @@ watch(
   background: rgba(69, 26, 3, 0.7);
 }
 .modal-v2__ink-cta:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-
-/* Preflight checklist: one line of green / amber chips that
-   aggregates the four "am I ready to plot" signals. */
-.modal-v2__preflight {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin: 0.6rem 0 0;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid #334155;
-  background: #1e293b;
-  border-radius: 8px;
-}
-.modal-v2__preflight.is-all-ok {
-  background: rgba(2, 44, 34, 0.4);
-  border-color: #047857;
-}
-.modal-v2__preflight-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.modal-v2__preflight-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.modal-v2__preflight-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  border: 1px solid transparent;
-  background: #0f172a;
-}
-.modal-v2__preflight-chip.is-ok {
-  border-color: #047857;
-  color: #a7f3d0;
-  background: rgba(2, 44, 34, 0.4);
-}
-.modal-v2__preflight-chip.is-warn {
-  border-color: #b45309;
-  color: #fde68a;
-  background: rgba(69, 26, 3, 0.4);
-}
-.modal-v2__preflight-chip.is-actionable {
-  cursor: pointer;
-}
-.modal-v2__preflight-chip.is-actionable:hover {
-  background: rgba(69, 26, 3, 0.7);
-}
-.modal-v2__preflight-chip.is-actionable:focus-visible {
   outline: 2px solid #10b981;
   outline-offset: 2px;
 }
