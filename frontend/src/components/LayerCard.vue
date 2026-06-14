@@ -185,7 +185,10 @@ const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }
            operator's primary question ("what colour is this?") before
            any path-level tuning. -->
       <section class="space-y-2">
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <p
+          class="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
+        >
+          <span aria-hidden="true" class="text-slate-600">●</span>
           {{ t('layers.sectionColor') }}
         </p>
         <div class="grid grid-cols-2 gap-2 text-xs">
@@ -296,7 +299,10 @@ const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }
            this layer: drawing speed, curve simplification, travel
            optimisation, preview opacity and the pen-change pause. -->
       <section class="space-y-2 border-t border-slate-700/60 pt-2.5">
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <p
+          class="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
+        >
+          <span aria-hidden="true" class="text-slate-600">⌇</span>
           {{ t('layers.sectionPath') }}
         </p>
         <div class="grid grid-cols-2 gap-2 text-xs">
@@ -389,7 +395,10 @@ const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }
         <div
           class="flex items-center justify-between text-[10px] uppercase tracking-wider text-slate-500"
         >
-          <span>{{ t('layers.printStyle') }}</span>
+          <span class="flex items-center gap-1.5">
+            <span aria-hidden="true" class="text-slate-600">▦</span>
+            {{ t('layers.printStyle') }}
+          </span>
           <div class="flex items-center gap-1">
             <button
               v-if="!isMultiPass"

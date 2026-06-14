@@ -18,6 +18,7 @@ import MultiColorMasterStyleParams from '../render/MultiColorMasterStyleParams.v
 import PaletteCard from '../source/PaletteCard.vue'
 import PenSlotPicker from '../shared/PenSlotPicker.vue'
 import PostProcessCard from '../style/PostProcessCard.vue'
+import TabEmptyState from '../shared/TabEmptyState.vue'
 
 // Style tab — focused on *what* the rendered bitmap output looks like:
 //   - bitmap mono  → master style picker, per-style params, pen slot,
@@ -251,7 +252,5 @@ async function onMulticolorMasterStyleChange(id: string): Promise<void> {
     <PostProcessCard :bitmap="bitmap" />
   </section>
 
-  <p v-else class="text-[11px] text-slate-500">
-    {{ t('style.notApplicable') }}
-  </p>
+  <TabEmptyState v-else :message="t('style.notApplicable')" />
 </template>

@@ -265,3 +265,26 @@ Migrations :
   par une note discrète non interactive avec tag « bientôt ».
 
 Vérifié : `vue-tsc --noEmit` ✓, `vitest run` (657 tests) ✓, `vite build` ✓, lint ✓.
+
+---
+
+## 8. Statut : polissage & découvrabilité (itération 2, 2026-06)
+
+Seconde passe après vérification d'une liste de pistes plus large (certaines écartées
+car fausses : le panneau scrolle déjà ; le hint de sync des calques est déjà explicite).
+Retenu : polissage des contrôles restants + découvrabilité.
+
+- **`TabEmptyState.vue`** (nouveau, `components/edit/shared/`) — état « non applicable /
+  pas de source » centré (icône + message), adopté par les 4 onglets à la place des
+  lignes `text-slate-500` nues.
+- **`PaletteCard`** — validation/normalisation du hex saisi (`#rgb` / `#rrggbb`) pour
+  ne jamais corrompre la palette ni désynchroniser le `<input type=color>` ; champ texte
+  avec `maxlength`/`placeholder`/`aria-label` ; bouton « Suivre les stylos » désactivé
+  avec `cursor-not-allowed` + tooltip explicatif.
+- **`LayerBulkBar`** — bouton « Réinitialiser les overrides » : hover rose (sémantique
+  destructive) → neutre/emerald + tooltip `layers.bulkResetHint` ; fallback de tooltip
+  sur le sélecteur de style.
+- **`LayerCard`** — glyphe d'icône en tête des 3 sections (Couleur · Tracé · Rendu) pour
+  un repérage visuel rapide.
+
+Vérifié : `vue-tsc --noEmit` ✓, `vitest run` (657 tests) ✓, `vite build` ✓, `eslint` ✓.

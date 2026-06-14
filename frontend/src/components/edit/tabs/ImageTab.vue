@@ -11,6 +11,7 @@ import BasicAdjustmentsCard from '../image/BasicAdjustmentsCard.vue'
 import LevelsCard from '../image/LevelsCard.vue'
 import FiltersCard from '../image/FiltersCard.vue'
 import TransformCard from '../image/TransformCard.vue'
+import TabEmptyState from '../shared/TabEmptyState.vue'
 
 // Image tab — photo-editor adjustments (brightness, contrast,
 // saturation, gamma, levels, sharpen/blur, invert, grayscale, rotate,
@@ -59,11 +60,7 @@ function resetPreprocess(): void {
     <TransformCard :preprocess="preprocess" />
   </section>
 
-  <p v-else-if="!fm.hasSource.value" class="text-[11px] text-slate-500">
-    {{ t('preprocess.noSource') }}
-  </p>
+  <TabEmptyState v-else-if="!fm.hasSource.value" :message="t('preprocess.noSource')" />
 
-  <p v-else class="text-[11px] text-slate-500">
-    {{ t('preprocess.notApplicable') }}
-  </p>
+  <TabEmptyState v-else :message="t('preprocess.notApplicable')" />
 </template>
