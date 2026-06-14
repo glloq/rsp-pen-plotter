@@ -104,6 +104,21 @@ watch(
   [draft.paletteFollowsPens, effectivePalette, () => bitmap.value.num_colors],
   ([follows, colors, n]) => {
     if (printMode.value !== 'multicolor') return
+    // The operator explicitly picked an image-clustering method
+    // (kmeans / kmeans_lab) on the SVG tab. That means "render the
+    // image's own colours", which directly contradicts palette-follows-
+    // pens (snap every cluster onto the pen rack as a fixed palette).
+    // Bail entirely so entering the Style tab doesn't silently rewrite
+    // the palette (the "couleurs plus les mêmes / mauvais ordre" report)
+    // nor flip the method back to ``fixed_palette``. ``fixed_palette`` is
+    // still seeded below when the operator hasn't chosen a method.
+    if (
+      draft.segmentationTouched.value.has('method') &&
+      (bitmap.value.segmentation_method === 'kmeans' ||
+        bitmap.value.segmentation_method === 'kmeans_lab')
+    ) {
+      return
+    }
     if (follows && colors.length) {
       // Dedupe before slicing: two installed pens with the same ink
       // would otherwise eat two of the operator's N colour slots while
