@@ -18,7 +18,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { libraryFilePreviewImageUrl, type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
-import { resolveAlgorithmPolicy } from '../../domain/policy/client'
 import type {
   Goal,
   PaletteMode,
@@ -26,7 +25,6 @@ import type {
   PolicyPass,
   SourceKind,
 } from '../../domain/policy/schemas'
-import { resolveEffectivePalette } from '../../lib/effectivePalette'
 import { assignPoolHexes } from '../../lib/nearestColor'
 import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
 import { recolorPreviewSvg } from '../../lib/previewRecolor'
@@ -41,6 +39,8 @@ import { useEditState } from '../../composables/useEditState'
 import { useAlgorithmsStore } from '../../stores/algorithms'
 import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimator'
 import { useFileManager } from '../../composables/useFileManager'
+import { useEditorPaletteSegmentation } from '../../composables/useEditorPaletteSegmentation'
+import { useEditorPreviewPipeline } from '../../composables/useEditorPreviewPipeline'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayersSection from '../LayersSection.vue'
 import EditTabs, { type EditTabId } from '../edit/EditTabs.vue'
@@ -105,17 +105,13 @@ const paletteMode = ref<PaletteMode>(
 // single click if they want.
 const goal = ref<Goal>('balanced')
 
-const decision = ref<PolicyDecision | null>(null)
-const resolving = ref(false)
-const resolveError = ref<string | null>(null)
-
-// Live preview state. ``renderedSvg`` holds the adapted result; until
-// it lands we fall back to the original placement SVG so the pane is
-// never blank.
-const renderedSvg = ref<string | null>(null)
-const previewLoading = ref(false)
-const previewError = ref(false)
-let previewController: AbortController | null = null
+// The live preview state (``decision``, ``resolving``, ``resolveError``,
+// ``renderedSvg``, ``previewLoading``, ``previewError``) plus the single
+// preview scheduler are owned by ``useEditorPreviewPipeline`` — created
+// once ``fileManager`` exists (it feeds the palette re-segmentation) and
+// destructured below. ``renderedSvg`` holds the adapted result; until it
+// lands the pane falls back to the original placement SVG so it's never
+// blank.
 
 // True while an expert draft is being committed and ``confirm`` is
 // waiting on it. Locks the footer actions (Apply / Generate) so the
@@ -192,270 +188,11 @@ const customPasses = computed<PolicyPass[]>(() =>
   }),
 )
 
-/**
- * Resolve the algorithm for the current intent, then render the real
- * result across every layer. Aborts any in-flight preview so rapid
- * intent toggles don't pile up stale renders. Errors degrade
- * gracefully — the original SVG keeps showing and Generate stays
- * usable as long as we have a decision.
- */
-async function resolveAndPreview(): Promise<void> {
-  if (!hasPlacement.value) return
-  previewController?.abort()
-  const controller = new AbortController()
-  previewController = controller
-
-  resolving.value = true
-  resolveError.value = null
-  previewError.value = false
-  try {
-    const d = await resolveAlgorithmPolicy({
-      source_kind: sourceKind.value,
-      goal: goal.value,
-      palette_mode: paletteMode.value,
-      available_colors_count: props.availableColorsCount ?? 1,
-      image_megapixels: props.imageMegapixels ?? null,
-      layer_count_estimate: props.layers?.length || 1,
-      is_mono_pen_machine: Boolean(props.isMonoPenMachine),
-    })
-    if (controller.signal.aborted) return
-    decision.value = d
-  } catch (err) {
-    resolveError.value = (err as Error).message
-    resolving.value = false
-    return
-  }
-  resolving.value = false
-
-  // Apply the decision's segmentation BEFORE rendering: /rerender only
-  // re-inks the clusters the original /upload produced — with the
-  // default 4-colour kmeans, picking 6 inks still rendered 4 muddy
-  // clusters snapped to whatever pool colour was nearest ("I selected
-  // 6 colours and the preview only shows one"). Re-converting with
-  // perceptual clustering (k = pool size) + the backend's ``ink_pool``
-  // remap makes every cluster draw with its own pool ink — including on
-  // low-saturation photos, where the previous fixed_palette approach
-  // sent every pixel to the black/grey pens and left the saturated
-  // ones empty no matter how many the operator picked.
-  await ensureSegmentationMatchesDecision(controller)
-  if (controller.signal.aborted) return
-
-  // Now render the adapted result. Keep the previous render visible
-  // until the new one lands to avoid a flash back to the original.
-  await renderAdaptedPreview(controller)
-}
-
-// ============================ PALETTE → SEGMENTATION ===================
-// The pool the operator is actually pointing at: machine pens, the
-// available-colours inventory, or their union, per the global palette
-// source. Mirrors ``stores/job.currentEffectivePalette`` so the
-// segmentation below lands on exactly the swatches the chips show.
-const effectivePool = computed<string[]>(() => {
-  const pens = (job.selectedProfile?.pens ?? [])
-    .filter((p) => p.installed && p.color)
-    .map((p) => p.color)
-  const available = availableColors.ordered.map((c) => c.hex)
-  return resolveEffectivePalette(paletteSource.source, pens, available)
-})
-
-/**
- * Re-convert the placement when the resolver wants a palette-driven
- * split but the cached segmentation was built with something else (or
- * an older pool). Round-trips /upload with the placement's own source
- * bytes so the new cluster set, layers and rerender cache all match
- * the operator's pool. The conversion is perceptual clustering
- * (``kmeans_lab``, k = pool size) + the backend's ``ink_pool`` remap —
- * each cluster draws with its own distinct pool ink, which keeps
- * working on low-saturation photos where the previous ``fixed_palette``
- * nearest-colour snap starved every non-grey pen. Skipped (cheap) when
- * the persisted ``last_options`` already carry the same pool, so this
- * runs once per placement × pool, not on every preview.
- */
-async function ensureSegmentationMatchesDecision(controller: AbortController): Promise<void> {
-  const d = decision.value
-  if (!d || d.segmentation_method !== 'fixed_palette') return
-  const placement = job.selectedPlacement
-  if (!placement || !placement.source_mime.startsWith('image/')) return
-  const pool = effectivePool.value.map((h) => h.toLowerCase())
-  // A 0/1-colour pool can't drive a multicolour split — keep whatever
-  // segmentation the upload picked (mono pipelines own that case).
-  if (pool.length < 2) return
-  const last = (placement.last_options ?? {}) as Record<string, unknown>
-  const lastPool = (Array.isArray(last.ink_pool) ? (last.ink_pool as string[]) : []).map((h) =>
-    h.toLowerCase(),
-  )
-  if (
-    last.segmentation_method === 'kmeans_lab' &&
-    lastPool.length === pool.length &&
-    lastPool.every((h, i) => h === pool[i])
-  ) {
-    return
-  }
-  await fileManager.ensureSelectedFile()
-  const file = fileManager.selectedFile.value
-  if (!file || controller.signal.aborted) return
-  previewLoading.value = true
-  const built = (fileManager.buildOptions() ?? {}) as Record<string, unknown>
-  // Ask for as many clusters as inks owned (+1 for the paper-white
-  // background cluster k-means spends before drop_background removes it).
-  // Over-asking is harmless now that the ink remap is plain nearest-match
-  // with reuse: a 3-colour image against an 8-ink pool collapses its
-  // extra clusters back onto the nearest inks (3 faithful colours), while
-  // a genuine 6-colour image still uses all 6 inks. The backend also caps
-  // k at the image's distinct colours; 16 stays the hard ceiling.
-  const dropBackground = built.drop_background !== false
-  const numColors = Math.min(pool.length + (dropBackground ? 1 : 0), 16)
-  const options = {
-    ...built,
-    segmentation_method: 'kmeans_lab',
-    segmentation_options: {},
-    num_colors: numColors,
-    ink_pool: pool,
-  }
-  await job.upload(file, options)
-}
-
-// Inventory edits / palette-source flips while the modal is open move
-// the pool under the decision — refresh the conversion + preview so
-// the chips and the render keep matching what the operator just
-// picked. Debounced: an inventory editing session mutates the pool
-// once per swatch.
-let poolRefreshTimer: number | null = null
-watch(
-  () => effectivePool.value.join('|'),
-  (next, prev) => {
-    if (next === prev || !decision.value) return
-    if (poolRefreshTimer !== null) window.clearTimeout(poolRefreshTimer)
-    poolRefreshTimer = window.setTimeout(() => {
-      poolRefreshTimer = null
-      void resolveAndPreview()
-    }, 300)
-  },
-)
-onBeforeUnmount(() => {
-  if (poolRefreshTimer !== null) window.clearTimeout(poolRefreshTimer)
-})
-
-// Per-layer ink assignment → preview coupling. The LayerCard picker
-// writes ``assigned_color_hex`` through the job store, which re-renders
-// the COMMITTED placement SVG — but this modal displays its own
-// adapted render (``renderedSvg``), so the operator assigned an ink
-// and saw nothing change. Re-run the adapted render (it ships
-// ``inkColorsFor`` with every /rerender) whenever any layer's assigned
-// ink moves. Debounced so a quick run through several layers renders
-// once.
-let inkRerenderTimer: number | null = null
-watch(
-  () =>
-    (job.selectedPlacement?.layers ?? [])
-      .map((l) => `${l.layer_id}:${l.assigned_color_hex ?? ''}`)
-      .join('|'),
-  (next, prev) => {
-    if (next === prev || !decision.value) return
-    if (inkRerenderTimer !== null) window.clearTimeout(inkRerenderTimer)
-    inkRerenderTimer = window.setTimeout(() => {
-      inkRerenderTimer = null
-      void rerenderOnly()
-    }, 300)
-  },
-)
-onBeforeUnmount(() => {
-  if (inkRerenderTimer !== null) window.clearTimeout(inkRerenderTimer)
-})
-
-/**
- * Render-only path used both by ``resolveAndPreview`` (after the policy
- * lands) and by ``customStyles`` mutations (where the resolver result
- * hasn't changed but the operator's stack has). Picks between custom
- * passes, resolver multi-pass, and single-algorithm depending on what's
- * active. Errors leave the previous render in place.
- */
-async function renderAdaptedPreview(controller: AbortController): Promise<void> {
-  if (!decision.value) return
-  previewLoading.value = true
-  try {
-    const passes: PolicyPass[] = customStylesActive.value
-      ? customPasses.value
-      : (decision.value.default_passes ?? [])
-    const result = passes.length
-      ? await job.previewPassesOnAllLayers(passes, controller.signal)
-      : await job.previewAlgorithmOnAllLayers(
-          decision.value.default_algorithm,
-          (decision.value.default_options ?? {}) as Record<string, unknown>,
-          controller.signal,
-        )
-    if (controller.signal.aborted) return
-    // ``null`` means nothing renderable (e.g. vector source with no
-    // layers, missing job_id, non-rerenderable) — fall back to the
-    // original placement SVG so the operator's last choice doesn't
-    // leave a stale render on screen. Without this clear, toggling
-    // goal / palette / custom style on a non-rerenderable placement
-    // would silently keep the previous render visible and read as
-    // "the preview doesn't update".
-    if (result) {
-      renderedSvg.value = result.svg
-    } else {
-      renderedSvg.value = null
-    }
-  } catch {
-    if (!controller.signal.aborted) previewError.value = true
-  } finally {
-    if (!controller.signal.aborted) previewLoading.value = false
-  }
-}
-
-/** Re-render without re-resolving — used when only the custom-style
- *  stack changes (the resolver inputs are unchanged, so its answer
- *  would be identical). Aborts any in-flight render. */
-async function rerenderOnly(): Promise<void> {
-  if (!hasPlacement.value || !decision.value) return
-  previewController?.abort()
-  const controller = new AbortController()
-  previewController = controller
-  previewError.value = false
-  await renderAdaptedPreview(controller)
-}
-
-// Operator mutated the custom-style stack (added, removed, or tweaked a
-// slider). Re-render through the cheaper path that skips the policy
-// resolver. The deep watch fires on knob drags too; the AbortController
-// in ``rerenderOnly`` cancels stale renders so slider scrubbing stays
-// responsive.
-watch(customStyles, () => void rerenderOnly(), { deep: true })
-
-// Physical size → render coupling. The /rerender payload carries each
-// layer's pen tip width converted into viewBox units from the
-// placement's mm size (``penWidthsFor``); that's what adapts stroke
-// thickness and floors the fill spacing to the real pen on paper.
-// Changing the sheet format refits the placement (SheetPicker →
-// ``fitSelectedPlacementToSheet``), so the render must re-run at the
-// new size — without this watcher the preview showed the exact same
-// drawing on A6 and A2 even though the physical result differs.
-// Debounced so a quick A6→A5→A4 click run renders once; the
-// AbortController inside ``rerenderOnly`` cancels stale renders.
-let sizeRerenderTimer: number | null = null
-watch(
-  () => [job.selectedPlacement?.width_mm ?? 0, job.selectedPlacement?.height_mm ?? 0] as const,
-  ([w, h], [prevW, prevH]) => {
-    // Sub-0.01 mm deltas are float noise from centring math, not an
-    // operator action — skip so the watcher can't ping-pong.
-    if (Math.abs(w - prevW) < 0.01 && Math.abs(h - prevH) < 0.01) return
-    if (!decision.value) return
-    if (sizeRerenderTimer !== null) window.clearTimeout(sizeRerenderTimer)
-    sizeRerenderTimer = window.setTimeout(() => {
-      sizeRerenderTimer = null
-      void rerenderOnly()
-    }, 300)
-  },
-)
-onBeforeUnmount(() => {
-  if (sizeRerenderTimer !== null) window.clearTimeout(sizeRerenderTimer)
-})
-
 function selectGoal(g: Goal): void {
   if (goal.value === g && decision.value) return
   goal.value = g
-  void resolveAndPreview()
+  // Direct operator action → resolve immediately for a responsive click.
+  schedule('resolve-and-segment', { immediate: true })
 }
 
 async function selectPalette(mode: PaletteMode): Promise<void> {
@@ -478,7 +215,10 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
     mode === 'machine_only' ? 'pens' : availableColors.ordered.length > 0 ? 'available' : 'union',
   )
   await nextTick()
-  void resolveAndPreview()
+  // Resolve immediately: the ``effectivePool`` watcher also fires from the
+  // source change above, but ``schedule`` clears its pending debounce so
+  // the two collapse into a single resolve instead of a double render.
+  schedule('resolve-and-segment', { immediate: true })
 }
 
 async function applyExpertDraft(): Promise<boolean> {
@@ -885,6 +625,80 @@ function openExpertEditor(): void {
 // useFileManager() WITHOUT owner so a tab switch can't abort the
 // shared previewer mid-flight.
 const fileManager = useFileManager(t, { owner: true })
+
+// ============================ PREVIEW PIPELINE =========================
+// Palette-driven re-segmentation + the single preview scheduler. Created
+// here (not at the top of setup) because the segmentation needs the
+// owner ``fileManager`` to round-trip /upload. The pipeline owns all the
+// live preview state the template reads; the four watchers below are the
+// only places that ask for a preview, each via ``schedule(level)``.
+const segmentation = useEditorPaletteSegmentation(fileManager)
+const { effectivePool, ensureSegmentationMatchesDecision } = segmentation
+const pipeline = useEditorPreviewPipeline({
+  hasPlacement,
+  sourceKind,
+  goal,
+  paletteMode,
+  customStylesActive,
+  customPasses,
+  resolveInputs: () => ({
+    available_colors_count: props.availableColorsCount ?? 1,
+    image_megapixels: props.imageMegapixels ?? null,
+    layer_count_estimate: props.layers?.length || 1,
+    is_mono_pen_machine: Boolean(props.isMonoPenMachine),
+  }),
+  ensureSegmentation: ensureSegmentationMatchesDecision,
+})
+const { decision, resolving, resolveError, renderedSvg, previewLoading, previewError, schedule } =
+  pipeline
+
+// Inventory edits / palette-source flips while the modal is open move the
+// pool under the decision — re-resolve so the chips and the render keep
+// matching what the operator just picked. Debounced (via ``schedule``):
+// an inventory editing session mutates the pool once per swatch.
+watch(
+  () => effectivePool.value.join('|'),
+  (next, prev) => {
+    if (next === prev || !decision.value) return
+    schedule('resolve-and-segment')
+  },
+)
+
+// Per-layer ink assignment → preview coupling. The LayerCard picker
+// writes ``assigned_color_hex`` through the job store; this modal shows
+// its own adapted render, so re-render whenever any layer's assigned ink
+// moves. Debounced so a quick run through several layers renders once.
+watch(
+  () =>
+    (job.selectedPlacement?.layers ?? [])
+      .map((l) => `${l.layer_id}:${l.assigned_color_hex ?? ''}`)
+      .join('|'),
+  (next, prev) => {
+    if (next === prev || !decision.value) return
+    schedule('render-only')
+  },
+)
+
+// Operator mutated the custom-style stack (added, removed, or tweaked a
+// slider). Re-render through the cheaper render-only path that skips the
+// resolver. Debounced so slider scrubbing collapses to one render.
+watch(customStyles, () => schedule('render-only'), { deep: true })
+
+// Physical size → render coupling. Changing the sheet format refits the
+// placement (SheetPicker → ``fitSelectedPlacementToSheet``), so the
+// render must re-run at the new mm size (pen widths convert from it).
+// Debounced so a quick A6→A5→A4 click run renders once.
+watch(
+  () => [job.selectedPlacement?.width_mm ?? 0, job.selectedPlacement?.height_mm ?? 0] as const,
+  ([w, h], [prevW, prevH]) => {
+    // Sub-0.01 mm deltas are float noise from centring math, not an
+    // operator action — skip so the watcher can't ping-pong.
+    if (Math.abs(w - prevW) < 0.01 && Math.abs(h - prevH) < 0.01) return
+    if (!decision.value) return
+    schedule('render-only')
+  },
+)
+
 // Direct access to the V1 singleton draft so we can read ``isDirty``
 // for the expert-mode "Appliquer" affordance. The cards inside the
 // expert tabs already mutate this singleton via their own imports;
@@ -1125,11 +939,11 @@ onMounted(async () => {
   // Reflect the committed style in the beginner stack BEFORE the first
   // resolve/preview so the operator sees (and Generate commits) the
   // style already saved on the placement rather than a fresh resolver
-  // pick. ``renderAdaptedPreview`` reads ``customStylesActive`` so a
-  // seeded stack renders straight away.
+  // pick. The pipeline's render reads ``customStylesActive`` so a seeded
+  // stack renders straight away.
   seedCustomStylesFromCommitted()
   // Kick off the first preview immediately — zero clicks to a result.
-  void resolveAndPreview()
+  schedule('resolve-and-segment', { immediate: true })
   startTourIfFirstRun()
   await nextTick()
   if (!dialogRoot.value) return
@@ -1141,7 +955,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onWindowKey)
-  previewController?.abort()
+  // Tears down the single preview timer + aborts any in-flight request.
+  pipeline.dispose()
 })
 
 // If the source kind changes (parent swaps file without remount), redo
@@ -1152,7 +967,7 @@ watch(
   (next) => {
     if (next && next !== sourceKind.value) {
       sourceKind.value = next
-      void resolveAndPreview()
+      schedule('resolve-and-segment', { immediate: true })
     }
   },
 )
