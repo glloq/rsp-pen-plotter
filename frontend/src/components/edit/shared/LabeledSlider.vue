@@ -35,6 +35,17 @@ const props = withDefaults(
   {
     step: 1,
     numeric: true,
+    // Empty strings render as "no label / no unit / no hint" — same as the
+    // previous implicit ``undefined``, but explicit so the contract is
+    // clear and the linter is satisfied.
+    label: '',
+    unit: '',
+    hint: '',
+    // ``undefined`` is meaningful here: ``decimals`` falls back to the
+    // precision inferred from ``step``, and ``formatValue`` is only used
+    // when present, so keep them nullable rather than inventing a default.
+    decimals: undefined,
+    formatValue: undefined,
   },
 )
 

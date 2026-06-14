@@ -27,6 +27,9 @@ const props = withDefaults(
     defaultExpanded: false,
     resettable: false,
     canReset: true,
+    // Empty → the header shows the ``↺`` glyph and no tooltip; callers
+    // pass a localised label when they want one.
+    resetLabel: '',
   },
 )
 
