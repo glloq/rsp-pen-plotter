@@ -466,6 +466,12 @@ describe('EditModalV2 (beginner single-screen)', () => {
     wrapper.unmount()
   })
 
+  // Focus-return-to-opener, Tab trapping, Shift+Tab, dynamic content and
+  // aria-disabled/hidden filtering are covered deterministically in
+  // useEditorDialogAccessibility.test.ts (the happy-dom focus model is
+  // unreliable across a full Vue unmount, so those assertions live at the
+  // composable level).
+
   it('exposes the Apply button only in expert mode, gated by draft.isDirty', async () => {
     // Expert mode restores the V1 image / SVG / style / text tabs.
     // Mutations in those tabs flow through ``useBitmapDraft`` and only

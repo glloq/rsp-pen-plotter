@@ -46,6 +46,7 @@ import {
   formatLengthMeters,
 } from '../../composables/useEditorPreflight'
 import { useEditorOnboarding } from '../../composables/useEditorOnboarding'
+import { useEditorDialogAccessibility } from '../../composables/useEditorDialogAccessibility'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import type { EditTabId } from '../edit/EditTabs.vue'
 import SheetPicker from './SheetPicker.vue'
@@ -668,35 +669,18 @@ useKeyboardShortcuts([
   },
 ])
 
-// Accessibility: Escape closes, focus moves into the dialog on mount,
-// and Tab is trapped inside while open (matches v1 + native dialogs).
+// Accessibility: Escape closes, focus moves into the dialog on mount and
+// returns to the opener on close, and Tab is trapped inside while open
+// (matches native <dialog>). Owned by useEditorDialogAccessibility.
 const dialogRoot = ref<HTMLElement | null>(null)
-
-function onWindowKey(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    emit('cancel')
-    return
-  }
-  if (event.key !== 'Tab' || !dialogRoot.value) return
-  const focusables = dialogRoot.value.querySelectorAll<HTMLElement>(
-    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  )
-  if (focusables.length === 0) return
-  const first = focusables[0]!
-  const last = focusables[focusables.length - 1]!
-  const active = document.activeElement as HTMLElement | null
-  if (event.shiftKey && active === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && active === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
+const a11y = useEditorDialogAccessibility({
+  dialogRoot,
+  onEscape: () => emit('cancel'),
+})
 
 onMounted(async () => {
-  window.addEventListener('keydown', onWindowKey)
+  // Capture the opener + start the keyboard trap before any focus moves.
+  a11y.activate()
   // Belt-and-braces preview reset on every mount: the modal :key
   // remounts on placement change so this fires per editor session.
   // The placement-switch watcher in useFileManager *should* have
@@ -717,15 +701,13 @@ onMounted(async () => {
   schedule('resolve-and-segment', { immediate: true })
   startTourIfFirstRun()
   await nextTick()
-  if (!dialogRoot.value) return
-  const first = dialogRoot.value.querySelector<HTMLElement>(
-    'button:not([disabled]), select:not([disabled])',
-  )
-  first?.focus()
+  // Move focus into the dialog once its content has rendered.
+  a11y.focusInitial()
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onWindowKey)
+  // Stop the keyboard trap + return focus to the opener.
+  a11y.deactivate()
   // Tears down the single preview timer + aborts any in-flight request.
   pipeline.dispose()
 })
