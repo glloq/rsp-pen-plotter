@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveMasterStyle, type SegmentationMethod } from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
@@ -87,28 +87,54 @@ const knobs = computed(() => draft.getMonoStyleKnobs(props.styleId))
 const KNOB_PROPAGATION_DELAY_MS = 120
 let knobPropagationTimer: ReturnType<typeof setTimeout> | null = null
 
+// Push the current knobs onto every layer's ``layer_algorithms`` so
+// /rerender (gcode generation) matches the live /preview. /preview
+// rebuilds ``band_recipes`` from current knobs on every call;
+// ``layer_algorithms`` would otherwise stay frozen on the values
+// captured at upload time.
+function propagateKnobsToLayers(): Promise<number> {
+  return applyMasterStyleToLayers(store, {
+    styleId: props.styleId,
+    penSlot: draft.monoPenSlot.value,
+    recipeResolver: (index, total) => draft.monoRecipeForBand(index, total),
+  })
+}
+
 function setKnob<K extends string>(key: K, value: unknown): void {
   // The composable's setMonoKnob is generic over keyof MonoStyleKnobs;
   // widening here keeps the template terse while every call site
   // already knows the field name + type from its <input> binding.
 
   ;(draft.setMonoKnob as any)(props.styleId, key, value)
-  // Re-propagate the updated knobs onto existing layers so /rerender
-  // (gcode generation) matches the live /preview. /preview rebuilds
-  // ``band_recipes`` from current knobs on every call; ``layer_algorithms``
-  // would otherwise stay frozen on the values captured at upload time.
   if (store.layers.length > 0) {
     if (knobPropagationTimer !== null) clearTimeout(knobPropagationTimer)
     knobPropagationTimer = setTimeout(() => {
       knobPropagationTimer = null
-      void applyMasterStyleToLayers(store, {
-        styleId: props.styleId,
-        penSlot: draft.monoPenSlot.value,
-        recipeResolver: (index, total) => draft.monoRecipeForBand(index, total),
-      })
+      void propagateKnobsToLayers()
     }, KNOB_PROPAGATION_DELAY_MS)
   }
 }
+
+// Drain the trailing-edge propagation timer immediately. Registered as a
+// store flush hook so /preflight + /generate apply the operator's last
+// knob tweak before reading ``placement.svg`` — otherwise hitting
+// Generate within the 120ms debounce window emitted the previous style.
+async function flushPendingKnobPropagation(): Promise<void> {
+  if (knobPropagationTimer === null) return
+  clearTimeout(knobPropagationTimer)
+  knobPropagationTimer = null
+  await propagateKnobsToLayers()
+}
+
+let unregisterFlushHook: (() => void) | null = null
+onMounted(() => {
+  unregisterFlushHook = store.registerRerenderFlushHook(flushPendingKnobPropagation)
+})
+onBeforeUnmount(() => {
+  unregisterFlushHook?.()
+  unregisterFlushHook = null
+  if (knobPropagationTimer !== null) clearTimeout(knobPropagationTimer)
+})
 
 // ---- Per-band override drawer (advanced only) ----
 const bandIndices = computed(() => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveMulticolorStyle } from '../../../data/printRegistry'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
@@ -40,27 +40,52 @@ const knobs = computed(() => draft.getMulticolorStyleKnobs(props.styleId))
 const KNOB_PROPAGATION_DELAY_MS = 120
 let knobPropagationTimer: ReturnType<typeof setTimeout> | null = null
 
+// Push the updated knobs onto existing layers so /rerender (gcode
+// generation) reflects the slider change. /preview ships ``band_recipes``
+// computed fresh from knobs and works without this, but the persisted
+// ``layer_algorithms`` would otherwise stay on the values captured at
+// upload time — the editor preview and the gcode output would diverge as
+// soon as the operator tweaks any knob (crossed, angle_step, spacing
+// range, …).
+function propagateKnobsToLayers(): Promise<number> {
+  return applyMasterStyleToLayers(store, {
+    styleId: props.styleId,
+    penSlot: null,
+    recipeResolver: (index, total, hex) => draft.multicolorRecipeForCluster(index, total, hex),
+  })
+}
+
 function setKnob<K extends string>(key: K, value: unknown): void {
   ;(draft.setMulticolorKnob as any)(props.styleId, key, value)
-  // Push the updated knobs onto existing layers so /rerender (gcode
-  // generation) reflects the slider change. /preview ships
-  // ``band_recipes`` computed fresh from knobs and works without this,
-  // but the persisted ``layer_algorithms`` would otherwise stay on the
-  // values captured at upload time — the editor preview and the gcode
-  // output would diverge as soon as the operator tweaks any knob
-  // (crossed, angle_step, spacing range, …).
   if (store.layers.length > 0) {
     if (knobPropagationTimer !== null) clearTimeout(knobPropagationTimer)
     knobPropagationTimer = setTimeout(() => {
       knobPropagationTimer = null
-      void applyMasterStyleToLayers(store, {
-        styleId: props.styleId,
-        penSlot: null,
-        recipeResolver: (index, total, hex) => draft.multicolorRecipeForCluster(index, total, hex),
-      })
+      void propagateKnobsToLayers()
     }, KNOB_PROPAGATION_DELAY_MS)
   }
 }
+
+// Drain the trailing-edge propagation timer immediately. Registered as a
+// store flush hook so /preflight + /generate apply the operator's last
+// knob tweak before reading ``placement.svg`` — otherwise hitting
+// Generate within the 120ms debounce window emitted the previous style.
+async function flushPendingKnobPropagation(): Promise<void> {
+  if (knobPropagationTimer === null) return
+  clearTimeout(knobPropagationTimer)
+  knobPropagationTimer = null
+  await propagateKnobsToLayers()
+}
+
+let unregisterFlushHook: (() => void) | null = null
+onMounted(() => {
+  unregisterFlushHook = store.registerRerenderFlushHook(flushPendingKnobPropagation)
+})
+onBeforeUnmount(() => {
+  unregisterFlushHook?.()
+  unregisterFlushHook = null
+  if (knobPropagationTimer !== null) clearTimeout(knobPropagationTimer)
+})
 </script>
 
 <template>

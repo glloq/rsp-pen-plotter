@@ -347,3 +347,66 @@ export interface CustomStyleSelection {
    *  options keep their backend defaults from ``printRegistry.ts``. */
   knobValue: number
 }
+
+/** One layer's committed algorithm spec, as stored in
+ *  ``placement.layer_algorithms``. Mirrors ``LayerAlgorithm`` from the
+ *  job store but kept structural so this module stays store-agnostic
+ *  (and trivially unit-testable). */
+export interface CommittedLayerSpec {
+  algorithm?: string
+  algorithm_options?: Record<string, unknown>
+  passes?: ReadonlyArray<{
+    algorithm: string
+    algorithm_options?: Record<string, unknown>
+    enabled?: boolean
+  }>
+}
+
+/**
+ * Reconstruct the beginner-editor style stack from a layer's *committed*
+ * algorithm spec (``placement.layer_algorithms[layerId]``).
+ *
+ * Both editor modes ultimately write the same algorithm(s) to every
+ * layer (``applyAlgorithmToAllLayers`` / ``applyPassesToAllLayers``), so
+ * the committed ``layer_algorithms`` is the single source of truth for
+ * what the G-code will draw. The beginner panel, however, starts from an
+ * empty stack and lets the policy resolver re-pick — which silently
+ * diverges from (and on confirm overwrites) a style the operator already
+ * chose. Seeding the stack from the committed spec keeps both modes
+ * showing the same style.
+ *
+ * Returns ``[]`` when the committed style can't be represented with the
+ * curated beginner catalogue (an expert-only algorithm outside the 12
+ * chips, or no spec at all). The caller then falls back to the resolver,
+ * preserving today's default-experience behaviour for those cases.
+ */
+export function deriveBeginnerStack(spec: CommittedLayerSpec | null | undefined): CustomStyleSelection[] {
+  if (!spec) return []
+  // Prefer the multi-pass stack (enabled passes only — disabled ones are
+  // a non-destructive UI toggle that never ships). Fall back to the
+  // single-algorithm shape.
+  const steps: Array<{ algorithm: string; options: Record<string, unknown> }> = []
+  if (spec.passes && spec.passes.length) {
+    for (const pass of spec.passes) {
+      if (pass.enabled === false) continue
+      steps.push({ algorithm: pass.algorithm, options: pass.algorithm_options ?? {} })
+    }
+  } else if (spec.algorithm) {
+    steps.push({ algorithm: spec.algorithm, options: spec.algorithm_options ?? {} })
+  }
+  if (!steps.length) return []
+
+  const stack: CustomStyleSelection[] = []
+  for (const step of steps) {
+    const style = getBeginnerStyle(step.algorithm as AlgorithmId)
+    // Any non-representable step aborts the whole derivation: a partial
+    // stack would silently drop passes and mislead the operator about
+    // what will be drawn.
+    if (!style) return []
+    const raw = step.options[style.primaryKnob.optionKey]
+    const knobValue = typeof raw === 'number' && Number.isFinite(raw) ? raw : style.primaryKnob.default
+    stack.push({ id: style.id, knobValue })
+    if (stack.length >= MAX_BEGINNER_STYLES) break
+  }
+  return stack
+}
