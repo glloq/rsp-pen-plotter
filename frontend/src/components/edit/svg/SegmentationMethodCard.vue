@@ -49,6 +49,17 @@ const SEG_METHODS: SegmentationMethod[] = [
 function selectMethod(method: SegmentationMethod): void {
   props.bitmap.segmentation_method = method
   draft.markSegmentationTouched('method')
+  // kmeans / kmeans_lab cluster the image's OWN colours — that is the
+  // "auto" palette source, which is mutually exclusive with following the
+  // pen rack. Turn palette-follows-pens off here so the Style tab's
+  // immediate watcher (which otherwise snaps the palette onto the pens
+  // and flips the method back to fixed_palette on tab entry) leaves the
+  // operator's choice alone. Clearing the palette keeps the Palettecard
+  // on its "auto" source instead of falling through to "manual".
+  if (method === 'kmeans' || method === 'kmeans_lab') {
+    draft.paletteFollowsPens.value = false
+    props.bitmap.palette = []
+  }
 }
 function setNumBands(value: number): void {
   props.bitmap.num_bands = value

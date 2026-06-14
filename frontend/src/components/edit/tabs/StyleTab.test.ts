@@ -75,6 +75,22 @@ it('keeps an explicit kmeans choice intact when entering the Style tab', async (
   expect(d.bitmap.value.palette).toEqual([])
 })
 
+it('does not stomp the palette when kmeans turned palette-follows-pens off', async () => {
+  const d = await openModal()
+  seed(['#ff0000', '#00ff00', '#0000ff'])
+
+  // This mirrors what SegmentationMethodCard.selectMethod('kmeans') does.
+  d.bitmap.value.segmentation_method = 'kmeans'
+  d.markSegmentationTouched('method')
+  d.paletteFollowsPens.value = false
+  d.bitmap.value.palette = []
+
+  await enterStyleTab()
+
+  expect(d.bitmap.value.segmentation_method).toBe('kmeans')
+  expect(d.bitmap.value.palette).toEqual([])
+})
+
 it('still seeds fixed_palette + the pool when no method was chosen (pens-follow default)', async () => {
   const d = await openModal()
   seed(['#ff0000', '#00ff00', '#0000ff'])
