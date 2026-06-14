@@ -48,7 +48,11 @@ import SvgTab from '../edit/tabs/SvgTab.vue'
 import StyleTab from '../edit/tabs/StyleTab.vue'
 import TextTab from '../edit/tabs/TextTab.vue'
 import SheetPicker from './SheetPicker.vue'
-import { BEGINNER_STYLES, type CustomStyleSelection } from './beginnerStyles'
+import {
+  BEGINNER_STYLES,
+  deriveBeginnerStack,
+  type CustomStyleSelection,
+} from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
 
@@ -137,6 +141,27 @@ const customStylesActive = computed<boolean>(() => customStyles.value.length > 0
 const canCustomizeStyles = computed<boolean>(
   () => sourceKind.value === 'bitmap_photo' || sourceKind.value === 'bitmap_illustration',
 )
+
+// Seed the custom-style stack from the placement's *committed*
+// ``layer_algorithms`` so the beginner panel reflects the style the
+// operator already chose — in either editor mode — instead of starting
+// empty and letting the resolver silently re-pick a different one (which
+// also overwrote the saved style on confirm). The committed
+// ``layer_algorithms`` is the single source of truth both modes write
+// to; both ``applyAlgorithmToAllLayers`` and ``applyPassesToAllLayers``
+// make it uniform across layers, so the first layer's spec represents
+// the whole drawing. Runs once on open (the modal remounts per session
+// via its ``:key``); no-op for non-bitmap kinds or when the committed
+// style has no beginner-catalogue equivalent — those keep the resolver
+// default.
+function seedCustomStylesFromCommitted(): void {
+  if (!canCustomizeStyles.value) return
+  const placement = job.selectedPlacement
+  const firstLayerId = placement?.layers[0]?.layer_id
+  if (!placement || !firstLayerId) return
+  const seeded = deriveBeginnerStack(placement.layer_algorithms[firstLayerId])
+  if (seeded.length) customStyles.value = seeded
+}
 
 // Build the PolicyPass[] the user's stack expresses. The full algorithm
 // option set keeps its registry defaults (see printRegistry.ts) and we
@@ -1031,6 +1056,12 @@ onMounted(async () => {
   // matter the order. Cheap when the previewer is already empty.
   fileManager.previewer.cancel()
   fileManager.previewer.clear()
+  // Reflect the committed style in the beginner stack BEFORE the first
+  // resolve/preview so the operator sees (and Generate commits) the
+  // style already saved on the placement rather than a fresh resolver
+  // pick. ``renderAdaptedPreview`` reads ``customStylesActive`` so a
+  // seeded stack renders straight away.
+  seedCustomStylesFromCommitted()
   // Kick off the first preview immediately — zero clicks to a result.
   void resolveAndPreview()
   startTourIfFirstRun()
