@@ -806,12 +806,17 @@ function toggleLayerVisibility(layerId: string): void {
 // A caret on the right of each ink chip opens a dropdown of every ink
 // the operator owns (loaded pens ∪ inventory), so a layer's colour can
 // be swapped without diving into the full Layers editor. ``openColorMenu``
-// holds the layerId whose menu is open (one at a time); a transparent
-// backdrop closes it on outside click. Mirrors LayerCard's manual pick:
-// the assignment is ``manual`` so the palette-source resnap leaves it
-// alone. The ``assigned_color_hex`` watcher above re-renders the preview
-// through ``rerenderOnly`` so the swap shows up immediately.
+// holds the layerId whose menu is open (one at a time). The menu is
+// TELEPORTED to <body> with fixed positioning computed from the caret's
+// on-screen rect: the ink chips live at the bottom of a fixed-height,
+// ``overflow-y:auto`` preview column, so a plain ``position:absolute``
+// dropdown was clipped by that scroll container and never reachable —
+// which is exactly why the picker "ne faisait rien". Mirrors LayerCard's
+// manual pick: the assignment is ``manual`` so the palette-source resnap
+// leaves it alone. The ``assigned_color_hex`` watcher above re-renders
+// the preview through ``rerenderOnly`` so the swap shows up immediately.
 const openColorMenu = ref<string | null>(null)
+const menuPos = ref<{ top: number; left: number; openUp: boolean } | null>(null)
 interface PickerColor {
   hex: string
   name: string
@@ -832,11 +837,49 @@ const pickerColors = computed<PickerColor[]>(() => {
   for (const entry of availableColors.ordered) push(entry.hex)
   return out
 })
-function toggleColorMenu(layerId: string): void {
-  openColorMenu.value = openColorMenu.value === layerId ? null : layerId
+// Currently-assigned hex of the open chip, for the "active" tick in the
+// teleported menu (which renders outside the v-for so it can't read
+// ``ink`` directly).
+const openInkHex = computed<string>(() => {
+  const id = openColorMenu.value
+  if (!id) return ''
+  return inkSwatches.value.find((s) => s.layerId === id)?.hex ?? ''
+})
+const MENU_MAX_PX = 240
+const MENU_WIDTH_PX = 200
+function toggleColorMenu(layerId: string, event: MouseEvent): void {
+  if (openColorMenu.value === layerId) {
+    openColorMenu.value = null
+    menuPos.value = null
+    return
+  }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  // Clamp horizontally so the menu never spills past the viewport edge;
+  // flip above the caret when there isn't room below.
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - MENU_WIDTH_PX - 8))
+  const openUp = rect.bottom + MENU_MAX_PX > window.innerHeight && rect.top > MENU_MAX_PX
+  menuPos.value = {
+    top: openUp ? rect.top - 4 : rect.bottom + 4,
+    left,
+    openUp,
+  }
+  openColorMenu.value = layerId
 }
-function assignInk(layerId: string, hex: string): void {
+function closeColorMenu(): void {
   openColorMenu.value = null
+  menuPos.value = null
+}
+const menuStyle = computed<Record<string, string>>(() => {
+  const pos = menuPos.value
+  const style: Record<string, string> = {}
+  if (!pos) return style
+  style.top = `${pos.top}px`
+  style.left = `${pos.left}px`
+  style.transform = pos.openUp ? 'translateY(-100%)' : 'none'
+  return style
+})
+function assignInk(layerId: string, hex: string): void {
+  closeColorMenu()
   // Synthetic live-preview ids have no real placement layer to patch.
   if (layerId.startsWith('preview-')) return
   job.updateLayer(layerId, { assigned_color_hex: hex, color_assignment: 'manual' })
@@ -1068,7 +1111,7 @@ function onWindowKey(event: KeyboardEvent): void {
     // An open ink-picker dropdown swallows the first Escape so the
     // operator can dismiss the menu without closing the whole modal.
     if (openColorMenu.value) {
-      openColorMenu.value = null
+      closeColorMenu()
       return
     }
     emit('cancel')
@@ -1360,38 +1403,10 @@ watch(
                     :title="t('v2.modal.layerChangeColor')"
                     :aria-label="t('v2.modal.layerChangeColor')"
                     :data-test="`modal-v2-ink-more-${ink.layerId}`"
-                    @click="toggleColorMenu(ink.layerId)"
+                    @click="toggleColorMenu(ink.layerId, $event)"
                   >
                     <span aria-hidden="true">▾</span>
                   </button>
-                  <div
-                    v-if="openColorMenu === ink.layerId"
-                    class="modal-v2__ink-menu"
-                    role="listbox"
-                    :data-test="`modal-v2-ink-menu-${ink.layerId}`"
-                  >
-                    <button
-                      v-for="c in pickerColors"
-                      :key="c.hex"
-                      type="button"
-                      role="option"
-                      class="modal-v2__ink-menu-item"
-                      :class="{ 'is-active': c.hex.toLowerCase() === ink.hex.toLowerCase() }"
-                      :aria-selected="c.hex.toLowerCase() === ink.hex.toLowerCase()"
-                      :data-test="`modal-v2-ink-pick-${ink.layerId}-${c.hex.replace('#', '')}`"
-                      @click="assignInk(ink.layerId, c.hex)"
-                    >
-                      <span
-                        class="modal-v2__ink-swatch"
-                        :style="{ backgroundColor: c.hex }"
-                        aria-hidden="true"
-                      />
-                      <span class="modal-v2__ink-name">{{ c.name }}</span>
-                    </button>
-                    <p v-if="!pickerColors.length" class="modal-v2__ink-menu-empty">
-                      {{ t('v2.modal.noColors') }}
-                    </p>
-                  </div>
                   <button
                     v-if="ink.isFallback"
                     type="button"
@@ -1405,13 +1420,45 @@ watch(
                   </button>
                 </li>
               </ul>
-              <!-- Outside-click catcher: closes whichever ink menu is open. -->
-              <div
-                v-if="openColorMenu"
-                class="modal-v2__ink-menu-backdrop"
-                @click="openColorMenu = null"
-              />
             </div>
+
+            <!-- Quick ink-picker dropdown — teleported to <body> with
+             fixed positioning so the fixed-height, scrollable preview
+             column can't clip it. A transparent full-screen backdrop
+             closes it on outside click. -->
+            <Teleport to="body">
+              <template v-if="openColorMenu">
+                <div class="modal-v2__ink-menu-backdrop" @click="closeColorMenu" />
+                <div
+                  class="modal-v2__ink-menu"
+                  role="listbox"
+                  :style="menuStyle"
+                  :data-test="`modal-v2-ink-menu-${openColorMenu}`"
+                >
+                  <button
+                    v-for="c in pickerColors"
+                    :key="c.hex"
+                    type="button"
+                    role="option"
+                    class="modal-v2__ink-menu-item"
+                    :class="{ 'is-active': c.hex.toLowerCase() === openInkHex.toLowerCase() }"
+                    :aria-selected="c.hex.toLowerCase() === openInkHex.toLowerCase()"
+                    :data-test="`modal-v2-ink-pick-${openColorMenu}-${c.hex.replace('#', '')}`"
+                    @click="assignInk(openColorMenu, c.hex)"
+                  >
+                    <span
+                      class="modal-v2__ink-swatch"
+                      :style="{ backgroundColor: c.hex }"
+                      aria-hidden="true"
+                    />
+                    <span class="modal-v2__ink-name">{{ c.name }}</span>
+                  </button>
+                  <p v-if="!pickerColors.length" class="modal-v2__ink-menu-empty">
+                    {{ t('v2.modal.noColors') }}
+                  </p>
+                </div>
+              </template>
+            </Teleport>
           </div>
           <!-- end preview block -->
 
@@ -2202,18 +2249,16 @@ watch(
 .modal-v2__ink-menu-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 1000;
 }
 .modal-v2__ink-menu {
-  position: absolute;
-  top: calc(100% + 0.25rem);
-  left: 0;
-  z-index: 21;
+  position: fixed;
+  z-index: 1001;
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
   max-height: 14rem;
-  min-width: 9rem;
+  width: 12.5rem;
   overflow-y: auto;
   padding: 0.25rem;
   border: 1px solid #334155;
