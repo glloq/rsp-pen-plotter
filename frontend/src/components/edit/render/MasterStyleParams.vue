@@ -197,7 +197,15 @@ function bandSwatchStyle(i: number): Record<string, string> {
           {{ t('mono.shades') }}
           <LayerCountBadge :count="draft.expectedLayerCount.value" />
         </p>
-        <span class="font-mono text-[11px] text-slate-300">{{ bitmap.num_bands }}</span>
+        <input
+          :value="bitmap.num_bands"
+          type="number"
+          min="1"
+          max="20"
+          step="1"
+          class="w-14 rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-right font-mono text-[11px] text-slate-100"
+          @change="(e) => setNumBands(Number((e.target as HTMLInputElement).value))"
+        />
       </div>
       <input
         :value="bitmap.num_bands"
@@ -218,7 +226,15 @@ function bandSwatchStyle(i: number): Record<string, string> {
           {{ t('mono.threshold') }}
           <LayerCountBadge :count="draft.expectedLayerCount.value" />
         </p>
-        <span class="font-mono text-[11px] text-slate-300">{{ thresholdValue.toFixed(2) }}</span>
+        <input
+          :value="thresholdValue.toFixed(2)"
+          type="number"
+          min="0.05"
+          max="0.95"
+          step="0.05"
+          class="w-14 rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-right font-mono text-[11px] text-slate-100"
+          @change="(e) => (thresholdValue = Number((e.target as HTMLInputElement).value))"
+        />
       </div>
       <input
         v-model.number="thresholdValue"

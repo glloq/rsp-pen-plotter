@@ -163,7 +163,23 @@ const poolCapShortfall = computed(() => {
         {{ t('colorStyles.numColors') }}
         <LayerCountBadge :count="draft.expectedLayerCount.value" />
       </p>
-      <span class="font-mono text-[11px] text-slate-300">{{ effectiveColorCount }}</span>
+      <span class="flex items-center gap-1">
+        <span
+          v-if="effectiveColorCount !== numColors"
+          class="font-mono text-[10px] text-slate-500"
+          :title="t('colorStyles.numColorsHint')"
+          >→ {{ effectiveColorCount }}</span
+        >
+        <input
+          :value="numColors"
+          type="number"
+          :min="2"
+          :max="16"
+          step="1"
+          class="w-14 rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-right font-mono text-[11px] text-slate-100"
+          @change="(e) => (numColors = Number((e.target as HTMLInputElement).value))"
+        />
+      </span>
     </div>
     <input
       :value="numColors"

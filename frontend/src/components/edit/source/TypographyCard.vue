@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import CollapsibleCard from '../shared/CollapsibleCard.vue'
 
 // Typography card — the *only* settings card the Style tab shows for
 // .txt / .md sources, so it's flat (no accordion) and split into
@@ -162,10 +163,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
        gets ignored by the backend re-render path. -->
   <div class="space-y-3">
     <!-- =================== DOCUMENT MODE TOGGLE =================== -->
-    <section
-      v-if="mode === 'document'"
-      class="card space-y-2 text-xs"
-    >
+    <section v-if="mode === 'document'" class="card space-y-2 text-xs">
       <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
         {{ t('typography.docHeader') }}
       </h3>
@@ -185,10 +183,7 @@ function sortedFonts(fonts: string[]): FontOption[] {
     </section>
 
     <!-- =================== FONT =================== -->
-    <section
-      v-if="mode === 'typography' || typo.hershey_text"
-      class="card space-y-2.5 text-xs"
-    >
+    <section v-if="mode === 'typography' || typo.hershey_text" class="card space-y-2.5 text-xs">
       <header class="flex items-baseline justify-between">
         <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
           {{ t('typography.fontSection') }}
@@ -271,13 +266,11 @@ function sortedFonts(fonts: string[]): FontOption[] {
     </section>
 
     <!-- =================== LAYOUT (typography sources only) =================== -->
-    <section
+    <CollapsibleCard
       v-if="mode === 'typography'"
-      class="card space-y-2 text-xs"
+      card-key="typography.layout"
+      :title="t('typography.layoutSection')"
     >
-      <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
-        {{ t('typography.layoutSection') }}
-      </h3>
       <div class="grid grid-cols-2 gap-2">
         <label class="block text-slate-400">
           {{ t('convert.alignment') }}
@@ -302,16 +295,14 @@ function sortedFonts(fonts: string[]): FontOption[] {
           />
         </label>
       </div>
-    </section>
+    </CollapsibleCard>
 
     <!-- =================== PAGE (typography sources only) =================== -->
-    <section
+    <CollapsibleCard
       v-if="mode === 'typography'"
-      class="card space-y-2 text-xs"
+      card-key="typography.page"
+      :title="t('typography.pageSection')"
     >
-      <h3 class="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
-        {{ t('typography.pageSection') }}
-      </h3>
       <div class="grid grid-cols-2 gap-2">
         <label class="block text-slate-400">
           {{ t('convert.margin') }}
@@ -347,6 +338,6 @@ function sortedFonts(fonts: string[]): FontOption[] {
           />
         </label>
       </div>
-    </section>
+    </CollapsibleCard>
   </div>
 </template>

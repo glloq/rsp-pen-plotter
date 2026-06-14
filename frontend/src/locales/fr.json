@@ -242,6 +242,7 @@
   "mono": {
     "pen": "Stylo",
     "penNotInstalled": "Slot non marqué comme installé",
+    "penHint": "Choisissez quel emplacement du magasin dessine cette encre.",
     "modeLabel": "Mode de rendu",
     "shades": "Nombre de nuances",
     "shadesHint": "1 = un seul calque, un seul stylo (sans ombrage). Augmente pour découper l'image en bandes de gris — chaque bande ajoute un calque et utilise un algorithme adapté au mode choisi.",
@@ -496,7 +497,8 @@
     "multicolor": "Multi-couleurs",
     "multicolorHint": "Découper l'image en un calque par couleur détectée.",
     "monochrome": "Mono-couleur",
-    "monochromeHint": "Tout dessiner sur un seul calque avec un seul stylo."
+    "monochromeHint": "Tout dessiner sur un seul calque avec un seul stylo.",
+    "modeHint": "Changez à tout moment — vos réglages de couleur et de style sont conservés."
   },
   "palette": {
     "title": "Palette",
@@ -1081,6 +1083,7 @@
     "maxDim": "Taille max (px)",
     "dropBackground": "Retirer le fond",
     "bgLuminance": "Seuil de fond",
+    "bgLuminanceHint": "Les pixels plus clairs que cette valeur (0–1) sont considérés comme du fond.",
     "cellSize": "Taille de cellule (mm)",
     "density": "Densité",
     "dotRadius": "Rayon des points (mm)",
@@ -1137,7 +1140,9 @@
     "addColour": "Ajouter une couleur",
     "postProcess": "Post-traitement",
     "minRegion": "Région min (px)",
+    "minRegionHint": "Supprime les régions de couleur plus petites que ce nombre de pixels (enlève le bruit).",
     "mergeDeltaE": "Fusion ΔE",
+    "mergeDeltaEHint": "Fusionne les couleurs de palette plus proches que cette distance perceptuelle (ΔE).",
     "render": "Algorithme de rendu",
     "kind_fill": "Remplissage",
     "kind_lines": "Lignes",

@@ -101,6 +101,20 @@ function bool(key: string): boolean {
   return typeof v === 'boolean' ? v : false
 }
 
+// Value for the editable numeric input (non-percent range knobs), snapped
+// to the descriptor's precision so the field never shows a float tail.
+function rangeNumber(ctl: RangeKnob): number {
+  const v = rangeValue(ctl)
+  return ctl.decimals !== undefined ? Number(v.toFixed(ctl.decimals)) : v
+}
+
+// Commit a typed value, clamped to the knob's (pen-floored) bounds.
+function onRangeNumber(ctl: RangeKnob, raw: string): void {
+  const v = Number(raw)
+  if (Number.isNaN(v)) return
+  emit('set', ctl.key, Math.min(ctl.max, Math.max(rangeMin(ctl), v)))
+}
+
 function rangeDisplay(ctl: RangeKnob): string {
   const v = rangeValue(ctl)
   let text: string
@@ -192,12 +206,28 @@ function setAlgoOverride(key: string, value: unknown): void {
         </template>
       </DualRangeSlider>
 
-      <!-- Single global slider -->
+      <!-- Single global slider (+ editable numeric input) -->
       <div v-else-if="ctl.kind === 'range'" class="space-y-1">
-        <p class="text-[10px] uppercase tracking-wider text-slate-400">
-          {{ t(ctl.labelKey) }}
-          <span class="ml-1 font-mono text-[11px] text-slate-300">{{ rangeDisplay(ctl) }}</span>
-        </p>
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-[10px] uppercase tracking-wider text-slate-400">
+            {{ t(ctl.labelKey) }}
+          </p>
+          <span v-if="ctl.percent" class="font-mono text-[11px] text-slate-300">{{
+            rangeDisplay(ctl)
+          }}</span>
+          <span v-else class="flex items-center gap-1">
+            <input
+              type="number"
+              :min="rangeMin(ctl)"
+              :max="ctl.max"
+              :step="ctl.step"
+              :value="rangeNumber(ctl)"
+              class="w-16 rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-right font-mono text-[11px] text-slate-100"
+              @change="(e) => onRangeNumber(ctl, (e.target as HTMLInputElement).value)"
+            />
+            <span v-if="ctl.unit" class="font-mono text-[10px] text-slate-500">{{ ctl.unit }}</span>
+          </span>
+        </div>
         <input
           type="range"
           :min="rangeMin(ctl)"

@@ -49,5 +49,6 @@ const { t } = useI18n()
         <span class="block text-[9px] text-slate-500">{{ t('printMode.monochromeHint') }}</span>
       </button>
     </div>
+    <p class="text-[10px] leading-snug text-slate-500">{{ t('printMode.modeHint') }}</p>
   </div>
 </template>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAccordionPersistence } from '../../../composables/useAccordionPersistence'
 import type { PreprocessDraft } from '../../../composables/useBitmapDraft'
+import CollapsibleCard from '../shared/CollapsibleCard.vue'
+import LabeledSlider from '../shared/LabeledSlider.vue'
 
 // Sharpen / blur and the two colour toggles (invert, grayscale).
 // Sharpen and blur are mutually useful — a touch of blur first kills
@@ -9,89 +11,81 @@ import type { PreprocessDraft } from '../../../composables/useBitmapDraft'
 // k-means pass; a touch of sharpen afterwards crisps up the edges
 // before vectorisation.
 
-defineProps<{ preprocess: PreprocessDraft }>()
+const props = defineProps<{ preprocess: PreprocessDraft }>()
 
 const { t } = useI18n()
-const expanded = useAccordionPersistence('preprocess.filters', false)
+
+function ditherLabel(v: number): string {
+  return v === 0
+    ? t('preprocess.filters.ditherOff')
+    : `${v} ${t('preprocess.filters.ditherLevels')}`
+}
+
+const isNeutral = computed(
+  () =>
+    props.preprocess.sharpen === 0 &&
+    props.preprocess.blur_px === 0 &&
+    !props.preprocess.invert &&
+    !props.preprocess.grayscale &&
+    props.preprocess.dither_levels === 0,
+)
+
+function reset(): void {
+  props.preprocess.sharpen = 0
+  props.preprocess.blur_px = 0
+  props.preprocess.invert = false
+  props.preprocess.grayscale = false
+  props.preprocess.dither_levels = 0
+}
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-700 bg-slate-800">
-    <button
-      type="button"
-      class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200"
-      :aria-expanded="expanded"
-      @click="expanded = !expanded"
-    >
-      {{ t('preprocess.filters.title') }}
-      <span class="text-slate-500">{{ expanded ? '−' : '+' }}</span>
-    </button>
-    <div v-if="expanded" class="space-y-3 border-t border-slate-700 p-3 text-xs">
-      <label class="block text-slate-400">
-        <div class="flex items-center justify-between">
-          <span>{{ t('preprocess.filters.sharpen') }}</span>
-          <span class="font-mono text-[10px] text-slate-500">{{
-            preprocess.sharpen.toFixed(2)
-          }}</span>
-        </div>
-        <input
-          v-model.number="preprocess.sharpen"
-          type="range"
-          min="0"
-          max="2"
-          step="0.05"
-          class="mt-1 w-full"
-        />
-      </label>
+  <CollapsibleCard
+    card-key="preprocess.filters"
+    :title="t('preprocess.filters.title')"
+    resettable
+    :can-reset="!isNeutral"
+    :reset-label="t('preprocess.reset')"
+    @reset="reset"
+  >
+    <LabeledSlider
+      :model-value="preprocess.sharpen"
+      :label="t('preprocess.filters.sharpen')"
+      :min="0"
+      :max="2"
+      :step="0.05"
+      @update:model-value="(v) => (preprocess.sharpen = v)"
+    />
+    <LabeledSlider
+      :model-value="preprocess.blur_px"
+      :label="t('preprocess.filters.blur')"
+      :min="0"
+      :max="5"
+      :step="0.1"
+      unit="px"
+      @update:model-value="(v) => (preprocess.blur_px = v)"
+    />
 
-      <label class="block text-slate-400">
-        <div class="flex items-center justify-between">
-          <span>{{ t('preprocess.filters.blur') }}</span>
-          <span class="font-mono text-[10px] text-slate-500"
-            >{{ preprocess.blur_px.toFixed(1) }} px</span
-          >
-        </div>
-        <input
-          v-model.number="preprocess.blur_px"
-          type="range"
-          min="0"
-          max="5"
-          step="0.1"
-          class="mt-1 w-full"
-        />
-      </label>
+    <label class="flex items-center gap-2 text-slate-300">
+      <input v-model="preprocess.invert" type="checkbox" class="accent-emerald-500" />
+      <span>{{ t('preprocess.filters.invert') }}</span>
+    </label>
 
-      <label class="flex items-center gap-2 text-slate-300">
-        <input v-model="preprocess.invert" type="checkbox" class="accent-emerald-500" />
-        <span>{{ t('preprocess.filters.invert') }}</span>
-      </label>
+    <label class="flex items-center gap-2 text-slate-300">
+      <input v-model="preprocess.grayscale" type="checkbox" class="accent-emerald-500" />
+      <span>{{ t('preprocess.filters.grayscale') }}</span>
+    </label>
 
-      <label class="flex items-center gap-2 text-slate-300">
-        <input v-model="preprocess.grayscale" type="checkbox" class="accent-emerald-500" />
-        <span>{{ t('preprocess.filters.grayscale') }}</span>
-      </label>
-
-      <label class="block text-slate-400">
-        <div class="flex items-center justify-between">
-          <span>{{ t('preprocess.filters.dither') }}</span>
-          <span class="font-mono text-[10px] text-slate-500">
-            {{
-              preprocess.dither_levels === 0
-                ? t('preprocess.filters.ditherOff')
-                : `${preprocess.dither_levels} ${t('preprocess.filters.ditherLevels')}`
-            }}
-          </span>
-        </div>
-        <input
-          v-model.number="preprocess.dither_levels"
-          type="range"
-          min="0"
-          max="8"
-          step="1"
-          class="mt-1 w-full"
-        />
-        <p class="mt-1 text-[10px] text-slate-500">{{ t('preprocess.filters.ditherHint') }}</p>
-      </label>
-    </div>
-  </div>
+    <LabeledSlider
+      :model-value="preprocess.dither_levels"
+      :label="t('preprocess.filters.dither')"
+      :min="0"
+      :max="8"
+      :step="1"
+      :numeric="false"
+      :format-value="ditherLabel"
+      :hint="t('preprocess.filters.ditherHint')"
+      @update:model-value="(v) => (preprocess.dither_levels = v)"
+    />
+  </CollapsibleCard>
 </template>
