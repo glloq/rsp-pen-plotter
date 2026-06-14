@@ -515,12 +515,31 @@ const { applying, applyError, applyExpertDraft, confirm } = useEditorConfirmatio
   onConfirm: (d) => emit('confirm', d),
 })
 
-const showTextTab = computed<boolean>(() => fileManager.kind.value === 'typography')
+// The Text tab is offered for every source that carries text — pure
+// typography (.txt / .md) AND mixed text+image documents (PDF / DOCX /
+// ODT / RTF / HTML). The tab content (TextTab.vue) already branches on
+// the document vs. typography kind; only this gate was still
+// typography-only, which is why a DOCX opened without it.
+const showTextTab = computed<boolean>(() => fileManager.carriesText.value)
 const defaultExpertTab = computed<EditTabId>(() => {
-  if (fileManager.kind.value === 'typography') return 'text'
+  // Text-bearing sources open on the Text tab so the operator lands on
+  // the controls that actually shape the result (font, Hershey, page),
+  // not the bitmap tabs a document can't be re-rendered through.
+  if (fileManager.carriesText.value) return 'text'
   if (fileManager.showsBitmapForm.value) return 'image'
   return 'layers'
 })
+
+// Multi-page documents (PDF / DOCX / …) report ``page_count`` in the
+// upload metadata. The page navigator lets the operator switch the
+// edited page without leaving the modal; ``goToPage`` re-runs the
+// conversion for the chosen page through the job store.
+const pageCount = computed<number>(() => fileManager.pageCount.value)
+const currentPage = computed<number>(() => fileManager.currentPage.value)
+const hasPages = computed<boolean>(() => pageCount.value > 1)
+function goToPage(page: number): void {
+  void fileManager.goToPage(page)
+}
 const activeExpertTab = ref<EditTabId>('layers')
 
 // =========================================================================
@@ -815,6 +834,38 @@ watch(
               </span>
             </p>
 
+            <!-- Page navigator: multi-page documents (PDF / DOCX / …)
+                 convert one page at a time. The chevrons re-run the
+                 conversion for the chosen page so the operator can edit
+                 a whole document without leaving the modal. -->
+            <div v-if="hasPages" class="modal-v2__pages" data-test="modal-v2-pages">
+              <button
+                type="button"
+                class="modal-v2__page-btn"
+                :disabled="currentPage <= 0"
+                :aria-label="t('v2.modal.pagePrev')"
+                :title="t('v2.modal.pagePrev')"
+                data-test="modal-v2-page-prev"
+                @click="goToPage(currentPage - 1)"
+              >
+                ‹
+              </button>
+              <span class="modal-v2__page-label" data-test="modal-v2-page-label">
+                {{ t('upload.pageOf', { current: currentPage + 1, total: pageCount }) }}
+              </span>
+              <button
+                type="button"
+                class="modal-v2__page-btn"
+                :disabled="currentPage >= pageCount - 1"
+                :aria-label="t('v2.modal.pageNext')"
+                :title="t('v2.modal.pageNext')"
+                data-test="modal-v2-page-next"
+                @click="goToPage(currentPage + 1)"
+              >
+                ›
+              </button>
+            </div>
+
             <!-- Estimate + magazine compatibility row. Time, length, pen
              count come from the placement's layers; the compatibility
              badge counts inks the resolver picked that aren't loaded in
@@ -1106,6 +1157,44 @@ watch(
   color: #cbd5e1;
 }
 
+/* Page navigator for multi-page documents. */
+.modal-v2__pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+.modal-v2__page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 4px;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.modal-v2__page-btn:hover:not(:disabled) {
+  background: #334155;
+}
+.modal-v2__page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.modal-v2__page-btn:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+.modal-v2__page-label {
+  font-size: 0.75rem;
+  color: #cbd5e1;
+  font-variant-numeric: tabular-nums;
+}
+
 .modal-v2__inks {
   display: flex;
   flex-direction: column;
@@ -1284,7 +1373,6 @@ watch(
   outline: 2px solid #10b981;
   outline-offset: 2px;
 }
-
 
 /* Onboarding tour overlay. Anchored to the modal so the preview
    underneath stays partly visible. */

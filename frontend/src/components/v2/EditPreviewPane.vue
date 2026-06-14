@@ -109,6 +109,14 @@ const displayedSvg = computed<string | null>(() => {
   return props.plotSvg ?? props.originalSvg ?? null
 })
 
+// The SVG painted in the sheet-bounded artwork box's "plot" layer.
+// Falls back to the original placement SVG when no adapted render is
+// available — documents and vectors aren't bitmap-rerenderable, so
+// ``plotSvg`` stays null for them and the artwork box would otherwise
+// render blank inside the sheet (the "no preview" a DOCX showed). The
+// converted placement SVG *is* the plot for those sources.
+const plotLayerSvg = computed<string | null>(() => props.plotSvg ?? props.originalSvg ?? null)
+
 // Zoom / pan — same gesture vocabulary as the rest of the app
 // (wheel zooms, drag pans, double-click recentres). The view is
 // intentionally *not* reset on prop changes so the operator can flip
@@ -573,12 +581,12 @@ const displayPercent = computed<number>(() =>
                  side. -->
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div
-              v-if="props.plotSvg"
+              v-if="plotLayerSvg"
               class="artwork-svg artwork-svg--plot"
               :class="{ 'is-stale': loading, 'is-hidden': viewMode === 'source' }"
               :style="viewMode === 'split' ? { clipPath: splitPlotClip } : {}"
               data-test="modal-v2-preview-svg"
-              v-html="props.plotSvg"
+              v-html="plotLayerSvg"
             />
             <!-- Source (original) layer — rendered only when needed so
                  the DOM stays light when the operator is on plot-only.

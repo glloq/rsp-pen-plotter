@@ -535,6 +535,54 @@ describe('EditModalV2 (beginner single-screen)', () => {
     expect(job.isVisible('color-112233')).toBe(false)
   })
 
+  it('offers the Text tab and a page navigator for a multi-page DOCX', async () => {
+    // Regression: a DOCX (mixed text + image) opened with only the bitmap
+    // tabs — no Text tab — and no way to switch pages. The Text tab is now
+    // gated on ``fileManager.carriesText`` (true for PDF / DOCX / … as well
+    // as .txt / .md) and the multi-page navigator reads ``page_count`` from
+    // the upload metadata.
+    const { useUiModeStore } = await import('../../stores/uiMode')
+    const { useJobStore } = await import('../../stores/job')
+    const { useFileManager } = await import('../../composables/useFileManager')
+    const job = useJobStore()
+    const id = job.addEmptyPlacement()
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            job_id: 'job-doc',
+            source_file: 'letter.docx',
+            source_mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>',
+            upload_metadata: { page_count: 3, page: 0 },
+          }
+        : p,
+    )
+    // The file-manager singleton leaks the previous test's File; pin the
+    // active source so ``carriesText`` reads the DOCX extension rather than
+    // a stale photo.jpg name.
+    useFileManager().setFile(
+      new File(['x'], 'letter.docx', {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    )
+    const wrapper = mountModal({ ...PLACEMENT_PROPS, sourceName: 'letter.docx' })
+    await flushPromises()
+
+    // The page navigator surfaces in both modes (it lives in the preview
+    // block, not the tab strip).
+    expect(wrapper.find('[data-test="modal-v2-pages"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="modal-v2-page-prev"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-test="modal-v2-page-next"]').attributes('disabled')).toBeUndefined()
+
+    // Expert mode reveals the tab strip; the Text tab must be present for
+    // a text-bearing document.
+    useUiModeStore().setMode('expert')
+    await nextTick()
+    const tabLabels = wrapper.findAll('[role="tab"]').map((b) => b.text())
+    expect(tabLabels).toContain('editModal.tabText')
+  })
+
   it('expert confirm waits for the draft upload before emitting confirm', async () => {
     // Race guard: in expert mode an operator who tweaked the image / SVG
     // / style tabs hits Generate expecting their changes to land in the
@@ -549,13 +597,11 @@ describe('EditModalV2 (beginner single-screen)', () => {
 
     const job = useJobStore()
     let resolveUpload!: () => void
-    const uploadSpy = vi
-      .spyOn(job, 'upload')
-      .mockReturnValue(
-        new Promise<void>((resolve) => {
-          resolveUpload = resolve
-        }),
-      )
+    const uploadSpy = vi.spyOn(job, 'upload').mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveUpload = resolve
+      }),
+    )
 
     const wrapper = mountModal(PLACEMENT_PROPS)
     await flushPromises()

@@ -1805,6 +1805,8 @@
       "preamble": "Voici ce que ta machine va tracer. Choisis comment tu veux le rendu en dessous, puis clique sur Générer.",
       "preambleDismiss": "Compris, ne plus afficher",
       "sheetCaptionLabel": "Feuille",
+      "pagePrev": "Page précédente",
+      "pageNext": "Page suivante",
       "sheetPickerLabel": "Format de feuille",
       "sheetPortrait": "Portrait",
       "sheetLandscape": "Paysage",
