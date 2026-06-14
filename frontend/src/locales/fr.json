@@ -1769,6 +1769,8 @@
       "layerHide": "Masquer cette couche",
       "layerShow": "Afficher cette couche",
       "layerHidden": "Couche masquée",
+      "layerChangeColor": "Changer la couleur de cette couche",
+      "noColors": "Aucune encre disponible",
       "inkFallbackCta": "Charger cette encre",
       "tourTitle": "Bienvenue dans l'éditeur",
       "tourStep1Title": "L'aperçu en grand",
