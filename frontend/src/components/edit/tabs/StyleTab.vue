@@ -92,7 +92,7 @@ const multicolorPenWidthMm = computed<number | null>(() => {
 
 // When the operator turned ``palette-follows-pens`` on AND the
 // effective palette has at least one chip, mirror it into the draft
-// palette + lock the segmentation method to ``fixed_palette``. The
+// palette + seed the segmentation method as ``fixed_palette``. The
 // palette is truncated to ``bitmap.num_colors`` so the operator can
 // use fewer pens than installed (e.g. only the first 4 of 6 magazine
 // slots) — without that, the "Nombre de couleurs" inputs would write
@@ -119,7 +119,17 @@ watch(
       // (num_colors), not which inks are reachable.
       const limit = Math.min(distinct.length, Math.max(1, Number(n) || distinct.length))
       bitmap.value.palette = distinct.slice(0, limit)
-      bitmap.value.segmentation_method = 'fixed_palette'
+      // Only seed ``fixed_palette`` as the default pens-mode method when
+      // the operator hasn't explicitly chosen a segmentation method in
+      // the SVG tab. Picking kmeans / kmeans_lab there marks ``method``
+      // touched; honouring it keeps the perceptual clustering the
+      // operator selected (which renders the image's own colours)
+      // instead of silently snapping every cluster onto the pen rack —
+      // the "couleurs pas adaptées" the operator saw when this watch
+      // fired ``immediate`` on tab entry and clobbered their choice.
+      if (!draft.segmentationTouched.value.has('method')) {
+        bitmap.value.segmentation_method = 'fixed_palette'
+      }
     }
   },
   { immediate: true },
