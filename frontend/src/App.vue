@@ -166,6 +166,22 @@ const v2SourceKind = computed<import('./domain/policy/schemas').SourceKind>(() =
   const mime = store.selectedPlacement?.source_mime ?? ''
   if (mime === 'image/svg+xml') return 'vector_svg'
   if (mime === 'application/pdf') return 'pdf_doc'
+  // Office + HTML documents are converted to a vector page exactly like a
+  // PDF (LibreOffice → PDF → SVG). They must resolve through the document
+  // pipeline, not the raster one — mapping them to ``bitmap_photo`` made
+  // the resolver pick a segmentation algorithm the source can't be
+  // re-rendered with, so the preview came back empty and the modal showed
+  // the bitmap tabs instead of the text tools.
+  if (
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mime === 'application/vnd.oasis.opendocument.text' ||
+    mime === 'application/rtf' ||
+    mime === 'text/rtf' ||
+    mime === 'text/html'
+  )
+    return 'pdf_doc'
+  // Plain text / Markdown are pure typography sources.
+  if (mime === 'text/plain' || mime === 'text/markdown') return 'text_typography'
   if (mime.startsWith('image/')) return 'bitmap_photo'
   return 'bitmap_photo'
 })

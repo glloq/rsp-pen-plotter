@@ -27,6 +27,12 @@ import { useUiStore } from '../stores/ui'
 const IMAGE_EXT = ['png', 'jpg', 'jpeg', 'tiff', 'webp', 'heic']
 const TYPOGRAPHY_EXT = ['txt', 'md']
 const DOCUMENT_EXT = ['pdf', 'svg', 'eps', 'ps', 'ai', 'docx', 'odt', 'rtf', 'html', 'dxf']
+// Document sources whose pages carry running text the operator can
+// re-render through the Hershey typography path (font, stroke, hershey
+// toggle, block map). The remaining DOCUMENT_EXT entries (svg, eps, ps,
+// ai, dxf) are pure vector graphics with no text model, so the Text tab
+// stays hidden for them.
+const TEXT_DOCUMENT_EXT = ['pdf', 'docx', 'odt', 'rtf', 'html']
 export const FILE_ACCEPT =
   '.svg,.png,.jpg,.jpeg,.tiff,.webp,.heic,.pdf,.dxf,.eps,.ps,.ai,.txt,.md,.html,.docx,.odt,.rtf'
 
@@ -112,6 +118,19 @@ export function useFileManager(t?: Translator, options: UseFileManagerOptions = 
   })
 
   const showsBitmapForm = computed(() => kind.value === 'bitmap' || kind.value === 'document')
+
+  // True when the source carries text the operator can shape with the
+  // typography tools — pure ``.txt`` / ``.md`` typography sources, plus
+  // mixed text+image documents (PDF / DOCX / ODT / RTF / HTML). Gates the
+  // editor's Text tab so a docx with running text exposes the same
+  // font / Hershey / block-map controls a PDF already does, instead of
+  // only the bitmap tabs that a vector document can't honour.
+  const carriesText = computed<boolean>(() => {
+    if (kind.value === 'typography') return true
+    if (kind.value !== 'document') return false
+    const ext = sourceName.value.split('.').pop()?.toLowerCase() ?? ''
+    return TEXT_DOCUMENT_EXT.includes(ext)
+  })
 
   const hasSource = computed<boolean>(() =>
     Boolean(_selectedFile.value || store.selectedPlacement?.source_file),
@@ -649,6 +668,7 @@ export function useFileManager(t?: Translator, options: UseFileManagerOptions = 
     sourceName,
     kind,
     showsBitmapForm,
+    carriesText,
     hasSource,
     previewSvg: previewer.previewSvg,
     previewResult: previewer.previewResult,

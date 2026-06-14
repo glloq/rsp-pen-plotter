@@ -1805,6 +1805,8 @@
       "preamble": "This is what your machine will draw. Pick how you want it rendered below, then click Generate.",
       "preambleDismiss": "Got it, don't show again",
       "sheetCaptionLabel": "Sheet",
+      "pagePrev": "Previous page",
+      "pageNext": "Next page",
       "sheetPickerLabel": "Sheet format",
       "sheetPortrait": "Portrait",
       "sheetLandscape": "Landscape",
