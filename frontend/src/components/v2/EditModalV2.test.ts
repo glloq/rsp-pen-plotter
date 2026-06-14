@@ -49,6 +49,10 @@ const i18n = createI18n({
           paletteLabel: 'Couleurs',
           paletteMachine: 'Magazine machine',
           paletteFree: 'Palette libre',
+          applyExpert: 'Appliquer',
+          applyExpertHint: 'Reconvertit le fichier.',
+          applyExpertClean: 'Aucun changement à appliquer.',
+          applyError: "Impossible d'appliquer vos réglages expert : {message}.",
         },
         intent: {
           fast: 'Rapide',
@@ -523,6 +527,95 @@ describe('EditModalV2 (beginner single-screen)', () => {
     // The eye writes straight to the visibility map — no rerender needed,
     // EditPreviewPane folds it into its opacity overlay.
     expect(job.isVisible('color-112233')).toBe(false)
+  })
+
+  it('expert confirm waits for the draft upload before emitting confirm', async () => {
+    // Race guard: in expert mode an operator who tweaked the image / SVG
+    // / style tabs hits Generate expecting their changes to land in the
+    // G-code. ``confirm`` must commit the dirty draft through
+    // ``uploadSelected`` (→ ``job.upload``) and AWAIT it before emitting,
+    // so the parent never generates from the pre-apply SVG. Drive
+    // ``job.upload`` with a deferred promise to prove the ordering.
+    const { useUiModeStore } = await import('../../stores/uiMode')
+    const { useJobStore } = await import('../../stores/job')
+    const { useBitmapDraft } = await import('../../composables/useBitmapDraft')
+    const { useFileManager } = await import('../../composables/useFileManager')
+
+    const job = useJobStore()
+    let resolveUpload!: () => void
+    const uploadSpy = vi
+      .spyOn(job, 'upload')
+      .mockReturnValue(
+        new Promise<void>((resolve) => {
+          resolveUpload = resolve
+        }),
+      )
+
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    useUiModeStore().setMode('expert')
+    // Make the draft dirty + hand the file manager a source File so
+    // ``uploadSelected`` proceeds past its ``_selectedFile`` guard. The
+    // draft is a module singleton that leaks across tests, so pin a known
+    // baseline first, then mutate it — that way "dirty" holds regardless
+    // of what a prior test committed.
+    const draft = useBitmapDraft()
+    draft.markCommitted()
+    draft.bitmap.value.preprocess.invert = !draft.bitmap.value.preprocess.invert
+    useFileManager().setFile(new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
+    await nextTick()
+
+    await wrapper.find('[data-test="confirm-button"]').trigger('click')
+    await flushPromises()
+
+    // Upload is in flight → confirm must NOT have fired yet, and Generate
+    // is locked so a second click can't race the re-upload.
+    expect(uploadSpy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('confirm')).toBeFalsy()
+    const generate = wrapper.find('[data-test="confirm-button"]')
+    expect((generate.element as HTMLButtonElement).disabled).toBe(true)
+
+    resolveUpload()
+    await flushPromises()
+
+    // Only now, after the upload settled, does confirm emit.
+    expect(wrapper.emitted('confirm')).toBeTruthy()
+    expect((generate.element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('expert confirm aborts (no emit, error shown) when the draft upload fails', async () => {
+    const { useUiModeStore } = await import('../../stores/uiMode')
+    const { useJobStore } = await import('../../stores/job')
+    const { useBitmapDraft } = await import('../../composables/useBitmapDraft')
+    const { useFileManager } = await import('../../composables/useFileManager')
+
+    const job = useJobStore()
+    vi.spyOn(job, 'upload').mockRejectedValue(new Error('network down'))
+
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    useUiModeStore().setMode('expert')
+    const draft = useBitmapDraft()
+    draft.markCommitted()
+    draft.bitmap.value.preprocess.invert = !draft.bitmap.value.preprocess.invert
+    useFileManager().setFile(new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
+    await nextTick()
+
+    await wrapper.find('[data-test="confirm-button"]').trigger('click')
+    await flushPromises()
+
+    // A failed apply must block confirm and surface the reason, so a
+    // network hiccup can never generate from un-applied changes.
+    expect(wrapper.emitted('confirm')).toBeFalsy()
+    const error = wrapper.find('[data-test="modal-v2-apply-error"]')
+    expect(error.exists()).toBe(true)
+    expect(error.text()).toContain('network down')
+    // Generate is usable again so the operator can retry.
+    expect(
+      (wrapper.find('[data-test="confirm-button"]').element as HTMLButtonElement).disabled,
+    ).toBe(false)
   })
 
   it('hides the intent grid and mounts the expert panel when uiMode is expert', async () => {

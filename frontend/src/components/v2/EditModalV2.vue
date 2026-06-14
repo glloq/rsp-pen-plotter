@@ -117,6 +117,24 @@ const previewLoading = ref(false)
 const previewError = ref(false)
 let previewController: AbortController | null = null
 
+// True while an expert draft is being committed and ``confirm`` is
+// waiting on it. Locks the footer actions (Apply / Generate) so the
+// operator can't double-fire mid-upload, and is what lets ``confirm``
+// await the upload before emitting — otherwise the parent could start
+// generating G-code from the pre-apply SVG.
+const applying = ref(false)
+// Reason the last expert apply failed, surfaced in the footer. Cleared
+// when a fresh apply starts. Non-null means ``confirm`` aborted instead
+// of generating from un-applied changes.
+const applyError = ref<string | null>(null)
+
+// Normalise an unknown thrown value to a human string without assuming
+// it's an ``Error`` (a rejected fetch / string throw would crash the
+// ``(err as Error).message`` cast).
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 const INTENTS: readonly Goal[] = ['fast', 'balanced', 'quality'] as const
 
 // True when there's an active placement to apply the decision to.
@@ -463,7 +481,7 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
   void resolveAndPreview()
 }
 
-async function applyExpertDraft(): Promise<void> {
+async function applyExpertDraft(): Promise<boolean> {
   // Commit the V1 draft mutations (image preprocess, segmentation
   // method, master style, typography) back to the placement by
   // re-running /upload with the freshly built options bundle. The
@@ -473,23 +491,42 @@ async function applyExpertDraft(): Promise<void> {
   // warning) shows up in the same shape the operator already knows.
   // No-op when nothing is dirty so a stray click can't trigger a
   // pointless re-upload.
-  if (!bitmapDraft.isDirty.value) return
-  await fileManager.uploadSelected()
+  //
+  // Returns whether the placement is safe to generate from: ``true``
+  // when there was nothing to apply or the upload landed, ``false``
+  // when the upload threw (``applyError`` then carries the reason and
+  // ``confirm`` must not emit). ``applying`` gates the footer buttons
+  // for the duration so a second click can't race a re-upload.
+  if (!bitmapDraft.isDirty.value) return true
+  applying.value = true
+  applyError.value = null
+  try {
+    await fileManager.uploadSelected()
+    return true
+  } catch (err) {
+    applyError.value = errorMessage(err)
+    return false
+  } finally {
+    applying.value = false
+  }
 }
 
-function confirm(): void {
+async function confirm(): Promise<void> {
+  if (!hasPlacement.value || !decision.value || applying.value) return
   // In expert mode, an operator who tweaked the image / SVG / style
   // cards expects their changes to land in the final G-code. Commit
-  // any pending draft mutations through the V1 ``uploadSelected``
-  // path *before* the V2 confirm fires so the placement the parent
-  // receives is the freshly-converted one. Fire-and-forget: the
-  // upload schedules its own progress toast, and the parent's
-  // confirm handler can run against the (already-rehydrated)
-  // placement state once /upload returns.
+  // any pending draft mutations through the V1 ``uploadSelected`` path
+  // and AWAIT it before the V2 confirm fires, so the placement the
+  // parent receives is the freshly-converted one — never the pre-apply
+  // SVG. If the upload fails we surface ``applyError`` and bail without
+  // emitting, so a network hiccup can't generate from un-applied work.
   if (uiMode.isExpert) {
-    void applyExpertDraft()
+    const ok = await applyExpertDraft()
+    if (!ok) return
+    // ``applyExpertDraft`` may have re-uploaded and rehydrated the
+    // placement; re-check before emitting against possibly-cleared state.
+    if (!hasPlacement.value || !decision.value) return
   }
-  if (!hasPlacement.value || !decision.value) return
   if (customStylesActive.value) {
     // Override the resolver's algorithm pick with the operator's manual
     // stack while keeping every other field the resolver decided
@@ -1455,6 +1492,14 @@ watch(
         >
           {{ t('v2.modal.cancel') }}
         </button>
+        <p
+          v-if="applyError"
+          class="error modal-v2__apply-error"
+          role="alert"
+          data-test="modal-v2-apply-error"
+        >
+          {{ t('v2.modal.applyError', { message: applyError }) }}
+        </p>
         <div class="modal-v2__footer-actions">
           <button
             v-if="uiMode.isAssisted"
@@ -1476,7 +1521,7 @@ watch(
             v-if="uiMode.isExpert"
             type="button"
             class="modal-v2__apply-btn"
-            :disabled="!bitmapDraft.isDirty || !hasPlacement"
+            :disabled="!bitmapDraft.isDirty || !hasPlacement || applying"
             :title="
               bitmapDraft.isDirty ? t('v2.modal.applyExpertHint') : t('v2.modal.applyExpertClean')
             "
@@ -1489,7 +1534,7 @@ watch(
           <button
             type="button"
             class="generate-btn"
-            :disabled="!decision || !hasPlacement || resolving"
+            :disabled="!decision || !hasPlacement || resolving || applying"
             :title="!hasPlacement ? t('v2.modal.noPlacement') : undefined"
             data-test="confirm-button"
             @click="confirm"
@@ -1958,6 +2003,12 @@ watch(
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.75rem;
+}
+.modal-v2__apply-error {
+  /* Sit inline between Cancel and the action buttons rather than push
+     the footer taller; the shared ``.error`` margin is for stacked use. */
+  margin: 0;
+  flex: 1 1 auto;
 }
 .generate-btn {
   padding: 0.55rem 1.4rem;
