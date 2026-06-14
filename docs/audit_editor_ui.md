@@ -1,5 +1,9 @@
 # Editor UI Audit (2026-06)
 
+> Suite : `docs/audit_editor_panel.md` poursuit le travail sur l'**ergonomie et
+> l'agencement des contrôles** des onglets du panneau de droite (une fois le thème
+> uniformisé par le présent audit).
+
 Scope: the edit modal and everything it renders —
 `components/v2/EditModalV2.vue`, `EditPreviewPane.vue`, `StyleCustomizer.vue`,
 `LayerInspector.vue`, and the whole `components/edit/**` tree (tabs, cards,
