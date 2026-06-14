@@ -794,11 +794,52 @@ function toggleLayerVisibility(layerId: string): void {
   if (layerId.startsWith('preview-')) return
   const next = !isLayerVisible(layerId)
   job.setVisibility(layerId, next)
-  // The resolver inputs haven't changed; only the render needs a
-  // refresh. ``resolveAndPreview`` is the cheapest reliable path —
-  // policy resolution is fast and the result is identical, so the
-  // re-render dominates and matches Generate's output.
-  void resolveAndPreview()
+  // No re-render needed: EditPreviewPane folds visibility into its
+  // per-layer opacity overlay, so the hidden colour vanishes from the
+  // displayed SVG instantly (the backend /rerender returns every layer
+  // regardless, so a round-trip here would change nothing on screen).
+  // The visibility flag is still persisted to the variant via
+  // ``setVisibility`` so Generate honours it.
+}
+
+// ============================ QUICK INK RE-PICK ========================
+// A caret on the right of each ink chip opens a dropdown of every ink
+// the operator owns (loaded pens ∪ inventory), so a layer's colour can
+// be swapped without diving into the full Layers editor. ``openColorMenu``
+// holds the layerId whose menu is open (one at a time); a transparent
+// backdrop closes it on outside click. Mirrors LayerCard's manual pick:
+// the assignment is ``manual`` so the palette-source resnap leaves it
+// alone. The ``assigned_color_hex`` watcher above re-renders the preview
+// through ``rerenderOnly`` so the swap shows up immediately.
+const openColorMenu = ref<string | null>(null)
+interface PickerColor {
+  hex: string
+  name: string
+}
+const pickerColors = computed<PickerColor[]>(() => {
+  const seen = new Set<string>()
+  const out: PickerColor[] = []
+  const push = (hex: string | undefined, name?: string): void => {
+    if (!hex) return
+    const key = hex.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ hex, name: name || inventoryNameByHex.value.get(key) || hex })
+  }
+  // Loaded pens first (they carry operator-given names), then the rest
+  // of the inventory — matches the ordering the chip labels already use.
+  for (const pen of installedPens.value) push(pen.color, pen.name)
+  for (const entry of availableColors.ordered) push(entry.hex)
+  return out
+})
+function toggleColorMenu(layerId: string): void {
+  openColorMenu.value = openColorMenu.value === layerId ? null : layerId
+}
+function assignInk(layerId: string, hex: string): void {
+  openColorMenu.value = null
+  // Synthetic live-preview ids have no real placement layer to patch.
+  if (layerId.startsWith('preview-')) return
+  job.updateLayer(layerId, { assigned_color_hex: hex, color_assignment: 'manual' })
 }
 
 // ============================ EXPERT MODE ==============================
@@ -1024,6 +1065,12 @@ const dialogRoot = ref<HTMLElement | null>(null)
 function onWindowKey(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     event.preventDefault()
+    // An open ink-picker dropdown swallows the first Escape so the
+    // operator can dismiss the menu without closing the whole modal.
+    if (openColorMenu.value) {
+      openColorMenu.value = null
+      return
+    }
     emit('cancel')
     return
   }
@@ -1300,6 +1347,51 @@ watch(
                     />
                     <span class="modal-v2__ink-name">{{ ink.displayName }}</span>
                   </button>
+                  <!-- Right-side caret: quick re-pick of this layer's ink
+                   from the colours the operator owns. Hidden for the
+                   synthetic live-preview swatches (no real layer to
+                   patch). -->
+                  <button
+                    v-if="!ink.layerId.startsWith('preview-')"
+                    type="button"
+                    class="modal-v2__ink-more"
+                    aria-haspopup="listbox"
+                    :aria-expanded="openColorMenu === ink.layerId"
+                    :title="t('v2.modal.layerChangeColor')"
+                    :aria-label="t('v2.modal.layerChangeColor')"
+                    :data-test="`modal-v2-ink-more-${ink.layerId}`"
+                    @click="toggleColorMenu(ink.layerId)"
+                  >
+                    <span aria-hidden="true">▾</span>
+                  </button>
+                  <div
+                    v-if="openColorMenu === ink.layerId"
+                    class="modal-v2__ink-menu"
+                    role="listbox"
+                    :data-test="`modal-v2-ink-menu-${ink.layerId}`"
+                  >
+                    <button
+                      v-for="c in pickerColors"
+                      :key="c.hex"
+                      type="button"
+                      role="option"
+                      class="modal-v2__ink-menu-item"
+                      :class="{ 'is-active': c.hex.toLowerCase() === ink.hex.toLowerCase() }"
+                      :aria-selected="c.hex.toLowerCase() === ink.hex.toLowerCase()"
+                      :data-test="`modal-v2-ink-pick-${ink.layerId}-${c.hex.replace('#', '')}`"
+                      @click="assignInk(ink.layerId, c.hex)"
+                    >
+                      <span
+                        class="modal-v2__ink-swatch"
+                        :style="{ backgroundColor: c.hex }"
+                        aria-hidden="true"
+                      />
+                      <span class="modal-v2__ink-name">{{ c.name }}</span>
+                    </button>
+                    <p v-if="!pickerColors.length" class="modal-v2__ink-menu-empty">
+                      {{ t('v2.modal.noColors') }}
+                    </p>
+                  </div>
                   <button
                     v-if="ink.isFallback"
                     type="button"
@@ -1313,6 +1405,12 @@ watch(
                   </button>
                 </li>
               </ul>
+              <!-- Outside-click catcher: closes whichever ink menu is open. -->
+              <div
+                v-if="openColorMenu"
+                class="modal-v2__ink-menu-backdrop"
+                @click="openColorMenu = null"
+              />
             </div>
           </div>
           <!-- end preview block -->
@@ -1999,6 +2097,7 @@ watch(
 }
 /* Ink chips now act as visibility toggles. */
 .modal-v2__ink-item {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
@@ -2071,6 +2170,86 @@ watch(
 .modal-v2__ink-cta:focus-visible {
   outline: 2px solid #10b981;
   outline-offset: 2px;
+}
+
+/* Right-side caret + quick ink-picker dropdown. */
+.modal-v2__ink-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.modal-v2__ink-more:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+.modal-v2__ink-more:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+.modal-v2__ink-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+.modal-v2__ink-menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  max-height: 14rem;
+  min-width: 9rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0f172a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.modal-v2__ink-menu-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+}
+.modal-v2__ink-menu-item:hover {
+  background: #1e293b;
+}
+.modal-v2__ink-menu-item.is-active {
+  border-color: #10b981;
+  color: #a7f3d0;
+}
+.modal-v2__ink-menu-item:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+.modal-v2__ink-menu-empty {
+  margin: 0;
+  padding: 0.35rem 0.45rem;
+  color: #64748b;
+  font-size: 0.7rem;
 }
 
 .modal-v2__footer-actions {
