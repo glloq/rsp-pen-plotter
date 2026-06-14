@@ -569,9 +569,40 @@ export const useJobStore = defineStore('job', () => {
     }, delayMs)
   }
 
+  // Pre-flush hooks let UI surfaces that debounce their *own*
+  // ``layer_algorithms`` propagation OUTSIDE the store drain that
+  // pending work before /preflight or /generate reads ``placement.svg``.
+  // The style-knob sliders (MasterStyleParams / MultiColorMasterStyleParams)
+  // keep a local trailing-edge timer — one propagation ~120ms after the
+  // last drag input — so a slider drag doesn't patch every layer on each
+  // pixel of travel. That timer is invisible to ``flushRerender``: without
+  // these hooks, tweaking a style knob and immediately hitting Generate
+  // raced — the local timer hadn't fired, so ``layer_algorithms`` still
+  // held the previous recipe and the composite baked the OLD style into
+  // the G-code while the live /preview already showed the new one.
+  const flushHooks = new Set<() => void | Promise<void>>()
+  function registerRerenderFlushHook(hook: () => void | Promise<void>): () => void {
+    flushHooks.add(hook)
+    return () => {
+      flushHooks.delete(hook)
+    }
+  }
+
   // Drain any debounced + in-flight rerender so callers can safely read
   // ``placement.svg`` afterwards. Safe to call when nothing is pending.
   async function flushRerender(): Promise<void> {
+    // Run component-side pre-flush hooks first so their pending
+    // ``layer_algorithms`` writes + the rerender they schedule are
+    // captured by the store timer drain below.
+    for (const hook of [...flushHooks]) {
+      try {
+        await hook()
+      } catch {
+        // A failing hook must not strand /generate: it only means that
+        // surface couldn't re-propagate, in which case the existing
+        // ``layer_algorithms`` still render — just without the last tweak.
+      }
+    }
     if (rerenderTimer) {
       clearTimeout(rerenderTimer)
       rerenderTimer = null
@@ -1866,6 +1897,7 @@ export const useJobStore = defineStore('job', () => {
     runPreflight,
     generate,
     flushRerender,
+    registerRerenderFlushHook,
   }
 })
 
