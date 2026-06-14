@@ -29,6 +29,7 @@ import type {
 import { resolveEffectivePalette } from '../../lib/effectivePalette'
 import { assignPoolHexes } from '../../lib/nearestColor'
 import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
+import { recolorPreviewSvg } from '../../lib/previewRecolor'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
 import { useUiStore } from '../../stores/ui'
@@ -544,6 +545,44 @@ const inventoryNameByHex = computed(() => {
   }
   return map
 })
+
+// Live-preview centroid → pool-ink mapping (expert mode only).
+//
+// The /preview SVG renders each cluster in its raw segmentation CENTROID
+// (the expert draft doesn't ship ``ink_pool``), but after Apply the job
+// store re-snaps every layer onto the active pool with the same
+// greedy-unique ΔE matching. The chips already show those snapped inks;
+// this exposes the per-centroid snap once so BOTH the chips and the
+// preview recolor below read from it. Without sharing the map, the
+// preview kept showing the photo's own colours while the chip strip
+// listed only the few pens that will actually draw — "la preview a plus
+// de couleurs que celles listées". ``null`` outside expert mode / before
+// a live palette exists, so the assisted pipeline (which already renders
+// snapped inks via /rerender + inkColorsFor) is untouched.
+interface PreviewSnap {
+  /** centroid hex (lowercased) → the pool ink it draws with. */
+  map: Map<string, string>
+  /** Per-cluster rows in document order, for the chip strip. */
+  rows: { centroid: string; ink: string; isFallback: boolean }[]
+}
+const previewInkSnap = computed<PreviewSnap | null>(() => {
+  const livePalette = fileManager.previewResult?.value?.palette ?? null
+  if (!uiMode.isExpert || !livePalette || livePalette.length === 0) return null
+  const pool = effectivePool.value
+  const snapped = assignPoolHexes(
+    livePalette.map((entry) => ({ sourceHex: entry.color })),
+    pool,
+  )
+  const map = new Map<string, string>()
+  const rows = livePalette.map((entry, idx) => {
+    const ink = snapped[idx] ?? entry.color
+    // Map even fallback clusters (ink === centroid) so the recolor pass
+    // is a no-op for them rather than leaving a gap.
+    map.set(entry.color.toLowerCase(), ink)
+    return { centroid: entry.color, ink, isFallback: snapped[idx] === null }
+  })
+  return { map, rows }
+})
 const inkSwatches = computed<InkSwatch[]>(() => {
   // Prefer the LIVE /preview palette when the V1 cards have just
   // produced one (expert mode tweaks): it reflects what the
@@ -553,21 +592,14 @@ const inkSwatches = computed<InkSwatch[]>(() => {
   // showed the previous /upload's colours even after the operator
   // changed k-means settings in the Style tab — exactly the "couleurs
   // pas à jour" the operator flagged.
-  const livePalette = fileManager.previewResult?.value?.palette ?? null
-  if (uiMode.isExpert && livePalette && livePalette.length > 0) {
-    // The /preview palette carries the raw segmentation CENTROIDS (the
-    // expert draft doesn't ship ``ink_pool``), but after Apply the job
-    // store re-snaps every layer onto the active pool. Run the same
-    // greedy-unique ΔE matching here so the chips show the inks the
-    // print will actually use — otherwise the strip "proposes" colours
-    // that never match the layer cards after committing.
-    const pool = effectivePool.value
-    const snapped = assignPoolHexes(
-      livePalette.map((entry) => ({ sourceHex: entry.color })),
-      pool,
-    )
-    return livePalette.map((entry, idx) => {
-      const hex = snapped[idx] ?? entry.color
+  // Expert mode: the chips mirror the live /preview clusters, snapped
+  // onto the active pool by ``previewInkSnap`` (the same map that
+  // recolours the preview SVG, so chips and preview agree on the inks
+  // that will actually be drawn).
+  const snap = previewInkSnap.value
+  if (snap) {
+    return snap.rows.map((row, idx) => {
+      const hex = row.ink
       const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
       const name = namedMatch ?? hex
       // Synthesise a stable layerId so the v-for keys stay stable
@@ -581,7 +613,7 @@ const inkSwatches = computed<InkSwatch[]>(() => {
         displayHex: namedMatch ? hex : '',
         // No pool ink to draw this cluster with (empty pool) — same
         // "load the magazine" affordance as the committed-layer branch.
-        isFallback: snapped[idx] === null,
+        isFallback: row.isFallback,
       }
     })
   }
@@ -953,7 +985,11 @@ const expertPreviewSvg = computed<string | null>(() => {
   const activePlacement = job.selectedPlacementId
   if (!fileForPlacement || !activePlacement) return null
   if (fileForPlacement !== activePlacement) return null
-  return svg
+  // Recolour the raw centroid render to the pool inks the chips list (and
+  // the print will use), so the operator doesn't see the photo's own
+  // colours in the preview while only a handful of pens are listed below.
+  const snap = previewInkSnap.value
+  return snap ? recolorPreviewSvg(svg, snap.map) : svg
 })
 const expertPreviewLoading = computed<boolean>(() => {
   if (!uiMode.isExpert) return false
