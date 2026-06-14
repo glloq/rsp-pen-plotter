@@ -102,9 +102,29 @@ function removePaletteColour(i: number): void {
   }
 }
 
+// Accept ``#rgb`` / ``#rrggbb`` (with or without the leading #), normalise
+// to lowercase ``#rrggbb``. Returns null for anything else so a fat-fingered
+// hex can't slip a non-colour string into the palette (which the colour
+// swatch can't render and the backend would choke on).
+function normalizeHex(raw: string): string | null {
+  let s = raw.trim().toLowerCase()
+  if (!s.startsWith('#')) s = `#${s}`
+  if (/^#[0-9a-f]{3}$/.test(s)) {
+    s = `#${s
+      .slice(1)
+      .split('')
+      .map((c) => c + c)
+      .join('')}`
+  }
+  return /^#[0-9a-f]{6}$/.test(s) ? s : null
+}
+
 function updatePaletteColour(i: number, value: string): void {
+  const norm = normalizeHex(value)
   const next = [...props.bitmap.palette]
-  next[i] = value
+  // On invalid input keep the previous value; reassign the array regardless
+  // so the text field's :value snaps back instead of retaining garbage.
+  if (norm !== null) next[i] = norm
   props.bitmap.palette = next
 }
 
@@ -135,11 +155,12 @@ const droppedAsBackground = computed<string[]>(() => {
       <div class="flex overflow-hidden rounded border border-slate-700">
         <button
           type="button"
-          class="px-2 py-0.5 text-[10px] transition"
+          class="px-2 py-0.5 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-40"
           :class="
             source === 'pens' ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:bg-slate-800'
           "
           :disabled="!installedPenColors.length"
+          :title="!installedPenColors.length ? t('palette.noPensInstalled') : undefined"
           @click="selectPens"
         >
           {{ t('palette.followPens') }}
@@ -237,6 +258,9 @@ const droppedAsBackground = computed<string[]>(() => {
           <input
             type="text"
             :value="hex"
+            maxlength="7"
+            placeholder="#rrggbb"
+            :aria-label="t('convert.specificColors')"
             class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
             @change="(e) => updatePaletteColour(i, (e.target as HTMLInputElement).value)"
           />

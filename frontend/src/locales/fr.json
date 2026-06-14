@@ -890,6 +890,7 @@
     "bulkPen": "Stylo",
     "bulkStyle": "Style",
     "bulkReset": "Réinitialiser les overrides",
+    "bulkResetHint": "Efface les overrides par calque des calques sélectionnés pour revenir au style maître.",
     "bulkClear": "Effacer la sélection",
     "totalLength": "Longueur totale",
     "estimatedTime": "Durée estimée",

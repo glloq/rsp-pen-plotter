@@ -890,6 +890,7 @@
     "bulkPen": "Pen",
     "bulkStyle": "Style",
     "bulkReset": "Reset overrides",
+    "bulkResetHint": "Clear per-layer overrides on the selected layers so they fall back to the master style.",
     "bulkClear": "Clear selection",
     "totalLength": "Total length",
     "estimatedTime": "Estimated time",

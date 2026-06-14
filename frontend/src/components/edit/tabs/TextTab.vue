@@ -5,6 +5,7 @@ import { getFonts } from '../../../api/client'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 import { useFileManager } from '../../../composables/useFileManager'
 import BlockMapCard from '../BlockMapCard.vue'
+import TabEmptyState from '../shared/TabEmptyState.vue'
 import TypographyCard from '../source/TypographyCard.vue'
 
 // Text tab — dedicated home for every text-related control. For
@@ -40,7 +41,5 @@ onMounted(async () => {
     <BlockMapCard />
   </section>
 
-  <p v-else class="text-[11px] text-slate-500">
-    {{ t('text.notApplicable') }}
-  </p>
+  <TabEmptyState v-else :message="t('text.notApplicable')" />
 </template>

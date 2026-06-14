@@ -5,6 +5,7 @@ import { useFileManager } from '../../../composables/useFileManager'
 import { useJobStore } from '../../../stores/job'
 import DetailPicker from '../shared/DetailPicker.vue'
 import LabeledSlider from '../shared/LabeledSlider.vue'
+import TabEmptyState from '../shared/TabEmptyState.vue'
 import SegmentationMethodCard from '../svg/SegmentationMethodCard.vue'
 
 // SVG tab — every technical knob that drives image → SVG conversion:
@@ -124,11 +125,7 @@ function onSimplifyChange(v: number): void {
     <SegmentationMethodCard :bitmap="bitmap" :is-document="fm.kind.value === 'document'" />
   </section>
 
-  <p v-else-if="!fm.hasSource.value" class="text-[11px] text-slate-500">
-    {{ t('svg.noSource') }}
-  </p>
+  <TabEmptyState v-else-if="!fm.hasSource.value" :message="t('svg.noSource')" />
 
-  <p v-else class="text-[11px] text-slate-500">
-    {{ t('svg.notApplicable') }}
-  </p>
+  <TabEmptyState v-else :message="t('svg.notApplicable')" />
 </template>

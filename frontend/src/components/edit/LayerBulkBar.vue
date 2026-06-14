@@ -123,7 +123,7 @@ function toggleStyle(): void {
             :key="style.id"
             type="button"
             class="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-left text-[11px] text-slate-200 hover:border-emerald-500"
-            :title="style.descriptionKey ? t(style.descriptionKey) : ''"
+            :title="style.descriptionKey ? t(style.descriptionKey) : t(style.labelKey)"
             @click="applyStyleToAll(style)"
           >
             {{ t(style.labelKey) }}
@@ -134,7 +134,8 @@ function toggleStyle(): void {
 
     <button
       type="button"
-      class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-300 hover:border-rose-500 hover:text-rose-200"
+      class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-slate-300 hover:border-emerald-600 hover:text-emerald-200"
+      :title="t('layers.bulkResetHint')"
       @click="resetOverrides"
     >
       {{ t('layers.bulkReset') }}
