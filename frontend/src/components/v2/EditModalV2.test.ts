@@ -635,5 +635,10 @@ describe('EditModalV2 (beginner single-screen)', () => {
     // Intent cards must be hidden in expert mode — they belong to the
     // assisted single-screen flow.
     expect(wrapper.find('[data-test="intent-balanced"]').exists()).toBe(false)
+    // The expert tab strip is async-loaded (defineAsyncComponent) to keep
+    // it out of the assisted chunk; flush the dynamic import and confirm
+    // it actually mounts rather than silently failing to resolve.
+    await flushPromises()
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(true)
   })
 })

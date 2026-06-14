@@ -14,7 +14,7 @@
 // click. Power-user details (algorithme, couches, raisonnement) move to
 // the full editor, reachable via "Ouvrir l'éditeur complet".
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { libraryFilePreviewImageUrl, type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
@@ -47,12 +47,7 @@ import {
 } from '../../composables/useEditorPreflight'
 import { useEditorOnboarding } from '../../composables/useEditorOnboarding'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
-import LayersSection from '../LayersSection.vue'
-import EditTabs, { type EditTabId } from '../edit/EditTabs.vue'
-import ImageTab from '../edit/tabs/ImageTab.vue'
-import SvgTab from '../edit/tabs/SvgTab.vue'
-import StyleTab from '../edit/tabs/StyleTab.vue'
-import TextTab from '../edit/tabs/TextTab.vue'
+import type { EditTabId } from '../edit/EditTabs.vue'
 import SheetPicker from './SheetPicker.vue'
 import { BEGINNER_STYLES, deriveBeginnerStack, type CustomStyleSelection } from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
@@ -83,6 +78,19 @@ const emit = defineEmits<{
   (e: 'cancel'): void
   (e: 'confirm', decision: PolicyDecision): void
 }>()
+
+// Expert-mode surfaces are async-loaded: they pull in the heavy V1 source
+// cards (preprocess, segmentation, master style, typography) that an
+// assisted-mode operator never touches. Lazy-loading keeps them out of
+// the modal's initial chunk so the default (assisted) open stays light;
+// they fetch the first time the operator flips to expert. All render
+// behind ``v-if="uiMode.isExpert"`` so there's no flash on first paint.
+const EditTabs = defineAsyncComponent(() => import('../edit/EditTabs.vue'))
+const ImageTab = defineAsyncComponent(() => import('../edit/tabs/ImageTab.vue'))
+const SvgTab = defineAsyncComponent(() => import('../edit/tabs/SvgTab.vue'))
+const StyleTab = defineAsyncComponent(() => import('../edit/tabs/StyleTab.vue'))
+const TextTab = defineAsyncComponent(() => import('../edit/tabs/TextTab.vue'))
+const LayersSection = defineAsyncComponent(() => import('../LayersSection.vue'))
 
 const { t } = useI18n()
 const ui = useUiStore()
