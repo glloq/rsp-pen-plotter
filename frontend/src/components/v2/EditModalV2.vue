@@ -26,14 +26,12 @@ import type {
   SourceKind,
 } from '../../domain/policy/schemas'
 import { assignPoolHexes } from '../../lib/nearestColor'
-import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
 import { recolorPreviewSvg } from '../../lib/previewRecolor'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
 import { useUiStore } from '../../stores/ui'
 import { useUiModeStore } from '../../stores/uiMode'
 import { useJobStore } from '../../stores/job'
-import { usePlotterStore } from '../../stores/plotter'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
 import { useEditState } from '../../composables/useEditState'
 import { useAlgorithmsStore } from '../../stores/algorithms'
@@ -42,6 +40,11 @@ import { useFileManager } from '../../composables/useFileManager'
 import { useEditorPaletteSegmentation } from '../../composables/useEditorPaletteSegmentation'
 import { useEditorPreviewPipeline } from '../../composables/useEditorPreviewPipeline'
 import { useEditorConfirmation } from '../../composables/useEditorConfirmation'
+import {
+  useEditorPreflight,
+  formatDuration,
+  formatLengthMeters,
+} from '../../composables/useEditorPreflight'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayersSection from '../LayersSection.vue'
 import EditTabs, { type EditTabId } from '../edit/EditTabs.vue'
@@ -90,7 +93,6 @@ const uiMode = useUiModeStore()
 const job = useJobStore()
 const paletteSource = usePaletteSourceStore()
 const availableColors = useAvailableColorsStore()
-const plotter = usePlotterStore()
 
 const sourceKind = ref<SourceKind>(props.initialSourceKind ?? 'bitmap_photo')
 // Initial palette mode: prop wins, else mirror the global palette source
@@ -327,147 +329,25 @@ const inkSwatches = computed<InkSwatch[]>(() => {
   })
 })
 
-// ============================ ESTIMATE =================================
-// Time, length and pen count for the placement being edited. Computed
-// straight from the ``layers`` prop (same data the job store uses for
-// its plan-wide aggregates), so the operator sees what *this* placement
-// will cost — not what the whole plan adds up to. Falls back to null
-// when there's no placement; the template hides the row in that case.
-const DEFAULT_SPEED_MM_S = 60
-function effectiveSpeed(layer: LayerInfo): number {
-  return layer.drawing_speed_mm_s ?? job.selectedProfile?.drawing_speed_mm_s ?? DEFAULT_SPEED_MM_S
-}
-const estimatedLengthMm = computed<number>(() => {
-  const layers = props.layers ?? []
-  return layers.reduce((sum, l) => sum + (l.total_length_mm ?? 0), 0)
+// ======================= PREFLIGHT + ESTIMATES ========================
+// Drawing estimates (length / time / required pen count), ink
+// compatibility and the four-chip "am I ready?" checklist — all derived
+// state, owned by ``useEditorPreflight``. Only the bindings the template
+// reads are destructured here. The live preview pane (zoom, pan, sheet
+// outline) lives in EditPreviewPane.vue; this parent only forwards SVGs
+// and flags.
+const {
+  estimatedLengthMm,
+  estimatedDurationSeconds,
+  requiredPenCount,
+  hasEstimate,
+  preflightItems,
+  openMagazine,
+} = useEditorPreflight({
+  layers: () => props.layers,
+  hasPlacement,
+  t,
 })
-const estimatedDurationSeconds = computed<number>(() => {
-  const layers = props.layers ?? []
-  return layers.reduce((sum, l) => {
-    const speed = effectiveSpeed(l)
-    return sum + (speed > 0 ? (l.total_length_mm ?? 0) / speed : 0)
-  }, 0)
-})
-const requiredPenCount = computed<number>(() => {
-  const layers = props.layers ?? []
-  const hexes = new Set<string>()
-  for (const layer of layers) {
-    const hex = (layer.assigned_color_hex ?? layer.source_color ?? '').toLowerCase()
-    if (hex) hexes.add(hex)
-  }
-  return hexes.size
-})
-const hasEstimate = computed<boolean>(() => estimatedLengthMm.value > 0)
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '—'
-  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes} min`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m === 0 ? `${h} h` : `${h} h ${m}`
-}
-function formatLengthMeters(mm: number): string {
-  if (!Number.isFinite(mm) || mm <= 0) return '0'
-  const meters = mm / 1000
-  return meters < 10 ? meters.toFixed(1) : Math.round(meters).toString()
-}
-
-// ============================ COMPATIBILITY ============================
-// Walk every layer's assigned colour, ask ``nearestPen`` for the best
-// installed match, and surface a single green/orange badge with the
-// count of unmatched inks. Clicking the badge opens the magazine
-// editor on the Colors tab so the operator can load the missing pens
-// without leaving the workflow.
-interface PenSlotShape extends PenSlotLike {
-  name?: string
-}
-const installedPens = computed<PenSlotShape[]>(() => {
-  const slots = job.selectedProfile?.pens ?? []
-  return slots
-    .filter((p) => p.installed !== false)
-    .map((p) => ({ index: p.index, color: p.color, installed: true, name: p.name }))
-})
-const missingInkCount = computed<number>(() => {
-  const pens = installedPens.value
-  if (pens.length === 0) return requiredPenCount.value
-  const layers = props.layers ?? []
-  const seen = new Set<string>()
-  let missing = 0
-  for (const layer of layers) {
-    const hex = (layer.assigned_color_hex ?? layer.source_color ?? '').toLowerCase()
-    if (!hex || seen.has(hex)) continue
-    seen.add(hex)
-    const match = nearestPen(hex, pens)
-    // 'far' and 'wrong' both mean the operator will get a visibly
-    // different ink — treat as missing so the warning is honest.
-    if (match.severity === 'far' || match.severity === 'wrong' || match.severity === 'none') {
-      missing += 1
-    }
-  }
-  return missing
-})
-function openMagazine(): void {
-  ui.openPlotterSettings('colors')
-}
-function openConnectionSettings(): void {
-  ui.openPlotterSettings('connection')
-}
-
-// Note: the live preview pane (zoom, pan, original↔plot toggle,
-// sheet outline, gesture hint) lives in EditPreviewPane.vue — the
-// parent only forwards the source / rendered SVG and the loading /
-// error flags.
-
-// ============================ PREFLIGHT CHECKLIST ======================
-// Four things have to be true before Generate can do anything useful:
-// a file is selected, the machine is online, a sheet is picked, and
-// every required ink is loaded. Surfacing them as a single line of
-// green/orange chips means the operator can answer "am I ready?" in
-// one glance instead of hunting four signals across the workspace.
-const machineReady = computed<boolean>(() => plotter.status.connected === true)
-const hasSheet = computed<boolean>(() => ui.previewSheet !== null)
-const inksReady = computed<boolean>(
-  () => requiredPenCount.value === 0 || missingInkCount.value === 0,
-)
-interface PreflightItem {
-  id: 'file' | 'machine' | 'sheet' | 'inks'
-  label: string
-  ok: boolean
-  // ``onFix`` jumps the operator straight to the panel that resolves
-  // the warning. Null when the modal can't help (e.g. the missing
-  // file has to come from the Files panel outside the modal).
-  onFix: (() => void) | null
-}
-const preflightItems = computed<PreflightItem[]>(() => [
-  {
-    id: 'file',
-    label: t('v2.modal.preflightFile'),
-    ok: hasPlacement.value,
-    onFix: null,
-  },
-  {
-    id: 'machine',
-    label: t('v2.modal.preflightMachine'),
-    ok: machineReady.value,
-    onFix: openConnectionSettings,
-  },
-  {
-    id: 'sheet',
-    label: t('v2.modal.preflightSheet'),
-    ok: hasSheet.value,
-    onFix: null,
-  },
-  {
-    id: 'inks',
-    label: t('v2.modal.preflightInks'),
-    ok: inksReady.value,
-    onFix: requiredPenCount.value > 0 ? openMagazine : null,
-  },
-])
-// Header-chip variant doesn't aggregate — each chip carries its own
-// colour. The previous "all-OK" highlight is dropped along with the
-// body-level preflight block.
 
 // ============================ SHEET OUTLINE ============================
 // Translucent rectangle drawn behind the artwork at the active sheet's
