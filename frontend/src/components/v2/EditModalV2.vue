@@ -46,7 +46,7 @@ import { useEditorDialogAccessibility } from '../../composables/useEditorDialogA
 import type { EditTabId } from '../edit/EditTabs.vue'
 import SheetPicker from './SheetPicker.vue'
 import { BEGINNER_STYLES, deriveBeginnerStack, type CustomStyleSelection } from './beginnerStyles'
-import StyleCustomizer from './StyleCustomizer.vue'
+import EditorAssistedPanel from './EditorAssistedPanel.vue'
 import EditorExpertPanel from './EditorExpertPanel.vue'
 import EditorHeader from './EditorHeader.vue'
 import EditorFooter from './EditorFooter.vue'
@@ -111,8 +111,6 @@ const goal = ref<Goal>('balanced')
 // ``applyExpertDraft`` and ``confirm`` — lives in
 // ``useEditorConfirmation``, wired up below once ``bitmapDraft`` and
 // ``fileManager`` exist.
-
-const INTENTS: readonly Goal[] = ['fast', 'balanced', 'quality'] as const
 
 // True when there's an active placement to apply the decision to.
 const hasPlacement = computed(() => Boolean(props.previewSvg || props.sourceName))
@@ -903,63 +901,18 @@ watch(
 
             <!-- Assisted surface: intent + palette + custom-style stack.
              Single-screen, three clicks max to a usable Generate. -->
-            <fieldset v-else class="modal-v2__intent">
-              <legend>{{ t('v2.modal.chooseIntent') }}</legend>
-              <div class="intent-grid">
-                <button
-                  v-for="opt in INTENTS"
-                  :key="opt"
-                  type="button"
-                  :class="{ active: goal === opt }"
-                  :aria-pressed="goal === opt"
-                  :data-test="`intent-${opt}`"
-                  @click="selectGoal(opt)"
-                >
-                  <strong>{{ t(`v2.intent.${opt}`) }}</strong>
-                  <span class="intent-desc">{{ t(`v2.intent.${opt}Desc`) }}</span>
-                </button>
-              </div>
-            </fieldset>
-
-            <!-- Secondary control: where the colours come from. Machine
-             magazine is the safe default (only pens actually loaded);
-             "free" lets the resolver pick from the full palette for
-             operators who'll swap pens by hand. -->
-            <fieldset v-if="uiMode.isAssisted" class="modal-v2__palette">
-              <legend>{{ t('v2.modal.paletteLabel') }}</legend>
-              <div class="palette-toggle">
-                <button
-                  type="button"
-                  :class="{ active: paletteMode === 'machine_only' }"
-                  :aria-pressed="paletteMode === 'machine_only'"
-                  data-test="palette-machine_only"
-                  @click="selectPalette('machine_only')"
-                >
-                  {{ t('v2.modal.paletteMachine') }}
-                </button>
-                <button
-                  type="button"
-                  :class="{ active: paletteMode === 'free' }"
-                  :aria-pressed="paletteMode === 'free'"
-                  data-test="palette-free"
-                  @click="selectPalette('free')"
-                >
-                  {{ t('v2.modal.paletteFree') }}
-                </button>
-              </div>
-            </fieldset>
-
-            <!-- Optional "stack your own styles" panel. Empty stack = the
-             resolver wins (default experience); non-empty stack
-             overrides the algorithm at preview + Generate time. The
-             subcomponent owns the picker UI, the parent owns the
-             selection state via v-model. Bitmap-only — vector and PDF
-             pipelines bypass raster algorithms entirely. -->
-            <StyleCustomizer
-              v-if="uiMode.isAssisted && canCustomizeStyles"
-              v-model="customStyles"
+            <EditorAssistedPanel
+              v-else
+              v-model:custom-styles="customStyles"
+              :goal="goal"
+              :palette-mode="paletteMode"
+              :can-customize-styles="canCustomizeStyles"
+              @select-goal="selectGoal"
+              @select-palette="selectPalette"
             />
 
+            <!-- Resolver error sits outside the panels: a failed resolve
+             can happen in either mode (it runs on open regardless). -->
             <p v-if="resolveError" class="error" data-test="modal-v2-resolve-error">
               {{ t('v2.modal.resolverError', { message: resolveError }) }}
             </p>
@@ -1191,104 +1144,8 @@ watch(
   margin: 0;
 }
 
-.modal-v2__intent {
-  border: none;
-  padding: 0;
-  margin: 0 0 0.5rem;
-}
-.modal-v2__intent legend {
-  padding: 0;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-.intent-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-}
-.intent-grid button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.2rem;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  background: #1e293b;
-  color: inherit;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    transform 0.08s ease;
-  cursor: pointer;
-  text-align: left;
-}
-.intent-grid button.active {
-  border-color: #059669;
-  background: rgba(2, 44, 34, 0.45);
-  box-shadow: inset 0 0 0 1px #059669;
-}
-.intent-grid button:hover:not(.active) {
-  background: #334155;
-  border-color: #475569;
-}
-.intent-grid button:active {
-  transform: scale(0.98);
-}
-.intent-grid button:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.intent-desc {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  font-weight: 400;
-}
-
-.modal-v2__palette {
-  border: none;
-  padding: 0;
-  margin: 0.75rem 0 0;
-}
-.modal-v2__palette legend {
-  padding: 0;
-  margin-bottom: 0.4rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-.palette-toggle {
-  display: inline-flex;
-  border: 1px solid #334155;
-  border-radius: 4px;
-  overflow: hidden;
-}
-.palette-toggle button {
-  padding: 0.35rem 0.8rem;
-  border: none;
-  background: #1e293b;
-  color: #cbd5e1;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.palette-toggle button + button {
-  border-left: 1px solid #334155;
-}
-.palette-toggle button.active {
-  background: rgba(2, 44, 34, 0.6);
-  color: #6ee7b7;
-  font-weight: 600;
-}
-.palette-toggle button:hover:not(.active) {
-  background: #334155;
-}
-.palette-toggle button:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
+/* Assisted controls (intent grid + palette toggle + style stack) live in
+   EditorAssistedPanel.vue. */
 
 .error {
   color: #fca5a5;
