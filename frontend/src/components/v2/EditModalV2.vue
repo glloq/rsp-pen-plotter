@@ -439,7 +439,18 @@ const pipeline = useEditorPreviewPipeline({
     layer_count_estimate: props.layers?.length || 1,
     is_mono_pen_machine: Boolean(props.isMonoPenMachine),
   }),
-  ensureSegmentation: ensureSegmentationMatchesDecision,
+  // In EXPERT mode the operator drives segmentation by hand via the SVG /
+  // Style tabs (the singleton bitmap draft). The resolver's automatic
+  // re-segmentation — which re-uploads the placement as kmeans_lab +
+  // ink_pool to snap every cluster onto the pen pool — would silently
+  // override that choice the moment the colour stores load on a tab
+  // switch (changing the rendered colours and reverting an explicit
+  // k-means pick). Skip it in expert mode so the draft stays authoritative;
+  // assisted mode still gets the automatic pool-matching round-trip.
+  ensureSegmentation: (decision, controller, onUploadStart) =>
+    uiMode.isExpert
+      ? Promise.resolve()
+      : ensureSegmentationMatchesDecision(decision, controller, onUploadStart),
 })
 const { decision, resolving, resolveError, renderedSvg, previewLoading, previewError, schedule } =
   pipeline
