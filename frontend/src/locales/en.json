@@ -1774,8 +1774,6 @@
       "layerHide": "Hide this layer",
       "layerShow": "Show this layer",
       "layerHidden": "Layer hidden",
-      "layerChangeColor": "Change this layer's colour",
-      "noColors": "No inks available",
       "inkFallbackCta": "Load this ink",
       "tourTitle": "Welcome to the editor",
       "tourStep1Title": "Large live preview",
