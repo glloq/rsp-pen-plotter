@@ -52,6 +52,7 @@ import type { EditTabId } from '../edit/EditTabs.vue'
 import SheetPicker from './SheetPicker.vue'
 import { BEGINNER_STYLES, deriveBeginnerStack, type CustomStyleSelection } from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
+import EditorFooter from './EditorFooter.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
 
 const props = defineProps<{
@@ -513,6 +514,10 @@ watch(
 // expert tabs already mutate this singleton via their own imports;
 // reading it here is a no-op for the wiring.
 const bitmapDraft = useBitmapDraft()
+// Top-level alias so the template auto-unwraps the nested ref to a plain
+// boolean (Vue only unwraps refs at the top of the render context, not
+// ``bitmapDraft.isDirty`` reached through an object).
+const draftDirty = bitmapDraft.isDirty
 
 // Race-safe Generate: in expert mode this awaits the dirty-draft upload
 // before emitting ``confirm`` so the parent never generates from the
@@ -1051,66 +1056,19 @@ watch(
         <!-- end .modal-v2__layout -->
       </template>
 
-      <footer class="modal-v2__footer">
-        <button
-          type="button"
-          class="modal-v2__cancel"
-          data-test="modal-v2-cancel"
-          @click="emit('cancel')"
-        >
-          {{ t('v2.modal.cancel') }}
-        </button>
-        <p
-          v-if="applyError"
-          class="error modal-v2__apply-error"
-          role="alert"
-          data-test="modal-v2-apply-error"
-        >
-          {{ t('v2.modal.applyError', { message: applyError }) }}
-        </p>
-        <div class="modal-v2__footer-actions">
-          <button
-            v-if="uiMode.isAssisted"
-            type="button"
-            class="modal-v2__expert-link"
-            :title="t('v2.modal.openExpertHint')"
-            data-test="modal-v2-open-expert"
-            @click="openExpertEditor"
-          >
-            {{ t('v2.modal.openExpert') }}
-          </button>
-          <!-- Expert "Appliquer" button: commits the V1 draft mutations
-               (image preprocess, segmentation, master style, typography)
-               back to the placement via /upload. Disabled when the draft
-               is clean so a stray click can't trigger a pointless
-               re-conversion. The dirty hint after the label tells the
-               operator the button is meaningful right now. -->
-          <button
-            v-if="uiMode.isExpert"
-            type="button"
-            class="modal-v2__apply-btn"
-            :disabled="!bitmapDraft.isDirty || !hasPlacement || applying"
-            :title="
-              bitmapDraft.isDirty ? t('v2.modal.applyExpertHint') : t('v2.modal.applyExpertClean')
-            "
-            data-test="modal-v2-apply-expert"
-            @click="applyExpertDraft"
-          >
-            {{ t('v2.modal.applyExpert') }}
-            <span v-if="bitmapDraft.isDirty" aria-hidden="true" class="dirty-dot">●</span>
-          </button>
-          <button
-            type="button"
-            class="generate-btn"
-            :disabled="!decision || !hasPlacement || resolving || applying"
-            :title="!hasPlacement ? t('v2.modal.noPlacement') : undefined"
-            data-test="confirm-button"
-            @click="confirm"
-          >
-            {{ t('v2.modal.generate') }}
-          </button>
-        </div>
-      </footer>
+      <EditorFooter
+        :apply-error="applyError"
+        :is-assisted="uiMode.isAssisted"
+        :is-expert="uiMode.isExpert"
+        :is-dirty="draftDirty"
+        :has-placement="hasPlacement"
+        :applying="applying"
+        :generate-disabled="!decision || !hasPlacement || resolving || applying"
+        @cancel="emit('cancel')"
+        @open-expert="openExpertEditor"
+        @apply="applyExpertDraft"
+        @generate="confirm"
+      />
 
       <!-- First-run welcome tour. Three steps, no progress lost on
            skip. Renders above the modal body so the operator can still
@@ -1565,46 +1523,7 @@ watch(
 }
 
 /* Footer: Annuler on the left, expert link + Generate on the right. */
-.modal-v2__footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-.modal-v2__apply-error {
-  /* Sit inline between Cancel and the action buttons rather than push
-     the footer taller; the shared ``.error`` margin is for stacked use. */
-  margin: 0;
-  flex: 1 1 auto;
-}
-.generate-btn {
-  padding: 0.55rem 1.4rem;
-  border: 1px solid #059669;
-  background: #059669;
-  color: white;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    transform 0.08s ease;
-}
-.generate-btn:hover:not(:disabled) {
-  background: #10b981;
-}
-.generate-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-.generate-btn:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.generate-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Footer (Cancel / Apply / Generate) lives in EditorFooter.vue. */
 
 /* Estimate + compatibility row. */
 .modal-v2__estimate {
@@ -1722,76 +1641,6 @@ watch(
   outline-offset: 2px;
 }
 
-.modal-v2__footer-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.modal-v2__cancel {
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  font-size: 0.875rem;
-  cursor: pointer;
-  padding: 0.3rem 0.5rem;
-  border-radius: 4px;
-}
-.modal-v2__cancel:hover {
-  background: #1e293b;
-  color: #e2e8f0;
-}
-.modal-v2__cancel:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.modal-v2__apply-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.45rem 1rem;
-  border: 1px solid #047857;
-  background: rgba(2, 44, 34, 0.4);
-  color: #a7f3d0;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    opacity 0.12s ease;
-}
-.modal-v2__apply-btn:hover:not(:disabled) {
-  background: rgba(2, 44, 34, 0.7);
-}
-.modal-v2__apply-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.modal-v2__apply-btn:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.modal-v2__apply-btn .dirty-dot {
-  font-size: 0.6875rem;
-  color: #fbbf24;
-}
-.modal-v2__expert-link {
-  border: none;
-  background: transparent;
-  color: #34d399;
-  font-size: 0.875rem;
-  cursor: pointer;
-  padding: 0.3rem 0.4rem;
-  border-radius: 4px;
-}
-.modal-v2__expert-link:hover {
-  background: rgba(2, 44, 34, 0.4);
-  text-decoration: underline;
-}
-.modal-v2__expert-link:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
 
 /* Preflight checklist: one line of green / amber chips that
    aggregates the four "am I ready to plot" signals. */
