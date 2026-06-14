@@ -48,11 +48,7 @@ import SvgTab from '../edit/tabs/SvgTab.vue'
 import StyleTab from '../edit/tabs/StyleTab.vue'
 import TextTab from '../edit/tabs/TextTab.vue'
 import SheetPicker from './SheetPicker.vue'
-import {
-  BEGINNER_STYLES,
-  deriveBeginnerStack,
-  type CustomStyleSelection,
-} from './beginnerStyles'
+import { BEGINNER_STYLES, deriveBeginnerStack, type CustomStyleSelection } from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
 
@@ -460,11 +456,7 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
   // couleurs en dehors des couleurs dispo"). Union stays the fallback
   // when the inventory is empty so the button is never a no-op.
   await paletteSource.update(
-    mode === 'machine_only'
-      ? 'pens'
-      : availableColors.ordered.length > 0
-        ? 'available'
-        : 'union',
+    mode === 'machine_only' ? 'pens' : availableColors.ordered.length > 0 ? 'available' : 'union',
   )
   await nextTick()
   void resolveAndPreview()
@@ -1283,9 +1275,10 @@ watch(
                     }"
                     :aria-pressed="isLayerVisible(ink.layerId)"
                     :title="
-                      isLayerVisible(ink.layerId)
+                      (isLayerVisible(ink.layerId)
                         ? t('v2.modal.layerHide')
-                        : t('v2.modal.layerShow')
+                        : t('v2.modal.layerShow')) +
+                      (ink.isFallback ? ` · ${t('v2.modal.inkFallback', { hex: ink.hex })}` : '')
                     "
                     :data-test="`modal-v2-ink-${ink.layerId}`"
                     @click="toggleLayerVisibility(ink.layerId)"
@@ -1299,17 +1292,6 @@ watch(
                       aria-hidden="true"
                     />
                     <span class="modal-v2__ink-name">{{ ink.displayName }}</span>
-                  </button>
-                  <button
-                    v-if="ink.isFallback"
-                    type="button"
-                    class="modal-v2__ink-cta"
-                    :title="t('v2.modal.inkFallback', { hex: ink.hex })"
-                    :aria-label="t('v2.modal.inkFallbackCta')"
-                    :data-test="`modal-v2-ink-load-${ink.layerId}`"
-                    @click="openMagazine"
-                  >
-                    {{ t('v2.modal.inkFallbackCta') }}
                   </button>
                 </li>
               </ul>
@@ -2055,24 +2037,6 @@ watch(
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.modal-v2__ink-cta {
-  border: 1px solid #b45309;
-  background: rgba(69, 26, 3, 0.4);
-  color: #fde68a;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.6875rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.modal-v2__ink-cta:hover {
-  background: rgba(69, 26, 3, 0.7);
-}
-.modal-v2__ink-cta:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-
 .modal-v2__footer-actions {
   display: inline-flex;
   align-items: center;
