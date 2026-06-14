@@ -45,6 +45,7 @@ import {
   formatDuration,
   formatLengthMeters,
 } from '../../composables/useEditorPreflight'
+import { useEditorOnboarding } from '../../composables/useEditorOnboarding'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
 import LayersSection from '../LayersSection.vue'
 import EditTabs, { type EditTabId } from '../edit/EditTabs.vue'
@@ -56,10 +57,6 @@ import SheetPicker from './SheetPicker.vue'
 import { BEGINNER_STYLES, deriveBeginnerStack, type CustomStyleSelection } from './beginnerStyles'
 import StyleCustomizer from './StyleCustomizer.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
-
-const ONBOARDING_KEY = 'omniplot.onboarding.editorV2.v1'
-const PREAMBLE_KEY = 'omniplot.preamble.editorV2.v1'
-const TOUR_STEPS = 3
 
 const props = defineProps<{
   initialSourceKind?: SourceKind
@@ -635,75 +632,23 @@ function selectExpertTab(id: EditTabId): void {
   activeExpertTab.value = id
 }
 
-// ============================ ONBOARDING TOUR ==========================
-// Three-step welcome shown the first time the modal opens. Persists a
-// "seen" flag in localStorage so it never reappears. ``skipOnboarding``
-// (prop) overrides for tests and embedded scenarios.
-interface OnboardingState {
-  seen: boolean
-}
-function readOnboarding(): OnboardingState {
-  try {
-    const raw = window.localStorage.getItem(ONBOARDING_KEY)
-    if (!raw) return { seen: false }
-    const parsed = JSON.parse(raw) as Partial<OnboardingState>
-    return { seen: parsed.seen === true }
-  } catch {
-    return { seen: false }
-  }
-}
-function persistOnboardingSeen(): void {
-  try {
-    window.localStorage.setItem(ONBOARDING_KEY, JSON.stringify({ seen: true }))
-  } catch {
-    /* private mode / quota — accept that the tour may replay */
-  }
-}
-const tourStep = ref<number>(0) // 0 = inactive; 1..TOUR_STEPS = visible
-const tourActive = computed<boolean>(() => tourStep.value > 0)
-function startTourIfFirstRun(): void {
-  if (props.skipOnboarding) return
-  if (!hasPlacement.value) return
-  if (readOnboarding().seen) return
-  tourStep.value = 1
-}
-function nextTourStep(): void {
-  if (tourStep.value >= TOUR_STEPS) {
-    dismissTour()
-    return
-  }
-  tourStep.value += 1
-}
-function dismissTour(): void {
-  tourStep.value = 0
-  persistOnboardingSeen()
-}
-
-// ============================ PREAMBLE =================================
-// One-sentence context card above the preview answering "what is this
-// for?". Distinct from the welcome tour: the tour walks the operator
-// through interactions, the preamble names the outcome ("your machine
-// will draw this"). Persisted dismissal so it disappears once read.
-function readPreambleDismissed(): boolean {
-  try {
-    const raw = window.localStorage.getItem(PREAMBLE_KEY)
-    if (!raw) return false
-    const parsed = JSON.parse(raw) as { dismissed?: boolean }
-    return parsed.dismissed === true
-  } catch {
-    return false
-  }
-}
-const preambleDismissed = ref<boolean>(props.skipOnboarding ? true : readPreambleDismissed())
-const preambleVisible = computed<boolean>(() => !preambleDismissed.value && hasPlacement.value)
-function dismissPreamble(): void {
-  preambleDismissed.value = true
-  try {
-    window.localStorage.setItem(PREAMBLE_KEY, JSON.stringify({ dismissed: true }))
-  } catch {
-    /* private mode / quota — accept that the preamble may replay */
-  }
-}
+// ======================= ONBOARDING TOUR + PREAMBLE ====================
+// First-run welcome tour (three steps) and the one-sentence preamble card
+// above the preview — both localStorage-backed so they never replay once
+// seen / dismissed. ``skipOnboarding`` (prop) overrides for tests/embeds.
+const {
+  TOUR_STEPS,
+  tourStep,
+  tourActive,
+  startTourIfFirstRun,
+  nextTourStep,
+  dismissTour,
+  preambleVisible,
+  dismissPreamble,
+} = useEditorOnboarding({
+  skipOnboarding: Boolean(props.skipOnboarding),
+  hasPlacement,
+})
 
 // Ctrl/Cmd+Enter = Générer. No prev/next anymore — there's one screen.
 useKeyboardShortcuts([
