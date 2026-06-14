@@ -122,4 +122,55 @@ describe('EditPreviewPane (sheet / artwork geometry)', () => {
     const plot = wrapper.find<HTMLElement>('[data-test="modal-v2-preview-svg"]')
     expect(plot.element.style.clipPath).toBe('inset(0 0 0 50%)')
   })
+
+  it('collapses a hidden layer to opacity 0 in the preview SVG', async () => {
+    // The ink-chip eye toggles job.visibility; the pane realises it by
+    // setting opacity on the matching ``<g inkscape:label="...">`` group.
+    const { useJobStore } = await import('../../stores/job')
+    const job = useJobStore()
+    const id = job.addEmptyPlacement()
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            layers: [
+              {
+                layer_id: 'color-aabbcc',
+                source_color: '#aabbcc',
+                target_pen_slot: null,
+                draw_order: 0,
+                total_length_mm: 10,
+                path_count: 1,
+                bbox: { x_min: 0, y_min: 0, x_max: 10, y_max: 10 },
+                optimize: true,
+                simplify_tolerance_mm: 0,
+                drawing_speed_mm_s: null,
+                color_label: null,
+                pause_before: 'auto',
+                assigned_color_hex: null,
+                color_assignment: 'auto',
+              },
+            ],
+          }
+        : p,
+    )
+    const plotSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape">' +
+      '<g inkscape:label="color-aabbcc"><path d="M0 0H10"/></g></svg>'
+    const wrapper = mountPane({ plotSvg })
+    await nextTick()
+    await Promise.resolve()
+    const group = () => wrapper.find('[data-test="modal-v2-preview-svg"]').element.querySelector('g')
+    // Visible: opacity unset ('') or explicitly 1 — both render fully opaque.
+    expect(group()?.style.opacity).not.toBe('0')
+
+    job.setVisibility('color-aabbcc', false)
+    await nextTick()
+    expect(group()?.style.opacity).toBe('0')
+
+    // Re-showing restores full opacity.
+    job.setVisibility('color-aabbcc', true)
+    await nextTick()
+    expect(group()?.style.opacity).toBe('1')
+  })
 })

@@ -571,20 +571,28 @@ describe('EditModalV2 (beginner single-screen)', () => {
           }
         : p,
     )
-    const wrapper = mountModal(PLACEMENT_PROPS)
+    const wrapper = mountModal({ ...PLACEMENT_PROPS, attachTo: document.body })
     await flushPromises()
 
-    // Menu is closed until the caret is clicked.
-    expect(wrapper.find('[data-test="modal-v2-ink-menu-color-112233"]').exists()).toBe(false)
+    // The dropdown is teleported to <body> (so the scrollable preview
+    // column can't clip it), so we assert against document.body, not the
+    // wrapper subtree.
+    const menuSel = '[data-test="modal-v2-ink-menu-color-112233"]'
+    expect(document.body.querySelector(menuSel)).toBeNull()
     await wrapper.find('[data-test="modal-v2-ink-more-color-112233"]').trigger('click')
-    expect(wrapper.find('[data-test="modal-v2-ink-menu-color-112233"]').exists()).toBe(true)
+    expect(document.body.querySelector(menuSel)).not.toBeNull()
 
-    await wrapper.find('[data-test="modal-v2-ink-pick-color-112233-ff0000"]').trigger('click')
+    const pick = document.body.querySelector<HTMLElement>(
+      '[data-test="modal-v2-ink-pick-color-112233-ff0000"]',
+    )!
+    pick.click()
+    await nextTick()
     const layer = job.selectedPlacement!.layers[0]!
     expect(layer.assigned_color_hex).toBe('#ff0000')
     expect(layer.color_assignment).toBe('manual')
     // Picking closes the menu.
-    expect(wrapper.find('[data-test="modal-v2-ink-menu-color-112233"]').exists()).toBe(false)
+    expect(document.body.querySelector(menuSel)).toBeNull()
+    wrapper.unmount()
   })
 
   it('hides the intent grid and mounts the expert panel when uiMode is expert', async () => {
