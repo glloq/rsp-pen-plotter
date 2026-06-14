@@ -1810,7 +1810,8 @@
       "sheetLandscape": "Paysage",
       "applyExpert": "Appliquer",
       "applyExpertHint": "Reconvertit le fichier avec les réglages des onglets Image / SVG / Style / Texte.",
-      "applyExpertClean": "Aucun changement à appliquer."
+      "applyExpertClean": "Aucun changement à appliquer.",
+      "applyError": "Impossible d'appliquer vos réglages expert : {message}. Le dessin n'a pas été généré — réessayez."
     },
     "style": {
       "crosshatch": "Hachures",

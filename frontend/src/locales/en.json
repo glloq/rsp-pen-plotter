@@ -1810,7 +1810,8 @@
       "sheetLandscape": "Landscape",
       "applyExpert": "Apply",
       "applyExpertHint": "Re-convert the file with the settings from the Image / SVG / Style / Text tabs.",
-      "applyExpertClean": "No changes to apply."
+      "applyExpertClean": "No changes to apply.",
+      "applyError": "Couldn't apply your expert changes: {message}. The drawing was not generated — try again."
     },
     "style": {
       "crosshatch": "Crosshatch",

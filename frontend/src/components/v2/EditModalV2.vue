@@ -18,7 +18,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { libraryFilePreviewImageUrl, type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
-import { resolveAlgorithmPolicy } from '../../domain/policy/client'
 import type {
   Goal,
   PaletteMode,
@@ -26,36 +25,32 @@ import type {
   PolicyPass,
   SourceKind,
 } from '../../domain/policy/schemas'
-import { resolveEffectivePalette } from '../../lib/effectivePalette'
 import { assignPoolHexes } from '../../lib/nearestColor'
-import { nearestPen, type PenSlotLike } from '../../lib/penMatching'
 import { recolorPreviewSvg } from '../../lib/previewRecolor'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
 import { useUiStore } from '../../stores/ui'
 import { useUiModeStore } from '../../stores/uiMode'
 import { useJobStore } from '../../stores/job'
-import { usePlotterStore } from '../../stores/plotter'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
 import { useEditState } from '../../composables/useEditState'
 import { useAlgorithmsStore } from '../../stores/algorithms'
 import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimator'
 import { useFileManager } from '../../composables/useFileManager'
-import AssistantModeToggle from '../AssistantModeToggle.vue'
-import LayersSection from '../LayersSection.vue'
-import EditTabs, { type EditTabId } from '../edit/EditTabs.vue'
-import ImageTab from '../edit/tabs/ImageTab.vue'
-import SvgTab from '../edit/tabs/SvgTab.vue'
-import StyleTab from '../edit/tabs/StyleTab.vue'
-import TextTab from '../edit/tabs/TextTab.vue'
+import { useEditorPaletteSegmentation } from '../../composables/useEditorPaletteSegmentation'
+import { useEditorPreviewPipeline } from '../../composables/useEditorPreviewPipeline'
+import { useEditorConfirmation } from '../../composables/useEditorConfirmation'
+import { useEditorPreflight } from '../../composables/useEditorPreflight'
+import { useEditorOnboarding } from '../../composables/useEditorOnboarding'
+import { useEditorDialogAccessibility } from '../../composables/useEditorDialogAccessibility'
+import type { EditTabId } from '../edit/EditTabs.vue'
 import SheetPicker from './SheetPicker.vue'
 import { BEGINNER_STYLES, deriveBeginnerStack, type CustomStyleSelection } from './beginnerStyles'
-import StyleCustomizer from './StyleCustomizer.vue'
+import EditorAssistedPanel from './EditorAssistedPanel.vue'
+import EditorExpertPanel from './EditorExpertPanel.vue'
+import EditorHeader from './EditorHeader.vue'
+import EditorFooter from './EditorFooter.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
-
-const ONBOARDING_KEY = 'omniplot.onboarding.editorV2.v1'
-const PREAMBLE_KEY = 'omniplot.preamble.editorV2.v1'
-const TOUR_STEPS = 3
 
 const props = defineProps<{
   initialSourceKind?: SourceKind
@@ -89,7 +84,6 @@ const uiMode = useUiModeStore()
 const job = useJobStore()
 const paletteSource = usePaletteSourceStore()
 const availableColors = useAvailableColorsStore()
-const plotter = usePlotterStore()
 
 const sourceKind = ref<SourceKind>(props.initialSourceKind ?? 'bitmap_photo')
 // Initial palette mode: prop wins, else mirror the global palette source
@@ -105,19 +99,18 @@ const paletteMode = ref<PaletteMode>(
 // single click if they want.
 const goal = ref<Goal>('balanced')
 
-const decision = ref<PolicyDecision | null>(null)
-const resolving = ref(false)
-const resolveError = ref<string | null>(null)
+// The live preview state (``decision``, ``resolving``, ``resolveError``,
+// ``renderedSvg``, ``previewLoading``, ``previewError``) plus the single
+// preview scheduler are owned by ``useEditorPreviewPipeline`` — created
+// once ``fileManager`` exists (it feeds the palette re-segmentation) and
+// destructured below. ``renderedSvg`` holds the adapted result; until it
+// lands the pane falls back to the original placement SVG so it's never
+// blank.
 
-// Live preview state. ``renderedSvg`` holds the adapted result; until
-// it lands we fall back to the original placement SVG so the pane is
-// never blank.
-const renderedSvg = ref<string | null>(null)
-const previewLoading = ref(false)
-const previewError = ref(false)
-let previewController: AbortController | null = null
-
-const INTENTS: readonly Goal[] = ['fast', 'balanced', 'quality'] as const
+// The expert-apply + confirm logic — ``applying``, ``applyError``,
+// ``applyExpertDraft`` and ``confirm`` — lives in
+// ``useEditorConfirmation``, wired up below once ``bitmapDraft`` and
+// ``fileManager`` exist.
 
 // True when there's an active placement to apply the decision to.
 const hasPlacement = computed(() => Boolean(props.previewSvg || props.sourceName))
@@ -174,270 +167,11 @@ const customPasses = computed<PolicyPass[]>(() =>
   }),
 )
 
-/**
- * Resolve the algorithm for the current intent, then render the real
- * result across every layer. Aborts any in-flight preview so rapid
- * intent toggles don't pile up stale renders. Errors degrade
- * gracefully — the original SVG keeps showing and Generate stays
- * usable as long as we have a decision.
- */
-async function resolveAndPreview(): Promise<void> {
-  if (!hasPlacement.value) return
-  previewController?.abort()
-  const controller = new AbortController()
-  previewController = controller
-
-  resolving.value = true
-  resolveError.value = null
-  previewError.value = false
-  try {
-    const d = await resolveAlgorithmPolicy({
-      source_kind: sourceKind.value,
-      goal: goal.value,
-      palette_mode: paletteMode.value,
-      available_colors_count: props.availableColorsCount ?? 1,
-      image_megapixels: props.imageMegapixels ?? null,
-      layer_count_estimate: props.layers?.length || 1,
-      is_mono_pen_machine: Boolean(props.isMonoPenMachine),
-    })
-    if (controller.signal.aborted) return
-    decision.value = d
-  } catch (err) {
-    resolveError.value = (err as Error).message
-    resolving.value = false
-    return
-  }
-  resolving.value = false
-
-  // Apply the decision's segmentation BEFORE rendering: /rerender only
-  // re-inks the clusters the original /upload produced — with the
-  // default 4-colour kmeans, picking 6 inks still rendered 4 muddy
-  // clusters snapped to whatever pool colour was nearest ("I selected
-  // 6 colours and the preview only shows one"). Re-converting with
-  // perceptual clustering (k = pool size) + the backend's ``ink_pool``
-  // remap makes every cluster draw with its own pool ink — including on
-  // low-saturation photos, where the previous fixed_palette approach
-  // sent every pixel to the black/grey pens and left the saturated
-  // ones empty no matter how many the operator picked.
-  await ensureSegmentationMatchesDecision(controller)
-  if (controller.signal.aborted) return
-
-  // Now render the adapted result. Keep the previous render visible
-  // until the new one lands to avoid a flash back to the original.
-  await renderAdaptedPreview(controller)
-}
-
-// ============================ PALETTE → SEGMENTATION ===================
-// The pool the operator is actually pointing at: machine pens, the
-// available-colours inventory, or their union, per the global palette
-// source. Mirrors ``stores/job.currentEffectivePalette`` so the
-// segmentation below lands on exactly the swatches the chips show.
-const effectivePool = computed<string[]>(() => {
-  const pens = (job.selectedProfile?.pens ?? [])
-    .filter((p) => p.installed && p.color)
-    .map((p) => p.color)
-  const available = availableColors.ordered.map((c) => c.hex)
-  return resolveEffectivePalette(paletteSource.source, pens, available)
-})
-
-/**
- * Re-convert the placement when the resolver wants a palette-driven
- * split but the cached segmentation was built with something else (or
- * an older pool). Round-trips /upload with the placement's own source
- * bytes so the new cluster set, layers and rerender cache all match
- * the operator's pool. The conversion is perceptual clustering
- * (``kmeans_lab``, k = pool size) + the backend's ``ink_pool`` remap —
- * each cluster draws with its own distinct pool ink, which keeps
- * working on low-saturation photos where the previous ``fixed_palette``
- * nearest-colour snap starved every non-grey pen. Skipped (cheap) when
- * the persisted ``last_options`` already carry the same pool, so this
- * runs once per placement × pool, not on every preview.
- */
-async function ensureSegmentationMatchesDecision(controller: AbortController): Promise<void> {
-  const d = decision.value
-  if (!d || d.segmentation_method !== 'fixed_palette') return
-  const placement = job.selectedPlacement
-  if (!placement || !placement.source_mime.startsWith('image/')) return
-  const pool = effectivePool.value.map((h) => h.toLowerCase())
-  // A 0/1-colour pool can't drive a multicolour split — keep whatever
-  // segmentation the upload picked (mono pipelines own that case).
-  if (pool.length < 2) return
-  const last = (placement.last_options ?? {}) as Record<string, unknown>
-  const lastPool = (Array.isArray(last.ink_pool) ? (last.ink_pool as string[]) : []).map((h) =>
-    h.toLowerCase(),
-  )
-  if (
-    last.segmentation_method === 'kmeans_lab' &&
-    lastPool.length === pool.length &&
-    lastPool.every((h, i) => h === pool[i])
-  ) {
-    return
-  }
-  await fileManager.ensureSelectedFile()
-  const file = fileManager.selectedFile.value
-  if (!file || controller.signal.aborted) return
-  previewLoading.value = true
-  const built = (fileManager.buildOptions() ?? {}) as Record<string, unknown>
-  // Ask for as many clusters as inks owned (+1 for the paper-white
-  // background cluster k-means spends before drop_background removes it).
-  // Over-asking is harmless now that the ink remap is plain nearest-match
-  // with reuse: a 3-colour image against an 8-ink pool collapses its
-  // extra clusters back onto the nearest inks (3 faithful colours), while
-  // a genuine 6-colour image still uses all 6 inks. The backend also caps
-  // k at the image's distinct colours; 16 stays the hard ceiling.
-  const dropBackground = built.drop_background !== false
-  const numColors = Math.min(pool.length + (dropBackground ? 1 : 0), 16)
-  const options = {
-    ...built,
-    segmentation_method: 'kmeans_lab',
-    segmentation_options: {},
-    num_colors: numColors,
-    ink_pool: pool,
-  }
-  await job.upload(file, options)
-}
-
-// Inventory edits / palette-source flips while the modal is open move
-// the pool under the decision — refresh the conversion + preview so
-// the chips and the render keep matching what the operator just
-// picked. Debounced: an inventory editing session mutates the pool
-// once per swatch.
-let poolRefreshTimer: number | null = null
-watch(
-  () => effectivePool.value.join('|'),
-  (next, prev) => {
-    if (next === prev || !decision.value) return
-    if (poolRefreshTimer !== null) window.clearTimeout(poolRefreshTimer)
-    poolRefreshTimer = window.setTimeout(() => {
-      poolRefreshTimer = null
-      void resolveAndPreview()
-    }, 300)
-  },
-)
-onBeforeUnmount(() => {
-  if (poolRefreshTimer !== null) window.clearTimeout(poolRefreshTimer)
-})
-
-// Per-layer ink assignment → preview coupling. The LayerCard picker
-// writes ``assigned_color_hex`` through the job store, which re-renders
-// the COMMITTED placement SVG — but this modal displays its own
-// adapted render (``renderedSvg``), so the operator assigned an ink
-// and saw nothing change. Re-run the adapted render (it ships
-// ``inkColorsFor`` with every /rerender) whenever any layer's assigned
-// ink moves. Debounced so a quick run through several layers renders
-// once.
-let inkRerenderTimer: number | null = null
-watch(
-  () =>
-    (job.selectedPlacement?.layers ?? [])
-      .map((l) => `${l.layer_id}:${l.assigned_color_hex ?? ''}`)
-      .join('|'),
-  (next, prev) => {
-    if (next === prev || !decision.value) return
-    if (inkRerenderTimer !== null) window.clearTimeout(inkRerenderTimer)
-    inkRerenderTimer = window.setTimeout(() => {
-      inkRerenderTimer = null
-      void rerenderOnly()
-    }, 300)
-  },
-)
-onBeforeUnmount(() => {
-  if (inkRerenderTimer !== null) window.clearTimeout(inkRerenderTimer)
-})
-
-/**
- * Render-only path used both by ``resolveAndPreview`` (after the policy
- * lands) and by ``customStyles`` mutations (where the resolver result
- * hasn't changed but the operator's stack has). Picks between custom
- * passes, resolver multi-pass, and single-algorithm depending on what's
- * active. Errors leave the previous render in place.
- */
-async function renderAdaptedPreview(controller: AbortController): Promise<void> {
-  if (!decision.value) return
-  previewLoading.value = true
-  try {
-    const passes: PolicyPass[] = customStylesActive.value
-      ? customPasses.value
-      : (decision.value.default_passes ?? [])
-    const result = passes.length
-      ? await job.previewPassesOnAllLayers(passes, controller.signal)
-      : await job.previewAlgorithmOnAllLayers(
-          decision.value.default_algorithm,
-          (decision.value.default_options ?? {}) as Record<string, unknown>,
-          controller.signal,
-        )
-    if (controller.signal.aborted) return
-    // ``null`` means nothing renderable (e.g. vector source with no
-    // layers, missing job_id, non-rerenderable) — fall back to the
-    // original placement SVG so the operator's last choice doesn't
-    // leave a stale render on screen. Without this clear, toggling
-    // goal / palette / custom style on a non-rerenderable placement
-    // would silently keep the previous render visible and read as
-    // "the preview doesn't update".
-    if (result) {
-      renderedSvg.value = result.svg
-    } else {
-      renderedSvg.value = null
-    }
-  } catch {
-    if (!controller.signal.aborted) previewError.value = true
-  } finally {
-    if (!controller.signal.aborted) previewLoading.value = false
-  }
-}
-
-/** Re-render without re-resolving — used when only the custom-style
- *  stack changes (the resolver inputs are unchanged, so its answer
- *  would be identical). Aborts any in-flight render. */
-async function rerenderOnly(): Promise<void> {
-  if (!hasPlacement.value || !decision.value) return
-  previewController?.abort()
-  const controller = new AbortController()
-  previewController = controller
-  previewError.value = false
-  await renderAdaptedPreview(controller)
-}
-
-// Operator mutated the custom-style stack (added, removed, or tweaked a
-// slider). Re-render through the cheaper path that skips the policy
-// resolver. The deep watch fires on knob drags too; the AbortController
-// in ``rerenderOnly`` cancels stale renders so slider scrubbing stays
-// responsive.
-watch(customStyles, () => void rerenderOnly(), { deep: true })
-
-// Physical size → render coupling. The /rerender payload carries each
-// layer's pen tip width converted into viewBox units from the
-// placement's mm size (``penWidthsFor``); that's what adapts stroke
-// thickness and floors the fill spacing to the real pen on paper.
-// Changing the sheet format refits the placement (SheetPicker →
-// ``fitSelectedPlacementToSheet``), so the render must re-run at the
-// new size — without this watcher the preview showed the exact same
-// drawing on A6 and A2 even though the physical result differs.
-// Debounced so a quick A6→A5→A4 click run renders once; the
-// AbortController inside ``rerenderOnly`` cancels stale renders.
-let sizeRerenderTimer: number | null = null
-watch(
-  () => [job.selectedPlacement?.width_mm ?? 0, job.selectedPlacement?.height_mm ?? 0] as const,
-  ([w, h], [prevW, prevH]) => {
-    // Sub-0.01 mm deltas are float noise from centring math, not an
-    // operator action — skip so the watcher can't ping-pong.
-    if (Math.abs(w - prevW) < 0.01 && Math.abs(h - prevH) < 0.01) return
-    if (!decision.value) return
-    if (sizeRerenderTimer !== null) window.clearTimeout(sizeRerenderTimer)
-    sizeRerenderTimer = window.setTimeout(() => {
-      sizeRerenderTimer = null
-      void rerenderOnly()
-    }, 300)
-  },
-)
-onBeforeUnmount(() => {
-  if (sizeRerenderTimer !== null) window.clearTimeout(sizeRerenderTimer)
-})
-
 function selectGoal(g: Goal): void {
   if (goal.value === g && decision.value) return
   goal.value = g
-  void resolveAndPreview()
+  // Direct operator action → resolve immediately for a responsive click.
+  schedule('resolve-and-segment', { immediate: true })
 }
 
 async function selectPalette(mode: PaletteMode): Promise<void> {
@@ -460,53 +194,10 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
     mode === 'machine_only' ? 'pens' : availableColors.ordered.length > 0 ? 'available' : 'union',
   )
   await nextTick()
-  void resolveAndPreview()
-}
-
-async function applyExpertDraft(): Promise<void> {
-  // Commit the V1 draft mutations (image preprocess, segmentation
-  // method, master style, typography) back to the placement by
-  // re-running /upload with the freshly built options bundle. The
-  // ``useFileManager.uploadSelected`` path is what the V1 modal's
-  // "Apply" button drove; we reuse it verbatim so the existing
-  // confirmation modal (overwrite warning, multi-pass reupload
-  // warning) shows up in the same shape the operator already knows.
-  // No-op when nothing is dirty so a stray click can't trigger a
-  // pointless re-upload.
-  if (!bitmapDraft.isDirty.value) return
-  await fileManager.uploadSelected()
-}
-
-function confirm(): void {
-  // In expert mode, an operator who tweaked the image / SVG / style
-  // cards expects their changes to land in the final G-code. Commit
-  // any pending draft mutations through the V1 ``uploadSelected``
-  // path *before* the V2 confirm fires so the placement the parent
-  // receives is the freshly-converted one. Fire-and-forget: the
-  // upload schedules its own progress toast, and the parent's
-  // confirm handler can run against the (already-rehydrated)
-  // placement state once /upload returns.
-  if (uiMode.isExpert) {
-    void applyExpertDraft()
-  }
-  if (!hasPlacement.value || !decision.value) return
-  if (customStylesActive.value) {
-    // Override the resolver's algorithm pick with the operator's manual
-    // stack while keeping every other field the resolver decided
-    // (segmentation method, quality tier, fallback chain, …). First
-    // pass mirrors ``default_algorithm`` / ``default_options`` per the
-    // PolicyDecision contract (see schemas.ts ``default_passes`` doc).
-    const passes = customPasses.value
-    const first = passes[0]!
-    emit('confirm', {
-      ...decision.value,
-      default_algorithm: first.algorithm,
-      default_options: first.algorithm_options,
-      default_passes: passes,
-    })
-    return
-  }
-  emit('confirm', decision.value)
+  // Resolve immediately: the ``effectivePool`` watcher also fires from the
+  // source change above, but ``schedule`` clears its pending debounce so
+  // the two collapse into a single resolve instead of a double render.
+  schedule('resolve-and-segment', { immediate: true })
 }
 
 // Swatches shown under the preview: one per layer of the active
@@ -627,147 +318,25 @@ const inkSwatches = computed<InkSwatch[]>(() => {
   })
 })
 
-// ============================ ESTIMATE =================================
-// Time, length and pen count for the placement being edited. Computed
-// straight from the ``layers`` prop (same data the job store uses for
-// its plan-wide aggregates), so the operator sees what *this* placement
-// will cost — not what the whole plan adds up to. Falls back to null
-// when there's no placement; the template hides the row in that case.
-const DEFAULT_SPEED_MM_S = 60
-function effectiveSpeed(layer: LayerInfo): number {
-  return layer.drawing_speed_mm_s ?? job.selectedProfile?.drawing_speed_mm_s ?? DEFAULT_SPEED_MM_S
-}
-const estimatedLengthMm = computed<number>(() => {
-  const layers = props.layers ?? []
-  return layers.reduce((sum, l) => sum + (l.total_length_mm ?? 0), 0)
+// ======================= PREFLIGHT + ESTIMATES ========================
+// Drawing estimates (length / time / required pen count), ink
+// compatibility and the four-chip "am I ready?" checklist — all derived
+// state, owned by ``useEditorPreflight``. Only the bindings the template
+// reads are destructured here. The live preview pane (zoom, pan, sheet
+// outline) lives in EditPreviewPane.vue; this parent only forwards SVGs
+// and flags.
+const {
+  estimatedLengthMm,
+  estimatedDurationSeconds,
+  requiredPenCount,
+  hasEstimate,
+  preflightItems,
+  openMagazine,
+} = useEditorPreflight({
+  layers: () => props.layers,
+  hasPlacement,
+  t,
 })
-const estimatedDurationSeconds = computed<number>(() => {
-  const layers = props.layers ?? []
-  return layers.reduce((sum, l) => {
-    const speed = effectiveSpeed(l)
-    return sum + (speed > 0 ? (l.total_length_mm ?? 0) / speed : 0)
-  }, 0)
-})
-const requiredPenCount = computed<number>(() => {
-  const layers = props.layers ?? []
-  const hexes = new Set<string>()
-  for (const layer of layers) {
-    const hex = (layer.assigned_color_hex ?? layer.source_color ?? '').toLowerCase()
-    if (hex) hexes.add(hex)
-  }
-  return hexes.size
-})
-const hasEstimate = computed<boolean>(() => estimatedLengthMm.value > 0)
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return '—'
-  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes} min`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m === 0 ? `${h} h` : `${h} h ${m}`
-}
-function formatLengthMeters(mm: number): string {
-  if (!Number.isFinite(mm) || mm <= 0) return '0'
-  const meters = mm / 1000
-  return meters < 10 ? meters.toFixed(1) : Math.round(meters).toString()
-}
-
-// ============================ COMPATIBILITY ============================
-// Walk every layer's assigned colour, ask ``nearestPen`` for the best
-// installed match, and surface a single green/orange badge with the
-// count of unmatched inks. Clicking the badge opens the magazine
-// editor on the Colors tab so the operator can load the missing pens
-// without leaving the workflow.
-interface PenSlotShape extends PenSlotLike {
-  name?: string
-}
-const installedPens = computed<PenSlotShape[]>(() => {
-  const slots = job.selectedProfile?.pens ?? []
-  return slots
-    .filter((p) => p.installed !== false)
-    .map((p) => ({ index: p.index, color: p.color, installed: true, name: p.name }))
-})
-const missingInkCount = computed<number>(() => {
-  const pens = installedPens.value
-  if (pens.length === 0) return requiredPenCount.value
-  const layers = props.layers ?? []
-  const seen = new Set<string>()
-  let missing = 0
-  for (const layer of layers) {
-    const hex = (layer.assigned_color_hex ?? layer.source_color ?? '').toLowerCase()
-    if (!hex || seen.has(hex)) continue
-    seen.add(hex)
-    const match = nearestPen(hex, pens)
-    // 'far' and 'wrong' both mean the operator will get a visibly
-    // different ink — treat as missing so the warning is honest.
-    if (match.severity === 'far' || match.severity === 'wrong' || match.severity === 'none') {
-      missing += 1
-    }
-  }
-  return missing
-})
-function openMagazine(): void {
-  ui.openPlotterSettings('colors')
-}
-function openConnectionSettings(): void {
-  ui.openPlotterSettings('connection')
-}
-
-// Note: the live preview pane (zoom, pan, original↔plot toggle,
-// sheet outline, gesture hint) lives in EditPreviewPane.vue — the
-// parent only forwards the source / rendered SVG and the loading /
-// error flags.
-
-// ============================ PREFLIGHT CHECKLIST ======================
-// Four things have to be true before Generate can do anything useful:
-// a file is selected, the machine is online, a sheet is picked, and
-// every required ink is loaded. Surfacing them as a single line of
-// green/orange chips means the operator can answer "am I ready?" in
-// one glance instead of hunting four signals across the workspace.
-const machineReady = computed<boolean>(() => plotter.status.connected === true)
-const hasSheet = computed<boolean>(() => ui.previewSheet !== null)
-const inksReady = computed<boolean>(
-  () => requiredPenCount.value === 0 || missingInkCount.value === 0,
-)
-interface PreflightItem {
-  id: 'file' | 'machine' | 'sheet' | 'inks'
-  label: string
-  ok: boolean
-  // ``onFix`` jumps the operator straight to the panel that resolves
-  // the warning. Null when the modal can't help (e.g. the missing
-  // file has to come from the Files panel outside the modal).
-  onFix: (() => void) | null
-}
-const preflightItems = computed<PreflightItem[]>(() => [
-  {
-    id: 'file',
-    label: t('v2.modal.preflightFile'),
-    ok: hasPlacement.value,
-    onFix: null,
-  },
-  {
-    id: 'machine',
-    label: t('v2.modal.preflightMachine'),
-    ok: machineReady.value,
-    onFix: openConnectionSettings,
-  },
-  {
-    id: 'sheet',
-    label: t('v2.modal.preflightSheet'),
-    ok: hasSheet.value,
-    onFix: null,
-  },
-  {
-    id: 'inks',
-    label: t('v2.modal.preflightInks'),
-    ok: inksReady.value,
-    onFix: requiredPenCount.value > 0 ? openMagazine : null,
-  },
-])
-// Header-chip variant doesn't aggregate — each chip carries its own
-// colour. The previous "all-OK" highlight is dropped along with the
-// body-level preflight block.
 
 // ============================ SHEET OUTLINE ============================
 // Translucent rectangle drawn behind the artwork at the active sheet's
@@ -848,11 +417,104 @@ function openExpertEditor(): void {
 // useFileManager() WITHOUT owner so a tab switch can't abort the
 // shared previewer mid-flight.
 const fileManager = useFileManager(t, { owner: true })
+
+// ============================ PREVIEW PIPELINE =========================
+// Palette-driven re-segmentation + the single preview scheduler. Created
+// here (not at the top of setup) because the segmentation needs the
+// owner ``fileManager`` to round-trip /upload. The pipeline owns all the
+// live preview state the template reads; the four watchers below are the
+// only places that ask for a preview, each via ``schedule(level)``.
+const segmentation = useEditorPaletteSegmentation(fileManager)
+const { effectivePool, ensureSegmentationMatchesDecision } = segmentation
+const pipeline = useEditorPreviewPipeline({
+  hasPlacement,
+  sourceKind,
+  goal,
+  paletteMode,
+  customStylesActive,
+  customPasses,
+  resolveInputs: () => ({
+    available_colors_count: props.availableColorsCount ?? 1,
+    image_megapixels: props.imageMegapixels ?? null,
+    layer_count_estimate: props.layers?.length || 1,
+    is_mono_pen_machine: Boolean(props.isMonoPenMachine),
+  }),
+  ensureSegmentation: ensureSegmentationMatchesDecision,
+})
+const { decision, resolving, resolveError, renderedSvg, previewLoading, previewError, schedule } =
+  pipeline
+
+// Inventory edits / palette-source flips while the modal is open move the
+// pool under the decision — re-resolve so the chips and the render keep
+// matching what the operator just picked. Debounced (via ``schedule``):
+// an inventory editing session mutates the pool once per swatch.
+watch(
+  () => effectivePool.value.join('|'),
+  (next, prev) => {
+    if (next === prev || !decision.value) return
+    schedule('resolve-and-segment')
+  },
+)
+
+// Per-layer ink assignment → preview coupling. The LayerCard picker
+// writes ``assigned_color_hex`` through the job store; this modal shows
+// its own adapted render, so re-render whenever any layer's assigned ink
+// moves. Debounced so a quick run through several layers renders once.
+watch(
+  () =>
+    (job.selectedPlacement?.layers ?? [])
+      .map((l) => `${l.layer_id}:${l.assigned_color_hex ?? ''}`)
+      .join('|'),
+  (next, prev) => {
+    if (next === prev || !decision.value) return
+    schedule('render-only')
+  },
+)
+
+// Operator mutated the custom-style stack (added, removed, or tweaked a
+// slider). Re-render through the cheaper render-only path that skips the
+// resolver. Debounced so slider scrubbing collapses to one render.
+watch(customStyles, () => schedule('render-only'), { deep: true })
+
+// Physical size → render coupling. Changing the sheet format refits the
+// placement (SheetPicker → ``fitSelectedPlacementToSheet``), so the
+// render must re-run at the new mm size (pen widths convert from it).
+// Debounced so a quick A6→A5→A4 click run renders once.
+watch(
+  () => [job.selectedPlacement?.width_mm ?? 0, job.selectedPlacement?.height_mm ?? 0] as const,
+  ([w, h], [prevW, prevH]) => {
+    // Sub-0.01 mm deltas are float noise from centring math, not an
+    // operator action — skip so the watcher can't ping-pong.
+    if (Math.abs(w - prevW) < 0.01 && Math.abs(h - prevH) < 0.01) return
+    if (!decision.value) return
+    schedule('render-only')
+  },
+)
+
 // Direct access to the V1 singleton draft so we can read ``isDirty``
 // for the expert-mode "Appliquer" affordance. The cards inside the
 // expert tabs already mutate this singleton via their own imports;
 // reading it here is a no-op for the wiring.
 const bitmapDraft = useBitmapDraft()
+// Top-level alias so the template auto-unwraps the nested ref to a plain
+// boolean (Vue only unwraps refs at the top of the render context, not
+// ``bitmapDraft.isDirty`` reached through an object).
+const draftDirty = bitmapDraft.isDirty
+
+// Race-safe Generate: in expert mode this awaits the dirty-draft upload
+// before emitting ``confirm`` so the parent never generates from the
+// pre-apply SVG. Owns ``applying`` / ``applyError`` (read by the footer).
+const { applying, applyError, applyExpertDraft, confirm } = useEditorConfirmation({
+  isExpert: computed(() => uiMode.isExpert),
+  hasPlacement,
+  decision,
+  isDirty: bitmapDraft.isDirty,
+  customStylesActive,
+  customPasses,
+  fileManager,
+  onConfirm: (d) => emit('confirm', d),
+})
+
 const showTextTab = computed<boolean>(() => fileManager.kind.value === 'typography')
 const defaultExpertTab = computed<EditTabId>(() => {
   if (fileManager.kind.value === 'typography') return 'text'
@@ -966,75 +628,23 @@ function selectExpertTab(id: EditTabId): void {
   activeExpertTab.value = id
 }
 
-// ============================ ONBOARDING TOUR ==========================
-// Three-step welcome shown the first time the modal opens. Persists a
-// "seen" flag in localStorage so it never reappears. ``skipOnboarding``
-// (prop) overrides for tests and embedded scenarios.
-interface OnboardingState {
-  seen: boolean
-}
-function readOnboarding(): OnboardingState {
-  try {
-    const raw = window.localStorage.getItem(ONBOARDING_KEY)
-    if (!raw) return { seen: false }
-    const parsed = JSON.parse(raw) as Partial<OnboardingState>
-    return { seen: parsed.seen === true }
-  } catch {
-    return { seen: false }
-  }
-}
-function persistOnboardingSeen(): void {
-  try {
-    window.localStorage.setItem(ONBOARDING_KEY, JSON.stringify({ seen: true }))
-  } catch {
-    /* private mode / quota — accept that the tour may replay */
-  }
-}
-const tourStep = ref<number>(0) // 0 = inactive; 1..TOUR_STEPS = visible
-const tourActive = computed<boolean>(() => tourStep.value > 0)
-function startTourIfFirstRun(): void {
-  if (props.skipOnboarding) return
-  if (!hasPlacement.value) return
-  if (readOnboarding().seen) return
-  tourStep.value = 1
-}
-function nextTourStep(): void {
-  if (tourStep.value >= TOUR_STEPS) {
-    dismissTour()
-    return
-  }
-  tourStep.value += 1
-}
-function dismissTour(): void {
-  tourStep.value = 0
-  persistOnboardingSeen()
-}
-
-// ============================ PREAMBLE =================================
-// One-sentence context card above the preview answering "what is this
-// for?". Distinct from the welcome tour: the tour walks the operator
-// through interactions, the preamble names the outcome ("your machine
-// will draw this"). Persisted dismissal so it disappears once read.
-function readPreambleDismissed(): boolean {
-  try {
-    const raw = window.localStorage.getItem(PREAMBLE_KEY)
-    if (!raw) return false
-    const parsed = JSON.parse(raw) as { dismissed?: boolean }
-    return parsed.dismissed === true
-  } catch {
-    return false
-  }
-}
-const preambleDismissed = ref<boolean>(props.skipOnboarding ? true : readPreambleDismissed())
-const preambleVisible = computed<boolean>(() => !preambleDismissed.value && hasPlacement.value)
-function dismissPreamble(): void {
-  preambleDismissed.value = true
-  try {
-    window.localStorage.setItem(PREAMBLE_KEY, JSON.stringify({ dismissed: true }))
-  } catch {
-    /* private mode / quota — accept that the preamble may replay */
-  }
-}
+// ======================= ONBOARDING TOUR + PREAMBLE ====================
+// First-run welcome tour (three steps) and the one-sentence preamble card
+// above the preview — both localStorage-backed so they never replay once
+// seen / dismissed. ``skipOnboarding`` (prop) overrides for tests/embeds.
+const {
+  TOUR_STEPS,
+  tourStep,
+  tourActive,
+  startTourIfFirstRun,
+  nextTourStep,
+  dismissTour,
+  preambleVisible,
+  dismissPreamble,
+} = useEditorOnboarding({
+  skipOnboarding: Boolean(props.skipOnboarding),
+  hasPlacement,
+})
 
 // Ctrl/Cmd+Enter = Générer. No prev/next anymore — there's one screen.
 useKeyboardShortcuts([
@@ -1046,35 +656,18 @@ useKeyboardShortcuts([
   },
 ])
 
-// Accessibility: Escape closes, focus moves into the dialog on mount,
-// and Tab is trapped inside while open (matches v1 + native dialogs).
+// Accessibility: Escape closes, focus moves into the dialog on mount and
+// returns to the opener on close, and Tab is trapped inside while open
+// (matches native <dialog>). Owned by useEditorDialogAccessibility.
 const dialogRoot = ref<HTMLElement | null>(null)
-
-function onWindowKey(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    emit('cancel')
-    return
-  }
-  if (event.key !== 'Tab' || !dialogRoot.value) return
-  const focusables = dialogRoot.value.querySelectorAll<HTMLElement>(
-    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-  )
-  if (focusables.length === 0) return
-  const first = focusables[0]!
-  const last = focusables[focusables.length - 1]!
-  const active = document.activeElement as HTMLElement | null
-  if (event.shiftKey && active === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && active === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
+const a11y = useEditorDialogAccessibility({
+  dialogRoot,
+  onEscape: () => emit('cancel'),
+})
 
 onMounted(async () => {
-  window.addEventListener('keydown', onWindowKey)
+  // Capture the opener + start the keyboard trap before any focus moves.
+  a11y.activate()
   // Belt-and-braces preview reset on every mount: the modal :key
   // remounts on placement change so this fires per editor session.
   // The placement-switch watcher in useFileManager *should* have
@@ -1088,23 +681,22 @@ onMounted(async () => {
   // Reflect the committed style in the beginner stack BEFORE the first
   // resolve/preview so the operator sees (and Generate commits) the
   // style already saved on the placement rather than a fresh resolver
-  // pick. ``renderAdaptedPreview`` reads ``customStylesActive`` so a
-  // seeded stack renders straight away.
+  // pick. The pipeline's render reads ``customStylesActive`` so a seeded
+  // stack renders straight away.
   seedCustomStylesFromCommitted()
   // Kick off the first preview immediately — zero clicks to a result.
-  void resolveAndPreview()
+  schedule('resolve-and-segment', { immediate: true })
   startTourIfFirstRun()
   await nextTick()
-  if (!dialogRoot.value) return
-  const first = dialogRoot.value.querySelector<HTMLElement>(
-    'button:not([disabled]), select:not([disabled])',
-  )
-  first?.focus()
+  // Move focus into the dialog once its content has rendered.
+  a11y.focusInitial()
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onWindowKey)
-  previewController?.abort()
+  // Stop the keyboard trap + return focus to the opener.
+  a11y.deactivate()
+  // Tears down the single preview timer + aborts any in-flight request.
+  pipeline.dispose()
 })
 
 // If the source kind changes (parent swaps file without remount), redo
@@ -1115,7 +707,7 @@ watch(
   (next) => {
     if (next && next !== sourceKind.value) {
       sourceKind.value = next
-      void resolveAndPreview()
+      schedule('resolve-and-segment', { immediate: true })
     }
   },
 )
@@ -1132,80 +724,21 @@ watch(
     <div
       ref="dialogRoot"
       class="modal-v2"
+      :class="{ 'is-expert': uiMode.isExpert }"
       role="dialog"
       aria-modal="true"
       :aria-label="t('v2.modal.title')"
     >
-      <header class="modal-v2__header">
-        <!-- No visible title (operator feedback) — the dialog keeps its
-             accessible name via the aria-label above. -->
-
-        <!-- Preflight + cost chips live in the header so the operator
-             can read "am I ready, what will it cost?" at a glance
-             without scrolling. ``data-test`` ids match the previous
-             chips so existing Playwright selectors keep working. -->
-        <ul
-          v-if="hasPlacement"
-          class="modal-v2__header-chips"
-          :aria-label="t('v2.modal.preflightLabel')"
-        >
-          <li v-for="item in preflightItems" :key="item.id">
-            <button
-              v-if="!item.ok && item.onFix"
-              type="button"
-              class="modal-v2__hchip is-warn is-actionable"
-              :data-test="`modal-v2-preflight-${item.id}`"
-              :title="t('v2.modal.preflightFix')"
-              @click="item.onFix"
-            >
-              <span aria-hidden="true">⚠</span>
-              <span>{{ item.label }}</span>
-            </button>
-            <span
-              v-else
-              class="modal-v2__hchip"
-              :class="item.ok ? 'is-ok' : 'is-warn'"
-              :data-test="`modal-v2-preflight-${item.id}`"
-            >
-              <span aria-hidden="true">{{ item.ok ? '✓' : '⚠' }}</span>
-              <span>{{ item.label }}</span>
-            </span>
-          </li>
-          <li v-if="hasEstimate">
-            <span
-              class="modal-v2__hchip is-info"
-              data-test="modal-v2-estimate-time"
-              :title="t('v2.modal.estimateLabel')"
-            >
-              <span aria-hidden="true">⏱</span>
-              <span>{{ formatDuration(estimatedDurationSeconds) }}</span>
-            </span>
-          </li>
-          <li v-if="hasEstimate">
-            <span class="modal-v2__hchip is-info" data-test="modal-v2-estimate-length">
-              <span aria-hidden="true">📏</span>
-              <span>{{ formatLengthMeters(estimatedLengthMm) }} m</span>
-            </span>
-          </li>
-          <li v-if="requiredPenCount > 0">
-            <span class="modal-v2__hchip is-info" data-test="modal-v2-estimate-pens">
-              <span aria-hidden="true">🖊</span>
-              <span>{{ requiredPenCount }}</span>
-            </span>
-          </li>
-        </ul>
-
-        <AssistantModeToggle v-if="uiMode.isExpert" />
-        <button
-          type="button"
-          class="close"
-          :aria-label="t('settings.close')"
-          data-test="modal-v2-close"
-          @click="emit('cancel')"
-        >
-          ×
-        </button>
-      </header>
+      <EditorHeader
+        :has-placement="hasPlacement"
+        :preflight-items="preflightItems"
+        :has-estimate="hasEstimate"
+        :estimated-duration-seconds="estimatedDurationSeconds"
+        :estimated-length-mm="estimatedLengthMm"
+        :required-pen-count="requiredPenCount"
+        :is-expert="uiMode.isExpert"
+        @close="emit('cancel')"
+      />
 
       <!-- No placement: explain how to get one, lock Generate. -->
       <div
@@ -1358,85 +891,28 @@ watch(
              dropped. The preview pane on the left stays mounted in
              both modes so the operator never loses sight of the
              result. -->
-            <section
+            <EditorExpertPanel
               v-if="uiMode.isExpert"
-              class="modal-v2__expert"
-              data-test="modal-v2-expert-panel"
-            >
-              <EditTabs
-                :model-value="activeExpertTab"
-                :layer-count="props.layers?.length ?? 0"
-                :show-text="showTextTab"
-                @update:model-value="selectExpertTab"
-              />
-              <div class="modal-v2__expert-body">
-                <ImageTab v-if="activeExpertTab === 'image'" />
-                <SvgTab v-else-if="activeExpertTab === 'svg'" />
-                <StyleTab v-else-if="activeExpertTab === 'style'" />
-                <TextTab v-else-if="activeExpertTab === 'text'" />
-                <LayersSection v-else-if="activeExpertTab === 'layers'" />
-              </div>
-            </section>
+              :active-tab="activeExpertTab"
+              :layer-count="props.layers?.length ?? 0"
+              :show-text="showTextTab"
+              @update:active-tab="selectExpertTab"
+            />
 
             <!-- Assisted surface: intent + palette + custom-style stack.
              Single-screen, three clicks max to a usable Generate. -->
-            <fieldset v-else class="modal-v2__intent">
-              <legend>{{ t('v2.modal.chooseIntent') }}</legend>
-              <div class="intent-grid">
-                <button
-                  v-for="opt in INTENTS"
-                  :key="opt"
-                  type="button"
-                  :class="{ active: goal === opt }"
-                  :aria-pressed="goal === opt"
-                  :data-test="`intent-${opt}`"
-                  @click="selectGoal(opt)"
-                >
-                  <strong>{{ t(`v2.intent.${opt}`) }}</strong>
-                  <span class="intent-desc">{{ t(`v2.intent.${opt}Desc`) }}</span>
-                </button>
-              </div>
-            </fieldset>
-
-            <!-- Secondary control: where the colours come from. Machine
-             magazine is the safe default (only pens actually loaded);
-             "free" lets the resolver pick from the full palette for
-             operators who'll swap pens by hand. -->
-            <fieldset v-if="uiMode.isAssisted" class="modal-v2__palette">
-              <legend>{{ t('v2.modal.paletteLabel') }}</legend>
-              <div class="palette-toggle">
-                <button
-                  type="button"
-                  :class="{ active: paletteMode === 'machine_only' }"
-                  :aria-pressed="paletteMode === 'machine_only'"
-                  data-test="palette-machine_only"
-                  @click="selectPalette('machine_only')"
-                >
-                  {{ t('v2.modal.paletteMachine') }}
-                </button>
-                <button
-                  type="button"
-                  :class="{ active: paletteMode === 'free' }"
-                  :aria-pressed="paletteMode === 'free'"
-                  data-test="palette-free"
-                  @click="selectPalette('free')"
-                >
-                  {{ t('v2.modal.paletteFree') }}
-                </button>
-              </div>
-            </fieldset>
-
-            <!-- Optional "stack your own styles" panel. Empty stack = the
-             resolver wins (default experience); non-empty stack
-             overrides the algorithm at preview + Generate time. The
-             subcomponent owns the picker UI, the parent owns the
-             selection state via v-model. Bitmap-only — vector and PDF
-             pipelines bypass raster algorithms entirely. -->
-            <StyleCustomizer
-              v-if="uiMode.isAssisted && canCustomizeStyles"
-              v-model="customStyles"
+            <EditorAssistedPanel
+              v-else
+              v-model:custom-styles="customStyles"
+              :goal="goal"
+              :palette-mode="paletteMode"
+              :can-customize-styles="canCustomizeStyles"
+              @select-goal="selectGoal"
+              @select-palette="selectPalette"
             />
 
+            <!-- Resolver error sits outside the panels: a failed resolve
+             can happen in either mode (it runs on open regardless). -->
             <p v-if="resolveError" class="error" data-test="modal-v2-resolve-error">
               {{ t('v2.modal.resolverError', { message: resolveError }) }}
             </p>
@@ -1446,58 +922,19 @@ watch(
         <!-- end .modal-v2__layout -->
       </template>
 
-      <footer class="modal-v2__footer">
-        <button
-          type="button"
-          class="modal-v2__cancel"
-          data-test="modal-v2-cancel"
-          @click="emit('cancel')"
-        >
-          {{ t('v2.modal.cancel') }}
-        </button>
-        <div class="modal-v2__footer-actions">
-          <button
-            v-if="uiMode.isAssisted"
-            type="button"
-            class="modal-v2__expert-link"
-            :title="t('v2.modal.openExpertHint')"
-            data-test="modal-v2-open-expert"
-            @click="openExpertEditor"
-          >
-            {{ t('v2.modal.openExpert') }}
-          </button>
-          <!-- Expert "Appliquer" button: commits the V1 draft mutations
-               (image preprocess, segmentation, master style, typography)
-               back to the placement via /upload. Disabled when the draft
-               is clean so a stray click can't trigger a pointless
-               re-conversion. The dirty hint after the label tells the
-               operator the button is meaningful right now. -->
-          <button
-            v-if="uiMode.isExpert"
-            type="button"
-            class="modal-v2__apply-btn"
-            :disabled="!bitmapDraft.isDirty || !hasPlacement"
-            :title="
-              bitmapDraft.isDirty ? t('v2.modal.applyExpertHint') : t('v2.modal.applyExpertClean')
-            "
-            data-test="modal-v2-apply-expert"
-            @click="applyExpertDraft"
-          >
-            {{ t('v2.modal.applyExpert') }}
-            <span v-if="bitmapDraft.isDirty" aria-hidden="true" class="dirty-dot">●</span>
-          </button>
-          <button
-            type="button"
-            class="generate-btn"
-            :disabled="!decision || !hasPlacement || resolving"
-            :title="!hasPlacement ? t('v2.modal.noPlacement') : undefined"
-            data-test="confirm-button"
-            @click="confirm"
-          >
-            {{ t('v2.modal.generate') }}
-          </button>
-        </div>
-      </footer>
+      <EditorFooter
+        :apply-error="applyError"
+        :is-assisted="uiMode.isAssisted"
+        :is-expert="uiMode.isExpert"
+        :is-dirty="draftDirty"
+        :has-placement="hasPlacement"
+        :applying="applying"
+        :generate-disabled="!decision || !hasPlacement || resolving || applying"
+        @cancel="emit('cancel')"
+        @open-expert="openExpertEditor"
+        @apply="applyExpertDraft"
+        @generate="confirm"
+      />
 
       <!-- First-run welcome tour. Three steps, no progress lost on
            skip. Renders above the modal body so the operator can still
@@ -1588,10 +1025,11 @@ watch(
   color: #f1f5f9;
 }
 /* Expert mode used to widen the modal here; the base ``.modal-v2``
-   rule already maxes at 1280 px for both modes so the split has
-   room either way. Kept the selector for future expert-only style
-   overrides. */
-.modal-v2:has(.modal-v2__expert) {
+   rule already maxes at 1280 px for both modes so the split has room
+   either way. Kept the hook (now a plain ``is-expert`` class rather than
+   ``:has(.modal-v2__expert)``, since the expert panel moved into its own
+   scoped component) for future expert-only style overrides. */
+.modal-v2.is-expert {
   width: min(98vw, 1280px);
 }
 
@@ -1636,11 +1074,7 @@ watch(
 /* The expert-mode controls drawer inside the right column. No own
    surface: the tabs and cards inside carry their slate-800 panels
    directly on the modal's slate-900 background, like the main view. */
-.modal-v2__expert {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
+/* Expert surface (tab strip + tab content) lives in EditorExpertPanel.vue. */
 
 /* Narrow viewports (tablet portrait, phones): collapse to a single
    column so the operator can still reach every control. */
@@ -1653,76 +1087,8 @@ watch(
     height: auto;
   }
 }
-.modal-v2__header {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #334155;
-}
-/* Preflight + estimate chip strip — lives in the header so the
-   operator reads "am I ready, what will it cost?" at a glance
-   without the body having to reserve real estate for them. */
-.modal-v2__header-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-}
-.modal-v2__hchip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.18rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  border: 1px solid transparent;
-  background: #1e293b;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.modal-v2__hchip.is-ok {
-  border-color: #047857;
-  color: #a7f3d0;
-  background: rgba(2, 44, 34, 0.4);
-}
-.modal-v2__hchip.is-warn {
-  border-color: #b45309;
-  color: #fde68a;
-  background: rgba(69, 26, 3, 0.4);
-}
-.modal-v2__hchip.is-info {
-  border-color: #334155;
-  color: #cbd5e1;
-  background: #1e293b;
-}
-.modal-v2__hchip.is-actionable {
-  cursor: pointer;
-}
-.modal-v2__hchip.is-actionable:hover {
-  background: rgba(69, 26, 3, 0.7);
-}
-.modal-v2__hchip.is-actionable:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.close {
-  border: none;
-  background: transparent;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #94a3b8;
-  line-height: 1;
-}
-.close:hover {
-  color: #e2e8f0;
-}
+/* Header (preflight/cost chips, mode toggle, close) lives in
+   EditorHeader.vue. */
 .ghost-btn {
   border: 1px solid #334155;
   background: #1e293b;
@@ -1778,104 +1144,8 @@ watch(
   margin: 0;
 }
 
-.modal-v2__intent {
-  border: none;
-  padding: 0;
-  margin: 0 0 0.5rem;
-}
-.modal-v2__intent legend {
-  padding: 0;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-.intent-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
-}
-.intent-grid button {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.2rem;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  background: #1e293b;
-  color: inherit;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    transform 0.08s ease;
-  cursor: pointer;
-  text-align: left;
-}
-.intent-grid button.active {
-  border-color: #059669;
-  background: rgba(2, 44, 34, 0.45);
-  box-shadow: inset 0 0 0 1px #059669;
-}
-.intent-grid button:hover:not(.active) {
-  background: #334155;
-  border-color: #475569;
-}
-.intent-grid button:active {
-  transform: scale(0.98);
-}
-.intent-grid button:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.intent-desc {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  font-weight: 400;
-}
-
-.modal-v2__palette {
-  border: none;
-  padding: 0;
-  margin: 0.75rem 0 0;
-}
-.modal-v2__palette legend {
-  padding: 0;
-  margin-bottom: 0.4rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #e2e8f0;
-}
-.palette-toggle {
-  display: inline-flex;
-  border: 1px solid #334155;
-  border-radius: 4px;
-  overflow: hidden;
-}
-.palette-toggle button {
-  padding: 0.35rem 0.8rem;
-  border: none;
-  background: #1e293b;
-  color: #cbd5e1;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: background 0.12s ease;
-}
-.palette-toggle button + button {
-  border-left: 1px solid #334155;
-}
-.palette-toggle button.active {
-  background: rgba(2, 44, 34, 0.6);
-  color: #6ee7b7;
-  font-weight: 600;
-}
-.palette-toggle button:hover:not(.active) {
-  background: #334155;
-}
-.palette-toggle button:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
+/* Assisted controls (intent grid + palette toggle + style stack) live in
+   EditorAssistedPanel.vue. */
 
 .error {
   color: #fca5a5;
@@ -1952,40 +1222,7 @@ watch(
 }
 
 /* Footer: Annuler on the left, expert link + Generate on the right. */
-.modal-v2__footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-.generate-btn {
-  padding: 0.55rem 1.4rem;
-  border: 1px solid #059669;
-  background: #059669;
-  color: white;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    transform 0.08s ease;
-}
-.generate-btn:hover:not(:disabled) {
-  background: #10b981;
-}
-.generate-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-.generate-btn:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.generate-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Footer (Cancel / Apply / Generate) lives in EditorFooter.vue. */
 
 /* Estimate + compatibility row. */
 .modal-v2__estimate {
@@ -2103,76 +1340,6 @@ watch(
   outline-offset: 2px;
 }
 
-.modal-v2__footer-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.modal-v2__cancel {
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  font-size: 0.875rem;
-  cursor: pointer;
-  padding: 0.3rem 0.5rem;
-  border-radius: 4px;
-}
-.modal-v2__cancel:hover {
-  background: #1e293b;
-  color: #e2e8f0;
-}
-.modal-v2__cancel:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.modal-v2__apply-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.45rem 1rem;
-  border: 1px solid #047857;
-  background: rgba(2, 44, 34, 0.4);
-  color: #a7f3d0;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    opacity 0.12s ease;
-}
-.modal-v2__apply-btn:hover:not(:disabled) {
-  background: rgba(2, 44, 34, 0.7);
-}
-.modal-v2__apply-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.modal-v2__apply-btn:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.modal-v2__apply-btn .dirty-dot {
-  font-size: 0.6875rem;
-  color: #fbbf24;
-}
-.modal-v2__expert-link {
-  border: none;
-  background: transparent;
-  color: #34d399;
-  font-size: 0.875rem;
-  cursor: pointer;
-  padding: 0.3rem 0.4rem;
-  border-radius: 4px;
-}
-.modal-v2__expert-link:hover {
-  background: rgba(2, 44, 34, 0.4);
-  text-decoration: underline;
-}
-.modal-v2__expert-link:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
 
 /* Preflight checklist: one line of green / amber chips that
    aggregates the four "am I ready to plot" signals. */
