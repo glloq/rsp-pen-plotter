@@ -19,7 +19,7 @@
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { type ColorAssignment, type LayerInfo } from '../../api/client'
+import { type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import type { Goal, PaletteMode, PolicyDecision, SourceKind } from '../../domain/policy/schemas'
 import { errorMessage } from '../../lib/errorMessage'
@@ -37,7 +37,6 @@ import { useEditorExpertPreview } from '../../composables/useEditorExpertPreview
 import { useEditorPreviewPipeline } from '../../composables/useEditorPreviewPipeline'
 import { useEditorConfirmation } from '../../composables/useEditorConfirmation'
 import { useEditorCloseGuard } from '../../composables/useEditorCloseGuard'
-import { useEditorPreflight } from '../../composables/useEditorPreflight'
 import { useEditorOnboarding } from '../../composables/useEditorOnboarding'
 import { useEditorDialogAccessibility } from '../../composables/useEditorDialogAccessibility'
 import type { EditTabId } from '../edit/EditTabs.vue'
@@ -183,22 +182,6 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
 // recolour so the chips and the preview SVG agree on the inks drawn.
 
 // ======================= PREFLIGHT + ESTIMATES ========================
-// Drawing estimates (length / time / required pen count), ink
-// compatibility and the four-chip "am I ready?" checklist — all derived
-// state, owned by ``useEditorPreflight``. Only the bindings the template
-// reads are destructured here. The live preview pane (zoom, pan, sheet
-// outline) lives in EditPreviewPane.vue; this parent only forwards SVGs
-// and flags.
-// Only ``openMagazine`` is still consumed (the ink-fallback CTA). The
-// preflight chips + cost estimates were dropped from the header to give
-// the preview maximum room, so the rest of this read-model is no longer
-// rendered.
-const { openMagazine } = useEditorPreflight({
-  layers: () => props.layers,
-  hasPlacement,
-  t,
-})
-
 // ============================ SHEET OUTLINE ============================
 // Translucent rectangle drawn behind the artwork at the active sheet's
 // real aspect ratio so the operator can read paper shape (portrait vs
@@ -231,43 +214,17 @@ const sheetOutline = computed<SheetOutline | null>(() => {
   }
 })
 
-// ============================ LAYER VISIBILITY =========================
-// Each ink chip doubles as a one-click visibility toggle. Toggling
-// triggers a fresh adapted render so the preview reflects exactly what
-// Generate will produce. The job store already persists visibility to
-// the active variant via ``setVisibility`` (autoSyncActiveVariant).
-function isLayerVisible(layerId: string): boolean {
-  return job.isVisible(layerId)
-}
-function toggleLayerVisibility(layerId: string): void {
-  // Live /preview clusters with no committed layer carry synthesised ids
-  // ("preview-N-…"). They aren't real placement layers so the visibility
-  // map can't act on them — skip rather than write a phantom key.
-  if (layerId.startsWith('preview-')) return
-  const next = !isLayerVisible(layerId)
-  job.setVisibility(layerId, next)
-  // No re-render needed: EditPreviewPane folds visibility into its
-  // per-layer opacity overlay, so the hidden colour vanishes from the
-  // displayed SVG instantly (the backend /rerender returns every layer
-  // regardless, so a round-trip here would change nothing on screen).
-  // The visibility flag is still persisted to the variant via
-  // ``setVisibility`` so Generate honours it.
-}
-
-// ============================ COLOUR ASSIGNMENT ========================
-// The assign-colour popover on each ink chip writes the layer's assigned
-// ink straight to the job store — the same path LayerCard's
-// AssignedColorPicker uses. In assisted mode the layer-assignment watcher
-// (below) re-renders through /rerender; in expert mode ``previewInkSnap``
-// re-reads the layer and recolours the live preview SVG, so the chip and
-// preview stay in lockstep without a round-trip.
+// ============================ INK CHIP ACTIONS =========================
+// Visibility + colour assignment for the chips under the preview both live
+// in ``useEditorInkSwatches`` (wired below): it routes each action to the
+// committed layer (assisted) OR to the editor-scoped cluster state (the
+// expert live preview), so hide + re-assign work on every image, committed
+// or not. The picker strips are the only thing the parent still owns.
 const installedPenColors = computed<string[]>(() =>
   (job.selectedProfile?.pens ?? [])
     .filter((p) => p.installed && p.color)
     .map((p) => p.color),
 )
-// Auto-snap pool ("↻ auto") — the source-driven palette. ``effectivePool``
-// is already exactly this, exposed by the segmentation composable below.
 // Manual-pick strip — the FULL magazine ∪ inventory, regardless of the
 // global palette source, so an explicit override offers every owned ink
 // (not just the magazine). Mirrors LayerCard's ``pickerPalette``.
@@ -278,24 +235,6 @@ const assignPickerPalette = computed<string[]>(() =>
     availableColors.ordered.map((c) => c.hex),
   ),
 )
-function onLayerColorPick(payload: {
-  layerId: string
-  hex: string
-  assignment: ColorAssignment
-}): void {
-  if (payload.layerId.startsWith('preview-')) return
-  job.updateLayer(payload.layerId, {
-    assigned_color_hex: payload.hex,
-    color_assignment: payload.assignment,
-  })
-}
-function onLayerColorReset(payload: { layerId: string; hex: string | null }): void {
-  if (payload.layerId.startsWith('preview-')) return
-  job.updateLayer(payload.layerId, {
-    assigned_color_hex: payload.hex,
-    color_assignment: 'auto',
-  })
-}
 
 // =========================================================================
 // EXPERT MODE
@@ -326,7 +265,14 @@ const segmentation = useEditorPaletteSegmentation(fileManager)
 const { effectivePool, ensureSegmentationMatchesDecision } = segmentation
 
 // Ink chips + the shared expert centroid→pool snap (see the note up top).
-const { previewInkSnap, inkSwatches } = useEditorInkSwatches({ fileManager, effectivePool })
+const {
+  previewInkSnap,
+  inkSwatches,
+  isSwatchVisible,
+  toggleSwatchVisibility,
+  assignSwatchColor,
+  resetSwatchColor,
+} = useEditorInkSwatches({ fileManager, effectivePool })
 
 const pipeline = useEditorPreviewPipeline({
   hasPlacement,
@@ -748,13 +694,12 @@ watch(
                  Extracted to EditorInkPanel.vue. -->
             <EditorInkPanel
               :swatches="inkSwatches"
-              :is-visible="isLayerVisible"
+              :is-visible="isSwatchVisible"
               :effective-palette="effectivePool"
               :picker-palette="assignPickerPalette"
-              @toggle="toggleLayerVisibility"
-              @load-ink="openMagazine"
-              @pick="onLayerColorPick"
-              @reset="onLayerColorReset"
+              @toggle="toggleSwatchVisibility"
+              @pick="(p) => assignSwatchColor(p.layerId, p.hex)"
+              @reset="(p) => resetSwatchColor(p.layerId, p.hex)"
             />
           </div>
           <!-- end preview block -->

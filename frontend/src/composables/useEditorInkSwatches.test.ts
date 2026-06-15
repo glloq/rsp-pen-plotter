@@ -126,37 +126,58 @@ describe('useEditorInkSwatches', () => {
     expect(previewInkSnap.value!.map.get('#3aa85a')).toBe(hex)
   })
 
-  it('expert mode: a MANUAL layer override wins; the rest snap to the pool', () => {
-    seedPlacement() // 2 committed layers: ddeeff(draw 0), aabbcc(draw 1)
+  it('expert mode: chips are cluster-scoped (synthetic layer) — assign works on every image', () => {
+    // No committed placement at all: a fresh, never-saved image. The chips must
+    // still carry a layer (synthetic) so the assign popover is always offered.
     useUiModeStore().setMode('expert')
-    const job = useJobStore()
-    const firstLayerId = [...(job.selectedPlacement?.layers ?? [])].sort(
-      (a, b) => a.draw_order - b.draw_order,
-    )[0]!.layer_id
-    job.updateLayer(firstLayerId, {
-      assigned_color_hex: '#abcdef',
-      color_assignment: 'manual',
+    const { inkSwatches } = useEditorInkSwatches({
+      fileManager: fileManagerWith([{ color: '#cc2020' }, { color: '#20cc20' }]),
+      effectivePool: ref(['#ff0000', '#00ff00']),
     })
-    // Live palette has 2 clusters = 2 committed layers, so they're ALIGNED and
-    // the manual override is honoured.
-    const { previewInkSnap, inkSwatches } = useEditorInkSwatches({
+    expect(inkSwatches.value.every((s) => s.layerId.startsWith('cluster-'))).toBe(true)
+    expect(inkSwatches.value.every((s) => s.layer !== null)).toBe(true)
+  })
+
+  it('expert mode: a manual cluster override wins and survives a SECOND change; reset → auto', () => {
+    useUiModeStore().setMode('expert')
+    const sw = useEditorInkSwatches({
       fileManager: fileManagerWith([{ color: '#111111' }, { color: '#222222' }]),
       effectivePool: ref(['#ff0000', '#00ff00']),
     })
-    expect(previewInkSnap.value!.map.get('#111111')).toBe('#abcdef')
-    // The second cluster is auto-snapped onto an owned ink (not left raw).
-    expect(['#ff0000', '#00ff00']).toContain(previewInkSnap.value!.map.get('#222222'))
-    expect(inkSwatches.value[0]!.hex).toBe('#abcdef')
-    expect(inkSwatches.value[0]!.layerId).toBe(firstLayerId)
+    const firstId = sw.inkSwatches.value[0]!.layerId // cluster-111111
+    sw.assignSwatchColor(firstId, '#abcdef')
+    expect(sw.previewInkSnap.value!.map.get('#111111')).toBe('#abcdef')
+    expect(sw.inkSwatches.value[0]!.hex).toBe('#abcdef')
+    // The other cluster still auto-snaps onto an owned ink.
+    expect(['#ff0000', '#00ff00']).toContain(sw.previewInkSnap.value!.map.get('#222222'))
+    // SECOND change must take effect (the reported "won't change a 2nd time").
+    sw.assignSwatchColor(firstId, '#0000ff')
+    expect(sw.inkSwatches.value[0]!.hex).toBe('#0000ff')
+    // Reset drops the override → back to the auto ΔE snap.
+    sw.resetSwatchColor(firstId, null)
+    expect(['#ff0000', '#00ff00']).toContain(sw.inkSwatches.value[0]!.hex)
   })
 
-  it('expert mode: a changed colour count ignores stale layers and snaps from live centroids', () => {
-    seedPlacement() // 2 committed layers
+  it('expert mode: hiding a cluster maps it to "none" so the preview paints it invisible', () => {
     useUiModeStore().setMode('expert')
-    // The operator raised num_colors → the live preview now has 3 clusters,
-    // which no longer match the 2 committed layers. No stale layer colour may
-    // leak in (the "blue for green / grey for green" bug); each cluster snaps
-    // purely from its own live centroid.
+    const sw = useEditorInkSwatches({
+      fileManager: fileManagerWith([{ color: '#111111' }, { color: '#222222' }]),
+      effectivePool: ref(['#ff0000', '#00ff00']),
+    })
+    const id = sw.inkSwatches.value[0]!.layerId
+    expect(sw.isSwatchVisible(id)).toBe(true)
+    sw.toggleSwatchVisibility(id)
+    expect(sw.isSwatchVisible(id)).toBe(false)
+    expect(sw.previewInkSnap.value!.map.get('#111111')).toBe('none')
+    // Toggling back restores it.
+    sw.toggleSwatchVisibility(id)
+    expect(sw.isSwatchVisible(id)).toBe(true)
+    expect(sw.previewInkSnap.value!.map.get('#111111')).not.toBe('none')
+  })
+
+  it('expert mode: a changed colour count snaps purely from live centroids', () => {
+    seedPlacement() // 2 committed layers — irrelevant to the live clusters now
+    useUiModeStore().setMode('expert')
     const { previewInkSnap, inkSwatches } = useEditorInkSwatches({
       fileManager: fileManagerWith([
         { color: '#2b2b2b' },
@@ -168,8 +189,7 @@ describe('useEditorInkSwatches', () => {
     expect(inkSwatches.value).toHaveLength(3)
     // dark grey → black, green → green, blue → blue.
     expect(inkSwatches.value.map((s) => s.hex)).toEqual(['#111111', '#22aa55', '#1e1edc'])
-    // None of the chips are wired to a stale committed layer.
-    expect(inkSwatches.value.every((s) => s.layer === null)).toBe(true)
+    expect(inkSwatches.value.every((s) => s.layerId.startsWith('cluster-'))).toBe(true)
     expect(previewInkSnap.value!.map.get('#3aa85a')).toBe('#22aa55')
   })
 })

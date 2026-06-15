@@ -3,9 +3,9 @@
 // one-click visibility toggle (👁 / ⊘ + strike-through) so a beginner can
 // mute a layer without leaving the modal, plus a 🎨 button that opens a
 // colour-assignment popover (the full magazine ∪ inventory picker) so the
-// operator can swap the ink a layer draws with right from the preview. When
-// the resolver fell back because nothing in the magazine matched, a secondary
-// "Charger" CTA on the chip jumps straight to the magazine editor.
+// operator can swap the ink a layer draws with right from the preview. Both
+// act on every chip — committed layers AND live-preview clusters — so the
+// controls are available even on a fresh, never-saved image.
 //
 // Extracted from ``EditModalV2.vue`` (audit P2 — "panneau des encres" +
 // "visibilité des calques") as a presentational component. It holds only the
@@ -31,7 +31,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'toggle', layerId: string): void
-  (e: 'load-ink'): void
   (e: 'pick', payload: { layerId: string; hex: string; assignment: ColorAssignment }): void
   (e: 'reset', payload: { layerId: string; hex: string | null }): void
 }>()
@@ -104,18 +103,6 @@ function onReset(layerId: string, payload: { hex: string | null }): void {
         >
           🎨
         </button>
-        <button
-          v-if="ink.isFallback"
-          type="button"
-          class="modal-v2__ink-cta"
-          :title="t('v2.modal.inkFallback', { hex: ink.hex })"
-          :aria-label="t('v2.modal.inkFallbackCta')"
-          :data-test="`modal-v2-ink-load-${ink.layerId}`"
-          @click="emit('load-ink')"
-        >
-          {{ t('v2.modal.inkFallbackCta') }}
-        </button>
-
         <!-- Per-layer colour picker popover (full magazine ∪ inventory). -->
         <div
           v-if="ink.layer && openLayerId === ink.layerId"
@@ -214,23 +201,6 @@ function onReset(layerId: string, payload: { hex: string | null }): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.modal-v2__ink-cta {
-  border: 1px solid #b45309;
-  background: rgba(69, 26, 3, 0.4);
-  color: #fde68a;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.6875rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.modal-v2__ink-cta:hover {
-  background: rgba(69, 26, 3, 0.7);
-}
-.modal-v2__ink-cta:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
 }
 .modal-v2__ink-assign {
   display: inline-flex;
