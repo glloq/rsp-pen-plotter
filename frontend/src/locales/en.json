@@ -1258,7 +1258,6 @@
     "tcCarousel": "Carousel",
     "tcRack": "Rack",
     "tcNone": "None (single pen)",
-    "toolChangeCommand": "Tool change command",
     "penSlots": "Pen slots",
     "penSlotsHint": "How many distinct pens the magazine can hold.",
     "magazine": "Magazine",
@@ -1266,20 +1265,13 @@
     "colorManagement": "Colour management",
     "colorManagementHint": "How this plotter handles colour. Assigning colours to pens happens in the Colours tab.",
     "colorMode": {
-      "mono": "Single colour",
       "manual": "Manual swap",
-      "magazine": "Automatic magazine",
-      "firmware": "Firmware magazine",
       "host": "Host magazine"
     },
     "colorModeHint": {
-      "mono": "One pen only, no tool change.",
       "manual": "Multiple colours: the plotter pauses so you swap the pen by hand.",
-      "magazine": "Motorised carousel / rack: the plotter swaps pens on its own.",
-      "firmware": "The controller swaps the pen itself on a single G-code command.",
       "host": "No native swap: the Raspberry Pi sends a G-code sequence to drive the magazine."
     },
-    "firmwareCommandHint": "Single command the controller runs to change pen. {slot} / {color} / {label} are substituted.",
     "hostSwap": {
       "intro": "The pen change, step by step — no G-code. Fine-tune the sequence below if needed.",
       "step": {
@@ -1388,7 +1380,6 @@
     "penCountManualHint": "How many pens you alternate between by hand. 1 = a single holder: the plotter pauses at every colour change and names the ink to mount.",
     "penChangePosition": "Pen-change position",
     "penChangePositionHint": "Where the head parks (machine coordinates) before a manual swap so you can reach the pen. Leave blank to park at the workspace home corner.",
-    "monoNote": "Single-colour mode: only one pen is used.",
     "penCommands": "Pen machine commands",
     "installed": "Present",
     "pickupPosition": "Pickup position",

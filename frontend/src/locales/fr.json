@@ -1258,7 +1258,6 @@
     "tcCarousel": "Carrousel",
     "tcRack": "Rack",
     "tcNone": "Aucun (stylo unique)",
-    "toolChangeCommand": "Commande changement d'outil",
     "penSlots": "Emplacements stylos",
     "penSlotsHint": "Nombre d'encoches dans le magasin de stylos.",
     "magazine": "Magasin",
@@ -1266,20 +1265,13 @@
     "colorManagement": "Gestion des couleurs",
     "colorManagementHint": "Indique comment ce traceur gère les couleurs. L'attribution des couleurs aux stylos se fait dans l'onglet Couleurs.",
     "colorMode": {
-      "mono": "Mono couleur",
       "manual": "Échange manuel",
-      "magazine": "Magasin automatique",
-      "firmware": "Magasin firmware",
       "host": "Magasin host"
     },
     "colorModeHint": {
-      "mono": "Un seul stylo, aucun changement d'outil.",
       "manual": "Plusieurs couleurs : le traceur s'arrête pour que tu changes le stylo à la main.",
-      "magazine": "Carrousel / rack motorisé : le traceur change de stylo tout seul.",
-      "firmware": "Le contrôleur change le stylo lui-même via une seule commande G-code.",
       "host": "Pas de changement natif : le Raspberry Pi envoie une séquence G-code pour piloter le magasin."
     },
-    "firmwareCommandHint": "Commande unique exécutée par le contrôleur pour changer de stylo. {slot} / {color} / {label} sont substitués.",
     "hostSwap": {
       "intro": "Le changement de stylo, étape par étape — sans G-code. Affine la séquence ci-dessous si besoin.",
       "step": {
@@ -1388,7 +1380,6 @@
     "penCountManualHint": "Nombre de stylos entre lesquels tu alternes manuellement. 1 = un seul porte-stylo : le traceur s'arrête à chaque changement de couleur et t'indique l'encre à monter.",
     "penChangePosition": "Position de changement de stylo",
     "penChangePositionHint": "Où la tête se gare (coordonnées machine) avant un changement manuel, pour accéder au stylo. Laisser vide pour se garer au coin home de l'espace de travail.",
-    "monoNote": "Mode mono couleur : un seul stylo est utilisé.",
     "penCommands": "Commandes machine du stylo",
     "installed": "Présent",
     "pickupPosition": "Position de prise",
