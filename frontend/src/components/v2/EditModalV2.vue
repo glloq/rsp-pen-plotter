@@ -19,7 +19,7 @@
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { libraryFilePreviewImageUrl, type LayerInfo } from '../../api/client'
+import { type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import type {
   Goal,
@@ -29,19 +29,16 @@ import type {
   SourceKind,
 } from '../../domain/policy/schemas'
 import { errorMessage } from '../../lib/errorMessage'
-import { assignPoolHexes } from '../../lib/nearestColor'
-import { recolorPreviewSvg } from '../../lib/previewRecolor'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
 import { useUiStore } from '../../stores/ui'
 import { useUiModeStore } from '../../stores/uiMode'
 import { useJobStore } from '../../stores/job'
 import { useBitmapDraft } from '../../composables/useBitmapDraft'
-import { useEditState } from '../../composables/useEditState'
-import { useAlgorithmsStore } from '../../stores/algorithms'
-import { usePreviewCostEstimator } from '../../composables/usePreviewCostEstimator'
 import { useFileManager } from '../../composables/useFileManager'
 import { useEditorPaletteSegmentation } from '../../composables/useEditorPaletteSegmentation'
+import { useEditorInkSwatches } from '../../composables/useEditorInkSwatches'
+import { useEditorExpertPreview } from '../../composables/useEditorExpertPreview'
 import { useEditorPreviewPipeline } from '../../composables/useEditorPreviewPipeline'
 import { useEditorConfirmation } from '../../composables/useEditorConfirmation'
 import { useEditorCloseGuard } from '../../composables/useEditorCloseGuard'
@@ -220,141 +217,11 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
   schedule('resolve-and-segment', { immediate: true })
 }
 
-// Swatches shown under the preview: one per layer of the active
-// placement, in draw order, showing the colour the layer will actually
-// be drawn with (assigned ink hex from the magazine / inventory pool,
-// or the segmentation centroid as a fallback). Used to make the
-// "which inks will this print use" question answerable at a glance,
-// independent of the preview SVG itself.
-interface InkSwatch {
-  layerId: string
-  hex: string
-  name: string
-  // Human-readable label for the chip. Inventory name when known,
-  // otherwise the hex itself.
-  displayName: string
-  // Secondary hex caption, shown next to ``displayName`` as a small
-  // monospace aside. Empty when the name already *is* the hex (no
-  // inventory match) to avoid duplicating the same six characters.
-  displayHex: string
-  isFallback: boolean
-}
-const inventoryNameByHex = computed(() => {
-  const map = new Map<string, string>()
-  for (const entry of availableColors.colors) {
-    if (entry.name && entry.name.trim()) {
-      map.set(entry.hex.toLowerCase(), entry.name)
-    }
-  }
-  return map
-})
-
-// Live-preview centroid → pool-ink mapping (expert mode only).
-//
-// The /preview SVG renders each cluster in its raw segmentation CENTROID
-// (the expert draft doesn't ship ``ink_pool``), but after Apply the job
-// store re-snaps every layer onto the active pool with the same
-// greedy-unique ΔE matching. The chips already show those snapped inks;
-// this exposes the per-centroid snap once so BOTH the chips and the
-// preview recolor below read from it. Without sharing the map, the
-// preview kept showing the photo's own colours while the chip strip
-// listed only the few pens that will actually draw — "la preview a plus
-// de couleurs que celles listées". ``null`` outside expert mode / before
-// a live palette exists, so the assisted pipeline (which already renders
-// snapped inks via /rerender + inkColorsFor) is untouched.
-interface PreviewSnap {
-  /** centroid hex (lowercased) → the pool ink it draws with. */
-  map: Map<string, string>
-  /** Per-cluster rows in document order, for the chip strip. */
-  rows: { centroid: string; ink: string; isFallback: boolean }[]
-}
-const previewInkSnap = computed<PreviewSnap | null>(() => {
-  const livePalette = fileManager.previewResult?.value?.palette ?? null
-  if (!uiMode.isExpert || !livePalette || livePalette.length === 0) return null
-  // "Fidèle à l'image": picking an image-clustering method (kmeans /
-  // kmeans_lab) turns ``paletteFollowsPens`` off — the operator asked to
-  // render the photo's OWN colours, not the pen rack. Snapping those
-  // centroids onto the owned pool here would silently override that choice
-  // with the few closest pens (the "mauvaises couleurs comme avant"
-  // report: both palette modes looked identical because both snapped).
-  // Show the centroids verbatim instead — identity map, so the preview SVG
-  // is left untouched and the chips list the image's real colours. Only
-  // snap when the operator opted to follow the pens.
-  if (!bitmapDraft.paletteFollowsPens.value) {
-    const rows = livePalette.map((entry) => ({
-      centroid: entry.color,
-      ink: entry.color,
-      isFallback: false,
-    }))
-    // Empty map → ``recolorPreviewSvg`` is a no-op (keeps image colours).
-    return { map: new Map<string, string>(), rows }
-  }
-  const pool = effectivePool.value
-  const snapped = assignPoolHexes(
-    livePalette.map((entry) => ({ sourceHex: entry.color })),
-    pool,
-  )
-  const map = new Map<string, string>()
-  const rows = livePalette.map((entry, idx) => {
-    const ink = snapped[idx] ?? entry.color
-    // Map even fallback clusters (ink === centroid) so the recolor pass
-    // is a no-op for them rather than leaving a gap.
-    map.set(entry.color.toLowerCase(), ink)
-    return { centroid: entry.color, ink, isFallback: snapped[idx] === null }
-  })
-  return { map, rows }
-})
-const inkSwatches = computed<InkSwatch[]>(() => {
-  // Prefer the LIVE /preview palette when the V1 cards have just
-  // produced one (expert mode tweaks): it reflects what the
-  // operator is actually about to commit on Apply. Falls back to
-  // the placement's committed layers so assisted mode + fresh
-  // sessions keep their chip strip. Without this the swatches
-  // showed the previous /upload's colours even after the operator
-  // changed k-means settings in the Style tab — exactly the "couleurs
-  // pas à jour" the operator flagged.
-  // Expert mode: the chips mirror the live /preview clusters, snapped
-  // onto the active pool by ``previewInkSnap`` (the same map that
-  // recolours the preview SVG, so chips and preview agree on the inks
-  // that will actually be drawn).
-  const snap = previewInkSnap.value
-  if (snap) {
-    return snap.rows.map((row, idx) => {
-      const hex = row.ink
-      const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
-      const name = namedMatch ?? hex
-      // Synthesise a stable layerId so the v-for keys stay stable
-      // across renders. The /preview palette doesn't carry layer
-      // ids; we tag them by index in cluster order.
-      return {
-        layerId: `preview-${idx}-${hex.replace('#', '')}`,
-        hex,
-        name,
-        displayName: name,
-        displayHex: namedMatch ? hex : '',
-        // No pool ink to draw this cluster with (empty pool) — same
-        // "load the magazine" affordance as the committed-layer branch.
-        isFallback: row.isFallback,
-      }
-    })
-  }
-  const layers = job.selectedPlacement?.layers ?? []
-  const ordered = [...layers].sort((a, b) => a.draw_order - b.draw_order)
-  return ordered.map((layer) => {
-    const assigned = layer.assigned_color_hex
-    const hex = assigned ?? layer.source_color
-    const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
-    const name = namedMatch ?? hex
-    return {
-      layerId: layer.layer_id,
-      hex,
-      name,
-      displayName: name,
-      displayHex: namedMatch ? hex : '',
-      isFallback: !assigned,
-    }
-  })
-})
+// Ink-swatch strip + the expert-mode live-preview centroid→pool snap live
+// in ``useEditorInkSwatches`` — wired up below once ``fileManager`` and
+// ``effectivePool`` exist (it reads the live /preview palette and the
+// operator's pool). ``previewInkSnap`` is shared with the expert preview
+// recolour so the chips and the preview SVG agree on the inks drawn.
 
 // ======================= PREFLIGHT + ESTIMATES ========================
 // Drawing estimates (length / time / required pen count), ink
@@ -464,6 +331,10 @@ const fileManager = useFileManager(t, { owner: true })
 // only places that ask for a preview, each via ``schedule(level)``.
 const segmentation = useEditorPaletteSegmentation(fileManager)
 const { effectivePool, ensureSegmentationMatchesDecision } = segmentation
+
+// Ink chips + the shared expert centroid→pool snap (see the note up top).
+const { previewInkSnap, inkSwatches } = useEditorInkSwatches({ fileManager, effectivePool })
+
 const pipeline = useEditorPreviewPipeline({
   hasPlacement,
   sourceKind,
@@ -626,94 +497,18 @@ function goToPage(page: number): void {
 }
 const activeExpertTab = ref<EditTabId>('layers')
 
-// =========================================================================
-// V1 expert-tab → preview wiring.
-// The restored Image / SVG / Style / Text cards mutate a singleton
-// ``useBitmapDraft`` whose deep watcher fires ``/preview`` via the
-// ``useFileManager`` scheduler. That endpoint returns the freshly
-// preprocessed + segmented + rendered SVG — which the assisted-mode
-// ``previewAlgorithmOnAllLayers`` path *doesn't* hit. Without forwarding
-// the scheduler's result, the operator would change brightness or
-// segmentation method and see nothing happen on screen.
-//
-// We forward the scheduler's SVG to ``EditPreviewPane`` only when the
-// operator is in expert mode AND the scheduler has actually produced a
-// result for this session. Outside those conditions we fall back to the
-// resolver-driven ``renderedSvg`` so the assisted wizard keeps its own
-// preview pipeline untouched.
-// The file manager's preview singleton outlives the modal: its
-// ``previewSvg`` can still hold the previous placement's render in the
-// brief window between the operator switching files and the new
-// /preview round-trip returning. Gate the forward on the placement id
-// the in-memory File was loaded for — filename equality is too weak
-// (two library entries can share a name, and the File object's name
-// just mirrors ``placement.source_file`` verbatim at download time).
-// When the file isn't loaded yet for THIS placement (just-switched,
-// awaiting ensureSelectedFile), suppress the svg too — anything still
-// in the singleton at that moment is the previous file's leftover.
-const expertPreviewSvg = computed<string | null>(() => {
-  if (!uiMode.isExpert) return null
-  const svg = fileManager.previewSvg.value
-  if (!svg || svg.length === 0) return null
-  const fileForPlacement = fileManager.selectedFilePlacementId.value
-  const activePlacement = job.selectedPlacementId
-  if (!fileForPlacement || !activePlacement) return null
-  if (fileForPlacement !== activePlacement) return null
-  // Recolour the raw centroid render to the pool inks the chips list (and
-  // the print will use), so the operator doesn't see the photo's own
-  // colours in the preview while only a handful of pens are listed below.
-  const snap = previewInkSnap.value
-  return snap ? recolorPreviewSvg(svg, snap.map) : svg
-})
-const expertPreviewLoading = computed<boolean>(() => {
-  if (!uiMode.isExpert) return false
-  return Boolean(fileManager.previewLoading.value)
-})
-const effectivePreviewSvg = computed<string | null>(
-  () => expertPreviewSvg.value ?? renderedSvg.value,
-)
-const effectivePreviewLoading = computed<boolean>(
-  () => expertPreviewLoading.value || previewLoading.value,
-)
+// Expert-tab → preview wiring (forward the /preview render in expert mode,
+// fall back to the resolver render otherwise), the source-image URL for
+// Original/Compare, and the per-run latency estimate — all owned by
+// ``useEditorExpertPreview``.
+const { effectivePreviewSvg, effectivePreviewLoading, previewEstimateMs, sourceImageUrl } =
+  useEditorExpertPreview({
+    fileManager,
+    previewInkSnap,
+    renderedSvg,
+    pipelineLoading: previewLoading,
+  })
 
-// Expected latency of the in-flight /preview for the active algorithm
-// × quality tier — the EMA the cost estimator maintains from past
-// ``elapsed_ms`` observations. Drives the determinate progress bar in
-// EditPreviewPane's loading overlay.
-const editState = useEditState()
-const costEstimator = usePreviewCostEstimator()
-const algorithmsCatalog = useAlgorithmsStore()
-const previewEstimateMs = computed<number>(() => {
-  // Touch the samples ref so a fresh EMA observation re-evaluates the
-  // estimate for the *next* run.
-  void costEstimator.samples.value
-  const algo = bitmapDraft.bitmap.value.algorithm
-  // Manifest complexity seeds the estimate before the first real
-  // observation — a 'high' algorithm (string_art, reaction_diffusion)
-  // starts near its real cost instead of the generic medium seed.
-  const complexity = algorithmsCatalog.byId.get(algo)?.complexity as
-    | 'low'
-    | 'medium'
-    | 'high'
-    | undefined
-  return costEstimator.estimateMs(algo, editState.previewQuality.value, complexity)
-})
-
-// =========================================================================
-// Source image URL — fed to EditPreviewPane's "Original" and "Compare"
-// modes so the operator sees the actual uploaded photo (PNG / JPG /
-// PDF page raster) vs. the converted result, instead of two SVG
-// derivatives of the same input. ``libraryFilePreviewImageUrl`` works
-// for every supported source type (the backend rasterises vectors,
-// documents, PDFs on demand), so this single URL covers all kinds.
-// Null when the placement isn't backed by a library file yet — the
-// pane falls back to ``originalSvg`` in that case.
-const sourceImageUrl = computed<string | null>(() => {
-  const id = job.selectedPlacement?.library_file_id
-  if (!id) return null
-  const page = Number(job.selectedPlacement?.upload_metadata?.page ?? 0)
-  return libraryFilePreviewImageUrl(id, Number.isFinite(page) ? page : 0)
-})
 // Reset the tab whenever the source file kind changes so the operator
 // doesn't land on an "Image" tab for a vector file. The :key in App.vue
 // also remounts on placement switch; this watcher is the safety net
