@@ -125,7 +125,11 @@ Both editors share the same preview pipeline:
 
 When the preview can't keep up (you cycle algorithms faster than they
 render) the previous successful render stays on screen; the new one
-arrives when ready.
+arrives when ready. *Generate* stays locked while the pipeline is still
+resolving, re-segmenting or rendering, so you never generate from a result
+that hasn't caught up with your last change. If a re-segmentation or render
+fails (e.g. a network drop), the editor surfaces the reason and unlocks
+*Generate* again so you can retry from the last good placement.
 
 ## Variants & Compare
 

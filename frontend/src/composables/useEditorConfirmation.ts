@@ -40,6 +40,15 @@ export function useEditorConfirmation(deps: EditorConfirmationDeps) {
   // of generating from un-applied changes.
   const applyError = ref<string | null>(null)
 
+  // Set from the host's ``onBeforeUnmount``. ``confirm`` awaits the expert
+  // upload, and the operator can close the modal during that await; without
+  // this guard ``onConfirm`` would fire from an unmounted component and
+  // generate a drawing the operator thought they'd cancelled (audit P1 §3).
+  let disposed = false
+  function dispose(): void {
+    disposed = true
+  }
+
   // Commit the V1 draft mutations back to the placement by re-running
   // /upload with the freshly built options bundle (the V1 "Apply" path).
   // No-op when nothing is dirty. Returns whether the placement is safe to
@@ -61,10 +70,14 @@ export function useEditorConfirmation(deps: EditorConfirmationDeps) {
   }
 
   async function confirm(): Promise<void> {
+    if (disposed) return
     if (!deps.hasPlacement.value || !deps.decision.value || applying.value) return
     if (deps.isExpert.value) {
       const ok = await applyExpertDraft()
       if (!ok) return
+      // The modal can be torn down while the upload above was in flight —
+      // bail before emitting so a closed modal never generates.
+      if (disposed) return
       // ``applyExpertDraft`` may have re-uploaded and rehydrated the
       // placement; re-check before emitting against possibly-cleared state.
       if (!deps.hasPlacement.value || !deps.decision.value) return
@@ -88,5 +101,5 @@ export function useEditorConfirmation(deps: EditorConfirmationDeps) {
     deps.onConfirm(deps.decision.value)
   }
 
-  return { applying, applyError, applyExpertDraft, confirm }
+  return { applying, applyError, applyExpertDraft, confirm, dispose }
 }

@@ -670,6 +670,85 @@ describe('EditModalV2 (beginner single-screen)', () => {
     ).toBe(false)
   })
 
+  it('blocks closing while an expert apply is committing', async () => {
+    // Closing mid-commit would let ``confirm`` emit after the modal is gone
+    // (audit P1 §3). The close gate must swallow the close while the upload
+    // is in flight.
+    const { useUiModeStore } = await import('../../stores/uiMode')
+    const { useJobStore } = await import('../../stores/job')
+    const { useBitmapDraft } = await import('../../composables/useBitmapDraft')
+    const { useFileManager } = await import('../../composables/useFileManager')
+
+    const job = useJobStore()
+    let resolveUpload!: () => void
+    vi.spyOn(job, 'upload').mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveUpload = resolve
+      }),
+    )
+
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    useUiModeStore().setMode('expert')
+    const draft = useBitmapDraft()
+    draft.markCommitted()
+    draft.bitmap.value.preprocess.invert = !draft.bitmap.value.preprocess.invert
+    useFileManager().setFile(new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
+    await nextTick()
+
+    // Kick off the commit, then try to close while it's in flight.
+    await wrapper.find('[data-test="confirm-button"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-test="modal-v2-cancel"]').trigger('click')
+    expect(wrapper.emitted('cancel')).toBeFalsy()
+
+    resolveUpload()
+    await flushPromises()
+  })
+
+  it('confirms before discarding an unsaved expert draft on close', async () => {
+    const { useUiModeStore } = await import('../../stores/uiMode')
+    const { useBitmapDraft } = await import('../../composables/useBitmapDraft')
+
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    useUiModeStore().setMode('expert')
+    const draft = useBitmapDraft()
+    draft.markCommitted()
+    draft.bitmap.value.preprocess.invert = !draft.bitmap.value.preprocess.invert
+    await nextTick()
+
+    // Decline the discard → modal stays open. (happy-dom has no native
+    // ``window.confirm``; assign a mock rather than spying on undefined.)
+    const confirmSpy = vi.fn().mockReturnValue(false)
+    const originalConfirm = window.confirm
+    window.confirm = confirmSpy as unknown as typeof window.confirm
+    await wrapper.find('[data-test="modal-v2-cancel"]').trigger('click')
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('cancel')).toBeFalsy()
+
+    // Accept the discard → modal closes.
+    confirmSpy.mockReturnValue(true)
+    await wrapper.find('[data-test="modal-v2-cancel"]').trigger('click')
+    expect(wrapper.emitted('cancel')).toBeTruthy()
+    window.confirm = originalConfirm
+  })
+
+  it('does not prompt on an assisted-mode close even though the shared draft reads dirty', async () => {
+    // The bitmap draft is "dirty by default" until an upload pins its
+    // baseline, but the assisted wizard never edits it — closing assisted
+    // mode must never nag.
+    const confirmSpy = vi.fn().mockReturnValue(false)
+    const originalConfirm = window.confirm
+    window.confirm = confirmSpy as unknown as typeof window.confirm
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+    await wrapper.find('[data-test="modal-v2-cancel"]').trigger('click')
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(wrapper.emitted('cancel')).toBeTruthy()
+    window.confirm = originalConfirm
+  })
+
   it('hides the intent grid and mounts the expert panel when uiMode is expert', async () => {
     // The header toggle / "Ouvrir l'éditeur complet" button flips
     // uiMode.mode to 'expert'; the modal must respond by swapping its
@@ -692,5 +771,105 @@ describe('EditModalV2 (beginner single-screen)', () => {
     // it actually mounts rather than silently failing to resolve.
     await flushPromises()
     expect(wrapper.find('[role="tablist"]').exists()).toBe(true)
+  })
+
+  // ---- Assisted parcours (integration) ------------------------------------
+  // End-to-end-ish coverage of the headline assisted flow the audit's
+  // Phase 3 calls for, driven through the real modal + stores (the browser
+  // E2E equivalent needs a backend + Playwright browser).
+
+  it('full assisted parcours: pick intent, switch palette, then Generate emits the latest decision', async () => {
+    const { usePaletteSourceStore } = await import('../../stores/paletteSource')
+    usePaletteSourceStore().source = 'pens'
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    // Pick the "fast" intent.
+    await wrapper.find('[data-test="intent-fast"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="intent-fast"]').classes()).toContain('active')
+
+    // Switch to the free palette.
+    await wrapper.find('[data-test="palette-free"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="palette-free"]').classes()).toContain('active')
+
+    // The last resolve must carry BOTH the chosen goal and palette.
+    expect(api.post).toHaveBeenLastCalledWith(
+      '/policy/resolve',
+      expect.objectContaining({ goal: 'fast', palette_mode: 'free' }),
+    )
+
+    // Generate emits the resolved decision.
+    const confirm = wrapper.find('[data-test="confirm-button"]')
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(false)
+    await confirm.trigger('click')
+    expect(wrapper.emitted('confirm')?.[0]?.[0]).toMatchObject({ default_algorithm: 'scanlines' })
+  })
+
+  it('rapid intent changes settle on the last choice (one decision generated)', async () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    // Fire three intents back-to-back; each immediate schedule aborts the
+    // previous in-flight flush, so the pipeline settles on the last one.
+    await wrapper.find('[data-test="intent-fast"]').trigger('click')
+    await wrapper.find('[data-test="intent-balanced"]').trigger('click')
+    await wrapper.find('[data-test="intent-quality"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="intent-quality"]').classes()).toContain('active')
+    expect(api.post).toHaveBeenLastCalledWith(
+      '/policy/resolve',
+      expect.objectContaining({ goal: 'quality' }),
+    )
+    // Generate is enabled and emits exactly once.
+    await wrapper.find('[data-test="confirm-button"]').trigger('click')
+    expect(wrapper.emitted('confirm')).toHaveLength(1)
+  })
+
+  it('Escape dismisses the welcome tour without closing the modal', async () => {
+    // First-run tour (no skipOnboarding, fresh localStorage). Escape must
+    // dismiss the tour and leave the modal open — the modal body is inert
+    // while the tour shows, so a stray Escape shouldn't tear it all down.
+    const wrapper = mountModal({
+      sourceName: 'photo.jpg',
+      previewSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+      attachTo: document.body,
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-test="modal-v2-tour"]').exists()).toBe(true)
+    // The body is inert while the tour owns the foreground.
+    expect(wrapper.find('[data-test="modal-v2-layout"]').attributes('inert')).toBeDefined()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+
+    expect(wrapper.find('[data-test="modal-v2-tour"]').exists()).toBe(false)
+    expect(wrapper.emitted('cancel')).toBeFalsy()
+    // Body is interactive again.
+    expect(wrapper.find('[data-test="modal-v2-layout"]').attributes('inert')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('keeps Generate locked while the resolve is still in flight', async () => {
+    // Hold the resolver so the pipeline stays in its non-terminal state;
+    // Generate must stay disabled until the decision lands (audit P0 §2).
+    let resolveResolve!: (v: unknown) => void
+    vi.mocked(api.post).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveResolve = () => resolve({ data: validDecision })
+        }),
+    )
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await nextTick()
+
+    const confirm = wrapper.find('[data-test="confirm-button"]')
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(true)
+
+    resolveResolve({ data: validDecision })
+    await flushPromises()
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(false)
   })
 })

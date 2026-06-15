@@ -44,6 +44,7 @@ function formatSize(bytes: number): string {
     "
     draggable="true"
     :title="t('files.dragHint')"
+    data-test="file-row"
     @dragstart="(e) => emit('dragstart', e, file)"
     @dblclick="emit('edit', file.file_id)"
   >
@@ -82,6 +83,7 @@ function formatSize(bytes: number): string {
         type="button"
         class="rounded bg-slate-700 px-1.5 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
         :title="t('files.editTitle')"
+        data-test="file-row-edit"
         @click.stop="emit('edit', file.file_id)"
       >
         ✎

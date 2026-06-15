@@ -1813,7 +1813,9 @@
       "applyExpert": "Apply",
       "applyExpertHint": "Re-convert the file with the settings from the Image / SVG / Style / Text tabs.",
       "applyExpertClean": "No changes to apply.",
-      "applyError": "Couldn't apply your expert changes: {message}. The drawing was not generated — try again."
+      "applyError": "Couldn't apply your expert changes: {message}. The drawing was not generated — try again.",
+      "paletteError": "Couldn't switch palette: {message}. The previous palette stays active.",
+      "discardConfirm": "Unapplied expert changes will be lost. Close anyway?"
     },
     "style": {
       "crosshatch": "Crosshatch",
