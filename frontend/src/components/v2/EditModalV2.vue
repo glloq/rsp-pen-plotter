@@ -251,6 +251,24 @@ interface PreviewSnap {
 const previewInkSnap = computed<PreviewSnap | null>(() => {
   const livePalette = fileManager.previewResult?.value?.palette ?? null
   if (!uiMode.isExpert || !livePalette || livePalette.length === 0) return null
+  // "Fidèle à l'image": picking an image-clustering method (kmeans /
+  // kmeans_lab) turns ``paletteFollowsPens`` off — the operator asked to
+  // render the photo's OWN colours, not the pen rack. Snapping those
+  // centroids onto the owned pool here would silently override that choice
+  // with the few closest pens (the "mauvaises couleurs comme avant"
+  // report: both palette modes looked identical because both snapped).
+  // Show the centroids verbatim instead — identity map, so the preview SVG
+  // is left untouched and the chips list the image's real colours. Only
+  // snap when the operator opted to follow the pens.
+  if (!bitmapDraft.paletteFollowsPens.value) {
+    const rows = livePalette.map((entry) => ({
+      centroid: entry.color,
+      ink: entry.color,
+      isFallback: false,
+    }))
+    // Empty map → ``recolorPreviewSvg`` is a no-op (keeps image colours).
+    return { map: new Map<string, string>(), rows }
+  }
   const pool = effectivePool.value
   const snapped = assignPoolHexes(
     livePalette.map((entry) => ({ sourceHex: entry.color })),

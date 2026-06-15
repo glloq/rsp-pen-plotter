@@ -1049,10 +1049,30 @@ export const useJobStore = defineStore('job', () => {
   // nearest pens. An empty pool clears the auto value
   // (assigned_color_hex = null), which matches the backend's fallback to
   // the raw centroid.
+  // True when a placement was converted in "fidèle à l'image" mode — an
+  // image-clustering segmentation (kmeans / kmeans_lab) committed WITHOUT
+  // an ``ink_pool``. That combination means the operator deliberately chose
+  // to render the photo's own colours rather than follow the pen rack, so
+  // its auto layers must NOT be snapped onto the owned pool: snapping would
+  // override the faithful centroids with the few closest pens (the
+  // "mauvaises couleurs" report). The pens-follow path always ships an
+  // ``ink_pool`` (wired as kmeans_lab + remap), so it's excluded here and
+  // keeps snapping as before.
+  function placementUsesImageColors(p: { last_options?: Record<string, unknown> | null }): boolean {
+    const opts = (p.last_options ?? {}) as Record<string, unknown>
+    const method = opts.segmentation_method
+    const inkPool = opts.ink_pool
+    const hasPool = Array.isArray(inkPool) && inkPool.length > 0
+    return !hasPool && (method === 'kmeans' || method === 'kmeans_lab')
+  }
+
   function resnapAutoLayers(poolOverride?: readonly string[]): void {
-    const pool = poolOverride ?? currentEffectivePalette()
+    const basePool = poolOverride ?? currentEffectivePalette()
     let changed = false
     placements.value = placements.value.map((p) => {
+      // Image-colours placements snap against an empty pool → every auto
+      // layer clears to ``null`` and falls back to its faithful centroid.
+      const pool = placementUsesImageColors(p) ? [] : basePool
       const assignments = pool.length
         ? assignPoolHexes(
             p.layers.map((layer) => ({
