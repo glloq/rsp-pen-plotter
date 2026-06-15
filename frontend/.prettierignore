@@ -2,4 +2,11 @@ dist
 node_modules
 coverage
 *.min.*
+# Generated + drift-checked snapshots — their formatting is owned by the
+# generators (openapi-typescript / gen-manifest-snapshot.mjs /
+# regen_algorithms_snapshot.py), not Prettier. Letting Prettier rewrite them
+# would fight the CI drift checks that compare against freshly generated
+# output.
 src/domain/api-types.ts
+src/domain/manifests/snapshot.json
+src/data/algorithmsSnapshot.json
