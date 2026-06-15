@@ -2,6 +2,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import { kdiag } from '../../../lib/kdiag'
 import { useFileManager } from '../../../composables/useFileManager'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { resolveEffectivePalette } from '../../../lib/effectivePalette'
@@ -103,6 +104,9 @@ const multicolorPenWidthMm = computed<number | null>(() => {
 watch(
   [draft.paletteFollowsPens, effectivePalette, () => bitmap.value.num_colors],
   ([follows, colors, n]) => {
+    kdiag(
+      `StyleTab pens-watch fired: follows=${follows} colors=${colors.length} method=${bitmap.value.segmentation_method} printMode=${printMode.value} touchedMethod=${draft.segmentationTouched.value.has('method')}`,
+    )
     if (printMode.value !== 'multicolor') return
     // The operator explicitly picked an image-clustering method
     // (kmeans / kmeans_lab) on the SVG tab. That means "render the
