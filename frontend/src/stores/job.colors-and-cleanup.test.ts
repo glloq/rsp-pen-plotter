@@ -91,6 +91,42 @@ describe('resnapAutoLayers', () => {
     expect(store.placements[0]!.layers[0]!.assigned_color_hex).toBeNull()
   })
 
+  it('keeps faithful centroids for image-colours placements (kmeans, no ink_pool)', () => {
+    // "Fidèle à l'image": a placement converted with kmeans and WITHOUT an
+    // ink_pool means the operator chose to render the photo's own colours.
+    // resnap must not snap those onto the pool, even though a pool exists —
+    // it clears the auto assignment so the layer renders its centroid.
+    const store = useJobStore()
+    store.placements = [
+      makePlacement({
+        last_options: { segmentation_method: 'kmeans' },
+        layers: [
+          makeLayer({ layer_id: 'a', source_color: '#5a6b3c', assigned_color_hex: '#ff0000' }),
+        ],
+      }),
+    ]
+
+    store.resnapAutoLayers(['#ff0000', '#00ff00', '#0000ff'])
+
+    expect(store.placements[0]!.layers[0]!.assigned_color_hex).toBeNull()
+  })
+
+  it('still snaps pens-follow placements (kmeans_lab WITH ink_pool)', () => {
+    // The follow-pens path always ships an ink_pool — it must keep snapping
+    // onto the rack so every owned pen shows up.
+    const store = useJobStore()
+    store.placements = [
+      makePlacement({
+        last_options: { segmentation_method: 'kmeans_lab', ink_pool: ['#ff0000', '#00ff00'] },
+        layers: [makeLayer({ source_color: '#10ff00' })],
+      }),
+    ]
+
+    store.resnapAutoLayers(['#ff0000', '#00ff00'])
+
+    expect(store.placements[0]!.layers[0]!.assigned_color_hex).toBe('#00ff00')
+  })
+
   it('re-snaps across all placements', () => {
     const store = useJobStore()
     store.placements = [
