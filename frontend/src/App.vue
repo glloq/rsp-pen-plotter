@@ -98,6 +98,7 @@ function prefetchHeavySurfaces(): void {
 
 import { api } from './api/client'
 import { useAlgorithmsStore } from './stores/algorithms'
+import { useAvailableColorsStore } from './stores/availableColors'
 import { useFeatureFlag } from './composables/useFeatureFlag'
 import { useJobStore } from './stores/job'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
@@ -116,6 +117,7 @@ const ui = useUiStore()
 const uiMode = useUiModeStore()
 const toasts = useToastStore()
 const algorithms = useAlgorithmsStore()
+const availableColors = useAvailableColorsStore()
 const perf = usePerfStore()
 const queue = useQueueStore()
 const uploads = useUploadsStore()
@@ -185,7 +187,21 @@ const v2SourceKind = computed<import('./domain/policy/schemas').SourceKind>(() =
   if (mime.startsWith('image/')) return 'bitmap_photo'
   return 'bitmap_photo'
 })
-const v2AvailableColorsCount = computed(() => store.selectedProfile?.pen_slot_count ?? 1)
+// The assisted editor's colour budget is the operator's available inks —
+// the available-colours inventory unioned with whatever pens are mounted —
+// NOT the magazine slot count. Colours are picked freely and loaded at
+// print time (load modal + manual swap prompts), so the magazine must
+// never cap how many distinct colours the resolver may choose for the
+// requested layer count. Falls back to the slot count only when no inks
+// are known yet (inventory not loaded / empty and no mounted pens).
+const v2AvailableColorsCount = computed(() => {
+  const pens = (store.selectedProfile?.pens ?? [])
+    .filter((p) => p.installed && p.color)
+    .map((p) => p.color!.toLowerCase())
+  const inventory = availableColors.ordered.map((c) => c.hex.toLowerCase())
+  const distinct = new Set([...pens, ...inventory]).size
+  return distinct || (store.selectedProfile?.pen_slot_count ?? 1)
+})
 const v2IsMonoPenMachine = computed(() => (store.selectedProfile?.pen_slot_count ?? 1) <= 1)
 
 function closeWorkshop(): void {
@@ -343,6 +359,11 @@ onMounted(async () => {
   // fallback banner. Failure populates `source` with 'snapshot' so the
   // banner becomes visible — no toast needed.
   void algorithms.refresh()
+  // Available-colours inventory drives the assisted editor's colour
+  // budget (``v2AvailableColorsCount``) so the resolver picks colours
+  // from the operator's owned inks rather than the magazine slots.
+  // Fire-and-forget: the count falls back to the slot count until it lands.
+  if (!availableColors.loaded) void availableColors.refresh()
   // Queue polling needs to run for the whole app session so Workshop
   // Mode + WorkspaceRail see live runs even when the operator never
   // opens the Plotter tab. ``startPolling`` is idempotent — calling

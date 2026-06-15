@@ -2,8 +2,8 @@
 
 These run **after** the per-source-kind matrix has produced a base
 recommendation; they may override the chosen algorithm to keep the
-preview snappy, the mono-pen flow coherent, or a near-monochrome image
-on a sensible algorithm.
+preview snappy or to put a near-monochrome image on a sensible
+algorithm.
 
 Each constraint is applied once. When it overrides the algorithm it
 records a :class:`ConstraintHit` so the modal can show the operator
