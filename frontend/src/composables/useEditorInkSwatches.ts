@@ -10,8 +10,9 @@
 // already carry the backend's ink assignment + geometry.
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { ColorAssignment, LayerInfo } from '../api/client'
-import { assignPoolHexes, nearestPoolHex } from '../lib/nearestColor'
+import { assignPoolHexes, chooseInkPalette, nearestPoolHex } from '../lib/nearestColor'
 import { useAvailableColorsStore } from '../stores/availableColors'
+import { useBitmapDraft } from './useBitmapDraft'
 import { useJobStore } from '../stores/job'
 import { useUiModeStore } from '../stores/uiMode'
 
@@ -96,6 +97,18 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
   const job = useJobStore()
   const availableColors = useAvailableColorsStore()
   const uiMode = useUiModeStore()
+  const bitmapDraft = useBitmapDraft()
+
+  // The M-ink palette (Style tab "Nombre de couleurs"): the N segment centroids
+  // reduced to ``color_count`` distinct available inks. Clamped to the number
+  // of segments — you can't draw more colours than segments. ``[]`` falls back
+  // to the full pool (no reduction). Shared by the preview snap AND the commit
+  // bake so they always agree.
+  function inkPaletteFor(centroids: readonly string[]): string[] {
+    const n = centroids.length
+    const m = Math.max(1, Math.min(bitmapDraft.bitmap.value.color_count || n, n))
+    return chooseInkPalette(centroids, deps.effectivePool.value, m)
+  }
 
   // Editor-scoped per-cluster state for the live preview, keyed by cluster id.
   // Reset whenever the active placement changes so one file's tweaks can't
@@ -135,9 +148,15 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
   const previewInkSnap = computed<PreviewSnap | null>(() => {
     const livePalette = deps.fileManager.previewResult?.value?.palette ?? null
     if (!uiMode.isExpert || !livePalette || livePalette.length === 0) return null
+    // Snap every cluster onto the M-ink palette (reduced for the Style
+    // "Nombre de couleurs"). When M ≥ N the palette holds one ink per centroid,
+    // so this is the plain nearest-match; when M < N segments share inks.
+    const centroids = livePalette.map((entry) => entry.color)
+    const palette = inkPaletteFor(centroids)
+    const snapPool = palette.length ? palette : deps.effectivePool.value
     const autoSnapped = assignPoolHexes(
-      livePalette.map((entry) => ({ sourceHex: entry.color })),
-      deps.effectivePool.value,
+      centroids.map((c) => ({ sourceHex: c })),
+      snapPool,
     )
     const map = new Map<string, string>()
     const rows = livePalette.map((entry, idx) => {
@@ -246,8 +265,29 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
   // overrides + HIDDEN clusters need carrying across. Layers match a cluster by
   // their ``source_color`` centroid (the segmentation is unchanged at commit).
   function applyClusterOverridesToLayers(): void {
+    const layers = job.selectedPlacement?.layers ?? []
+    if (!layers.length) return
+    // 1. Reduce the AUTO layers to the M-ink palette (Style "Nombre de
+    //    couleurs") so the committed layers — and the G-code — draw the same
+    //    M colours the operator saw on the preview. Manual overrides win.
+    const sources = layers.map((l) => l.source_color)
+    const palette = inkPaletteFor(sources)
+    if (palette.length) {
+      const snapped = assignPoolHexes(
+        sources.map((s) => ({ sourceHex: s })),
+        palette,
+      )
+      layers.forEach((layer, i) => {
+        if (layer.color_assignment === 'manual') return
+        const ink = snapped[i]
+        if (ink && ink !== layer.assigned_color_hex) {
+          job.updateLayer(layer.layer_id, { assigned_color_hex: ink, color_assignment: 'auto' })
+        }
+      })
+    }
+    // 2. Carry the per-cluster manual overrides + hidden flags across.
     if (clusterColor.value.size === 0 && clusterHidden.value.size === 0) return
-    for (const layer of job.selectedPlacement?.layers ?? []) {
+    for (const layer of layers) {
       const id = clusterIdFor(layer.source_color)
       const override = clusterColor.value.get(id)
       if (override) {

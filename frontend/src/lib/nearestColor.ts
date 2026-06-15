@@ -128,6 +128,86 @@ export function nearestPoolHex(sourceHex: string, pool: readonly string[]): stri
   return canonicalHex(pool[bestIdx]!)
 }
 
+/** Nearest pool hex to an already-computed Lab value (internal helper). */
+function nearestPoolHexByLab(lab: [number, number, number], pool: readonly string[]): string | null {
+  if (!pool.length) return null
+  let bestIdx = 0
+  let bestD = Infinity
+  for (let i = 0; i < pool.length; i++) {
+    const d = deltaE2000(lab, hexToLab(pool[i]!))
+    if (d < bestD) {
+      bestD = d
+      bestIdx = i
+    }
+  }
+  return canonicalHex(pool[bestIdx]!)
+}
+
+/**
+ * Choose up to ``m`` available inks that best represent ``centroids`` — the
+ * decoupled "number of colours" palette. The N segment centroids are grouped
+ * agglomeratively in CIE Lab (merge the perceptually-closest pair until ``m``
+ * groups remain), then each group is snapped to its nearest available pool ink
+ * (deduplicated). Because the palette is derived from the image's OWN dominant
+ * colours, a grey region resolves to a grey ink and stays put as the segment
+ * count (N) changes — instead of every cluster independently chasing the
+ * nearest inventory ink and flipping grey→purple when N moves.
+ *
+ * @returns Up to ``m`` canonical ``#rrggbb`` inks, in merge order. Empty when
+ *   the pool or the centroid list is empty.
+ */
+export function chooseInkPalette(
+  centroids: readonly string[],
+  pool: readonly string[],
+  m: number,
+): string[] {
+  const target = Math.max(1, Math.floor(m))
+  if (!pool.length || !centroids.length) return []
+  // Each centroid starts as its own group (Lab points + running mean).
+  interface Group {
+    labs: [number, number, number][]
+    mean: [number, number, number]
+  }
+  const meanOf = (labs: [number, number, number][]): [number, number, number] => [
+    labs.reduce((s, l) => s + l[0], 0) / labs.length,
+    labs.reduce((s, l) => s + l[1], 0) / labs.length,
+    labs.reduce((s, l) => s + l[2], 0) / labs.length,
+  ]
+  let groups: Group[] = centroids.map((h) => {
+    const lab = hexToLab(h)
+    return { labs: [lab], mean: lab }
+  })
+  while (groups.length > target) {
+    let bi = 0
+    let bj = 1
+    let best = Infinity
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        const d = deltaE2000(groups[i]!.mean, groups[j]!.mean)
+        if (d < best) {
+          best = d
+          bi = i
+          bj = j
+        }
+      }
+    }
+    const labs = [...groups[bi]!.labs, ...groups[bj]!.labs]
+    const merged: Group = { labs, mean: meanOf(labs) }
+    groups = groups.filter((_, idx) => idx !== bi && idx !== bj)
+    groups.push(merged)
+  }
+  const palette: string[] = []
+  const seen = new Set<string>()
+  for (const g of groups) {
+    const ink = nearestPoolHexByLab(g.mean, pool)
+    if (ink && !seen.has(ink.toLowerCase())) {
+      seen.add(ink.toLowerCase())
+      palette.push(ink)
+    }
+  }
+  return palette
+}
+
 export interface PoolAssignmentItem {
   /** Cluster centroid the assignment is computed from. */
   sourceHex: string

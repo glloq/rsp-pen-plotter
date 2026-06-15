@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignPoolHexes, nearestPoolHex } from './nearestColor'
+import { assignPoolHexes, chooseInkPalette, nearestPoolHex } from './nearestColor'
 
 // Pins the ΔE 2000 nearest-match used by the LayerCard's
 // "↻ reset to auto" affordance. The numeric path mirrors the backend's
@@ -84,5 +84,35 @@ describe('assignPoolHexes', () => {
     ]
     const out = assignPoolHexes(items, ['#000000', '#ff0000', '#0000ff', '#00aa00'])
     expect(out).toEqual(['#00aa00', '#00aa00', '#00aa00', '#ff0000'])
+  })
+})
+
+describe('chooseInkPalette', () => {
+  const pool = ['#111111', '#22aa55', '#1e3cc8', '#c81e1e', '#808080']
+
+  it('returns one ink per centroid when m >= the number of centroids', () => {
+    const out = chooseInkPalette(['#2e8b57', '#1e3cc8'], pool, 5)
+    expect(out).toEqual(['#22aa55', '#1e3cc8'])
+  })
+
+  it('reduces N centroids to M inks by merging the closest in Lab', () => {
+    // Four centroids: two greens, a blue, a grey. Asking for 3 colours merges
+    // the two greens into one green ink — grey stays grey, blue stays blue.
+    const centroids = ['#2e8b57', '#3cb371', '#1e3cc8', '#808080']
+    const out = chooseInkPalette(centroids, pool, 3)
+    expect(out).toHaveLength(3)
+    expect(out).toContain('#22aa55') // green
+    expect(out).toContain('#1e3cc8') // blue
+    expect(out).toContain('#808080') // grey — never flips to another hue
+  })
+
+  it('collapses everything onto one ink at m = 1', () => {
+    const out = chooseInkPalette(['#2e8b57', '#1e3cc8', '#808080'], pool, 1)
+    expect(out).toHaveLength(1)
+  })
+
+  it('returns [] for an empty pool or no centroids', () => {
+    expect(chooseInkPalette(['#123456'], [], 3)).toEqual([])
+    expect(chooseInkPalette([], pool, 3)).toEqual([])
   })
 })

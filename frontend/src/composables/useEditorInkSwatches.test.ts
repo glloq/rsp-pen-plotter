@@ -63,6 +63,9 @@ function seedPlacement() {
 describe('useEditorInkSwatches', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    // The bitmap draft is a module-level singleton — reset it so one test's
+    // num_colors / color_count can't leak into the next.
+    useBitmapDraft().rehydrateDraft({ placement: null, installedPenColors: [] })
   })
 
   it('assisted mode: chips come from committed layers in draw order', () => {
@@ -173,6 +176,31 @@ describe('useEditorInkSwatches', () => {
     sw.toggleSwatchVisibility(id)
     expect(sw.isSwatchVisible(id)).toBe(true)
     expect(sw.previewInkSnap.value!.map.get('#111111')).not.toBe('none')
+  })
+
+  it('expert mode: color_count (M) merges the N segments onto M distinct inks', () => {
+    useUiModeStore().setMode('expert')
+    const draft = useBitmapDraft()
+    draft.bitmap.value.num_colors = 4
+    // Four segments: two greens, a blue, a grey. Asking for 3 colours merges
+    // the two greens; grey stays grey (never flips hue).
+    draft.bitmap.value.color_count = 3
+    const { inkSwatches } = useEditorInkSwatches({
+      fileManager: fileManagerWith([
+        { color: '#2e8b57' },
+        { color: '#3cb371' },
+        { color: '#1e3cc8' },
+        { color: '#808080' },
+      ]),
+      effectivePool: ref(['#111111', '#22aa55', '#1e3cc8', '#c81e1e', '#808080']),
+    })
+    const distinct = new Set(inkSwatches.value.map((s) => s.hex.toLowerCase()))
+    expect(distinct.size).toBe(3)
+    // grey segment stays on the grey ink.
+    expect(inkSwatches.value[3]!.hex).toBe('#808080')
+    // Lowering M to 1 collapses everything onto a single ink.
+    draft.bitmap.value.color_count = 1
+    expect(new Set(inkSwatches.value.map((s) => s.hex.toLowerCase())).size).toBe(1)
   })
 
   it('applyClusterOverridesToLayers bakes manual inks + hidden onto committed layers', () => {

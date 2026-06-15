@@ -115,7 +115,15 @@ export type PreprocessDraft = {
 export type BitmapDraft = {
   preprocess: PreprocessDraft
   segmentation_method: SegmentationMethod
+  // Segmentation granularity — how many clusters the image is split into (one
+  // layer per cluster). The "Nombre de calques" knob in the SVG tab.
   num_colors: number
+  // Distinct ink count — how many colours the print actually draws. The N
+  // segments above are quantised onto this many inks (``color_count`` ≤
+  // ``num_colors``); segments sharing an ink merge. The "Nombre de couleurs"
+  // knob in the Style tab. Decouples colour count from layer/detail count so
+  // raising the detail doesn't churn the palette.
+  color_count: number
   num_bands: number
   thresholds: number[]
   // Specific colours pinned via the "Colours" block. Non-empty switches
@@ -213,6 +221,9 @@ export function defaultBitmap(): BitmapDraft {
     preprocess: defaultPreprocess(),
     segmentation_method: 'kmeans',
     num_colors: 4,
+    // Default = num_colors → no reduction (M == N) until the operator lowers
+    // the colour count on the Style tab.
+    color_count: 4,
     // Monochrome luminance banding defaults to a SINGLE band → a single
     // layer drawn with a single pen, matching the print-mode toggle's
     // promise ("draw everything on one layer with one pen"). The shading
