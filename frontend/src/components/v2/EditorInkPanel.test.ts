@@ -78,7 +78,7 @@ describe('EditorInkPanel', () => {
     const swatchBtns = w
       .get('[data-test="modal-v2-ink-popover-color-aabbcc"]')
       .findAll('button[style]')
-    await swatchBtns[swatchBtns.length - 1].trigger('click')
+    await swatchBtns[swatchBtns.length - 1]!.trigger('click')
     const pick = w.emitted('pick')?.[0]?.[0] as { layerId: string; hex: string }
     expect(pick.layerId).toBe('color-aabbcc')
     expect(pick.hex).toBe('#0000ff')
