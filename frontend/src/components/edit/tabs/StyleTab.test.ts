@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import StyleTab from './StyleTab.vue'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
@@ -49,14 +49,54 @@ async function openModal(): Promise<ReturnType<typeof useBitmapDraft>> {
   return d
 }
 
+// Track mounted tabs so each test's StyleTab — and its still-active
+// pens-watch — is torn down before the next test runs. Without this, a
+// leftover StyleTab from a prior test fires its watch against the shared
+// singleton draft during the next test's setup (e.g. ``seed()``), stomping
+// state before that test has configured it.
+let mounted: VueWrapper[] = []
+
 async function enterStyleTab(): Promise<void> {
-  mount(StyleTab, { global: { plugins: [i18n] } })
+  mounted.push(mount(StyleTab, { global: { plugins: [i18n] } }))
   await nextTick()
   await nextTick()
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
+})
+
+afterEach(() => {
+  for (const w of mounted) w.unmount()
+  mounted = []
+})
+
+it('keeps a COMMITTED kmeans conversion intact (touched=false) on Style-tab entry', async () => {
+  // The operator's real bug: an image previously converted with kmeans
+  // reopens with method=kmeans, committed=true and touched=false (rehydrate
+  // clears the flag). palette-follows-pens is at its default (true). Entering
+  // the Style tab used to stomp this to fixed_palette + the pen palette.
+  const t = (k: string) => k
+  useFileManager(t as never, { owner: true })
+  await flush()
+  await nextTick()
+  const d = useBitmapDraft()
+  d.rehydrateDraft({
+    placement: { source_file: 'photo.jpg', last_options: { segmentation_method: 'kmeans', num_colors: 6 } },
+    installedPenColors: ['#ff0000', '#00ff00', '#0000ff'],
+  })
+  seed(['#ff0000', '#00ff00', '#0000ff'])
+
+  // Preconditions matching the KDIAG capture.
+  expect(d.bitmap.value.segmentation_method).toBe('kmeans')
+  expect(d.segmentationTouched.value.has('method')).toBe(false)
+  expect(d.committed.value).toBe(true)
+  expect(d.paletteFollowsPens.value).toBe(true)
+
+  await enterStyleTab()
+
+  expect(d.bitmap.value.segmentation_method).toBe('kmeans')
+  expect(d.bitmap.value.palette).toEqual([])
 })
 
 it('keeps an explicit kmeans choice intact when entering the Style tab', async () => {
