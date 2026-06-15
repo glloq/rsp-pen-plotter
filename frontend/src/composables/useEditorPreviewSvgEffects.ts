@@ -143,5 +143,7 @@ export function useEditorPreviewSvgEffects(deps: EditorPreviewSvgEffectsDeps) {
     if (strokeFloorTimer !== null) clearTimeout(strokeFloorTimer)
   })
 
-  return { applyOpacityOverlay, applyStrokeFloor }
+  // Side-effect-only composable: the overlay + stroke-floor are driven entirely
+  // by the watches above, so there's nothing to return. The opacity-map maths
+  // is unit-tested via the exported ``computeLayerOpacityMap``.
 }

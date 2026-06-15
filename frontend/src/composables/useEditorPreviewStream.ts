@@ -90,6 +90,9 @@ export function useEditorPreviewStream(
     if (payload && typeof payload.layer_label === 'string') return payload.layer_label
     return ''
   })
+  // Internal only — folded into ``displayPercent`` below; not part of the
+  // public surface since the overlay binds the merged percent, not the raw
+  // stream percent.
   const streamPercent = computed<number>(() => stream.percent.value ?? 0)
   const streamActive = computed<boolean>(() => Boolean(stream.active.value))
 
@@ -103,5 +106,5 @@ export function useEditorPreviewStream(
       : estimatedProgress.percent.value,
   )
 
-  return { streamLabel, streamPercent, streamActive, displayPercent }
+  return { streamLabel, streamActive, displayPercent }
 }
