@@ -15,6 +15,7 @@ import { useEstimatedProgress } from '../../composables/useEstimatedProgress'
 import { useProgressiveStream } from '../../composables/useProgressiveStream'
 import { applyPreviewStrokeFloor } from '../../lib/previewStrokeFloor'
 import { useJobStore } from '../../stores/job'
+import SafeSvgHtml from './SafeSvgHtml.vue'
 
 export interface SheetOutlineShape {
   // Real aspect ratio (w/h) — fed straight to CSS ``aspect-ratio`` so
@@ -582,15 +583,14 @@ const displayPercent = computed<number>(() =>
           >
             <!-- Plot (result) layer — always rendered; split mode
                  clips it from the left so the source shows on that
-                 side. -->
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <div
+                 side. Injection goes through SafeSvgHtml (DOMPurify). -->
+            <SafeSvgHtml
               v-if="plotLayerSvg"
+              :svg="plotLayerSvg"
               class="artwork-svg artwork-svg--plot"
               :class="{ 'is-stale': loading, 'is-hidden': viewMode === 'source' }"
               :style="viewMode === 'split' ? { clipPath: splitPlotClip } : {}"
               data-test="modal-v2-preview-svg"
-              v-html="plotLayerSvg"
             />
             <!-- Source (original) layer — rendered only when needed so
                  the DOM stays light when the operator is on plot-only.
@@ -612,11 +612,10 @@ const displayPercent = computed<number>(() =>
                 class="artwork-source-img"
                 draggable="false"
               />
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div
+              <SafeSvgHtml
                 v-else-if="props.originalSvg"
+                :svg="props.originalSvg"
                 class="artwork-source-svg"
-                v-html="props.originalSvg"
               />
             </div>
           </div>
@@ -642,15 +641,15 @@ const displayPercent = computed<number>(() =>
              sheet-bounded equivalent above so callers don't have to
              branch on the layout when asserting presence. -->
         <div v-else class="preview-viewport">
-          <!-- eslint-disable-next-line vue/no-v-html -->
           <div
             v-if="displayedSvg"
             ref="previewRoot"
             class="preview-svg"
             :class="{ 'is-stale': loading }"
             data-test="modal-v2-preview-svg"
-            v-html="displayedSvg"
-          />
+          >
+            <SafeSvgHtml :svg="displayedSvg" />
+          </div>
         </div>
       </div>
 
