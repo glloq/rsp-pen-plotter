@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { useEstimatedProgress } from '../../composables/useEstimatedProgress'
 import { useProgressiveStream } from '../../composables/useProgressiveStream'
 import { applyPreviewStrokeFloor } from '../../lib/previewStrokeFloor'
+import { useEditorPreviewZoomPan } from '../../composables/useEditorPreviewZoomPan'
 import { useJobStore } from '../../stores/job'
 import SafeSvgHtml from './SafeSvgHtml.vue'
 
@@ -122,65 +123,22 @@ const displayedSvg = computed<string | null>(() => {
 // converted placement SVG *is* the plot for those sources.
 const plotLayerSvg = computed<string | null>(() => props.plotSvg ?? props.originalSvg ?? null)
 
-// Zoom / pan — same gesture vocabulary as the rest of the app
-// (wheel zooms, drag pans, double-click recentres). The view is
+// Zoom / pan gesture vocabulary (wheel zooms, drag pans, double-click
+// recentres) — owned by ``useEditorPreviewZoomPan``. The view is
 // intentionally *not* reset on prop changes so the operator can flip
 // intent ↔ palette while zoomed into a detail.
-const zoom = ref(1)
-const panX = ref(0)
-const panY = ref(0)
-const panning = ref(false)
-let panStartX = 0
-let panStartY = 0
-let panInitX = 0
-let panInitY = 0
-const MIN_ZOOM = 0.2
-const MAX_ZOOM = 16
-
-const contentStyle = computed(() => ({
-  transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoom.value})`,
-  transformOrigin: 'center center',
-  transition: panning.value ? 'none' : 'transform 0.08s ease-out',
-}))
-
-function clampZoom(value: number): number {
-  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value))
-}
-function onWheel(event: WheelEvent): void {
-  event.preventDefault()
-  const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15
-  zoom.value = clampZoom(zoom.value * factor)
-}
-function onPanStart(event: PointerEvent): void {
-  if (event.button !== 0 && event.button !== 1) return
-  panning.value = true
-  panStartX = event.clientX
-  panStartY = event.clientY
-  panInitX = panX.value
-  panInitY = panY.value
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-}
-function onPanMove(event: PointerEvent): void {
-  if (!panning.value) return
-  panX.value = panInitX + (event.clientX - panStartX)
-  panY.value = panInitY + (event.clientY - panStartY)
-}
-function onPanEnd(event: PointerEvent): void {
-  if (!panning.value) return
-  panning.value = false
-  ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
-}
-function zoomIn(): void {
-  zoom.value = clampZoom(zoom.value * 1.25)
-}
-function zoomOut(): void {
-  zoom.value = clampZoom(zoom.value / 1.25)
-}
-function resetView(): void {
-  zoom.value = 1
-  panX.value = 0
-  panY.value = 0
-}
+const {
+  zoom,
+  panning,
+  contentStyle,
+  onWheel,
+  onPanStart,
+  onPanMove,
+  onPanEnd,
+  zoomIn,
+  zoomOut,
+  resetView,
+} = useEditorPreviewZoomPan()
 
 // =========================================================================
 // Sheet outline sizing.

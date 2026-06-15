@@ -21,7 +21,7 @@ function seedPlacement(libraryFileId: string | null): string {
   const job = useJobStore()
   const id = job.addEmptyPlacement()
   job.placements = job.placements.map((p) =>
-    p.id === id ? { ...p, library_file_id: libraryFileId ?? undefined } : p,
+    p.id === id ? { ...p, library_file_id: libraryFileId } : p,
   )
   job.selectPlacement(id)
   return id
