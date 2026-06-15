@@ -49,10 +49,13 @@ export function useMagazinePlan() {
 
   const plan = computed(() => buildInkLoadingPlan(planLayers.value, slotCount.value))
 
-  // Multi-pen machines only: mono machines already cycle any number of
-  // inks through their single holder via the colour-change pauses.
+  // Every machine with a holder and at least two inks needs a loading
+  // plan now — including single-holder machines, where the plan is one
+  // initial pen plus a manual swap at each colour change. (Previously
+  // restricted to multi-slot magazines, which silently dropped the
+  // single-holder swap prompts.)
   const needed = computed<boolean>(
-    () => store.isMultiColor && slotCount.value >= 2 && store.layers.length > 0,
+    () => slotCount.value >= 1 && plan.value.inkCount >= 2 && store.layers.length > 0,
   )
 
   // Profiles that declare no tool-change support can't pause mid-print —

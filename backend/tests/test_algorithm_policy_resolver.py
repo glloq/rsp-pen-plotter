@@ -222,19 +222,23 @@ def test_sparse_palette_does_not_fire_for_friendly_algo() -> None:
     assert d.default_algorithm == "direct"
 
 
-def test_mono_pen_machine_constraint_records_explanation() -> None:
+def test_mono_pen_machine_no_longer_forces_a_constraint() -> None:
+    # A single-holder machine is no longer special-cased: it draws a
+    # multi-colour file by swapping the pen at each colour change.
     d = resolve(_input(is_mono_pen_machine=True))
-    assert any(c.constraint == "mono_pen_machine" for c in d.hard_constraints_applied)
+    assert not any(c.constraint == "mono_pen_machine" for c in d.hard_constraints_applied)
 
 
-def test_mono_pen_caps_num_colors_to_one() -> None:
+def test_mono_pen_keeps_full_num_colors() -> None:
+    # num_colors is driven by the palette / available count, NOT capped
+    # to one for mono-pen machines anymore.
     d = resolve(_input(is_mono_pen_machine=True, available_colors_count=4))
-    assert d.default_options["num_colors"] == 1
+    assert d.default_options["num_colors"] == 4
 
 
-def test_mono_pen_with_free_palette_falls_back_to_fixed_palette() -> None:
+def test_mono_pen_with_free_palette_still_uses_kmeans() -> None:
     d = resolve(_input(is_mono_pen_machine=True, palette_mode=PaletteMode.FREE))
-    assert d.segmentation_method is SegmentationMethod.FIXED_PALETTE
+    assert d.segmentation_method is SegmentationMethod.KMEANS
 
 
 # ── Reasoning trail snapshot ─────────────────────────────────────────

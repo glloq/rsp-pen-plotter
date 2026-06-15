@@ -80,7 +80,14 @@ class PolicyInput(BaseModel):
 
     source_kind: SourceKind
     goal: Goal = Goal.FAST
-    palette_mode: PaletteMode = PaletteMode.MACHINE_ONLY
+    # The editor is no longer capped to the pens physically mounted in
+    # the magazine: the operator picks any ink they own and the loading
+    # is handled at print time (load modal for magazines, manual swap
+    # prompts otherwise). ``union`` — pens ∪ available-colours inventory —
+    # is therefore the default so the resolver chooses the best-matching
+    # owned inks for the requested layer count instead of limiting to the
+    # mounted slots.
+    palette_mode: PaletteMode = PaletteMode.UNION
     available_colors_count: int = Field(ge=0, default=1)
     image_megapixels: float | None = None
     layer_count_estimate: int = Field(ge=0, default=1)

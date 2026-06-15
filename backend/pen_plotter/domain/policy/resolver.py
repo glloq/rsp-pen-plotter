@@ -19,7 +19,6 @@ from pen_plotter.domain.policy.types import (
     PolicyDecision,
     PolicyInput,
     RuleHit,
-    SegmentationMethod,
 )
 
 
@@ -100,18 +99,12 @@ def resolve(inp: PolicyInput) -> PolicyDecision:
         options = {}
         passes = []
 
-    # Mono-pen machines always run on one colour (audit #4 §4 third
-    # bullet). We don't change the algorithm — the resolver still
-    # recommends the same family — but we strip the palette parameters
-    # so downstream code knows there's a single layer to draw.
-    if inp.is_mono_pen_machine and "num_colors" in options:
-        options["num_colors"] = 1
-
-    # Mono-pen + non-vector source still needs *some* segmentation to
-    # pick the printable area; ``fixed_palette`` with a single colour
-    # is the cheapest answer.
-    if inp.is_mono_pen_machine and segmentation is SegmentationMethod.KMEANS:
-        segmentation = SegmentationMethod.FIXED_PALETTE
+    # NOTE: mono-pen machines are no longer collapsed to a single colour.
+    # A single-holder machine can still draw a multi-colour file — the
+    # operator swaps the pen at each colour change (prompted by the
+    # print-launch load modal / the mid-print pauses). The resolver
+    # therefore picks colours purely from ``palette_mode`` /
+    # ``available_colors_count``, exactly like a magazine machine.
 
     return PolicyDecision(
         segmentation_method=segmentation,

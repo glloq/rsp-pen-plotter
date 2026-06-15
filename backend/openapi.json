@@ -2668,7 +2668,7 @@
           },
           "palette_mode": {
             "$ref": "#/components/schemas/PaletteMode",
-            "default": "machine_only"
+            "default": "union"
           },
           "source_kind": {
             "$ref": "#/components/schemas/SourceKind"

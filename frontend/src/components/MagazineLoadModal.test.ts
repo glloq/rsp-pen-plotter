@@ -177,6 +177,25 @@ describe('MagazineLoadModal', () => {
     await expect(ensureMagazineLoaded()).resolves.toBe('skipped')
   })
 
+  it('opens for a single-holder machine with a manual-swap plan', async () => {
+    const job = await seed()
+    // Single holder (mono-pen): one initial load + a manual swap at each
+    // colour change. The gate no longer skips these.
+    job.profiles[0]!.pen_slot_count = 1
+    job.profiles[0]!.pens = [pen(0, '#000000')]
+    const wrapper = mountModal()
+    const gate = ensureMagazineLoaded()
+    await nextTick()
+    expect(wrapper.find('[data-test="magazine-load-modal"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="magazine-load-slot-0"]').exists()).toBe(true)
+    // Inks b/c (3 inks, 1 slot) become mid-print manual swaps.
+    const swaps = wrapper.find('[data-test="magazine-load-swaps"]').text()
+    expect(swaps).toContain('#222222')
+    expect(swaps).toContain('#333333')
+    await wrapper.find('[data-test="magazine-load-cancel"]').trigger('click')
+    await expect(gate).resolves.toBe('cancelled')
+  })
+
   it('confirms: applies the (remapped) plan, regenerates, resolves confirmed', async () => {
     const job = await seed()
     const wrapper = mountModal()
