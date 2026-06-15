@@ -40,12 +40,10 @@ import { useEditorPreflight } from '../../composables/useEditorPreflight'
 import { useEditorOnboarding } from '../../composables/useEditorOnboarding'
 import { useEditorDialogAccessibility } from '../../composables/useEditorDialogAccessibility'
 import type { EditTabId } from '../edit/EditTabs.vue'
-import SheetPicker from './SheetPicker.vue'
 import { useEditorCustomStyles } from '../../composables/useEditorCustomStyles'
 import EditorAssistedPanel from './EditorAssistedPanel.vue'
 import EditorExpertPanel from './EditorExpertPanel.vue'
 import EditorHeader from './EditorHeader.vue'
-import EditorFooter from './EditorFooter.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
 
 const props = defineProps<{
@@ -188,14 +186,11 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
 // reads are destructured here. The live preview pane (zoom, pan, sheet
 // outline) lives in EditPreviewPane.vue; this parent only forwards SVGs
 // and flags.
-const {
-  estimatedLengthMm,
-  estimatedDurationSeconds,
-  requiredPenCount,
-  hasEstimate,
-  preflightItems,
-  openMagazine,
-} = useEditorPreflight({
+// Only ``openMagazine`` is still consumed (the ink-fallback CTA). The
+// preflight chips + cost estimates were dropped from the header to give
+// the preview maximum room, so the rest of this read-model is no longer
+// rendered.
+const { openMagazine } = useEditorPreflight({
   layers: () => props.layers,
   hasPlacement,
   t,
@@ -258,16 +253,12 @@ function toggleLayerVisibility(layerId: string): void {
   // ``setVisibility`` so Generate honours it.
 }
 
-// ============================ EXPERT MODE ==============================
-// "Ouvrir l'éditeur complet" promise from the design notes (top of file).
-// Switches the global UX mode to expert; the AssistantModeToggle in the
-// header reflects the change immediately. The modal stays open and swaps
-// its controls block to the expert tab strip (EditorExpertPanel) based on
-// ``uiMode.isExpert`` — the preview pane stays mounted across the switch.
-function openExpertEditor(): void {
-  uiMode.setMode('expert')
-}
-
+// =========================================================================
+// EXPERT MODE
+// The assisted/expert switch lives in the header (AssistantModeToggle).
+// The modal stays open across the switch and swaps its controls block to
+// the expert tab strip (EditorExpertPanel) based on ``uiMode.isExpert`` —
+// the preview pane stays mounted throughout.
 // =========================================================================
 // Expert mode tab state.
 // Expert mode reveals the V1 source / SVG / style / text / layers tabs
@@ -382,18 +373,15 @@ watch(
 // expert tabs already mutate this singleton via their own imports;
 // reading it here is a no-op for the wiring.
 const bitmapDraft = useBitmapDraft()
-// Top-level alias so the template auto-unwraps the nested ref to a plain
-// boolean (Vue only unwraps refs at the top of the render context, not
-// ``bitmapDraft.isDirty`` reached through an object).
-const draftDirty = bitmapDraft.isDirty
 
-// Race-safe Generate: in expert mode this awaits the dirty-draft upload
-// before emitting ``confirm`` so the parent never generates from the
-// pre-apply SVG. Owns ``applying`` / ``applyError`` (read by the footer).
+// Race-safe save: in expert mode the single "save the print style"
+// button awaits the dirty-draft upload before emitting ``confirm`` so the
+// parent never commits from the pre-apply SVG. ``applyExpertDraft`` is no
+// longer a separate footer button — ``confirm`` runs it internally. Owns
+// ``applying`` / ``applyError``.
 const {
   applying,
   applyError,
-  applyExpertDraft,
   confirm,
   dispose: disposeConfirmation,
 } = useEditorConfirmation({
@@ -407,7 +395,13 @@ const {
   onConfirm: (d) => emit('confirm', d),
 })
 
-// Single close gate (header ✕, footer Annuler, backdrop, Escape all route
+// The single header "save the print style" button is locked until there's
+// a decision to commit and nothing is in flight (resolve or expert apply).
+const saveDisabled = computed(
+  () => !decision.value || !hasPlacement.value || pipelineBusy.value || applying.value,
+)
+
+// Single close gate (header ✕, backdrop, Escape all route
 // here). Blocks closing while an expert apply is committing and confirms
 // before discarding an unsaved expert draft. ``window.confirm`` is the same
 // affordance the colours panel uses for destructive actions.
@@ -612,13 +606,9 @@ watch(
       <EditorHeader
         :inert="tourActive"
         :has-placement="hasPlacement"
-        :preflight-items="preflightItems"
-        :has-estimate="hasEstimate"
-        :estimated-duration-seconds="estimatedDurationSeconds"
-        :estimated-length-mm="estimatedLengthMm"
-        :required-pen-count="requiredPenCount"
-        :is-expert="uiMode.isExpert"
+        :save-disabled="saveDisabled"
         @close="requestClose"
+        @save="confirm"
       />
 
       <!-- No placement: explain how to get one, lock Generate. -->
@@ -684,19 +674,9 @@ watch(
               :artwork-height-mm="job.selectedPlacement?.height_mm ?? null"
             />
 
-            <!-- Sheet picker: A6/A5/A4/A3/A2/Letter + portrait/landscape.
-             Lives right under the preview so the operator can size the
-             page-guide without leaving the modal. Mutations go through
-             ``ui.setPreviewSheet`` so the plan view stays in sync. -->
-            <SheetPicker />
-
-            <!-- File caption. -->
-            <p v-if="props.sourceName" class="modal-v2__caption" data-test="modal-v2-context">
-              <span class="modal-v2__filename">{{ props.sourceName }}</span>
-              <span v-if="props.layers && props.layers.length" class="modal-v2__counts">
-                · {{ t('v2.modal.layerCount', { count: props.layers.length }) }}
-              </span>
-            </p>
+            <!-- Sheet picker moved to the header (above the preview); the
+                 filename caption was removed so only the used colours sit
+                 under the preview, maximising preview real estate. -->
 
             <!-- Page navigator: multi-page documents (PDF / DOCX / …)
                  convert one page at a time. The chevrons re-run the
@@ -836,26 +816,17 @@ watch(
             <p v-if="paletteError" class="error" data-test="modal-v2-palette-error">
               {{ t('v2.modal.paletteError', { message: paletteError }) }}
             </p>
+            <!-- Save failed to commit the expert draft (the header Save
+             button runs the apply internally) — surface why so the
+             operator can retry rather than silently losing the work. -->
+            <p v-if="applyError" class="error" role="alert" data-test="modal-v2-apply-error">
+              {{ t('v2.modal.applyError', { message: applyError }) }}
+            </p>
           </div>
           <!-- end controls block -->
         </div>
         <!-- end .modal-v2__layout -->
       </template>
-
-      <EditorFooter
-        :inert="tourActive"
-        :apply-error="applyError"
-        :is-assisted="uiMode.isAssisted"
-        :is-expert="uiMode.isExpert"
-        :is-dirty="draftDirty"
-        :has-placement="hasPlacement"
-        :applying="applying"
-        :generate-disabled="!decision || !hasPlacement || pipelineBusy || applying"
-        @cancel="requestClose"
-        @open-expert="openExpertEditor"
-        @apply="applyExpertDraft"
-        @generate="confirm"
-      />
 
       <!-- First-run welcome tour. Three steps, no progress lost on
            skip. Renders above the modal body so the operator can still
@@ -976,12 +947,12 @@ watch(
   gap: 0.35rem;
   position: sticky;
   top: 0;
-  /* Fixed height (header 44 px + footer 60 px + paddings subtracted
-     from the modal's 92vh ceiling): the preview pane flexes inside it
-     and gives up height to the sheet picker and ink chips below, so
-     format and colours are readable without scrolling this column —
-     notably in expert mode where the right column gets long. */
-  height: calc(92vh - 9rem);
+  /* Fixed height (header band + paddings subtracted from the modal's
+     92vh ceiling; the footer is gone so the preview reclaims that space):
+     the preview pane flexes inside it and gives up height to the ink
+     chips below, so the colours stay readable without scrolling this
+     column — notably in expert mode where the right column gets long. */
+  height: calc(92vh - 7rem);
   overflow-y: auto;
 }
 /* The preview pane (child component root) absorbs the column's spare
@@ -1018,19 +989,6 @@ watch(
 
 /* Preview pane, zoom/pan, sheet outline, view toggle, gesture hint
    and spinner all live in EditPreviewPane.vue now. */
-
-.modal-v2__caption {
-  margin: 0;
-  font-size: 0.75rem;
-  color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.modal-v2__filename {
-  font-family: ui-monospace, Menlo, monospace;
-  color: #cbd5e1;
-}
 
 /* Page navigator for multi-page documents. */
 .modal-v2__pages {
@@ -1169,8 +1127,9 @@ watch(
   outline-offset: 2px;
 }
 
-/* Footer (Cancel / Apply / Generate) lives in EditorFooter.vue.
-   Header preflight + estimate chips live in EditorHeader.vue. */
+/* The footer was removed: the single "save the print style" button and
+   the close button live in EditorHeader.vue (right zone), alongside the
+   sheet-format picker (left) and the assisted/expert toggle (center). */
 
 /* Ink chips now act as visibility toggles. */
 .modal-v2__ink-item {

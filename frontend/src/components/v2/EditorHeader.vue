@@ -1,158 +1,116 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import AssistantModeToggle from '../AssistantModeToggle.vue'
-import { formatDuration, formatLengthMeters, type PreflightItem } from '../../composables/useEditorPreflight'
+import SheetPicker from './SheetPicker.vue'
 
 // Presentational header for the editor modal. The dialog keeps its
 // accessible name via the parent's ``aria-label`` (no visible title, per
-// operator feedback); this row carries the preflight + cost chips so the
-// operator can read "am I ready, what will it cost?" at a glance, the
-// assisted/expert toggle (expert only), and the close button. All state
-// arrives via props; close is emitted.
+// operator feedback). Three zones, left→right:
+//   - LEFT   : the sheet-format picker, sitting directly above the preview
+//     so the operator sizes the page before reading the result.
+//   - CENTER : the assisted/expert UX-mode toggle.
+//   - RIGHT  : the single "save the print style" commit button and the
+//     close button.
+// The status/preflight chips (file / machine / sheet / inks) and the cost
+// estimates were removed from here to give the preview maximum room.
 defineProps<{
   hasPlacement: boolean
-  preflightItems: PreflightItem[]
-  hasEstimate: boolean
-  estimatedDurationSeconds: number
-  estimatedLengthMm: number
-  requiredPenCount: number
-  isExpert: boolean
+  /** Disables the save button (no decision / no placement / busy). */
+  saveDisabled: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'close'): void }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'save'): void }>()
 
 const { t } = useI18n()
 </script>
 
 <template>
   <header class="modal-v2__header">
-    <!-- No visible title (operator feedback) — the dialog keeps its
-         accessible name via the aria-label on the parent dialog. -->
+    <!-- LEFT: sheet-format picker, above the preview. -->
+    <div class="modal-v2__header-left">
+      <SheetPicker v-if="hasPlacement" />
+    </div>
 
-    <!-- Preflight + cost chips. ``data-test`` ids match the previous chips
-         so existing Playwright selectors keep working. -->
-    <ul
-      v-if="hasPlacement"
-      class="modal-v2__header-chips"
-      :aria-label="t('v2.modal.preflightLabel')"
-    >
-      <li v-for="item in preflightItems" :key="item.id">
-        <button
-          v-if="!item.ok && item.onFix"
-          type="button"
-          class="modal-v2__hchip is-warn is-actionable"
-          :data-test="`modal-v2-preflight-${item.id}`"
-          :title="t('v2.modal.preflightFix')"
-          @click="item.onFix"
-        >
-          <span aria-hidden="true">⚠</span>
-          <span>{{ item.label }}</span>
-        </button>
-        <span
-          v-else
-          class="modal-v2__hchip"
-          :class="item.ok ? 'is-ok' : 'is-warn'"
-          :data-test="`modal-v2-preflight-${item.id}`"
-        >
-          <span aria-hidden="true">{{ item.ok ? '✓' : '⚠' }}</span>
-          <span>{{ item.label }}</span>
-        </span>
-      </li>
-      <li v-if="hasEstimate">
-        <span
-          class="modal-v2__hchip is-info"
-          data-test="modal-v2-estimate-time"
-          :title="t('v2.modal.estimateLabel')"
-        >
-          <span aria-hidden="true">⏱</span>
-          <span>{{ formatDuration(estimatedDurationSeconds) }}</span>
-        </span>
-      </li>
-      <li v-if="hasEstimate">
-        <span class="modal-v2__hchip is-info" data-test="modal-v2-estimate-length">
-          <span aria-hidden="true">📏</span>
-          <span>{{ formatLengthMeters(estimatedLengthMm) }} m</span>
-        </span>
-      </li>
-      <li v-if="requiredPenCount > 0">
-        <span class="modal-v2__hchip is-info" data-test="modal-v2-estimate-pens">
-          <span aria-hidden="true">🖊</span>
-          <span>{{ requiredPenCount }}</span>
-        </span>
-      </li>
-    </ul>
+    <!-- CENTER: assisted / expert UX-mode selector. -->
+    <div class="modal-v2__header-center">
+      <AssistantModeToggle />
+    </div>
 
-    <AssistantModeToggle v-if="isExpert" />
-    <button
-      type="button"
-      class="close"
-      :aria-label="t('settings.close')"
-      data-test="modal-v2-close"
-      @click="emit('close')"
-    >
-      ×
-    </button>
+    <!-- RIGHT: the single commit button + close. -->
+    <div class="modal-v2__header-right">
+      <button
+        type="button"
+        class="modal-v2__save"
+        :disabled="saveDisabled"
+        :title="!hasPlacement ? t('v2.modal.noPlacement') : t('v2.modal.saveStyleHint')"
+        data-test="confirm-button"
+        @click="emit('save')"
+      >
+        {{ t('v2.modal.saveStyle') }}
+      </button>
+      <button
+        type="button"
+        class="close"
+        :aria-label="t('settings.close')"
+        data-test="modal-v2-close"
+        @click="emit('close')"
+      >
+        ×
+      </button>
+    </div>
   </header>
 </template>
 
 <style scoped>
 .modal-v2__header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid #334155;
 }
-/* Preflight + estimate chip strip — reads "am I ready, what will it
-   cost?" at a glance without the body reserving real estate. */
-.modal-v2__header-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  flex: 1;
+.modal-v2__header-left {
   min-width: 0;
 }
-.modal-v2__hchip {
-  display: inline-flex;
+.modal-v2__header-center {
+  display: flex;
+  justify-content: center;
+}
+.modal-v2__header-right {
+  display: flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.18rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  border: 1px solid transparent;
-  background: #1e293b;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
 }
-.modal-v2__hchip.is-ok {
-  border-color: #047857;
-  color: #a7f3d0;
-  background: rgba(2, 44, 34, 0.4);
-}
-.modal-v2__hchip.is-warn {
-  border-color: #b45309;
-  color: #fde68a;
-  background: rgba(69, 26, 3, 0.4);
-}
-.modal-v2__hchip.is-info {
-  border-color: #334155;
-  color: #cbd5e1;
-  background: #1e293b;
-}
-.modal-v2__hchip.is-actionable {
+.modal-v2__save {
+  padding: 0.5rem 1.3rem;
+  border: 1px solid #059669;
+  background: #059669;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    transform 0.08s ease;
 }
-.modal-v2__hchip.is-actionable:hover {
-  background: rgba(69, 26, 3, 0.7);
+.modal-v2__save:hover:not(:disabled) {
+  background: #10b981;
 }
-.modal-v2__hchip.is-actionable:focus-visible {
+.modal-v2__save:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.modal-v2__save:focus-visible {
   outline: 2px solid #10b981;
   outline-offset: 2px;
+}
+.modal-v2__save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .close {
   border: none;
@@ -164,5 +122,20 @@ const { t } = useI18n()
 }
 .close:hover {
   color: #e2e8f0;
+}
+
+/* On narrow viewports the three-zone grid collapses to a wrapping row so
+   the picker, toggle and buttons stay reachable on a tablet. */
+@media (max-width: 900px) {
+  .modal-v2__header {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .modal-v2__header-center {
+    justify-content: flex-start;
+  }
+  .modal-v2__header-right {
+    justify-content: flex-start;
+  }
 }
 </style>

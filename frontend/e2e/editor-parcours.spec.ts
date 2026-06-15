@@ -83,8 +83,12 @@ test.describe('Editor parcours (assisted → expert → generate)', () => {
       timeout: 20_000,
     })
 
-    // Flip to the expert surface from the footer link.
-    await page.locator('[data-test="modal-v2-open-expert"]').click()
+    // Flip to the expert surface from the modal header's mode toggle.
+    // Scoped to the modal backdrop so it doesn't also match the
+    // app-header toggle, which renders the same data-test ids.
+    await page
+      .locator('[data-test="modal-v2-backdrop"] [data-test="assistant-mode-expert"]')
+      .click()
     await expect(page.locator('[data-test="modal-v2-expert-panel"]')).toBeVisible()
     // The lazy-loaded tab strip resolves.
     await expect(page.locator('[role="tablist"]')).toBeVisible({ timeout: 20_000 })

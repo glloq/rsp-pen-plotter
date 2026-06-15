@@ -1810,6 +1810,8 @@
       "sheetPickerLabel": "Sheet format",
       "sheetPortrait": "Portrait",
       "sheetLandscape": "Landscape",
+      "saveStyle": "Save style",
+      "saveStyleHint": "Save the chosen print style for this file.",
       "applyExpert": "Apply",
       "applyExpertHint": "Re-convert the file with the settings from the Image / SVG / Style / Text tabs.",
       "applyExpertClean": "No changes to apply.",
