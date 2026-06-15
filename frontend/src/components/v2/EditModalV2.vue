@@ -767,7 +767,26 @@ useKeyboardShortcuts([
 const dialogRoot = ref<HTMLElement | null>(null)
 const a11y = useEditorDialogAccessibility({
   dialogRoot,
-  onEscape: () => requestClose(),
+  // While the welcome tour is open it owns the foreground: Escape dismisses
+  // the tour (and unblocks the modal) rather than closing the whole editor
+  // out from under the operator mid-tour.
+  onEscape: () => {
+    if (tourActive.value) {
+      dismissTour()
+      return
+    }
+    requestClose()
+  },
+})
+
+// When the tour dismisses, its buttons unmount and the modal body stops
+// being inert — pull focus back into the modal so it doesn't fall to
+// <body> (the trap would then yank it back on the next Tab, but landing it
+// cleanly is better for screen-reader users).
+watch(tourActive, (active, was) => {
+  if (was && !active) {
+    void nextTick().then(() => a11y.focusInitial())
+  }
 })
 
 onMounted(async () => {
@@ -838,6 +857,7 @@ watch(
       :aria-label="t('v2.modal.title')"
     >
       <EditorHeader
+        :inert="tourActive"
         :has-placement="hasPlacement"
         :preflight-items="preflightItems"
         :has-estimate="hasEstimate"
@@ -869,6 +889,7 @@ watch(
              One short sentence + a dismiss-forever button. -->
         <div
           v-if="preambleVisible"
+          :inert="tourActive"
           class="modal-v2__preamble"
           role="note"
           data-test="modal-v2-preamble"
@@ -889,7 +910,7 @@ watch(
              wanted maximum preview real estate; the tabs / sheet
              picker / inks / footer all sit beneath it in a compact
              stack. -->
-        <div class="modal-v2__layout" data-test="modal-v2-layout">
+        <div class="modal-v2__layout" :inert="tourActive" data-test="modal-v2-layout">
           <!-- Preview block: preview pane + sheet picker. Sits at the
                top so the artwork is always the first thing on screen. -->
           <div class="modal-v2__preview-block">
@@ -1069,6 +1090,7 @@ watch(
       </template>
 
       <EditorFooter
+        :inert="tourActive"
         :apply-error="applyError"
         :is-assisted="uiMode.isAssisted"
         :is-expert="uiMode.isExpert"
@@ -1085,11 +1107,16 @@ watch(
       <!-- First-run welcome tour. Three steps, no progress lost on
            skip. Renders above the modal body so the operator can still
            see what each step describes. -->
+      <!-- Welcome tour. While open it owns the foreground: the modal body
+           (header / controls / footer) is rendered ``inert`` above, so this
+           is genuinely the active dialog — hence ``aria-modal="true"`` and
+           the focus trap collapsing to the tour. Escape dismisses the tour,
+           not the modal. -->
       <div
         v-if="tourActive"
         class="modal-v2__tour"
         role="dialog"
-        aria-modal="false"
+        aria-modal="true"
         :aria-label="t('v2.modal.tourTitle')"
         data-test="modal-v2-tour"
       >

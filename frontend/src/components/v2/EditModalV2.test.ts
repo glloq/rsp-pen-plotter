@@ -828,6 +828,30 @@ describe('EditModalV2 (beginner single-screen)', () => {
     expect(wrapper.emitted('confirm')).toHaveLength(1)
   })
 
+  it('Escape dismisses the welcome tour without closing the modal', async () => {
+    // First-run tour (no skipOnboarding, fresh localStorage). Escape must
+    // dismiss the tour and leave the modal open — the modal body is inert
+    // while the tour shows, so a stray Escape shouldn't tear it all down.
+    const wrapper = mountModal({
+      sourceName: 'photo.jpg',
+      previewSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+      attachTo: document.body,
+    })
+    await flushPromises()
+    expect(wrapper.find('[data-test="modal-v2-tour"]').exists()).toBe(true)
+    // The body is inert while the tour owns the foreground.
+    expect(wrapper.find('[data-test="modal-v2-layout"]').attributes('inert')).toBeDefined()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+
+    expect(wrapper.find('[data-test="modal-v2-tour"]').exists()).toBe(false)
+    expect(wrapper.emitted('cancel')).toBeFalsy()
+    // Body is interactive again.
+    expect(wrapper.find('[data-test="modal-v2-layout"]').attributes('inert')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('keeps Generate locked while the resolve is still in flight', async () => {
     // Hold the resolver so the pipeline stays in its non-terminal state;
     // Generate must stay disabled until the decision lands (audit P0 §2).

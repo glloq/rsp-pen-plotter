@@ -113,6 +113,31 @@ describe('useEditorDialogAccessibility', () => {
     a11y.deactivate()
   })
 
+  it('excludes controls inside an inert subtree (onboarding tour case)', () => {
+    // Wrap the first two buttons in an inert container — the trap must
+    // collapse to the only non-inert control (btnLast), mirroring the modal
+    // body going inert while the welcome tour is open.
+    const inertBox = document.createElement('div')
+    inertBox.setAttribute('inert', '')
+    dialog.insertBefore(inertBox, btnFirst)
+    inertBox.append(btnFirst, btnMid)
+    const a11y = useEditorDialogAccessibility({ dialogRoot: ref(dialog), onEscape: () => {} })
+    a11y.activate()
+    a11y.focusInitial()
+    expect(document.activeElement).toBe(btnLast)
+    a11y.deactivate()
+  })
+
+  it('excludes display:none / visibility:hidden controls', () => {
+    btnFirst.style.display = 'none'
+    btnMid.style.visibility = 'hidden'
+    const a11y = useEditorDialogAccessibility({ dialogRoot: ref(dialog), onEscape: () => {} })
+    a11y.activate()
+    a11y.focusInitial()
+    expect(document.activeElement).toBe(btnLast)
+    a11y.deactivate()
+  })
+
   it('follows content that mounts after activation', () => {
     const a11y = useEditorDialogAccessibility({ dialogRoot: ref(dialog), onEscape: () => {} })
     a11y.activate()

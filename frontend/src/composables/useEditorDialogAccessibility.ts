@@ -5,8 +5,10 @@
 // Extracted from ``EditModalV2.vue`` (Phase 4 of the editor audit) and
 // hardened: it now captures the element that had focus when the dialog
 // opened and restores focus there on close (so keyboard users aren't
-// dumped at the top of the page), and it skips ``aria-disabled`` and
-// hidden controls when computing the tab ring.
+// dumped at the top of the page), and it skips controls that aren't really
+// tabbable when computing the tab ring: ``aria-disabled``, ``hidden``,
+// elements inside an ``inert`` subtree (the onboarding tour), and ones that
+// are visually hidden (``display:none`` / ``visibility:hidden`` / no box).
 import type { Ref } from 'vue'
 
 // Tabbable candidates inside the dialog. ``aria-disabled`` and the
@@ -31,15 +33,36 @@ export function useEditorDialogAccessibility(deps: DialogAccessibilityDeps) {
   // The control that had focus when the dialog opened, restored on close.
   let opener: HTMLElement | null = null
 
+  // Is ``el`` actually reachable by Tab? Filters the cases the CSS selector
+  // can't express. Order matters: the cheap attribute checks short-circuit
+  // before the layout-dependent ones.
+  function isTabbable(el: HTMLElement): boolean {
+    // ``aria-disabled`` is independent of the ``:disabled`` selector; a
+    // ``hidden`` element is never tabbable.
+    if (el.getAttribute('aria-disabled') === 'true' || el.hidden) return false
+    // Anything inside an ``inert`` subtree is removed from the tab order by
+    // the platform — the onboarding tour marks the modal body inert so the
+    // trap must collapse to the tour, not leak to the controls behind it.
+    if (typeof el.closest === 'function' && el.closest('[inert]')) return false
+    // Real visibility: ``display:none`` / ``visibility:hidden`` (the latter
+    // inherits, so this also catches a hidden ancestor). ``getComputedStyle``
+    // works without a layout engine.
+    if (typeof getComputedStyle === 'function') {
+      const style = getComputedStyle(el)
+      if (style.display === 'none' || style.visibility === 'hidden') return false
+    }
+    // Zero client rects ⇒ not rendered (a ``display:none`` ancestor, an
+    // offscreen/collapsed box). Real browsers report 0; test DOMs without a
+    // layout engine report ≥1 for everything, so this is a no-op there
+    // rather than a false exclusion that would empty the ring.
+    if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) return false
+    return true
+  }
+
   function focusables(): HTMLElement[] {
     const root = deps.dialogRoot.value
     if (!root) return []
-    return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-      // Skip controls that are present but not actually operable: an
-      // ``aria-disabled`` element still matches ``:not([disabled])`` (the
-      // two are independent), and ``hidden`` elements aren't tabbable.
-      (el) => el.getAttribute('aria-disabled') !== 'true' && !el.hidden,
-    )
+    return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(isTabbable)
   }
 
   function onKeydown(event: KeyboardEvent): void {
