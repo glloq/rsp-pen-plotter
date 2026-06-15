@@ -111,6 +111,13 @@ describe('chooseInkPalette', () => {
     expect(out).toHaveLength(1)
   })
 
+  it('weights bias the palette toward the larger (dominant) regions', () => {
+    // A large grey area + a tiny red speck. M=1 must keep GREY, not the speck.
+    expect(chooseInkPalette(['#808080', '#c81e1e'], pool, 1, [0.95, 0.05])).toEqual(['#808080'])
+    // Flip the weights and red wins.
+    expect(chooseInkPalette(['#808080', '#c81e1e'], pool, 1, [0.05, 0.95])).toEqual(['#c81e1e'])
+  })
+
   it('returns [] for an empty pool or no centroids', () => {
     expect(chooseInkPalette(['#123456'], [], 3)).toEqual([])
     expect(chooseInkPalette([], pool, 3)).toEqual([])

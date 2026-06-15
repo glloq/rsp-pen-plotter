@@ -59,7 +59,12 @@ function hexToLab(hex: string): [number, number, number] {
   return xyzToLab(srgbToXyz(hexToRgb(hex)))
 }
 
-function deltaE2000(lab1: [number, number, number], lab2: [number, number, number]): number {
+/** RGB (0-255 each) → CIE Lab. Exposed for pixel-histogram callers. */
+export function rgbToLab(r: number, g: number, b: number): [number, number, number] {
+  return xyzToLab(srgbToXyz([r, g, b]))
+}
+
+export function deltaE2000(lab1: [number, number, number], lab2: [number, number, number]): number {
   // Faithful to the CIEDE2000 reference paper. Kept readable rather
   // than golfed; this is a one-shot per reset click so the cost is
   // a rounding error.
@@ -153,6 +158,12 @@ function nearestPoolHexByLab(lab: [number, number, number], pool: readonly strin
  * count (N) changes — instead of every cluster independently chasing the
  * nearest inventory ink and flipping grey→purple when N moves.
  *
+ * ``weights`` (per centroid, e.g. pixel-area coverage) make the merge
+ * DOMINANCE-aware: group means lean toward the larger regions, so reducing to M
+ * keeps the biggest colours and folds the minor ones into them — instead of a
+ * tiny vivid speck outweighing a large muted area. Omitted ⇒ every centroid
+ * counts equally.
+ *
  * @returns Up to ``m`` canonical ``#rrggbb`` inks, in merge order. Empty when
  *   the pool or the centroid list is empty.
  */
@@ -160,22 +171,23 @@ export function chooseInkPalette(
   centroids: readonly string[],
   pool: readonly string[],
   m: number,
+  weights?: readonly number[],
 ): string[] {
   const target = Math.max(1, Math.floor(m))
   if (!pool.length || !centroids.length) return []
-  // Each centroid starts as its own group (Lab points + running mean).
   interface Group {
-    labs: [number, number, number][]
-    mean: [number, number, number]
+    sum: [number, number, number] // weighted Lab sum
+    w: number // total weight
   }
-  const meanOf = (labs: [number, number, number][]): [number, number, number] => [
-    labs.reduce((s, l) => s + l[0], 0) / labs.length,
-    labs.reduce((s, l) => s + l[1], 0) / labs.length,
-    labs.reduce((s, l) => s + l[2], 0) / labs.length,
+  const mean = (g: Group): [number, number, number] => [
+    g.sum[0] / g.w,
+    g.sum[1] / g.w,
+    g.sum[2] / g.w,
   ]
-  let groups: Group[] = centroids.map((h) => {
+  let groups: Group[] = centroids.map((h, i) => {
     const lab = hexToLab(h)
-    return { labs: [lab], mean: lab }
+    const w = Math.max(1e-6, weights?.[i] ?? 1)
+    return { sum: [lab[0] * w, lab[1] * w, lab[2] * w], w }
   })
   while (groups.length > target) {
     let bi = 0
@@ -183,7 +195,7 @@ export function chooseInkPalette(
     let best = Infinity
     for (let i = 0; i < groups.length; i++) {
       for (let j = i + 1; j < groups.length; j++) {
-        const d = deltaE2000(groups[i]!.mean, groups[j]!.mean)
+        const d = deltaE2000(mean(groups[i]!), mean(groups[j]!))
         if (d < best) {
           best = d
           bi = i
@@ -191,15 +203,21 @@ export function chooseInkPalette(
         }
       }
     }
-    const labs = [...groups[bi]!.labs, ...groups[bj]!.labs]
-    const merged: Group = { labs, mean: meanOf(labs) }
+    const a = groups[bi]!
+    const b = groups[bj]!
+    const merged: Group = {
+      sum: [a.sum[0] + b.sum[0], a.sum[1] + b.sum[1], a.sum[2] + b.sum[2]],
+      w: a.w + b.w,
+    }
     groups = groups.filter((_, idx) => idx !== bi && idx !== bj)
     groups.push(merged)
   }
+  // Heaviest group first so the dominant colour leads the swatch strip.
+  groups.sort((x, y) => y.w - x.w)
   const palette: string[] = []
   const seen = new Set<string>()
   for (const g of groups) {
-    const ink = nearestPoolHexByLab(g.mean, pool)
+    const ink = nearestPoolHexByLab(mean(g), pool)
     if (ink && !seen.has(ink.toLowerCase())) {
       seen.add(ink.toLowerCase())
       palette.push(ink)

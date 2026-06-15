@@ -11,6 +11,7 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { ColorAssignment, LayerInfo } from '../api/client'
 import { assignPoolHexes, chooseInkPalette, nearestPoolHex } from '../lib/nearestColor'
+import { colorCoverageFromSvg } from '../lib/svgCoverage'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { useBitmapDraft } from './useBitmapDraft'
 import { useJobStore } from '../stores/job'
@@ -46,6 +47,9 @@ export interface PreviewSnap {
 // palette. Kept structural so the modal passes its owner instance verbatim.
 export interface InkSwatchFileManager {
   previewResult: Ref<{ palette: { color: string }[] } | null>
+  // Raw /preview SVG (segment centroids) — rasterised to weight the M-ink
+  // reduction by area. Optional: omitted ⇒ the reduction stays unweighted.
+  previewSvg?: Ref<string>
 }
 
 export interface EditorInkSwatchesDeps {
@@ -99,15 +103,35 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
   const uiMode = useUiModeStore()
   const bitmapDraft = useBitmapDraft()
 
+  // Per-centroid pixel-area coverage of the live preview, recomputed (async,
+  // off a canvas raster) whenever the /preview SVG changes — i.e. once per
+  // segmentation, NOT on every M tweak, so lowering M stays instant.
+  const coverageWeights = ref<Map<string, number>>(new Map())
+  watch(
+    () => deps.fileManager.previewSvg?.value ?? '',
+    async (svg) => {
+      const centroids = deps.fileManager.previewResult?.value?.palette?.map((p) => p.color) ?? []
+      coverageWeights.value = await colorCoverageFromSvg(svg, centroids)
+    },
+    { immediate: true },
+  )
+
   // The M-ink palette (Style tab "Nombre de couleurs"): the N segment centroids
-  // reduced to ``color_count`` distinct available inks. Clamped to the number
-  // of segments — you can't draw more colours than segments. ``[]`` falls back
-  // to the full pool (no reduction). Shared by the preview snap AND the commit
-  // bake so they always agree.
+  // reduced to ``color_count`` distinct available inks, weighted by area so the
+  // DOMINANT colours survive. Clamped to the number of segments — you can't draw
+  // more colours than segments. ``[]`` falls back to the full pool (no
+  // reduction). Shared by the preview snap AND the commit bake so they agree.
   function inkPaletteFor(centroids: readonly string[]): string[] {
     const n = centroids.length
     const m = Math.max(1, Math.min(bitmapDraft.bitmap.value.color_count || n, n))
-    return chooseInkPalette(centroids, deps.effectivePool.value, m)
+    const weights = centroids.map((c) => coverageWeights.value.get(c.toLowerCase()))
+    const allWeighted = weights.every((w) => w !== undefined)
+    return chooseInkPalette(
+      centroids,
+      deps.effectivePool.value,
+      m,
+      allWeighted ? (weights as number[]) : undefined,
+    )
   }
 
   // Editor-scoped per-cluster state for the live preview, keyed by cluster id.
