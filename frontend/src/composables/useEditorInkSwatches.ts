@@ -17,7 +17,6 @@ import { computed, type ComputedRef, type Ref } from 'vue'
 import type { LayerInfo } from '../api/client'
 import { assignPoolHexes } from '../lib/nearestColor'
 import { useAvailableColorsStore } from '../stores/availableColors'
-import { useBitmapDraft } from './useBitmapDraft'
 import { useJobStore } from '../stores/job'
 import { useUiModeStore } from '../stores/uiMode'
 
@@ -64,7 +63,6 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
   const job = useJobStore()
   const availableColors = useAvailableColorsStore()
   const uiMode = useUiModeStore()
-  const bitmapDraft = useBitmapDraft()
 
   const inventoryNameByHex = computed<Map<string, string>>(() => {
     const map = new Map<string, string>()
@@ -86,66 +84,55 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
     return [...layers].sort((a, b) => a.draw_order - b.draw_order)
   })
 
-  // Live-preview centroid → pool-ink mapping (expert mode only).
+  // Live-preview centroid → available-ink mapping (expert mode only).
   //
   // The /preview SVG renders each cluster in its raw segmentation CENTROID
-  // (the expert draft doesn't ship ``ink_pool``), but after Apply the job
-  // store re-snaps every layer onto the active pool with the same
-  // greedy-unique ΔE matching. The chips already show those snapped inks;
-  // this exposes the per-centroid snap once so BOTH the chips and the
-  // preview recolor read from it. Without sharing the map, the preview kept
-  // showing the photo's own colours while the chip strip listed only the
-  // few pens that will actually draw — "la preview a plus de couleurs que
-  // celles listées". ``null`` outside expert mode / before a live palette
-  // exists, so the assisted pipeline (which already renders snapped inks via
-  // /rerender + inkColorsFor) is untouched.
+  // (the expert draft ships no ``ink_pool``). A pen plotter can only draw
+  // with the inks the operator owns, so EVERY cluster is snapped here to its
+  // perceptually-nearest available ink (CIE Lab ΔE 2000, full inventory ∪ pens
+  // pool) — the chips and the recoloured preview therefore always show real
+  // available colours, never the image's own centroids. The map is shared with
+  // the expert preview recolour so the chips and the SVG agree on the ink drawn.
   const previewInkSnap = computed<PreviewSnap | null>(() => {
     const livePalette = deps.fileManager.previewResult?.value?.palette ?? null
     if (!uiMode.isExpert || !livePalette || livePalette.length === 0) return null
-    // The ink each live cluster draws with, by priority:
-    //   1. a MANUAL per-layer override (the assign-colour popover) — always
-    //      wins, so reassigning a layer recolours both the chip and the
-    //      live preview to the chosen ink.
-    //   2. the pool snap, when the operator follows the pens via a
-    //      fixed_palette (greedy-unique ΔE onto the owned pool).
-    //   3. otherwise the cluster's OWN colour ("fidèle à l'image"): kmeans /
-    //      kmeans_lab render the photo's real colours, so the chip lists them
-    //      verbatim and the preview is left untouched.
-    // The centroid → ink map feeds ``recolorPreviewSvg`` so the preview and
-    // the chip strip always agree on the colour drawn.
-    const method = bitmapDraft.bitmap.value.segmentation_method
-    const snapToPool =
-      bitmapDraft.paletteFollowsPens.value &&
-      (method === 'fixed_palette' || method === 'palette_dither')
-    const autoSnapped = snapToPool
-      ? assignPoolHexes(
-          livePalette.map((entry) => ({ sourceHex: entry.color })),
-          deps.effectivePool.value,
-        )
-      : []
+    const pool = deps.effectivePool.value
+    // Always snap every cluster onto the owned pool. Reuse is allowed (two
+    // clusters nearest the same ink both draw it) so a pool that doesn't span
+    // the image collapses onto the closest inks instead of scattering greens
+    // onto blue/grey. ``null`` per item only when the pool is empty.
+    const autoSnapped = assignPoolHexes(
+      livePalette.map((entry) => ({ sourceHex: entry.color })),
+      pool,
+    )
+    // Manual overrides + the per-chip layer handle come from the committed
+    // layers ONLY while the live segmentation still matches them (same cluster
+    // count ⇒ same clusters, in draw order). The moment the operator changes
+    // the colour count in the SVG tab the committed layers are stale, so we map
+    // purely from the live centroids — index-mapping onto stale layers is
+    // exactly what assigned "blue for green / grey for green".
     const layers = sortedLayers.value
+    const aligned = layers.length === livePalette.length ? layers : null
     const map = new Map<string, string>()
     const rows = livePalette.map((entry, idx) => {
-      const layer = layers[idx] ?? null
+      const centroid = entry.color
+      const layer = aligned ? (aligned[idx] ?? null) : null
       const manual =
         layer && layer.color_assignment === 'manual' && layer.assigned_color_hex
           ? layer.assigned_color_hex
           : null
-      let ink = entry.color
-      let isFallback = false
-      if (manual) {
-        ink = manual
-      } else if (snapToPool) {
-        ink = autoSnapped[idx] ?? entry.color
-        isFallback = autoSnapped[idx] === null
+      const auto = autoSnapped[idx] ?? centroid
+      const ink = manual ?? auto
+      // Fallback = the pool was empty so no owned ink could be picked (the chip
+      // surfaces a "load this ink" CTA). A successful snap is never a fallback.
+      const isFallback = !manual && autoSnapped[idx] === null
+      // Record the remap so ``recolorPreviewSvg`` paints the cluster in its
+      // assigned ink. An ink equal to the centroid (pool already held that
+      // exact colour) needs no rewrite.
+      if (ink.toLowerCase() !== centroid.toLowerCase()) {
+        map.set(centroid.toLowerCase(), ink)
       }
-      // Only record a real remap: a cluster drawn in its own colour ("fidèle
-      // à l'image") stays out of the map so ``recolorPreviewSvg`` leaves the
-      // preview untouched.
-      if (ink.toLowerCase() !== entry.color.toLowerCase()) {
-        map.set(entry.color.toLowerCase(), ink)
-      }
-      return { centroid: entry.color, ink, isFallback, layer }
+      return { centroid, ink, isFallback, layer }
     })
     return { map, rows }
   })
