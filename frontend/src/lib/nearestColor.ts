@@ -133,39 +133,25 @@ export function nearestPoolHex(sourceHex: string, pool: readonly string[]): stri
   return canonicalHex(pool[bestIdx]!)
 }
 
-/** Nearest pool hex to an already-computed Lab value (internal helper). */
-function nearestPoolHexByLab(lab: [number, number, number], pool: readonly string[]): string | null {
-  if (!pool.length) return null
-  let bestIdx = 0
-  let bestD = Infinity
-  for (let i = 0; i < pool.length; i++) {
-    const d = deltaE2000(lab, hexToLab(pool[i]!))
-    if (d < bestD) {
-      bestD = d
-      bestIdx = i
-    }
-  }
-  return canonicalHex(pool[bestIdx]!)
-}
-
 /**
  * Choose up to ``m`` available inks that best represent ``centroids`` — the
- * decoupled "number of colours" palette. The N segment centroids are grouped
- * agglomeratively in CIE Lab (merge the perceptually-closest pair until ``m``
- * groups remain), then each group is snapped to its nearest available pool ink
- * (deduplicated). Because the palette is derived from the image's OWN dominant
- * colours, a grey region resolves to a grey ink and stays put as the segment
- * count (N) changes — instead of every cluster independently chasing the
- * nearest inventory ink and flipping grey→purple when N moves.
+ * decoupled "number of colours" palette.
  *
- * ``weights`` (per centroid, e.g. pixel-area coverage) make the merge
- * DOMINANCE-aware: group means lean toward the larger regions, so reducing to M
- * keeps the biggest colours and folds the minor ones into them — instead of a
- * tiny vivid speck outweighing a large muted area. Omitted ⇒ every centroid
- * counts equally.
+ * Each segment centroid is first snapped to its nearest available ink (CIE Lab
+ * ΔE 2000), then the inks are ranked by the total AREA of the segments that
+ * landed on them and the top ``m`` are kept. The caller folds the remaining
+ * segments onto the nearest survivor. Working in INK space (not centroid space)
+ * means the palette is always real available colours — a grey region resolves
+ * to the grey ink and stays put as the segment count (N) changes — and ranking
+ * by area keeps the DOMINANT colours: the biggest regions survive a reduction
+ * while specks fold in, instead of the 2nd-largest colour being merged away
+ * just because it sits perceptually close to a neighbour.
  *
- * @returns Up to ``m`` canonical ``#rrggbb`` inks, in merge order. Empty when
- *   the pool or the centroid list is empty.
+ * ``weights`` (per centroid, e.g. pixel-area coverage) drive the ranking;
+ * omitted ⇒ every segment counts as one (rank by segment count).
+ *
+ * @returns Up to ``m`` canonical ``#rrggbb`` inks, most-dominant first. Empty
+ *   when the pool or the centroid list is empty.
  */
 export function chooseInkPalette(
   centroids: readonly string[],
@@ -175,55 +161,20 @@ export function chooseInkPalette(
 ): string[] {
   const target = Math.max(1, Math.floor(m))
   if (!pool.length || !centroids.length) return []
-  interface Group {
-    sum: [number, number, number] // weighted Lab sum
-    w: number // total weight
-  }
-  const mean = (g: Group): [number, number, number] => [
-    g.sum[0] / g.w,
-    g.sum[1] / g.w,
-    g.sum[2] / g.w,
-  ]
-  let groups: Group[] = centroids.map((h, i) => {
-    const lab = hexToLab(h)
-    const w = Math.max(1e-6, weights?.[i] ?? 1)
-    return { sum: [lab[0] * w, lab[1] * w, lab[2] * w], w }
+  // Snap each segment to its nearest available ink, accumulating area per ink.
+  const coverageByInk = new Map<string, number>()
+  centroids.forEach((c, i) => {
+    const ink = nearestPoolHex(c, pool)
+    if (!ink) return
+    const w = Math.max(0, weights?.[i] ?? 1)
+    coverageByInk.set(ink, (coverageByInk.get(ink) ?? 0) + w)
   })
-  while (groups.length > target) {
-    let bi = 0
-    let bj = 1
-    let best = Infinity
-    for (let i = 0; i < groups.length; i++) {
-      for (let j = i + 1; j < groups.length; j++) {
-        const d = deltaE2000(mean(groups[i]!), mean(groups[j]!))
-        if (d < best) {
-          best = d
-          bi = i
-          bj = j
-        }
-      }
-    }
-    const a = groups[bi]!
-    const b = groups[bj]!
-    const merged: Group = {
-      sum: [a.sum[0] + b.sum[0], a.sum[1] + b.sum[1], a.sum[2] + b.sum[2]],
-      w: a.w + b.w,
-    }
-    groups = groups.filter((_, idx) => idx !== bi && idx !== bj)
-    groups.push(merged)
-  }
-  // Heaviest group first so the dominant colour leads the swatch strip.
-  groups.sort((x, y) => y.w - x.w)
-  const palette: string[] = []
-  const seen = new Set<string>()
-  for (const g of groups) {
-    const ink = nearestPoolHexByLab(mean(g), pool)
-    if (ink && !seen.has(ink.toLowerCase())) {
-      seen.add(ink.toLowerCase())
-      palette.push(ink)
-    }
-  }
-  return palette
+  // Keep the M inks covering the most area; minor inks' segments fold onto the
+  // nearest survivor in the caller's snap.
+  return [...coverageByInk.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, target)
+    .map(([ink]) => ink)
 }
 
 export interface PoolAssignmentItem {
