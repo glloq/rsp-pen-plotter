@@ -44,6 +44,8 @@ import { useEditorCustomStyles } from '../../composables/useEditorCustomStyles'
 import EditorAssistedPanel from './EditorAssistedPanel.vue'
 import EditorExpertPanel from './EditorExpertPanel.vue'
 import EditorHeader from './EditorHeader.vue'
+import EditorInkPanel from './EditorInkPanel.vue'
+import EditorPageNav from './EditorPageNav.vue'
 import EditPreviewPane from './EditPreviewPane.vue'
 
 const props = defineProps<{
@@ -686,36 +688,13 @@ watch(
                  under the preview, maximising preview real estate. -->
 
             <!-- Page navigator: multi-page documents (PDF / DOCX / …)
-                 convert one page at a time. The chevrons re-run the
-                 conversion for the chosen page so the operator can edit
-                 a whole document without leaving the modal. -->
-            <div v-if="hasPages" class="modal-v2__pages" data-test="modal-v2-pages">
-              <button
-                type="button"
-                class="modal-v2__page-btn"
-                :disabled="currentPage <= 0"
-                :aria-label="t('v2.modal.pagePrev')"
-                :title="t('v2.modal.pagePrev')"
-                data-test="modal-v2-page-prev"
-                @click="goToPage(currentPage - 1)"
-              >
-                ‹
-              </button>
-              <span class="modal-v2__page-label" data-test="modal-v2-page-label">
-                {{ t('upload.pageOf', { current: currentPage + 1, total: pageCount }) }}
-              </span>
-              <button
-                type="button"
-                class="modal-v2__page-btn"
-                :disabled="currentPage >= pageCount - 1"
-                :aria-label="t('v2.modal.pageNext')"
-                :title="t('v2.modal.pageNext')"
-                data-test="modal-v2-page-next"
-                @click="goToPage(currentPage + 1)"
-              >
-                ›
-              </button>
-            </div>
+                 convert one page at a time. Extracted to EditorPageNav.vue. -->
+            <EditorPageNav
+              v-if="hasPages"
+              :current-page="currentPage"
+              :page-count="pageCount"
+              @go="goToPage"
+            />
 
             <!-- Estimate + magazine compatibility row. Time, length, pen
              count come from the placement's layers; the compatibility
@@ -723,61 +702,14 @@ watch(
              the magazine, with a one-click shortcut to fix it. -->
             <!-- Cost + preflight chips moved to the header. -->
 
-            <!-- Per-layer ink swatches, in draw order. Each chip is a
-             one-click visibility toggle (👁 / strike-through) so the
-             beginner can mute a layer without leaving the modal. When
-             the resolver fell back because nothing in the magazine
-             matched, a secondary "Charger" button on the chip jumps
-             straight to the magazine editor. -->
-            <div
-              v-if="inkSwatches.length"
-              class="modal-v2__inks"
-              data-test="modal-v2-inks"
-              :aria-label="t('v2.modal.inksLabel')"
-            >
-              <span class="modal-v2__inks-label">{{ t('v2.modal.inksLabel') }}</span>
-              <ul class="modal-v2__inks-list">
-                <li v-for="ink in inkSwatches" :key="ink.layerId" class="modal-v2__ink-item">
-                  <button
-                    type="button"
-                    class="modal-v2__ink"
-                    :class="{
-                      'is-fallback': ink.isFallback,
-                      'is-hidden': !isLayerVisible(ink.layerId),
-                    }"
-                    :aria-pressed="isLayerVisible(ink.layerId)"
-                    :title="
-                      isLayerVisible(ink.layerId)
-                        ? t('v2.modal.layerHide')
-                        : t('v2.modal.layerShow')
-                    "
-                    :data-test="`modal-v2-ink-${ink.layerId}`"
-                    @click="toggleLayerVisibility(ink.layerId)"
-                  >
-                    <span class="modal-v2__ink-eye" aria-hidden="true">{{
-                      isLayerVisible(ink.layerId) ? '👁' : '⊘'
-                    }}</span>
-                    <span
-                      class="modal-v2__ink-swatch"
-                      :style="{ backgroundColor: ink.hex }"
-                      aria-hidden="true"
-                    />
-                    <span class="modal-v2__ink-name">{{ ink.displayName }}</span>
-                  </button>
-                  <button
-                    v-if="ink.isFallback"
-                    type="button"
-                    class="modal-v2__ink-cta"
-                    :title="t('v2.modal.inkFallback', { hex: ink.hex })"
-                    :aria-label="t('v2.modal.inkFallbackCta')"
-                    :data-test="`modal-v2-ink-load-${ink.layerId}`"
-                    @click="openMagazine"
-                  >
-                    {{ t('v2.modal.inkFallbackCta') }}
-                  </button>
-                </li>
-              </ul>
-            </div>
+            <!-- Per-layer ink swatches + one-click visibility toggles.
+                 Extracted to EditorInkPanel.vue. -->
+            <EditorInkPanel
+              :swatches="inkSwatches"
+              :is-visible="isLayerVisible"
+              @toggle="toggleLayerVisibility"
+              @load-ink="openMagazine"
+            />
           </div>
           <!-- end preview block -->
 
@@ -998,67 +930,10 @@ watch(
    and spinner all live in EditPreviewPane.vue now. */
 
 /* Page navigator for multi-page documents. */
-.modal-v2__pages {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0;
-}
-.modal-v2__page-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border: 1px solid #334155;
-  background: #1e293b;
-  color: #e2e8f0;
-  border-radius: 4px;
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-}
-.modal-v2__page-btn:hover:not(:disabled) {
-  background: #334155;
-}
-.modal-v2__page-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.modal-v2__page-btn:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.modal-v2__page-label {
-  font-size: 0.75rem;
-  color: #cbd5e1;
-  font-variant-numeric: tabular-nums;
-}
-
-.modal-v2__inks {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin: 0;
-}
-.modal-v2__inks-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.modal-v2__inks-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-/* Assisted controls (intent grid + palette toggle + style stack) live in
-   EditorAssistedPanel.vue. */
+/* Page navigator (.modal-v2__pages) lives in EditorPageNav.vue; the ink
+   swatch panel (.modal-v2__inks / .modal-v2__ink*) lives in
+   EditorInkPanel.vue; assisted controls (intent grid + palette toggle +
+   style stack) live in EditorAssistedPanel.vue. */
 
 .error {
   color: #fca5a5;
@@ -1139,82 +1014,6 @@ watch(
    sheet-format picker (left) and the assisted/expert toggle (center). */
 
 /* Ink chips now act as visibility toggles. */
-.modal-v2__ink-item {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-}
-.modal-v2__ink {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.15rem 0.55rem 0.15rem 0.35rem;
-  border: 1px solid #334155;
-  border-radius: 999px;
-  background: #1e293b;
-  font-size: 0.75rem;
-  color: #cbd5e1;
-  max-width: 14rem;
-  cursor: pointer;
-  transition:
-    background 0.12s ease,
-    opacity 0.15s ease;
-}
-.modal-v2__ink:hover {
-  background: #334155;
-}
-.modal-v2__ink:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.modal-v2__ink.is-hidden {
-  opacity: 0.5;
-}
-.modal-v2__ink.is-hidden .modal-v2__ink-name {
-  text-decoration: line-through;
-}
-.modal-v2__ink.is-fallback {
-  border-color: #b45309;
-  background: rgba(69, 26, 3, 0.4);
-  color: #fde68a;
-}
-.modal-v2__ink-eye {
-  font-size: 0.6875rem;
-  line-height: 1;
-  opacity: 0.7;
-}
-.modal-v2__ink-swatch {
-  display: inline-block;
-  width: 0.85rem;
-  height: 0.85rem;
-  border-radius: 50%;
-  border: 1px solid rgba(241, 245, 249, 0.3);
-  flex-shrink: 0;
-}
-.modal-v2__ink-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.modal-v2__ink-cta {
-  border: 1px solid #b45309;
-  background: rgba(69, 26, 3, 0.4);
-  color: #fde68a;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.6875rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.modal-v2__ink-cta:hover {
-  background: rgba(69, 26, 3, 0.7);
-}
-.modal-v2__ink-cta:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-
 /* Onboarding tour overlay. Anchored to the modal so the preview
    underneath stays partly visible. */
 .modal-v2__tour {
