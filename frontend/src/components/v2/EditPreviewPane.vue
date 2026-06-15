@@ -17,6 +17,8 @@ import { applyPreviewStrokeFloor } from '../../lib/previewStrokeFloor'
 import { useEditorPreviewZoomPan } from '../../composables/useEditorPreviewZoomPan'
 import { useEditorPreviewSplit } from '../../composables/useEditorPreviewSplit'
 import { useJobStore } from '../../stores/job'
+import PreviewLoadingOverlay from './PreviewLoadingOverlay.vue'
+import PreviewToolbar from './PreviewToolbar.vue'
 import SafeSvgHtml from './SafeSvgHtml.vue'
 
 export interface SheetOutlineShape {
@@ -555,114 +557,24 @@ const displayPercent = computed<number>(() =>
         </div>
       </div>
 
-      <!-- Three-way mode toggle: Result / Original / Compare. The
-           V1 modal exposed the same set; restoring it keeps the
-           operator able to verify what the conversion did to the
-           source pixels. -->
-      <div
-        v-if="canShowOriginal"
-        class="mode-toggle"
-        data-test="modal-v2-mode-toggle"
-        @pointerdown.stop
-        @wheel.stop
-        @dblclick.stop
-      >
-        <button
-          type="button"
-          :class="{ active: viewMode === 'plot' }"
-          :aria-pressed="viewMode === 'plot'"
-          :title="t('v2.modal.viewPlot')"
-          data-test="modal-v2-mode-plot"
-          @click="setMode('plot')"
-        >
-          {{ t('v2.modal.viewPlot') }}
-        </button>
-        <button
-          type="button"
-          :class="{ active: viewMode === 'source' }"
-          :aria-pressed="viewMode === 'source'"
-          :title="t('v2.modal.viewOriginal')"
-          data-test="modal-v2-mode-source"
-          @click="setMode('source')"
-        >
-          {{ t('v2.modal.viewOriginal') }}
-        </button>
-        <button
-          type="button"
-          :class="{ active: viewMode === 'split' }"
-          :aria-pressed="viewMode === 'split'"
-          :disabled="!canCompareOriginal"
-          :title="t('v2.modal.viewCompare')"
-          data-test="modal-v2-mode-split"
-          @click="setMode('split')"
-        >
-          {{ t('v2.modal.viewCompare') }}
-        </button>
-      </div>
+      <!-- Floating controls: Result / Original / Compare toggle + zoom. -->
+      <PreviewToolbar
+        :view-mode="viewMode"
+        :can-show-original="canShowOriginal"
+        :can-compare-original="canCompareOriginal"
+        :zoom="zoom"
+        @set-mode="setMode"
+        @zoom-in="zoomIn"
+        @zoom-out="zoomOut"
+        @reset-view="resetView"
+      />
 
-      <div class="zoom" data-test="modal-v2-zoom" @pointerdown.stop @wheel.stop @dblclick.stop>
-        <button
-          type="button"
-          :title="t('v2.modal.zoomIn')"
-          :aria-label="t('v2.modal.zoomIn')"
-          data-test="modal-v2-zoom-in"
-          @click="zoomIn"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          :title="t('v2.modal.zoomOut')"
-          :aria-label="t('v2.modal.zoomOut')"
-          data-test="modal-v2-zoom-out"
-          @click="zoomOut"
-        >
-          −
-        </button>
-        <button
-          type="button"
-          class="zoom-reset"
-          :title="t('v2.modal.resetView')"
-          :aria-label="t('v2.modal.resetView')"
-          data-test="modal-v2-zoom-reset"
-          @click="resetView"
-        >
-          {{ Math.round(zoom * 100) }}%
-        </button>
-      </div>
-
-      <div
+      <PreviewLoadingOverlay
         v-if="loading"
-        class="preview-overlay"
-        role="status"
-        aria-live="polite"
-        data-test="modal-v2-preview-loading"
-      >
-        <span class="spinner" aria-hidden="true" />
-        <span class="preview-overlay__label">
-          {{ t('v2.modal.previewLoading') }}
-          <span class="preview-overlay__percent" data-test="modal-v2-preview-percent">
-            {{ displayPercent }} %
-          </span>
-          <span v-if="streamActive && streamLabel" class="preview-overlay__layer">
-            · {{ streamLabel }}
-          </span>
-        </span>
-        <!-- Progress bar: estimated fill from the cost-estimator EMA
-             (per algorithm × quality), advanced by the SSE stream's
-             real per-layer percent when one is active. Always visible
-             while a preview is computing. -->
-        <div
-          class="preview-overlay__bar"
-          role="progressbar"
-          :aria-valuenow="displayPercent"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          data-test="modal-v2-preview-progress"
-        >
-          <div class="preview-overlay__bar-fill" :style="{ width: `${displayPercent}%` }" />
-        </div>
-      </div>
+        :percent="displayPercent"
+        :stream-active="streamActive"
+        :stream-label="streamLabel"
+      />
       <p v-if="error" class="preview-error" data-test="modal-v2-preview-error">
         {{ t('v2.modal.previewError')
         }}<span v-if="errorMessage" class="preview-error__detail"> — {{ errorMessage }}</span>
@@ -849,86 +761,10 @@ const displayPercent = computed<number>(() =>
 /* Mode toggle (Result / Source / Compare). Lives in the top-right
    corner of the pane so it doesn't collide with the existing zoom
    controls in the top-left or the gesture-hint at the bottom. */
-.mode-toggle {
-  position: absolute;
-  top: 0.5rem;
-  left: 0.5rem;
-  display: inline-flex;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid #334155;
-  border-radius: 4px;
-  overflow: hidden;
-  z-index: 3;
-}
-.mode-toggle button {
-  border: none;
-  background: transparent;
-  color: #cbd5e1;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.55rem;
-  cursor: pointer;
-  font-weight: 500;
-}
-.mode-toggle button + button {
-  border-left: 1px solid #334155;
-}
-.mode-toggle button.active {
-  background: #059669;
-  color: white;
-}
-.mode-toggle button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.mode-toggle button:hover:not(.active):not(:disabled) {
-  background: #334155;
-}
-.mode-toggle button:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.preview-overlay {
-  position: absolute;
-  inset: auto 0 0 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  padding: 0.5rem 0.75rem;
-  background: rgba(15, 23, 42, 0.88);
-  font-size: 0.75rem;
-  color: #cbd5e1;
-}
-.preview-overlay__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.preview-overlay__layer {
-  color: #34d399;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.75rem;
-}
-.preview-overlay__percent {
-  color: #94a3b8;
-  font-family: ui-monospace, Menlo, monospace;
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-}
-.preview-overlay__bar {
-  width: min(100%, 240px);
-  height: 4px;
-  background: #334155;
-  border-radius: 999px;
-  overflow: hidden;
-}
-.preview-overlay__bar-fill {
-  height: 100%;
-  background: #10b981;
-  border-radius: 999px;
-  transition: width 0.15s ease;
-}
+/* The Result/Original/Compare toggle + zoom cluster live in
+   PreviewToolbar.vue; the loading spinner + progress bar live in
+   PreviewLoadingOverlay.vue. Both position themselves against this
+   pane's ``.preview`` container. */
 .preview-error {
   position: absolute;
   inset: auto 0.5rem 0.5rem;
@@ -943,57 +779,6 @@ const displayPercent = computed<number>(() =>
 }
 .preview-error__detail {
   opacity: 0.85;
-}
-.zoom {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.zoom button {
-  width: 1.9rem;
-  height: 1.9rem;
-  border: 1px solid #334155;
-  background: rgba(15, 23, 42, 0.85);
-  color: #e2e8f0;
-  border-radius: 4px;
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.zoom button:hover {
-  background: #334155;
-}
-.zoom button:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-.zoom-reset {
-  font-size: 0.625rem !important;
-  font-variant-numeric: tabular-nums;
-}
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid #334155;
-  border-top-color: #10b981;
-  border-radius: 50%;
-  animation: preview-spin 0.7s linear infinite;
-}
-@keyframes preview-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation: none;
-  }
 }
 
 .sheet-outline {
