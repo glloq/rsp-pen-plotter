@@ -9,34 +9,22 @@
 // adapted-render SVG, the original placement SVG, loading / error
 // flags, and the sheet geometry, and just hands them down.
 
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useEstimatedProgress } from '../../composables/useEstimatedProgress'
-import { useProgressiveStream } from '../../composables/useProgressiveStream'
-import { applyPreviewStrokeFloor } from '../../lib/previewStrokeFloor'
 import { useEditorPreviewZoomPan } from '../../composables/useEditorPreviewZoomPan'
 import { useEditorPreviewSplit } from '../../composables/useEditorPreviewSplit'
-import { useJobStore } from '../../stores/job'
+import { useEditorPreviewStream } from '../../composables/useEditorPreviewStream'
+import { useEditorPreviewSheetGeometry } from '../../composables/useEditorPreviewSheetGeometry'
+import { useEditorPreviewSvgEffects } from '../../composables/useEditorPreviewSvgEffects'
 import PreviewLoadingOverlay from './PreviewLoadingOverlay.vue'
 import PreviewToolbar from './PreviewToolbar.vue'
 import SafeSvgHtml from './SafeSvgHtml.vue'
+import type { SheetOutlineShape } from './sheetGeometry'
 
-export interface SheetOutlineShape {
-  // Real aspect ratio (w/h) — fed straight to CSS ``aspect-ratio`` so
-  // the rectangle keeps its shape regardless of how wide vs. tall the
-  // preview pane is. Percent-of-axis sizing distorted the shape on
-  // non-square panes; that bug is what this interface fixes.
-  aspectRatio: number
-  labelW: number
-  labelH: number
-  isPortrait: boolean
-  /** Real sheet width in mm — used to scale the artwork so the same
-   *  drawing visibly shrinks when the operator picks a bigger paper
-   *  format (and overflows when picking a smaller one). */
-  widthMm: number
-  /** Real sheet height in mm — companion to ``widthMm``. */
-  heightMm: number
-}
+// Re-exported so existing callers can keep importing the shape from this
+// component; the canonical definition now lives in ``./sheetGeometry`` so the
+// geometry composable can reference it without a circular import.
+export type { SheetOutlineShape }
 
 const props = defineProps<{
   /** The adapted (resolver / custom-stack) render. May be null while
@@ -144,84 +132,18 @@ const {
 } = useEditorPreviewZoomPan()
 
 // =========================================================================
-// Sheet outline sizing.
-// CSS ``aspect-ratio`` alone won't fit a rectangle into a non-square
-// pane without distortion — when both axes are constrained, the
-// browser picks one and the aspect breaks. We track the pane's real
-// pixel size with ResizeObserver, then derive the sheet's width/height
-// in pixels so it's *guaranteed* to honour the requested aspect ratio
-// AND fit inside 92 % of the pane on whichever axis is tighter.
-const paneEl = ref<HTMLElement | null>(null)
-const paneWidth = ref(0)
-const paneHeight = ref(0)
-let paneObserver: ResizeObserver | null = null
-
-const sheetStyle = computed<{ width: string; height: string } | null>(() => {
-  const s = props.sheet
-  if (!s) return null
-  const ratio = s.aspectRatio
-  if (!Number.isFinite(ratio) || ratio <= 0) return null
-  const pw = paneWidth.value
-  const ph = paneHeight.value
-  if (pw <= 0 || ph <= 0) return null
-  const maxW = pw * 0.92
-  const maxH = ph * 0.92
-  // Anchor on whichever axis caps the rectangle first. ``maxW / ratio``
-  // is the height the rectangle would take if it filled maxW; if that
-  // exceeds maxH, the sheet is taller than it is wide and we anchor
-  // on height instead.
-  let w: number
-  let h: number
-  if (maxW / ratio <= maxH) {
-    w = maxW
-    h = maxW / ratio
-  } else {
-    h = maxH
-    w = maxH * ratio
-  }
-  return { width: `${Math.round(w)}px`, height: `${Math.round(h)}px` }
-})
-
-// =========================================================================
-// Artwork-inside-sheet sizing.
-// The previous layout rendered the SVG and the sheet outline as
-// independent overlays — picking A4 vs. A3 left the artwork at the
-// same on-screen size and made it overflow the paper. The fix sizes
-// the artwork as a fraction of the sheet (artworkMm / sheetMm), so a
-// 100 × 100 mm drawing visibly fills half of an A4 portrait (210
-// × 297 mm) and barely covers a quarter of A3. Falls back to "fill the
-// sheet" when the artwork's own dimensions aren't known yet (typically
-// during the first /preview round-trip on upload).
-const artworkFraction = computed<{ w: number; h: number } | null>(() => {
-  if (!props.sheet) return null
-  const sw = props.sheet.widthMm
-  const sh = props.sheet.heightMm
-  if (!sw || !sh) return null
-  const aw = props.artworkWidthMm ?? sw
-  const ah = props.artworkHeightMm ?? sh
-  let w = aw / sw
-  let h = ah / sh
-  // Overflow clamp: scale BOTH axes by the same factor so an artwork
-  // bigger than the sheet still keeps its aspect ratio while filling
-  // the page. The previous per-axis ``Math.min(100, …)`` clamp
-  // stretched the drawing whenever the two axes overflowed by
-  // different amounts (e.g. an A4-sized artwork on an A6 sheet).
-  const over = Math.max(w, h)
-  if (over > 1) {
-    w /= over
-    h /= over
-  }
-  return { w, h }
-})
-
-const artworkStyle = computed<{ width: string; height: string } | null>(() => {
-  // Express the artwork box as a percentage of the sheet so the inline
-  // sheet container (already sized in pixels by ``sheetStyle``) does
-  // the unit conversion for us.
-  const f = artworkFraction.value
-  if (!f) return null
-  return { width: `${f.w * 100}%`, height: `${f.h * 100}%` }
-})
+// Sheet + artwork geometry.
+// The pane's pixel size (ResizeObserver), the dashed-sheet fit, and the
+// artwork-fraction sizing all live in ``useEditorPreviewSheetGeometry`` so
+// the fit/clamp maths is testable without mounting the pane. ``paneEl`` is the
+// template ref the observer watches; ``artworkFraction`` must be available
+// before the split wiring below consumes it.
+const { paneEl, paneWidth, paneHeight, sheetStyle, artworkFraction, artworkStyle } =
+  useEditorPreviewSheetGeometry({
+    sheet: () => props.sheet,
+    artworkWidthMm: () => props.artworkWidthMm,
+    artworkHeightMm: () => props.artworkHeightMm,
+  })
 
 // =========================================================================
 // Split / compare slider.
@@ -235,212 +157,36 @@ const artworkStyle = computed<{ width: string; height: string } | null>(() => {
 const { splitPercent, onSplitGrab, onSplitMove, onSplitRelease, splitPlotClip, splitSourceClip } =
   useEditorPreviewSplit({ viewMode, artworkFraction })
 
-onMounted(() => {
-  if (!paneEl.value || typeof ResizeObserver === 'undefined') return
-  paneObserver = new ResizeObserver((entries) => {
-    const entry = entries[0]
-    if (!entry) return
-    const rect = entry.contentRect
-    paneWidth.value = rect.width
-    paneHeight.value = rect.height
-  })
-  paneObserver.observe(paneEl.value)
-})
-
-onBeforeUnmount(() => {
-  paneObserver?.disconnect()
-  paneObserver = null
+// =========================================================================
+// Progressive preview stream + estimated progress.
+// ``useEditorPreviewStream`` owns the /preview/stream SSE open/close
+// lifecycle (skipping sub-350 ms previews) and folds the real stream percent
+// together with the estimated bar into a single ``displayPercent`` the
+// loading overlay binds to. Self-cleaning on scope dispose.
+const { streamLabel, streamActive, displayPercent } = useEditorPreviewStream({
+  loading: () => props.loading,
+  streamFileId: () => props.streamFileId,
+  estimateMs: () => props.estimateMs,
 })
 
 // =========================================================================
-// Progressive preview stream (roadmap C.7 wiring).
-// Opens an EventSource on /preview/stream while a heavy preview is in
-// flight, and surfaces a percent + last-layer label inside the loading
-// overlay. The composable cleans itself up onUnmounted and on
-// done/error events, so the only thing the pane has to manage is the
-// open/close lifecycle in response to the parent's loading flag.
-
-const stream = useProgressiveStream()
-const SLOW_PREVIEW_MS = 350
-let openTimer: number | null = null
-
-function shouldStream(): boolean {
-  // Only open when we actually have a file id to stream from. Without
-  // one the endpoint falls back to its synthetic emitter — not useful
-  // here.
-  return Boolean(props.streamFileId)
-}
-
-function clearOpenTimer(): void {
-  if (openTimer !== null) {
-    window.clearTimeout(openTimer)
-    openTimer = null
-  }
-}
-
-watch(
-  () => props.loading,
-  (loading) => {
-    if (loading && shouldStream()) {
-      // Don't fire the SSE for previews that resolve in < 350 ms —
-      // opening + closing a connection for a fast render is wasted
-      // work and the overlay flicker is annoying. The plain spinner
-      // is fine for sub-second loads.
-      clearOpenTimer()
-      // Capture the file id at schedule time so a prop swap mid-delay
-      // can't sneak ``undefined`` into the URL.
-      const scheduledFileId = props.streamFileId
-      openTimer = window.setTimeout(() => {
-        openTimer = null
-        // Re-check at fire time: the parent may have invalidated the
-        // file (placement removed) during the 350 ms window. Bail
-        // silently — the plain spinner is fine.
-        if (!scheduledFileId || scheduledFileId !== props.streamFileId) return
-        const url = `/preview/stream?file_id=${encodeURIComponent(scheduledFileId)}`
-        stream.open(url)
-      }, SLOW_PREVIEW_MS)
-    } else {
-      clearOpenTimer()
-      stream.close()
-    }
-  },
-)
-
-// Vue auto-stops the watch on unmount, but a pending setTimeout would
-// otherwise still fire — opening an EventSource after the composable's
-// onUnmounted close already ran. Cancel the timer too so closing the
-// modal mid-delay leaks nothing.
-onBeforeUnmount(() => {
-  clearOpenTimer()
-})
-
-// =========================================================================
-// Per-layer opacity overlay (preview-only).
-// The job store mutates ``layer.opacity_percent`` when the operator drags
-// the LayerCard slider, but the backend's /rerender doesn't consume it —
-// opacity is intentionally a *preview* hint, not a hardware parameter.
-// We apply it client-side by walking the v-html'd SVG and setting
-// ``stroke-opacity`` on each ``<g class="layer color-XXX">`` group, then
-// re-apply whenever any layer's opacity_percent changes.
-
-const job = useJobStore()
+// Preview-only SVG effects.
+// The per-layer opacity overlay (ink-chip eye toggle + opacity slider) and
+// the display-time stroke floor both walk the v-html'd SVG client-side.
+// ``previewRoot`` is the shared render-surface ref (artwork box in sheet mode,
+// unbounded viewport otherwise) and stays declared here so both template
+// branches can bind it; the walks live in ``useEditorPreviewSvgEffects``.
 const previewRoot = ref<HTMLElement | null>(null)
-
-function applyOpacityOverlay(): void {
-  const root = previewRoot.value
-  if (!root) return
-  const svg = root.querySelector('svg')
-  if (!svg) return
-  // Build a layerId → opacity map so we can do one DOM walk instead of
-  // N queries. Defaults the implicit 100 % case so groups whose layer
-  // we don't recognise stay at 1.0 instead of inheriting a stale value
-  // left over from a previous SVG.
-  // A hidden layer (the ink chip's eye toggle) collapses to opacity 0 so
-  // the colour disappears from the preview entirely — the backend
-  // /rerender still returns every layer, so this client-side overlay is
-  // what actually realises the "cacher cette couleur" affordance.
-  const opacityById = new Map<string, number>()
-  for (const layer of job.layers) {
-    const pct = layer.opacity_percent ?? 100
-    const visible = job.isVisible(layer.layer_id)
-    opacityById.set(layer.layer_id, visible ? Math.max(0, Math.min(100, pct)) / 100 : 0)
-  }
-  // The bitmap / vector / text pipelines all label each per-layer
-  // group with ``inkscape:label="color-XXXXXX"`` (= layer_id). The
-  // namespaced attribute selector is fragile across parsers (HTML
-  // vs XML mode), so we walk every <g> imperatively and filter on
-  // the attribute presence. Reset to 1.0 when the group's layer
-  // isn't in the active set so a stale value from the previous SVG
-  // doesn't bleed through.
-  const groups = svg.getElementsByTagName('g')
-  for (const g of Array.from(groups)) {
-    const label = g.getAttribute('inkscape:label')
-    if (!label) continue
-    const opacity = opacityById.get(label)
-    g.style.opacity = opacity === undefined ? '1' : String(opacity)
-  }
-}
-
-// Re-apply whenever the SVG content changes or any layer's
-// opacity_percent value moves.
-watch(
-  () => [props.plotSvg, props.originalSvg, viewMode.value],
-  () => {
-    // The v-html commit happens during the same flush; defer to the
-    // next microtask so the DOM is in place when we walk it.
-    void Promise.resolve().then(() => {
-      applyOpacityOverlay()
-      applyStrokeFloor()
-    })
-  },
-)
-watch(
-  () =>
-    job.layers
-      .map((l) => `${l.layer_id}:${l.opacity_percent ?? 100}:${job.isVisible(l.layer_id) ? 1 : 0}`)
-      .join('|'),
-  () => applyOpacityOverlay(),
-)
-
-// =========================================================================
-// Display-time stroke floor.
-// The render carries true-to-life pen widths (a 0.5 mm tip on an A2-fit
-// placement is well under one device pixel at fit zoom), and sub-pixel
-// strokes anti-alias into pale, washed-out colours — operators read it
-// as "the preview is transparent". Floor every stroke at ~0.8 device px
-// so colours stay legible; zooming in past the floor restores the exact
-// physical widths (the floor is recomputed per zoom level from each
-// SVG's on-screen size). Cosmetic only — the SVG string sent to
-// /generate is untouched.
-function applyStrokeFloor(): void {
-  const root = previewRoot.value
-  if (!root) return
-  for (const svg of Array.from(root.querySelectorAll('svg'))) {
-    const rect = svg.getBoundingClientRect()
-    if (!rect.width) continue
-    applyPreviewStrokeFloor(svg as SVGSVGElement, rect.width)
-  }
-}
-
-// Zoom / pane-size / sheet changes all move the on-screen scale, so the
-// floor must be recomputed. Debounced: wheel-zoom fires per tick and a
-// dense SVG walk per tick would stutter; 120 ms after the last change
-// is invisible to the operator.
-let strokeFloorTimer: number | null = null
-watch([zoom, paneWidth, paneHeight, artworkStyle], () => {
-  if (strokeFloorTimer !== null) window.clearTimeout(strokeFloorTimer)
-  strokeFloorTimer = window.setTimeout(() => {
-    strokeFloorTimer = null
-    applyStrokeFloor()
-  }, 120)
+useEditorPreviewSvgEffects({
+  previewRoot,
+  viewMode,
+  plotSvg: () => props.plotSvg,
+  originalSvg: () => props.originalSvg,
+  zoom,
+  paneWidth,
+  paneHeight,
+  artworkStyle,
 })
-onBeforeUnmount(() => {
-  if (strokeFloorTimer !== null) window.clearTimeout(strokeFloorTimer)
-})
-
-const streamLabel = computed<string>(() => {
-  const payload = stream.lastProgress.value?.payload
-  if (payload && typeof payload.layer_label === 'string') return payload.layer_label
-  return ''
-})
-const streamPercent = computed<number>(() => stream.percent.value ?? 0)
-const streamActive = computed<boolean>(() => Boolean(stream.active.value))
-
-// Estimated determinate progress — always available while loading,
-// even when no SSE stream can run (draft previews without a library
-// file id, single-band mono renders whose stream would tick 0→100 in
-// one step). When the stream *is* reporting, the bar shows whichever
-// of the two is further along so real layer ticks can only move it
-// forward, never backwards.
-const estimatedProgress = useEstimatedProgress(
-  () => props.loading,
-  () => props.estimateMs ?? 0,
-)
-const displayPercent = computed<number>(() =>
-  streamActive.value
-    ? Math.max(streamPercent.value, estimatedProgress.percent.value)
-    : estimatedProgress.percent.value,
-)
 </script>
 
 <template>

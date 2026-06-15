@@ -21,13 +21,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
-import type {
-  Goal,
-  PaletteMode,
-  PolicyDecision,
-  PolicyPass,
-  SourceKind,
-} from '../../domain/policy/schemas'
+import type { Goal, PaletteMode, PolicyDecision, SourceKind } from '../../domain/policy/schemas'
 import { errorMessage } from '../../lib/errorMessage'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
@@ -47,7 +41,7 @@ import { useEditorOnboarding } from '../../composables/useEditorOnboarding'
 import { useEditorDialogAccessibility } from '../../composables/useEditorDialogAccessibility'
 import type { EditTabId } from '../edit/EditTabs.vue'
 import SheetPicker from './SheetPicker.vue'
-import { BEGINNER_STYLES, deriveBeginnerStack, type CustomStyleSelection } from './beginnerStyles'
+import { useEditorCustomStyles } from '../../composables/useEditorCustomStyles'
 import EditorAssistedPanel from './EditorAssistedPanel.vue'
 import EditorExpertPanel from './EditorExpertPanel.vue'
 import EditorHeader from './EditorHeader.vue'
@@ -119,55 +113,19 @@ const hasPlacement = computed(() => Boolean(props.previewSvg || props.sourceName
 
 // ============================ CUSTOM STYLE STACK =======================
 // Optional escape hatch from the resolver's automatic algorithm pick:
-// the StyleCustomizer subcomponent owns the picker UI, this parent
-// owns the selection state + the PolicyPass projection that drives
-// /rerender and Generate. Empty stack = resolver wins (default
-// experience). Non-empty stack = the modal overrides decision.default_*.
-const customStyles = ref<CustomStyleSelection[]>([])
-const customStylesActive = computed<boolean>(() => customStyles.value.length > 0)
-
-// Custom styles really only make sense for bitmap sources — vectors
-// and PDFs route through dedicated pipelines (vector_passthrough,
-// pdf_text_*) that ignore raster algorithms. We hide the panel
-// outright for non-bitmap kinds so the affordance never misleads.
-const canCustomizeStyles = computed<boolean>(
-  () => sourceKind.value === 'bitmap_photo' || sourceKind.value === 'bitmap_illustration',
-)
-
-// Seed the custom-style stack from the placement's *committed*
-// ``layer_algorithms`` so the beginner panel reflects the style the
-// operator already chose — in either editor mode — instead of starting
-// empty and letting the resolver silently re-pick a different one (which
-// also overwrote the saved style on confirm). The committed
-// ``layer_algorithms`` is the single source of truth both modes write
-// to; both ``applyAlgorithmToAllLayers`` and ``applyPassesToAllLayers``
-// make it uniform across layers, so the first layer's spec represents
-// the whole drawing. Runs once on open (the modal remounts per session
-// via its ``:key``); no-op for non-bitmap kinds or when the committed
-// style has no beginner-catalogue equivalent — those keep the resolver
-// default.
-function seedCustomStylesFromCommitted(): void {
-  if (!canCustomizeStyles.value) return
-  const placement = job.selectedPlacement
-  const firstLayerId = placement?.layers[0]?.layer_id
-  if (!placement || !firstLayerId) return
-  const seeded = deriveBeginnerStack(placement.layer_algorithms[firstLayerId])
-  if (seeded.length) customStyles.value = seeded
-}
-
-// Build the PolicyPass[] the user's stack expresses. The full algorithm
-// option set keeps its registry defaults (see printRegistry.ts) and we
-// only override the primary knob's key — that's the entire contract of
-// the "1 simple knob per style" decision.
-const customPasses = computed<PolicyPass[]>(() =>
-  customStyles.value.map((sel) => {
-    const style = BEGINNER_STYLES.find((s) => s.id === sel.id)!
-    return {
-      algorithm: sel.id,
-      algorithm_options: { [style.primaryKnob.optionKey]: sel.knobValue },
-    }
-  }),
-)
+// the StyleCustomizer subcomponent owns the picker UI; ``useEditorCustomStyles``
+// owns the selection state, the bitmap-only gate, the one-shot seed from the
+// committed ``layer_algorithms``, and the PolicyPass projection that drives
+// /rerender and Generate. Empty stack = resolver wins (default experience);
+// non-empty stack = the modal overrides decision.default_*. ``seed`` runs once
+// on open (the modal remounts per session via its ``:key``).
+const {
+  customStyles,
+  customStylesActive,
+  canCustomizeStyles,
+  customPasses,
+  seedCustomStylesFromCommitted,
+} = useEditorCustomStyles({ sourceKind: () => sourceKind.value })
 
 function selectGoal(g: Goal): void {
   if (goal.value === g && decision.value) return
