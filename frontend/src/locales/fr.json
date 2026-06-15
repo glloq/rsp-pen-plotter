@@ -1817,7 +1817,8 @@
       "applyExpertClean": "Aucun changement à appliquer.",
       "applyError": "Impossible d'appliquer vos réglages expert : {message}. Le dessin n'a pas été généré — réessayez.",
       "paletteError": "Impossible de changer de palette : {message}. La palette précédente reste active.",
-      "discardConfirm": "Des réglages expert non appliqués vont être perdus. Fermer quand même ?"
+      "discardConfirm": "Des réglages expert non appliqués vont être perdus. Fermer quand même ?",
+      "applyingInProgress": "Application de vos réglages… veuillez patienter avant de fermer."
     },
     "style": {
       "crosshatch": "Hachures",

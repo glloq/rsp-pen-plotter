@@ -16,6 +16,7 @@ const i18n = createI18n({
           saveStyle: 'Enregistrer le style',
           saveStyleHint: 'Enregistre le style',
           noPlacement: 'Aucun placement actif',
+          applyingInProgress: 'Application en cours…',
         },
       },
     },
@@ -72,6 +73,15 @@ describe('EditorHeader', () => {
     const w = mountHeader()
     await w.find('[data-test="modal-v2-close"]').trigger('click')
     expect(w.emitted('close')).toBeTruthy()
+  })
+
+  it('disables the close button (with a hint) while an expert apply is committing', () => {
+    const w = mountHeader({ applying: true })
+    const close = w.find('[data-test="modal-v2-close"]')
+    // The close gate blocks closing during apply; surfacing it as a disabled
+    // button with a title beats a live-but-inert ✕ (audit P2).
+    expect((close.element as HTMLButtonElement).disabled).toBe(true)
+    expect(close.attributes('title')).toBe('Application en cours…')
   })
 
   it('does not render the old preflight / estimate status chips', () => {

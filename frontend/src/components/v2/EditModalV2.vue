@@ -613,6 +613,7 @@ watch(
         :inert="tourActive"
         :has-placement="hasPlacement"
         :save-disabled="saveDisabled"
+        :applying="applying"
         @close="requestClose"
         @save="confirm"
       />

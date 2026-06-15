@@ -1817,7 +1817,8 @@
       "applyExpertClean": "No changes to apply.",
       "applyError": "Couldn't apply your expert changes: {message}. The drawing was not generated — try again.",
       "paletteError": "Couldn't switch palette: {message}. The previous palette stays active.",
-      "discardConfirm": "Unapplied expert changes will be lost. Close anyway?"
+      "discardConfirm": "Unapplied expert changes will be lost. Close anyway?",
+      "applyingInProgress": "Applying your settings… please wait before closing."
     },
     "style": {
       "crosshatch": "Crosshatch",
