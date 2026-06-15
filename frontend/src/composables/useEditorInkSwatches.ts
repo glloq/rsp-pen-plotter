@@ -239,6 +239,27 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
     job.updateLayer(layerId, { assigned_color_hex: fallback, color_assignment: 'auto' })
   }
 
+  // Bake the live-preview cluster tweaks onto the committed layers — called on
+  // Apply/Generate so the G-code honours what the operator set on the preview.
+  // The auto ΔE snap is already applied to the committed layers by the job
+  // store's ``resnapAutoLayers`` (same union pool), so only the MANUAL ink
+  // overrides + HIDDEN clusters need carrying across. Layers match a cluster by
+  // their ``source_color`` centroid (the segmentation is unchanged at commit).
+  function applyClusterOverridesToLayers(): void {
+    if (clusterColor.value.size === 0 && clusterHidden.value.size === 0) return
+    for (const layer of job.selectedPlacement?.layers ?? []) {
+      const id = clusterIdFor(layer.source_color)
+      const override = clusterColor.value.get(id)
+      if (override) {
+        job.updateLayer(layer.layer_id, {
+          assigned_color_hex: override,
+          color_assignment: 'manual',
+        })
+      }
+      if (clusterHidden.value.has(id)) job.setVisibility(layer.layer_id, false)
+    }
+  }
+
   return {
     previewInkSnap,
     inkSwatches,
@@ -247,5 +268,6 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
     toggleSwatchVisibility,
     assignSwatchColor,
     resetSwatchColor,
+    applyClusterOverridesToLayers,
   }
 }

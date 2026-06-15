@@ -28,6 +28,11 @@ export interface EditorConfirmationDeps {
   fileManager: ConfirmationFileManager
   /** Emit the final decision to the parent (the modal's ``confirm`` event). */
   onConfirm: (decision: PolicyDecision) => void
+  /** Run after the draft is committed (whether or not a re-upload happened)
+   *  and BEFORE ``onConfirm`` — used to bake live-preview cluster overrides
+   *  (manual inks + hidden layers) onto the freshly committed layers so the
+   *  G-code honours them. */
+  onCommitted?: () => void | Promise<void>
 }
 
 export function useEditorConfirmation(deps: EditorConfirmationDeps) {
@@ -55,11 +60,18 @@ export function useEditorConfirmation(deps: EditorConfirmationDeps) {
   // generate from: ``true`` when there was nothing to apply or the upload
   // landed, ``false`` when it threw (``applyError`` then carries why).
   async function applyExpertDraft(): Promise<boolean> {
-    if (!deps.isDirty.value) return true
+    // Even when the bitmap draft is clean (no re-upload needed), the operator
+    // may have tweaked cluster inks / visibility on the live preview — bake
+    // those onto the committed layers too.
+    if (!deps.isDirty.value) {
+      await deps.onCommitted?.()
+      return true
+    }
     applying.value = true
     applyError.value = null
     try {
       await deps.fileManager.uploadSelected()
+      await deps.onCommitted?.()
       return true
     } catch (err) {
       applyError.value = errorMessage(err)

@@ -175,6 +175,32 @@ describe('useEditorInkSwatches', () => {
     expect(sw.previewInkSnap.value!.map.get('#111111')).not.toBe('none')
   })
 
+  it('applyClusterOverridesToLayers bakes manual inks + hidden onto committed layers', () => {
+    seedPlacement() // committed layers ddeeff / aabbcc
+    useUiModeStore().setMode('expert')
+    const job = useJobStore()
+    // The live preview clusters share the committed layers' centroids
+    // (source_color), so the overrides map across by centroid.
+    const sw = useEditorInkSwatches({
+      fileManager: fileManagerWith([{ color: '#ddeeff' }, { color: '#aabbcc' }]),
+      effectivePool: ref(['#ff0000', '#00ff00']),
+    })
+    // Override the first cluster's ink and hide it on the live preview.
+    sw.assignSwatchColor('cluster-ddeeff', '#123456')
+    sw.toggleSwatchVisibility('cluster-ddeeff')
+    // Nothing on the committed layers yet.
+    expect(job.selectedPlacement?.layers.find((l) => l.layer_id === 'color-ddeeff')).toMatchObject({
+      color_assignment: 'auto',
+    })
+    sw.applyClusterOverridesToLayers()
+    const baked = job.selectedPlacement!.layers.find((l) => l.layer_id === 'color-ddeeff')!
+    expect(baked.assigned_color_hex).toBe('#123456')
+    expect(baked.color_assignment).toBe('manual')
+    expect(job.isVisible('color-ddeeff')).toBe(false)
+    // The untouched layer is left alone.
+    expect(job.isVisible('color-aabbcc')).toBe(true)
+  })
+
   it('expert mode: a changed colour count snaps purely from live centroids', () => {
     seedPlacement() // 2 committed layers — irrelevant to the live clusters now
     useUiModeStore().setMode('expert')
