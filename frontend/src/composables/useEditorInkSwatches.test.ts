@@ -63,6 +63,9 @@ function seedPlacement() {
 describe('useEditorInkSwatches', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    // The bitmap draft is a module-level singleton — reset it so one test's
+    // num_colors / color_count can't leak into the next.
+    useBitmapDraft().rehydrateDraft({ placement: null, installedPenColors: [] })
   })
 
   it('assisted mode: chips come from committed layers in draw order', () => {
@@ -173,6 +176,57 @@ describe('useEditorInkSwatches', () => {
     sw.toggleSwatchVisibility(id)
     expect(sw.isSwatchVisible(id)).toBe(true)
     expect(sw.previewInkSnap.value!.map.get('#111111')).not.toBe('none')
+  })
+
+  it('expert mode: color_count (M) merges the N segments onto M distinct inks', () => {
+    useUiModeStore().setMode('expert')
+    const draft = useBitmapDraft()
+    draft.bitmap.value.num_colors = 4
+    // Four segments: two greens, a blue, a grey. Asking for 3 colours merges
+    // the two greens; grey stays grey (never flips hue).
+    draft.bitmap.value.color_count = 3
+    const { inkSwatches } = useEditorInkSwatches({
+      fileManager: fileManagerWith([
+        { color: '#2e8b57' },
+        { color: '#3cb371' },
+        { color: '#1e3cc8' },
+        { color: '#808080' },
+      ]),
+      effectivePool: ref(['#111111', '#22aa55', '#1e3cc8', '#c81e1e', '#808080']),
+    })
+    const distinct = new Set(inkSwatches.value.map((s) => s.hex.toLowerCase()))
+    expect(distinct.size).toBe(3)
+    // grey segment stays on the grey ink.
+    expect(inkSwatches.value[3]!.hex).toBe('#808080')
+    // Lowering M to 1 collapses everything onto a single ink.
+    draft.bitmap.value.color_count = 1
+    expect(new Set(inkSwatches.value.map((s) => s.hex.toLowerCase())).size).toBe(1)
+  })
+
+  it('applyClusterOverridesToLayers bakes manual inks + hidden onto committed layers', () => {
+    seedPlacement() // committed layers ddeeff / aabbcc
+    useUiModeStore().setMode('expert')
+    const job = useJobStore()
+    // The live preview clusters share the committed layers' centroids
+    // (source_color), so the overrides map across by centroid.
+    const sw = useEditorInkSwatches({
+      fileManager: fileManagerWith([{ color: '#ddeeff' }, { color: '#aabbcc' }]),
+      effectivePool: ref(['#ff0000', '#00ff00']),
+    })
+    // Override the first cluster's ink and hide it on the live preview.
+    sw.assignSwatchColor('cluster-ddeeff', '#123456')
+    sw.toggleSwatchVisibility('cluster-ddeeff')
+    // Nothing on the committed layers yet.
+    expect(job.selectedPlacement?.layers.find((l) => l.layer_id === 'color-ddeeff')).toMatchObject({
+      color_assignment: 'auto',
+    })
+    sw.applyClusterOverridesToLayers()
+    const baked = job.selectedPlacement!.layers.find((l) => l.layer_id === 'color-ddeeff')!
+    expect(baked.assigned_color_hex).toBe('#123456')
+    expect(baked.color_assignment).toBe('manual')
+    expect(job.isVisible('color-ddeeff')).toBe(false)
+    // The untouched layer is left alone.
+    expect(job.isVisible('color-aabbcc')).toBe(true)
   })
 
   it('expert mode: a changed colour count snaps purely from live centroids', () => {

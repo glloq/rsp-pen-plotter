@@ -3,13 +3,18 @@
 // very top because it drives BOTH the detail granularity AND how many distinct
 // inks get pulled from the palette: each layer is one cluster, snapped to its
 // nearest available ink. The control adapts to the active segmentation method
-// (colours for kmeans, tonal bands for luminance, cut points for thresholds);
-// palette methods derive their count from the palette itself, edited on the
-// Style tab. Lives outside the (collapsible) method card so it stays visible.
+// (colours for kmeans / palette methods, tonal bands for luminance, cut points
+// for thresholds). Lives outside the (collapsible) method card so it stays
+// visible.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SegmentationMethod } from '../../../api/client'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import { resolveEffectivePalette } from '../../../lib/effectivePalette'
+import { nextPadColor } from '../../../lib/paletteColors'
+import { useAvailableColorsStore } from '../../../stores/availableColors'
+import { useJobStore } from '../../../stores/job'
+import { usePaletteSourceStore } from '../../../stores/paletteSource'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 
 interface BitmapDraft {
@@ -25,6 +30,9 @@ const props = defineProps<{ bitmap: BitmapDraft }>()
 
 const { t } = useI18n()
 const draft = useBitmapDraft()
+const job = useJobStore()
+const paletteSource = usePaletteSourceStore()
+const availableColors = useAvailableColorsStore()
 
 const isKmeans = computed(
   () =>
@@ -38,11 +46,41 @@ const isPalette = computed(
     props.bitmap.segmentation_method === 'fixed_palette' ||
     props.bitmap.segmentation_method === 'palette_dither',
 )
+// kmeans, kmeans_lab AND the palette-driven methods all count by colour, so
+// they share the same num_colors slider.
+const usesColourCount = computed(() => isKmeans.value || isPalette.value)
 
-// kmeans colour count — clamp to the practical 1..16 range the backend caps k
-// at (it also caps to the image's distinct colours downstream).
+// Pool a manual-palette resize pads from (machine pens / inventory / union).
+const effectivePool = computed<string[]>(() => {
+  const pens = (job.selectedProfile?.pens ?? [])
+    .filter((p) => p.installed && p.color)
+    .map((p) => p.color)
+  const available = availableColors.ordered.map((c) => c.hex)
+  return resolveEffectivePalette(paletteSource.source, pens, available)
+})
+
+// Colour count — clamp to the practical 1..16 range the backend caps k at.
+// For a MANUAL fixed_palette / palette_dither (the operator hand-picked the
+// inks, not following the pens), keep the palette length in lock-step so the
+// count is actually honoured — palette methods count by palette length. An
+// empty palette downgrades to kmeans + num_colors on the wire, so leave it be.
 function setNumColors(value: number): void {
-  props.bitmap.num_colors = Math.max(1, Math.min(16, Math.round(value) || 1))
+  const target = Math.max(1, Math.min(16, Math.round(value) || 1))
+  props.bitmap.num_colors = target
+  if (isPalette.value && props.bitmap.palette.length > 0 && !draft.paletteFollowsPens.value) {
+    const current = props.bitmap.palette
+    if (current.length > target) {
+      props.bitmap.palette = current.slice(0, target)
+    } else if (current.length < target) {
+      const used = new Set(current.map((h) => h.toLowerCase()))
+      const unusedPool = effectivePool.value.filter((h) => !used.has(h.toLowerCase()))
+      const padded = [...current]
+      while (padded.length < target) {
+        padded.push(unusedPool.shift() ?? nextPadColor(padded))
+      }
+      props.bitmap.palette = padded
+    }
+  }
 }
 
 function setNumBands(value: number): void {
@@ -85,8 +123,9 @@ function commitThresholdOrder(): void {
       <LayerCountBadge :count="draft.expectedLayerCount.value" />
     </div>
 
-    <!-- kmeans / kmeans_lab → colour count (slider + number, 1..16). -->
-    <template v-if="isKmeans">
+    <!-- kmeans / kmeans_lab / fixed_palette / palette_dither → colour count
+         (slider + number, 1..16). -->
+    <template v-if="usesColourCount">
       <div class="flex items-center gap-2">
         <input
           :value="bitmap.num_colors"
@@ -109,6 +148,11 @@ function commitThresholdOrder(): void {
           @change="(e) => setNumColors(Number((e.target as HTMLInputElement).value))"
         />
       </div>
+      <!-- Palette methods draw with a SPECIFIC ink list; the slider sets how
+           many, the exact colours are edited on the Style tab. -->
+      <p v-if="isPalette" class="text-[10px] text-slate-500">
+        {{ t('convert.fixedPaletteRefHint') }}
+      </p>
     </template>
 
     <!-- luminance_bands → tonal band count. -->
@@ -157,11 +201,6 @@ function commitThresholdOrder(): void {
       </div>
       <p class="text-[10px] text-slate-500">{{ t('convert.thresholdsHint') }}</p>
     </template>
-
-    <!-- fixed_palette / palette_dither → count comes from the palette itself. -->
-    <p v-else-if="isPalette" class="text-[10px] text-slate-500">
-      {{ t('convert.fixedPaletteRefHint') }}
-    </p>
 
     <p class="text-[10px] leading-snug text-slate-500">{{ t('svg.layerCountHint') }}</p>
   </div>

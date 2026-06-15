@@ -115,7 +115,15 @@ export type PreprocessDraft = {
 export type BitmapDraft = {
   preprocess: PreprocessDraft
   segmentation_method: SegmentationMethod
+  // Segmentation granularity — how many clusters the image is split into (one
+  // layer per cluster). The "Nombre de calques" knob in the SVG tab.
   num_colors: number
+  // Distinct ink count — how many colours the print actually draws. The N
+  // segments above are quantised onto this many inks (``color_count`` ≤
+  // ``num_colors``); segments sharing an ink merge. The "Nombre de couleurs"
+  // knob in the Style tab. Decouples colour count from layer/detail count so
+  // raising the detail doesn't churn the palette.
+  color_count: number
   num_bands: number
   thresholds: number[]
   // Specific colours pinned via the "Colours" block. Non-empty switches
@@ -213,6 +221,9 @@ export function defaultBitmap(): BitmapDraft {
     preprocess: defaultPreprocess(),
     segmentation_method: 'kmeans',
     num_colors: 4,
+    // Default = num_colors → no reduction (M == N) until the operator lowers
+    // the colour count on the Style tab.
+    color_count: 4,
     // Monochrome luminance banding defaults to a SINGLE band → a single
     // layer drawn with a single pen, matching the print-mode toggle's
     // promise ("draw everything on one layer with one pen"). The shading
@@ -1368,10 +1379,15 @@ const _expectedLayerCount = computed<number>(() => {
     }
     return 1
   }
-  if (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither')
-    // Deduped: the backend merges identical palette entries into a
-    // single cluster/layer, so repeated chips don't inflate the count.
-    return uniquePalette(b.palette).length
+  if (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither') {
+    // Deduped: the backend merges identical palette entries into a single
+    // cluster/layer, so repeated chips don't inflate the count. An EMPTY
+    // palette downgrades to kmeans + num_colors on the wire (see
+    // buildBitmapOptions), which produces num_colors layers — reflect that
+    // instead of 0.
+    const distinct = uniquePalette(b.palette).length
+    return distinct > 0 ? distinct : b.num_colors
+  }
   return b.num_colors
 })
 

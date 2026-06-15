@@ -175,7 +175,9 @@
     "notApplicable": "This file type doesn't use SVG conversion controls."
   },
   "style": {
-    "notApplicable": "This file type doesn't use the style controls."
+    "notApplicable": "This file type doesn't use the style controls.",
+    "colorCountTitle": "Number of colours",
+    "colorCountHint": "How many distinct inks the print uses. The layers are grouped onto this many inks (the image's dominant colours, snapped to your palette); raise the layer count on the SVG tab for more detail."
   },
   "text": {
     "notApplicable": "This file type doesn't carry text."

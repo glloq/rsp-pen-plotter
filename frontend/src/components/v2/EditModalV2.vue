@@ -272,6 +272,7 @@ const {
   toggleSwatchVisibility,
   assignSwatchColor,
   resetSwatchColor,
+  applyClusterOverridesToLayers,
 } = useEditorInkSwatches({ fileManager, effectivePool })
 
 const pipeline = useEditorPreviewPipeline({
@@ -383,6 +384,9 @@ const {
   customPasses,
   fileManager,
   onConfirm: (d) => emit('confirm', d),
+  // Carry the live-preview cluster tweaks (manual inks + hidden layers) onto
+  // the committed layers so Generate / G-code honours them.
+  onCommitted: applyClusterOverridesToLayers,
 })
 
 // The single header "save the print style" button is locked until there's

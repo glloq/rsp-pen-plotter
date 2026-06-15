@@ -175,7 +175,9 @@
     "notApplicable": "Ce type de fichier n'utilise pas les contrôles de conversion SVG."
   },
   "style": {
-    "notApplicable": "Ce type de fichier n'utilise pas les contrôles de style."
+    "notApplicable": "Ce type de fichier n'utilise pas les contrôles de style.",
+    "colorCountTitle": "Nombre de couleurs",
+    "colorCountHint": "Combien d'encres distinctes l'impression utilise. Les calques sont regroupés sur ce nombre d'encres (les couleurs dominantes de l'image, rapprochées de ta palette) ; augmente le nombre de calques dans l'onglet SVG pour plus de détail."
   },
   "text": {
     "notApplicable": "Ce type de fichier ne contient pas de texte."
