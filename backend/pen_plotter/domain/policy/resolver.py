@@ -6,7 +6,7 @@ Audit #4 pipeline:
       -> rule lookup (per source_kind, goal)
       -> derive segmentation method (palette_mode dependent)
       -> assemble reasoning trail
-      -> apply hard constraints (mega-pixels / mono-pen / sparse palette)
+      -> apply hard constraints (mega-pixels / sparse palette)
       -> PolicyDecision
 """
 
