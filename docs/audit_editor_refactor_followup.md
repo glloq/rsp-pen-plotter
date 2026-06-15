@@ -66,10 +66,10 @@ template-ref passé en prop). C'est la principale source de régression possible
    Sortie : ~80 lignes de script. **À faire en premier.**
 
 2. **`useEditorPreviewSheetGeometry(() => props.sheet, () => props.artwork*Mm)`**
-   _(risque faible)_ — `paneEl` + `ResizeObserver` + `sheetStyle` + `artworkFraction`
-   + `artworkStyle` (pure géométrie, testable en injectant `paneWidth/Height`).
-   Attention : `artworkFraction` doit rester disponible **avant** l'appel à
-   `useEditorPreviewSplit`. Sortie : ~70 lignes.
+   _(risque faible)_ — regroupe `paneEl`, `ResizeObserver`, `sheetStyle`,
+   `artworkFraction` et `artworkStyle` (pure géométrie, testable en injectant
+   `paneWidth/Height`). Attention : `artworkFraction` doit rester disponible **avant**
+   l'appel à `useEditorPreviewSplit`. Sortie : ~70 lignes.
 
 3. **`useEditorPreviewSvgEffects({ previewRoot, viewMode, plotSvg, originalSvg, zoom, paneWidth, paneHeight, artworkStyle })`**
    _(risque moyen)_ — `applyOpacityOverlay` + `applyStrokeFloor` + leurs watches +
