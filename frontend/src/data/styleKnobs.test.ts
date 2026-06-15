@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MONO_STYLE_DEFAULTS,
-  MULTICOLOR_STYLE_DEFAULTS,
-  masterStylesByMode,
-} from './printRegistry'
+import { MONO_STYLE_DEFAULTS, MULTICOLOR_STYLE_DEFAULTS, masterStylesByMode } from './printRegistry'
 import {
   MONO_STYLE_KNOBS,
   MULTICOLOR_STYLE_KNOBS,
@@ -290,9 +286,10 @@ describe('styleKnobs', () => {
             for (const key of knobKeys(ctl)) {
               const v = defaults[key]
               expect(typeof v, `${family}/${styleId}.${key} default`).toBe('number')
-              expect(v as number, `${family}/${styleId}.${key} below slider min`).greaterThanOrEqual(
-                ctl.min,
-              )
+              expect(
+                v as number,
+                `${family}/${styleId}.${key} below slider min`,
+              ).greaterThanOrEqual(ctl.min)
               expect(v as number, `${family}/${styleId}.${key} above slider max`).lessThanOrEqual(
                 ctl.max,
               )

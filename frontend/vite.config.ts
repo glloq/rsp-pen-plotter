@@ -30,6 +30,10 @@ export default defineConfig({
   },
   build,
   test: {
+    // Stub the global ``EventSource`` (and any other env hardening) before
+    // any test imports a module that opens a real SSE stream — keeps the
+    // suite network-free, handle-free and deterministic in CI (audit P1).
+    setupFiles: ['./vitest.setup.ts'],
     // The Playwright suite lives in ``e2e/`` and depends on
     // ``@playwright/test``, which isn't a dev dep until contributors
     // opt in via ``npm run e2e:install``. Excluding the directory

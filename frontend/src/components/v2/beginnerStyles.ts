@@ -330,9 +330,7 @@ export const BEGINNER_STYLES: readonly BeginnerStyle[] = [
 ]
 
 /** O(1) lookup helper for the modal's render loops. */
-const STYLE_BY_ID = new Map<AlgorithmId, BeginnerStyle>(
-  BEGINNER_STYLES.map((s) => [s.id, s]),
-)
+const STYLE_BY_ID = new Map<AlgorithmId, BeginnerStyle>(BEGINNER_STYLES.map((s) => [s.id, s]))
 
 export function getBeginnerStyle(id: AlgorithmId): BeginnerStyle | undefined {
   return STYLE_BY_ID.get(id)
@@ -380,7 +378,9 @@ export interface CommittedLayerSpec {
  * chips, or no spec at all). The caller then falls back to the resolver,
  * preserving today's default-experience behaviour for those cases.
  */
-export function deriveBeginnerStack(spec: CommittedLayerSpec | null | undefined): CustomStyleSelection[] {
+export function deriveBeginnerStack(
+  spec: CommittedLayerSpec | null | undefined,
+): CustomStyleSelection[] {
   if (!spec) return []
   // Prefer the multi-pass stack (enabled passes only — disabled ones are
   // a non-destructive UI toggle that never ships). Fall back to the
@@ -404,7 +404,8 @@ export function deriveBeginnerStack(spec: CommittedLayerSpec | null | undefined)
     // what will be drawn.
     if (!style) return []
     const raw = step.options[style.primaryKnob.optionKey]
-    const knobValue = typeof raw === 'number' && Number.isFinite(raw) ? raw : style.primaryKnob.default
+    const knobValue =
+      typeof raw === 'number' && Number.isFinite(raw) ? raw : style.primaryKnob.default
     stack.push({ id: style.id, knobValue })
     if (stack.length >= MAX_BEGINNER_STYLES) break
   }

@@ -191,8 +191,7 @@ function migrateLegacyPlacement(p: Partial<Placement>): Placement {
   // produce a usable placement.
   if (Array.isArray(placement.variants) && placement.variants.length > 0) {
     const active =
-      placement.variants.find((v) => v.id === placement.active_variant_id) ??
-      placement.variants[0]!
+      placement.variants.find((v) => v.id === placement.active_variant_id) ?? placement.variants[0]!
     placement.layer_algorithms = {
       ...(placement.layer_algorithms ?? {}),
       ...(active.layer_algorithms ?? {}),

@@ -107,6 +107,11 @@ function clearAll(): void {
             :data-test="`modal-v2-style-${style.id}`"
             @click="toggleStyle(style.id)"
           >
+            <!-- ``thumbnailSvg`` is a hardcoded ``const`` literal from
+                 beginnerStyles.ts (in-bundle, trusted) injected as the inner
+                 content of this sized <svg>. It is a documented exception to
+                 the "all dynamic editor SVG via SafeSvgHtml" invariant — see
+                 SafeSvgHtml.vue — so it isn't sanitised at render. -->
             <!-- eslint-disable-next-line vue/no-v-html -->
             <svg
               class="style-thumb"
@@ -131,6 +136,8 @@ function clearAll(): void {
         >
           <span class="style-row-step" aria-hidden="true">{{ idx + 1 }}</span>
           <span class="style-row-name">
+            <!-- Trusted in-bundle constant — documented SafeSvgHtml
+                 exception, same as the picker thumbnail above. -->
             <!-- eslint-disable-next-line vue/no-v-html -->
             <svg
               class="style-row-thumb"

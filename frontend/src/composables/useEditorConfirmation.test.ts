@@ -36,7 +36,9 @@ describe('useEditorConfirmation', () => {
     const { conf, onConfirm, uploadSelected } = setup()
     await conf.confirm()
     expect(uploadSelected).not.toHaveBeenCalled()
-    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ default_algorithm: 'scanlines' }))
+    expect(onConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ default_algorithm: 'scanlines' }),
+    )
   })
 
   it('overrides the algorithm from the custom-style stack', async () => {

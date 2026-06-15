@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveMulticolorStyle } from '../../../data/printRegistry'
-import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import { useBitmapDraft, type MulticolorStyleKnobs } from '../../../composables/useBitmapDraft'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { useJobStore } from '../../../stores/job'
 import MasterStyleKnobs from './MasterStyleKnobs.vue'
@@ -55,8 +55,12 @@ function propagateKnobsToLayers(): Promise<number> {
   })
 }
 
-function setKnob<K extends string>(key: K, value: unknown): void {
-  ;(draft.setMulticolorKnob as any)(props.styleId, key, value)
+function setKnob(key: string, value: unknown): void {
+  // Data-driven knob editor: ``MasterStyleKnobs`` emits ``(string, unknown)``
+  // since the field name isn't statically known. Narrow only the key + value
+  // crossing this boundary instead of widening the setter to ``any`` (which
+  // would drop type-checking from every other call site).
+  draft.setMulticolorKnob(props.styleId, key as keyof MulticolorStyleKnobs, value as never)
   if (store.layers.length > 0) {
     if (knobPropagationTimer !== null) clearTimeout(knobPropagationTimer)
     knobPropagationTimer = setTimeout(() => {

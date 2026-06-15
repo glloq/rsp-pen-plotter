@@ -82,8 +82,14 @@ export function useEditorPreviewStream(
 
   // A pending setTimeout would otherwise still fire after teardown — opening
   // an EventSource after the stream's own cleanup already ran. Cancel the
-  // timer on scope dispose so closing the modal mid-delay leaks nothing.
-  onScopeDispose(clearOpenTimer)
+  // timer on scope dispose, and close the stream explicitly so the contract
+  // holds even when an injected ``StreamHandle`` doesn't tear itself down on
+  // dispose (the real ``useProgressiveStream`` does, but the cleanup must not
+  // depend on that implicit behaviour — audit P2).
+  onScopeDispose(() => {
+    clearOpenTimer()
+    stream.close()
+  })
 
   const streamLabel = computed<string>(() => {
     const payload = stream.lastProgress.value?.payload

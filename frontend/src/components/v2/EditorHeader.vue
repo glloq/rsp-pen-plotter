@@ -17,6 +17,11 @@ defineProps<{
   hasPlacement: boolean
   /** Disables the save button (no decision / no placement / busy). */
   saveDisabled: boolean
+  /** An expert draft is mid-commit. The close gate blocks closing during this
+   *  window, so the ✕ is disabled (with an explanatory title) rather than
+   *  staying live but silently inert — otherwise the operator can't tell the
+   *  click was refused vs. ignored (audit P2). */
+  applying?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'save'): void }>()
@@ -51,7 +56,9 @@ const { t } = useI18n()
       <button
         type="button"
         class="close"
+        :disabled="applying"
         :aria-label="t('settings.close')"
+        :title="applying ? t('v2.modal.applyingInProgress') : undefined"
         data-test="modal-v2-close"
         @click="emit('close')"
       >
@@ -120,8 +127,12 @@ const { t } = useI18n()
   color: #94a3b8;
   line-height: 1;
 }
-.close:hover {
+.close:hover:not(:disabled) {
   color: #e2e8f0;
+}
+.close:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* On narrow viewports the three-zone grid collapses to a wrapping row so

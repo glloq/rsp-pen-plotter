@@ -160,7 +160,8 @@ describe('EditPreviewPane (sheet / artwork geometry)', () => {
     const wrapper = mountPane({ plotSvg })
     await nextTick()
     await Promise.resolve()
-    const group = () => wrapper.find('[data-test="modal-v2-preview-svg"]').element.querySelector('g')
+    const group = () =>
+      wrapper.find('[data-test="modal-v2-preview-svg"]').element.querySelector('g')
     // Visible: opacity unset ('') or explicitly 1 — both render fully opaque.
     expect(group()?.style.opacity).not.toBe('0')
 

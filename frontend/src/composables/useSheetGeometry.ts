@@ -171,10 +171,7 @@ export function useSheetGeometry(inputs: SheetGeometryInputs) {
   // large SVGs. Cache by placement id + the inputs that change the
   // output: the post-style SVG and the bbox identity. Both are stable
   // during move/resize gestures, so the cached entry hits every frame.
-  const cropCache = new Map<
-    string,
-    { svgIn: string; bboxKey: string; out: string }
-  >()
+  const cropCache = new Map<string, { svgIn: string; bboxKey: string; out: string }>()
 
   const renderedPlacements = computed<RenderedPlacement[]>(() => {
     const w = workspace.value

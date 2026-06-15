@@ -37,7 +37,10 @@ export function applyPreviewStrokeFloor(
   if (!displayWidthPx || displayWidthPx <= 0) return
   const viewBox = svg.getAttribute('viewBox')
   if (!viewBox) return
-  const parts = viewBox.trim().split(/[\s,]+/).map(Number)
+  const parts = viewBox
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number)
   const vbWidth = parts[2]
   if (!vbWidth || !Number.isFinite(vbWidth) || vbWidth <= 0) return
   // viewBox units that correspond to one device pixel at the current

@@ -215,7 +215,10 @@ const passPresets: PassPreset[] = [
     labelKey: 'passes.presetContourStipple',
     passes: [
       { algorithm: 'contours', algorithm_options: { spacing_mm: 1.9, max_rings: 12 } },
-      { algorithm: 'stippling', algorithm_options: { density: 0.02, dot_radius_mm: 0.19, seed: 0 } },
+      {
+        algorithm: 'stippling',
+        algorithm_options: { density: 0.02, dot_radius_mm: 0.19, seed: 0 },
+      },
     ],
   },
 ]

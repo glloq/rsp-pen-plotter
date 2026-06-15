@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveMasterStyle, type SegmentationMethod } from '../../../data/printRegistry'
-import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import { useBitmapDraft, type MonoStyleKnobs } from '../../../composables/useBitmapDraft'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { useJobStore } from '../../../stores/job'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
@@ -100,12 +100,14 @@ function propagateKnobsToLayers(): Promise<number> {
   })
 }
 
-function setKnob<K extends string>(key: K, value: unknown): void {
-  // The composable's setMonoKnob is generic over keyof MonoStyleKnobs;
-  // widening here keeps the template terse while every call site
-  // already knows the field name + type from its <input> binding.
-
-  ;(draft.setMonoKnob as any)(props.styleId, key, value)
+function setKnob(key: string, value: unknown): void {
+  // ``MasterStyleKnobs`` is data-driven (knob definitions live in
+  // ``styleKnobs.ts``), so it emits ``set`` as ``(string, unknown)`` — the
+  // field name isn't a literal here. Rather than widen the whole setter to
+  // ``any`` (which would erase its checking everywhere), narrow only the two
+  // arguments that cross this dynamic boundary: the key is asserted to be a
+  // real knob name and the value rides through as the setter's per-key type.
+  draft.setMonoKnob(props.styleId, key as keyof MonoStyleKnobs, value as never)
   if (store.layers.length > 0) {
     if (knobPropagationTimer !== null) clearTimeout(knobPropagationTimer)
     knobPropagationTimer = setTimeout(() => {

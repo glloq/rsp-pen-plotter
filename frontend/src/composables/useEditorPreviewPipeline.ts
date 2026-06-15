@@ -42,8 +42,37 @@ export type PreviewInvalidation = 'render-only' | 'segment-and-render' | 'resolv
 //   - ``resolving``  : the policy resolver is running.
 //   - ``segmenting`` : re-uploading the placement to match the pool.
 //   - ``rendering``  : /rerender (or /preview) is producing the SVG.
-//   - ``error``      : the last flush failed; terminal until the next flush.
-export type PipelineStatus = 'idle' | 'resolving' | 'segmenting' | 'rendering' | 'error'
+//
+// Terminal error states are split by *which* phase failed because they have
+// different generate-safety semantics (audit P1):
+//   - ``resolver-error``     : the policy resolver threw. The previous
+//                              ``decision`` is untouched, so generating from
+//                              the last good decision is still coherent.
+//   - ``segmentation-error`` : the re-segmentation upload failed AFTER a new
+//                              decision was stored. The placement's clusters
+//                              no longer match the displayed decision, so a
+//                              generate here would mix a new policy with a
+//                              stale placement — BLOCK generation.
+//   - ``render-error``       : segmentation succeeded but /rerender failed.
+//                              The placement is consistent with the decision;
+//                              only the *preview* image is missing, so
+//                              generating from the last good state is allowed.
+export type PipelineStatus =
+  | 'idle'
+  | 'resolving'
+  | 'segmenting'
+  | 'rendering'
+  | 'render-error'
+  | 'segmentation-error'
+  | 'resolver-error'
+
+// Non-terminal statuses: the pipeline is mid-flight. Generate is locked while
+// any of these hold.
+const ACTIVE_STATUSES: ReadonlySet<PipelineStatus> = new Set<PipelineStatus>([
+  'resolving',
+  'segmenting',
+  'rendering',
+])
 
 const LEVEL_RANK: Record<PreviewInvalidation, number> = {
   'render-only': 0,
@@ -96,17 +125,26 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
   // Explicit lifecycle status (see ``PipelineStatus``). Drives the modal's
   // Generate-disabled guard so generation can't fire mid-pipeline.
   const status = ref<PipelineStatus>('idle')
+  // A debounced invalidation that hasn't flushed yet. Reactive (a ``ref``,
+  // not a plain ``let``) so ``busy`` flips the instant a debounced schedule
+  // is queued — otherwise the 300 ms window between an ink / style / size
+  // tweak and ``flush()`` left Generate enabled, letting the operator
+  // generate against a preview that hadn't started catching up (audit P1).
+  const pending = ref<PreviewInvalidation | null>(null)
   // True while the pipeline is mid-flight (resolving / segmenting /
-  // rendering). ``error`` and ``idle`` are both "safe to generate" terminal
-  // states — the operator can still generate from the last good placement
-  // even if the *preview* couldn't be refreshed.
-  const busy = computed(
-    () =>
-      status.value === 'resolving' || status.value === 'segmenting' || status.value === 'rendering',
-  )
+  // rendering) OR a debounced flush is still pending. All "the displayed
+  // render is not yet current" states collapse here, and the modal locks
+  // Generate for the whole window.
+  const busy = computed(() => pending.value !== null || ACTIVE_STATUSES.has(status.value))
+  // Generate-safety gate. Locked while busy, and additionally after a
+  // segmentation error — there the stored decision no longer matches the
+  // placement's clusters, so generating would produce a result that doesn't
+  // match what's displayed (audit P1). ``resolver-error`` / ``render-error``
+  // leave the placement consistent with the last good decision, so they don't
+  // block here (the modal's own ``decision != null`` check still applies).
+  const canGenerate = computed(() => !busy.value && status.value !== 'segmentation-error')
 
   let controller: AbortController | null = null
-  let pending: PreviewInvalidation | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
 
   function clearTimer(): void {
@@ -118,7 +156,8 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
 
   function schedule(level: PreviewInvalidation, opts: { immediate?: boolean } = {}): void {
     // Escalate to the strongest level requested since the last flush.
-    if (pending === null || LEVEL_RANK[level] > LEVEL_RANK[pending]) pending = level
+    if (pending.value === null || LEVEL_RANK[level] > LEVEL_RANK[pending.value])
+      pending.value = level
     // Always drop any in-flight timer so an immediate request supersedes a
     // pending debounced one (and a fresh debounce restarts the window).
     clearTimer()
@@ -163,8 +202,8 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
   }
 
   async function flush(): Promise<void> {
-    const level = pending
-    pending = null
+    const level = pending.value
+    pending.value = null
     if (level === null) return
     if (!deps.hasPlacement.value) return
     // Cancel any in-flight request so rapid toggles don't pile up stale
@@ -199,7 +238,7 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
           // the static defaults still let the operator generate.
           if (!c.signal.aborted) {
             resolveError.value = errorMessage(err)
-            status.value = 'error'
+            status.value = 'resolver-error'
           }
           return
         }
@@ -233,15 +272,19 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
       }
       // ``render`` swallows its own errors into ``previewError``; reflect
       // that in the terminal status so a failed render still disables the
-      // "stale" spinner without claiming success.
-      if (!c.signal.aborted) status.value = previewError.value ? 'error' : 'idle'
+      // "stale" spinner without claiming success. A render error keeps the
+      // placement consistent with the decision (only the preview image is
+      // missing), so it stays generate-safe — see ``canGenerate``.
+      if (!c.signal.aborted) status.value = previewError.value ? 'render-error' : 'idle'
     } catch (err) {
       // Reached only when ``ensureSegmentation`` throws (resolver errors
-      // return above, render errors are caught inside ``render``).
+      // return above, render errors are caught inside ``render``). The new
+      // decision is already stored but its segmentation never landed, so the
+      // placement is now inconsistent — ``segmentation-error`` blocks Generate.
       if (!c.signal.aborted) {
         previewError.value = true
         previewErrorMessage.value = errorMessage(err)
-        status.value = 'error'
+        status.value = 'segmentation-error'
       }
     } finally {
       // Release the per-flush flags so a failed or short-circuited run never
@@ -258,6 +301,9 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
   // host component's ``onBeforeUnmount``.
   function dispose(): void {
     clearTimer()
+    // Drop the queued level too so a disposed pipeline doesn't read ``busy``
+    // forever (the ref would otherwise keep its last pending value).
+    pending.value = null
     controller?.abort()
   }
 
@@ -271,6 +317,7 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
     previewErrorMessage,
     status,
     busy,
+    canGenerate,
     schedule,
     flush,
     dispose,

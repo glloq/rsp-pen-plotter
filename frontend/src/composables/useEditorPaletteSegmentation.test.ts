@@ -43,7 +43,13 @@ function seedImagePlacement(lastOptions: Record<string, unknown>) {
   const file = new File(['x'], 'photo.jpg', { type: 'image/jpeg' })
   job.placements = job.placements.map((p) =>
     p.id === id
-      ? { ...p, source_file: 'photo.jpg', source_mime: 'image/jpeg', last_file: file, last_options: lastOptions }
+      ? {
+          ...p,
+          source_file: 'photo.jpg',
+          source_mime: 'image/jpeg',
+          last_file: file,
+          last_options: lastOptions,
+        }
       : p,
   )
   return file
@@ -96,7 +102,10 @@ describe('useEditorPaletteSegmentation', () => {
     const upload = vi.spyOn(job, 'upload').mockResolvedValue()
 
     const seg = useEditorPaletteSegmentation(fakeFileManager(file))
-    await seg.ensureSegmentationMatchesDecision(FIXED_PALETTE_DECISION as never, new AbortController())
+    await seg.ensureSegmentationMatchesDecision(
+      FIXED_PALETTE_DECISION as never,
+      new AbortController(),
+    )
 
     expect(upload).not.toHaveBeenCalled()
   })
@@ -125,7 +134,10 @@ describe('useEditorPaletteSegmentation', () => {
     const upload = vi.spyOn(job, 'upload').mockResolvedValue()
 
     const seg = useEditorPaletteSegmentation(fakeFileManager(file))
-    await seg.ensureSegmentationMatchesDecision(FIXED_PALETTE_DECISION as never, new AbortController())
+    await seg.ensureSegmentationMatchesDecision(
+      FIXED_PALETTE_DECISION as never,
+      new AbortController(),
+    )
 
     expect(upload).not.toHaveBeenCalled()
   })
