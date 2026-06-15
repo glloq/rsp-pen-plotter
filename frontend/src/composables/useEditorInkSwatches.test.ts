@@ -95,7 +95,11 @@ describe('useEditorInkSwatches', () => {
 
   it('expert mode + follow-pens: snaps live centroids onto the pool', () => {
     useUiModeStore().setMode('expert')
-    useBitmapDraft().paletteFollowsPens.value = true
+    const draft = useBitmapDraft()
+    draft.paletteFollowsPens.value = true
+    // Pens-follow only snaps when the method is the palette-driven
+    // fixed_palette — kmeans/kmeans_lab render the image's own colours.
+    draft.bitmap.value.segmentation_method = 'fixed_palette'
     const { previewInkSnap, inkSwatches } = useEditorInkSwatches({
       fileManager: fileManagerWith([{ color: '#100000' }, { color: '#001000' }]),
       effectivePool: ref(['#ff0000', '#00ff00']),
@@ -109,7 +113,9 @@ describe('useEditorInkSwatches', () => {
 
   it('expert mode + faithful-to-image: identity map keeps the centroids', () => {
     useUiModeStore().setMode('expert')
-    useBitmapDraft().paletteFollowsPens.value = false
+    const draft = useBitmapDraft()
+    draft.paletteFollowsPens.value = false
+    draft.bitmap.value.segmentation_method = 'kmeans'
     const { previewInkSnap, inkSwatches } = useEditorInkSwatches({
       fileManager: fileManagerWith([{ color: '#123456' }]),
       effectivePool: ref(['#ff0000']),
@@ -117,5 +123,36 @@ describe('useEditorInkSwatches', () => {
     // Empty map → recolour is a no-op; the chip keeps the image colour.
     expect(previewInkSnap.value!.map.size).toBe(0)
     expect(inkSwatches.value[0]!.hex).toBe('#123456')
+  })
+
+  it('expert mode: a MANUAL layer override recolours the cluster + its chip', () => {
+    seedPlacement()
+    useUiModeStore().setMode('expert')
+    const draft = useBitmapDraft()
+    draft.paletteFollowsPens.value = false
+    draft.bitmap.value.segmentation_method = 'kmeans'
+    // The two seeded layers are in draw order ddeeff(0), aabbcc(1). The live
+    // preview clusters map to them by index. Make the first a MANUAL pick.
+    const job = useJobStore()
+    const firstLayerId = [...(job.selectedPlacement?.layers ?? [])].sort(
+      (a, b) => a.draw_order - b.draw_order,
+    )[0]!.layer_id
+    job.updateLayer(firstLayerId, {
+      assigned_color_hex: '#abcdef',
+      color_assignment: 'manual',
+    })
+    const { previewInkSnap, inkSwatches } = useEditorInkSwatches({
+      fileManager: fileManagerWith([{ color: '#111111' }, { color: '#222222' }]),
+      effectivePool: ref(['#ff0000', '#00ff00']),
+    })
+    // First cluster (#111111) is remapped onto the manual ink; the second is
+    // faithful to the image (kmeans), so it stays out of the map.
+    expect(previewInkSnap.value!.map.get('#111111')).toBe('#abcdef')
+    expect(previewInkSnap.value!.map.has('#222222')).toBe(false)
+    // The chip shows the manual ink and is wired to the real layer so the
+    // eye toggle + assign popover can act on it.
+    expect(inkSwatches.value[0]!.hex).toBe('#abcdef')
+    expect(inkSwatches.value[0]!.layerId).toBe(firstLayerId)
+    expect(inkSwatches.value[0]!.layer).not.toBeNull()
   })
 })

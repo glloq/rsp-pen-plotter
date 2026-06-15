@@ -134,12 +134,33 @@ it('does not stomp the palette when kmeans turned palette-follows-pens off', asy
   expect(d.bitmap.value.palette).toEqual([])
 })
 
-it('still seeds fixed_palette + the pool when no method was chosen (pens-follow default)', async () => {
+it('leaves the default kmeans method intact on Style-tab entry (method is authoritative)', async () => {
   const d = await openModal()
   seed(['#ff0000', '#00ff00', '#0000ff'])
 
-  // No explicit method choice — the palette-follows-pens default should
-  // mirror the pool into the draft and seed fixed_palette.
+  // Fresh image: the default method is kmeans (render the image's own
+  // colours). Entering the Style tab used to silently flip this to
+  // fixed_palette + the pen palette even though the operator never picked
+  // pens — the reported bug. The method is now authoritative, so kmeans
+  // survives untouched.
+  expect(d.bitmap.value.segmentation_method).toBe('kmeans')
+
+  await enterStyleTab()
+
+  expect(d.bitmap.value.segmentation_method).toBe('kmeans')
+  expect(d.bitmap.value.palette).toEqual([])
+})
+
+it('mirrors the pen palette once the operator picks pens-follow (fixed_palette)', async () => {
+  const d = await openModal()
+  seed(['#ff0000', '#00ff00', '#0000ff'])
+
+  // Operator opts into pens-follow: this is what PaletteCard.selectPens
+  // does — flip the flag AND set fixed_palette. The StyleTab watcher then
+  // mirrors + truncates the effective pen palette into the draft.
+  d.paletteFollowsPens.value = true
+  d.bitmap.value.segmentation_method = 'fixed_palette'
+
   await enterStyleTab()
 
   expect(d.bitmap.value.segmentation_method).toBe('fixed_palette')

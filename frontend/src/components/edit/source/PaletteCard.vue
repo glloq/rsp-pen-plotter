@@ -48,14 +48,26 @@ const draft = useBitmapDraft()
 // reads as broken.
 type PaletteSource = 'pens' | 'auto' | 'manual'
 const source = computed<PaletteSource>(() => {
+  // The segmentation METHOD is authoritative: kmeans / kmeans_lab render
+  // the image's own colours ("auto"), whatever the legacy follows-pens
+  // flag still says underneath. Without this the card showed "Suivre les
+  // stylos" highlighted while the preview rendered the image's colours.
+  if (
+    props.bitmap.segmentation_method === 'kmeans' ||
+    props.bitmap.segmentation_method === 'kmeans_lab'
+  ) {
+    return 'auto'
+  }
   if (props.paletteFollowsPens) return 'pens'
   return props.bitmap.palette.length > 0 ? 'manual' : 'auto'
 })
 
 function selectPens(): void {
-  // The StyleTab watcher rewrites segmentation → fixed_palette + the
-  // installed-pen colours when paletteFollowsPens flips back on.
+  // Pens-follow is a fixed_palette driven by the installed pens: set the
+  // method here so the choice is explicit (the StyleTab watcher only
+  // mirrors / truncates the pen palette, it no longer flips the method).
   emit('update:paletteFollowsPens', true)
+  props.bitmap.segmentation_method = 'fixed_palette'
 }
 
 function selectAuto(): void {

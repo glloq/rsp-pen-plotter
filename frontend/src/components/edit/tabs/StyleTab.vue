@@ -90,68 +90,47 @@ const multicolorPenWidthMm = computed<number | null>(() => {
   return min
 })
 
-// When the operator turned ``palette-follows-pens`` on AND the
-// effective palette has at least one chip, mirror it into the draft
-// palette + seed the segmentation method as ``fixed_palette``. The
-// palette is truncated to ``bitmap.num_colors`` so the operator can
-// use fewer pens than installed (e.g. only the first 4 of 6 magazine
-// slots) — without that, the "Nombre de couleurs" inputs would write
-// to ``num_colors`` but the preview would keep rendering with all 6
-// pens because ``fixed_palette`` walks the entire palette array.
-// Guarded against stomping a mono-mode rehydrate (only seed genuine
-// multicolour placements).
+// Keep the rendered pen palette in sync while the operator is in
+// pens-follow mode. The segmentation METHOD is authoritative: kmeans /
+// kmeans_lab mean "render the image's OWN colours", so they are NEVER
+// snapped onto the pen rack here — entering the Style tab leaves an
+// image-clustering choice (the fresh-image default OR an explicit SVG-tab
+// pick) completely untouched. That was the bug: a default-but-previewed
+// kmeans image silently flipped to ``fixed_palette`` + the pen palette on
+// tab entry, changing the colours and dropping layers under the preview.
+//
+// Pens-follow is now reached only by the operator picking "Suivre les
+// stylos" in the PaletteCard, which sets ``fixed_palette`` explicitly.
+// This watch then mirrors the effective pen palette into the draft,
+// truncated to ``bitmap.num_colors`` so the operator can use fewer pens
+// than installed (e.g. only the first 4 of 6 magazine slots) without the
+// preview rendering with all of them.
 watch(
-  [draft.paletteFollowsPens, effectivePalette, () => bitmap.value.num_colors],
-  ([follows, colors, n]) => {
+  [
+    draft.paletteFollowsPens,
+    effectivePalette,
+    () => bitmap.value.num_colors,
+    () => bitmap.value.segmentation_method,
+  ],
+  ([follows, colors, n, method]) => {
     if (printMode.value !== 'multicolor') return
-    // kmeans / kmeans_lab mean "render the image's OWN colours", which
-    // directly contradicts palette-follows-pens (snap every cluster onto
-    // the pen rack as a fixed palette). Preserve that choice whenever it
-    // is deliberate — i.e. the operator picked it on the SVG tab this
-    // session (``touched``) OR it was loaded from a previously-committed
-    // conversion (``committed``; rehydrate clears the touched flag, so a
-    // saved kmeans image opens with touched=false and must NOT be judged
-    // by that alone — the original bug). Bail entirely so entering the
-    // Style tab doesn't rewrite the palette ("couleurs plus les mêmes /
-    // mauvais ordre") nor flip the method back to fixed_palette.
-    // fixed_palette is still seeded below for a fresh, uncommitted
-    // placement (the pens-follow default for a never-converted image).
-    const methodIsImageClustering =
-      bitmap.value.segmentation_method === 'kmeans' ||
-      bitmap.value.segmentation_method === 'kmeans_lab'
-    if (
-      methodIsImageClustering &&
-      (draft.segmentationTouched.value.has('method') || draft.committed.value)
-    ) {
-      return
-    }
-    if (follows && colors.length) {
-      // Dedupe before slicing: two installed pens with the same ink
-      // would otherwise eat two of the operator's N colour slots while
-      // rendering as a single layer (the backend merges identical
-      // palette entries).
-      const distinct = uniquePalette(colors)
-      // The FULL rack feeds the backend's ink_pool (which inks each
-      // cluster can snap to). Without this the truncated palette below
-      // capped the pool at the first N slots, so blue drew as red /
-      // green as yellow when the matching pens sat further down the rack.
-      draft.pensFullPool.value = distinct
-      // The truncated palette only drives the colour-count displays
-      // (num_colors), not which inks are reachable.
-      const limit = Math.min(distinct.length, Math.max(1, Number(n) || distinct.length))
-      bitmap.value.palette = distinct.slice(0, limit)
-      // Only seed ``fixed_palette`` as the default pens-mode method when
-      // the operator hasn't explicitly chosen a segmentation method in
-      // the SVG tab. Picking kmeans / kmeans_lab there marks ``method``
-      // touched; honouring it keeps the perceptual clustering the
-      // operator selected (which renders the image's own colours)
-      // instead of silently snapping every cluster onto the pen rack —
-      // the "couleurs pas adaptées" the operator saw when this watch
-      // fired ``immediate`` on tab entry and clobbered their choice.
-      if (!draft.segmentationTouched.value.has('method')) {
-        bitmap.value.segmentation_method = 'fixed_palette'
-      }
-    }
+    // Only palette-driven methods read ``bitmap.palette``; kmeans /
+    // kmeans_lab cluster the image directly, so never rewrite their state.
+    if (method !== 'fixed_palette' && method !== 'palette_dither') return
+    if (!follows || !colors.length) return
+    // Dedupe before slicing: two installed pens with the same ink would
+    // otherwise eat two of the operator's N colour slots while rendering
+    // as a single layer (the backend merges identical palette entries).
+    const distinct = uniquePalette(colors)
+    // The FULL rack feeds the backend's ink_pool (which inks each cluster
+    // can snap to). Without this the truncated palette below capped the
+    // pool at the first N slots, so blue drew as red / green as yellow
+    // when the matching pens sat further down the rack.
+    draft.pensFullPool.value = distinct
+    // The truncated palette only drives the colour-count displays
+    // (num_colors), not which inks are reachable.
+    const limit = Math.min(distinct.length, Math.max(1, Number(n) || distinct.length))
+    bitmap.value.palette = distinct.slice(0, limit)
   },
   { immediate: true },
 )

@@ -1,17 +1,21 @@
 <script setup lang="ts">
 // Per-layer ink swatches, in draw order, under the preview. Each chip is a
 // one-click visibility toggle (👁 / ⊘ + strike-through) so a beginner can
-// mute a layer without leaving the modal. When the resolver fell back because
-// nothing in the magazine matched, a secondary "Charger" CTA on the chip
-// jumps straight to the magazine editor.
+// mute a layer without leaving the modal, plus a 🎨 button that opens a
+// colour-assignment popover (the full magazine ∪ inventory picker) so the
+// operator can swap the ink a layer draws with right from the preview. When
+// the resolver fell back because nothing in the magazine matched, a secondary
+// "Charger" CTA on the chip jumps straight to the magazine editor.
 //
 // Extracted from ``EditModalV2.vue`` (audit P2 — "panneau des encres" +
-// "visibilité des calques") as a presentational component. It holds no state:
-// visibility is read through the injected ``isVisible`` getter (so it stays a
-// reactive dependency of the host's store) and toggles / magazine jumps are
-// emitted back to the host, which owns the store writes.
+// "visibilité des calques") as a presentational component. It holds only the
+// "which popover is open" UI state: visibility + assignment are read through
+// the props and all store writes are emitted back to the host.
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { ColorAssignment } from '../../api/client'
 import type { InkSwatch } from '../../composables/useEditorInkSwatches'
+import AssignedColorPicker from '../edit/AssignedColorPicker.vue'
 
 const props = defineProps<{
   /** Layers to render, in draw order. Empty hides the whole panel. */
@@ -19,14 +23,34 @@ const props = defineProps<{
   /** Current visibility of a layer id — kept as a getter so the host's
    *  reactive store read is tracked by this component's render. */
   isVisible: (layerId: string) => boolean
+  /** Source-driven pool the "↻ auto" nearest-match reads from. */
+  effectivePalette: readonly string[]
+  /** Full magazine ∪ inventory set offered for a manual pick. */
+  pickerPalette: readonly string[]
 }>()
 
 const emit = defineEmits<{
   (e: 'toggle', layerId: string): void
   (e: 'load-ink'): void
+  (e: 'pick', payload: { layerId: string; hex: string; assignment: ColorAssignment }): void
+  (e: 'reset', payload: { layerId: string; hex: string | null }): void
 }>()
 
 const { t } = useI18n()
+
+// Which chip's assignment popover is open (layerId), or null when none.
+const openLayerId = ref<string | null>(null)
+function toggleAssign(layerId: string): void {
+  openLayerId.value = openLayerId.value === layerId ? null : layerId
+}
+function onPick(layerId: string, payload: { hex: string; assignment: ColorAssignment }): void {
+  emit('pick', { layerId, ...payload })
+  openLayerId.value = null
+}
+function onReset(layerId: string, payload: { hex: string | null }): void {
+  emit('reset', { layerId, ...payload })
+  openLayerId.value = null
+}
 </script>
 
 <template>
@@ -61,6 +85,25 @@ const { t } = useI18n()
           />
           <span class="modal-v2__ink-name">{{ ink.displayName }}</span>
         </button>
+        <!-- Assign another colour to this layer. Disabled for the rare
+             live-preview cluster with no committed layer yet. -->
+        <button
+          v-if="ink.layer"
+          type="button"
+          class="modal-v2__ink-assign"
+          :class="{ 'is-open': openLayerId === ink.layerId }"
+          :aria-expanded="openLayerId === ink.layerId"
+          :title="
+            openLayerId === ink.layerId
+              ? t('v2.modal.layerAssignClose')
+              : t('v2.modal.layerAssign')
+          "
+          :aria-label="t('v2.modal.layerAssign')"
+          :data-test="`modal-v2-ink-assign-${ink.layerId}`"
+          @click="toggleAssign(ink.layerId)"
+        >
+          🎨
+        </button>
         <button
           v-if="ink.isFallback"
           type="button"
@@ -72,6 +115,21 @@ const { t } = useI18n()
         >
           {{ t('v2.modal.inkFallbackCta') }}
         </button>
+
+        <!-- Per-layer colour picker popover (full magazine ∪ inventory). -->
+        <div
+          v-if="ink.layer && openLayerId === ink.layerId"
+          class="modal-v2__ink-popover"
+          :data-test="`modal-v2-ink-popover-${ink.layerId}`"
+        >
+          <AssignedColorPicker
+            :layer="ink.layer"
+            :effective-palette="props.effectivePalette"
+            :picker-palette="props.pickerPalette"
+            @pick="(p) => onPick(ink.layerId, p)"
+            @reset="(p) => onReset(ink.layerId, p)"
+          />
+        </div>
       </li>
     </ul>
   </div>
@@ -173,5 +231,46 @@ const { t } = useI18n()
 .modal-v2__ink-cta:focus-visible {
   outline: 2px solid #10b981;
   outline-offset: 2px;
+}
+.modal-v2__ink-assign {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #1e293b;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+.modal-v2__ink-assign:hover {
+  background: #334155;
+}
+.modal-v2__ink-assign.is-open {
+  border-color: #10b981;
+  background: rgba(6, 78, 59, 0.4);
+}
+.modal-v2__ink-assign:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+/* Popover floats above the chip strip so a long inventory doesn't push the
+   preview around. The chip item is the positioning context. */
+.modal-v2__ink-popover {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  z-index: 20;
+  width: 16rem;
+  max-width: 80vw;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  background: #0f172a;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 </style>

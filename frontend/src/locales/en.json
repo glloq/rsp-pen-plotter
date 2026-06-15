@@ -1765,6 +1765,8 @@
       "layerHide": "Hide this layer",
       "layerShow": "Show this layer",
       "layerHidden": "Layer hidden",
+      "layerAssign": "Assign another colour",
+      "layerAssignClose": "Close colour picker",
       "inkFallbackCta": "Load this ink",
       "tourTitle": "Welcome to the editor",
       "tourStep1Title": "Large live preview",

@@ -24,6 +24,37 @@ export interface OpacityLayer {
   opacity_percent?: number | null
 }
 
+export interface ColorOpacityLayer extends OpacityLayer {
+  source_color?: string | null
+  assigned_color_hex?: string | null
+}
+
+/**
+ * Build a ``lowercased hex → opacity`` map for previews whose groups carry no
+ * ``inkscape:label`` (the expert raw /preview groups regions by fill colour).
+ * Keyed by each layer's source AND assigned hex. Within a layer the source
+ * colour is written last so the centroid (= the flat preview's group fill)
+ * resolves to that layer's own visibility; the assigned ink is the recoloured
+ * form and is keyed too so a pens-snapped preview still hides. Distinct
+ * clusters carry distinct centroids, so the only ambiguity is the pathological
+ * case of one layer's assigned ink aliasing another's centroid — last layer
+ * wins there, which is acceptable for a transient preview hint.
+ */
+export function computeLayerColorOpacityMap(
+  layers: ColorOpacityLayer[],
+  isVisible: (layerId: string) => boolean,
+): Map<string, number> {
+  const byColor = new Map<string, number>()
+  for (const layer of layers) {
+    const op = isVisible(layer.layer_id)
+      ? Math.max(0, Math.min(100, layer.opacity_percent ?? 100)) / 100
+      : 0
+    if (layer.assigned_color_hex) byColor.set(layer.assigned_color_hex.toLowerCase(), op)
+    if (layer.source_color) byColor.set(layer.source_color.toLowerCase(), op)
+  }
+  return byColor
+}
+
 /**
  * Build a ``layerId → opacity (0..1)`` map for a single DOM walk instead of N
  * queries. A hidden layer collapses to 0 (the eye toggle); a visible layer
@@ -79,18 +110,31 @@ export function useEditorPreviewSvgEffects(deps: EditorPreviewSvgEffectsDeps) {
     const svg = root.querySelector('svg')
     if (!svg) return
     const opacityById = computeLayerOpacityMap(job.layers, (id) => job.isVisible(id))
-    // The bitmap / vector / text pipelines all label each per-layer group with
-    // ``inkscape:label="color-XXXXXX"`` (= layer_id). The namespaced attribute
-    // selector is fragile across parsers (HTML vs XML mode), so we walk every
-    // <g> imperatively and filter on the attribute presence. Reset to 1.0 when
-    // the group's layer isn't in the active set so a stale value from the
-    // previous SVG doesn't bleed through.
+    // The assisted / rerender SVG labels each per-layer group with
+    // ``inkscape:label="color-XXXXXX"`` (= layer_id). The expert raw /preview,
+    // however, groups regions by FILL colour with no label — so build a second
+    // lookup keyed by each layer's source / assigned hex and fall back to it for
+    // unlabelled groups. Without this the ink-chip eye toggle did nothing on the
+    // live expert preview (the group it should hide carries no layer_id). See
+    // ``computeLayerColorOpacityMap``.
+    const opacityByColor = computeLayerColorOpacityMap(job.layers, (id) => job.isVisible(id))
+    // The namespaced attribute selector is fragile across parsers (HTML vs XML
+    // mode), so we walk every <g> imperatively. Labelled groups reset to 1.0
+    // when their layer isn't in the active set so a stale value from the
+    // previous SVG can't bleed through; unlabelled groups are only touched when
+    // their colour matches a known layer (a white paper rect is left alone).
     const groups = svg.getElementsByTagName('g')
     for (const g of Array.from(groups)) {
       const label = g.getAttribute('inkscape:label')
-      if (!label) continue
-      const opacity = opacityById.get(label)
-      g.style.opacity = opacity === undefined ? '1' : String(opacity)
+      if (label) {
+        const opacity = opacityById.get(label)
+        g.style.opacity = opacity === undefined ? '1' : String(opacity)
+        continue
+      }
+      const color = (g.getAttribute('fill') || g.getAttribute('stroke') || '').toLowerCase()
+      if (!color || color === 'none') continue
+      const op = opacityByColor.get(color)
+      if (op !== undefined) g.style.opacity = String(op)
     }
   }
 

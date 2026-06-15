@@ -1765,6 +1765,8 @@
       "layerHide": "Masquer cette couche",
       "layerShow": "Afficher cette couche",
       "layerHidden": "Couche masquée",
+      "layerAssign": "Assigner une autre couleur",
+      "layerAssignClose": "Fermer le sélecteur de couleur",
       "inkFallbackCta": "Charger cette encre",
       "tourTitle": "Bienvenue dans l'éditeur",
       "tourStep1Title": "L'aperçu en grand",
