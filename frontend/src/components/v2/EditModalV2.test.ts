@@ -49,6 +49,8 @@ const i18n = createI18n({
           paletteLabel: 'Couleurs',
           paletteMachine: 'Magazine machine',
           paletteFree: 'Palette libre',
+          saveStyle: 'Enregistrer le style',
+          saveStyleHint: 'Enregistre le style',
           applyExpert: 'Appliquer',
           applyExpertHint: 'Reconvertit le fichier.',
           applyExpertClean: 'Aucun changement à appliquer.',
@@ -472,25 +474,22 @@ describe('EditModalV2 (beginner single-screen)', () => {
   // unreliable across a full Vue unmount, so those assertions live at the
   // composable level).
 
-  it('exposes the Apply button only in expert mode, gated by draft.isDirty', async () => {
-    // Expert mode restores the V1 image / SVG / style / text tabs.
-    // Mutations in those tabs flow through ``useBitmapDraft`` and only
-    // land on the placement when the operator hits "Appliquer", which
-    // calls ``fileManager.uploadSelected``. Keep the button visible in
-    // expert only and disabled when the draft is clean so the operator
-    // gets a clear "nothing to commit" affordance instead of a phantom
-    // re-upload trigger.
+  it('exposes a single save button (no separate Apply) in both modes', async () => {
+    // The footer's "Appliquer" + "Générer" pair collapsed into one header
+    // "Enregistrer le style" button. In expert mode that single button
+    // commits the dirty draft internally before emitting (the apply path
+    // lives inside ``confirm`` now), so there's no standalone Apply button.
     const { useUiModeStore } = await import('../../stores/uiMode')
     const wrapper = mountModal(PLACEMENT_PROPS)
     const uiMode = useUiModeStore()
+    // Assisted: one save button, no Apply button.
+    expect(wrapper.find('[data-test="confirm-button"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="modal-v2-apply-expert"]').exists()).toBe(false)
+    // Expert: still one save button, still no Apply button.
     uiMode.setMode('expert')
     await nextTick()
-    const apply = wrapper.find('[data-test="modal-v2-apply-expert"]')
-    expect(apply.exists()).toBe(true)
-    // The button carries data-test plus a confirm handler; deeper
-    // dirty-tracking is exercised by the underlying useBitmapDraft
-    // tests (useBitmapDraft.test.ts).
+    expect(wrapper.find('[data-test="confirm-button"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="modal-v2-apply-expert"]').exists()).toBe(false)
   })
 
   it('toggles layer visibility from the ink chip eye', async () => {
@@ -699,7 +698,7 @@ describe('EditModalV2 (beginner single-screen)', () => {
     // Kick off the commit, then try to close while it's in flight.
     await wrapper.find('[data-test="confirm-button"]').trigger('click')
     await flushPromises()
-    await wrapper.find('[data-test="modal-v2-cancel"]').trigger('click')
+    await wrapper.find('[data-test="modal-v2-close"]').trigger('click')
     expect(wrapper.emitted('cancel')).toBeFalsy()
 
     resolveUpload()
@@ -723,13 +722,13 @@ describe('EditModalV2 (beginner single-screen)', () => {
     const confirmSpy = vi.fn().mockReturnValue(false)
     const originalConfirm = window.confirm
     window.confirm = confirmSpy as unknown as typeof window.confirm
-    await wrapper.find('[data-test="modal-v2-cancel"]').trigger('click')
+    await wrapper.find('[data-test="modal-v2-close"]').trigger('click')
     expect(confirmSpy).toHaveBeenCalledTimes(1)
     expect(wrapper.emitted('cancel')).toBeFalsy()
 
     // Accept the discard → modal closes.
     confirmSpy.mockReturnValue(true)
-    await wrapper.find('[data-test="modal-v2-cancel"]').trigger('click')
+    await wrapper.find('[data-test="modal-v2-close"]').trigger('click')
     expect(wrapper.emitted('cancel')).toBeTruthy()
     window.confirm = originalConfirm
   })
@@ -743,7 +742,7 @@ describe('EditModalV2 (beginner single-screen)', () => {
     window.confirm = confirmSpy as unknown as typeof window.confirm
     const wrapper = mountModal(PLACEMENT_PROPS)
     await flushPromises()
-    await wrapper.find('[data-test="modal-v2-cancel"]').trigger('click')
+    await wrapper.find('[data-test="modal-v2-close"]').trigger('click')
     expect(confirmSpy).not.toHaveBeenCalled()
     expect(wrapper.emitted('cancel')).toBeTruthy()
     window.confirm = originalConfirm
