@@ -12,14 +12,14 @@ discussion** — rien ici n'est encore fait.
 
 ## 0. Déjà fait (ne pas refaire)
 
-| Axe | État |
-|-----|------|
-| P0 — pipeline async robuste (try/catch/finally, statut, Générer verrouillé) | ✅ `useEditorPreviewPipeline` |
-| P1 — fermeture sûre (dispose confirm, `requestClose`, rollback palette) | ✅ `useEditorCloseGuard`, `useEditorConfirmation` |
-| P2 — frontière SVG explicite (DOMPurify) | ✅ `SafeSvgHtml.vue`, `sanitizePreviewSvgCached` |
-| P2 — accessibilité (focus-trap inert/visibilité, tour = vrai modal, Escape) | ✅ `useEditorDialogAccessibility`, `EditModalV2` |
-| P2 — découpage (1ʳᵉ vague) | ✅ `useEditorInkSwatches`, `useEditorExpertPreview`, `useEditorPreviewZoomPan`, `useEditorPreviewSplit`, `PreviewToolbar.vue`, `PreviewLoadingOverlay.vue` |
-| P3 — tests (intégration runnable + Playwright gated) | ✅ / ⚠️ Playwright non exécuté (voir §4) |
+| Axe                                                                         | État                                                                                                                                                       |
+| --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0 — pipeline async robuste (try/catch/finally, statut, Générer verrouillé) | ✅ `useEditorPreviewPipeline`                                                                                                                              |
+| P1 — fermeture sûre (dispose confirm, `requestClose`, rollback palette)     | ✅ `useEditorCloseGuard`, `useEditorConfirmation`                                                                                                          |
+| P2 — frontière SVG explicite (DOMPurify)                                    | ✅ `SafeSvgHtml.vue`, `sanitizePreviewSvgCached`                                                                                                           |
+| P2 — accessibilité (focus-trap inert/visibilité, tour = vrai modal, Escape) | ✅ `useEditorDialogAccessibility`, `EditModalV2`                                                                                                           |
+| P2 — découpage (1ʳᵉ vague)                                                  | ✅ `useEditorInkSwatches`, `useEditorExpertPreview`, `useEditorPreviewZoomPan`, `useEditorPreviewSplit`, `PreviewToolbar.vue`, `PreviewLoadingOverlay.vue` |
+| P3 — tests (intégration runnable + Playwright gated)                        | ✅ / ⚠️ Playwright non exécuté (voir §4)                                                                                                                   |
 
 **Tailles actuelles** (point de départ de cette feuille de route) :
 
@@ -37,17 +37,17 @@ isolées » que le nombre de lignes brut.
 
 Responsabilités encore dans le fichier, par bloc :
 
-| Bloc | Lignes (~) | Nature | Couplage |
-|------|-----------|--------|----------|
-| État de vue (`viewMode`, `hasSource`, `canShowOriginal`, `canCompareOriginal`, `setMode`, `displayedSvg`, `plotLayerSvg`) | 90–125 | logique pure | faible |
-| Géométrie feuille (`paneEl`, `ResizeObserver`, `paneWidth/Height`, `sheetStyle`) | 146–183 | layout | `previewRoot` indirect via stroke-floor |
-| Taille artwork (`artworkFraction`, `artworkStyle`) | 185–224 | calcul pur | consommé par `useEditorPreviewSplit` |
-| Wiring split (appel composable) | 226–236 | déjà extrait | dépend de `artworkFraction` |
-| Flux SSE (`useProgressiveStream`, `shouldStream`, `openTimer`, watch `loading`) | 255–315 | cycle de vie | timers + unmount |
-| Overlay opacité par calque (`applyOpacityOverlay`, `previewRoot`, watches) | 317–383 | **walk DOM** | **`previewRoot`** |
-| Stroke-floor d'affichage (`applyStrokeFloor`, `strokeFloorTimer`, watch) | 385–419 | **walk DOM** | **`previewRoot`**, `zoom`, taille pane |
-| Computeds stream/estimation (`streamLabel/Percent/Active`, `displayPercent`, `estimatedProgress`) | 421–443 | logique pure | — |
-| Template surface (pane → stage → sheet/artwork/split, fallback viewport) | 446–589 | template + CSS | **`previewRoot`** |
+| Bloc                                                                                                                      | Lignes (~) | Nature         | Couplage                                |
+| ------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------- | --------------------------------------- |
+| État de vue (`viewMode`, `hasSource`, `canShowOriginal`, `canCompareOriginal`, `setMode`, `displayedSvg`, `plotLayerSvg`) | 90–125     | logique pure   | faible                                  |
+| Géométrie feuille (`paneEl`, `ResizeObserver`, `paneWidth/Height`, `sheetStyle`)                                          | 146–183    | layout         | `previewRoot` indirect via stroke-floor |
+| Taille artwork (`artworkFraction`, `artworkStyle`)                                                                        | 185–224    | calcul pur     | consommé par `useEditorPreviewSplit`    |
+| Wiring split (appel composable)                                                                                           | 226–236    | déjà extrait   | dépend de `artworkFraction`             |
+| Flux SSE (`useProgressiveStream`, `shouldStream`, `openTimer`, watch `loading`)                                           | 255–315    | cycle de vie   | timers + unmount                        |
+| Overlay opacité par calque (`applyOpacityOverlay`, `previewRoot`, watches)                                                | 317–383    | **walk DOM**   | **`previewRoot`**                       |
+| Stroke-floor d'affichage (`applyStrokeFloor`, `strokeFloorTimer`, watch)                                                  | 385–419    | **walk DOM**   | **`previewRoot`**, `zoom`, taille pane  |
+| Computeds stream/estimation (`streamLabel/Percent/Active`, `displayPercent`, `estimatedProgress`)                         | 421–443    | logique pure   | —                                       |
+| Template surface (pane → stage → sheet/artwork/split, fallback viewport)                                                  | 446–589    | template + CSS | **`previewRoot`**                       |
 
 ### Le point dur : `previewRoot`
 
@@ -61,25 +61,25 @@ template-ref passé en prop). C'est la principale source de régression possible
 ### Plan d'extraction proposé (ordre = risque croissant)
 
 1. **`useEditorPreviewStream(props.loading, props.streamFileId, props.estimateMs)`**
-   *(risque faible)* — déplace tout le cycle SSE + `streamLabel/Percent/Active` +
+   _(risque faible)_ — déplace tout le cycle SSE + `streamLabel/Percent/Active` +
    `displayPercent` + `estimatedProgress`. Auto-contenu, testable (faux timers).
    Sortie : ~80 lignes de script. **À faire en premier.**
 
 2. **`useEditorPreviewSheetGeometry(() => props.sheet, () => props.artwork*Mm)`**
-   *(risque faible)* — `paneEl` + `ResizeObserver` + `sheetStyle` + `artworkFraction`
-   + `artworkStyle`. Pure géométrie, testable en injectant `paneWidth/Height`.
+   _(risque faible)_ — `paneEl` + `ResizeObserver` + `sheetStyle` + `artworkFraction`
+   + `artworkStyle` (pure géométrie, testable en injectant `paneWidth/Height`).
    Attention : `artworkFraction` doit rester disponible **avant** l'appel à
    `useEditorPreviewSplit`. Sortie : ~70 lignes.
 
 3. **`useEditorPreviewSvgEffects({ previewRoot, viewMode, plotSvg, originalSvg, zoom, paneWidth, paneHeight, artworkStyle })`**
-   *(risque moyen)* — `applyOpacityOverlay` + `applyStrokeFloor` + leurs watches +
+   _(risque moyen)_ — `applyOpacityOverlay` + `applyStrokeFloor` + leurs watches +
    `strokeFloorTimer`. `previewRoot` **reste déclaré dans le pane** et est passé au
    composable. Difficile à tester sous happy-dom (pas de layout réel ; `getClientRects`
    renvoie une box factice) → couvrir la logique de map d'opacité en isolant le walk,
    et laisser le stroke-floor en vérification manuelle/navigateur.
 
 4. **`PreviewSheet.vue` + `PreviewViewport.vue` + `PreviewCompareSlider.vue`**
-   *(risque élevé — à faire en dernier, avec vérif navigateur)* :
+   _(risque élevé — à faire en dernier, avec vérif navigateur)_ :
    - `PreviewSheet.vue` : `sheet-outline` + `sheet-caption` + `artwork-box` + les deux
      `SafeSvgHtml` (plot/source) + `<img>` source + le `split-handle`. CSS scoped
      associée (`.sheet-outline`, `.artwork-*`, `.split-handle*`).
@@ -105,12 +105,12 @@ Plus faible valeur (le script restant est surtout de l'orchestration légitime :
 les 4 watchers de preview, `onMounted`, le wiring des composables). Candidats si on
 veut passer sous 900 lignes total :
 
-| Extraction | Contenu | Valeur | Risque |
-|------------|---------|--------|--------|
-| `useEditorCustomStyles` | `customStyles`, `customStylesActive`, `customPasses`, `seedCustomStylesFromCommitted`, `canCustomizeStyles` | moyenne (testable) | faible |
-| `useEditorSheetOutline` | computed `sheetOutline` | faible | faible |
-| `useEditorLayerVisibility` | `isLayerVisible`, `toggleLayerVisibility` | faible | faible |
-| `useEditorDocumentNavigation` | `pageCount`, `currentPage`, `hasPages`, `goToPage` | très faible (wrappers fins sur `fileManager`) | faible |
+| Extraction                    | Contenu                                                                                                     | Valeur                                        | Risque |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------ |
+| `useEditorCustomStyles`       | `customStyles`, `customStylesActive`, `customPasses`, `seedCustomStylesFromCommitted`, `canCustomizeStyles` | moyenne (testable)                            | faible |
+| `useEditorSheetOutline`       | computed `sheetOutline`                                                                                     | faible                                        | faible |
+| `useEditorLayerVisibility`    | `isLayerVisible`, `toggleLayerVisibility`                                                                   | faible                                        | faible |
+| `useEditorDocumentNavigation` | `pageCount`, `currentPage`, `hasPages`, `goToPage`                                                          | très faible (wrappers fins sur `fileManager`) | faible |
 
 Recommandation : **ne faire que `useEditorCustomStyles`** (vrai bloc métier, ~50
 lignes, testable hors DOM) ; les autres sont trop fins pour justifier un fichier.
