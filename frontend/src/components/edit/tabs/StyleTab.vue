@@ -2,7 +2,6 @@
 import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
-import { kdiag } from '../../../lib/kdiag'
 import { useFileManager } from '../../../composables/useFileManager'
 import { applyMasterStyleToLayers } from '../../../composables/useStylePropagation'
 import { resolveEffectivePalette } from '../../../lib/effectivePalette'
@@ -104,22 +103,25 @@ const multicolorPenWidthMm = computed<number | null>(() => {
 watch(
   [draft.paletteFollowsPens, effectivePalette, () => bitmap.value.num_colors],
   ([follows, colors, n]) => {
-    kdiag(
-      `StyleTab pens-watch fired: follows=${follows} colors=${colors.length} method=${bitmap.value.segmentation_method} printMode=${printMode.value} touchedMethod=${draft.segmentationTouched.value.has('method')}`,
-    )
     if (printMode.value !== 'multicolor') return
-    // The operator explicitly picked an image-clustering method
-    // (kmeans / kmeans_lab) on the SVG tab. That means "render the
-    // image's own colours", which directly contradicts palette-follows-
-    // pens (snap every cluster onto the pen rack as a fixed palette).
-    // Bail entirely so entering the Style tab doesn't silently rewrite
-    // the palette (the "couleurs plus les mêmes / mauvais ordre" report)
-    // nor flip the method back to ``fixed_palette``. ``fixed_palette`` is
-    // still seeded below when the operator hasn't chosen a method.
+    // kmeans / kmeans_lab mean "render the image's OWN colours", which
+    // directly contradicts palette-follows-pens (snap every cluster onto
+    // the pen rack as a fixed palette). Preserve that choice whenever it
+    // is deliberate — i.e. the operator picked it on the SVG tab this
+    // session (``touched``) OR it was loaded from a previously-committed
+    // conversion (``committed``; rehydrate clears the touched flag, so a
+    // saved kmeans image opens with touched=false and must NOT be judged
+    // by that alone — the original bug). Bail entirely so entering the
+    // Style tab doesn't rewrite the palette ("couleurs plus les mêmes /
+    // mauvais ordre") nor flip the method back to fixed_palette.
+    // fixed_palette is still seeded below for a fresh, uncommitted
+    // placement (the pens-follow default for a never-converted image).
+    const methodIsImageClustering =
+      bitmap.value.segmentation_method === 'kmeans' ||
+      bitmap.value.segmentation_method === 'kmeans_lab'
     if (
-      draft.segmentationTouched.value.has('method') &&
-      (bitmap.value.segmentation_method === 'kmeans' ||
-        bitmap.value.segmentation_method === 'kmeans_lab')
+      methodIsImageClustering &&
+      (draft.segmentationTouched.value.has('method') || draft.committed.value)
     ) {
       return
     }

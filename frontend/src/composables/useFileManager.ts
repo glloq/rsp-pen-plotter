@@ -18,7 +18,6 @@ import { downloadOriginalFile } from '../api/client'
 import { confirmAction } from './confirm'
 import { resetEditState, useEditState } from './useEditState'
 import { useBitmapDraft } from './useBitmapDraft'
-import { kdiag } from '../lib/kdiag'
 import { usePreviewScheduler } from './usePreviewScheduler'
 import { usePreviewCostEstimator } from './usePreviewCostEstimator'
 import { applyMasterStyleToLayers } from './useStylePropagation'
@@ -485,8 +484,7 @@ export function useFileManager(t?: Translator, options: UseFileManagerOptions = 
       // /preview call.
       watch(
         () => store.selectedPlacementId,
-        async (nextId, prevId) => {
-          kdiag(`placement-switch watcher fired  ${prevId} -> ${nextId} (will rehydrate)`)
+        async () => {
           // Drop the previous placement's preview result before
           // anything else: the singleton previewer cached the SVG of
           // the OLD source, and the V2 modal forwards
