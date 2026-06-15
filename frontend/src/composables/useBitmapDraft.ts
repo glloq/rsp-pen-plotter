@@ -1368,10 +1368,15 @@ const _expectedLayerCount = computed<number>(() => {
     }
     return 1
   }
-  if (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither')
-    // Deduped: the backend merges identical palette entries into a
-    // single cluster/layer, so repeated chips don't inflate the count.
-    return uniquePalette(b.palette).length
+  if (b.segmentation_method === 'fixed_palette' || b.segmentation_method === 'palette_dither') {
+    // Deduped: the backend merges identical palette entries into a single
+    // cluster/layer, so repeated chips don't inflate the count. An EMPTY
+    // palette downgrades to kmeans + num_colors on the wire (see
+    // buildBitmapOptions), which produces num_colors layers — reflect that
+    // instead of 0.
+    const distinct = uniquePalette(b.palette).length
+    return distinct > 0 ? distinct : b.num_colors
+  }
   return b.num_colors
 })
 
