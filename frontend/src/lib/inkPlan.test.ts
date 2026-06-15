@@ -52,7 +52,12 @@ describe('buildInkLoadingPlan', () => {
     // A B C A with 2 slots: at C, A is reused later but B never is —
     // evict B, keep A loaded.
     const plan = buildInkLoadingPlan(
-      [layer('a1', '#aa0000'), layer('b', '#00bb00'), layer('c', '#0000cc'), layer('a2', '#aa0000')],
+      [
+        layer('a1', '#aa0000'),
+        layer('b', '#00bb00'),
+        layer('c', '#0000cc'),
+        layer('a2', '#aa0000'),
+      ],
       2,
     )
     expect(plan.swaps).toEqual([{ layerId: 'c', slot: 1, hex: '#0000cc', replacesHex: '#00bb00' }])

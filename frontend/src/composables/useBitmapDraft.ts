@@ -33,11 +33,7 @@
 // builder.
 
 import { computed, ref } from 'vue'
-import {
-  KNOB_UNITS_MM,
-  convertLegacyStyleKnobs,
-  isLegacyKnobPayload,
-} from '../lib/legacyKnobUnits'
+import { KNOB_UNITS_MM, convertLegacyStyleKnobs, isLegacyKnobPayload } from '../lib/legacyKnobUnits'
 import type { SegmentationMethod } from '../api/client'
 import { uniquePalette } from '../lib/paletteColors'
 import {
@@ -505,9 +501,7 @@ export function rehydrateDraft(ctx: RehydrateContext): void {
     const pens = uniquePalette(ctx.installedPenColors)
     _paletteFollowsPens.value =
       _bitmap.value.palette.length <= pens.length &&
-      _bitmap.value.palette.every(
-        (c, i) => c.toLowerCase() === (pens[i] ?? '').toLowerCase(),
-      )
+      _bitmap.value.palette.every((c, i) => c.toLowerCase() === (pens[i] ?? '').toLowerCase())
   }
   const curvesOpts = (opts as Record<string, unknown>).curves
   if (curvesOpts && typeof curvesOpts === 'object') {
@@ -941,7 +935,12 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-flowfield': {
-      const seedSpacing = lerp(i, total, knobs.seed_spacing_min ?? 2.2, knobs.seed_spacing_max ?? 4.5)
+      const seedSpacing = lerp(
+        i,
+        total,
+        knobs.seed_spacing_min ?? 2.2,
+        knobs.seed_spacing_max ?? 4.5,
+      )
       return {
         algorithm: 'flowfield',
         algorithm_options: {
@@ -1126,7 +1125,8 @@ function colorRecipeFromKnobs(
       }
     }
     case 'color-truchet': {
-      const cell = Math.round(lerp(i, total, knobs.cell_min ?? 2.6, knobs.cell_max ?? 5.2) * 10) / 10
+      const cell =
+        Math.round(lerp(i, total, knobs.cell_min ?? 2.6, knobs.cell_max ?? 5.2) * 10) / 10
       return {
         algorithm: 'truchet',
         algorithm_options: { cell_mm: cell, seed: i * 13 + 7 },

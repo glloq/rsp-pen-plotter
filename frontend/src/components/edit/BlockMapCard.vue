@@ -71,10 +71,7 @@ const imageCount = computed(() => currentBlocks.value.filter((b) => b.kind === '
 </script>
 
 <template>
-  <section
-    v-if="isPdf && (loading || analysis || error)"
-    class="card space-y-2"
-  >
+  <section v-if="isPdf && (loading || analysis || error)" class="card space-y-2">
     <div class="flex items-baseline justify-between">
       <p class="text-[10px] uppercase tracking-wider text-slate-400">
         {{ t('blockMap.title') }}

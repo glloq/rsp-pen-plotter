@@ -19,16 +19,16 @@ describe('useEditorOnboarding — tour', () => {
   })
 
   it('does not start when skipped, when there is no placement, or when already seen', () => {
-    expect(
-      run(() => useEditorOnboarding({ skipOnboarding: true, hasPlacement: ref(true) })),
-    ).toBe(0)
+    expect(run(() => useEditorOnboarding({ skipOnboarding: true, hasPlacement: ref(true) }))).toBe(
+      0,
+    )
     expect(
       run(() => useEditorOnboarding({ skipOnboarding: false, hasPlacement: ref(false) })),
     ).toBe(0)
     window.localStorage.setItem(ONBOARDING_KEY, JSON.stringify({ seen: true }))
-    expect(
-      run(() => useEditorOnboarding({ skipOnboarding: false, hasPlacement: ref(true) })),
-    ).toBe(0)
+    expect(run(() => useEditorOnboarding({ skipOnboarding: false, hasPlacement: ref(true) }))).toBe(
+      0,
+    )
 
     function run(make: () => ReturnType<typeof useEditorOnboarding>): number {
       const ob = make()

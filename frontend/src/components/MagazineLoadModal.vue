@@ -15,10 +15,7 @@
 
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  resolveMagazineGate,
-  useMagazineGateState,
-} from '../composables/magazineGate'
+import { resolveMagazineGate, useMagazineGateState } from '../composables/magazineGate'
 import { useMagazinePlan, type SlotPermutation } from '../composables/useMagazinePlan'
 import { useJobStore } from '../stores/job'
 import { useToastStore } from '../stores/toasts'
@@ -28,15 +25,8 @@ const gate = useMagazineGateState()
 const job = useJobStore()
 const toasts = useToastStore()
 
-const {
-  slotCount,
-  plan,
-  swapsUnsupported,
-  nameFor,
-  remappedSwaps,
-  applying,
-  applyPlan,
-} = useMagazinePlan()
+const { slotCount, plan, swapsUnsupported, nameFor, remappedSwaps, applying, applyPlan } =
+  useMagazinePlan()
 
 // planSlot → physical slot, editable through the selects. Reset to the
 // identity every time the modal opens so a previous session's remap
@@ -62,9 +52,7 @@ const initialRows = computed(() =>
   })),
 )
 
-const slotOptions = computed<number[]>(() =>
-  Array.from({ length: slotCount.value }, (_, i) => i),
-)
+const slotOptions = computed<number[]>(() => Array.from({ length: slotCount.value }, (_, i) => i))
 
 // Keep the mapping a bijection: picking a slot already held by another
 // ink swaps the two rows instead of silently double-booking the slot.

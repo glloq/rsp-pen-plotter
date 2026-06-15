@@ -63,7 +63,9 @@ describe('EditorHeader', () => {
 
   it('disables the save button when saveDisabled is set', () => {
     const w = mountHeader({ saveDisabled: true })
-    expect((w.find('[data-test="confirm-button"]').element as HTMLButtonElement).disabled).toBe(true)
+    expect((w.find('[data-test="confirm-button"]').element as HTMLButtonElement).disabled).toBe(
+      true,
+    )
   })
 
   it('emits close from the close button', async () => {

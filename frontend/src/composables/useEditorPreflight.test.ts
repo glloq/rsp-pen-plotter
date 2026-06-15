@@ -6,11 +6,7 @@ import { ref } from 'vue'
 import type { LayerInfo } from '../api/client'
 import { usePlotterStore } from '../stores/plotter'
 import { useUiStore } from '../stores/ui'
-import {
-  formatDuration,
-  formatLengthMeters,
-  useEditorPreflight,
-} from './useEditorPreflight'
+import { formatDuration, formatLengthMeters, useEditorPreflight } from './useEditorPreflight'
 
 function layer(over: Partial<LayerInfo> = {}): LayerInfo {
   return {

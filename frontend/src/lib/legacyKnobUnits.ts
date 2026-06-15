@@ -66,9 +66,7 @@ function round2(v: number): number {
  * through untouched; unknown keys are preserved so nothing the operator
  * saved is dropped.
  */
-export function convertLegacyStyleKnobs(
-  knobs: Record<string, unknown>,
-): Record<string, unknown> {
+export function convertLegacyStyleKnobs(knobs: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(knobs)) {
     const renamed = RENAMED_FIELDS[key]

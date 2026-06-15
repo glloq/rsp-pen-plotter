@@ -132,7 +132,11 @@ async function onApply(): Promise<void> {
       >
         {{ applying ? t('magazinePlan.applying') : t('magazinePlan.apply') }}
       </button>
-      <span v-if="magazineReady" class="text-[10px] text-emerald-300" data-test="magazine-plan-ready">
+      <span
+        v-if="magazineReady"
+        class="text-[10px] text-emerald-300"
+        data-test="magazine-plan-ready"
+      >
         ✓ {{ t('magazinePlan.ready') }}
       </span>
     </div>

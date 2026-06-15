@@ -99,10 +99,7 @@ describe('multi-pass helpers', () => {
     store.placements = [makePlacement()]
     store.selectPlacement('p1')
 
-    const stack: LayerPass[] = [
-      { ...PASSES[0]!, enabled: false },
-      { ...PASSES[1]! },
-    ]
+    const stack: LayerPass[] = [{ ...PASSES[0]!, enabled: false }, { ...PASSES[1]! }]
     await store.applyLayerPasses('a', stack)
 
     const spec = store.placements[0]!.layer_algorithms.a!

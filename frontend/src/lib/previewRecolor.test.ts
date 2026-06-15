@@ -3,8 +3,7 @@ import { recolorPreviewSvg } from './previewRecolor'
 
 describe('recolorPreviewSvg', () => {
   it('rewrites fill and stroke hexes to their mapped pool ink', () => {
-    const svg =
-      '<g fill="#3a5f2c"><path/></g><g stroke="#1b3a6f"><path/></g>'
+    const svg = '<g fill="#3a5f2c"><path/></g><g stroke="#1b3a6f"><path/></g>'
     const map = new Map([
       ['#3a5f2c', '#808080'],
       ['#1b3a6f', '#001f5b'],

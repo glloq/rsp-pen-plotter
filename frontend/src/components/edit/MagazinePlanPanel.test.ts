@@ -127,7 +127,10 @@ function makePlacement(layers: LayerInfo[]): Placement {
   } as Placement
 }
 
-async function seed(layers: LayerInfo[], profile = makeProfile()): Promise<ReturnType<typeof useJobStore>> {
+async function seed(
+  layers: LayerInfo[],
+  profile = makeProfile(),
+): Promise<ReturnType<typeof useJobStore>> {
   const job = useJobStore()
   const { profiles, selectedProfileName } = storeToRefs(job)
   profiles.value = [profile]

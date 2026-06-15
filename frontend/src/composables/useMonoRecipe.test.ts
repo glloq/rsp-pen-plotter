@@ -289,9 +289,7 @@ describe('buildMonoBandRecipes', () => {
     setMonoMasterStyleId('dash-shading')
     const dash = buildMonoBandRecipes('luminance_bands', 2)
     expect(dash!.every((r) => r.algorithm === 'dashes')).toBe(true)
-    const dashAngles = dash!.map(
-      (r) => (r.algorithm_options as Record<string, unknown>).angle_deg,
-    )
+    const dashAngles = dash!.map((r) => (r.algorithm_options as Record<string, unknown>).angle_deg)
     expect(new Set(dashAngles).size).toBe(2)
 
     // Penrose: the divisions knob sets the darkest band, lighter bands

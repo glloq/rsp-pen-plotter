@@ -82,7 +82,10 @@ it('keeps a COMMITTED kmeans conversion intact (touched=false) on Style-tab entr
   await nextTick()
   const d = useBitmapDraft()
   d.rehydrateDraft({
-    placement: { source_file: 'photo.jpg', last_options: { segmentation_method: 'kmeans', num_colors: 6 } },
+    placement: {
+      source_file: 'photo.jpg',
+      last_options: { segmentation_method: 'kmeans', num_colors: 6 },
+    },
     installedPenColors: ['#ff0000', '#00ff00', '#0000ff'],
   })
   seed(['#ff0000', '#00ff00', '#0000ff'])

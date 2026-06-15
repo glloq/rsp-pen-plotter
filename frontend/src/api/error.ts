@@ -38,9 +38,10 @@ export function errorDetail(err: unknown, fallback: string): string {
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const env = data as { code?: unknown; message?: unknown; details?: unknown }
     if (typeof env.message === 'string' && env.message.length > 0) {
-      const details = (
-        env.details && typeof env.details === 'object' ? env.details : {}
-      ) as Record<string, unknown>
+      const details = (env.details && typeof env.details === 'object' ? env.details : {}) as Record<
+        string,
+        unknown
+      >
       // Pydantic input rejections: surface the field errors instead of
       // the generic "request validation failed" so the operator learns
       // WHICH field was rejected and why.

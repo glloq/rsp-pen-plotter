@@ -133,8 +133,7 @@ export const useLibraryStore = defineStore('library', () => {
       for (const [fileId, entry] of Object.entries(legacy ?? {})) {
         if (!entry || typeof entry !== 'object') continue
         const variants = Array.isArray(entry.variants) ? entry.variants : []
-        const active =
-          variants.find((v) => v.id === entry.active_variant_id) ?? variants[0] ?? null
+        const active = variants.find((v) => v.id === entry.active_variant_id) ?? variants[0] ?? null
         migrated[fileId] = {
           layer_algorithms: { ...(active?.layer_algorithms ?? {}) },
           visibility: { ...(active?.visibility ?? {}) },

@@ -368,7 +368,8 @@ function recipeFromKnobs(
       }
     }
     case 'squiggle-shade': {
-      const spacing = Math.round(lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.6) * 10) / 10
+      const spacing =
+        Math.round(lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.6) * 10) / 10
       // Wider wiggle on dark bands (wave_max at i=0) → thin line on light.
       const amp = lerp(i, total, knobs.wave_max ?? 0.82, knobs.wave_min ?? 0.3)
       return {
@@ -396,7 +397,8 @@ function recipeFromKnobs(
     // entry, recipeFromKnobs receives undefined knobs and falls through to
     // style.bandRecipe — so it never reaches this switch.
     case 'concentric-rings': {
-      const spacing = Math.round(lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.2) * 10) / 10
+      const spacing =
+        Math.round(lerp(i, total, knobs.spacing_min ?? 1.1, knobs.spacing_max ?? 2.2) * 10) / 10
       const rings = Math.round(lerp(i, total, knobs.rings_max ?? 50, knobs.rings_min ?? 12))
       return {
         algorithm: 'concentric_offset',

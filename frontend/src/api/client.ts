@@ -336,7 +336,11 @@ export async function optimizeToolpaths(
   // de l'optimisation" with no cause. Cancellation still works via the
   // AbortSignal; the backend runs the work in a threadpool. Mirrors the
   // ``/rerender`` call below.
-  const response = await api.post<OptimizeResponse>('/optimize', { svg, layers }, { signal, timeout: 0 })
+  const response = await api.post<OptimizeResponse>(
+    '/optimize',
+    { svg, layers },
+    { signal, timeout: 0 },
+  )
   return response.data
 }
 
