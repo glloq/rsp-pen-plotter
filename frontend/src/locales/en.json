@@ -159,6 +159,8 @@
     "notApplicable": "This file type doesn't use colour segmentation."
   },
   "svg": {
+    "layerCountTitle": "Number of layers",
+    "layerCountHint": "One layer per cluster, each drawn with the nearest ink from your palette. More layers = more detail and more distinct colours.",
     "pathTitle": "Path treatments",
     "centerline": "Line-tracing mode (centerline)",
     "centerlineDesc": "Trace the medial skeleton instead of region outlines. Best for schematics and line art. Thick filled areas collapse to a single line at the centre, which is intentional.",

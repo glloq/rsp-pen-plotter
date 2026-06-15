@@ -1,19 +1,15 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { SegmentationMethod } from '../../../api/client'
-import LayerCountBadge from '../shared/LayerCountBadge.vue'
 import CollapsibleCard from '../shared/CollapsibleCard.vue'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
 
-// Segmentation method picker + the primary parameter for the chosen
-// method (num_colors / num_bands / thresholds list / palette ref hint).
-// Lives in the SVG tab because the segmentation method is a technical
-// vectorisation decision: it controls how the source raster gets sliced
-// into per-colour masks before any algorithm renders them. The
-// post-processing knobs (drop_background, min_region, merge_delta_e)
-// live in a sibling card on the Style tab — they filter what the
-// segmentation produces and are more naturally a colour-/output-shaping
-// concern than a segmentation choice.
+// Segmentation method picker — HOW the source raster gets sliced into
+// per-colour masks before any algorithm renders them. The layer/colour COUNT
+// (num_colors / num_bands / thresholds) is the headline knob and lives in the
+// sibling ``SegmentationCountCard`` at the very top of the SVG tab; the
+// post-processing knobs (drop_background, min_region, merge_delta_e) live on
+// the Style tab. This card stays focused on the method choice itself.
 
 interface BitmapDraft {
   segmentation_method: SegmentationMethod
@@ -61,37 +57,6 @@ function selectMethod(method: SegmentationMethod): void {
     props.bitmap.palette = []
   }
 }
-function setNumBands(value: number): void {
-  props.bitmap.num_bands = value
-  draft.markSegmentationTouched('num_bands')
-}
-function addThreshold(): void {
-  props.bitmap.thresholds = [...props.bitmap.thresholds, 0.5].sort((a, b) => a - b)
-  draft.markSegmentationTouched('thresholds')
-}
-function removeThreshold(i: number): void {
-  props.bitmap.thresholds = props.bitmap.thresholds.filter((_, idx) => idx !== i)
-  draft.markSegmentationTouched('thresholds')
-}
-function updateThreshold(i: number, value: number): void {
-  // Write the clamped value in place WITHOUT sorting: the rows are
-  // index-keyed and the edited input is still focused, so re-sorting
-  // here would yank the row (and focus) out from under the operator
-  // mid-edit. The list is re-ordered on blur (commitThresholdOrder).
-  const clamped = Math.max(0, Math.min(1, value))
-  const next = [...props.bitmap.thresholds]
-  next[i] = clamped
-  props.bitmap.thresholds = next
-  draft.markSegmentationTouched('thresholds')
-}
-function commitThresholdOrder(): void {
-  const sorted = [...props.bitmap.thresholds].sort((a, b) => a - b)
-  // Only patch when the order actually changes — avoids a useless
-  // reactive write (and preview reschedule) on every blur.
-  if (sorted.some((v, idx) => v !== props.bitmap.thresholds[idx])) {
-    props.bitmap.thresholds = sorted
-  }
-}
 </script>
 
 <template>
@@ -132,88 +97,6 @@ function commitThresholdOrder(): void {
         </div>
       </div>
 
-      <label
-        v-if="
-          bitmap.segmentation_method === 'kmeans' || bitmap.segmentation_method === 'kmeans_lab'
-        "
-        class="block text-slate-400"
-      >
-        <span class="inline-flex items-center">
-          {{ t('convert.numColors') }}
-          <LayerCountBadge :count="draft.expectedLayerCount.value" />
-        </span>
-        <input
-          v-model.number="bitmap.num_colors"
-          type="number"
-          min="1"
-          max="32"
-          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-        />
-      </label>
-
-      <label
-        v-else-if="bitmap.segmentation_method === 'luminance_bands'"
-        class="block text-slate-400"
-      >
-        <span class="inline-flex items-center">
-          {{ t('convert.numBands') }}
-          <LayerCountBadge :count="draft.expectedLayerCount.value" />
-        </span>
-        <input
-          :value="bitmap.num_bands"
-          type="number"
-          min="2"
-          max="16"
-          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-          @input="(e) => setNumBands(Number((e.target as HTMLInputElement).value))"
-        />
-      </label>
-
-      <div v-else-if="bitmap.segmentation_method === 'thresholds'" class="space-y-1">
-        <div class="flex items-center justify-between">
-          <span class="inline-flex items-center text-slate-400">
-            {{ t('convert.thresholds') }}
-            <LayerCountBadge :count="draft.expectedLayerCount.value" />
-          </span>
-          <button
-            type="button"
-            class="rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-600"
-            @click="addThreshold"
-          >
-            + {{ t('convert.addThreshold') }}
-          </button>
-        </div>
-        <div v-for="(value, i) in bitmap.thresholds" :key="i" class="flex items-center gap-1">
-          <input
-            type="number"
-            min="0"
-            max="1"
-            step="0.01"
-            :value="value"
-            class="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
-            @change="(e) => updateThreshold(i, Number((e.target as HTMLInputElement).value))"
-            @blur="commitThresholdOrder"
-          />
-          <button
-            type="button"
-            class="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-600"
-            @click="removeThreshold(i)"
-          >
-            ✕
-          </button>
-        </div>
-        <p class="text-[10px] text-slate-500">{{ t('convert.thresholdsHint') }}</p>
-      </div>
-
-      <p
-        v-else-if="
-          bitmap.segmentation_method === 'fixed_palette' ||
-          bitmap.segmentation_method === 'palette_dither'
-        "
-        class="text-[10px] text-slate-500"
-      >
-        {{ t('convert.fixedPaletteRefHint') }}
-      </p>
       <p v-if="bitmap.segmentation_method === 'palette_dither'" class="text-[10px] text-slate-500">
         {{ t('convert.paletteDitherNote') }}
       </p>
