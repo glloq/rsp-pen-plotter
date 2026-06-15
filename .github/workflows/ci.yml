@@ -133,7 +133,7 @@ jobs:
         run: npm run build
 
   e2e:
-    name: E2E — Playwright (modal V2 + operator parcours)
+    name: E2E — Playwright (modal V2 + operator + editor parcours)
     runs-on: ubuntu-latest
     needs: [backend, frontend]
     timeout-minutes: 20

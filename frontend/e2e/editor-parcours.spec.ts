@@ -17,10 +17,10 @@
 //     OMNIPLOT_FAKE_HARDWARE=1 <start backend on :8000>
 //     E2E_BACKEND_RUNNING=1 npm run e2e
 //
-//   NOTE: this spec was authored against the app's data-test hooks and the
-//   real API contract but has NOT been executed in CI yet (the authoring
-//   environment had no Playwright browser egress). Validate it once in a
-//   browser+backend environment before relying on it as a gate.
+//   The CI ``e2e`` job (.github/workflows/ci.yml) boots the fake-hardware
+//   backend, installs Chromium and sets ``E2E_BACKEND_RUNNING=1``, so this
+//   spec runs there alongside the other Playwright specs — it is a real gate,
+//   not authoring-only scaffolding.
 
 import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
