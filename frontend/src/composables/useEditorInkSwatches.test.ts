@@ -95,7 +95,11 @@ describe('useEditorInkSwatches', () => {
 
   it('expert mode + follow-pens: snaps live centroids onto the pool', () => {
     useUiModeStore().setMode('expert')
-    useBitmapDraft().paletteFollowsPens.value = true
+    const draft = useBitmapDraft()
+    draft.paletteFollowsPens.value = true
+    // Pens-follow only snaps when the method is the palette-driven
+    // fixed_palette — kmeans/kmeans_lab render the image's own colours.
+    draft.bitmap.value.segmentation_method = 'fixed_palette'
     const { previewInkSnap, inkSwatches } = useEditorInkSwatches({
       fileManager: fileManagerWith([{ color: '#100000' }, { color: '#001000' }]),
       effectivePool: ref(['#ff0000', '#00ff00']),

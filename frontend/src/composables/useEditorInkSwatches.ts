@@ -85,16 +85,20 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
   const previewInkSnap = computed<PreviewSnap | null>(() => {
     const livePalette = deps.fileManager.previewResult?.value?.palette ?? null
     if (!uiMode.isExpert || !livePalette || livePalette.length === 0) return null
-    // "Fidèle à l'image": picking an image-clustering method (kmeans /
-    // kmeans_lab) turns ``paletteFollowsPens`` off — the operator asked to
-    // render the photo's OWN colours, not the pen rack. Snapping those
-    // centroids onto the owned pool here would silently override that choice
-    // with the few closest pens (the "mauvaises couleurs comme avant"
-    // report: both palette modes looked identical because both snapped).
-    // Show the centroids verbatim instead — identity map, so the preview SVG
-    // is left untouched and the chips list the image's real colours. Only
-    // snap when the operator opted to follow the pens.
-    if (!bitmapDraft.paletteFollowsPens.value) {
+    // "Fidèle à l'image": an image-clustering method (kmeans / kmeans_lab)
+    // renders the photo's OWN colours, not the pen rack — the method is
+    // authoritative, so show the centroids verbatim whatever the legacy
+    // follows-pens flag still says. Snapping them onto the owned pool here
+    // would silently override that choice with the few closest pens (the
+    // "mauvaises couleurs comme avant" report: both palette modes looked
+    // identical because both snapped). Identity map → the preview SVG is
+    // left untouched and the chips list the image's real colours. Only snap
+    // when the operator opted to follow the pens via a fixed_palette.
+    const method = bitmapDraft.bitmap.value.segmentation_method
+    const snapToPool =
+      bitmapDraft.paletteFollowsPens.value &&
+      (method === 'fixed_palette' || method === 'palette_dither')
+    if (!snapToPool) {
       const rows = livePalette.map((entry) => ({
         centroid: entry.color,
         ink: entry.color,
