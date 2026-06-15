@@ -9,7 +9,7 @@ import { useJobStore } from '../stores/job'
 import type { MachineProfile } from '../api/client'
 
 // Regression for "Impossible d'enregistrer le profil": changing the
-// pen-slot count (e.g. switching to the Mono card → 1) re-ran
+// pen-slot count (e.g. dropping a manual machine to a single holder) re-ran
 // ``normalizePens`` on the *reactive* draft, which re-inserted reactive
 // pen proxies into ``pens``. ``structuredClone`` then threw a
 // DataCloneError inside ``save()``, surfacing as the generic save-failed
@@ -81,10 +81,16 @@ describe('ProfileEditor save serialisation', () => {
     saved.length = 0
   })
 
-  it('saves after switching to Mono (pen count → 1)', async () => {
+  it('saves after dropping to a single holder (pen count → 1)', async () => {
     const wrapper = mountSeeded()
     await nextTick()
-    await wrapper.find('[data-test="color-mode-mono"]').trigger('click')
+    // Single-holder manual machine: the operator types 1 → the watcher
+    // re-runs normalizePens down to a single slot.
+    await wrapper.find('[data-test="color-mode-manual"]').trigger('click')
+    await nextTick()
+    const countInput = wrapper.find('[data-test="magazine-pen-count"] input')
+    await countInput.setValue('1')
+    await countInput.trigger('change')
     await nextTick()
     await clickSave(wrapper)
     expect(saved).toHaveLength(1)
@@ -94,9 +100,9 @@ describe('ProfileEditor save serialisation', () => {
   it('saves after raising the pen count (proxy reuse path)', async () => {
     const wrapper = mountSeeded()
     await nextTick()
-    // Firmware magazine keeps multiple pens; bump the count so the
-    // watcher re-runs normalizePens and retains existing slots.
-    await wrapper.find('[data-test="color-mode-firmware"]').trigger('click')
+    // Host magazine keeps multiple pens; bump the count so the watcher
+    // re-runs normalizePens and retains existing slots.
+    await wrapper.find('[data-test="color-mode-host"]').trigger('click')
     await nextTick()
     const countInput = wrapper.find('[data-test="magazine-pen-count"] input')
     await countInput.setValue('4')
