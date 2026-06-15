@@ -44,6 +44,10 @@ const props = defineProps<{
   loading: boolean
   /** True when the last render failed — surfaces a small message. */
   error: boolean
+  /** Specific failure reason (network / backend), appended after the
+   *  generic message when present. Optional — null shows the generic
+   *  text alone. */
+  errorMessage?: string | null
   /** Active sheet outline geometry, or null if no sheet is selected. */
   sheet: SheetOutlineShape | null
   /** Library file id of the active placement. When set AND a heavy
@@ -759,7 +763,8 @@ const displayPercent = computed<number>(() =>
         </div>
       </div>
       <p v-if="error" class="preview-error" data-test="modal-v2-preview-error">
-        {{ t('v2.modal.previewError') }}
+        {{ t('v2.modal.previewError')
+        }}<span v-if="errorMessage" class="preview-error__detail"> — {{ errorMessage }}</span>
       </p>
     </div>
 
@@ -1034,6 +1039,9 @@ const displayPercent = computed<number>(() =>
   border: 1px solid #b91c1c;
   padding: 0.35rem;
   border-radius: 4px;
+}
+.preview-error__detail {
+  opacity: 0.85;
 }
 .zoom {
   position: absolute;

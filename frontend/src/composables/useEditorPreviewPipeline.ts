@@ -20,13 +20,30 @@
 // for direct operator actions (mount, intent click) while still clearing
 // any pending debounced flush, so an immediate request can't race a
 // debounced one into a double render.
-import { ref, type ComputedRef, type Ref } from 'vue'
+import { computed, ref, type ComputedRef, type Ref } from 'vue'
 import { resolveAlgorithmPolicy } from '../domain/policy/client'
-import type { Goal, PaletteMode, PolicyDecision, PolicyPass, SourceKind } from '../domain/policy/schemas'
+import type {
+  Goal,
+  PaletteMode,
+  PolicyDecision,
+  PolicyPass,
+  SourceKind,
+} from '../domain/policy/schemas'
 import { errorMessage } from '../lib/errorMessage'
 import { useJobStore } from '../stores/job'
 
 export type PreviewInvalidation = 'render-only' | 'segment-and-render' | 'resolve-and-segment'
+
+// Single source of truth for "is the preview pipeline doing anything?".
+// The modal disables Generate for every non-terminal state so the operator
+// can't generate from a placement whose palette / segmentation / render
+// hasn't caught up with their last click (audit P0 §2).
+//   - ``idle``       : nothing in flight, the displayed render is current.
+//   - ``resolving``  : the policy resolver is running.
+//   - ``segmenting`` : re-uploading the placement to match the pool.
+//   - ``rendering``  : /rerender (or /preview) is producing the SVG.
+//   - ``error``      : the last flush failed; terminal until the next flush.
+export type PipelineStatus = 'idle' | 'resolving' | 'segmenting' | 'rendering' | 'error'
 
 const LEVEL_RANK: Record<PreviewInvalidation, number> = {
   'render-only': 0,
@@ -72,6 +89,21 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
   const renderedSvg = ref<string | null>(null)
   const previewLoading = ref(false)
   const previewError = ref(false)
+  // Specific reason the last preview (segment / render) failed — surfaced
+  // next to the generic "preview unavailable" message so a network drop
+  // during re-segmentation reads as more than a frozen spinner.
+  const previewErrorMessage = ref<string | null>(null)
+  // Explicit lifecycle status (see ``PipelineStatus``). Drives the modal's
+  // Generate-disabled guard so generation can't fire mid-pipeline.
+  const status = ref<PipelineStatus>('idle')
+  // True while the pipeline is mid-flight (resolving / segmenting /
+  // rendering). ``error`` and ``idle`` are both "safe to generate" terminal
+  // states — the operator can still generate from the last good placement
+  // even if the *preview* couldn't be refreshed.
+  const busy = computed(
+    () =>
+      status.value === 'resolving' || status.value === 'segmenting' || status.value === 'rendering',
+  )
 
   let controller: AbortController | null = null
   let pending: PreviewInvalidation | null = null
@@ -120,8 +152,11 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
           )
       if (c.signal.aborted) return
       renderedSvg.value = result ? result.svg : null
-    } catch {
-      if (!c.signal.aborted) previewError.value = true
+    } catch (err) {
+      if (!c.signal.aborted) {
+        previewError.value = true
+        previewErrorMessage.value = errorMessage(err)
+      }
     } finally {
       if (!c.signal.aborted) previewLoading.value = false
     }
@@ -138,43 +173,84 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
     const c = new AbortController()
     controller = c
 
-    if (level === 'resolve-and-segment') {
-      resolving.value = true
-      resolveError.value = null
-      previewError.value = false
-      try {
-        const d = await resolveAlgorithmPolicy({
-          source_kind: deps.sourceKind.value,
-          goal: deps.goal.value,
-          palette_mode: deps.paletteMode.value,
-          ...deps.resolveInputs(),
+    // Every phase below runs inside ONE try/finally so a throw from the
+    // resolver OR ``ensureSegmentation`` (network drop, backend 500 during
+    // re-upload) can never escape as an unhandled rejection or strand the
+    // ``resolving`` / ``previewLoading`` flags at ``true`` — that was the
+    // frozen-spinner / stuck-pipeline failure mode flagged in audit P0 §1.
+    try {
+      if (level === 'resolve-and-segment') {
+        status.value = 'resolving'
+        resolving.value = true
+        resolveError.value = null
+        previewError.value = false
+        previewErrorMessage.value = null
+        let resolved: PolicyDecision
+        try {
+          resolved = await resolveAlgorithmPolicy({
+            source_kind: deps.sourceKind.value,
+            goal: deps.goal.value,
+            palette_mode: deps.paletteMode.value,
+            ...deps.resolveInputs(),
+          })
+        } catch (err) {
+          // A resolver failure is reported on its own channel
+          // (``resolveError``) and aborts the flush before segmentation —
+          // the static defaults still let the operator generate.
+          if (!c.signal.aborted) {
+            resolveError.value = errorMessage(err)
+            status.value = 'error'
+          }
+          return
+        }
+        if (c.signal.aborted) return
+        decision.value = resolved
+        // Apply the decision's segmentation BEFORE rendering: /rerender only
+        // re-inks the clusters the original /upload produced.
+        status.value = 'segmenting'
+        await deps.ensureSegmentation(decision.value, c, () => {
+          previewLoading.value = true
         })
         if (c.signal.aborted) return
-        decision.value = d
-      } catch (err) {
-        resolveError.value = errorMessage(err)
-        resolving.value = false
-        return
+        status.value = 'rendering'
+        await render(c)
+      } else if (level === 'segment-and-render') {
+        if (!decision.value) return
+        previewError.value = false
+        previewErrorMessage.value = null
+        status.value = 'segmenting'
+        await deps.ensureSegmentation(decision.value, c, () => {
+          previewLoading.value = true
+        })
+        if (c.signal.aborted) return
+        status.value = 'rendering'
+        await render(c)
+      } else {
+        previewError.value = false
+        previewErrorMessage.value = null
+        status.value = 'rendering'
+        await render(c)
       }
-      resolving.value = false
-      // Apply the decision's segmentation BEFORE rendering: /rerender only
-      // re-inks the clusters the original /upload produced.
-      await deps.ensureSegmentation(decision.value, c, () => {
-        previewLoading.value = true
-      })
-      if (c.signal.aborted) return
-      await render(c)
-    } else if (level === 'segment-and-render') {
-      if (!decision.value) return
-      previewError.value = false
-      await deps.ensureSegmentation(decision.value, c, () => {
-        previewLoading.value = true
-      })
-      if (c.signal.aborted) return
-      await render(c)
-    } else {
-      previewError.value = false
-      await render(c)
+      // ``render`` swallows its own errors into ``previewError``; reflect
+      // that in the terminal status so a failed render still disables the
+      // "stale" spinner without claiming success.
+      if (!c.signal.aborted) status.value = previewError.value ? 'error' : 'idle'
+    } catch (err) {
+      // Reached only when ``ensureSegmentation`` throws (resolver errors
+      // return above, render errors are caught inside ``render``).
+      if (!c.signal.aborted) {
+        previewError.value = true
+        previewErrorMessage.value = errorMessage(err)
+        status.value = 'error'
+      }
+    } finally {
+      // Release the per-flush flags so a failed or short-circuited run never
+      // leaves a permanent spinner. A NEWER flush will have aborted this
+      // controller and owns its own flags, so we skip the reset then.
+      if (!c.signal.aborted) {
+        resolving.value = false
+        previewLoading.value = false
+      }
     }
   }
 
@@ -192,6 +268,9 @@ export function useEditorPreviewPipeline(deps: PreviewPipelineDeps) {
     renderedSvg,
     previewLoading,
     previewError,
+    previewErrorMessage,
+    status,
+    busy,
     schedule,
     flush,
     dispose,

@@ -151,6 +151,87 @@ describe('useEditorPreviewPipeline', () => {
     expect(render).not.toHaveBeenCalled()
   })
 
+  it('catches a segmentation error: surfaces it, clears the spinner, no unhandled rejection', async () => {
+    const render = stubRender()
+    const ensureSegmentation = vi.fn().mockImplementation(async (_d, _c, onUploadStart) => {
+      // Simulate ``ensureSelectedFile`` having flipped the spinner before
+      // the upload threw — the bug was this leaving previewLoading stuck.
+      onUploadStart()
+      throw new Error('upload failed')
+    })
+    const deps = makeDeps({ ensureSegmentation })
+    const pipe = useEditorPreviewPipeline(deps)
+
+    pipe.schedule('resolve-and-segment', { immediate: true })
+    await flushPromises()
+
+    expect(ensureSegmentation).toHaveBeenCalledTimes(1)
+    // Render never runs after a failed segmentation.
+    expect(render).not.toHaveBeenCalled()
+    // The error is surfaced and the pipeline lands in a terminal state with
+    // no lingering spinner.
+    expect(pipe.previewError.value).toBe(true)
+    expect(pipe.previewErrorMessage.value).toBe('upload failed')
+    expect(pipe.status.value).toBe('error')
+    expect(pipe.previewLoading.value).toBe(false)
+    expect(pipe.resolving.value).toBe(false)
+    expect(pipe.busy.value).toBe(false)
+  })
+
+  it('a later flush after a segmentation error recovers (status back to idle)', async () => {
+    const render = stubRender()
+    const ensureSegmentation = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValue(undefined)
+    const pipe = useEditorPreviewPipeline(makeDeps({ ensureSegmentation }))
+
+    pipe.schedule('resolve-and-segment', { immediate: true })
+    await flushPromises()
+    expect(pipe.status.value).toBe('error')
+
+    pipe.schedule('resolve-and-segment', { immediate: true })
+    await flushPromises()
+    expect(pipe.previewError.value).toBe(false)
+    expect(pipe.status.value).toBe('idle')
+    expect(render).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not surface a segmentation error when the flush was aborted', async () => {
+    stubRender()
+    let rejectSeg!: (e: Error) => void
+    const ensureSegmentation = vi.fn().mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSeg = reject
+        }),
+    )
+    const pipe = useEditorPreviewPipeline(makeDeps({ ensureSegmentation }))
+
+    pipe.schedule('resolve-and-segment', { immediate: true })
+    await flushPromises() // resolve done, awaiting segmentation
+    // A newer immediate flush aborts the first controller, then the first
+    // segmentation rejects — it must NOT paint an error over the new run.
+    pipe.schedule('resolve-and-segment', { immediate: true })
+    rejectSeg(new Error('stale failure'))
+    await flushPromises()
+
+    expect(pipe.previewError.value).toBe(false)
+    expect(pipe.previewErrorMessage.value).toBeNull()
+  })
+
+  it('returns to an idle, not-busy status after a successful flush', async () => {
+    stubRender()
+    const pipe = useEditorPreviewPipeline(makeDeps())
+    expect(pipe.status.value).toBe('idle')
+
+    pipe.schedule('resolve-and-segment', { immediate: true })
+    await flushPromises()
+
+    expect(pipe.status.value).toBe('idle')
+    expect(pipe.busy.value).toBe(false)
+  })
+
   it('dispose() cancels a pending debounced flush', async () => {
     const render = stubRender()
     const pipe = useEditorPreviewPipeline(makeDeps())

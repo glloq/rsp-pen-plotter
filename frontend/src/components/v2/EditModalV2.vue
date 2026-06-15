@@ -1,18 +1,21 @@
 <script setup lang="ts">
-// Modal V2 — beginner editor (assisted mode).
+// Modal V2 — the editor (the only editor surface since the v0.2 migration).
 //
 // Single-screen, zero-mandatory-step flow (roadmap C.2 / audit #7 §3,
 // simplified per operator feedback "encore plus simple, preview rapide
-// adaptée, un minimum d'interactions"). Lives **in parallel** with the
-// expert EditModal.vue and is gated by the assisted UX mode.
+// adaptée, un minimum d'interactions"). Hosts BOTH modes directly,
+// switched by the global UX mode (``uiMode``):
+//   - ASSISTED: intent + palette + a small custom-style stack
+//     (EditorAssistedPanel).
+//   - EXPERT:   the Image / SVG / Style / Text / Layers tab strip
+//     (EditorExpertPanel, lazy-loaded).
 //
-// The whole decision (source kind, palette, algorithm, layers) is
-// resolved automatically from the placement + a single "intent" choice
-// (Rapide / Équilibré / Qualité, défaut Équilibré). The operator sees a
-// large LIVE preview of the real plotted result — re-rendered through
-// the same ``/rerender`` endpoint "Generate" uses — and commits in one
-// click. Power-user details (algorithme, couches, raisonnement) move to
-// the full editor, reachable via "Ouvrir l'éditeur complet".
+// In assisted mode the whole decision (source kind, palette, algorithm,
+// layers) is resolved automatically from the placement + a single "intent"
+// choice (Rapide / Équilibré / Qualité, défaut Équilibré). The operator
+// sees a large LIVE preview of the real plotted result — re-rendered
+// through the same ``/rerender`` endpoint "Generate" uses — and commits in
+// one click. "Ouvrir l'éditeur complet" flips to expert mode in place.
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -25,6 +28,7 @@ import type {
   PolicyPass,
   SourceKind,
 } from '../../domain/policy/schemas'
+import { errorMessage } from '../../lib/errorMessage'
 import { assignPoolHexes } from '../../lib/nearestColor'
 import { recolorPreviewSvg } from '../../lib/previewRecolor'
 import { useAvailableColorsStore } from '../../stores/availableColors'
@@ -40,6 +44,7 @@ import { useFileManager } from '../../composables/useFileManager'
 import { useEditorPaletteSegmentation } from '../../composables/useEditorPaletteSegmentation'
 import { useEditorPreviewPipeline } from '../../composables/useEditorPreviewPipeline'
 import { useEditorConfirmation } from '../../composables/useEditorConfirmation'
+import { useEditorCloseGuard } from '../../composables/useEditorCloseGuard'
 import { useEditorPreflight } from '../../composables/useEditorPreflight'
 import { useEditorOnboarding } from '../../composables/useEditorOnboarding'
 import { useEditorDialogAccessibility } from '../../composables/useEditorDialogAccessibility'
@@ -174,9 +179,15 @@ function selectGoal(g: Goal): void {
   schedule('resolve-and-segment', { immediate: true })
 }
 
+// Surfaced when a palette switch fails to persist — keeps the toggle and
+// the rendered preview honest by rolling the local mode back to whatever
+// actually landed in the store.
+const paletteError = ref<string | null>(null)
 async function selectPalette(mode: PaletteMode): Promise<void> {
   if (paletteMode.value === mode && decision.value) return
+  const previousMode = paletteMode.value
   paletteMode.value = mode
+  paletteError.value = null
   // Mirror to the global palette source so the job store's resnap
   // watcher refreshes each layer's ``assigned_color_hex`` against the
   // pool the operator just picked. The preview call below then sends
@@ -190,9 +201,18 @@ async function selectPalette(mode: PaletteMode): Promise<void> {
   // colours outside the list the operator curated ("ça me donne des
   // couleurs en dehors des couleurs dispo"). Union stays the fallback
   // when the inventory is empty so the button is never a no-op.
-  await paletteSource.update(
-    mode === 'machine_only' ? 'pens' : availableColors.ordered.length > 0 ? 'available' : 'union',
-  )
+  try {
+    await paletteSource.update(
+      mode === 'machine_only' ? 'pens' : availableColors.ordered.length > 0 ? 'available' : 'union',
+    )
+  } catch (err) {
+    // The store didn't switch pools — restore the toggle so the UI doesn't
+    // advertise a palette the segmentation isn't actually using, and tell
+    // the operator why. No resolve is scheduled (nothing changed).
+    paletteMode.value = previousMode
+    paletteError.value = errorMessage(err)
+    return
+  }
   await nextTick()
   // Resolve immediately: the ``effectivePool`` watcher also fires from the
   // source change above, but ``schedule`` clears its pending debounce so
@@ -416,9 +436,9 @@ function toggleLayerVisibility(layerId: string): void {
 // ============================ EXPERT MODE ==============================
 // "Ouvrir l'éditeur complet" promise from the design notes (top of file).
 // Switches the global UX mode to expert; the AssistantModeToggle in the
-// header reflects the change immediately. The modal stays open so the
-// operator doesn't lose their place — future iterations will swap the
-// inner UI to the expert layout based on ``uiMode.isExpert``.
+// header reflects the change immediately. The modal stays open and swaps
+// its controls block to the expert tab strip (EditorExpertPanel) based on
+// ``uiMode.isExpert`` — the preview pane stays mounted across the switch.
 function openExpertEditor(): void {
   uiMode.setMode('expert')
 }
@@ -470,8 +490,16 @@ const pipeline = useEditorPreviewPipeline({
       ? Promise.resolve()
       : ensureSegmentationMatchesDecision(decision, controller, onUploadStart),
 })
-const { decision, resolving, resolveError, renderedSvg, previewLoading, previewError, schedule } =
-  pipeline
+const {
+  decision,
+  resolveError,
+  renderedSvg,
+  previewLoading,
+  previewError,
+  previewErrorMessage,
+  busy: pipelineBusy,
+  schedule,
+} = pipeline
 
 // Inventory edits / palette-source flips while the modal is open move the
 // pool under the decision — re-resolve so the chips and the render keep
@@ -533,7 +561,13 @@ const draftDirty = bitmapDraft.isDirty
 // Race-safe Generate: in expert mode this awaits the dirty-draft upload
 // before emitting ``confirm`` so the parent never generates from the
 // pre-apply SVG. Owns ``applying`` / ``applyError`` (read by the footer).
-const { applying, applyError, applyExpertDraft, confirm } = useEditorConfirmation({
+const {
+  applying,
+  applyError,
+  applyExpertDraft,
+  confirm,
+  dispose: disposeConfirmation,
+} = useEditorConfirmation({
   isExpert: computed(() => uiMode.isExpert),
   hasPlacement,
   decision,
@@ -542,6 +576,27 @@ const { applying, applyError, applyExpertDraft, confirm } = useEditorConfirmatio
   customPasses,
   fileManager,
   onConfirm: (d) => emit('confirm', d),
+})
+
+// Single close gate (header ✕, footer Annuler, backdrop, Escape all route
+// here). Blocks closing while an expert apply is committing and confirms
+// before discarding an unsaved expert draft. ``window.confirm`` is the same
+// affordance the colours panel uses for destructive actions.
+//
+// Gated on EXPERT mode: the shared bitmap draft reads "dirty" by default
+// until an upload pins its baseline (``markCommitted``), and the assisted
+// wizard never edits that draft — so confirming on an assisted-mode close
+// would nag the operator about changes they never made. Only the expert
+// tabs surface the draft, so only an expert close can lose real work.
+const hasUnsavedExpertDraft = computed(() => uiMode.isExpert && bitmapDraft.isDirty.value)
+const { requestClose } = useEditorCloseGuard({
+  applying,
+  isDirty: hasUnsavedExpertDraft,
+  // Defensive ``typeof`` guard: ``window.confirm`` is absent in some test
+  // DOMs; treat "no dialog available" as "proceed" rather than throwing.
+  confirmDiscard: () =>
+    typeof window.confirm === 'function' ? window.confirm(t('v2.modal.discardConfirm')) : true,
+  onClose: () => emit('cancel'),
 })
 
 // The Text tab is offered for every source that carries text — pure
@@ -699,7 +754,9 @@ useKeyboardShortcuts([
   {
     id: 'modal.next',
     handler: () => {
-      if (!resolving.value && decision.value) confirm()
+      // Mirror the footer's Generate guard: never fire mid-pipeline or
+      // mid-apply, only when there's a decision to generate from.
+      if (!pipelineBusy.value && !applying.value && decision.value) confirm()
     },
   },
 ])
@@ -710,7 +767,7 @@ useKeyboardShortcuts([
 const dialogRoot = ref<HTMLElement | null>(null)
 const a11y = useEditorDialogAccessibility({
   dialogRoot,
-  onEscape: () => emit('cancel'),
+  onEscape: () => requestClose(),
 })
 
 onMounted(async () => {
@@ -745,6 +802,9 @@ onBeforeUnmount(() => {
   a11y.deactivate()
   // Tears down the single preview timer + aborts any in-flight request.
   pipeline.dispose()
+  // Mark the confirmation disposed so an expert upload that's still in
+  // flight can't emit ``confirm`` from this now-unmounted modal.
+  disposeConfirmation()
 })
 
 // If the source kind changes (parent swaps file without remount), redo
@@ -767,7 +827,7 @@ watch(
     class="modal-v2__backdrop"
     role="presentation"
     data-test="modal-v2-backdrop"
-    @click.self="emit('cancel')"
+    @click.self="requestClose"
   >
     <div
       ref="dialogRoot"
@@ -785,7 +845,7 @@ watch(
         :estimated-length-mm="estimatedLengthMm"
         :required-pen-count="requiredPenCount"
         :is-expert="uiMode.isExpert"
-        @close="emit('cancel')"
+        @close="requestClose"
       />
 
       <!-- No placement: explain how to get one, lock Generate. -->
@@ -842,6 +902,7 @@ watch(
               :source-image-url="sourceImageUrl"
               :loading="effectivePreviewLoading"
               :error="previewError"
+              :error-message="previewErrorMessage"
               :sheet="sheetOutline"
               :estimate-ms="previewEstimateMs"
               :stream-file-id="job.selectedPlacement?.library_file_id ?? null"
@@ -996,6 +1057,11 @@ watch(
             <p v-if="resolveError" class="error" data-test="modal-v2-resolve-error">
               {{ t('v2.modal.resolverError', { message: resolveError }) }}
             </p>
+            <!-- Palette switch failed to persist — the toggle has rolled
+             back to the pool actually in use; tell the operator why. -->
+            <p v-if="paletteError" class="error" data-test="modal-v2-palette-error">
+              {{ t('v2.modal.paletteError', { message: paletteError }) }}
+            </p>
           </div>
           <!-- end controls block -->
         </div>
@@ -1009,8 +1075,8 @@ watch(
         :is-dirty="draftDirty"
         :has-placement="hasPlacement"
         :applying="applying"
-        :generate-disabled="!decision || !hasPlacement || resolving || applying"
-        @cancel="emit('cancel')"
+        :generate-disabled="!decision || !hasPlacement || pipelineBusy || applying"
+        @cancel="requestClose"
         @open-expert="openExpertEditor"
         @apply="applyExpertDraft"
         @generate="confirm"

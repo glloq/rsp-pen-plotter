@@ -131,6 +131,39 @@ describe('useEditorConfirmation', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 
+  it('does not emit confirm if the modal is disposed while the upload is in flight', async () => {
+    let resolveUpload!: () => void
+    const uploadSelected = vi.fn().mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveUpload = resolve
+      }),
+    )
+    const { conf, onConfirm } = setup({
+      isExpert: ref(true),
+      isDirty: ref(true),
+      fileManager: { uploadSelected },
+    })
+
+    const done = conf.confirm()
+    await Promise.resolve()
+    expect(conf.applying.value).toBe(true)
+    // Operator closes the modal mid-upload → host calls dispose().
+    conf.dispose()
+    resolveUpload()
+    await done
+
+    // The upload completed but confirm must NOT fire from the closed modal.
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
+  it('bails immediately when confirm is called after dispose', async () => {
+    const { conf, onConfirm, uploadSelected } = setup()
+    conf.dispose()
+    await conf.confirm()
+    expect(uploadSelected).not.toHaveBeenCalled()
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
+
   it('expert isExpert reacts to a live ref (computed expert flag)', async () => {
     const mode = ref<'assisted' | 'expert'>('assisted')
     const uploadSelected = vi.fn().mockResolvedValue(undefined)
