@@ -15,6 +15,7 @@ import { useEstimatedProgress } from '../../composables/useEstimatedProgress'
 import { useProgressiveStream } from '../../composables/useProgressiveStream'
 import { applyPreviewStrokeFloor } from '../../lib/previewStrokeFloor'
 import { useEditorPreviewZoomPan } from '../../composables/useEditorPreviewZoomPan'
+import { useEditorPreviewSplit } from '../../composables/useEditorPreviewSplit'
 import { useJobStore } from '../../stores/job'
 import SafeSvgHtml from './SafeSvgHtml.vue'
 
@@ -226,68 +227,11 @@ const artworkStyle = computed<{ width: string; height: string } | null>(() => {
 // source preview (left half) and the converted result (right half).
 // V2 inherits the same mechanic so the operator can verify what the
 // algorithm did to the photo without leaving the modal.
-const splitPercent = ref<number>(50)
-const splitDragging = ref<boolean>(false)
-// We measure against the SHEET, not the pane, because the handle's
-// ``left: ${splitPercent}%`` is relative to the sheet outline (which
-// is what contains the artwork). Using the pane rect made the handle
-// jump under the pointer when the sheet wasn't pane-wide.
-let splitSheetRect: DOMRect | null = null
-
-function onSplitGrab(event: PointerEvent): void {
-  const sheet = (event.currentTarget as HTMLElement).closest('.sheet-outline') as HTMLElement | null
-  if (!sheet) return
-  event.stopPropagation()
-  event.preventDefault()
-  splitDragging.value = true
-  splitSheetRect = sheet.getBoundingClientRect()
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-  updateSplit(event)
-}
-function onSplitMove(event: PointerEvent): void {
-  if (!splitDragging.value) return
-  updateSplit(event)
-}
-function onSplitRelease(event: PointerEvent): void {
-  if (!splitDragging.value) return
-  splitDragging.value = false
-  splitSheetRect = null
-  ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
-}
-function updateSplit(event: PointerEvent): void {
-  if (!splitSheetRect) return
-  const x = event.clientX - splitSheetRect.left
-  const pct = (x / splitSheetRect.width) * 100
-  splitPercent.value = Math.max(0, Math.min(100, pct))
-}
-
-// Reset to 50/50 when switching INTO split mode so the operator gets a
-// clean fresh sweep instead of inheriting wherever the last drag ended
-// (often 0 % or 100 %, which hides one side entirely).
-watch(viewMode, (next, prev) => {
-  if (next === 'split' && prev !== 'split') splitPercent.value = 50
-})
-
-// Clip-paths for the split mode: the plot SVG is revealed from the
-// right edge inward to ``splitPercent``; the source SVG is shown only
-// in the complementary left band. Implemented with ``clip-path`` so
-// each half stays at full opacity and stacking is just z-order.
-//
-// The handle's ``left`` is a percentage of the SHEET, but the clip
-// paths apply to the artwork layers inside the (top-left anchored,
-// possibly smaller) artwork box — so the handle position has to be
-// converted from sheet space into artwork space before clipping.
-// Without the conversion the visible cut line only tracked the handle
-// when the artwork happened to fill the sheet exactly (oversized
-// drawings on A5/A6); on bigger formats it drifted away from the
-// handle, which read as a broken slider.
-const splitArtworkPercent = computed<number>(() => {
-  const f = artworkFraction.value
-  if (!f || f.w <= 0) return splitPercent.value
-  return Math.max(0, Math.min(100, splitPercent.value / f.w))
-})
-const splitPlotClip = computed<string>(() => `inset(0 0 0 ${splitArtworkPercent.value}%)`)
-const splitSourceClip = computed<string>(() => `inset(0 ${100 - splitArtworkPercent.value}% 0 0)`)
+// Compare (split) slider — the draggable reveal handle + its clip-paths.
+// Owned by ``useEditorPreviewSplit`` (sheet-space pointer → artwork-space
+// clip conversion lives there); resets to 50/50 on entering split mode.
+const { splitPercent, onSplitGrab, onSplitMove, onSplitRelease, splitPlotClip, splitSourceClip } =
+  useEditorPreviewSplit({ viewMode, artworkFraction })
 
 onMounted(() => {
   if (!paneEl.value || typeof ResizeObserver === 'undefined') return
