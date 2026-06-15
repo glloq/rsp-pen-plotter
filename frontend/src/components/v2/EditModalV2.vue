@@ -19,10 +19,11 @@
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { type LayerInfo } from '../../api/client'
+import { type ColorAssignment, type LayerInfo } from '../../api/client'
 import { useKeyboardShortcuts } from '../../composables/useKeyboardShortcuts'
 import type { Goal, PaletteMode, PolicyDecision, SourceKind } from '../../domain/policy/schemas'
 import { errorMessage } from '../../lib/errorMessage'
+import { resolveEffectivePalette } from '../../lib/effectivePalette'
 import { useAvailableColorsStore } from '../../stores/availableColors'
 import { usePaletteSourceStore } from '../../stores/paletteSource'
 import { useUiStore } from '../../stores/ui'
@@ -239,11 +240,9 @@ function isLayerVisible(layerId: string): boolean {
   return job.isVisible(layerId)
 }
 function toggleLayerVisibility(layerId: string): void {
-  // Live /preview palette entries carry synthesised ids ("preview-N-…")
-  // because the response doesn't enumerate layers. They aren't real
-  // placement layers so the visibility map can't act on them — skip
-  // the toggle rather than write a phantom key the rest of the store
-  // would never read.
+  // Live /preview clusters with no committed layer carry synthesised ids
+  // ("preview-N-…"). They aren't real placement layers so the visibility
+  // map can't act on them — skip rather than write a phantom key.
   if (layerId.startsWith('preview-')) return
   const next = !isLayerVisible(layerId)
   job.setVisibility(layerId, next)
@@ -253,6 +252,49 @@ function toggleLayerVisibility(layerId: string): void {
   // regardless, so a round-trip here would change nothing on screen).
   // The visibility flag is still persisted to the variant via
   // ``setVisibility`` so Generate honours it.
+}
+
+// ============================ COLOUR ASSIGNMENT ========================
+// The assign-colour popover on each ink chip writes the layer's assigned
+// ink straight to the job store — the same path LayerCard's
+// AssignedColorPicker uses. In assisted mode the layer-assignment watcher
+// (below) re-renders through /rerender; in expert mode ``previewInkSnap``
+// re-reads the layer and recolours the live preview SVG, so the chip and
+// preview stay in lockstep without a round-trip.
+const installedPenColors = computed<string[]>(() =>
+  (job.selectedProfile?.pens ?? [])
+    .filter((p) => p.installed && p.color)
+    .map((p) => p.color),
+)
+// Auto-snap pool ("↻ auto") — the source-driven palette. ``effectivePool``
+// is already exactly this, exposed by the segmentation composable below.
+// Manual-pick strip — the FULL magazine ∪ inventory, regardless of the
+// global palette source, so an explicit override offers every owned ink
+// (not just the magazine). Mirrors LayerCard's ``pickerPalette``.
+const assignPickerPalette = computed<string[]>(() =>
+  resolveEffectivePalette(
+    'union',
+    installedPenColors.value,
+    availableColors.ordered.map((c) => c.hex),
+  ),
+)
+function onLayerColorPick(payload: {
+  layerId: string
+  hex: string
+  assignment: ColorAssignment
+}): void {
+  if (payload.layerId.startsWith('preview-')) return
+  job.updateLayer(payload.layerId, {
+    assigned_color_hex: payload.hex,
+    color_assignment: payload.assignment,
+  })
+}
+function onLayerColorReset(payload: { layerId: string; hex: string | null }): void {
+  if (payload.layerId.startsWith('preview-')) return
+  job.updateLayer(payload.layerId, {
+    assigned_color_hex: payload.hex,
+    color_assignment: 'auto',
+  })
 }
 
 // =========================================================================
@@ -707,8 +749,12 @@ watch(
             <EditorInkPanel
               :swatches="inkSwatches"
               :is-visible="isLayerVisible"
+              :effective-palette="effectivePool"
+              :picker-palette="assignPickerPalette"
               @toggle="toggleLayerVisibility"
               @load-ink="openMagazine"
+              @pick="onLayerColorPick"
+              @reset="onLayerColorReset"
             />
           </div>
           <!-- end preview block -->
