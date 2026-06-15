@@ -147,8 +147,13 @@ describe('useEditorPreviewPipeline', () => {
 
     expect(pipe.resolveError.value).toBe('boom')
     expect(pipe.resolving.value).toBe(false)
+    expect(pipe.status.value).toBe('resolver-error')
     expect(deps.ensureSegmentation).not.toHaveBeenCalled()
     expect(render).not.toHaveBeenCalled()
+    // A resolver error keeps the previous decision intact, so generating from
+    // the last good decision stays allowed (the modal's own decision-null
+    // check is what gates the very first resolve).
+    expect(pipe.canGenerate.value).toBe(true)
   })
 
   it('catches a segmentation error: surfaces it, clears the spinner, no unhandled rejection', async () => {
@@ -172,10 +177,13 @@ describe('useEditorPreviewPipeline', () => {
     // no lingering spinner.
     expect(pipe.previewError.value).toBe(true)
     expect(pipe.previewErrorMessage.value).toBe('upload failed')
-    expect(pipe.status.value).toBe('error')
+    expect(pipe.status.value).toBe('segmentation-error')
     expect(pipe.previewLoading.value).toBe(false)
     expect(pipe.resolving.value).toBe(false)
     expect(pipe.busy.value).toBe(false)
+    // A segmentation error leaves the placement out of sync with the freshly
+    // resolved decision — Generate must stay blocked (audit P1).
+    expect(pipe.canGenerate.value).toBe(false)
   })
 
   it('a later flush after a segmentation error recovers (status back to idle)', async () => {
@@ -188,12 +196,13 @@ describe('useEditorPreviewPipeline', () => {
 
     pipe.schedule('resolve-and-segment', { immediate: true })
     await flushPromises()
-    expect(pipe.status.value).toBe('error')
+    expect(pipe.status.value).toBe('segmentation-error')
 
     pipe.schedule('resolve-and-segment', { immediate: true })
     await flushPromises()
     expect(pipe.previewError.value).toBe(false)
     expect(pipe.status.value).toBe('idle')
+    expect(pipe.canGenerate.value).toBe(true)
     expect(render).toHaveBeenCalledTimes(1)
   })
 
@@ -229,6 +238,51 @@ describe('useEditorPreviewPipeline', () => {
     await flushPromises()
 
     expect(pipe.status.value).toBe('idle')
+    expect(pipe.busy.value).toBe(false)
+  })
+
+  it('is busy (Generate locked) during the debounce window before a flush fires', async () => {
+    stubRender()
+    const pipe = useEditorPreviewPipeline(makeDeps())
+    expect(pipe.busy.value).toBe(false)
+    expect(pipe.canGenerate.value).toBe(true)
+
+    // A debounced schedule (ink / style / size tweak) must lock Generate
+    // *immediately*, not only once flush() starts — otherwise the operator
+    // can generate against a preview that hasn't begun catching up (audit P1).
+    pipe.schedule('render-only')
+    expect(pipe.busy.value).toBe(true)
+    expect(pipe.canGenerate.value).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(300)
+    await flushPromises()
+    expect(pipe.busy.value).toBe(false)
+    expect(pipe.canGenerate.value).toBe(true)
+  })
+
+  it('a render error stays generate-safe (placement still matches the decision)', async () => {
+    const job = useJobStore()
+    vi.spyOn(job, 'previewAlgorithmOnAllLayers').mockRejectedValue(new Error('render down'))
+    const pipe = useEditorPreviewPipeline(makeDeps())
+
+    pipe.schedule('resolve-and-segment', { immediate: true })
+    await flushPromises()
+
+    // Segmentation landed; only the preview render failed — the placement is
+    // consistent with the decision, so generating from it is still allowed.
+    expect(pipe.previewError.value).toBe(true)
+    expect(pipe.status.value).toBe('render-error')
+    expect(pipe.busy.value).toBe(false)
+    expect(pipe.canGenerate.value).toBe(true)
+  })
+
+  it('dispose() clears the pending level so a torn-down pipeline reads not-busy', async () => {
+    stubRender()
+    const pipe = useEditorPreviewPipeline(makeDeps())
+
+    pipe.schedule('render-only') // debounced, queues a pending level
+    expect(pipe.busy.value).toBe(true)
+    pipe.dispose()
     expect(pipe.busy.value).toBe(false)
   })
 

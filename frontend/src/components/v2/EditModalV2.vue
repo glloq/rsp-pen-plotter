@@ -317,7 +317,7 @@ const {
   previewLoading,
   previewError,
   previewErrorMessage,
-  busy: pipelineBusy,
+  canGenerate,
   schedule,
 } = pipeline
 
@@ -397,8 +397,13 @@ const {
 
 // The single header "save the print style" button is locked until there's
 // a decision to commit and nothing is in flight (resolve or expert apply).
+// ``canGenerate`` already folds in the pipeline's busy state *and* the
+// segmentation-error block + the debounce-pending window, so the operator
+// can't commit from a placement that's out of sync with the displayed
+// decision (audit P1). The decision / placement / applying checks stay
+// explicit here.
 const saveDisabled = computed(
-  () => !decision.value || !hasPlacement.value || pipelineBusy.value || applying.value,
+  () => !decision.value || !hasPlacement.value || !canGenerate.value || applying.value,
 )
 
 // Single close gate (header ✕, backdrop, Escape all route
@@ -501,9 +506,10 @@ useKeyboardShortcuts([
   {
     id: 'modal.next',
     handler: () => {
-      // Mirror the footer's Generate guard: never fire mid-pipeline or
-      // mid-apply, only when there's a decision to generate from.
-      if (!pipelineBusy.value && !applying.value && decision.value) confirm()
+      // Mirror the footer's Generate guard: never fire mid-pipeline, during
+      // the debounce window, after a segmentation error, or mid-apply — only
+      // when there's a decision to generate from.
+      if (canGenerate.value && !applying.value && decision.value) confirm()
     },
   },
 ])
