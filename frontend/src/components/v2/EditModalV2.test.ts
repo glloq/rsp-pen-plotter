@@ -772,4 +772,80 @@ describe('EditModalV2 (beginner single-screen)', () => {
     await flushPromises()
     expect(wrapper.find('[role="tablist"]').exists()).toBe(true)
   })
+
+  // ---- Assisted parcours (integration) ------------------------------------
+  // End-to-end-ish coverage of the headline assisted flow the audit's
+  // Phase 3 calls for, driven through the real modal + stores (the browser
+  // E2E equivalent needs a backend + Playwright browser).
+
+  it('full assisted parcours: pick intent, switch palette, then Generate emits the latest decision', async () => {
+    const { usePaletteSourceStore } = await import('../../stores/paletteSource')
+    usePaletteSourceStore().source = 'pens'
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    // Pick the "fast" intent.
+    await wrapper.find('[data-test="intent-fast"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="intent-fast"]').classes()).toContain('active')
+
+    // Switch to the free palette.
+    await wrapper.find('[data-test="palette-free"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="palette-free"]').classes()).toContain('active')
+
+    // The last resolve must carry BOTH the chosen goal and palette.
+    expect(api.post).toHaveBeenLastCalledWith(
+      '/policy/resolve',
+      expect.objectContaining({ goal: 'fast', palette_mode: 'free' }),
+    )
+
+    // Generate emits the resolved decision.
+    const confirm = wrapper.find('[data-test="confirm-button"]')
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(false)
+    await confirm.trigger('click')
+    expect(wrapper.emitted('confirm')?.[0]?.[0]).toMatchObject({ default_algorithm: 'scanlines' })
+  })
+
+  it('rapid intent changes settle on the last choice (one decision generated)', async () => {
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    // Fire three intents back-to-back; each immediate schedule aborts the
+    // previous in-flight flush, so the pipeline settles on the last one.
+    await wrapper.find('[data-test="intent-fast"]').trigger('click')
+    await wrapper.find('[data-test="intent-balanced"]').trigger('click')
+    await wrapper.find('[data-test="intent-quality"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="intent-quality"]').classes()).toContain('active')
+    expect(api.post).toHaveBeenLastCalledWith(
+      '/policy/resolve',
+      expect.objectContaining({ goal: 'quality' }),
+    )
+    // Generate is enabled and emits exactly once.
+    await wrapper.find('[data-test="confirm-button"]').trigger('click')
+    expect(wrapper.emitted('confirm')).toHaveLength(1)
+  })
+
+  it('keeps Generate locked while the resolve is still in flight', async () => {
+    // Hold the resolver so the pipeline stays in its non-terminal state;
+    // Generate must stay disabled until the decision lands (audit P0 §2).
+    let resolveResolve!: (v: unknown) => void
+    vi.mocked(api.post).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveResolve = () => resolve({ data: validDecision })
+        }),
+    )
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await nextTick()
+
+    const confirm = wrapper.find('[data-test="confirm-button"]')
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(true)
+
+    resolveResolve({ data: validDecision })
+    await flushPromises()
+    expect((confirm.element as HTMLButtonElement).disabled).toBe(false)
+  })
 })
