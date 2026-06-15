@@ -2900,7 +2900,7 @@ export interface components {
              * @default 1
              */
             layer_count_estimate: number;
-            /** @default machine_only */
+            /** @default union */
             palette_mode: components["schemas"]["PaletteMode"];
             source_kind: components["schemas"]["SourceKind"];
         };

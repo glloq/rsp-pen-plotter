@@ -43,16 +43,11 @@ def apply(
     """
     hits: list[ConstraintHit] = []
 
-    if inp.is_mono_pen_machine:
-        hits.append(
-            ConstraintHit(
-                constraint="mono_pen_machine",
-                description=(
-                    "Machine mono-pen : la séparation couleur est désactivée, "
-                    "les variantes de densité/passes sont utilisées à la place."
-                ),
-            )
-        )
+    # NOTE: mono-pen (single-holder) machines used to force the colour
+    # separation off here. They no longer do — a single-holder machine
+    # draws a multi-colour file by swapping the pen at each colour change
+    # (prompted by the load modal / mid-print pauses), so the palette is
+    # chosen the same way as for a magazine machine.
 
     too_big = (
         inp.image_megapixels is not None

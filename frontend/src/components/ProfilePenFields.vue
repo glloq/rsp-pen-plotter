@@ -8,15 +8,22 @@
 // pauses are placed + back-compat YAML export). The two must never
 // disagree, so every mode change goes through ``setMode``.
 //
-// Four modes, mapped to capability ToolingMode + legacy method:
-//   - mono     → single_pen / none         (one pen, no swap)
-//   - manual   → manual     / manual_pause (operator swaps by hand)
-//   - firmware → firmware   / carousel     (plotter swaps on one G-code command)
-//   - host     → host_macro / rack         (the Pi emits a G-code sequence)
+// Two modes, mapped to capability ToolingMode + legacy method:
+//   - manual → manual     / manual_pause (operator swaps by hand —
+//                                         single holder OR hand-served
+//                                         magazine, pauses per swap)
+//   - host   → host_macro / rack         (the Pi drives the magazine
+//                                         via a G-code sequence)
+//
+// The automatic firmware-magazine mode (carousel) and the dedicated
+// mono-pen mode have been retired: a single-holder machine is just a
+// manual machine with one slot, and colour changes are always operator-
+// driven (load modal at launch + mid-print swap prompts) rather than
+// delegated to the controller's firmware. Legacy profiles saved with
+// those methods still load — they map onto the closest surviving mode.
 //
 // Per-pen colours / slots live in the Couleurs tab; this fieldset only
-// owns the swap strategy + magazine size + the firmware trigger or the
-// host macro sequence.
+// owns the swap strategy + magazine size + the host macro sequence.
 //
 // Receives the draft profile via v-model so the parent stays the single
 // owner of editable state; Vue allows mutating nested fields through a
@@ -45,7 +52,7 @@ const props = defineProps<{
 // carousel exceeds this.
 const MAX_PEN_SLOTS = 64
 
-type ColorMode = 'mono' | 'manual' | 'firmware' | 'host'
+type ColorMode = 'manual' | 'host'
 
 interface ModeSpec {
   id: ColorMode
@@ -56,27 +63,27 @@ interface ModeSpec {
 }
 
 const modes: ModeSpec[] = [
-  { id: 'mono', method: 'none', tooling: 'single_pen', source: 'machine', icon: '✏️' },
   { id: 'manual', method: 'manual_pause', tooling: 'manual', source: 'operator', icon: '✋' },
-  { id: 'firmware', method: 'carousel', tooling: 'firmware', source: 'machine', icon: '🎡' },
   { id: 'host', method: 'rack', tooling: 'host_macro', source: 'host', icon: '🤖' },
 ]
 
 // Capabilities is the source of truth for the mode; fall back to the
-// legacy field for profiles untouched since migration.
+// legacy field for profiles untouched since migration. Retired methods
+// map onto the closest surviving mode so old YAML still opens without a
+// dangling selection: the firmware magazine (carousel) becomes the
+// host-driven magazine, and the dedicated mono-pen mode becomes a
+// single-holder manual machine.
 const colorMode = computed<ColorMode>(() => {
   const tooling = props.draft.capabilities?.tool_change.mode
   const byTooling = modes.find((m) => m.tooling === tooling)
   if (byTooling) return byTooling.id
   switch (props.draft.tool_change_method) {
-    case 'none':
-      return 'mono'
-    case 'manual_pause':
-      return 'manual'
     case 'rack':
+    case 'carousel':
       return 'host'
     default:
-      return 'firmware'
+      // manual_pause, none (legacy mono), or anything unknown.
+      return 'manual'
   }
 })
 
@@ -481,18 +488,12 @@ function clampPenCount(): void {
   const n = Math.floor(props.draft.pen_slot_count)
   // Manual machines can run a SINGLE holder: the operator swaps inks by
   // hand and the run pauses per colour change (the AxiDraw workflow).
-  // Motorised magazines (firmware / host) need at least two physical
+  // A motorised (host-driven) magazine needs at least two physical
   // slots for an automated swap to mean anything.
   const min = colorMode.value === 'manual' ? 1 : 2
   props.draft.pen_slot_count = Math.min(MAX_PEN_SLOTS, Math.max(min, Number.isFinite(n) ? n : min))
   ensureCaps().max_pens_in_magazine = Math.max(1, props.draft.pen_slot_count)
 }
-
-// Default firmware swap trigger seeded when entering firmware mode.
-// ``{slot}`` is substituted by the backend's FirmwareStrategy at swap
-// time; matches the input's placeholder so the operator sees a working
-// example instead of a leftover pause command.
-const FIRMWARE_TRIGGER_SEED = 'M6 T{slot}'
 
 function setMode(mode: ColorMode): void {
   const target = modes.find((m) => m.id === mode)
@@ -506,33 +507,22 @@ function setMode(mode: ColorMode): void {
   tc.mode = target.tooling
   tc.command_source = target.source
 
-  // ``tool_change_command`` plays two different roles: the pause
-  // boundary in the emitted G-code (manual / host / mono → ``M0``,
-  // which any sender honours and the streamer intercepts) and the
-  // firmware's swap trigger (firmware → e.g. ``M6 T{slot}``). A mode
-  // switch that leaves the other role's value behind breaks the run:
-  // a leftover ``M0`` sent as a "firmware trigger" feed-holds the
-  // controller with no operator prompt, and a leftover firmware
-  // trigger in a manual/host profile means the emitted boundary never
-  // pauses on a bare sender. Entering firmware seeds the example
-  // trigger only over a pause command (a custom trigger typed earlier
-  // is kept); leaving firmware always restores ``M0``.
-  const cmd = props.draft.tool_change_command.trim()
-  if (mode === 'firmware') {
-    if (!cmd || cmd === 'M0') props.draft.tool_change_command = FIRMWARE_TRIGGER_SEED
-  } else if (cmd !== 'M0') {
+  // Both surviving modes pause on ``M0`` — the boundary any sender
+  // honours and the streamer intercepts. Restore it in case the profile
+  // carried a leftover firmware trigger (e.g. ``M6 T{slot}``) from a
+  // retired carousel mode, which would otherwise never pause.
+  if (props.draft.tool_change_command.trim() !== 'M0') {
     props.draft.tool_change_command = 'M0'
   }
 
-  if (mode === 'mono') {
-    props.draft.pen_slot_count = 1
-  } else if (mode === 'manual') {
+  if (mode === 'manual') {
     // Manual swaps work from a single holder (colour-change pauses) up
     // to a hand-served magazine (slot pauses) — keep the operator's
     // count, just make it sane.
     if (props.draft.pen_slot_count < 1) props.draft.pen_slot_count = 1
   } else if (props.draft.pen_slot_count < 2) {
-    // A motorised magazine needs at least two slots to swap between.
+    // A motorised (host-driven) magazine needs at least two slots to
+    // swap between.
     props.draft.pen_slot_count = 2
   }
   caps.max_pens_in_magazine = Math.max(1, props.draft.pen_slot_count)
@@ -590,10 +580,10 @@ function onChangePos(axis: 'x' | 'y', raw: string): void {
     <div class="space-y-4 border-t border-slate-700 p-3">
       <p class="text-[11px] text-slate-500">{{ t('profile.colorManagementHint') }}</p>
 
-      <!-- Mode selector: four cards. Firmware vs Host make the two
-           magazine cases explicit (plotter-driven single command vs
-           Pi-driven G-code sequence). -->
-      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4" data-test="color-mode-selector">
+      <!-- Mode selector: manual swap (single holder or hand-served
+           magazine, pauses per swap) vs host-driven magazine (the Pi
+           emits a G-code swap sequence). -->
+      <div class="grid grid-cols-2 gap-2" data-test="color-mode-selector">
         <button
           v-for="mode in modes"
           :key="mode.id"
@@ -623,9 +613,9 @@ function onChangePos(axis: 'x' | 'y', raw: string): void {
         </button>
       </div>
 
-      <!-- Pen count — only meaningful for multicolour plotters. -->
+      <!-- Pen count — how many holders/slots the machine has. 1 = single
+           holder (manual colour-change pauses); 2+ = magazine. -->
       <div
-        v-if="colorMode !== 'mono'"
         class="rounded-lg border border-slate-700 bg-slate-900/50 p-3"
         data-test="magazine-pen-count"
       >
@@ -648,7 +638,6 @@ function onChangePos(axis: 'x' | 'y', raw: string): void {
           }}
         </p>
       </div>
-      <p v-else class="text-[11px] text-slate-500">{{ t('profile.monoNote') }}</p>
 
       <!-- Manual swap: where the head parks before prompting the operator,
            so the pen can be reached clear of the drawing. Blank = workspace
@@ -688,32 +677,13 @@ function onChangePos(axis: 'x' | 'y', raw: string): void {
         </div>
       </div>
 
-      <!-- CASE 1 — firmware magazine: a single G-code command the
-           controller interprets to swap the pen itself. -->
-      <label
-        v-if="colorMode === 'firmware'"
-        class="block text-slate-400"
-        data-test="firmware-command"
-      >
-        {{ t('profile.toolChangeCommand') }}
-        <input
-          v-model="draft.tool_change_command"
-          type="text"
-          placeholder="M6 T{slot}"
-          class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-slate-100"
-        />
-        <span class="mt-0.5 block text-[11px] text-slate-500">{{
-          t('profile.firmwareCommandHint')
-        }}</span>
-      </label>
-
-      <!-- CASE 2 — host magazine: a visual, G-code-free swap builder.
-           The operator orders high-level blocks (move to slot, grab,
-           release, head up/down, wait); the backend compiles them using
-           each pen's position (set in the magazine below). A raw G-code
-           block remains as an escape hatch for exotic hardware. -->
+      <!-- Host magazine: a visual, G-code-free swap builder. The operator
+           orders high-level blocks (move to slot, grab, release, head
+           up/down, wait); the backend compiles them using each pen's
+           position (set in the magazine below). A raw G-code block remains
+           as an escape hatch for exotic hardware. -->
       <div
-        v-else-if="colorMode === 'host' && hostSwap"
+        v-if="colorMode === 'host' && hostSwap"
         class="space-y-3 rounded-lg border border-slate-700 bg-slate-900/50 p-3"
         data-test="host-swap-editor"
       >

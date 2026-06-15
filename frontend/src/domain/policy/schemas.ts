@@ -45,7 +45,7 @@ export type ConstraintHit = z.infer<typeof ConstraintHitSchema>
 export const PolicyInputSchema = z.object({
   source_kind: SourceKindSchema,
   goal: GoalSchema.default('fast'),
-  palette_mode: PaletteModeSchema.default('machine_only'),
+  palette_mode: PaletteModeSchema.default('union'),
   available_colors_count: z.number().int().nonnegative().default(1),
   image_megapixels: z.number().nullable().optional(),
   layer_count_estimate: z.number().int().nonnegative().default(1),

@@ -167,23 +167,23 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(xmax).toBeDefined()
   })
 
-  it('renders the four tool-change mode cards with the seeded mode active', async () => {
+  it('renders the two surviving tool-change mode cards with the seeded mode active', async () => {
     // Per-pen colour cards now live in the Colours tab; the profile tab
-    // exposes the tool-change mode (mono / manual / firmware / host) and,
-    // for multicolour modes, the pen count. The seeded profile uses
-    // manual_pause → the "manual" card is active.
+    // exposes the tool-change mode (manual / host) and the pen count. The
+    // retired mono / firmware (carousel) cards are gone. The seeded
+    // profile uses manual_pause → the "manual" card is active.
     const wrapper = mountEditor()
     await nextTick()
-    expect(wrapper.find('[data-test="color-mode-mono"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="color-mode-manual"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="color-mode-firmware"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="color-mode-host"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="color-mode-mono"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="color-mode-firmware"]').exists()).toBe(false)
     const manual = wrapper.find('[data-test="color-mode-manual"]')
     expect(manual.attributes('aria-pressed')).toBe('true')
   })
 
   it('shows the pen count for a multicolour profile', async () => {
-    // pen_slot_count = 2 with a non-mono mode → the magazine pen-count
+    // pen_slot_count = 2 → the magazine pen-count
     // input is visible and reflects the seeded value.
     const wrapper = mountEditor()
     await nextTick()
@@ -238,16 +238,18 @@ describe('ProfileEditor with a profile seeded', () => {
     expect(originValues).not.toContain('center')
   })
 
-  it('CASE 1 — firmware mode exposes the single tool-change command field', async () => {
+  it('the firmware tool-change command field is gone (carousel mode retired)', async () => {
     const wrapper = mountEditor()
     await nextTick()
-    await wrapper.find('[data-test="color-mode-firmware"]').trigger('click')
+    // No firmware card to select, and the single-command field never
+    // renders for the surviving manual / host modes.
+    expect(wrapper.find('[data-test="color-mode-firmware"]').exists()).toBe(false)
+    await wrapper.find('[data-test="color-mode-manual"]').trigger('click')
     await nextTick()
-    expect(wrapper.find('[data-test="firmware-command"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="host-swap-editor"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="firmware-command"]').exists()).toBe(false)
   })
 
-  it('CASE 2 — host mode exposes the visual swap builder seeded with steps', async () => {
+  it('host mode exposes the visual swap builder seeded with steps', async () => {
     const wrapper = mountEditor()
     await nextTick()
     await wrapper.find('[data-test="color-mode-host"]').trigger('click')

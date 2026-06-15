@@ -47,7 +47,8 @@ function mountFields(draft: MachineProfile) {
   })
 }
 
-// Mode card order mirrors the ``modes`` array: mono, manual, firmware, host.
+// Mode card order mirrors the ``modes`` array: manual, host. The retired
+// mono / firmware (carousel) modes are no longer offered.
 function modeButton(wrapper: ReturnType<typeof mountFields>, index: number) {
   return wrapper.find('[data-test="color-mode-selector"]').findAll('button')[index]!
 }
@@ -55,67 +56,68 @@ function modeButton(wrapper: ReturnType<typeof mountFields>, index: number) {
 describe('ProfilePenFields mode switching', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('seeds the firmware trigger when switching manual → firmware', async () => {
-    // A leftover ``M0`` sent as a firmware trigger feed-holds the
-    // controller with no operator prompt.
-    const draft = makeDraft()
-    const wrapper = mountFields(draft)
-    await modeButton(wrapper, 2).trigger('click') // firmware
-    expect(draft.tool_change_method).toBe('carousel')
-    expect(draft.tool_change_command).toBe('M6 T{slot}')
-    expect(draft.capabilities?.tool_change.mode).toBe('firmware')
-  })
-
-  it('restores M0 when switching firmware → manual', async () => {
-    const draft = makeDraft({
-      tool_change_method: 'carousel',
-      tool_change_command: 'T{slot}',
-    })
-    const wrapper = mountFields(draft)
-    await modeButton(wrapper, 1).trigger('click') // manual
-    expect(draft.tool_change_method).toBe('manual_pause')
-    expect(draft.tool_change_command).toBe('M0')
-    expect(draft.capabilities?.tool_change.mode).toBe('manual')
-    expect(draft.capabilities?.tool_change.manual_prompt).not.toBeNull()
-  })
-
-  it('keeps a custom firmware trigger when re-entering firmware mode', async () => {
-    const draft = makeDraft({ tool_change_command: 'T{slot} G4 P500' })
-    const wrapper = mountFields(draft)
-    await modeButton(wrapper, 2).trigger('click') // firmware
-    expect(draft.tool_change_command).toBe('T{slot} G4 P500')
+  it('offers exactly two modes (manual + host)', () => {
+    const wrapper = mountFields(makeDraft())
+    const buttons = wrapper.find('[data-test="color-mode-selector"]').findAll('button')
+    expect(buttons.length).toBe(2)
+    expect(wrapper.find('[data-test="color-mode-manual"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="color-mode-host"]').exists()).toBe(true)
+    // Retired modes are gone from the picker.
+    expect(wrapper.find('[data-test="color-mode-mono"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="color-mode-firmware"]').exists()).toBe(false)
   })
 
   it('host mode gets M0 boundaries and a seeded visual swap plan', async () => {
     const draft = makeDraft({
-      tool_change_method: 'carousel',
-      tool_change_command: 'M6 T{slot}',
+      tool_change_method: 'manual_pause',
+      tool_change_command: 'M0',
     })
     const wrapper = mountFields(draft)
-    await modeButton(wrapper, 3).trigger('click') // host
+    await modeButton(wrapper, 1).trigger('click') // host
     expect(draft.tool_change_method).toBe('rack')
     expect(draft.tool_change_command).toBe('M0')
     expect(draft.capabilities?.tool_change.mode).toBe('host_macro')
     expect(draft.capabilities?.tool_change.host_swap?.steps.length).toBeGreaterThan(0)
   })
 
-  it('manual mode keeps a single holder (AxiDraw-style colour pauses)', async () => {
-    // 1 slot + manual_pause is the mono manual-swap workflow: the run
-    // pauses per COLOUR change. The mode switch used to force the count
-    // to 2, silently flipping the pause semantics to slot-based.
-    const draft = makeDraft({ tool_change_method: 'none', pen_slot_count: 1 })
+  it('manual mode keeps a single holder (single-holder colour pauses)', async () => {
+    // 1 slot + manual_pause is the single-holder manual-swap workflow:
+    // the run pauses per COLOUR change.
+    const draft = makeDraft({ tool_change_method: 'rack', pen_slot_count: 1 })
     const wrapper = mountFields(draft)
-    await modeButton(wrapper, 1).trigger('click') // manual
+    await modeButton(wrapper, 0).trigger('click') // manual
     expect(draft.tool_change_method).toBe('manual_pause')
     expect(draft.pen_slot_count).toBe(1)
+    expect(draft.capabilities?.tool_change.manual_prompt).not.toBeNull()
   })
 
-  it('mono mode drops to one slot and M0', async () => {
-    const draft = makeDraft({ tool_change_command: 'M6 T{slot}' })
+  it('restores an M0 boundary over a leftover firmware trigger', async () => {
+    // A legacy carousel profile carried e.g. ``M6 T{slot}``; selecting a
+    // surviving mode must put the pause boundary back to M0 so the run
+    // actually pauses on a bare sender.
+    const draft = makeDraft({
+      tool_change_method: 'carousel',
+      tool_change_command: 'M6 T{slot}',
+    })
     const wrapper = mountFields(draft)
-    await modeButton(wrapper, 0).trigger('click') // mono
-    expect(draft.tool_change_method).toBe('none')
-    expect(draft.pen_slot_count).toBe(1)
+    await modeButton(wrapper, 0).trigger('click') // manual
+    expect(draft.tool_change_method).toBe('manual_pause')
     expect(draft.tool_change_command).toBe('M0')
+  })
+
+  it('maps a legacy carousel profile onto the host card', () => {
+    // No capabilities block (untouched-since-migration legacy YAML) +
+    // carousel method → the host magazine is the closest surviving mode.
+    const draft = makeDraft({ tool_change_method: 'carousel', capabilities: null })
+    const wrapper = mountFields(draft)
+    expect(wrapper.find('[data-test="color-mode-host"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('[data-test="color-mode-manual"]').attributes('aria-pressed')).toBe('false')
+  })
+
+  it('maps a legacy mono (none) profile onto the manual card', () => {
+    const draft = makeDraft({ tool_change_method: 'none', capabilities: null })
+    const wrapper = mountFields(draft)
+    expect(wrapper.find('[data-test="color-mode-manual"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('[data-test="color-mode-host"]').attributes('aria-pressed')).toBe('false')
   })
 })

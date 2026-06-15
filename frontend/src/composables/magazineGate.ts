@@ -26,13 +26,20 @@ export function useMagazineGateState(): MagazineGateState {
 }
 
 /**
- * Gate a print launch on the magazine being loaded.
+ * Gate a print launch on the inks being loaded.
  *
  * Returns ``'skipped'`` immediately when no loading step is relevant
- * (mono-pen machine, no multicolour layers) — the caller then keeps
- * its regular confirmation dialog. Otherwise opens the
- * MagazineLoadModal and resolves ``'confirmed'`` (plan applied, G-code
- * up to date, modal showed its own launch button) or ``'cancelled'``.
+ * (no layers, or a single ink) — the caller then keeps its regular
+ * confirmation dialog. Otherwise opens the MagazineLoadModal and
+ * resolves ``'confirmed'`` (plan applied, G-code up to date, modal
+ * showed its own launch button) or ``'cancelled'``.
+ *
+ * The modal now covers EVERY machine, not just multi-slot magazines.
+ * On a single-holder machine (``pen_slot_count`` 1) the loading plan is
+ * one initial pen plus one manual swap per colour change — the operator
+ * is prompted to load the first ink before launch and to swap at each
+ * subsequent colour. There is no firmware auto-change path: every ink
+ * load / swap goes through this modal (and the mid-print pauses).
  */
 export function ensureMagazineLoaded(): Promise<MagazineGateResult> {
   const job = useJobStore()
@@ -40,9 +47,9 @@ export function ensureMagazineLoaded(): Promise<MagazineGateResult> {
   const inks = new Set(
     job.layers.map((l) => (l.assigned_color_hex ?? l.source_color).toLowerCase()),
   )
-  // Mono machines handle any ink count via colour-change pauses; a
-  // single-ink job has nothing to plan either.
-  if (slotCount < 2 || job.layers.length === 0 || inks.size < 2) {
+  // No holder to plan against, no layers, or a single ink → nothing to
+  // load or swap, so keep the caller's regular confirmation dialog.
+  if (slotCount < 1 || job.layers.length === 0 || inks.size < 2) {
     return Promise.resolve('skipped')
   }
   // Settle a dangling previous gate (double-click on Play) as cancelled
