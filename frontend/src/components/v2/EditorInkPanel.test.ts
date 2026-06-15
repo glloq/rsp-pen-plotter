@@ -34,7 +34,7 @@ function layer(id: string, hex: string): LayerInfo {
   } as LayerInfo
 }
 
-function swatch(id: string, hex: string, withLayer = true): InkSwatch {
+function swatch(id: string, hex: string): InkSwatch {
   return {
     layerId: id,
     hex,
@@ -42,7 +42,7 @@ function swatch(id: string, hex: string, withLayer = true): InkSwatch {
     displayName: hex,
     displayHex: '',
     isFallback: false,
-    layer: withLayer ? layer(id, hex) : null,
+    layer: layer(id, hex),
   }
 }
 
@@ -86,8 +86,10 @@ describe('EditorInkPanel', () => {
     expect(w.find('[data-test="modal-v2-ink-popover-color-aabbcc"]').exists()).toBe(false)
   })
 
-  it('hides the assign button for a cluster with no committed layer', () => {
-    const w = mountPanel([swatch('preview-0-aabbcc', '#aabbcc', false)])
-    expect(w.find('[data-test="modal-v2-ink-assign-preview-0-aabbcc"]').exists()).toBe(false)
+  it('offers the assign button on a live-preview cluster chip too', () => {
+    // Cluster chips (never-committed image) carry a synthetic layer, so the
+    // assign button is available all the time — not only on saved files.
+    const w = mountPanel([swatch('cluster-aabbcc', '#aabbcc')])
+    expect(w.find('[data-test="modal-v2-ink-assign-cluster-aabbcc"]').exists()).toBe(true)
   })
 })

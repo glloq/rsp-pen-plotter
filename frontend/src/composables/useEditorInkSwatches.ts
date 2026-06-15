@@ -1,21 +1,16 @@
-// Ink-swatch strip + live-preview centroid→pool snap for the V2 editor.
+// Ink-swatch strip + live-preview cluster→ink mapping for the V2 editor.
 //
-// Extracted from ``EditModalV2.vue`` (Phase 4 of the editor audit) so the
-// "which inks will this print use, and how does the expert /preview map
-// onto the owned pool" logic can be reasoned about and tested without
-// mounting the modal.
-//
-// Owns two reactive outputs:
-//   - ``previewInkSnap``: in EXPERT mode, the per-cluster mapping from the
-//     /preview's raw segmentation centroids to the pool ink each cluster
-//     will actually draw with (or an identity map when the operator asked
-//     to stay faithful to the image's own colours). Shared with the expert
-//     preview recolour so the chips and the preview SVG always agree.
-//   - ``inkSwatches``: the chip strip itself — the live /preview clusters
-//     in expert mode, else the placement's committed layers in draw order.
-import { computed, type ComputedRef, type Ref } from 'vue'
-import type { LayerInfo } from '../api/client'
-import { assignPoolHexes } from '../lib/nearestColor'
+// Owns the chips under the preview and the per-cluster ink each one draws
+// with. The strip must stay fully functional AT ALL TIMES — hide a layer and
+// re-assign its ink — even on a fresh, never-committed image, so the expert
+// live /preview clusters carry their OWN editor-scoped state (colour override +
+// visibility) keyed by a stable per-cluster id, instead of depending on
+// committed ``job.layers`` (which may be empty or out of sync after a
+// colour-count change). Assisted mode keeps reading the committed layers, which
+// already carry the backend's ink assignment + geometry.
+import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
+import type { ColorAssignment, LayerInfo } from '../api/client'
+import { assignPoolHexes, nearestPoolHex } from '../lib/nearestColor'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { useJobStore } from '../stores/job'
 import { useUiModeStore } from '../stores/uiMode'
@@ -32,19 +27,18 @@ export interface InkSwatch {
   // inventory match) to avoid duplicating the same six characters.
   displayHex: string
   isFallback: boolean
-  // The real placement layer this chip drives — the eye toggle and the
-  // assign-colour popover act on it. ``null`` only when a live /preview
-  // cluster has no matching committed layer yet (segmentation changed but
-  // not re-applied), in which case those per-layer controls are disabled.
-  layer: LayerInfo | null
+  // The layer (real committed layer, or a synthetic one standing in for a
+  // live /preview cluster) the assign-colour popover drives. Always set, so
+  // the popover is offered on every chip.
+  layer: LayerInfo
 }
 
 export interface PreviewSnap {
-  /** centroid hex (lowercased) → the ink it draws with (manual override,
-   *  pool snap or its own colour when faithful to the image). */
+  /** centroid hex (lowercased) → the ink it draws with, or ``'none'`` for a
+   *  hidden cluster (``recolorPreviewSvg`` paints it invisible). */
   map: Map<string, string>
   /** Per-cluster rows in document order, for the chip strip. */
-  rows: { centroid: string; ink: string; isFallback: boolean; layer: LayerInfo | null }[]
+  rows: { centroid: string; ink: string; isFallback: boolean; layer: LayerInfo }[]
 }
 
 // The slice of ``useFileManager`` the swatches need — the live /preview
@@ -59,10 +53,62 @@ export interface EditorInkSwatchesDeps {
   effectivePool: Ref<string[]> | ComputedRef<string[]>
 }
 
+// A live-preview cluster's chip id. The centroid hex makes it stable across
+// re-previews of the SAME segmentation (so an override survives a slider
+// nudge) and naturally resets when the colour count changes (new centroids →
+// new ids). The ``cluster-`` prefix tells the routing helpers below to act on
+// the editor-scoped state rather than the job store.
+function clusterIdFor(centroid: string): string {
+  return `cluster-${centroid.replace('#', '').toLowerCase()}`
+}
+function isClusterId(layerId: string): boolean {
+  return layerId.startsWith('cluster-')
+}
+
+// Stand-in LayerInfo for a live cluster so the shared AssignedColorPicker (which
+// reads source_color / assigned_color_hex / color_assignment) works unchanged.
+function makeClusterLayer(
+  layerId: string,
+  centroid: string,
+  ink: string,
+  manual: boolean,
+  drawOrder: number,
+): LayerInfo {
+  return {
+    layer_id: layerId,
+    source_color: centroid,
+    assigned_color_hex: ink,
+    color_assignment: (manual ? 'manual' : 'auto') as ColorAssignment,
+    draw_order: drawOrder,
+    target_pen_slot: null,
+    total_length_mm: 0,
+    path_count: 0,
+    bbox: { x_min: 0, y_min: 0, x_max: 0, y_max: 0 },
+    optimize: true,
+    simplify_tolerance_mm: 0,
+    drawing_speed_mm_s: null,
+    color_label: null,
+    pause_before: 'auto',
+  } as LayerInfo
+}
+
 export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
   const job = useJobStore()
   const availableColors = useAvailableColorsStore()
   const uiMode = useUiModeStore()
+
+  // Editor-scoped per-cluster state for the live preview, keyed by cluster id.
+  // Reset whenever the active placement changes so one file's tweaks can't
+  // bleed into another.
+  const clusterColor = ref<Map<string, string>>(new Map())
+  const clusterHidden = ref<Set<string>>(new Set())
+  watch(
+    () => job.selectedPlacementId,
+    () => {
+      clusterColor.value = new Map()
+      clusterHidden.value = new Set()
+    },
+  )
 
   const inventoryNameByHex = computed<Map<string, string>>(() => {
     const map = new Map<string, string>()
@@ -74,89 +120,54 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
     return map
   })
 
-  // The committed placement's layers in DRAW order — the same order the
-  // /preview palette and the SVG groups come in, so a live cluster maps to
-  // its real layer by index. This is what gives the expert-mode chips a
-  // real ``layer_id`` (eye toggle + colour assignment), and what lets a
-  // manual ink override recolour the live preview.
   const sortedLayers = computed<LayerInfo[]>(() => {
     const layers = job.selectedPlacement?.layers ?? []
     return [...layers].sort((a, b) => a.draw_order - b.draw_order)
   })
 
-  // Live-preview centroid → available-ink mapping (expert mode only).
+  // Live-preview cluster → available-ink mapping (expert mode only).
   //
-  // The /preview SVG renders each cluster in its raw segmentation CENTROID
-  // (the expert draft ships no ``ink_pool``). A pen plotter can only draw
-  // with the inks the operator owns, so EVERY cluster is snapped here to its
-  // perceptually-nearest available ink (CIE Lab ΔE 2000, full inventory ∪ pens
-  // pool) — the chips and the recoloured preview therefore always show real
-  // available colours, never the image's own centroids. The map is shared with
-  // the expert preview recolour so the chips and the SVG agree on the ink drawn.
+  // Every cluster is snapped to its perceptually-nearest available ink (CIE Lab
+  // ΔE 2000, full inventory ∪ pens pool) unless the operator pinned one via the
+  // assign popover; a hidden cluster maps to ``'none'`` so the shared recolour
+  // pass paints it invisible. The map feeds ``recolorPreviewSvg`` so the chips,
+  // the preview and the eventual print all agree.
   const previewInkSnap = computed<PreviewSnap | null>(() => {
     const livePalette = deps.fileManager.previewResult?.value?.palette ?? null
     if (!uiMode.isExpert || !livePalette || livePalette.length === 0) return null
-    const pool = deps.effectivePool.value
-    // Always snap every cluster onto the owned pool. Reuse is allowed (two
-    // clusters nearest the same ink both draw it) so a pool that doesn't span
-    // the image collapses onto the closest inks instead of scattering greens
-    // onto blue/grey. ``null`` per item only when the pool is empty.
     const autoSnapped = assignPoolHexes(
       livePalette.map((entry) => ({ sourceHex: entry.color })),
-      pool,
+      deps.effectivePool.value,
     )
-    // Manual overrides + the per-chip layer handle come from the committed
-    // layers ONLY while the live segmentation still matches them (same cluster
-    // count ⇒ same clusters, in draw order). The moment the operator changes
-    // the colour count in the SVG tab the committed layers are stale, so we map
-    // purely from the live centroids — index-mapping onto stale layers is
-    // exactly what assigned "blue for green / grey for green".
-    const layers = sortedLayers.value
-    const aligned = layers.length === livePalette.length ? layers : null
     const map = new Map<string, string>()
     const rows = livePalette.map((entry, idx) => {
       const centroid = entry.color
-      const layer = aligned ? (aligned[idx] ?? null) : null
-      const manual =
-        layer && layer.color_assignment === 'manual' && layer.assigned_color_hex
-          ? layer.assigned_color_hex
-          : null
+      const layerId = clusterIdFor(centroid)
+      const override = clusterColor.value.get(layerId) ?? null
       const auto = autoSnapped[idx] ?? centroid
-      const ink = manual ?? auto
-      // Fallback = the pool was empty so no owned ink could be picked (the chip
-      // surfaces a "load this ink" CTA). A successful snap is never a fallback.
-      const isFallback = !manual && autoSnapped[idx] === null
-      // Record the remap so ``recolorPreviewSvg`` paints the cluster in its
-      // assigned ink. An ink equal to the centroid (pool already held that
-      // exact colour) needs no rewrite.
-      if (ink.toLowerCase() !== centroid.toLowerCase()) {
+      const ink = override ?? auto
+      const isFallback = !override && autoSnapped[idx] === null
+      const hidden = clusterHidden.value.has(layerId)
+      if (hidden) {
+        map.set(centroid.toLowerCase(), 'none')
+      } else if (ink.toLowerCase() !== centroid.toLowerCase()) {
         map.set(centroid.toLowerCase(), ink)
       }
+      const layer = makeClusterLayer(layerId, centroid, ink, override !== null, idx)
       return { centroid, ink, isFallback, layer }
     })
     return { map, rows }
   })
 
   const inkSwatches = computed<InkSwatch[]>(() => {
-    // Prefer the LIVE /preview palette when the V1 cards have just produced
-    // one (expert mode tweaks): it reflects what the operator is actually
-    // about to commit on Apply. Falls back to the placement's committed
-    // layers so assisted mode + fresh sessions keep their chip strip.
-    // Expert mode: the chips mirror the live /preview clusters, snapped onto
-    // the active pool by ``previewInkSnap`` (the same map that recolours the
-    // preview SVG, so chips and preview agree on the inks drawn).
     const snap = previewInkSnap.value
     if (snap) {
-      return snap.rows.map((row, idx) => {
+      return snap.rows.map((row) => {
         const hex = row.ink
         const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
         const name = namedMatch ?? hex
-        // Drive the chip from its real layer so the eye toggle + assign
-        // popover act on the placement. Only when a live cluster has no
-        // matching committed layer (segmentation changed but not applied)
-        // do we fall back to a synthesised, control-less id.
         return {
-          layerId: row.layer?.layer_id ?? `preview-${idx}-${hex.replace('#', '')}`,
+          layerId: row.layer.layer_id,
           hex,
           name,
           displayName: name,
@@ -183,5 +194,58 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
     })
   })
 
-  return { previewInkSnap, inkSwatches, inventoryNameByHex }
+  // ---- Per-chip actions (route to cluster state OR the job store) ----
+
+  function isSwatchVisible(layerId: string): boolean {
+    if (isClusterId(layerId)) return !clusterHidden.value.has(layerId)
+    return job.isVisible(layerId)
+  }
+
+  function toggleSwatchVisibility(layerId: string): void {
+    if (isClusterId(layerId)) {
+      const next = new Set(clusterHidden.value)
+      if (next.has(layerId)) next.delete(layerId)
+      else next.add(layerId)
+      clusterHidden.value = next
+      return
+    }
+    job.setVisibility(layerId, !job.isVisible(layerId))
+  }
+
+  function assignSwatchColor(layerId: string, hex: string): void {
+    if (isClusterId(layerId)) {
+      const next = new Map(clusterColor.value)
+      next.set(layerId, hex)
+      clusterColor.value = next
+      return
+    }
+    job.updateLayer(layerId, { assigned_color_hex: hex, color_assignment: 'manual' })
+  }
+
+  function resetSwatchColor(layerId: string, hex: string | null): void {
+    if (isClusterId(layerId)) {
+      // Drop the override → the cluster falls back to the auto ΔE snap.
+      const next = new Map(clusterColor.value)
+      next.delete(layerId)
+      clusterColor.value = next
+      return
+    }
+    const fallback =
+      hex ??
+      nearestPoolHex(
+        sortedLayers.value.find((l) => l.layer_id === layerId)?.source_color ?? '',
+        deps.effectivePool.value,
+      )
+    job.updateLayer(layerId, { assigned_color_hex: fallback, color_assignment: 'auto' })
+  }
+
+  return {
+    previewInkSnap,
+    inkSwatches,
+    inventoryNameByHex,
+    isSwatchVisible,
+    toggleSwatchVisibility,
+    assignSwatchColor,
+    resetSwatchColor,
+  }
 }

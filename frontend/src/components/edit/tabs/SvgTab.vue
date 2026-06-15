@@ -6,6 +6,7 @@ import { useJobStore } from '../../../stores/job'
 import DetailPicker from '../shared/DetailPicker.vue'
 import LabeledSlider from '../shared/LabeledSlider.vue'
 import TabEmptyState from '../shared/TabEmptyState.vue'
+import SegmentationCountCard from '../svg/SegmentationCountCard.vue'
 import SegmentationMethodCard from '../svg/SegmentationMethodCard.vue'
 
 // SVG tab — every technical knob that drives image → SVG conversion:
@@ -46,6 +47,15 @@ function onSimplifyChange(v: number): void {
 
 <template>
   <section v-if="fm.hasSource.value && fm.showsBitmapForm.value" class="space-y-3">
+    <!-- Layer / colour count — the headline knob, surfaced FIRST: it sets how
+         many clusters the image is split into (one layer per cluster, each
+         snapped to its nearest available ink) and so drives both the colour
+         fidelity and the detail. -->
+    <SegmentationCountCard :bitmap="bitmap" />
+
+    <!-- Segmentation method (how the bitmap gets split into masks). -->
+    <SegmentationMethodCard :bitmap="bitmap" :is-document="fm.kind.value === 'document'" />
+
     <!-- Detail tier + path treatments -->
     <div class="card space-y-3 text-xs">
       <DetailPicker
@@ -120,9 +130,6 @@ function onSimplifyChange(v: number): void {
         </div>
       </div>
     </div>
-
-    <!-- Segmentation method (how the bitmap gets split into masks) -->
-    <SegmentationMethodCard :bitmap="bitmap" :is-document="fm.kind.value === 'document'" />
   </section>
 
   <TabEmptyState v-else-if="!fm.hasSource.value" :message="t('svg.noSource')" />

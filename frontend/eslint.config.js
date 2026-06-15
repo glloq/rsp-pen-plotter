@@ -81,6 +81,7 @@ export default [
       'src/components/edit/source/PaletteCard.vue',
       'src/components/edit/source/TypographyCard.vue',
       'src/components/edit/style/PostProcessCard.vue',
+      'src/components/edit/svg/SegmentationCountCard.vue',
       'src/components/edit/svg/SegmentationMethodCard.vue',
     ],
     rules: {
