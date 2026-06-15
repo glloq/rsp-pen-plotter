@@ -229,18 +229,22 @@ function onReset(layerId: string, payload: { hex: string | null }): void {
   outline: 2px solid #10b981;
   outline-offset: 2px;
 }
-/* Popover floats above the chip strip so a long inventory doesn't push the
-   preview around. The chip item is the positioning context. */
+/* The chip strip sits near the BOTTOM of the modal, so the picker opens
+   UPWARD (above the chip) to stay inside the modal instead of spilling off the
+   bottom. Height is capped so a long inventory scrolls rather than overflowing
+   past the top. The chip item is the positioning context. */
 .modal-v2__ink-popover {
   position: absolute;
-  top: calc(100% + 0.3rem);
+  bottom: calc(100% + 0.3rem);
   left: 0;
   z-index: 20;
   width: 16rem;
   max-width: 80vw;
+  max-height: 60vh;
+  overflow-y: auto;
   border: 1px solid #334155;
   border-radius: 0.5rem;
   background: #0f172a;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
 }
 </style>
