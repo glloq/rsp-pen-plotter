@@ -95,15 +95,23 @@ describe('chooseInkPalette', () => {
     expect(out).toEqual(['#22aa55', '#1e3cc8'])
   })
 
-  it('reduces N centroids to M inks by merging the closest in Lab', () => {
-    // Four centroids: two greens, a blue, a grey. Asking for 3 colours merges
-    // the two greens into one green ink — grey stays grey, blue stays blue.
+  it('reduces N centroids to M inks, keeping the most-covered inks', () => {
+    // Four centroids: two greens (one ink), a blue, a grey. Asking for 3 inks
+    // keeps green (two segments), blue and grey — all real available inks.
     const centroids = ['#2e8b57', '#3cb371', '#1e3cc8', '#808080']
     const out = chooseInkPalette(centroids, pool, 3)
     expect(out).toHaveLength(3)
     expect(out).toContain('#22aa55') // green
     expect(out).toContain('#1e3cc8') // blue
     expect(out).toContain('#808080') // grey — never flips to another hue
+  })
+
+  it('ranks by AREA: the 2nd-biggest colour survives over smaller ones', () => {
+    // grey 0.6, green 0.25, blue 0.1, red 0.05. At M=2 the two biggest (grey,
+    // green) must win — NOT grey + a small colour that happens to sit far away.
+    const centroids = ['#808080', '#2e8b57', '#1e3cc8', '#c81e1e']
+    const out = chooseInkPalette(centroids, pool, 2, [0.6, 0.25, 0.1, 0.05])
+    expect(out).toEqual(['#808080', '#22aa55'])
   })
 
   it('collapses everything onto one ink at m = 1', () => {
