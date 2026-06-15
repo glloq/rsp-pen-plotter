@@ -4,6 +4,7 @@ import type { SegmentationMethod } from '../../../api/client'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 import CollapsibleCard from '../shared/CollapsibleCard.vue'
 import { useBitmapDraft } from '../../../composables/useBitmapDraft'
+import { kdiag } from '../../../lib/kdiag'
 
 // Segmentation method picker + the primary parameter for the chosen
 // method (num_colors / num_bands / thresholds list / palette ref hint).
@@ -47,6 +48,7 @@ const SEG_METHODS: SegmentationMethod[] = [
 // User-driven mutators flag the corresponding field as "touched" so the
 // next master-style switch / print-mode flip can warn before stomping.
 function selectMethod(method: SegmentationMethod): void {
+  kdiag(`selectMethod(${method}) clicked`)
   props.bitmap.segmentation_method = method
   draft.markSegmentationTouched('method')
   // kmeans / kmeans_lab cluster the image's OWN colours — that is the

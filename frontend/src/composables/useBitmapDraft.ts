@@ -32,7 +32,8 @@
 // /preview scheduler and the /upload submission share the same payload
 // builder.
 
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { kdiag, kdiagTrace } from '../lib/kdiag'
 import {
   KNOB_UNITS_MM,
   convertLegacyStyleKnobs,
@@ -380,6 +381,27 @@ const _segmentationTouched = ref<Set<SegmentationField>>(new Set())
 // Phase 4's dirty-tracker will hang off this in addition to a snapshot.
 const _committed = ref<boolean>(false)
 
+// --- KDIAG: trace every segmentation_method / paletteFollowsPens change.
+// Opt-in (localStorage.kdiag='1'); a no-op otherwise. The trailing
+// console.trace shows the stack that scheduled the change so we can see
+// WHICH watcher / mutator reverted the operator's kmeans pick.
+watch(
+  () => _bitmap.value.segmentation_method,
+  (next, prev) => {
+    if (next === prev) return
+    kdiag(`segmentation_method ${prev} -> ${next}  (follows=${_paletteFollowsPens.value})`)
+    kdiagTrace(`segmentation_method -> ${next}`)
+  },
+)
+watch(
+  () => _paletteFollowsPens.value,
+  (next, prev) => {
+    if (next === prev) return
+    kdiag(`paletteFollowsPens ${prev} -> ${next}  (method=${_bitmap.value.segmentation_method})`)
+    kdiagTrace(`paletteFollowsPens -> ${next}`)
+  },
+)
+
 // ---- Computed views ----
 // Print mode is derived from the segmentation method + master-style id
 // so the toggle stays in sync with whatever the operator picked in the
@@ -422,6 +444,15 @@ export interface RehydrateContext {
 }
 
 export function rehydrateDraft(ctx: RehydrateContext): void {
+  kdiag(
+    'rehydrateDraft CALLED  placement=',
+    ctx.placement?.source_file ?? null,
+    ' last_options.keys=',
+    ctx.placement?.last_options ? Object.keys(ctx.placement.last_options) : null,
+    ' ink_pool=',
+    (ctx.placement?.last_options as Record<string, unknown> | undefined)?.ink_pool ?? null,
+  )
+  kdiagTrace('rehydrateDraft')
   _bitmap.value = defaultBitmap()
   _curves.value = defaultCurves()
   resetTypography()
