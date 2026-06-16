@@ -12,6 +12,18 @@ const step = ref(10)
 const targetX = ref(0)
 const targetY = ref(0)
 
+// Manual moves need a live, idle machine. The jog pad stays mounted at
+// all times (CNC / laser / 3D-printer cockpit style) and greys out
+// whenever the head can't be driven: no connection, a move already in
+// flight, or a job running / paused (which owns the head).
+const controlsDisabled = computed(
+  () =>
+    !plotter.status.connected ||
+    plotter.movementBusy ||
+    plotter.status.state === 'running' ||
+    plotter.status.state === 'paused',
+)
+
 function jog(dx: number, dy: number): void {
   plotter.jog(dx * step.value, dy * step.value, job.selectedProfileName)
 }
@@ -48,7 +60,8 @@ const corners = computed(() => {
       <span>{{ t('plotter.step') }}</span>
       <select
         v-model.number="step"
-        class="rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-100"
+        :disabled="controlsDisabled"
+        class="rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         <option :value="1">1 mm</option>
         <option :value="10">10 mm</option>
@@ -61,7 +74,7 @@ const corners = computed(() => {
         class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.jogUp')"
         :title="t('plotter.jogUp')"
-        :disabled="plotter.movementBusy"
+        :disabled="controlsDisabled"
         @click="jog(0, 1)"
       >
         ↑
@@ -71,7 +84,7 @@ const corners = computed(() => {
         class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.jogLeft')"
         :title="t('plotter.jogLeft')"
-        :disabled="plotter.movementBusy"
+        :disabled="controlsDisabled"
         @click="jog(-1, 0)"
       >
         ←
@@ -80,7 +93,7 @@ const corners = computed(() => {
         class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.home')"
         :title="t('plotter.home')"
-        :disabled="plotter.movementBusy"
+        :disabled="controlsDisabled"
         @click="home"
       >
         ⌂
@@ -89,7 +102,7 @@ const corners = computed(() => {
         class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.jogRight')"
         :title="t('plotter.jogRight')"
-        :disabled="plotter.movementBusy"
+        :disabled="controlsDisabled"
         @click="jog(1, 0)"
       >
         →
@@ -99,7 +112,7 @@ const corners = computed(() => {
         class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.jogDown')"
         :title="t('plotter.jogDown')"
-        :disabled="plotter.movementBusy"
+        :disabled="controlsDisabled"
         @click="jog(0, -1)"
       >
         ↓
@@ -115,18 +128,20 @@ const corners = computed(() => {
           type="number"
           step="any"
           placeholder="X"
-          class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          :disabled="controlsDisabled"
+          class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         />
         <input
           v-model.number="targetY"
           type="number"
           step="any"
           placeholder="Y"
-          class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          :disabled="controlsDisabled"
+          class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         />
         <button
           class="rounded bg-slate-700 px-3 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
-          :disabled="plotter.movementBusy"
+          :disabled="controlsDisabled"
           @click="gotoTarget"
         >
           {{ t('plotter.go') }}
@@ -139,7 +154,7 @@ const corners = computed(() => {
           class="flex-1 rounded bg-slate-700 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
           :aria-label="t('plotter.gotoCorner', { x: corner.x, y: corner.y })"
           :title="`X${corner.x} Y${corner.y}`"
-          :disabled="plotter.movementBusy"
+          :disabled="controlsDisabled"
           @click="plotter.goto(corner.x, corner.y, job.selectedProfileName)"
         >
           {{ corner.label }}

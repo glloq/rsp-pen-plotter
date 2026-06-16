@@ -17,9 +17,14 @@ const { status, error } = storeToRefs(plotter)
 
 const canSend = computed(() => Boolean(job.gcode))
 
+// A running / paused job owns the head, so pen + jog commands must wait.
 const manualBusy = computed(
   () => status.value.state === 'running' || status.value.state === 'paused',
 )
+// Manual controls stay mounted at all times (CNC / laser / 3D-printer
+// cockpit style) and grey out whenever they can't be driven: no live
+// connection, or a job currently owning the head.
+const manualDisabled = computed(() => !status.value.connected || manualBusy.value)
 
 async function penUp(): Promise<void> {
   const cmd = job.selectedProfile?.pen_up_command
@@ -83,41 +88,54 @@ const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length 
         <PrintQueuePanel />
       </section>
 
-      <div
-        v-if="!status.connected"
-        class="rounded-lg border border-dashed border-slate-700 px-3 py-5 text-center text-xs text-slate-500"
-      >
-        <p>{{ t('plotter.manualDisconnected') }}</p>
-        <button
-          type="button"
-          class="mt-3 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
-          data-test="plotter-connect-cta"
-          @click="ui.openPlotterSettings('connection')"
+      <!-- MANUAL CONTROL — always mounted (CNC / laser / 3D-printer style),
+           greyed + disabled until a plotter is connected. The connect
+           banner explains the greyed state and offers a one-click path to
+           the connection settings. -->
+      <div class="space-y-4" data-test="manual-control">
+        <div
+          v-if="!status.connected"
+          class="flex items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-800/40 px-3 py-2"
+          data-test="plotter-connect-banner"
         >
-          {{ t('plotter.connect') }}
-        </button>
-      </div>
+          <p class="text-xs text-slate-400">{{ t('plotter.manualDisconnected') }}</p>
+          <button
+            type="button"
+            class="shrink-0 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
+            data-test="plotter-connect-cta"
+            @click="ui.openPlotterSettings('connection')"
+          >
+            {{ t('plotter.connect') }}
+          </button>
+        </div>
 
-      <template v-else>
         <section class="space-y-2">
           <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
             {{ t('execute.jog') }}
           </h4>
-          <div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
+          <div
+            class="rounded-lg border border-slate-700 bg-slate-800 p-3 transition-opacity"
+            :class="{ 'opacity-50': !status.connected }"
+            :aria-disabled="!status.connected"
+          >
             <JogControls />
           </div>
         </section>
 
-        <section class="mt-4 space-y-2">
+        <section class="space-y-2">
           <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
             {{ t('plotter.penControl') }}
           </h4>
-          <div class="rounded-lg border border-slate-700 bg-slate-800 p-3">
+          <div
+            class="rounded-lg border border-slate-700 bg-slate-800 p-3 transition-opacity"
+            :class="{ 'opacity-50': !status.connected }"
+            :aria-disabled="!status.connected"
+          >
             <div class="flex gap-2">
               <button
                 type="button"
-                class="flex-1 rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600 disabled:opacity-40"
-                :disabled="manualBusy || !job.selectedProfile?.pen_up_command"
+                class="flex-1 rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                :disabled="manualDisabled || !job.selectedProfile?.pen_up_command"
                 :title="job.selectedProfile?.pen_up_command ?? ''"
                 data-test="manual-pen-up"
                 @click="penUp"
@@ -126,8 +144,8 @@ const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length 
               </button>
               <button
                 type="button"
-                class="flex-1 rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600 disabled:opacity-40"
-                :disabled="manualBusy || !job.selectedProfile?.pen_down_command"
+                class="flex-1 rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                :disabled="manualDisabled || !job.selectedProfile?.pen_down_command"
                 :title="job.selectedProfile?.pen_down_command ?? ''"
                 data-test="manual-pen-down"
                 @click="penDown"
@@ -144,8 +162,8 @@ const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length 
           </div>
         </section>
 
-        <p v-if="error" class="mt-3 text-xs text-red-400">{{ error }}</p>
-      </template>
+        <p v-if="error" class="text-xs text-red-400">{{ error }}</p>
+      </div>
     </div>
 
     <!-- COLLAPSIBLE G-CODE PANEL (bottom of the tab) -->
