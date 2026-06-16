@@ -118,6 +118,60 @@ export function mmPerViewBoxUnit(svg: string, widthMm: number, heightMm: number)
   return Math.sqrt((widthMm / vbW) * (heightMm / vbH))
 }
 
+// Absolute CSS length units → millimetres. ``px`` and unitless values are
+// deliberately excluded: they carry no reliable physical scale (a 24×24
+// icon must not be read as a 24 mm page), so a length in those units
+// yields ``null`` and the caller falls back to fitting the content.
+const ABS_LENGTH_TO_MM: Readonly<Record<string, number>> = {
+  mm: 1,
+  cm: 10,
+  in: 25.4,
+  pt: 25.4 / 72,
+  pc: 25.4 / 6,
+}
+
+/** Parse a CSS length carrying an *absolute* unit into mm, or null. */
+function absoluteLengthMm(raw: string | null): number | null {
+  if (!raw) return null
+  const m = raw.trim().match(/^\+?(\d*\.?\d+)\s*(mm|cm|in|pt|pc)$/i)
+  if (!m) return null
+  const value = Number(m[1])
+  const factor = ABS_LENGTH_TO_MM[m[2]!.toLowerCase()]
+  if (!(value > 0) || factor === undefined) return null
+  return value * factor
+}
+
+/** Read a quoted attribute off an opening tag string, or null. The
+ *  leading whitespace requirement keeps ``width`` from matching the
+ *  ``-width`` tail of ``stroke-width``. */
+function tagAttr(tag: string, name: string): string | null {
+  const m = tag.match(new RegExp(`\\s${name}\\s*=\\s*"([^"]*)"|\\s${name}\\s*=\\s*'([^']*)'`, 'i'))
+  if (!m) return null
+  return m[1] ?? m[2] ?? null
+}
+
+/**
+ * Physical page size (mm) a raw SVG was authored for, read from the root
+ * ``<svg width=… height=…>`` when *both* carry an absolute unit
+ * (mm / cm / in / pt / pc). Inkscape and Illustrator stamp these on every
+ * "A4" / "A5" export, letting the caller size the on-sheet placement to
+ * the real page instead of rescaling the artwork to fill the workspace.
+ *
+ * Returns ``null`` when a dimension is missing, a percentage, or in
+ * ``px`` / unitless user units — none of which pin a real-world size — so
+ * the caller keeps its fit-to-workspace fallback for those.
+ */
+export function svgIntrinsicPageSizeMm(
+  svg: string,
+): { width_mm: number; height_mm: number } | null {
+  const root = svg.match(/<svg\b[^>]*>/i)?.[0]
+  if (!root) return null
+  const width_mm = absoluteLengthMm(tagAttr(root, 'width'))
+  const height_mm = absoluteLengthMm(tagAttr(root, 'height'))
+  if (width_mm === null || height_mm === null) return null
+  return { width_mm, height_mm }
+}
+
 /**
  * Rewrite the root ``<svg>``'s ``viewBox`` to the given bounding box (in
  * SVG user units) so the displayed area is exactly the inked content

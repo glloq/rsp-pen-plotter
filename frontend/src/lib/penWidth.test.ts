@@ -9,6 +9,7 @@ import {
   parsePenWidthMm,
   penMarkFloorMm,
   strokeWidthMmByHex,
+  svgIntrinsicPageSizeMm,
 } from './penWidth'
 
 describe('canonicalHex', () => {
@@ -69,6 +70,49 @@ describe('mmPerViewBoxUnit', () => {
   it('returns null when the viewBox is missing or degenerate', () => {
     expect(mmPerViewBoxUnit('<svg></svg>', 100, 100)).toBeNull()
     expect(mmPerViewBoxUnit('<svg viewBox="0 0 0 0"></svg>', 100, 100)).toBeNull()
+  })
+})
+
+describe('svgIntrinsicPageSizeMm', () => {
+  it('reads an A4 page off the root width/height in mm', () => {
+    const svg = '<svg width="210mm" height="297mm" viewBox="0 0 210 297"></svg>'
+    expect(svgIntrinsicPageSizeMm(svg)).toEqual({ width_mm: 210, height_mm: 297 })
+  })
+
+  it('converts cm / in / pt / pc units to mm', () => {
+    expect(svgIntrinsicPageSizeMm('<svg width="21cm" height="29.7cm"></svg>')).toEqual({
+      width_mm: 210,
+      height_mm: 297,
+    })
+    const inch = svgIntrinsicPageSizeMm('<svg width="1in" height="2in"></svg>')!
+    expect(inch.width_mm).toBeCloseTo(25.4, 6)
+    expect(inch.height_mm).toBeCloseTo(50.8, 6)
+    const pt = svgIntrinsicPageSizeMm('<svg width="72pt" height="144pt"></svg>')!
+    expect(pt.width_mm).toBeCloseTo(25.4, 6)
+    expect(pt.height_mm).toBeCloseTo(50.8, 6)
+  })
+
+  it('tolerates single quotes and surrounding whitespace', () => {
+    const svg = "<svg  width='148mm'  height='210mm' >"
+    expect(svgIntrinsicPageSizeMm(svg)).toEqual({ width_mm: 148, height_mm: 210 })
+  })
+
+  it('returns null for px / unitless / percentage dimensions', () => {
+    // A 24×24 icon must not be mistaken for a 24 mm page.
+    expect(svgIntrinsicPageSizeMm('<svg width="24" height="24" viewBox="0 0 24 24"/>')).toBeNull()
+    expect(svgIntrinsicPageSizeMm('<svg width="800px" height="600px"/>')).toBeNull()
+    expect(svgIntrinsicPageSizeMm('<svg width="100%" height="100%"/>')).toBeNull()
+  })
+
+  it('returns null when a dimension is missing or there is no root tag', () => {
+    expect(svgIntrinsicPageSizeMm('<svg width="210mm"/>')).toBeNull()
+    expect(svgIntrinsicPageSizeMm('not an svg')).toBeNull()
+  })
+
+  it('does not pick up the -width tail of stroke-width on the root', () => {
+    // The root carries stroke-width but no real width → no false positive.
+    const svg = '<svg stroke-width="0.3" height="297mm" viewBox="0 0 210 297"></svg>'
+    expect(svgIntrinsicPageSizeMm(svg)).toBeNull()
   })
 })
 
