@@ -798,6 +798,45 @@ export const useJobStore = defineStore('job', () => {
     scheduleRerender(50)
   }
 
+  // Bulk per-layer recipe application (audit B5). The master-style
+  // propagation (``applyMasterStyleToLayers``) assigns a *different*
+  // recipe + pen slot per band; doing it through the per-layer
+  // ``updateLayer`` + ``applyLayerAlgorithm`` looped N times meant N full
+  // ``layer_algorithms`` map spreads AND N whole-``fileSettings`` clones
+  // (``autoSyncFileSettings``) on a 120 ms cadence — a 16-band image
+  // stuttered. This collapses the whole set into a single patch + one
+  // sync + one clear + one rerender.
+  async function applyLayerRecipes(
+    entries: ReadonlyArray<{
+      layerId: string
+      penSlot?: number | null
+      algorithm: string
+      algorithmOptions: Record<string, unknown>
+    }>,
+  ): Promise<void> {
+    const p = selectedPlacement.value
+    if (!p || !entries.length) return
+    const nextAlgos: Record<string, LayerAlgorithm> = { ...p.layer_algorithms }
+    const slotByLayer = new Map<string, number>()
+    for (const e of entries) {
+      nextAlgos[e.layerId] = {
+        algorithm: e.algorithm,
+        algorithm_options: { ...e.algorithmOptions },
+      }
+      if (e.penSlot !== undefined && e.penSlot !== null) slotByLayer.set(e.layerId, e.penSlot)
+    }
+    const patch: Partial<Placement> = { layer_algorithms: nextAlgos }
+    if (slotByLayer.size) {
+      patch.layers = p.layers.map((l) =>
+        slotByLayer.has(l.layer_id) ? { ...l, target_pen_slot: slotByLayer.get(l.layer_id)! } : l,
+      )
+    }
+    patchSelected(patch)
+    autoSyncFileSettings()
+    clearLivePreviewSvg()
+    scheduleRerender(50)
+  }
+
   async function clearLayerAlgorithm(layerId: string): Promise<void> {
     const p = selectedPlacement.value
     if (!p) return
@@ -1935,6 +1974,7 @@ export const useJobStore = defineStore('job', () => {
     restorePlacementAspect,
     fitSelectedPlacementToSheet,
     applyLayerAlgorithm,
+    applyLayerRecipes,
     applyAlgorithmToAllLayers,
     previewAlgorithmOnAllLayers,
     applyPassesToAllLayers,
