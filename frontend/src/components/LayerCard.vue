@@ -29,6 +29,7 @@ import LayerCardSummary from './LayerCardSummary.vue'
 import PrintStylePicker from './edit/PrintStylePicker.vue'
 import LayerPassStack from './edit/LayerPassStack.vue'
 import AlgoParamsForm from './edit/AlgoParamsForm.vue'
+import LabeledSlider from './edit/shared/LabeledSlider.vue'
 
 const { t } = useI18n()
 const props = defineProps<{ layer: LayerInfo }>()
@@ -341,24 +342,17 @@ const algorithmsByKind = computed<Array<{ kind: string; algos: AlgorithmInfo[] }
            layer to preview dilute-ink / watercolor passes. Persists on
            the placement via ``updateLayer`` but the G-code generator
            ignores it — it's a visual cue, not a hardware setting. -->
-          <label class="col-span-2 text-slate-400">
-            <span class="flex items-center gap-1">
-              {{ t('layers.opacity') }}
-              <span class="font-mono text-[10px] text-slate-500"
-                >{{ layer.opacity_percent ?? 100 }}%</span
-              >
-            </span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              :value="layer.opacity_percent ?? 100"
-              class="mt-0.5 w-full accent-emerald-500"
-              :data-test="`layer-opacity-${layer.layer_id}`"
-              @input="onOpacity"
+          <div class="col-span-2">
+            <LabeledSlider
+              :model-value="layer.opacity_percent ?? 100"
+              :label="t('layers.opacity')"
+              :min="0"
+              :max="100"
+              :step="5"
+              unit="%"
+              @update:model-value="onOpacity"
             />
-          </label>
+          </div>
         </div>
 
         <!-- Pen-change pause: how the run behaves right before this

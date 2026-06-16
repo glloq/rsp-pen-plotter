@@ -211,8 +211,9 @@ export function useLayerCardState(layer: Ref<LayerInfo>) {
     })
   }
 
-  function onOpacity(event: Event): void {
-    const raw = Number((event.target as HTMLInputElement).value)
+  function onOpacity(value: number | Event): void {
+    const raw =
+      typeof value === 'number' ? value : Number((value.target as HTMLInputElement).value)
     const clamped = Math.max(0, Math.min(100, Math.round(raw)))
     store.updateLayer(layer.value.layer_id, { opacity_percent: clamped })
   }

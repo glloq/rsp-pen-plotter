@@ -326,10 +326,6 @@ useEditorPreviewSvgEffects({
         }}<span v-if="errorMessage" class="preview-error__detail"> — {{ errorMessage }}</span>
       </p>
     </div>
-
-    <p class="gesture-hint" data-test="modal-v2-gesture-hint">
-      {{ t('v2.modal.gestureHint') }}
-    </p>
   </div>
 </template>
 
@@ -557,11 +553,4 @@ useEditorPreviewSvgEffects({
   font-variant-numeric: tabular-nums;
 }
 
-.gesture-hint {
-  margin: 0.35rem 0 0;
-  font-size: 0.6875rem;
-  color: #64748b;
-  text-align: center;
-  font-style: italic;
-}
 </style>

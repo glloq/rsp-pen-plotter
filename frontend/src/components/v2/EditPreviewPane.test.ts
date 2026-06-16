@@ -24,7 +24,6 @@ const i18n = createI18n({
           zoomIn: 'Zoom +',
           zoomOut: 'Zoom −',
           resetView: 'Recentrer',
-          gestureHint: 'Molette : zoom · Glisser : déplacer',
         },
       },
     },

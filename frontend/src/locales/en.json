@@ -1691,7 +1691,6 @@
       "paletteFree": "Any ink (I'll swap pens by hand)",
       "inksLabel": "Inks in use",
       "inkFallback": "No loaded ink matches — falling back to {hex}",
-      "gestureHint": "Wheel: zoom · Drag: pan · Double-click: recentre",
       "estimateLabel": "Estimate",
       "estimateTime": "≈ {value}",
       "estimateLength": "{meters} m drawn",
