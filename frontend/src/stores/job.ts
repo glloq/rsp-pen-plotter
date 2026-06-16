@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
 import { validateUploadFile } from '../api/uploadValidation'
@@ -166,7 +166,14 @@ function emptyBbox(): BoundingBox {
 
 export const useJobStore = defineStore('job', () => {
   // ====== Placements ====================================================
-  const placements = ref<Placement[]>([])
+  // ``shallowRef`` (not ``ref``): every write replaces the array wholesale
+  // via an immutable update (``patchPlacement`` does ``.map``/spread; layer
+  // edits route through ``patchSelected`` the same way), so deep reactivity
+  // would only add cost — Vue proxying every placement / layer / bbox on
+  // each drag-frame patch — without ever being relied upon (the old deep
+  // watcher was already removed; see ``invalidateOutputs`` below). The
+  // shallow ref still triggers all dependents on the array reassignment.
+  const placements = shallowRef<Placement[]>([])
   const selectedPlacementId = ref<string | null>(null)
 
   const selectedPlacement = computed<Placement | null>(() => {

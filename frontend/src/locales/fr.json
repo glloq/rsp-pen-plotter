@@ -1376,7 +1376,8 @@
   "gcode": {
     "title": "G-code",
     "lines": "lignes",
-    "download": "Télécharger"
+    "download": "Télécharger",
+    "truncated": "Affichage des {count} premières lignes — téléchargez pour le programme complet."
   },
   "simulator": {
     "title": "Simulateur",

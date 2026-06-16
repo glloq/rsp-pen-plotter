@@ -8,7 +8,18 @@ const { t } = useI18n()
 const store = useJobStore()
 const { gcode } = storeToRefs(store)
 
-const lineCount = computed(() => (gcode.value ? gcode.value.split('\n').length : 0))
+// Cap how many lines we inject into the live <pre>. A full plot can be
+// hundreds of thousands of lines; rendering the whole string as one DOM
+// text node was a layout/paint spike on open (audit B7). The operator
+// never reads past the top anyway — the Download button (and the
+// Simulator tab) cover the full program.
+const MAX_PREVIEW_LINES = 2000
+const lines = computed(() => (gcode.value ? gcode.value.split('\n') : []))
+const lineCount = computed(() => lines.value.length)
+const truncated = computed(() => lines.value.length > MAX_PREVIEW_LINES)
+const previewText = computed(() =>
+  truncated.value ? lines.value.slice(0, MAX_PREVIEW_LINES).join('\n') : (gcode.value ?? ''),
+)
 
 function download(): void {
   if (!gcode.value) return
@@ -42,7 +53,10 @@ function download(): void {
     </div>
     <pre
       class="min-h-0 flex-1 overflow-auto p-4 text-xs font-mono text-emerald-200 whitespace-pre"
-      >{{ gcode }}</pre
+      >{{ previewText }}</pre
     >
+    <p v-if="truncated" class="border-t border-slate-700 px-4 py-1.5 text-[11px] text-slate-400">
+      {{ t('gcode.truncated', { count: MAX_PREVIEW_LINES }) }}
+    </p>
   </section>
 </template>

@@ -69,11 +69,18 @@ function isColorVisible(hex: string | null): boolean {
   return props.colorFilter.has(hex ?? '')
 }
 
-function project(x: number, y: number, b: SimBounds): [number, number] {
-  const s = Math.min(
+// Fit-scale (world mm → canvas px) for the given bounds. Hoisted out of
+// ``project`` so ``draw`` computes it ONCE per frame instead of twice per
+// segment (tens of thousands of redundant min/div ops per frame on a dense
+// plot — the per-point recompute the audit flagged).
+function fitScale(b: SimBounds): number {
+  return Math.min(
     (WIDTH - 2 * PAD) / Math.max(b.maxX - b.minX, 1e-6),
     (HEIGHT - 2 * PAD) / Math.max(b.maxY - b.minY, 1e-6),
   )
+}
+
+function project(x: number, y: number, b: SimBounds, s: number): [number, number] {
   const cx = PAD + (x - b.minX) * s
   const cy = props.flipOriginY ? PAD + (b.maxY - y) * s : PAD + (y - b.minY) * s
   // Apply view transform: zoom around the canvas centre, then translate.
@@ -98,12 +105,13 @@ function draw(): void {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
   const bounds = props.frameBounds
+  const s = fitScale(bounds)
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, WIDTH, HEIGHT)
 
   // Sheet / workspace outline.
-  const [sx0, sy0] = project(bounds.minX, bounds.minY, bounds)
-  const [sx1, sy1] = project(bounds.maxX, bounds.maxY, bounds)
+  const [sx0, sy0] = project(bounds.minX, bounds.minY, bounds, s)
+  const [sx1, sy1] = project(bounds.maxX, bounds.maxY, bounds, s)
   ctx.strokeStyle = '#94a3b8'
   ctx.lineWidth = 1
   ctx.setLineDash([])
@@ -118,18 +126,18 @@ function draw(): void {
     // inherit visibility from ``showTravel`` instead because they have
     // no inherent colour.
     if (seg.drawing && !isColorVisible(seg.colorHex)) {
-      pen = project(seg.x1, seg.y1, bounds)
+      pen = project(seg.x1, seg.y1, bounds, s)
       continue
     }
     if (!seg.drawing && !props.showTravel) {
-      pen = project(seg.x1, seg.y1, bounds)
+      pen = project(seg.x1, seg.y1, bounds, s)
       continue
     }
     const frac = seg.duration > 0 ? Math.min(1, (t - seg.startTime) / seg.duration) : 1
     const ex = seg.x0 + (seg.x1 - seg.x0) * frac
     const ey = seg.y0 + (seg.y1 - seg.y0) * frac
-    const [ax, ay] = project(seg.x0, seg.y0, bounds)
-    const [bx, by] = project(ex, ey, bounds)
+    const [ax, ay] = project(seg.x0, seg.y0, bounds, s)
+    const [bx, by] = project(ex, ey, bounds, s)
     ctx.beginPath()
     ctx.moveTo(ax, ay)
     ctx.lineTo(bx, by)
@@ -156,7 +164,7 @@ function draw(): void {
   // without a legend.
   for (const ev of r.events) {
     if (ev.time > t) break
-    const [ex, ey] = project(ev.x, ev.y, bounds)
+    const [ex, ey] = project(ev.x, ev.y, bounds, s)
     if (ev.type === 'pen_up' || ev.type === 'pen_down') {
       if (!props.showPenEvents) continue
       drawPenEventMarker(ctx, ex, ey, ev.type === 'pen_up')
