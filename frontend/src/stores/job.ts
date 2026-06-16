@@ -35,6 +35,7 @@ import {
   layerStrokeWidthsPx,
   mmPerViewBoxUnit,
   strokeWidthMmByHex,
+  svgIntrinsicPageSizeMm,
 } from '../lib/penWidth'
 import { assignPoolHexes } from '../lib/nearestColor'
 import { resolveEffectivePalette } from '../lib/effectivePalette'
@@ -1419,30 +1420,44 @@ export const useJobStore = defineStore('job', () => {
     const usableH = Math.max(wsH - 2 * marginMm.value, wsH * 0.5)
     const bboxW = Math.max(sourceBbox.x_max - sourceBbox.x_min, 1e-6)
     const bboxH = Math.max(sourceBbox.y_max - sourceBbox.y_min, 1e-6)
-    let width: number
-    let height: number
-    if (intrinsicSize && intrinsicSize.width_mm > 0 && intrinsicSize.height_mm > 0 && svg) {
-      // PDF / DOCX / HTML / text: the converter emits a page-sized SVG
-      // (e.g. PyMuPDF viewBox in points, Hershey viewBox in mm) with
-      // the content offset from the page corner by its margins. We
-      // size the on-sheet placement to the *inked* bbox in mm — not to
-      // the full page — so the green resize rectangle wraps the
-      // content tightly instead of leaving the page margins as empty
-      // space at the top-left. ``mmPerViewBoxUnit`` reads the SVG's
-      // viewBox vs the reported page dimensions to bridge units (mm
-      // for Hershey text, points for PyMuPDF) into millimetres. Clamp
-      // down (but never up) if the inked content is larger than the
-      // usable area.
-      const mmPerUnit = mmPerViewBoxUnit(svg, intrinsicSize.width_mm, intrinsicSize.height_mm) ?? 1
+    // Size the placement to the *inked* bbox converted to millimetres,
+    // then clamp down (never up) if it overflows the usable area. The
+    // mm↔viewBox-unit bridge is what makes the result a real-world size
+    // rather than a fit-to-workspace rescale.
+    const sizeToContent = (mmPerUnit: number): { width: number; height: number } => {
       const contentW = bboxW * mmPerUnit
       const contentH = bboxH * mmPerUnit
       const fit = Math.min(1, usableW / contentW, usableH / contentH)
-      width = contentW * fit
-      height = contentH * fit
+      return { width: contentW * fit, height: contentH * fit }
+    }
+    let width: number
+    let height: number
+    if (intrinsicSize && intrinsicSize.width_mm > 0 && intrinsicSize.height_mm > 0 && svg) {
+      // PDF / DOCX / HTML / text: the converter reports the page size in
+      // ``upload_metadata`` and emits a page-sized SVG (PyMuPDF viewBox in
+      // points, Hershey viewBox in mm) with the content offset from the
+      // page corner by its margins. ``mmPerViewBoxUnit`` reads the SVG's
+      // viewBox vs the reported page dimensions to bridge units into
+      // millimetres.
+      const mmPerUnit = mmPerViewBoxUnit(svg, intrinsicSize.width_mm, intrinsicSize.height_mm) ?? 1
+      ;({ width, height } = sizeToContent(mmPerUnit))
     } else {
-      const scale = Math.min(usableW / bboxW, usableH / bboxH)
-      width = bboxW * scale
-      height = bboxH * scale
+      // Raw SVG (Inkscape / Illustrator export) reports no page metadata,
+      // but its root ``<svg width/height>`` still encodes the physical
+      // page it was drawn for. Honour that so an A4 / A5 drawing lands at
+      // its true mm size; without it the content bbox is rescaled to fill
+      // the workspace and an A4 file comes in at the wrong size. ``px`` /
+      // unitless dimensions yield null here and keep the fit fallback.
+      const svgPage = svg ? svgIntrinsicPageSizeMm(svg) : null
+      const mmPerUnit =
+        svg && svgPage ? mmPerViewBoxUnit(svg, svgPage.width_mm, svgPage.height_mm) : null
+      if (mmPerUnit) {
+        ;({ width, height } = sizeToContent(mmPerUnit))
+      } else {
+        const scale = Math.min(usableW / bboxW, usableH / bboxH)
+        width = bboxW * scale
+        height = bboxH * scale
+      }
     }
     // Preserve existing x/y if the placement already had real content;
     // otherwise centre. We detect "fresh" by checking source_file empty
