@@ -98,6 +98,28 @@ def test_bitmap_converter_produces_layered_svg(two_color_png: bytes) -> None:
     assert "ff0000" in result.svg.lower() or "dc1414" in result.svg.lower()
 
 
+def test_bitmap_converter_reports_target_footprint_as_page_size(
+    two_color_png: bytes,
+) -> None:
+    # The operator sized the placement to A5, so the converter must report
+    # that footprint as the page size; a later library drag-drop reads it
+    # to restore the picture at A5 instead of rescaling it to fill the bed.
+    result = BitmapConverter().convert(
+        two_color_png,
+        options={"algorithm": "direct", "target_width_mm": 148.0, "target_height_mm": 210.0},
+    )
+    assert result.metadata["page_width_mm"] == 148.0
+    assert result.metadata["page_height_mm"] == 210.0
+
+
+def test_bitmap_converter_omits_page_size_without_a_target(two_color_png: bytes) -> None:
+    # No chosen footprint → no page size, so the placement keeps its
+    # legacy fit-to-workspace sizing on first upload.
+    result = BitmapConverter().convert(two_color_png, options={"algorithm": "direct"})
+    assert "page_width_mm" not in result.metadata
+    assert "page_height_mm" not in result.metadata
+
+
 def test_bitmap_converter_halftone_no_potrace_needed(two_color_png: bytes) -> None:
     result = BitmapConverter().convert(
         two_color_png, options={"algorithm": "halftone", "num_colors": 2}

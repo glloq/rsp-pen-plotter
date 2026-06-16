@@ -15,7 +15,7 @@ import pytest  # noqa: E402
 from httpx import ASGITransport  # noqa: E402
 from sqlmodel import Session, delete  # noqa: E402
 
-from pen_plotter.api.files import FILES_DIR  # noqa: E402
+from pen_plotter.api.files import FILES_DIR, _backfill_page_size  # noqa: E402
 from pen_plotter.main import app  # noqa: E402
 from pen_plotter.persistence import FileRecord, engine  # noqa: E402
 
@@ -58,6 +58,30 @@ def _upload_form(content: bytes, name: str, folder: str = "") -> dict:
         "files": {"file": (name, content, "image/svg+xml")},
         "data": {"folder": folder},
     }
+
+
+def test_backfill_page_size_heals_legacy_bitmap_entries() -> None:
+    # Entry saved before the converter reported page size: empty upload
+    # metadata but a stored A5 target footprint → backfilled so a drag-drop
+    # restores the picture at A5 instead of rescaling it to the bed.
+    out = _backfill_page_size({}, {"target_width_mm": 148.0, "target_height_mm": 210.0})
+    assert out == {"page_width_mm": 148.0, "page_height_mm": 210.0}
+
+
+def test_backfill_page_size_keeps_existing_page_size() -> None:
+    # New entries already carry the page size; the stored target must not
+    # clobber it.
+    meta = {"page_width_mm": 210.0, "page_height_mm": 297.0}
+    out = _backfill_page_size(dict(meta), {"target_width_mm": 148.0, "target_height_mm": 210.0})
+    assert out == meta
+
+
+def test_backfill_page_size_noop_without_a_target() -> None:
+    # Vector entries (no bitmap options) and bitmaps never sized to a
+    # footprint stay on the fit-to-workspace path.
+    assert _backfill_page_size({}, None) == {}
+    assert _backfill_page_size({}, {"num_colors": 4}) == {}
+    assert _backfill_page_size({}, {"target_width_mm": 0, "target_height_mm": 210.0}) == {}
 
 
 @pytest.mark.asyncio

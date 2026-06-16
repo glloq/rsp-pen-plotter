@@ -68,6 +68,29 @@ async def test_upload_png_with_options_dispatches_to_bitmap(two_color_png: bytes
 
 
 @pytest.mark.asyncio
+async def test_upload_png_reports_target_footprint_as_page_size(
+    two_color_png: bytes,
+) -> None:
+    # An image sized to A5 must round-trip its footprint as the page size so
+    # a later library drag-drop restores it at A5 instead of rescaling the
+    # raster to fill the bed.
+    async with _client() as client:
+        response = await client.post(
+            "/upload",
+            files={"file": ("photo.png", two_color_png, "image/png")},
+            data={
+                "profile_name": "Custom CoreXY A3",
+                "options": '{"num_colors": 2, "target_width_mm": 148.0, '
+                '"target_height_mm": 210.0}',
+            },
+        )
+    assert response.status_code == 200
+    metadata = response.json()["metadata"]
+    assert metadata["page_width_mm"] == 148.0
+    assert metadata["page_height_mm"] == 210.0
+
+
+@pytest.mark.asyncio
 async def test_upload_pdf_resolves_mime_from_extension() -> None:
     async with _client() as client:
         response = await client.post(
