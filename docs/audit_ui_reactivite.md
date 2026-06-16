@@ -294,3 +294,50 @@ Le backend expose déjà `/preview/stream` (SSE, 1 event `progress` par calque r
   B3 (virtualisation) protège les grandes bibliothèques.
 - **Démarrage** : C2 (locale) + C1 (health) + C4 (scène) = l'essentiel du time-to-interactive,
   surtout sur matériel Pi.
+
+---
+
+## Statut d'implémentation (mise à jour 2026-06-16)
+
+### ✅ Fait & vérifié (suite 874 tests + typecheck + build verts)
+
+**Phase 1 — Socle toasts à ETA**
+- `lib/progressEstimate.ts` (courbe + temps restant + format), `lib/progressToast.ts`
+  (`beginProgressToast` : toast progress + barre + ETA + affichage différé + annulation),
+  `lib/durationEstimator.ts` (EMA de durée persistée). Barre déterministe ajoutée aux toasts.
+- A1+A2 rerender : toast slow-only (>400 ms) + ETA (historique `preview_refresh`) + annulation.
+- A6 Generate & A7 mise à jour système : barre déterministe + temps restant dans la modale.
+
+**Phase 2 — Trous de feedback**
+- macros (A3), jog/home/goto (A4/A5) : toasts + gardes anti-renvoi.
+- store queue : `toasts.error` + `isBusy`/`enqueuing` (corrige Panel/RunActions/Workshop/Header).
+- JobHistory (A14) : état d'erreur distinct. A8/A11 déjà couverts par `store.upload`.
+
+**Phase 3 — Jank (sous-ensemble contenu)**
+- B1 SimCanvas : hoist de l'échelle hors de `project()`. B6 : `shallowRef` placements.
+- B7 GcodePreview : `<pre>` plafonné. B5 : propagation master-style batchée (`applyLayerRecipes`).
+- B8 AuditPanel : poll gated par visibilité. B3 (partiel) : `Intl.Collator` hissé.
+
+**Phase 4 — Démarrage** : C1 (health parallèle), C2 (locale lazy → chunks séparés confirmés au build),
+C3/C7 (fetches advisory en idle).
+
+**Phase 5 — Polling** : D1 (queue visibility-aware).
+
+### ⏸️ Différé sciemment (raison)
+
+- **B2 — parse G-code en Web Worker** : transforme `reparse` (composable testé) de sync→async et
+  exige un stub Worker dans happy-dom ; non vérifiable sans navigateur réel. Le plus gros gain réel
+  restant, mais le plus risqué à faire à l'aveugle.
+- **B3 — virtualisation complète de la grille bibliothèque** : nécessite un `IntersectionObserver`
+  (absent de happy-dom) + refonte du fetch/sanitize par ligne visible ; risque de régression sur
+  `FilesPane.test`. Atténué aujourd'hui par v-memo + thumbCache + le hoist du Collator.
+- **B4 — `isDirty` flag** : le remplacer changerait la sémantique value-based (revert = propre) ;
+  gain marginal (stringify de petits objets) pour un risque de test.
+- **B9 — debounce persistance workspaces** : le test attend une persistance synchrone, et l'usage
+  est basse fréquence (pas de rafale comme les sliders) — gain négligeable.
+- **C4 — hydratation de scène non bloquante** : déplacer/alléger l'hydratation `JSON.parse` du
+  constructeur du store touche un chemin sensible (retour utilisateur avec scène peuplée) ; à faire
+  avec un test dédié.
+- **Phase 5 (backend) — vraie progression SSE sur `/rerender`** : feature transverse backend+frontend
+  (brancher `progress_callback` + pont SSE) ; le toast d'ETA estimé de la Phase 1 couvre déjà le besoin
+  immédiat côté UX.
