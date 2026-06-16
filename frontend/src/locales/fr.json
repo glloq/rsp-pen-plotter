@@ -162,6 +162,7 @@
     "layerCountTitle": "Nombre de calques",
     "layerCountHint": "Un calque par cluster, chacun dessiné avec la couleur la plus proche de ta palette. Plus de calques = plus de détail et de couleurs distinctes. Le nombre de couleurs distinctes se règle dans l'onglet Style.",
     "pathTitle": "Traitements des tracés",
+    "detailPathTitle": "Détail & tracé",
     "centerline": "Mode trait (centerline)",
     "centerlineDesc": "Trace le squelette médian au lieu des contours fermés. Idéal pour les schémas et dessins au trait. Les zones remplies épaisses sont réduites à un seul trait au centre, c'est voulu.",
     "minBranch": "Détails fins (longueur min. de branche)",

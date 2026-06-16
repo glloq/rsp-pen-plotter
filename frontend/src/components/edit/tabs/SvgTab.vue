@@ -6,6 +6,7 @@ import { useJobStore } from '../../../stores/job'
 import DetailPicker from '../shared/DetailPicker.vue'
 import LabeledSlider from '../shared/LabeledSlider.vue'
 import TabEmptyState from '../shared/TabEmptyState.vue'
+import CollapsibleCard from '../shared/CollapsibleCard.vue'
 import SegmentationCountCard from '../svg/SegmentationCountCard.vue'
 import SegmentationMethodCard from '../svg/SegmentationMethodCard.vue'
 
@@ -56,8 +57,14 @@ function onSimplifyChange(v: number): void {
     <!-- Segmentation method (how the bitmap gets split into masks). -->
     <SegmentationMethodCard :bitmap="bitmap" :is-document="fm.kind.value === 'document'" />
 
-    <!-- Detail tier + path treatments -->
-    <div class="card space-y-3 text-xs">
+    <!-- Detail tier + path treatments — collapsible like the sibling
+         segmentation method card (open by default so nothing is hidden on
+         arrival), so the SVG tab's secondary blocks share one card pattern. -->
+    <CollapsibleCard
+      card-key="svg.detailPath"
+      :title="t('svg.detailPathTitle')"
+      :default-expanded="true"
+    >
       <DetailPicker
         :model-value="bitmap.max_dimension_px"
         @update:model-value="(v) => (bitmap.max_dimension_px = v)"
@@ -112,7 +119,7 @@ function onSimplifyChange(v: number): void {
           @update:model-value="onSimplifyChange"
         />
       </div>
-    </div>
+    </CollapsibleCard>
   </section>
 
   <TabEmptyState v-else-if="!fm.hasSource.value" :message="t('svg.noSource')" />
