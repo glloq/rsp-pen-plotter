@@ -271,11 +271,16 @@ export function useFileManager(t?: Translator, options: UseFileManagerOptions = 
       ).length,
   )
 
-  async function uploadSelected(): Promise<void> {
+  async function uploadSelected(opts: { skipConfirm?: boolean } = {}): Promise<void> {
     if (!_selectedFile.value) return
 
+    // ``skipConfirm`` is set when the re-convert is an implicit step of a
+    // higher-level action the operator already confirmed — e.g. "Enregistrer
+    // le style" on a non-rerenderable source, where the only way to bake the
+    // chosen style into the plan is a fresh conversion. Re-prompting there
+    // would be a redundant second dialog on top of the Save click.
     // Ask for overwrite confirmation when a conversion already exists.
-    if (store.job) {
+    if (!opts.skipConfirm && store.job) {
       const ok = await confirmAction({
         title: t?.('editModal.overwriteTitle') ?? 'Re-convert file',
         message:
@@ -288,7 +293,7 @@ export function useFileManager(t?: Translator, options: UseFileManagerOptions = 
       if (!ok) return
     }
 
-    if (multiPassLayerCount.value > 0) {
+    if (!opts.skipConfirm && multiPassLayerCount.value > 0) {
       const ok = await confirmAction({
         title: t?.('passes.reuploadTitle') ?? 'Multi-pass layers',
         message:

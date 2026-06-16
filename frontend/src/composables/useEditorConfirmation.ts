@@ -33,6 +33,14 @@ export interface EditorConfirmationDeps {
    *  (manual inks + hidden layers) onto the freshly committed layers so the
    *  G-code honours them. */
   onCommitted?: () => void | Promise<void>
+  /** Re-convert a non-rerenderable source (PDF / document) from its bytes so
+   *  the operator's chosen style/settings bake into the plan. These sources
+   *  have no in-place ``/rerender`` route, so a style change would otherwise
+   *  never reach the canvas — the operator had to remove + re-add the file.
+   *  Returns ``true`` when it handled the save (the source was non-rerenderable
+   *  and a re-convert ran), ``false`` to fall through to the normal expert /
+   *  assisted commit. Optional so callers without a file manager skip it. */
+  reconvertForPlan?: () => Promise<boolean>
 }
 
 export function useEditorConfirmation(deps: EditorConfirmationDeps) {
@@ -84,6 +92,34 @@ export function useEditorConfirmation(deps: EditorConfirmationDeps) {
   async function confirm(): Promise<void> {
     if (disposed) return
     if (!deps.hasPlacement.value || !deps.decision.value || applying.value) return
+    // Non-rerenderable sources (PDF / documents) can't be re-inked in place,
+    // so the chosen style only reaches the plan through a fresh conversion.
+    // Run that first; when it handles the save we've already committed the
+    // new SVG + layers, so emit the decision and skip the rerenderable
+    // expert/assisted paths below (which would otherwise /rerender a source
+    // that has no rerender route).
+    if (deps.reconvertForPlan) {
+      applying.value = true
+      applyError.value = null
+      let handled = false
+      try {
+        handled = await deps.reconvertForPlan()
+      } catch (err) {
+        applyError.value = errorMessage(err)
+        return
+      } finally {
+        applying.value = false
+      }
+      if (handled) {
+        // The modal can be torn down while the re-convert was in flight —
+        // bail before emitting so a closed modal never generates.
+        if (disposed) return
+        if (!deps.hasPlacement.value || !deps.decision.value) return
+        await deps.onCommitted?.()
+        deps.onConfirm(deps.decision.value)
+        return
+      }
+    }
     if (deps.isExpert.value) {
       const ok = await applyExpertDraft()
       if (!ok) return
