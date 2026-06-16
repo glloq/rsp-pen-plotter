@@ -72,7 +72,7 @@ const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length 
            (jog pad + pen + go-to + corners) is one compact two-column card
            so the tab fits without scrolling. -->
       <div
-        class="rounded-lg border border-slate-700 bg-slate-800 p-3 transition-opacity"
+        class="rounded-lg border border-slate-700 bg-slate-800 p-2 transition-opacity"
         :class="{ 'opacity-50': !status.connected }"
         :aria-disabled="!status.connected"
         data-test="manual-control"
