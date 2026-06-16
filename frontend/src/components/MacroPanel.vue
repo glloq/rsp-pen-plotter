@@ -75,11 +75,11 @@ async function removeMacro(name: string): Promise<void> {
         </div>
         <button
           class="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-40"
-          :disabled="!canRun"
+          :disabled="!canRun || store.isRunning(macro.name)"
           :title="canRun ? '' : t('macros.runHint')"
           @click="store.run(macro.name)"
         >
-          {{ t('macros.run') }}
+          {{ store.isRunning(macro.name) ? t('plotter.running') : t('macros.run') }}
         </button>
         <button
           class="rounded bg-slate-700 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"

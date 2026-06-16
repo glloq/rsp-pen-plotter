@@ -31,6 +31,20 @@ export const useQueueStore = defineStore('queue', () => {
   let timer: ReturnType<typeof setTimeout> | null = null
   let inflight: Promise<void> | null = null
   let consecutiveErrors = 0
+  // Run ids with an action (pause/resume/cancel/delete) in flight. The
+  // cockpit binds button ``:disabled`` to ``isBusy(id)`` and the actions
+  // early-return while busy, so a double-click can't fire a second
+  // round-trip before the first reloads the queue. ``enqueuing`` is the
+  // same guard for the id-less enqueue path.
+  const busyIds = ref<ReadonlySet<string>>(new Set())
+  const enqueuing = ref(false)
+  const isBusy = (id: string): boolean => busyIds.value.has(id)
+  function setBusy(id: string, value: boolean): void {
+    const next = new Set(busyIds.value)
+    if (value) next.add(id)
+    else next.delete(id)
+    busyIds.value = next
+  }
 
   const active = computed(() => runs.value.filter((r) => ACTIVE.includes(r.state)))
 
@@ -98,39 +112,62 @@ export const useQueueStore = defineStore('queue', () => {
   }
 
   async function enqueue(name: string, profileName: string, gcode: string): Promise<void> {
+    if (enqueuing.value) return
+    enqueuing.value = true
     try {
       await enqueuePrint(name, profileName, gcode)
       await load()
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('queue.enqueueFailed'))
+      const message = errorDetail(err, i18n.global.t('queue.enqueueFailed'))
+      error.value = message
+      useToastStore().error(message)
+    } finally {
+      enqueuing.value = false
     }
   }
 
   async function act(id: string, action: 'pause' | 'resume' | 'cancel'): Promise<void> {
+    if (busyIds.value.has(id)) return
+    setBusy(id, true)
     try {
       await queueRunAction(id, action)
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('queue.actionFailed'))
+      const message = errorDetail(err, i18n.global.t('queue.actionFailed'))
+      error.value = message
+      useToastStore().error(message)
+    } finally {
+      await load()
+      setBusy(id, false)
     }
-    await load()
   }
 
   async function remove(id: string): Promise<void> {
+    if (busyIds.value.has(id)) return
+    setBusy(id, true)
     try {
       await deleteQueuedRun(id)
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('queue.actionFailed'))
+      const message = errorDetail(err, i18n.global.t('queue.actionFailed'))
+      error.value = message
+      useToastStore().error(message)
+    } finally {
+      await load()
+      setBusy(id, false)
     }
-    await load()
   }
+
+  const isHidden = (): boolean => typeof document !== 'undefined' && document.hidden
 
   function _schedule(): void {
     if (timer !== null) clearTimeout(timer)
     // Fast cadence while a run is active (timeline cockpit needs
     // smooth progress), slow cadence when the queue is empty —
     // operators idle most of the time and don't need 2 s polling
-    // for an empty queue.
-    const base = active.value.length > 0 ? FAST_INTERVAL_MS : SLOW_INTERVAL_MS
+    // for an empty queue. A backgrounded tab also drops to the slow
+    // cadence even with an active run: nobody's watching the cockpit,
+    // so 3 s polling just burns the Pi's event loop. The visibility
+    // listener snaps back to fast + refreshes immediately on return.
+    const base = !isHidden() && active.value.length > 0 ? FAST_INTERVAL_MS : SLOW_INTERVAL_MS
     // Exponential backoff on repeated failures so a dropped backend doesn't
     // pin the Pi's event loop with reconnect attempts every 3 s.
     const interval = base * Math.pow(2, consecutiveErrors)
@@ -140,8 +177,19 @@ export const useQueueStore = defineStore('queue', () => {
     }, interval)
   }
 
+  let visibilityHandler: (() => void) | null = null
+
   function startPolling(): void {
     if (timer !== null) return // idempotent
+    if (visibilityHandler === null && typeof document !== 'undefined') {
+      visibilityHandler = () => {
+        // On return to the foreground, refresh immediately (the slow-cadence
+        // tick may be far off) and reschedule at the now-appropriate cadence.
+        if (!document.hidden) void load()
+        _schedule()
+      }
+      document.addEventListener('visibilitychange', visibilityHandler)
+    }
     void load().then(() => {
       if (timer === null) _schedule()
     })
@@ -156,7 +204,23 @@ export const useQueueStore = defineStore('queue', () => {
       clearTimeout(timer)
       timer = null
     }
+    if (visibilityHandler !== null && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', visibilityHandler)
+      visibilityHandler = null
+    }
   }
 
-  return { runs, active, error, load, enqueue, act, remove, startPolling, stopPolling }
+  return {
+    runs,
+    active,
+    error,
+    enqueuing,
+    isBusy,
+    load,
+    enqueue,
+    act,
+    remove,
+    startPolling,
+    stopPolling,
+  }
 })

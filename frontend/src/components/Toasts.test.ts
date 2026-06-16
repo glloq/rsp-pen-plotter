@@ -72,6 +72,33 @@ describe('Toasts', () => {
     expect(wrapper.find('.animate-spin').exists()).toBe(true)
   })
 
+  it('renders a determinate progress bar for progress toasts carrying a percent', async () => {
+    const store = useToastStore()
+    const id = store.progress('Updating render…', undefined, 42)
+    const wrapper = mount(Toasts)
+    await nextTick()
+    const bar = wrapper.find('[role="progressbar"]')
+    expect(bar.exists()).toBe(true)
+    expect(bar.attributes('aria-valuenow')).toBe('42')
+    // The fill width tracks the percent (clamped 0..100).
+    const fill = bar.find('div')
+    expect(fill.attributes('style')).toContain('width: 42%')
+    // setProgress moves the bar + message without re-kinding the toast.
+    store.setProgress(id, { percent: 73, message: 'Updating render… · ~3 s remaining' })
+    await nextTick()
+    expect(wrapper.find('[role="progressbar"]').attributes('aria-valuenow')).toBe('73')
+    expect(wrapper.text()).toContain('~3 s remaining')
+  })
+
+  it('omits the progress bar for indeterminate progress toasts (no percent)', async () => {
+    const store = useToastStore()
+    store.progress('Working…')
+    const wrapper = mount(Toasts)
+    await nextTick()
+    expect(wrapper.find('.animate-spin').exists()).toBe(true)
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
+  })
+
   it('renders the inline action button when ``action`` is set', async () => {
     const clicked = vi.fn()
     const store = useToastStore()

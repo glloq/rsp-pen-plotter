@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
 import { validateUploadFile } from '../api/uploadValidation'
@@ -30,6 +30,8 @@ import {
   type ToolpathMetrics,
 } from '../api/client'
 import { buildComposite } from '../lib/composite'
+import { beginProgressToast } from '../lib/progressToast'
+import { getDurationEstimateMs, recordDuration } from '../lib/durationEstimator'
 import {
   canonicalHex,
   layerStrokeWidthsPx,
@@ -165,7 +167,14 @@ function emptyBbox(): BoundingBox {
 
 export const useJobStore = defineStore('job', () => {
   // ====== Placements ====================================================
-  const placements = ref<Placement[]>([])
+  // ``shallowRef`` (not ``ref``): every write replaces the array wholesale
+  // via an immutable update (``patchPlacement`` does ``.map``/spread; layer
+  // edits route through ``patchSelected`` the same way), so deep reactivity
+  // would only add cost — Vue proxying every placement / layer / bbox on
+  // each drag-frame patch — without ever being relied upon (the old deep
+  // watcher was already removed; see ``invalidateOutputs`` below). The
+  // shallow ref still triggers all dependents on the array reassignment.
+  const placements = shallowRef<Placement[]>([])
   const selectedPlacementId = ref<string | null>(null)
 
   const selectedPlacement = computed<Placement | null>(() => {
@@ -790,6 +799,45 @@ export const useJobStore = defineStore('job', () => {
     scheduleRerender(50)
   }
 
+  // Bulk per-layer recipe application (audit B5). The master-style
+  // propagation (``applyMasterStyleToLayers``) assigns a *different*
+  // recipe + pen slot per band; doing it through the per-layer
+  // ``updateLayer`` + ``applyLayerAlgorithm`` looped N times meant N full
+  // ``layer_algorithms`` map spreads AND N whole-``fileSettings`` clones
+  // (``autoSyncFileSettings``) on a 120 ms cadence — a 16-band image
+  // stuttered. This collapses the whole set into a single patch + one
+  // sync + one clear + one rerender.
+  async function applyLayerRecipes(
+    entries: ReadonlyArray<{
+      layerId: string
+      penSlot?: number | null
+      algorithm: string
+      algorithmOptions: Record<string, unknown>
+    }>,
+  ): Promise<void> {
+    const p = selectedPlacement.value
+    if (!p || !entries.length) return
+    const nextAlgos: Record<string, LayerAlgorithm> = { ...p.layer_algorithms }
+    const slotByLayer = new Map<string, number>()
+    for (const e of entries) {
+      nextAlgos[e.layerId] = {
+        algorithm: e.algorithm,
+        algorithm_options: { ...e.algorithmOptions },
+      }
+      if (e.penSlot !== undefined && e.penSlot !== null) slotByLayer.set(e.layerId, e.penSlot)
+    }
+    const patch: Partial<Placement> = { layer_algorithms: nextAlgos }
+    if (slotByLayer.size) {
+      patch.layers = p.layers.map((l) =>
+        slotByLayer.has(l.layer_id) ? { ...l, target_pen_slot: slotByLayer.get(l.layer_id)! } : l,
+      )
+    }
+    patchSelected(patch)
+    autoSyncFileSettings()
+    clearLivePreviewSvg()
+    scheduleRerender(50)
+  }
+
   async function clearLayerAlgorithm(layerId: string): Promise<void> {
     const p = selectedPlacement.value
     if (!p) return
@@ -858,6 +906,23 @@ export const useJobStore = defineStore('job', () => {
     // sample — the operator's intent was to cancel, not to observe.
     const perf = usePerfStore()
     const tStart = performance.now()
+    // Slow-only progress toast (audit AXE A, A1/A2): both the assisted-Save
+    // path and the master-style edit route through here, and neither shows
+    // the editor's /preview overlay (that's a different endpoint), so before
+    // this the operator got zero feedback while a multi-second /rerender ran
+    // — sometimes after the modal had already closed. A render that finishes
+    // under ~400 ms never pops a toast; a slow one shows a determinate bar +
+    // ETA seeded from the rolling /rerender latency (the ``preview_refresh``
+    // KPI this same function records below), with a Cancel button wired to
+    // this run's abort controller.
+    const refreshSummary = perf.summary('preview_refresh')
+    const refreshEstimateMs = refreshSummary.count > 0 ? Math.round(refreshSummary.p50) : 0
+    const progressToast = beginProgressToast({
+      message: i18n.global.t('toast.rerendering'),
+      estimateMs: refreshEstimateMs,
+      showAfterMs: 400,
+      cancel: () => controller.abort(),
+    })
     try {
       const layersPayload = Object.entries(p.layer_algorithms).flatMap(
         ([layer_id, spec]): LayerAlgorithmOverride[] => {
@@ -898,6 +963,10 @@ export const useJobStore = defineStore('job', () => {
         penWidthsFor(p),
         inkColorsFor(p),
         { width_mm: p.width_mm, height_mm: p.height_mm },
+        // Real per-layer progress from /rerender/stream drives the toast's
+        // bar + layer label, superseding the estimated bar. Falls back to
+        // the estimate when streaming is unavailable (old backend / tests).
+        (percent, label) => progressToast.setProgress(percent, label),
       )
       if (controller.signal.aborted) return
       // patchPlacement already invalidates the cached outputs for the new SVG.
@@ -921,6 +990,10 @@ export const useJobStore = defineStore('job', () => {
         toasts.warning((err as Error).message || i18n.global.t('layers.rerenderFailed'))
       }
     } finally {
+      // Resolve the toast on every exit path (success, abort, error). The
+      // existing 404/405/generic warnings above own the error messaging, so
+      // here we just clear the in-progress toast rather than double up.
+      progressToast.dismiss()
       if (rerenderController === controller) rerenderController = null
       if (!controller.signal.aborted) {
         perf.recordTiming('preview_refresh', performance.now() - tStart, p.id)
@@ -1743,7 +1816,19 @@ export const useJobStore = defineStore('job', () => {
     // receives the signal and threads it through every API call.
     const ui = useUiStore()
     const controller = new AbortController()
-    ui.startGcodeJob('optimize', i18n.global.t('gcodeJob.optimizing'), () => controller.abort())
+    // Seed the modal's ETA from past pipeline durations (null on first run →
+    // the modal shows an indeterminate spinner). ``genStart`` clocks the
+    // whole optimize → preflight → generate run so a successful pass folds a
+    // fresh sample back into the estimate for next time.
+    const genStart = performance.now()
+    const generateEstimateMs = getDurationEstimateMs('generate')
+    const generateEtaSeconds = generateEstimateMs > 0 ? Math.round(generateEstimateMs / 1000) : null
+    ui.startGcodeJob(
+      'optimize',
+      i18n.global.t('gcodeJob.optimizing'),
+      () => controller.abort(),
+      generateEtaSeconds,
+    )
 
     let phase: 'optimize' | 'preflight' | 'generate' = 'optimize'
     try {
@@ -1799,6 +1884,10 @@ export const useJobStore = defineStore('job', () => {
       })
       preflight.value = outcome.preflight
       gcode.value = outcome.gcode
+      // Fold the real pipeline duration into the EMA so the next run's ETA
+      // sharpens. Only on success — a cancelled/errored run isn't a
+      // representative sample of the full pipeline cost.
+      recordDuration('generate', performance.now() - genStart)
       ui.finishGcodeJob('success', i18n.global.t('gcodeJob.success'))
       // Auto-dismiss the success state after a short pause so the modal
       // doesn't linger — the operator can already see the generated
@@ -1904,6 +1993,7 @@ export const useJobStore = defineStore('job', () => {
     restorePlacementAspect,
     fitSelectedPlacementToSheet,
     applyLayerAlgorithm,
+    applyLayerRecipes,
     applyAlgorithmToAllLayers,
     previewAlgorithmOnAllLayers,
     applyPassesToAllLayers,

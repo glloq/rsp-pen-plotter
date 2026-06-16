@@ -31,6 +31,12 @@ export interface GcodeJobState {
   message: string
   error: string | null
   startedAt: number | null
+  // Seed estimate (seconds) for the whole optimize → preflight → generate
+  // pipeline, learned from past runs (``durationEstimator``). Drives the
+  // modal's determinate bar + remaining-time readout. Null on the very
+  // first run (no history) — the modal falls back to an indeterminate
+  // spinner + elapsed counter.
+  etaSeconds: number | null
 }
 
 export interface UpdateModalState {
@@ -49,6 +55,12 @@ export interface UpdateModalState {
   // reminder and a Reload button. Distinct from ``phase === 'success'``
   // because a no-op still ends in success but doesn't need the reminder.
   newCommitApplied: boolean
+  // Seed estimate (seconds) for the update, learned from past updates
+  // (``durationEstimator``). Drives a determinate bar + remaining-time.
+  // Null on the first update (no history) → indeterminate spinner. Updates
+  // are genuinely unpredictable (npm/build/network), so past the estimate
+  // the modal shows a "taking longer than usual" hint, not a fake countdown.
+  etaSeconds: number | null
 }
 
 const UPDATE_NOTIFY_KEY = 'omniplot.updateNotifications'
@@ -110,6 +122,7 @@ export const useUiStore = defineStore('ui', () => {
     startedAt: null,
     forced: false,
     newCommitApplied: false,
+    etaSeconds: null,
   })
 
   // G-code generation progress modal. ``cancelFn`` is the AbortController
@@ -123,10 +136,16 @@ export const useUiStore = defineStore('ui', () => {
     message: '',
     error: null,
     startedAt: null,
+    etaSeconds: null,
   })
   const gcodeJobCancel = ref<(() => void) | null>(null)
 
-  function startGcodeJob(step: GcodeJobStep, message: string, cancel: () => void): void {
+  function startGcodeJob(
+    step: GcodeJobStep,
+    message: string,
+    cancel: () => void,
+    etaSeconds: number | null = null,
+  ): void {
     gcodeJobCancel.value = cancel
     gcodeJobState.value = {
       phase: 'running',
@@ -134,6 +153,7 @@ export const useUiStore = defineStore('ui', () => {
       message,
       error: null,
       startedAt: Date.now(),
+      etaSeconds,
     }
   }
 
@@ -154,6 +174,7 @@ export const useUiStore = defineStore('ui', () => {
       message,
       error,
       startedAt: gcodeJobState.value.startedAt,
+      etaSeconds: gcodeJobState.value.etaSeconds,
     }
   }
 
@@ -165,6 +186,7 @@ export const useUiStore = defineStore('ui', () => {
       message: '',
       error: null,
       startedAt: null,
+      etaSeconds: null,
     }
   }
 
@@ -226,7 +248,7 @@ export const useUiStore = defineStore('ui', () => {
     editModalOpen.value = false
   }
 
-  function startUpdate(message: string): void {
+  function startUpdate(message: string, etaSeconds: number | null = null): void {
     updateState.value = {
       phase: 'running',
       message,
@@ -234,6 +256,7 @@ export const useUiStore = defineStore('ui', () => {
       startedAt: Date.now(),
       forced: false,
       newCommitApplied: false,
+      etaSeconds,
     }
   }
 
@@ -259,6 +282,7 @@ export const useUiStore = defineStore('ui', () => {
       startedAt: updateState.value.startedAt,
       forced: payload.forced ?? false,
       newCommitApplied: payload.newCommitApplied ?? false,
+      etaSeconds: updateState.value.etaSeconds,
     }
   }
 
@@ -270,6 +294,7 @@ export const useUiStore = defineStore('ui', () => {
       startedAt: null,
       forced: false,
       newCommitApplied: false,
+      etaSeconds: null,
     }
   }
 

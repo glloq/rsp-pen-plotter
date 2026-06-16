@@ -6,12 +6,18 @@ import { getAudit, type AuditEntry } from '../api/client'
 const { t } = useI18n()
 const entries = ref<AuditEntry[]>([])
 let timer: ReturnType<typeof setInterval> | null = null
+let onVisible: (() => void) | null = null
 
 async function refresh(): Promise<void> {
+  // Skip the round-trip while the tab is backgrounded — nobody's reading
+  // the log, so a 5 s poll against a Pi is pure waste. The visibility
+  // listener fires an immediate refresh on return.
+  if (typeof document !== 'undefined' && document.hidden) return
   try {
     entries.value = await getAudit()
   } catch {
-    entries.value = []
+    // Keep the last good list on a transient blip rather than blanking it
+    // (which read as "no actions recorded yet").
   }
 }
 
@@ -23,9 +29,19 @@ function formatTime(ts: string): string {
 onMounted(() => {
   void refresh()
   timer = setInterval(refresh, 5000)
+  if (typeof document !== 'undefined') {
+    onVisible = () => {
+      if (!document.hidden) void refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+  }
 })
 onBeforeUnmount(() => {
   if (timer !== null) clearInterval(timer)
+  if (onVisible !== null && typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisible)
+    onVisible = null
+  }
 })
 </script>
 

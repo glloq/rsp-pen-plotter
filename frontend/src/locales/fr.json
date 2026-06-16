@@ -29,7 +29,16 @@
     "plotterSending": "Envoi du G-code au traceur…",
     "plotterSent": "G-code envoyé au traceur.",
     "plotterConnecting": "Connexion au traceur…",
-    "plotterConnected": "Traceur connecté."
+    "plotterConnected": "Traceur connecté.",
+    "remaining": "~{time} restant",
+    "almostDone": "presque terminé…",
+    "longerThanUsual": "plus long que d'habitude…",
+    "rerendering": "Mise à jour du rendu…",
+    "macroRunning": "Exécution de la macro « {name} »…",
+    "macroDone": "Macro « {name} » exécutée.",
+    "plotterMoving": "Déplacement de la tête…",
+    "plotterHoming": "Retour à l'origine…",
+    "cancel": "Annuler"
   },
   "header": {
     "settings": "Réglages",
@@ -1364,7 +1373,8 @@
   "gcode": {
     "title": "G-code",
     "lines": "lignes",
-    "download": "Télécharger"
+    "download": "Télécharger",
+    "truncated": "Affichage des {count} premières lignes — téléchargez pour le programme complet."
   },
   "simulator": {
     "title": "Simulateur",
@@ -1528,7 +1538,11 @@
     "description": "Description (facultatif)",
     "commands": "Une commande par ligne",
     "save": "Enregistrer la macro",
-    "clear": "Effacer"
+    "clear": "Effacer",
+    "runFailed": "Impossible d'exécuter la macro.",
+    "loadFailed": "Impossible de charger les macros.",
+    "saveFailed": "Impossible d'enregistrer la macro.",
+    "deleteFailed": "Impossible de supprimer la macro."
   },
   "swap": {
     "title": "Changement de stylo requis",
@@ -1565,7 +1579,8 @@
   },
   "history": {
     "title": "Historique",
-    "empty": "Aucun travail pour l'instant."
+    "empty": "Aucun travail pour l'instant.",
+    "loadFailed": "Impossible de charger l'historique."
   },
   "audit": {
     "title": "Journal d'audit",

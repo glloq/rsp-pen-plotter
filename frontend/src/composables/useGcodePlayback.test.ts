@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, ref, type Ref } from 'vue'
-import { useGcodePlayback, type PlaybackHandle } from './useGcodePlayback'
-import type { ParseOptions } from '../lib/gcode'
+import { defineComponent, nextTick, ref, type Ref } from 'vue'
+import { useGcodePlayback, type PlaybackHandle, type PlaybackOptions } from './useGcodePlayback'
+import { parseGcode, type ParseOptions, type SimResult } from '../lib/gcode'
 
 // The composable owns a requestAnimationFrame loop and registers an
 // ``onBeforeUnmount`` cleanup. To exercise it under vitest we mount a
@@ -28,17 +28,31 @@ const PARSE_OPTIONS: ParseOptions = {
   toolChangeCommand: 'M0',
 }
 
-function mountHost(gcode: Ref<string | null>, opts: Ref<ParseOptions | null>) {
+function mountHost(
+  gcode: Ref<string | null>,
+  opts: Ref<ParseOptions | null>,
+  options?: PlaybackOptions,
+) {
   let handle: PlaybackHandle | undefined
   const Host = defineComponent({
     setup() {
-      handle = useGcodePlayback({ gcode, parseOptions: opts })
+      handle = useGcodePlayback({ gcode, parseOptions: opts }, options)
       return () => null
     },
   })
   const wrapper = mount(Host)
   if (!handle) throw new Error('handle was not captured')
   return { wrapper, handle }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (err: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
 }
 
 describe('useGcodePlayback', () => {
@@ -171,5 +185,72 @@ describe('useGcodePlayback', () => {
     // teardown nukes any pending RAF — otherwise a future tick would
     // try to mutate a disposed ref.
     expect(cancel).toHaveBeenCalled()
+  })
+})
+
+// The production parser (parseGcodeMaybeAsync) resolves out of band via a
+// Web Worker. These cases drive that async contract through an injected
+// promise-returning parser — real timers so microtasks flush normally.
+describe('useGcodePlayback — async (worker) parse path', () => {
+  it('populates sim only once the parse promise resolves', async () => {
+    const gcode = ref<string | null>(SAMPLE_GCODE)
+    const opts = ref<ParseOptions | null>(PARSE_OPTIONS)
+    const d = deferred<SimResult>()
+    const { handle } = mountHost(gcode, opts, { parse: () => d.promise })
+    // Still parsing — sim stays null (no synchronous freeze).
+    expect(handle.sim.value).toBeNull()
+    const result = parseGcode(SAMPLE_GCODE, PARSE_OPTIONS)
+    d.resolve(result)
+    await d.promise
+    await nextTick()
+    expect(handle.sim.value).toBe(result)
+    expect(handle.simTime.value).toBe(result.totalTimeSeconds)
+  })
+
+  it('drops a stale parse result when a newer reparse supersedes it', async () => {
+    const gcode = ref<string | null>(SAMPLE_GCODE)
+    const opts = ref<ParseOptions | null>(PARSE_OPTIONS)
+    const first = deferred<SimResult>()
+    const second = deferred<SimResult>()
+    const queue = [first, second]
+    let i = 0
+    const { handle, wrapper } = mountHost(gcode, opts, { parse: () => queue[i++]!.promise })
+    // Trigger a second reparse while the first is still in flight.
+    gcode.value = `G21\nG90\nG0 X0 Y0\nM3 S1000\nG1 X20 Y20 F1800\n`
+    await wrapper.vm.$nextTick()
+    const stale = parseGcode(SAMPLE_GCODE, PARSE_OPTIONS)
+    const fresh = parseGcode(gcode.value, PARSE_OPTIONS)
+    // Resolve the OLD request last — it must be ignored.
+    second.resolve(fresh)
+    await second.promise
+    await nextTick()
+    expect(handle.sim.value).toBe(fresh)
+    first.resolve(stale)
+    await first.promise
+    await nextTick()
+    // Still the fresh result — the stale one was dropped by the seq guard.
+    expect(handle.sim.value).toBe(fresh)
+  })
+
+  it('keeps the last good sim when a parse rejects', async () => {
+    const gcode = ref<string | null>(SAMPLE_GCODE)
+    const opts = ref<ParseOptions | null>(PARSE_OPTIONS)
+    const first = deferred<SimResult>()
+    const second = deferred<SimResult>()
+    const queue = [first, second]
+    let i = 0
+    const { handle, wrapper } = mountHost(gcode, opts, { parse: () => queue[i++]!.promise })
+    const good = parseGcode(SAMPLE_GCODE, PARSE_OPTIONS)
+    first.resolve(good)
+    await first.promise
+    await nextTick()
+    expect(handle.sim.value).toBe(good)
+    // A later reparse fails — the canvas must not blank.
+    gcode.value = `G21\nG90\nG0 X1 Y1\n`
+    await wrapper.vm.$nextTick()
+    second.reject(new Error('boom'))
+    await second.promise.catch(() => undefined)
+    await nextTick()
+    expect(handle.sim.value).toBe(good)
   })
 })

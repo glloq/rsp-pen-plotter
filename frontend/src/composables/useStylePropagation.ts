@@ -36,6 +36,19 @@ export interface StylePropagationStore {
     algorithm: string,
     algorithmOptions: Record<string, unknown>,
   ) => Promise<void>
+  // Optional bulk path: when the store implements it, the composable hands
+  // over the full set of per-layer (slot + recipe) assignments in one call
+  // so the store collapses them into a single patch + sync + rerender
+  // instead of N (audit B5). Callers/tests that don't implement it fall
+  // back to the per-layer ``updateLayer`` + ``applyLayerAlgorithm`` loop.
+  applyLayerRecipes?: (
+    entries: ReadonlyArray<{
+      layerId: string
+      penSlot?: number | null
+      algorithm: string
+      algorithmOptions: Record<string, unknown>
+    }>,
+  ) => Promise<void> | void
 }
 
 export interface PropagationOptions {
@@ -80,17 +93,15 @@ export async function applyMasterStyleToLayers(
   if (!layers.length) return 0
   const style = resolveMasterStyle(options.styleId)
   const total = layers.length
-  let applied = 0
 
-  for (let i = 0; i < total; i++) {
-    const layer = layers[i]!
-    if (
+  // Resolve every layer's (slot + recipe) up front so the store can apply
+  // them in one shot. Slot is only set when it actually differs (mirrors
+  // the original per-layer guard).
+  const entries = layers.map((layer, i) => {
+    const slotDiffers =
       options.penSlot !== undefined &&
       options.penSlot !== null &&
       layer.target_pen_slot !== options.penSlot
-    ) {
-      store.updateLayer(layer.layer_id, { target_pen_slot: options.penSlot })
-    }
     // Resolution order, most → least specific:
     //   1. operator-tuned ``recipeResolver`` (live Style-tab sliders) —
     //      so what the picker would render and what the layers get stay
@@ -109,8 +120,26 @@ export async function applyMasterStyleToLayers(
         algorithm: style.defaultAlgorithm,
         algorithm_options: { ...style.defaultAlgorithmOptions },
       }
-    await store.applyLayerAlgorithm(layer.layer_id, recipe.algorithm, recipe.algorithm_options)
-    applied += 1
+    return {
+      layerId: layer.layer_id,
+      penSlot: slotDiffers ? options.penSlot : undefined,
+      algorithm: recipe.algorithm,
+      algorithmOptions: recipe.algorithm_options,
+    }
+  })
+
+  if (store.applyLayerRecipes) {
+    // Batched path — one patch + one sync + one rerender for the whole set.
+    await store.applyLayerRecipes(entries)
+  } else {
+    // Per-layer fallback (tests / minimal stores): identical observable
+    // effect, the store just debounces /rerender so it's still one round-trip.
+    for (const e of entries) {
+      if (e.penSlot !== undefined && e.penSlot !== null) {
+        store.updateLayer(e.layerId, { target_pen_slot: e.penSlot })
+      }
+      await store.applyLayerAlgorithm(e.layerId, e.algorithm, e.algorithmOptions)
+    }
   }
-  return applied
+  return entries.length
 }

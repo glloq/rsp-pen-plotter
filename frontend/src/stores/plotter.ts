@@ -133,11 +133,34 @@ export const usePlotterStore = defineStore('plotter', () => {
     closeSocket()
     return withErrors(() => plotterDisconnect())
   }
+  // True while a head movement (jog / goto / home) is in flight. Movement
+  // commands queue on the firmware, so without a guard a hammered jog pad
+  // dispatches a runaway stack of moves; the controls bind ``:disabled`` to
+  // this and ``withMovement`` early-returns as a hard backstop. Kept
+  // separate from transport (pause/resume/abort) so an in-flight move never
+  // disables the operator's ability to stop the machine.
+  const movementBusy = ref(false)
+  async function withMovement(
+    fn: () => Promise<PlotterStatus>,
+    progressMessage?: string,
+  ): Promise<void> {
+    if (movementBusy.value) return
+    movementBusy.value = true
+    try {
+      await withErrors(fn, progressMessage)
+    } finally {
+      movementBusy.value = false
+    }
+  }
+  // Jog steps are small + quick — a per-press toast would spam, so only the
+  // busy guard applies. Goto / home can take seconds, so they surface a
+  // progress toast that auto-dismisses when the move lands.
   const jog = (dx: number, dy: number, profileName: string): Promise<void> =>
-    withErrors(() => plotterJog(dx, dy, profileName))
+    withMovement(() => plotterJog(dx, dy, profileName))
   const goto = (x: number, y: number, profileName: string): Promise<void> =>
-    withErrors(() => plotterGoto(x, y, profileName))
-  const home = (profileName: string): Promise<void> => withErrors(() => plotterHome(profileName))
+    withMovement(() => plotterGoto(x, y, profileName), i18n.global.t('toast.plotterMoving'))
+  const home = (profileName: string): Promise<void> =>
+    withMovement(() => plotterHome(profileName), i18n.global.t('toast.plotterHoming'))
   const run = (gcode: string): Promise<void> =>
     withErrors(
       () => plotterRun(gcode),
@@ -173,6 +196,7 @@ export const usePlotterStore = defineStore('plotter', () => {
     terminator,
     error,
     progress,
+    movementBusy,
     connect,
     disconnect,
     jog,

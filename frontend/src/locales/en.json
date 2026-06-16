@@ -29,7 +29,16 @@
     "plotterSending": "Sending G-code to plotter…",
     "plotterSent": "G-code sent to plotter.",
     "plotterConnecting": "Connecting to plotter…",
-    "plotterConnected": "Plotter connected."
+    "plotterConnected": "Plotter connected.",
+    "remaining": "~{time} remaining",
+    "almostDone": "almost done…",
+    "longerThanUsual": "taking longer than usual…",
+    "rerendering": "Updating render…",
+    "macroRunning": "Running macro \"{name}\"…",
+    "macroDone": "Macro \"{name}\" done.",
+    "plotterMoving": "Moving the head…",
+    "plotterHoming": "Homing…",
+    "cancel": "Cancel"
   },
   "header": {
     "settings": "Settings",
@@ -1364,7 +1373,8 @@
   "gcode": {
     "title": "G-code",
     "lines": "lines",
-    "download": "Download"
+    "download": "Download",
+    "truncated": "Showing the first {count} lines — download for the full program."
   },
   "simulator": {
     "title": "Simulator",
@@ -1528,7 +1538,11 @@
     "description": "Description (optional)",
     "commands": "One command per line",
     "save": "Save macro",
-    "clear": "Clear"
+    "clear": "Clear",
+    "runFailed": "Could not run the macro.",
+    "loadFailed": "Could not load macros.",
+    "saveFailed": "Could not save the macro.",
+    "deleteFailed": "Could not delete the macro."
   },
   "swap": {
     "title": "Pen change required",
@@ -1565,7 +1579,8 @@
   },
   "history": {
     "title": "History",
-    "empty": "No jobs yet."
+    "empty": "No jobs yet.",
+    "loadFailed": "Couldn't load job history."
   },
   "audit": {
     "title": "Audit log",

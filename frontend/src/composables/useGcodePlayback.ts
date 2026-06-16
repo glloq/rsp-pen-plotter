@@ -17,7 +17,8 @@
 // ``onBeforeUnmount`` cleanup so the caller doesn't have to remember.
 
 import { onBeforeUnmount, ref, shallowRef, watch, type Ref } from 'vue'
-import { parseGcode, type ParseOptions, type SimResult } from '../lib/gcode'
+import { type ParseOptions, type SimResult } from '../lib/gcode'
+import { parseGcodeMaybeAsync } from '../lib/gcodeParser'
 
 export interface PlaybackInputs {
   /** Source G-code text. ``null`` means "no plot yet" and parks the
@@ -27,6 +28,17 @@ export interface PlaybackInputs {
    *  while no profile is selected (``sim.value`` stays ``null`` then
    *  too, mirroring the original Simulator behaviour). */
   parseOptions: Ref<ParseOptions | null>
+}
+
+export interface PlaybackOptions {
+  /** Parse function. Defaults to the worker-backed parser
+   *  (``parseGcodeMaybeAsync``), which offloads to a Web Worker in the
+   *  browser and falls back to a synchronous parse where Worker is
+   *  unavailable (SSR / unit tests). May return a value OR a Promise — a
+   *  synchronous return keeps ``reparse`` synchronous so callers that read
+   *  ``sim`` on the same tick still observe the result. Injectable so the
+   *  async path is testable without a real worker. */
+  parse?: (code: string, opts: ParseOptions) => SimResult | Promise<SimResult>
 }
 
 export interface PlaybackHandle {
@@ -54,7 +66,15 @@ export interface PlaybackHandle {
  * ``speed`` defaults to ``5×`` to match the Simulator toolbar's
  * preset row (1× / 5× / 100×); the original component opens at 5×.
  */
-export function useGcodePlayback(inputs: PlaybackInputs): PlaybackHandle {
+export function useGcodePlayback(
+  inputs: PlaybackInputs,
+  options: PlaybackOptions = {},
+): PlaybackHandle {
+  const parse = options.parse ?? parseGcodeMaybeAsync
+  // Monotonic parse request id. Guards against a stale async parse landing
+  // after a newer reparse (or a park-to-null) took over — the worker path
+  // resolves out of band, so only the latest request may write ``sim``.
+  let parseSeq = 0
   // ``shallowRef`` on purpose: a parsed plot can hold tens of thousands
   // of ``SimSegment`` objects. A plain ``ref`` would wrap every segment
   // (and every field within) in a reactive Proxy — doubling memory and
@@ -118,20 +138,42 @@ export function useGcodePlayback(inputs: PlaybackInputs): PlaybackHandle {
     simTime.value = Math.max(0, Math.min(r.totalTimeSeconds, time))
   }
 
+  function apply(result: SimResult): void {
+    sim.value = result
+    // Default to the final frame so the operator sees the full result
+    // the moment they open the tab. Press Restart / Play to scrub
+    // back to the start of the plot.
+    simTime.value = result.totalTimeSeconds
+  }
+
   function reparse(): void {
     pause()
     const code = inputs.gcode.value
     const opts = inputs.parseOptions.value
+    // Bump first so an in-flight async parse is invalidated even by the
+    // park-to-null branch below.
+    const reqId = ++parseSeq
     if (!code || !opts) {
       sim.value = null
       simTime.value = 0
       return
     }
-    sim.value = parseGcode(code, opts)
-    // Default to the final frame so the operator sees the full result
-    // the moment they open the tab. Press Restart / Play to scrub
-    // back to the start of the plot.
-    simTime.value = sim.value.totalTimeSeconds
+    const out = parse(code, opts)
+    if (out instanceof Promise) {
+      out
+        .then((result) => {
+          // Drop a stale result: a newer reparse took over while the worker
+          // was busy. Equality also covers the park-to-null case above.
+          if (reqId === parseSeq) apply(result)
+        })
+        .catch(() => {
+          // Parse failed (the worker client already falls back to a
+          // main-thread parse, so this is a last-resort guard) — keep the
+          // last good sim rather than blanking the canvas.
+        })
+    } else {
+      apply(out)
+    }
   }
 
   // Auto-reparse whenever either input changes. ``immediate`` runs

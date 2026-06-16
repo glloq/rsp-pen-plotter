@@ -80,20 +80,25 @@ const PlotterSettingsModal = defineAsyncComponent(loadPlotterSettingsModal)
 // only runs when the main thread has spare cycles. ``requestIdleCallback``
 // isn't shipped by every browser; ``setTimeout`` (1 s) is a safe
 // fallback that still arrives well before the typical first Edit click.
-function prefetchHeavySurfaces(): void {
-  type IdleScheduler = (cb: () => void, opts?: { timeout: number }) => unknown
-  const idle =
+type IdleScheduler = (cb: () => void, opts?: { timeout: number }) => unknown
+// Run ``cb`` during browser idle time (``requestIdleCallback`` where
+// available, a 1 s ``setTimeout`` fallback otherwise) so it never contends
+// with the boot critical path. Shared by the chunk prefetch and the
+// advisory-data fetches deferred out of ``onMounted``.
+function scheduleIdle(cb: () => void, opts: { timeout: number } = { timeout: 4000 }): void {
+  const idle: IdleScheduler =
     (window as unknown as { requestIdleCallback?: IdleScheduler }).requestIdleCallback ??
-    ((cb: () => void) => window.setTimeout(cb, 1000))
-  idle(
-    () => {
-      void loadEditModal().catch(() => undefined)
-      void loadWorkshop().catch(() => undefined)
-      void loadSettingsDrawer().catch(() => undefined)
-      void loadPlotterSettingsModal().catch(() => undefined)
-    },
-    { timeout: 4000 },
-  )
+    ((c: () => void) => window.setTimeout(c, 1000))
+  idle(cb, opts)
+}
+
+function prefetchHeavySurfaces(): void {
+  scheduleIdle(() => {
+    void loadEditModal().catch(() => undefined)
+    void loadWorkshop().catch(() => undefined)
+    void loadSettingsDrawer().catch(() => undefined)
+    void loadPlotterSettingsModal().catch(() => undefined)
+  })
 }
 
 import { api } from './api/client'
@@ -346,8 +351,10 @@ onMounted(async () => {
     )
   }
   try {
-    await getHealth()
-    await Promise.all([store.loadProfiles(), store.loadPresets()])
+    // Health folds into the same wave as profiles/presets — its result is
+    // only used to decide whether to show the unreachable toast, so there's
+    // no reason to pay a serial round-trip before the real boot data loads.
+    await Promise.all([getHealth(), store.loadProfiles(), store.loadPresets()])
   } catch {
     // Backend unreachable at boot is operator-blocking: nothing in the
     // app works without it. Use the persistent ``critical`` channel so
@@ -355,28 +362,27 @@ onMounted(async () => {
     // see it after wandering away from the screen.
     toasts.critical(t('app.apiUnreachable'))
   }
-  // Fire-and-forget: the toast is purely advisory, no need to block the
-  // rest of the startup sequence on the (potentially slow) git fetch.
-  void checkForUpdatesOnStartup()
-  // Library integrity is best-effort: the banner stays hidden when the
-  // call fails, so a transient network blip never turns into a false
-  // alert. Refreshed only on boot — the backend boot scan is the
-  // authoritative trigger.
-  void library.refreshIntegrity()
-  // Algorithm manifest powers the v2 modal's resolver UI and the
-  // fallback banner. Failure populates `source` with 'snapshot' so the
-  // banner becomes visible — no toast needed.
-  void algorithms.refresh()
-  // Available-colours inventory drives the assisted editor's colour
-  // budget (``v2AvailableColorsCount``) so the resolver picks colours
-  // from the operator's owned inks rather than the magazine slots.
-  // Fire-and-forget: the count falls back to the slot count until it lands.
-  if (!availableColors.loaded) void availableColors.refresh()
   // Queue polling needs to run for the whole app session so Workshop
   // Mode + WorkspaceRail see live runs even when the operator never
   // opens the Plotter tab. ``startPolling`` is idempotent — calling
   // it again from PlotterControl is a no-op.
   queue.startPolling()
+  // Advisory data — none of it is needed for first paint. Defer to idle so
+  // it doesn't contend for sockets / main-thread time with the critical
+  // boot wave (profiles, queue, library):
+  //   - update check: purely a toast, and the git fetch can be slow;
+  //   - library integrity: best-effort banner, hidden on failure;
+  //   - algorithm manifest: only powers the (closed) edit modal's resolver
+  //     + the fallback banner, which can appear a beat later;
+  //   - available colours: only feeds the edit modal's colour budget, which
+  //     falls back to the slot count until it lands (also lazily loaded by
+  //     SheetPreview when actually needed).
+  scheduleIdle(() => {
+    void checkForUpdatesOnStartup()
+    void library.refreshIntegrity()
+    void algorithms.refresh()
+    if (!availableColors.loaded) void availableColors.refresh()
+  })
   // Warm the editor + Workshop chunks during idle time so the first
   // click on Edit (or Workshop Mode) doesn't pay the network + parse
   // cost. See ``prefetchHeavySurfaces`` for the scheduling notes.

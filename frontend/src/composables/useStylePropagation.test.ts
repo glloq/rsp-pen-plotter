@@ -109,4 +109,31 @@ describe('applyMasterStyleToLayers', () => {
     expect(slotPatches).toEqual([{ layerId: 'color-000000', slot: 2 }])
     expect(calls).toHaveLength(1)
   })
+
+  it('uses the batched applyLayerRecipes path in one call when the store provides it', async () => {
+    const { store, calls, slotPatches } = makeStore([
+      { layer_id: 'color-ff0000', source_color: '#ff0000', target_pen_slot: null },
+      { layer_id: 'color-00ff00', source_color: '#00ff00', target_pen_slot: null },
+      { layer_id: 'color-0000ff', source_color: '#0000ff', target_pen_slot: null },
+    ])
+    const batches: Parameters<NonNullable<StylePropagationStore['applyLayerRecipes']>>[0][] = []
+    store.applyLayerRecipes = (entries) => {
+      batches.push(entries)
+    }
+    const applied = await applyMasterStyleToLayers(store, {
+      styleId: 'color-crosshatch',
+      penSlot: 4,
+    })
+    // One batched call carrying all three layers; the per-layer fallback
+    // methods are NOT used.
+    expect(batches).toHaveLength(1)
+    expect(batches[0]).toHaveLength(3)
+    expect(calls).toHaveLength(0)
+    expect(slotPatches).toHaveLength(0)
+    expect(applied).toBe(3)
+    // Slot 4 differs from the layers' null, so it rides along on each entry,
+    // and the per-cluster crosshatch angles are still distinct.
+    expect(batches[0]!.every((e) => e.penSlot === 4)).toBe(true)
+    expect(new Set(batches[0]!.map((e) => e.algorithmOptions.angle_deg)).size).toBe(3)
+  })
 })

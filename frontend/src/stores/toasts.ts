@@ -23,6 +23,11 @@ export interface Toast {
    *  ttl. Reserved for critical events (operator-blocking errors,
    *  hardware loss) that must not vanish on a 6 s timer. */
   persistent?: boolean
+  /** Determinate progress 0..100 for ``kind === 'progress'``. When set,
+   *  the toast renders a thin filling bar in addition to the spinner so
+   *  the operator sees *how far* a long op has got, not just *that* it's
+   *  running. Left undefined for indeterminate (spinner-only) progress. */
+  progress?: number
 }
 
 let nextId = 1
@@ -45,12 +50,15 @@ export const useToastStore = defineStore('toasts', () => {
     message: string,
     ttl: number = 6000,
     action?: ToastAction,
-    options: { persistent?: boolean } = {},
+    options: { persistent?: boolean; progress?: number } = {},
   ): number {
     const id = nextId++
     const persistent = options.persistent === true
     const effectiveTtl = persistent ? 0 : ttl
-    toasts.value = [...toasts.value, { id, kind, message, ttl: effectiveTtl, action, persistent }]
+    toasts.value = [
+      ...toasts.value,
+      { id, kind, message, ttl: effectiveTtl, action, persistent, progress: options.progress },
+    ]
     if (effectiveTtl > 0) {
       timers.set(
         id,
@@ -71,13 +79,32 @@ export const useToastStore = defineStore('toasts', () => {
     show('error', message, 0, action, { persistent: true })
 
   // Persistent toast for in-progress operations. Returns an id; pass it to
-  // ``update()`` or ``dismiss()`` when the operation completes. ttl=0 so it
-  // stays visible (with spinner) until the caller resolves it. The optional
-  // ``action`` wires up a cancel button (or similar) inline on the toast,
-  // so the operator can interrupt a long-running render without hunting
-  // for the right pane to click in.
-  const progress = (message: string, action?: ToastAction): number =>
-    show('progress', message, 0, action)
+  // ``setProgress()`` (to advance the bar / message), ``update()`` or
+  // ``dismiss()`` when the operation completes. ttl=0 so it stays visible
+  // (with spinner) until the caller resolves it. The optional ``action``
+  // wires up a cancel button (or similar) inline on the toast, so the
+  // operator can interrupt a long-running render without hunting for the
+  // right pane to click in. ``initialPercent`` opts the toast into the
+  // determinate progress bar from the first frame.
+  const progress = (message: string, action?: ToastAction, initialPercent?: number): number =>
+    show('progress', message, 0, action, { progress: initialPercent })
+
+  // In-place update of a live toast's progress bar and/or message WITHOUT
+  // touching its ttl/timer — the hot path for a per-tick ETA refresh on a
+  // ``progress`` toast (which is ttl=0/persistent anyway). Distinct from
+  // ``update()``, which re-kinds the toast and resets the auto-dismiss
+  // timer. No-op when the id is gone (operator dismissed it manually).
+  function setProgress(id: number, fields: { percent?: number; message?: string }): void {
+    toasts.value = toasts.value.map((t) =>
+      t.id === id
+        ? {
+            ...t,
+            ...(fields.percent !== undefined ? { progress: fields.percent } : {}),
+            ...(fields.message !== undefined ? { message: fields.message } : {}),
+          }
+        : t,
+    )
+  }
 
   // Transform an existing toast (typically a ``progress`` one) into a new
   // kind/message with a fresh ttl. Falls back to creating a new toast if
@@ -117,6 +144,7 @@ export const useToastStore = defineStore('toasts', () => {
     error,
     critical,
     progress,
+    setProgress,
     update,
   }
 })
