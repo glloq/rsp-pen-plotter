@@ -7,6 +7,7 @@ import { applyMasterStyleToLayers } from '../../../composables/useStylePropagati
 import { useJobStore } from '../../../stores/job'
 import LayerCountBadge from '../shared/LayerCountBadge.vue'
 import MasterStyleKnobs from './MasterStyleKnobs.vue'
+import { getAlgoSpec } from '../../../data/algorithmSchemas'
 
 // Per-style knobs exposed by the active master style. Two paths:
 //   - shaded styles (luminance_bands)   → bands slider (1..20) + ink
@@ -42,6 +43,15 @@ const draft = useBitmapDraft()
 const store = useJobStore()
 
 const style = computed(() => resolveMasterStyle(props.styleId))
+
+// Per-band override drawer shows the master algorithm's option keys. Resolve
+// each raw key (``spacing_mm``…) to its localised label via the algorithm
+// schema, like AlgoParamsForm does, instead of surfacing the bare field name.
+const bandAlgoSpec = computed(() => getAlgoSpec(style.value.defaultAlgorithm))
+function bandKeyLabel(key: string): string {
+  const opt = bandAlgoSpec.value?.schema.find((o) => o.key === key)
+  return opt ? t(opt.label) : key
+}
 const usesBands = computed(() => style.value.segmentation?.method === 'luminance_bands')
 // Some luminance_bands styles don't expose a band-count knob (the tonal
 // spiral is a single continuous stroke shaded from the pixel tone map, so
@@ -301,7 +311,7 @@ function bandSwatchStyle(i: number): Record<string, string> {
               :key="key"
               class="flex items-center gap-1"
             >
-              <span class="text-[10px] text-slate-500">{{ key }}</span>
+              <span class="text-[10px] text-slate-500">{{ bandKeyLabel(String(key)) }}</span>
               <input
                 v-if="typeof value === 'number'"
                 type="number"

@@ -451,3 +451,37 @@ et les sélecteurs : elle change la **résolution/affichage des styles** et
 un vrai refactor à concevoir et tester séparément (mapping des ids legacy,
 parité des presets, snapshots de rendu). Laissé pour une itération dédiée
 plutôt que fait à l'aveugle.
+
+---
+
+## 12. Seconde passe éditeur — constats A–F (2026-06)
+
+Re-lecture ciblée des 5 onglets, **strictement éditeur** (aucun réglage traceur).
+Appliqué :
+
+- **A** — onglet Style : hints de mode allégés (la clause qui répétait le
+  sous-texte du bouton est retirée ; le pointeur actionnable vers l'onglet
+  Calques est conservé — `render.multicolorHint`, `mono.layersHint`).
+- **B** — `MasterStyleParams` : le tiroir avancé « par bande » affichait les
+  options avec leur clé brute (`spacing_mm`…) ; elles passent par les libellés
+  localisés du schéma de l'algorithme (comme `AlgoParamsForm`), repli sur la clé.
+- **D** — `MasterStylePicker` : tooltip `render.customisedHint` retiré (la ligne
+  `customisedExplain` juste en dessous dit déjà la même chose).
+- **E** — `SvgTab` : note permanente « Lissage de courbe · Bientôt » retirée
+  (fonctionnalité non livrée, note non interactive).
+- **F** — `SvgTab` : le bloc détail/tracé devient une `CollapsibleCard` (dépliée
+  par défaut), cohérente avec la `SegmentationMethodCard` voisine ; `StyleTab`
+  suivait déjà la convention (cartes primaires plates + post-process accordéon).
+
+Clés i18n orphelines supprimées au passage : `svg.curveFit*`,
+`render.customisedHint`.
+
+**C — examiné mais NON appliqué (justifié).** Localiser les pickers d'algorithme
+« expert » (`LayerPassStack:336`, menu avancé `LayerCard:458`) : seuls ~9
+algorithmes sur ~44 disposent d'une clé `convert.algo*`. Le faire produirait un
+affichage **incohérent** (quelques-uns traduits, la majorité en brut) ou
+imposerait d'**inventer ~35 libellés**. Les identifiants bruts restent le choix
+cohérent et reconnaissable pour ces menus power-user.
+
+Vérifié à chaque incrément : `vue-tsc --noEmit` ✓ · `vite build` ✓ ·
+`vitest run` (847 tests) ✓ · `eslint` ✓.

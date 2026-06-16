@@ -127,7 +127,6 @@ const activeStyle = computed(() => resolve(props.modelValue))
       <span
         v-if="isCustomised"
         class="rounded border border-amber-700 bg-amber-950/40 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-amber-200"
-        :title="t('render.customisedHint')"
       >
         {{ t('render.customised') }}
       </span>
