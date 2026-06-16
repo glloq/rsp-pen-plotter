@@ -334,11 +334,13 @@ schéma `PreviewProgressEvent` et le pont thread+queue de `preview_stream`. Côt
 gagne un `onProgress` qui consomme le flux (`fetch` + `ReadableStream`) et retombe sur le POST simple si
 indisponible ; le toast affiche la **vraie** barre par couche + libellé au lieu de l'estimation.
 
+**Phase 3 (suite) — B3 : lazy-load des miniatures à la visibilité** : composable `useInViewport`
+(`IntersectionObserver`, fallback eager), `FileListRow` émet `visible` à l'entrée dans la vue, et
+`FilesPane` ne fetch/sanitize le détail d'une ligne qu'à ce moment-là (fin du burst N fetch + N
+DOMPurify à l'ouverture / au filtrage). Toutes les lignes restent dans le DOM (scroll naturel).
+
 ### ⏸️ Différé sciemment (raison)
 
-- **B3 — virtualisation complète de la grille bibliothèque** : nécessite un `IntersectionObserver`
-  (absent de happy-dom) + refonte du fetch/sanitize par ligne visible ; risque de régression sur
-  `FilesPane.test`. Atténué aujourd'hui par v-memo + thumbCache + le hoist du Collator.
 - **B4 — `isDirty` flag** : le remplacer changerait la sémantique value-based (revert = propre) ;
   gain marginal (stringify de petits objets) pour un risque de test.
 - **B9 — debounce persistance workspaces** : le test attend une persistance synchrone, et l'usage
