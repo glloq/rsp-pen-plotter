@@ -47,6 +47,12 @@ export interface SavedFileSettings {
   // older snapshots (and files whose only state is layer overrides)
   // still load.
   last_options?: Record<string, unknown>
+  // The on-plan footprint (mm) the file was last left at — set by a resize
+  // or the editor's sheet picker (e.g. "fit to A5"). Restored on the next
+  // placement so re-dropping a file the operator sized to A5 brings it
+  // back at A5 instead of recomputing an auto-fit-to-workspace size.
+  // Optional for back-compat with snapshots saved before footprint memory.
+  footprint_mm?: { width_mm: number; height_mm: number }
 }
 
 const FILE_SETTINGS_KEY = 'omniplot.fileSettings.v2'
@@ -203,12 +209,14 @@ export const useLibraryStore = defineStore('library', () => {
       layer_algorithms: Record<string, LayerAlgorithm>
       visibility: Record<string, boolean>
       last_options?: Record<string, unknown>
+      footprint_mm?: { width_mm: number; height_mm: number }
     },
   ): void {
     if (!fileId) return
-    // Preserve a previously-saved ``last_options`` when this call doesn't
-    // carry one (e.g. a pure visibility toggle whose options haven't
-    // been recomputed) so we never blank out a remembered config.
+    // Preserve a previously-saved ``last_options`` / ``footprint_mm`` when
+    // this call doesn't carry one (e.g. a pure visibility toggle whose
+    // options haven't been recomputed) so we never blank out a remembered
+    // config or footprint.
     const prior = fileSettings.value[fileId]
     fileSettings.value = {
       ...fileSettings.value,
@@ -219,6 +227,11 @@ export const useLibraryStore = defineStore('library', () => {
           ? { ...settings.last_options }
           : prior?.last_options
             ? { ...prior.last_options }
+            : undefined,
+        footprint_mm: settings.footprint_mm
+          ? { ...settings.footprint_mm }
+          : prior?.footprint_mm
+            ? { ...prior.footprint_mm }
             : undefined,
       },
     }
@@ -232,6 +245,7 @@ export const useLibraryStore = defineStore('library', () => {
       layer_algorithms: { ...saved.layer_algorithms },
       visibility: { ...saved.visibility },
       last_options: saved.last_options ? { ...saved.last_options } : undefined,
+      footprint_mm: saved.footprint_mm ? { ...saved.footprint_mm } : undefined,
     }
   }
 
