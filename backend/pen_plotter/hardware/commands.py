@@ -9,23 +9,28 @@ from __future__ import annotations
 from pen_plotter.models import MachineProfile
 
 
-def jog_command(dx_mm: float, dy_mm: float, profile: MachineProfile) -> list[str]:
+def jog_command(
+    dx_mm: float, dy_mm: float, profile: MachineProfile, dz_mm: float = 0.0
+) -> list[str]:
     """Build a relative jog move.
 
     Args:
         dx_mm: Relative X displacement in millimeters.
         dy_mm: Relative Y displacement in millimeters.
         profile: The target machine profile (for travel speed).
+        dz_mm: Relative Z displacement in millimeters for a motorised Z
+            axis. Added to the move only when non-zero so X/Y-only machines
+            never see a spurious ``Z`` word.
 
     Returns:
         The G-code lines for a relative jog, restoring absolute mode.
     """
     feed = profile.travel_speed_mm_s * 60.0
-    return [
-        "G91",
-        f"G1 X{dx_mm:.3f} Y{dy_mm:.3f} F{feed:.1f}",
-        "G90",
-    ]
+    move = f"G1 X{dx_mm:.3f} Y{dy_mm:.3f}"
+    if dz_mm:
+        move += f" Z{dz_mm:.3f}"
+    move += f" F{feed:.1f}"
+    return ["G91", move, "G90"]
 
 
 def goto_command(x_mm: float, y_mm: float, profile: MachineProfile) -> list[str]:

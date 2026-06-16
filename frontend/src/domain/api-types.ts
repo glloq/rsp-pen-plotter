@@ -2468,6 +2468,11 @@ export interface components {
             dx_mm: number;
             /** Dy Mm */
             dy_mm: number;
+            /**
+             * Dz Mm
+             * @default 0
+             */
+            dz_mm: number;
             /** Profile Name */
             profile_name: string;
         };

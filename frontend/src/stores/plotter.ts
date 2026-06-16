@@ -155,8 +155,8 @@ export const usePlotterStore = defineStore('plotter', () => {
   // Jog steps are small + quick — a per-press toast would spam, so only the
   // busy guard applies. Goto / home can take seconds, so they surface a
   // progress toast that auto-dismisses when the move lands.
-  const jog = (dx: number, dy: number, profileName: string): Promise<void> =>
-    withMovement(() => plotterJog(dx, dy, profileName))
+  const jog = (dx: number, dy: number, profileName: string, dz = 0): Promise<void> =>
+    withMovement(() => plotterJog(dx, dy, profileName, dz))
   const goto = (x: number, y: number, profileName: string): Promise<void> =>
     withMovement(() => plotterGoto(x, y, profileName), i18n.global.t('toast.plotterMoving'))
   const home = (profileName: string): Promise<void> =>

@@ -63,6 +63,15 @@ def test_jog_command_is_relative() -> None:
     assert lines[0] == "G91"
     assert lines[-1] == "G90"
     assert "X5.000 Y-3.000" in lines[1]
+    # An X/Y-only jog never emits a Z word.
+    assert "Z" not in lines[1]
+
+
+def test_jog_command_adds_z_when_nonzero() -> None:
+    lines = jog_command(0.0, 0.0, _profile(), dz_mm=2.5)
+    assert lines[0] == "G91"
+    assert lines[-1] == "G90"
+    assert "Z2.500" in lines[1]
 
 
 def test_home_command_grbl() -> None:

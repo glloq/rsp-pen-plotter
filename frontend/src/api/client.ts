@@ -589,10 +589,12 @@ export async function plotterJog(
   dxMm: number,
   dyMm: number,
   profileName: string,
+  dzMm = 0,
 ): Promise<PlotterStatus> {
   const response = await api.post<PlotterStatus>('/plotter/jog', {
     dx_mm: dxMm,
     dy_mm: dyMm,
+    dz_mm: dzMm,
     profile_name: profileName,
   })
   return response.data

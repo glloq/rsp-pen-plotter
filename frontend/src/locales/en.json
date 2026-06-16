@@ -1416,6 +1416,8 @@
     "jogDown": "Jog down (Y−)",
     "jogLeft": "Jog left (X−)",
     "jogRight": "Jog right (X+)",
+    "jogZUp": "Raise Z (Z+)",
+    "jogZDown": "Lower Z (Z−)",
     "gotoCorner": "Go to corner X{x} Y{y}",
     "sendJob": "Send job",
     "pause": "Pause",
