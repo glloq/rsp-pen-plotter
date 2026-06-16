@@ -323,11 +323,19 @@ C3/C7 (fetches advisory en idle).
 
 **Phase 5 — Polling** : D1 (queue visibility-aware).
 
+**Phase 3 (suite) — B2 : parse G-code en Web Worker** : `lib/gcodeParser.worker.ts` +
+`parseGcodeMaybeAsync` (worker en navigateur, fallback synchrone hors navigateur). `useGcodePlayback`
+gère valeur sync OU promesse async, avec garde de péremption (seq) ; build émet un chunk worker séparé.
+Supprime le gel à l'ouverture du simulateur / à la régénération.
+
+**Phase 5 (backend+frontend) — vraie progression SSE sur `/rerender`** : nouvel endpoint
+`POST /rerender/stream` (SSE, 1 tick `progress` par couche + `done` portant le SVG), réutilisant le
+schéma `PreviewProgressEvent` et le pont thread+queue de `preview_stream`. Côté frontend, `rerenderJob`
+gagne un `onProgress` qui consomme le flux (`fetch` + `ReadableStream`) et retombe sur le POST simple si
+indisponible ; le toast affiche la **vraie** barre par couche + libellé au lieu de l'estimation.
+
 ### ⏸️ Différé sciemment (raison)
 
-- **B2 — parse G-code en Web Worker** : transforme `reparse` (composable testé) de sync→async et
-  exige un stub Worker dans happy-dom ; non vérifiable sans navigateur réel. Le plus gros gain réel
-  restant, mais le plus risqué à faire à l'aveugle.
 - **B3 — virtualisation complète de la grille bibliothèque** : nécessite un `IntersectionObserver`
   (absent de happy-dom) + refonte du fetch/sanitize par ligne visible ; risque de régression sur
   `FilesPane.test`. Atténué aujourd'hui par v-memo + thumbCache + le hoist du Collator.
