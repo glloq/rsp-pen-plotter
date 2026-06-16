@@ -19,14 +19,12 @@
 // mid-flight EMA update can't make the bar jump backwards.
 
 import { onScopeDispose, ref, watch, type Ref } from 'vue'
+import { estimatedPercent } from '../lib/progressEstimate'
 
 const TICK_MS = 120
 // Fallback when the caller can't produce an estimate (no algorithm
 // selected yet) — roughly a Standard-tier medium algorithm.
 const FALLBACK_ESTIMATE_MS = 800
-const HEAD_START_PCT = 8
-const AT_ESTIMATE_PCT = 80
-const CEILING_PCT = 98
 
 export interface EstimatedProgress {
   /** 0..100, animated while ``loading`` is true. */
@@ -50,12 +48,7 @@ export function useEstimatedProgress(
   }
 
   function tick(): void {
-    const x = (Date.now() - startedAt) / estimate
-    const value =
-      x < 1
-        ? HEAD_START_PCT + (AT_ESTIMATE_PCT - HEAD_START_PCT) * x
-        : AT_ESTIMATE_PCT + (CEILING_PCT - AT_ESTIMATE_PCT) * (1 - Math.exp(-(x - 1) * 0.8))
-    percent.value = Math.min(CEILING_PCT, Math.round(value))
+    percent.value = estimatedPercent(Date.now() - startedAt, estimate)
   }
 
   function start(): void {
@@ -63,7 +56,7 @@ export function useEstimatedProgress(
     startedAt = Date.now()
     const raw = estimateMsGetter()
     estimate = Number.isFinite(raw) && raw > 0 ? raw : FALLBACK_ESTIMATE_MS
-    percent.value = HEAD_START_PCT
+    percent.value = estimatedPercent(0, estimate)
     timer = setInterval(tick, TICK_MS)
   }
 

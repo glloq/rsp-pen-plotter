@@ -10,6 +10,7 @@ import {
 } from '../api/client'
 import { errorDetail } from '../api/error'
 import { confirmAction } from '../composables/confirm'
+import { getDurationEstimateMs, recordDuration } from '../lib/durationEstimator'
 import { useUiStore } from '../stores/ui'
 
 const { t, locale } = useI18n()
@@ -57,12 +58,20 @@ async function runUpdate(force = false): Promise<void> {
   updateError.value = null
   lastUpdate.value = null
   // Drive the global blocking modal — operator can't interact with the rest
-  // of the UI while update.sh is running.
-  ui.startUpdate(t('updateModal.statusPulling'))
+  // of the UI while update.sh is running. Seed its ETA from past *applied*
+  // updates (null on the first one → indeterminate). ``updateStart`` clocks
+  // the run so a real upgrade folds a fresh sample back in.
+  const updateStart = performance.now()
+  const updateEstimateMs = getDurationEstimateMs('systemUpdate')
+  const updateEtaSeconds = updateEstimateMs > 0 ? Math.round(updateEstimateMs / 1000) : null
+  ui.startUpdate(t('updateModal.statusPulling'), updateEtaSeconds)
   try {
     const result = await systemUpdate(force)
     lastUpdate.value = result
     if (result.updated) {
+      // Only an actual build is a representative sample — a no-op (already
+      // up to date) is a fast git-fetch and would skew the estimate low.
+      recordDuration('systemUpdate', performance.now() - updateStart)
       ui.finishUpdate('success', {
         message: t('updateModal.successMessage'),
         forced: result.forced,

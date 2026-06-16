@@ -29,7 +29,12 @@
     "plotterSending": "Sending G-code to plotter…",
     "plotterSent": "G-code sent to plotter.",
     "plotterConnecting": "Connecting to plotter…",
-    "plotterConnected": "Plotter connected."
+    "plotterConnected": "Plotter connected.",
+    "remaining": "~{time} remaining",
+    "almostDone": "almost done…",
+    "longerThanUsual": "taking longer than usual…",
+    "rerendering": "Updating render…",
+    "cancel": "Cancel"
   },
   "header": {
     "settings": "Settings",

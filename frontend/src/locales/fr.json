@@ -29,7 +29,12 @@
     "plotterSending": "Envoi du G-code au traceur…",
     "plotterSent": "G-code envoyé au traceur.",
     "plotterConnecting": "Connexion au traceur…",
-    "plotterConnected": "Traceur connecté."
+    "plotterConnected": "Traceur connecté.",
+    "remaining": "~{time} restant",
+    "almostDone": "presque terminé…",
+    "longerThanUsual": "plus long que d'habitude…",
+    "rerendering": "Mise à jour du rendu…",
+    "cancel": "Annuler"
   },
   "header": {
     "settings": "Réglages",

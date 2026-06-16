@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '../stores/ui'
+import { estimatedPercent, formatDuration, remainingSeconds } from '../lib/progressEstimate'
 
 const { t } = useI18n()
 const ui = useUiStore()
@@ -43,10 +44,29 @@ watch(
 
 onBeforeUnmount(stopTicker)
 
-const elapsedSeconds = computed(() => {
+const elapsedMs = computed(() => {
   const start = updateState.value.startedAt
   if (!start) return 0
-  return Math.max(0, Math.floor((now.value - start) / 1000))
+  return Math.max(0, now.value - start)
+})
+
+const elapsedSeconds = computed(() => Math.floor(elapsedMs.value / 1000))
+
+// Determinate progress once a learned ETA exists. Updates are genuinely
+// unpredictable (npm/build/network), so past the estimate we show a
+// "taking longer than usual" hint rather than a fake countdown.
+const etaMs = computed(() => {
+  const eta = updateState.value.etaSeconds
+  return eta && eta > 0 ? eta * 1000 : 0
+})
+const hasEta = computed(() => etaMs.value > 0)
+const percent = computed(() => (hasEta.value ? estimatedPercent(elapsedMs.value, etaMs.value) : 0))
+const remainingLabel = computed(() => {
+  if (!hasEta.value) return ''
+  const secs = remainingSeconds(elapsedMs.value, etaMs.value)
+  return secs !== null
+    ? t('toast.remaining', { time: formatDuration(secs) })
+    : t('toast.longerThanUsual')
 })
 
 const visible = computed(() => updateState.value.phase !== 'idle')
@@ -112,9 +132,26 @@ function dismiss(): void {
             {{ updateState.message }}
           </p>
           <p v-if="updateState.phase === 'running'" class="mt-2 font-mono text-xs text-slate-500">
-            {{ t('updateModal.elapsed', { seconds: elapsedSeconds }) }}
+            {{ t('updateModal.elapsed', { seconds: elapsedSeconds })
+            }}<template v-if="remainingLabel"> · {{ remainingLabel }}</template>
           </p>
         </div>
+      </div>
+
+      <!-- Determinate progress bar — shown once a learned ETA exists (first
+           update has no history → indeterminate spinner above). -->
+      <div
+        v-if="updateState.phase === 'running' && hasEta"
+        class="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-700/60"
+        role="progressbar"
+        :aria-valuenow="Math.round(percent)"
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <div
+          class="h-full rounded-full bg-emerald-400 transition-[width] duration-500 ease-out"
+          :style="{ width: `${percent}%` }"
+        />
       </div>
 
       <div

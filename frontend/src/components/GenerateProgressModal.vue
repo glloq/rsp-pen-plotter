@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '../stores/ui'
+import { estimatedPercent, formatDuration, remainingSeconds } from '../lib/progressEstimate'
 
 // Progress modal for the optimize → preflight → generate pipeline. The
 // state machine lives in ui.gcodeJobState; this component only renders
@@ -45,10 +46,28 @@ watch(
 
 onBeforeUnmount(stopTicker)
 
-const elapsedSeconds = computed(() => {
+const elapsedMs = computed(() => {
   const start = gcodeJobState.value.startedAt
   if (!start) return 0
-  return Math.max(0, Math.floor((now.value - start) / 1000))
+  return Math.max(0, now.value - start)
+})
+
+const elapsedSeconds = computed(() => Math.floor(elapsedMs.value / 1000))
+
+// Determinate progress + remaining-time, available once we have a learned
+// ETA (``etaSeconds`` is null on the first-ever run → indeterminate spinner).
+const etaMs = computed(() => {
+  const eta = gcodeJobState.value.etaSeconds
+  return eta && eta > 0 ? eta * 1000 : 0
+})
+const hasEta = computed(() => etaMs.value > 0)
+const percent = computed(() => (hasEta.value ? estimatedPercent(elapsedMs.value, etaMs.value) : 0))
+const remainingLabel = computed(() => {
+  if (!hasEta.value) return ''
+  const secs = remainingSeconds(elapsedMs.value, etaMs.value)
+  return secs !== null
+    ? t('toast.remaining', { time: formatDuration(secs) })
+    : t('toast.longerThanUsual')
 })
 
 const visible = computed(() => gcodeJobState.value.phase !== 'idle')
@@ -133,9 +152,27 @@ function close(): void {
             {{ gcodeJobState.message }}
           </p>
           <p v-if="gcodeJobState.phase === 'running'" class="mt-2 font-mono text-xs text-slate-500">
-            {{ t('gcodeJob.elapsed', { seconds: elapsedSeconds }) }}
+            {{ t('gcodeJob.elapsed', { seconds: elapsedSeconds })
+            }}<template v-if="remainingLabel"> · {{ remainingLabel }}</template>
           </p>
         </div>
+      </div>
+
+      <!-- Determinate progress bar — shown once a learned ETA exists. The
+           first-ever run has no history (etaSeconds null) and keeps the
+           indeterminate spinner above. -->
+      <div
+        v-if="gcodeJobState.phase === 'running' && hasEta"
+        class="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-700/60"
+        role="progressbar"
+        :aria-valuenow="Math.round(percent)"
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <div
+          class="h-full rounded-full bg-emerald-400 transition-[width] duration-500 ease-out"
+          :style="{ width: `${percent}%` }"
+        />
       </div>
 
       <ul class="mt-4 space-y-1.5 text-sm">
