@@ -89,7 +89,6 @@ const shown = computed(() => (showAll.value ? visible.value : featured.value))
             ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
             : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
         "
-        :title="style.descriptionKey ? t(style.descriptionKey) : ''"
         @click="emit('select', style)"
       >
         <span class="font-medium">{{ t(style.labelKey) }}</span>

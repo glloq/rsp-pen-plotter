@@ -86,7 +86,6 @@ function selectMethod(method: SegmentationMethod): void {
                 ? 'border-emerald-600 bg-emerald-950/40 text-emerald-200'
                 : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-600'
             "
-            :title="t(`convert.seg_${method}_hint`)"
             @click="selectMethod(method)"
           >
             <span class="block font-medium">{{ t(`convert.seg_${method}`) }}</span>

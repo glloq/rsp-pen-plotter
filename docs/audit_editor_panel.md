@@ -17,6 +17,12 @@ contrôles, pas sur le thème de couleurs.
 > l'**ergonomie/agencement des contrôles** à l'intérieur des onglets, une fois le
 > thème uniformisé.
 
+> **Mise à jour (2026-06, audit doublons/textes).** Les références ci-dessous à
+> `ColorCountSlider.vue` sont **historiques** : ce composant a depuis été
+> **retiré** (il n'était plus monté — remplacé à l'écran par `ColorReductionCard`
+> et `SegmentationCountCard`). Son pattern d'« alertes conditionnelles » n'est
+> donc plus visible. Voir `audit_editor_doublons_textes.md` (F1).
+
 ---
 
 ## 1. Architecture du panneau

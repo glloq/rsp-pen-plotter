@@ -202,12 +202,12 @@ const droppedAsBackground = computed<string[]>(() => {
       </div>
     </div>
 
-    <!-- Number of colours lives on a single slider in
-         ``ColorCountSlider`` (just above the style picker)
-         so the operator has one knob, not two. In pens mode the
-         StyleTab watcher truncates the palette to ``num_colors``; in
-         auto mode num_colors drives k-means; in manual mode the slider
-         resizes the editable palette below. -->
+    <!-- Colour count lives on a single slider on the Style tab
+         (``ColorReductionCard``); the SVG tab's ``SegmentationCountCard``
+         owns the layer/segment count. One knob per concept, not two
+         here. In pens mode the StyleTab watcher truncates the palette to
+         ``num_colors``; in auto mode num_colors drives k-means; in
+         manual mode the editable palette below is resized. -->
 
     <!-- Pen-following: chips locked to the installed pens, with slot
          numbers so the user knows which pen will plot what. -->
