@@ -14,6 +14,19 @@
 // ``useEditorPreviewStream.test.ts``) inject their own fake factory / stub
 // handle and never touch this global, so they're unaffected.
 import { api } from './src/api/client'
+import { i18n } from './src/i18n'
+import en from './src/locales/en.json'
+import fr from './src/locales/fr.json'
+
+// The app now lazy-loads locale catalogues (only the active language is
+// bundled at boot; see src/i18n.ts), so the shared i18n instance starts
+// with empty messages. Populate both synchronously here so any test that
+// exercises the *real* i18n (stores call ``i18n.global.t`` directly) sees
+// fully-translated strings, exactly as it did when both locales were
+// statically imported. Tests that ``vi.mock('../i18n')`` use their own
+// catalogue and are unaffected.
+i18n.global.setLocaleMessage('en', en as Record<string, unknown>)
+i18n.global.setLocaleMessage('fr', fr as Record<string, unknown>)
 
 // Network kill-switch for the unit suite.
 //

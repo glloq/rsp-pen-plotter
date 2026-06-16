@@ -10,6 +10,7 @@ import {
 } from '../api/client'
 import { errorDetail } from '../api/error'
 import { confirmAction } from '../composables/confirm'
+import { ensureLocale } from '../i18n'
 import { getDurationEstimateMs, recordDuration } from '../lib/durationEstimator'
 import { useUiStore } from '../stores/ui'
 
@@ -25,7 +26,10 @@ const PLAN_PREVIEW_MODES = [
   { id: 'image', label: 'system.planPreviewImage', hint: 'system.planPreviewImageHint' },
 ] as const
 
-function setLocale(value: 'en' | 'fr'): void {
+async function setLocale(value: 'en' | 'fr'): Promise<void> {
+  // Load the target catalogue (lazy chunk) before flipping the active
+  // locale so the UI doesn't flash raw keys while the JSON is in flight.
+  await ensureLocale(value)
   locale.value = value
 }
 
