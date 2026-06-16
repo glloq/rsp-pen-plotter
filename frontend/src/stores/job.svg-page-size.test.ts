@@ -29,7 +29,11 @@ vi.mock('../api/client', async () => {
 
 import { useJobStore } from './job'
 
-function detailFor(svg: string, bbox: { x_max: number; y_max: number }) {
+function detailFor(
+  svg: string,
+  bbox: { x_max: number; y_max: number },
+  upload_metadata: Record<string, unknown> = {},
+) {
   return {
     file_id: 'lib-1',
     source_file: 'drawing.svg',
@@ -44,7 +48,7 @@ function detailFor(svg: string, bbox: { x_max: number; y_max: number }) {
       },
     ],
     upload_warnings: [],
-    upload_metadata: {},
+    upload_metadata,
   }
 }
 
@@ -106,5 +110,24 @@ describe('library drop sizes a raw SVG to its physical page', () => {
     // on the limiting (width) axis → 277 mm.
     expect(p.width_mm).toBeCloseTo(277, 3)
     expect(p.height_mm).toBeCloseTo(277, 3)
+  })
+
+  it('sizes a bitmap (px viewBox) to the A5 page reported in metadata', async () => {
+    // A processed image: the SVG viewBox is in raster pixels and carries no
+    // physical unit, so the A5 footprint comes from upload_metadata (the
+    // backend reports the operator's target_width/height_mm there). Without
+    // it the image was rescaled to fill the bed — bigger than A5.
+    const bitmapSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="296" height="420" ' +
+      'viewBox="0 0 296 420"><rect x="0" y="0" width="296" height="420" ' +
+      'fill="none" stroke="black"/></svg>'
+    getLibraryFile.mockResolvedValue(
+      detailFor(bitmapSvg, { x_max: 296, y_max: 420 }, { page_width_mm: 148, page_height_mm: 210 }),
+    )
+    const store = useJobStore()
+    const id = await store.createPlacementFromLibrary('lib-1')
+    const p = store.placements.find((pl) => pl.id === id)!
+    expect(p.width_mm).toBeCloseTo(148, 3)
+    expect(p.height_mm).toBeCloseTo(210, 3)
   })
 })

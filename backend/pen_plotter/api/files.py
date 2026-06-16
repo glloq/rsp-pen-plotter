@@ -168,6 +168,34 @@ def _record_to_out(record: FileRecord) -> FileRecordOut:
     )
 
 
+def _backfill_page_size(
+    upload_metadata: dict[str, Any], bitmap_options: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Backfill a bitmap entry's page size from its stored target footprint.
+
+    Heals library entries saved before the bitmap converter began reporting
+    its page size, so a drag-drop restores the placement at the operator's
+    chosen physical size instead of rescaling the raster to fill the bed.
+    New entries already carry the page size and return unchanged.
+    """
+    if upload_metadata.get("page_width_mm") and upload_metadata.get("page_height_mm"):
+        return upload_metadata
+    if not bitmap_options:
+        return upload_metadata
+    raw_width = bitmap_options.get("target_width_mm")
+    raw_height = bitmap_options.get("target_height_mm")
+    if raw_width is None or raw_height is None:
+        return upload_metadata
+    try:
+        width_mm = float(raw_width)
+        height_mm = float(raw_height)
+    except (TypeError, ValueError):
+        return upload_metadata
+    if width_mm <= 0 or height_mm <= 0:
+        return upload_metadata
+    return {**upload_metadata, "page_width_mm": width_mm, "page_height_mm": height_mm}
+
+
 def _record_to_detail(record: FileRecord) -> FileDetail:
     meta = read_meta_or_empty(record.file_id)
     svg = read_svg(record.file_id)
@@ -178,7 +206,7 @@ def _record_to_detail(record: FileRecord) -> FileDetail:
         svg=svg,
         layers=meta.layers,
         warnings=meta.warnings,
-        upload_metadata=meta.upload_metadata,
+        upload_metadata=_backfill_page_size(meta.upload_metadata, meta.bitmap_options),
         rerenderable=meta.rerenderable,
     )
 

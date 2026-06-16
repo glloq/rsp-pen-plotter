@@ -555,11 +555,21 @@ class BitmapConverter(Converter):
             n_workers=n_workers,
             progress_callback=progress_callback,
         )
+        # Report the operator's chosen footprint (mm) as the page size, the
+        # same contract the PDF / text converters use. The rendered SVG's
+        # viewBox is in raster pixels, so without this a later library
+        # drag-drop has no physical scale to restore and rescales the image
+        # to fill the bed — landing an "A5" picture much larger than A5.
+        metadata: dict[str, Any] = {}
+        if opts.target_width_mm and opts.target_height_mm:
+            metadata["page_width_mm"] = float(opts.target_width_mm)
+            metadata["page_height_mm"] = float(opts.target_height_mm)
         return (
             ConversionResult(
                 svg=svg,
                 source_mime="image/svg+xml",
                 warnings=[*line_art_warnings, *ink_warnings, *warnings],
+                metadata=metadata,
             ),
             seg,
         )
