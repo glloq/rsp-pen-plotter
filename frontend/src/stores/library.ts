@@ -23,6 +23,12 @@ import { useToastStore } from './toasts'
 import { validateUploadFile } from '../api/uploadValidation'
 import type { LayerAlgorithm } from './job'
 
+// Hoisted out of the ``filteredSorted`` computed (audit B3): constructing
+// an Intl.Collator is non-trivial, and rebuilding one on every re-sort
+// (each search keystroke / sort toggle) was pure waste. One shared,
+// locale-agnostic, numeric-aware collator serves every comparison.
+const NAME_COLLATOR = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
+
 // File-level snapshot of the print settings for a library entry.
 // Persisted across sessions so every new placement of the same file
 // starts from the operator's last-applied settings instead of the
@@ -256,14 +262,13 @@ export const useLibraryStore = defineStore('library', () => {
       if (q && !f.source_file.toLowerCase().includes(q)) return false
       return true
     })
-    const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
     const direction = sortOrder.value === 'asc' ? 1 : -1
     rows = [...rows].sort((a, b) => {
       let cmp = 0
       if (sortKey.value === 'name') {
-        cmp = collator.compare(a.source_file, b.source_file)
+        cmp = NAME_COLLATOR.compare(a.source_file, b.source_file)
       } else if (sortKey.value === 'type') {
-        cmp = collator.compare(a.source_mime, b.source_mime)
+        cmp = NAME_COLLATOR.compare(a.source_mime, b.source_mime)
       } else {
         cmp = a.created_at.localeCompare(b.created_at)
       }
