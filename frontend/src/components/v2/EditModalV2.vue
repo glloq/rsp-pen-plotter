@@ -387,6 +387,30 @@ watch(
 // reading it here is a no-op for the wiring.
 const bitmapDraft = useBitmapDraft()
 
+// Non-rerenderable sources (PDF / DOCX / ODT / HTML documents) have no
+// in-place ``/rerender`` route, so a Style-tab master-style change writes
+// ``layer_algorithms`` but never reaches the plan — the operator used to
+// have to remove + re-add the file. On Save, re-convert such a source from
+// its bytes with the current draft options so the chosen style bakes into
+// the fresh conversion. Returns true when it handled the save. Pure vector
+// sources (SVG / DXF) carry no re-convertible raster/text form, so they're
+// skipped — re-converting them would be a no-op round-trip.
+async function reconvertForPlan(): Promise<boolean> {
+  // Only expert mode exposes the controls that change a non-rerenderable
+  // source's conversion (Style-tab master style, SVG/Text knobs). The
+  // assisted panel's style stack is bitmap-only, so an assisted Save of a
+  // document has nothing to bake — re-converting there would just be a slow
+  // round-trip. Restrict the auto re-convert to expert mode.
+  if (!uiMode.isExpert) return false
+  const p = job.selectedPlacement
+  if (!p || p.rerenderable) return false
+  if (!fileManager.showsBitmapForm.value && !fileManager.carriesText.value) return false
+  await fileManager.ensureSelectedFile()
+  if (!fileManager.selectedFile.value) return false
+  await fileManager.uploadSelected({ skipConfirm: true })
+  return true
+}
+
 // Race-safe save: in expert mode the single "save the print style"
 // button awaits the dirty-draft upload before emitting ``confirm`` so the
 // parent never commits from the pre-apply SVG. ``applyExpertDraft`` is no
@@ -409,6 +433,7 @@ const {
   // Carry the live-preview cluster tweaks (manual inks + hidden layers) onto
   // the committed layers so Generate / G-code honours them.
   onCommitted: applyClusterOverridesToLayers,
+  reconvertForPlan,
 })
 
 // The single header "save the print style" button is locked until there's
