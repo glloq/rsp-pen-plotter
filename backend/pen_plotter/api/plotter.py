@@ -35,6 +35,9 @@ class JogRequest(BaseModel):
 
     dx_mm: float
     dy_mm: float
+    # Optional relative Z displacement for a motorised Z axis. Defaults to 0
+    # so existing X/Y-only callers are unaffected.
+    dz_mm: float = 0.0
     profile_name: str
 
 
@@ -127,7 +130,7 @@ async def jog(request: JogRequest) -> StatusResponse:
     """Jog the head by a relative offset."""
     profile = _profile_or_404(request.profile_name)
     try:
-        await controller.jog(request.dx_mm, request.dy_mm, profile)
+        await controller.jog(request.dx_mm, request.dy_mm, profile, dz_mm=request.dz_mm)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _status()

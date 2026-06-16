@@ -180,10 +180,12 @@ class PlotterController:
                     if response.startswith(("error", "alarm", "!!")):
                         raise RuntimeError(f"Controller error: {response}")
 
-    async def jog(self, dx_mm: float, dy_mm: float, profile: MachineProfile) -> None:
-        """Jog the head by a relative offset."""
+    async def jog(
+        self, dx_mm: float, dy_mm: float, profile: MachineProfile, dz_mm: float = 0.0
+    ) -> None:
+        """Jog the head by a relative offset (X/Y, plus optional Z)."""
         self._require_idle()
-        await self._send_immediate(jog_command(dx_mm, dy_mm, profile))
+        await self._send_immediate(jog_command(dx_mm, dy_mm, profile, dz_mm=dz_mm))
 
     async def goto(self, x_mm: float, y_mm: float, profile: MachineProfile) -> None:
         """Move the head to an absolute workspace position."""

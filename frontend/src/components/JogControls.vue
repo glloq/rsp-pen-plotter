@@ -5,17 +5,15 @@ import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 
-// Compact manual-control cockpit: XY jog pad + step on the left, pen
-// up/down + go-to + workspace corners on the right. Sized to take the
-// minimum room on the Plotter tab (CNC / laser / 3D-printer style) so the
-// print queue keeps the space below.
+// Compact Repetier-style manual cockpit: an X/Y jog cross (with Home in
+// the centre) on the left, a Z jog column (motorised Z), and the pen
+// servo lift/lower beside it. One shared step selector drives X/Y/Z.
+// Deliberately no "go to point / corners" — this stays minimal.
 
 const { t } = useI18n()
 const plotter = usePlotterStore()
 const job = useJobStore()
 const step = ref(10)
-const targetX = ref(0)
-const targetY = ref(0)
 
 // Manual moves need a live, idle machine. The cockpit stays mounted at
 // all times and greys out whenever the head can't be driven: no
@@ -33,6 +31,10 @@ function jog(dx: number, dy: number): void {
   plotter.jog(dx * step.value, dy * step.value, job.selectedProfileName)
 }
 
+function jogZ(dz: number): void {
+  plotter.jog(0, 0, job.selectedProfileName, dz * step.value)
+}
+
 async function home(): Promise<void> {
   const confirmed = await confirmAction({
     title: t('confirm.homeTitle'),
@@ -41,10 +43,6 @@ async function home(): Promise<void> {
     cancelLabel: t('confirm.cancel'),
   })
   if (confirmed) plotter.home(job.selectedProfileName)
-}
-
-function gotoTarget(): void {
-  plotter.goto(targetX.value, targetY.value, job.selectedProfileName)
 }
 
 const penUpCmd = computed(() => job.selectedProfile?.pen_up_command ?? '')
@@ -60,30 +58,19 @@ async function penDown(): Promise<void> {
   await plotter.run(penDownCmd.value)
 }
 
-const corners = computed(() => {
-  const ws = job.selectedProfile?.workspace
-  if (!ws) return []
-  return [
-    { label: '↙', x: ws.x_min, y: ws.y_min },
-    { label: '↘', x: ws.x_max, y: ws.y_min },
-    { label: '↖', x: ws.x_min, y: ws.y_max },
-    { label: '↗', x: ws.x_max, y: ws.y_max },
-  ]
-})
-
 const jogBtn =
   'rounded bg-slate-700 hover:bg-slate-600 py-1 text-sm text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
-const actBtn =
-  'rounded bg-slate-700 hover:bg-slate-600 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
-const fieldCls =
-  'rounded border border-slate-700 bg-slate-900 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
+const axisBtn =
+  'rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs font-medium text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
+const penBtn =
+  'rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-[11px] text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
 </script>
 
 <template>
-  <div class="flex gap-2">
-    <!-- LEFT: XY jog pad + step size -->
-    <div class="shrink-0">
-      <div class="grid w-[5.5rem] grid-cols-3 gap-1">
+  <div class="space-y-2">
+    <div class="flex items-start gap-3">
+      <!-- X/Y jog cross with Home in the centre -->
+      <div class="grid w-[5.5rem] shrink-0 grid-cols-3 gap-1">
         <span />
         <button
           :class="jogBtn"
@@ -134,94 +121,76 @@ const fieldCls =
         </button>
         <span />
       </div>
-      <label class="mt-1 flex items-center justify-center gap-1 text-[10px] text-slate-400">
-        <span>{{ t('plotter.step') }}</span>
-        <select
-          v-model.number="step"
-          :disabled="controlsDisabled"
-          :class="fieldCls"
-          class="px-1 py-0.5 text-[10px]"
-        >
-          <option :value="1">1 mm</option>
-          <option :value="10">10 mm</option>
-          <option :value="50">50 mm</option>
-        </select>
-      </label>
-    </div>
 
-    <!-- RIGHT: pen lift, go-to coordinates, workspace corners -->
-    <div class="flex min-w-0 flex-1 flex-col gap-1.5">
-      <div class="flex gap-1.5">
+      <!-- Z jog column (motorised Z) -->
+      <div class="flex flex-col items-stretch gap-1">
+        <span class="text-center text-[10px] uppercase tracking-wider text-slate-500">Z</span>
+        <button
+          :class="axisBtn"
+          :aria-label="t('plotter.jogZUp')"
+          :title="t('plotter.jogZUp')"
+          :disabled="controlsDisabled"
+          data-test="jog-z-up"
+          @click="jogZ(1)"
+        >
+          Z+
+        </button>
+        <button
+          :class="axisBtn"
+          :aria-label="t('plotter.jogZDown')"
+          :title="t('plotter.jogZDown')"
+          :disabled="controlsDisabled"
+          data-test="jog-z-down"
+          @click="jogZ(-1)"
+        >
+          Z−
+        </button>
+      </div>
+
+      <!-- Pen servo lift / lower -->
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <span class="text-[10px] uppercase tracking-wider text-slate-500">{{
+          t('plotter.penControl')
+        }}</span>
         <button
           type="button"
-          :class="actBtn"
-          class="flex-1 px-1.5 py-1 text-[11px]"
+          :class="penBtn"
           :disabled="controlsDisabled || !penUpCmd"
           :title="penUpCmd"
           data-test="manual-pen-up"
           @click="penUp"
         >
-          ↑ {{ t('plotter.penUp') }}
+          ▲ {{ t('plotter.penUp') }}
         </button>
         <button
           type="button"
-          :class="actBtn"
-          class="flex-1 px-1.5 py-1 text-[11px]"
+          :class="penBtn"
           :disabled="controlsDisabled || !penDownCmd"
           :title="penDownCmd"
           data-test="manual-pen-down"
           @click="penDown"
         >
-          ↓ {{ t('plotter.penDown') }}
+          ▼ {{ t('plotter.penDown') }}
         </button>
-      </div>
-      <p v-if="!penUpCmd || !penDownCmd" class="text-[10px] leading-tight text-slate-500">
-        {{ t('plotter.penCommandsMissing') }}
-      </p>
-
-      <div class="flex items-center gap-1">
-        <input
-          v-model.number="targetX"
-          type="number"
-          step="any"
-          placeholder="X"
-          :disabled="controlsDisabled"
-          :class="fieldCls"
-          class="w-full min-w-0 px-1.5 py-0.5 text-[11px]"
-        />
-        <input
-          v-model.number="targetY"
-          type="number"
-          step="any"
-          placeholder="Y"
-          :disabled="controlsDisabled"
-          :class="fieldCls"
-          class="w-full min-w-0 px-1.5 py-0.5 text-[11px]"
-        />
-        <button
-          :class="actBtn"
-          class="shrink-0 px-2 py-0.5 text-[11px]"
-          :disabled="controlsDisabled"
-          @click="gotoTarget"
-        >
-          {{ t('plotter.go') }}
-        </button>
-      </div>
-
-      <div v-if="corners.length" class="flex gap-1">
-        <button
-          v-for="corner in corners"
-          :key="corner.label"
-          :class="actBtn"
-          class="flex-1 py-0.5 text-[11px]"
-          :aria-label="t('plotter.gotoCorner', { x: corner.x, y: corner.y })"
-          :title="`X${corner.x} Y${corner.y}`"
-          :disabled="controlsDisabled"
-          @click="plotter.goto(corner.x, corner.y, job.selectedProfileName)"
-        >
-          {{ corner.label }}
-        </button>
+        <p v-if="!penUpCmd || !penDownCmd" class="text-[10px] leading-tight text-slate-500">
+          {{ t('plotter.penCommandsMissing') }}
+        </p>
       </div>
     </div>
+
+    <!-- Shared step size for X / Y / Z -->
+    <label class="flex items-center gap-1.5 text-[11px] text-slate-400">
+      <span>{{ t('plotter.step') }}</span>
+      <select
+        v-model.number="step"
+        :disabled="controlsDisabled"
+        class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <option :value="0.1">0.1 mm</option>
+        <option :value="1">1 mm</option>
+        <option :value="10">10 mm</option>
+        <option :value="50">50 mm</option>
+      </select>
+    </label>
   </div>
 </template>

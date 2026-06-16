@@ -1637,6 +1637,11 @@
             "title": "Dy Mm",
             "type": "number"
           },
+          "dz_mm": {
+            "default": 0.0,
+            "title": "Dz Mm",
+            "type": "number"
+          },
           "profile_name": {
             "title": "Profile Name",
             "type": "string"

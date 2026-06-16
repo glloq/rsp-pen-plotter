@@ -1416,6 +1416,8 @@
     "jogDown": "Déplacer vers le bas (Y−)",
     "jogLeft": "Déplacer à gauche (X−)",
     "jogRight": "Déplacer à droite (X+)",
+    "jogZUp": "Monter le Z (Z+)",
+    "jogZDown": "Descendre le Z (Z−)",
     "gotoCorner": "Aller au coin X{x} Y{y}",
     "sendJob": "Envoyer le travail",
     "pause": "Pause",
