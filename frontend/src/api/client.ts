@@ -661,6 +661,133 @@ export interface RerenderResponse {
   warnings: string[]
 }
 
+function buildRerenderBody(
+  jobId: string,
+  layers: LayerAlgorithmOverride[],
+  layerStrokeWidths?: Record<string, number>,
+  layerInkColors?: Record<string, string>,
+  targetSizeMm?: { width_mm: number; height_mm: number } | null,
+): Record<string, unknown> {
+  return {
+    job_id: jobId,
+    layers,
+    // Per-layer pen tip width (viewBox units), so the backend renders
+    // each layer's stroke at the real pen and floors fill spacing at
+    // one pen width. Omitted when no inventory width is resolved.
+    ...(layerStrokeWidths ? { layer_stroke_widths: layerStrokeWidths } : {}),
+    // Per-layer assigned ink hex (from the magazine / inventory pool)
+    // so the rendered SVG shows the colours that will actually be
+    // drawn rather than the segmentation centroids.
+    ...(layerInkColors ? { layer_ink_colors: layerInkColors } : {}),
+    // Physical footprint (mm) the placement occupies on the sheet so
+    // millimetre algorithm options (spacing_mm, cell_size_mm, …)
+    // convert to the right raster pitch — this is what makes the
+    // page format drive the line density.
+    ...(targetSizeMm && targetSizeMm.width_mm > 0 && targetSizeMm.height_mm > 0
+      ? {
+          target_width_mm: targetSizeMm.width_mm,
+          target_height_mm: targetSizeMm.height_mm,
+        }
+      : {}),
+  }
+}
+
+/** Raised by ``rerenderViaStream`` when the SSE stream couldn't even
+ *  start (old backend, non-OK response, no streaming body) so
+ *  ``rerenderJob`` knows to fall back to the plain POST. */
+class RerenderStreamUnavailable extends Error {}
+
+function canStreamRerender(): boolean {
+  // Never in the unit-test env (a real fetch would hit the dev network and
+  // leak handles — vitest.setup only kills the axios adapter). The runtime
+  // capability checks cover SSR / old browsers.
+  return (
+    !import.meta.env.VITEST &&
+    typeof fetch === 'function' &&
+    typeof ReadableStream !== 'undefined' &&
+    typeof TextDecoderStream !== 'undefined'
+  )
+}
+
+async function rerenderViaStream(
+  body: Record<string, unknown>,
+  signal: AbortSignal | undefined,
+  onProgress: (percent: number, label?: string) => void,
+): Promise<RerenderResponse> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (apiKey) headers['X-API-Key'] = apiKey
+  let resp: Response
+  try {
+    resp = await fetch(`${baseURL}/rerender/stream`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal,
+    })
+  } catch (err) {
+    // Abort must propagate (the caller treats it as a cancel); any other
+    // fetch failure (DNS, refused, CORS) means "try the plain endpoint".
+    if ((err as { name?: string })?.name === 'AbortError') throw err
+    throw new RerenderStreamUnavailable((err as Error)?.message)
+  }
+  if (!resp.ok || !resp.body) {
+    throw new RerenderStreamUnavailable(`status ${resp.status}`)
+  }
+  const reader = resp.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  let result: RerenderResponse | null = null
+  let streamError: string | null = null
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += value
+      // SSE frames are separated by a blank line.
+      let sep: number
+      while ((sep = buffer.indexOf('\n\n')) >= 0) {
+        const frame = buffer.slice(0, sep)
+        buffer = buffer.slice(sep + 2)
+        let event = ''
+        let data = ''
+        for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim()
+          else if (line.startsWith('data:')) data = line.slice(5).trim()
+        }
+        if (!data) continue
+        let payload: Record<string, unknown> | undefined
+        try {
+          payload = (JSON.parse(data) as { payload?: Record<string, unknown> }).payload
+        } catch {
+          continue
+        }
+        if (event === 'progress' && typeof payload?.percent === 'number') {
+          onProgress(
+            payload.percent,
+            typeof payload.layer_label === 'string' ? payload.layer_label : undefined,
+          )
+        } else if (event === 'done') {
+          result = {
+            svg: typeof payload?.svg === 'string' ? payload.svg : '',
+            warnings: Array.isArray(payload?.warnings) ? (payload.warnings as string[]) : [],
+          }
+        } else if (event === 'error') {
+          streamError =
+            typeof payload?.message === 'string' ? payload.message : 'rerender stream failed'
+        }
+      }
+    }
+  } finally {
+    try {
+      reader.releaseLock()
+    } catch {
+      /* already released */
+    }
+  }
+  if (streamError) throw new Error(streamError)
+  if (!result) throw new Error('rerender stream ended without a result')
+  return result
+}
+
 export async function rerenderJob(
   jobId: string,
   layers: LayerAlgorithmOverride[],
@@ -668,36 +795,25 @@ export async function rerenderJob(
   layerStrokeWidths?: Record<string, number>,
   layerInkColors?: Record<string, string>,
   targetSizeMm?: { width_mm: number; height_mm: number } | null,
+  // Optional real-progress sink. When provided (and the runtime supports
+  // streaming), the call goes to ``/rerender/stream`` and reports one
+  // per-layer ``(percent, label)`` tick; it falls back to the plain POST
+  // when streaming can't start, so an old backend keeps working.
+  onProgress?: (percent: number, label?: string) => void,
 ): Promise<RerenderResponse> {
-  const response = await api.post<RerenderResponse>(
-    '/rerender',
-    {
-      job_id: jobId,
-      layers,
-      // Per-layer pen tip width (viewBox units), so the backend renders
-      // each layer's stroke at the real pen and floors fill spacing at
-      // one pen width. Omitted when no inventory width is resolved.
-      ...(layerStrokeWidths ? { layer_stroke_widths: layerStrokeWidths } : {}),
-      // Per-layer assigned ink hex (from the magazine / inventory pool)
-      // so the rendered SVG shows the colours that will actually be
-      // drawn rather than the segmentation centroids.
-      ...(layerInkColors ? { layer_ink_colors: layerInkColors } : {}),
-      // Physical footprint (mm) the placement occupies on the sheet so
-      // millimetre algorithm options (spacing_mm, cell_size_mm, …)
-      // convert to the right raster pitch — this is what makes the
-      // page format drive the line density.
-      ...(targetSizeMm && targetSizeMm.width_mm > 0 && targetSizeMm.height_mm > 0
-        ? {
-            target_width_mm: targetSizeMm.width_mm,
-            target_height_mm: targetSizeMm.height_mm,
-          }
-        : {}),
-    },
-    // No timeout: a heavy multi-pass stack on a high-res placement
-    // can take a while. The caller passes ``signal`` so the operator
-    // can cancel.
-    { signal, timeout: 0 },
-  )
+  const body = buildRerenderBody(jobId, layers, layerStrokeWidths, layerInkColors, targetSizeMm)
+  if (onProgress && canStreamRerender()) {
+    try {
+      return await rerenderViaStream(body, signal, onProgress)
+    } catch (err) {
+      // Only a "couldn't start" condition falls through to the plain POST;
+      // a mid-stream error (or an abort) is surfaced to the caller.
+      if (!(err instanceof RerenderStreamUnavailable)) throw err
+    }
+  }
+  // No timeout: a heavy multi-pass stack on a high-res placement can take
+  // a while. The caller passes ``signal`` so the operator can cancel.
+  const response = await api.post<RerenderResponse>('/rerender', body, { signal, timeout: 0 })
   return response.data
 }
 

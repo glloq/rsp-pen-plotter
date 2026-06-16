@@ -71,6 +71,27 @@ describe('beginProgressToast', () => {
     handle.dismiss()
   })
 
+  it('switches to real progress on setProgress — labelled, monotonic, no backward jump', () => {
+    const store = useToastStore()
+    const handle = beginProgressToast({ message: 'Rendering', estimateMs: 10_000 })
+    vi.advanceTimersByTime(2_000)
+    const estimatePct = store.toasts[0]!.progress as number
+    expect(estimatePct).toBeGreaterThan(0)
+    // A real tick at a LOWER raw percent than the estimate must not yank
+    // the bar backwards (it's seeded from the estimate) and switches the
+    // message from the ETA to the layer label.
+    handle.setProgress(5, 'Layer 1/4')
+    const afterFirst = store.toasts[0]!
+    expect(afterFirst.progress).toBeGreaterThanOrEqual(estimatePct)
+    expect(afterFirst.message).toContain('Layer 1/4')
+    expect(afterFirst.message).not.toContain('remaining')
+    // A higher real tick advances the bar and updates the label.
+    handle.setProgress(60, 'Layer 3/4')
+    expect(store.toasts[0]!.progress).toBeGreaterThanOrEqual(60)
+    expect(store.toasts[0]!.message).toContain('Layer 3/4')
+    handle.dismiss()
+  })
+
   it('transforms a shown toast into a success toast on succeed()', () => {
     const store = useToastStore()
     const handle = beginProgressToast({ message: 'Rendering' })

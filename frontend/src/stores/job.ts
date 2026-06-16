@@ -962,6 +962,10 @@ export const useJobStore = defineStore('job', () => {
         penWidthsFor(p),
         inkColorsFor(p),
         { width_mm: p.width_mm, height_mm: p.height_mm },
+        // Real per-layer progress from /rerender/stream drives the toast's
+        // bar + layer label, superseding the estimated bar. Falls back to
+        // the estimate when streaming is unavailable (old backend / tests).
+        (percent, label) => progressToast.setProgress(percent, label),
       )
       if (controller.signal.aborted) return
       // patchPlacement already invalidates the cached outputs for the new SVG.

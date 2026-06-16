@@ -41,6 +41,13 @@ export interface ProgressToastOptions {
 export interface ProgressToastHandle {
   /** Replace the base status line (the ETA suffix is re-appended). */
   setMessage(message: string): void
+  /** Feed REAL progress (0..100, optional layer label) from a streaming
+   *  source. Supersedes the estimate: the bar switches to the real
+   *  percent (seeded from where the estimate had it so it never jumps
+   *  backward, then monotonic) and the message shows the label instead of
+   *  the ETA. Does not force a deferred toast to appear — a fast op that
+   *  finishes before ``showAfterMs`` still stays silent. */
+  setProgress(percent: number, label?: string): void
   /** Resolve as success. Silent if the toast was deferred and never shown
    *  (a fast success needs no confirmation toast). */
   succeed(message: string, ttl?: number): void
@@ -61,8 +68,17 @@ export function beginProgressToast(options: ProgressToastOptions): ProgressToast
   let ticker: ReturnType<typeof setInterval> | null = null
   let showTimer: ReturnType<typeof setTimeout> | null = null
   let settled = false
+  // Real-progress state (driven by ``setProgress`` from a streaming source).
+  let realActive = false
+  let realLabel = ''
+  let displayPct = 0
 
   function composeMessage(): string {
+    if (realActive) {
+      // Real per-layer progress: the bar carries the magnitude, the label
+      // says which layer — no fabricated countdown.
+      return realLabel ? `${baseMessage} · ${realLabel}` : baseMessage
+    }
     if (!estimate) return baseMessage
     const remaining = remainingSeconds(Date.now() - startedAt, estimate)
     const suffix =
@@ -70,6 +86,13 @@ export function beginProgressToast(options: ProgressToastOptions): ProgressToast
         ? i18n.global.t('toast.remaining', { time: formatDuration(remaining) })
         : i18n.global.t('toast.almostDone')
     return `${baseMessage} · ${suffix}`
+  }
+
+  // The percentage to paint right now: real progress once it's arrived,
+  // otherwise the estimate curve (undefined → indeterminate spinner).
+  function currentPercent(): number | undefined {
+    if (realActive) return displayPct
+    return estimate ? estimatedPercent(Date.now() - startedAt, estimate) : undefined
   }
 
   function open(): void {
@@ -80,18 +103,14 @@ export function beginProgressToast(options: ProgressToastOptions): ProgressToast
           onClick: () => options.cancel?.(),
         }
       : undefined
-    id = toasts.progress(
-      composeMessage(),
-      action,
-      estimate ? estimatedPercent(Date.now() - startedAt, estimate) : undefined,
-    )
+    id = toasts.progress(composeMessage(), action, currentPercent())
+    // Animate while estimating; once real progress takes over,
+    // ``currentPercent`` returns the (static-between-ticks) real value and
+    // the same ticker just keeps the message fresh.
     if (estimate) {
       ticker = setInterval(() => {
         if (id === null) return
-        toasts.setProgress(id, {
-          percent: estimatedPercent(Date.now() - startedAt, estimate),
-          message: composeMessage(),
-        })
+        toasts.setProgress(id, { percent: currentPercent(), message: composeMessage() })
       }, TICK_MS)
     }
   }
@@ -121,6 +140,20 @@ export function beginProgressToast(options: ProgressToastOptions): ProgressToast
       if (settled) return
       baseMessage = message
       if (id !== null) toasts.setProgress(id, { message: composeMessage() })
+    },
+    setProgress(percent: number, label?: string): void {
+      if (settled) return
+      const clamped = Math.max(0, Math.min(99, percent))
+      if (!realActive) {
+        realActive = true
+        // Seed from where the estimate had the bar so switching to real
+        // data never makes the bar jump backwards.
+        displayPct = estimate ? estimatedPercent(Date.now() - startedAt, estimate) : 0
+      }
+      displayPct = Math.max(displayPct, clamped)
+      if (label !== undefined) realLabel = label
+      // Don't force a deferred toast open here — slow-only still holds.
+      if (id !== null) toasts.setProgress(id, { percent: displayPct, message: composeMessage() })
     },
     succeed(message: string, ttl = 3000): void {
       if (settled) return
