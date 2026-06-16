@@ -74,11 +74,12 @@ async function sendNow(): Promise<void> {
 
 async function enqueue(): Promise<void> {
   if (!job.gcode) return
-  // Same gate as the direct send: a queued run will pause on the same
-  // swap prompts, so the magazine must match the plan before enqueue.
-  const gate = await ensureMagazineLoaded()
-  if (gate === 'cancelled') return
-  if (!job.gcode) return
+  // Queuing only stacks the already-generated program for later — it
+  // does NOT launch it, so there is nothing to load yet. No magazine /
+  // swap gate here: the backend parks and pauses the run for the initial
+  // ink and every mid-print swap (M0 → SwapPromptModal) when it actually
+  // reaches the machine, and forcing an ink-load up front would also be
+  // meaningless on a manual-swap machine that has no magazine to fill.
   logOdometerForCurrentJob()
   const name = job.job?.source_file ?? 'job'
   await queue.enqueue(name, job.selectedProfileName, job.gcode)
@@ -133,6 +134,7 @@ async function activeCancel(): Promise<void> {
         <button
           class="flex-1 rounded bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
           :disabled="!canSend"
+          data-test="queue-send-now"
           @click="sendNow"
         >
           ▶ {{ t('plotter.sendJob') }}
@@ -141,6 +143,7 @@ async function activeCancel(): Promise<void> {
           class="rounded bg-sky-600 hover:bg-sky-500 px-3 py-2 text-sm text-white disabled:opacity-50"
           :disabled="!canSend"
           :title="t('queue.add')"
+          data-test="queue-enqueue"
           @click="enqueue"
         >
           + {{ t('execute.queue') }}
@@ -150,6 +153,7 @@ async function activeCancel(): Promise<void> {
       <button
         v-else-if="!status.connected && canSend"
         class="w-full rounded bg-sky-600 hover:bg-sky-500 px-3 py-2 text-sm font-medium text-white"
+        data-test="queue-enqueue"
         @click="enqueue"
       >
         + {{ t('queue.add') }}
