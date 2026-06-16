@@ -7,7 +7,7 @@ import { usePlotterStore } from '../stores/plotter'
 import { useUiStore } from '../stores/ui'
 import GcodePreview from './GcodePreview.vue'
 import JogControls from './JogControls.vue'
-import PrintQueuePanel from './PrintQueuePanel.vue'
+import GcodeFilesPanel from './GcodeFilesPanel.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
@@ -72,7 +72,7 @@ const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length 
            (jog pad + pen + go-to + corners) is one compact two-column card
            so the tab fits without scrolling. -->
       <div
-        class="rounded-lg border border-slate-700 bg-slate-800 p-3 transition-opacity"
+        class="rounded-lg border border-slate-700 bg-slate-800 p-2 transition-opacity"
         :class="{ 'opacity-50': !status.connected }"
         :aria-disabled="!status.connected"
         data-test="manual-control"
@@ -81,14 +81,14 @@ const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length 
       </div>
       <p v-if="error" class="mt-1.5 text-xs text-red-400">{{ error }}</p>
 
-      <!-- Print queue + live-run follow-up. Always visible so the operator
-           can enqueue a job while disconnected and watch progress once the
-           run starts. -->
+      <!-- G-code file library: save the current program, then pick one and
+           print it on demand. Always visible so the operator can manage
+           saved programs even while disconnected. -->
       <section class="mt-3 space-y-1.5">
         <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
-          {{ t('queue.title') }}
+          {{ t('gcodeFiles.title') }}
         </h4>
-        <PrintQueuePanel />
+        <GcodeFilesPanel />
       </section>
     </div>
 

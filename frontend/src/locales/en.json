@@ -1577,6 +1577,25 @@
       "canceled": "Canceled"
     }
   },
+  "gcodeFiles": {
+    "title": "G-code files",
+    "saveCurrent": "Save current G-code",
+    "generateFirst": "Generate G-code first to save it.",
+    "empty": "No G-code files yet. Generate a drawing, then save it here.",
+    "print": "Print selection",
+    "rename": "Rename",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "deleteTitle": "Delete this G-code file?",
+    "deleteMsg": "\"{name}\" will be removed from the library. A print in progress is not interrupted.",
+    "saved": "G-code \"{name}\" saved.",
+    "loadFailed": "Could not load the G-code files.",
+    "saveFailed": "Could not save the G-code.",
+    "renameFailed": "Could not rename the file.",
+    "deleteFailed": "Could not delete the file.",
+    "printFailed": "Could not start printing."
+  },
   "history": {
     "title": "History",
     "empty": "No jobs yet.",

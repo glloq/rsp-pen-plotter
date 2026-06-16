@@ -337,6 +337,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/gcode-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Files
+         * @description List saved G-code programs, newest first (no payload).
+         */
+        get: operations["list_files_gcode_files_get"];
+        put?: never;
+        /**
+         * Create File
+         * @description Save a G-code program to the library.
+         *
+         *     Lenient on the profile (a saved file is just text); the profile is
+         *     validated again when the file is actually printed.
+         *
+         *     Raises:
+         *         HTTPException: 422 if the G-code is empty.
+         */
+        post: operations["create_file_gcode_files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gcode-files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete File
+         * @description Delete a saved program.
+         *
+         *     Raises:
+         *         HTTPException: 404 if the file is unknown.
+         */
+        delete: operations["delete_file_gcode_files__file_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename File
+         * @description Rename a saved program.
+         *
+         *     Raises:
+         *         HTTPException: 404 if the file is unknown.
+         */
+        patch: operations["rename_file_gcode_files__file_id__patch"];
+        trace?: never;
+    };
+    "/gcode-files/{file_id}/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Print File
+         * @description Launch a saved program: enqueue it as a run and wake the worker.
+         *
+         *     Raises:
+         *         HTTPException: 404 if the file or its profile is unknown.
+         */
+        post: operations["print_file_gcode_files__file_id__print_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/generate": {
         parameters: {
             query?: never;
@@ -1330,6 +1413,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rerender/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rerender Stream
+         * @description Re-render with real per-layer progress over Server-Sent Events.
+         *
+         *     Same body + cache semantics as ``POST /rerender``; the difference is
+         *     the response: a ``text/event-stream`` of ``start`` / ``progress`` /
+         *     ``done`` (or ``error``) events. The prep (cache lookup, rehydration,
+         *     resegmentation) is awaited here so a missing job is a clean 404 before
+         *     the stream headers go out — then only the per-layer render is streamed.
+         */
+        post: operations["rerender_stream_rerender_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/palette-source": {
         parameters: {
             query?: never;
@@ -2002,6 +2111,52 @@ export interface components {
             /** Existing */
             existing: boolean;
             file: components["schemas"]["FileDetail"];
+        };
+        /**
+         * GcodeFileCreate
+         * @description Body for ``POST /gcode-files`` — save the current program.
+         */
+        GcodeFileCreate: {
+            /** Gcode */
+            gcode: string;
+            /** Name */
+            name: string;
+            /** Profile Name */
+            profile_name: string;
+        };
+        /**
+         * GcodeFilePatch
+         * @description Body for ``PATCH /gcode-files/{id}`` — rename.
+         */
+        GcodeFilePatch: {
+            /** Name */
+            name: string;
+        };
+        /**
+         * GcodeFileSummary
+         * @description Wire projection of a saved program WITHOUT the G-code payload.
+         */
+        GcodeFileSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Line Count */
+            line_count: number;
+            /** Name */
+            name: string;
+            /** Profile Name */
+            profile_name: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /**
          * GenerateRequest
@@ -3094,6 +3249,8 @@ export interface components {
             error?: string | null;
             /** Gcode */
             gcode: string;
+            /** Gcode File Id */
+            gcode_file_id?: string | null;
             /** Id */
             id: string;
             /** Idempotency Key */
@@ -3155,6 +3312,8 @@ export interface components {
             created_at: string;
             /** Error */
             error?: string | null;
+            /** Gcode File Id */
+            gcode_file_id?: string | null;
             /** Id */
             id: string;
             /** Idempotency Key */
@@ -3211,6 +3370,10 @@ export interface components {
             };
             /** Layers */
             layers?: components["schemas"]["LayerAlgorithm"][];
+            /** Target Height Mm */
+            target_height_mm?: number | null;
+            /** Target Width Mm */
+            target_width_mm?: number | null;
         };
         /**
          * RerenderResponse
@@ -4204,6 +4367,187 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_files_gcode_files_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GcodeFileSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_file_gcode_files_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GcodeFileCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GcodeFileSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_file_gcode_files__file_id__delete: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_file_gcode_files__file_id__patch: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GcodeFilePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GcodeFileSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    print_file_gcode_files__file_id__print_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                file_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrintRunSummary"];
                 };
             };
             /** @description Validation Error */
@@ -5816,6 +6160,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RerenderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rerender_stream_rerender_stream_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RerenderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

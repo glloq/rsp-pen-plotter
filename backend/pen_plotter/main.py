@@ -23,6 +23,7 @@ from pen_plotter.api.audit import router as audit_router
 from pen_plotter.api.available_colors import router as available_colors_router
 from pen_plotter.api.files import router as files_router
 from pen_plotter.api.fonts import router as fonts_router
+from pen_plotter.api.gcode_files import router as gcode_files_router
 from pen_plotter.api.generate import router as generate_router
 from pen_plotter.api.jobs import router as jobs_router
 from pen_plotter.api.macros import router as macros_router
@@ -294,6 +295,7 @@ app.include_router(plans_router, dependencies=_GUARDED)
 app.include_router(policy_router, dependencies=_GUARDED)
 app.include_router(plotter_router, dependencies=_GUARDED)
 app.include_router(queue_router, dependencies=_GUARDED)
+app.include_router(gcode_files_router, dependencies=_GUARDED)
 app.include_router(audit_router, dependencies=_GUARDED)
 app.include_router(jobs_router, dependencies=_GUARDED)
 app.include_router(presets_router, dependencies=_GUARDED)

@@ -6,9 +6,9 @@ import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 
 // Compact manual-control cockpit: XY jog pad + step on the left, pen
-// up/down + go-to + workspace corners on the right. Laid out as two
-// columns so the whole control surface fits the Plotter tab without
-// scrolling (CNC / laser / 3D-printer style).
+// up/down + go-to + workspace corners on the right. Sized to take the
+// minimum room on the Plotter tab (CNC / laser / 3D-printer style) so the
+// print queue keeps the space below.
 
 const { t } = useI18n()
 const plotter = usePlotterStore()
@@ -72,14 +72,18 @@ const corners = computed(() => {
 })
 
 const jogBtn =
-  'rounded bg-slate-700 hover:bg-slate-600 py-1.5 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
+  'rounded bg-slate-700 hover:bg-slate-600 py-1 text-sm text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
+const actBtn =
+  'rounded bg-slate-700 hover:bg-slate-600 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
+const fieldCls =
+  'rounded border border-slate-700 bg-slate-900 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
 </script>
 
 <template>
-  <div class="flex gap-3">
+  <div class="flex gap-2">
     <!-- LEFT: XY jog pad + step size -->
     <div class="shrink-0">
-      <div class="grid w-28 grid-cols-3 gap-1">
+      <div class="grid w-[5.5rem] grid-cols-3 gap-1">
         <span />
         <button
           :class="jogBtn"
@@ -130,12 +134,13 @@ const jogBtn =
         </button>
         <span />
       </div>
-      <label class="mt-1.5 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+      <label class="mt-1 flex items-center justify-center gap-1 text-[10px] text-slate-400">
         <span>{{ t('plotter.step') }}</span>
         <select
           v-model.number="step"
           :disabled="controlsDisabled"
-          class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+          :class="fieldCls"
+          class="px-1 py-0.5 text-[10px]"
         >
           <option :value="1">1 mm</option>
           <option :value="10">10 mm</option>
@@ -145,11 +150,12 @@ const jogBtn =
     </div>
 
     <!-- RIGHT: pen lift, go-to coordinates, workspace corners -->
-    <div class="flex min-w-0 flex-1 flex-col gap-2">
-      <div class="flex gap-2">
+    <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div class="flex gap-1.5">
         <button
           type="button"
-          class="flex-1 rounded bg-slate-700 px-2 py-1.5 text-xs text-slate-100 hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+          :class="actBtn"
+          class="flex-1 px-1.5 py-1 text-[11px]"
           :disabled="controlsDisabled || !penUpCmd"
           :title="penUpCmd"
           data-test="manual-pen-up"
@@ -159,7 +165,8 @@ const jogBtn =
         </button>
         <button
           type="button"
-          class="flex-1 rounded bg-slate-700 px-2 py-1.5 text-xs text-slate-100 hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+          :class="actBtn"
+          class="flex-1 px-1.5 py-1 text-[11px]"
           :disabled="controlsDisabled || !penDownCmd"
           :title="penDownCmd"
           data-test="manual-pen-down"
@@ -173,14 +180,14 @@ const jogBtn =
       </p>
 
       <div class="flex items-center gap-1">
-        <span class="text-[11px] text-slate-400">{{ t('plotter.goto') }}</span>
         <input
           v-model.number="targetX"
           type="number"
           step="any"
           placeholder="X"
           :disabled="controlsDisabled"
-          class="w-full min-w-0 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+          :class="fieldCls"
+          class="w-full min-w-0 px-1.5 py-0.5 text-[11px]"
         />
         <input
           v-model.number="targetY"
@@ -188,10 +195,12 @@ const jogBtn =
           step="any"
           placeholder="Y"
           :disabled="controlsDisabled"
-          class="w-full min-w-0 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+          :class="fieldCls"
+          class="w-full min-w-0 px-1.5 py-0.5 text-[11px]"
         />
         <button
-          class="shrink-0 rounded bg-slate-700 px-2.5 py-1 text-xs text-slate-100 hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+          :class="actBtn"
+          class="shrink-0 px-2 py-0.5 text-[11px]"
           :disabled="controlsDisabled"
           @click="gotoTarget"
         >
@@ -203,7 +212,8 @@ const jogBtn =
         <button
           v-for="corner in corners"
           :key="corner.label"
-          class="flex-1 rounded bg-slate-700 py-1 text-xs text-slate-100 hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+          :class="actBtn"
+          class="flex-1 py-0.5 text-[11px]"
           :aria-label="t('plotter.gotoCorner', { x: corner.x, y: corner.y })"
           :title="`X${corner.x} Y${corner.y}`"
           :disabled="controlsDisabled"
