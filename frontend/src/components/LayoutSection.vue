@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import { useToastStore } from '../stores/toasts'
 import { useUiStore } from '../stores/ui'
+import { SHEET_PRESETS, type SheetPreset } from '../data/sheetPresets'
 
 const { t } = useI18n()
 const store = useJobStore()
@@ -52,19 +53,7 @@ const workspaceHeight = computed(() => {
   return ws ? ws.y_max - ws.y_min : 0
 })
 
-interface SheetPreset {
-  name: string
-  w: number
-  h: number
-}
-const presets: SheetPreset[] = [
-  { name: 'A6', w: 105, h: 148 },
-  { name: 'A5', w: 148, h: 210 },
-  { name: 'A4', w: 210, h: 297 },
-  { name: 'A3', w: 297, h: 420 },
-  { name: 'A2', w: 420, h: 594 },
-  { name: 'Letter', w: 216, h: 279 },
-]
+const presets = SHEET_PRESETS
 
 // Seed the default orientation from the work area shape and show a sensible
 // default zone (A4 in that orientation, centred — or the full bed when A4

@@ -407,3 +407,47 @@ alignement du namespace `v2.modal`), **Lot C** (clarté N/M, opacité `LayerCard
 → `LabeledSlider`, hint « défaut par calque » sur le simplify global), **Lot D**
 (source unique de styles `mono.modes`/`colorStyles`/`printStyles`, presets de
 feuille partagés).
+
+---
+
+## 11. Statut : Lots B, C, T1, T2 et D7 appliqués (2026-06)
+
+Suite directe du Lot A, dans la même branche :
+
+- **Lot C (clarté)** — opacité par calque migrée sur `LabeledSlider` (saisie
+  numérique) ; `layerCountHint` renvoie au réglage du nombre de couleurs de
+  l'onglet Style ; `simplifyDesc` précise « défaut modifiable par calque ».
+- **T1** — hint geste/zoom permanent retiré (doublon de l'infobulle + de la
+  visite guidée) : élément, CSS `.gesture-hint` et clé `v2.modal.gestureHint`.
+- **T2** — 7 hints verbeux raccourcis (minBranch, detail, shades, spiralTonal,
+  convertSync, odometer, hintManual).
+- **Lot B (terminologie, valeurs FR uniquement)** — unifié : `pens`/`feutre`
+  → **stylo**, `slot` → **emplacement** (variables `{slot}`/`{slots}`
+  préservées), `couche` → **calque**, `encre` → **couleur** (élisions gérées) ;
+  vouvoiement → tutoiement ; noms de style anglais traduits (Squiggle →
+  Gribouillis, Flow field → Champ de flux, Streamlines → Lignes de flux,
+  hand-drawn → façon croquis). `en.json` laissé tel quel (déjà cohérent).
+  **« rack » conservé** : c'est un type de changeur d'outil distinct
+  (« Rack à pince »), pas le magasin ; **« pen up/down » conservé** (terme
+  firmware).
+- **D7** — table de presets de feuille extraite dans `data/sheetPresets.ts`,
+  consommée par `SheetPicker` **et** `LayoutSection` (fin de la double copie
+  maintenue à la main).
+
+Révision d'un constat : **D2** n'a été appliqué que sur `SegmentationMethodCard`
+et `PrintStylePicker` (sous-texte non tronqué) ; `MasterStylePicker` est
+conservé (ses tuiles **tronquent** label et description → l'infobulle de tuile
+et le pied de carte restent utiles, ce n'est pas un pur doublon).
+
+Vérifié à chaque incrément : `vue-tsc --noEmit` ✓ · `vite build` ✓ ·
+`vitest run` (844 tests) ✓ · `eslint` ✓.
+
+### Non fait — **D4** (refonte structurelle), volontairement différé
+
+La fusion des trois vocabulaires de styles (`mono.modes` / `colorStyles` /
+`printStyles`) en une source unique touche `printRegistry.ts`, `styleKnobs.ts`
+et les sélecteurs : elle change la **résolution/affichage des styles** et
+**risque de modifier le rendu**. Ce n'est pas un nettoyage « sans risque » mais
+un vrai refactor à concevoir et tester séparément (mapping des ids legacy,
+parité des presets, snapshots de rendu). Laissé pour une itération dédiée
+plutôt que fait à l'aveugle.

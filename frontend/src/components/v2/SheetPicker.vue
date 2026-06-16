@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../../stores/job'
 import { useUiStore } from '../../stores/ui'
 import type { PreviewSheet } from '../../stores/ui'
+import { SHEET_PRESETS, type SheetPreset } from '../../data/sheetPresets'
 
 const { t } = useI18n()
 const ui = useUiStore()
@@ -28,22 +29,9 @@ function commitSheet(sheet: PreviewSheet): void {
   job.fitSelectedPlacementToSheet(sheet)
 }
 
-interface SheetPreset {
-  name: string
-  w: number
-  h: number
-}
-
-// Same preset list as LayoutSection.vue — kept identical so a sheet
-// the operator picks here matches the one the plan view advertises.
-const PRESETS: SheetPreset[] = [
-  { name: 'A6', w: 105, h: 148 },
-  { name: 'A5', w: 148, h: 210 },
-  { name: 'A4', w: 210, h: 297 },
-  { name: 'A3', w: 297, h: 420 },
-  { name: 'A2', w: 420, h: 594 },
-  { name: 'Letter', w: 216, h: 279 },
-]
+// Shared preset table (data/sheetPresets.ts) so a sheet picked here matches
+// the one the plan view (LayoutSection) advertises — one source, not two.
+const PRESETS = SHEET_PRESETS
 
 type Orientation = 'portrait' | 'landscape'
 
