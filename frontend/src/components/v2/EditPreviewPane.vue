@@ -557,32 +557,6 @@ useEditorPreviewSvgEffects({
   font-variant-numeric: tabular-nums;
 }
 
-.view-toggle {
-  position: absolute;
-  bottom: 0.5rem;
-  left: 0.5rem;
-  padding: 0.25rem 0.65rem;
-  border: 1px solid #334155;
-  background: rgba(15, 23, 42, 0.85);
-  color: #e2e8f0;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  z-index: 2;
-}
-.view-toggle:hover {
-  background: #334155;
-}
-.view-toggle.is-original {
-  background: rgba(2, 44, 34, 0.6);
-  border-color: #059669;
-  color: #6ee7b7;
-}
-.view-toggle:focus-visible {
-  outline: 2px solid #10b981;
-  outline-offset: 2px;
-}
-
 .gesture-hint {
   margin: 0.35rem 0 0;
   font-size: 0.6875rem;

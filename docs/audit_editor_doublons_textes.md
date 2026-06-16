@@ -367,5 +367,43 @@ Chaque constat cite un fichier (et une ligne quand pertinent). Constats
 seulement par son test), F2 (`LayersTab` non importé), F3 (`editPreview.` : 0
 occurrence dans `frontend/src`), F4 (`.view-toggle` absent du template), D1
 (`fr.json:914`==`:916`, rendus en `LayerCard.vue:400`/`:446`), D2/D3 (titres ==
-sous-textes), T1 (3 clés vivantes + 1 morte). Aucun fichier n'a été modifié :
-**audit documenté seul**.
+sous-textes), T1 (3 clés vivantes + 1 morte).
+
+---
+
+## 10. Statut : Lot A appliqué (2026-06)
+
+Premier incrément « nettoyage sans risque » livré dans cette branche :
+
+- **F1** — `ColorCountSlider.vue` + son test supprimés ; clés i18n orphelines
+  `colorStyles.numColors*` (et `numColorsLocked`) retirées de `fr.json`/`en.json` ;
+  entrée morte retirée de `eslint.config.js` ; commentaires de `PaletteCard` et
+  `MultiColorMasterStyleParams` corrigés (ils pointaient vers le fichier supprimé) ;
+  références historiques signalées dans `audit_editor_panel.md`.
+- **F2** — `LayersTab.vue` (wrapper jamais importé) supprimé.
+- **F3** — namespace i18n `editPreview.*` (~25 clés, inutilisé) retiré des deux locales.
+- **F4** — CSS `.view-toggle` morte retirée de `EditPreviewPane.vue`.
+- **D1** — `layers.printStyle` renommé « Style de rendu » / « Render style » ; le
+  menu avancé conserve « Algorithme du calque ». Plus de libellé en double dans
+  `LayerCard`.
+- **D2** — `:title` redondant retiré sur `SegmentationMethodCard` et
+  `PrintStylePicker` (le sous-texte, non tronqué, dit déjà la même chose).
+- **T3** — les trois avertissements `numColorsCapped`/`Rendered`/`PoolCapped`
+  disparaissent avec leur unique consommateur (`ColorCountSlider`).
+
+**Révision d'un constat initial :** `MasterStylePicker` (D3) est finalement
+**laissé tel quel**. Ses tuiles **tronquent** label et description
+(`truncate`), donc l'infobulle de tuile et le pied de carte (description complète
+du style actif) ne sont pas de purs doublons — les retirer perdrait l'accès au
+texte complet. À revoir seulement si les tuiles cessent de tronquer.
+
+Vérifié : `vue-tsc --noEmit` ✓ · `vite build` ✓ · `vitest run` (844 tests) ✓ ·
+`eslint` ✓.
+
+**Reste à faire (lots suivants).** T1 (guidance geste/zoom — touche
+`EditPreviewPane.test.ts`), T2 (réécriture des hints verbeux), **Lot B**
+(terminologie : stylo/emplacement/calque/encre, tutoiement, fuites d'anglais,
+alignement du namespace `v2.modal`), **Lot C** (clarté N/M, opacité `LayerCard`
+→ `LabeledSlider`, hint « défaut par calque » sur le simplify global), **Lot D**
+(source unique de styles `mono.modes`/`colorStyles`/`printStyles`, presets de
+feuille partagés).

@@ -11,9 +11,9 @@ import MasterStyleKnobs from './MasterStyleKnobs.vue'
 // of ``MasterStyleParams.vue`` but for the colour-recipe pipeline. The
 // per-style knob UI is declarative (``data/styleKnobs.ts`` descriptors
 // rendered by the shared ``MasterStyleKnobs`` component), so a new
-// colour master needs zero edits here. The cluster-count slider moved
-// to the sibling ``ColorCountSlider.vue`` so the Style tab can show it
-// before the master-style picker (colour count first, then style).
+// colour master needs zero edits here. The cluster-count slider lives
+// in ``ColorReductionCard`` on the Style tab, shown before the
+// master-style picker (colour count first, then style).
 
 const props = defineProps<{
   styleId: string

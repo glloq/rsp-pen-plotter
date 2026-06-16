@@ -75,7 +75,6 @@ export default [
       'src/components/edit/image/FiltersCard.vue',
       'src/components/edit/image/LevelsCard.vue',
       'src/components/edit/image/TransformCard.vue',
-      'src/components/edit/render/ColorCountSlider.vue',
       'src/components/edit/render/ColorReductionCard.vue',
       'src/components/edit/render/DualRangeSlider.vue',
       'src/components/edit/render/MasterStyleParams.vue',
