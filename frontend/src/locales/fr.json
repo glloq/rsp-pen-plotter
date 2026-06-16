@@ -1577,6 +1577,25 @@
       "canceled": "Annulé"
     }
   },
+  "gcodeFiles": {
+    "title": "Fichiers G-code",
+    "saveCurrent": "Enregistrer le G-code courant",
+    "generateFirst": "Générez le G-code pour pouvoir l'enregistrer.",
+    "empty": "Aucun fichier G-code. Générez un dessin puis enregistrez-le ici.",
+    "print": "Imprimer la sélection",
+    "rename": "Renommer",
+    "delete": "Supprimer",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "deleteTitle": "Supprimer ce fichier G-code ?",
+    "deleteMsg": "« {name} » sera retiré de la bibliothèque. Une impression en cours n'est pas interrompue.",
+    "saved": "G-code « {name} » enregistré.",
+    "loadFailed": "Impossible de charger les fichiers G-code.",
+    "saveFailed": "Impossible d'enregistrer le G-code.",
+    "renameFailed": "Impossible de renommer le fichier.",
+    "deleteFailed": "Impossible de supprimer le fichier.",
+    "printFailed": "Impossible de lancer l'impression."
+  },
   "history": {
     "title": "Historique",
     "empty": "Aucun travail pour l'instant.",

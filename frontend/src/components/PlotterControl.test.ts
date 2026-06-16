@@ -10,6 +10,7 @@ vi.mock('../api/client', async (orig) => {
   return {
     ...actual,
     listQueue: vi.fn(async () => []),
+    listGcodeFiles: vi.fn(async () => []),
   }
 })
 

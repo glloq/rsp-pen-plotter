@@ -107,6 +107,11 @@ class PrintRun(SQLModel, table=True):
     skipped_layers: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     # Optional client-supplied key to make enqueue idempotent across retries.
     idempotency_key: str | None = Field(default=None, index=True)
+    # Links a run back to the saved G-code file it was launched from
+    # (:mod:`pen_plotter.gcode_library`), so the file list can show which
+    # program is currently printing. ``None`` for direct enqueues that
+    # weren't started from the library.
+    gcode_file_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -117,12 +122,16 @@ def enqueue(
     gcode: str,
     priority: int = 0,
     idempotency_key: str | None = None,
+    gcode_file_id: str | None = None,
     target: Engine = default_engine,
 ) -> PrintRun:
     """Add a run to the queue.
 
     When ``idempotency_key`` is supplied and a run already exists with it, the
     existing run is returned unchanged so retries don't enqueue duplicates.
+
+    ``gcode_file_id`` links the run to a saved library program so the file
+    list can reflect which one is printing.
     """
     if idempotency_key:
         with Session(target) as session:
@@ -150,6 +159,7 @@ def enqueue(
         pause_points={str(k): v for k, v in pause_points.items()},
         swap_actions=swap_actions,
         idempotency_key=idempotency_key,
+        gcode_file_id=gcode_file_id,
     )
     with Session(target) as session:
         session.add(run)

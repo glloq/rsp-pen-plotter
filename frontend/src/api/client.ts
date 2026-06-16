@@ -470,6 +470,10 @@ export interface PrintRun {
    *  the skip-and-continue path; empty otherwise. The UI surfaces it
    *  on the run row + a critical toast. */
   skipped_layers?: string[]
+  /** Set when the run was launched from a saved G-code file
+   *  (`POST /gcode-files/{id}/print`); links it back to that library
+   *  entry so the file list can show which program is printing. */
+  gcode_file_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -504,6 +508,54 @@ export async function queueRunAction(
 
 export async function deleteQueuedRun(id: string): Promise<void> {
   await api.delete(`/queue/${encodeURIComponent(id)}`)
+}
+
+/** A saved G-code program in the print library (metadata only — the
+ *  `GET /gcode-files` list never ships the program text). */
+export interface GcodeFileSummary {
+  id: string
+  name: string
+  profile_name: string
+  line_count: number
+  size_bytes: number
+  created_at: string
+  updated_at: string
+}
+
+export async function listGcodeFiles(): Promise<GcodeFileSummary[]> {
+  const response = await api.get<GcodeFileSummary[]>('/gcode-files')
+  return response.data
+}
+
+export async function saveGcodeFile(
+  name: string,
+  profileName: string,
+  gcode: string,
+): Promise<GcodeFileSummary> {
+  const response = await api.post<GcodeFileSummary>('/gcode-files', {
+    name,
+    profile_name: profileName,
+    gcode,
+  })
+  return response.data
+}
+
+export async function renameGcodeFile(id: string, name: string): Promise<GcodeFileSummary> {
+  const response = await api.patch<GcodeFileSummary>(`/gcode-files/${encodeURIComponent(id)}`, {
+    name,
+  })
+  return response.data
+}
+
+export async function deleteGcodeFile(id: string): Promise<void> {
+  await api.delete(`/gcode-files/${encodeURIComponent(id)}`)
+}
+
+/** Launch a saved program: the backend enqueues it as a run and starts
+ *  the worker. Returns the freshly-queued run summary. */
+export async function printGcodeFile(id: string): Promise<PrintRun> {
+  const response = await api.post<PrintRun>(`/gcode-files/${encodeURIComponent(id)}/print`)
+  return response.data
 }
 
 export interface PlotterStatus {
