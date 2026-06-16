@@ -75,8 +75,7 @@ describe('PlotterControl — manual control always visible', () => {
 
     // The control surface is mounted (no longer hidden behind an empty state).
     expect(wrapper.find('[data-test="manual-control"]').exists()).toBe(true)
-    // A connect affordance explains the greyed state.
-    expect(wrapper.find('[data-test="plotter-connect-banner"]').exists()).toBe(true)
+    // A connect shortcut surfaces in the toolbar while offline.
     expect(wrapper.find('[data-test="plotter-connect-cta"]').exists()).toBe(true)
 
     // Pen + jog controls are present but disabled.
@@ -95,7 +94,8 @@ describe('PlotterControl — manual control always visible', () => {
     const wrapper = mountControl()
     await nextTick()
 
-    expect(wrapper.find('[data-test="plotter-connect-banner"]').exists()).toBe(false)
+    // The connect shortcut disappears once connected.
+    expect(wrapper.find('[data-test="plotter-connect-cta"]').exists()).toBe(false)
     // Pen commands are set on the profile, so connection is the only gate.
     expect(wrapper.find('[data-test="manual-pen-up"]').attributes('disabled')).toBeUndefined()
     const jogUp = wrapper.find('button[aria-label="Jog up (Y+)"]')
