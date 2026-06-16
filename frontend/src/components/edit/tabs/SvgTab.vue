@@ -111,23 +111,6 @@ function onSimplifyChange(v: number): void {
           :hint="t('svg.simplifyDesc')"
           @update:model-value="onSimplifyChange"
         />
-
-        <!-- Curve fitting (reserved) — surfaced as a discreet "coming
-             soon" note rather than a permanently-disabled checkbox, so
-             the panel doesn't carry a dead control. -->
-        <div class="rounded border border-slate-800 bg-slate-900/40 px-2 py-1.5">
-          <p class="font-medium text-slate-400">
-            {{ t('svg.curveFit') }}
-            <span
-              class="ml-1 rounded bg-slate-700 px-1 py-px font-mono text-[9px] uppercase text-slate-300"
-            >
-              {{ t('svg.curveFitTodo') }}
-            </span>
-          </p>
-          <p class="mt-0.5 text-[10px] leading-snug text-slate-500">
-            {{ t('svg.curveFitDesc') }}
-          </p>
-        </div>
       </div>
     </div>
   </section>

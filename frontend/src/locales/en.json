@@ -168,9 +168,6 @@
     "minBranchDesc": "Skeleton branches shorter than this many segmentation-canvas pixels are dropped. Lower to 1-2 px to keep tick marks, dimension serifs and hatching on a technical drawing; raise to 4-5 px for noisier scans.",
     "simplify": "Douglas-Peucker tolerance",
     "simplifyDesc": "Higher values remove more intermediate vertices when /optimize runs. Applies to every layer in the current placement.",
-    "curveFit": "Smooth into Bézier curves",
-    "curveFitDesc": "Convert simplified polylines into cubic Bézier paths for smoother plotter motion.",
-    "curveFitTodo": "Coming soon",
     "noSource": "Attach a file first.",
     "notApplicable": "This file type doesn't use SVG conversion controls."
   },
@@ -233,7 +230,6 @@
     "notApplicable": "This file type doesn't have a render style.",
     "replaceOverridesWarning": "Switching style will replace {count} per-layer override(s). Continue?",
     "customised": "Customised",
-    "customisedHint": "Current settings no longer match the preset.",
     "customisedExplain": "Settings drifted from the \"{style}\" preset — click a preset to reset to its defaults.",
     "styleOverwroteFields": "Preset overwrote your manual settings: {fields}.",
     "field_method": "segmentation method",
