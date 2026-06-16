@@ -7,12 +7,18 @@ wire model and the HTTP error mapping.
 
 from __future__ import annotations
 
+import asyncio
+import logging
+from collections.abc import AsyncIterator
+from queue import Queue
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from pen_plotter.api.preview_stream import PreviewProgressEvent, _sse
 from pen_plotter.application import file_library as _lib
 from pen_plotter.application.file_library import (
     CacheEntry,
@@ -28,6 +34,8 @@ from pen_plotter.converters.bitmap import (
     pick_effective_segmentation,
 )
 from pen_plotter.core.sanitize import sanitize_svg
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -132,6 +140,40 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
             cannot reconstruct one — see
             ``application.file_library.REHYDRATE_*`` for the reason codes.
     """
+    entry, overrides, px_per_mm = await _prepare_rerender(request)
+
+    try:
+        # Rendering is synchronous geometry/raster work — keep it off the
+        # event loop for the same reason as the rehydration above.
+        svg, warnings = await run_in_threadpool(
+            BitmapConverter.render_from_segmentation,
+            entry.segmentation,
+            entry.options,
+            per_layer_overrides=overrides,
+            layer_stroke_widths=request.layer_stroke_widths,
+            layer_ink_colors=request.layer_ink_colors,
+            px_per_mm=px_per_mm,
+        )
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover — algorithm/runtime failures
+        raise HTTPException(status_code=422, detail=f"Re-render failed: {exc}") from exc
+
+    return RerenderResponse(svg=sanitize_svg(svg), warnings=warnings)
+
+
+async def _prepare_rerender(
+    request: RerenderRequest,
+) -> tuple[CacheEntry, dict[str, dict[str, Any]], float | None]:
+    """Resolve the cache entry, per-layer overrides and raster scale.
+
+    Shared by ``POST /rerender`` and ``POST /rerender/stream`` so both
+    paths agree on cache lookup, rehydration, the line-art resegmentation
+    and the mm→px scale. Raises the same structured 404 as the legacy
+    endpoint when no segmentation can be reconstructed — and, crucially
+    for the streaming variant, it runs to completion (and may raise)
+    *before* the 200/event-stream headers go out.
+    """
     entry = get_cached(request.job_id)
     if entry is None:
         # Rehydration re-reads the original bytes and re-runs the full
@@ -166,13 +208,9 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
 
     # Re-segment from disk when a per-layer override flips the layer to a
     # line-extraction algorithm in monochrome mode but the cached
-    # segmentation isn't already Otsu. Without this, the cached kmeans /
-    # luminance_bands clusters trace the anti-aliased halo around every
-    # stroke instead of the ink itself — the same regression the upload
-    # auto-switch was added to fix, just hidden behind the editor's
-    # per-layer algorithm picker. Best-effort: if the source bytes have
-    # been GC'd or the new options don't round-trip, fall through to the
-    # legacy cached-render path.
+    # segmentation isn't already Otsu. Best-effort: if the source bytes
+    # have been GC'd or the new options don't round-trip, fall through to
+    # the legacy cached-render path.
     entry = await run_in_threadpool(
         _maybe_reseg_for_line_art_overrides, entry, request.job_id, overrides
     )
@@ -184,25 +222,126 @@ async def rerender(request: RerenderRequest) -> RerenderResponse:
     if request.target_width_mm and request.target_height_mm:
         raster_h, raster_w = entry.segmentation.labels.shape
         px_per_mm = max(raster_w, raster_h) / max(request.target_width_mm, request.target_height_mm)
+    return entry, overrides, px_per_mm
 
-    try:
-        # Rendering is synchronous geometry/raster work — keep it off the
-        # event loop for the same reason as the rehydration above.
-        svg, warnings = await run_in_threadpool(
-            BitmapConverter.render_from_segmentation,
-            entry.segmentation,
-            entry.options,
-            per_layer_overrides=overrides,
-            layer_stroke_widths=request.layer_stroke_widths,
-            layer_ink_colors=request.layer_ink_colors,
-            px_per_mm=px_per_mm,
+
+async def _rerender_stream(
+    request: RerenderRequest,
+    entry: CacheEntry,
+    overrides: dict[str, dict[str, Any]],
+    px_per_mm: float | None,
+) -> AsyncIterator[bytes]:
+    """Stream ``render_from_segmentation`` progress as SSE frames.
+
+    Runs the render in a worker thread and bridges its per-layer
+    ``progress_callback`` to SSE frames (audit B2 follow-up).
+    Mirrors ``preview_stream._real_stream``: a bounded queue carries
+    ``(kind, payload)`` tuples from the synchronous render thread to this
+    async generator, with a ``None`` sentinel marking completion. The
+    final ``done`` event carries the sanitized SVG so the client gets the
+    result on the same channel as the progress.
+    """
+    loop = asyncio.get_event_loop()
+    start_ts = loop.time()
+    queue: Queue[tuple[str, dict[str, Any]] | None] = Queue()
+
+    def progress(i: int, total: int, label: str) -> None:
+        queue.put(
+            (
+                "progress",
+                {
+                    "layer_index": i - 1,
+                    "layer_label": label,
+                    "percent": int((i / max(total, 1)) * 100),
+                },
+            )
         )
-    except (KeyError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # pragma: no cover — algorithm/runtime failures
-        raise HTTPException(status_code=422, detail=f"Re-render failed: {exc}") from exc
 
-    return RerenderResponse(svg=sanitize_svg(svg), warnings=warnings)
+    def run() -> None:
+        try:
+            svg, warnings = BitmapConverter.render_from_segmentation(
+                entry.segmentation,
+                entry.options,
+                per_layer_overrides=overrides,
+                layer_stroke_widths=request.layer_stroke_widths,
+                layer_ink_colors=request.layer_ink_colors,
+                px_per_mm=px_per_mm,
+                progress_callback=progress,
+            )
+            queue.put(("done", {"svg": sanitize_svg(svg), "warnings": warnings}))
+        except (KeyError, ValueError) as exc:
+            queue.put(("error", {"message": str(exc)}))
+        except Exception as exc:  # noqa: BLE001 — relay to the SSE client
+            queue.put(("error", {"message": f"Re-render failed: {exc}"}))
+        finally:
+            queue.put(None)
+
+    seq = 0
+    yield _sse(
+        PreviewProgressEvent(
+            kind="start",
+            sequence=seq,
+            elapsed_ms=0,
+            payload={"job_id": request.job_id},
+        )
+    ).encode()
+    seq += 1
+
+    task = asyncio.create_task(asyncio.to_thread(run))
+    task.add_done_callback(_log_stream_worker_outcome)
+    try:
+        while True:
+            item = await loop.run_in_executor(None, queue.get)
+            if item is None:
+                break
+            kind, payload = item
+            elapsed = int((loop.time() - start_ts) * 1000)
+            yield _sse(
+                PreviewProgressEvent(
+                    kind=kind,  # type: ignore[arg-type]
+                    sequence=seq,
+                    elapsed_ms=elapsed,
+                    payload=payload,
+                )
+            ).encode()
+            seq += 1
+        await task
+    except GeneratorExit:
+        # Client disconnected mid-render. The synchronous render thread
+        # can't be cancelled — detach it; it runs to completion, pushes
+        # its sentinel into the (garbage-collectable) queue and the
+        # done-callback logs any failure. Must not await on this path.
+        raise
+
+
+def _log_stream_worker_outcome(task: asyncio.Task[None]) -> None:
+    """Surface render-thread failures from a detached SSE worker task."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        _log.error("rerender-stream worker failed after client disconnect", exc_info=exc)
+
+
+@router.post("/rerender/stream")
+async def rerender_stream(request: RerenderRequest) -> StreamingResponse:
+    """Re-render with real per-layer progress over Server-Sent Events.
+
+    Same body + cache semantics as ``POST /rerender``; the difference is
+    the response: a ``text/event-stream`` of ``start`` / ``progress`` /
+    ``done`` (or ``error``) events. The prep (cache lookup, rehydration,
+    resegmentation) is awaited here so a missing job is a clean 404 before
+    the stream headers go out — then only the per-layer render is streamed.
+    """
+    entry, overrides, px_per_mm = await _prepare_rerender(request)
+    return StreamingResponse(
+        _rerender_stream(request, entry, overrides, px_per_mm),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def _maybe_reseg_for_line_art_overrides(

@@ -628,3 +628,85 @@ def test_files_integrity_endpoint_lists_broken_entries(
         issue["file_id"] == file_id and issue["reason"] == "missing_bitmap_options"
         for issue in broken["issues"]
     )
+
+
+# --- /rerender/stream (SSE per-layer progress) -------------------------------
+
+
+def _parse_sse(text: str) -> list[dict[str, object]]:
+    """Tokenize an SSE response body into individual events."""
+    out: list[dict[str, object]] = []
+    current_event: str | None = None
+    current_data: str | None = None
+    for raw in text.splitlines():
+        if raw.startswith("event:"):
+            current_event = raw.split(":", 1)[1].strip()
+        elif raw.startswith("data:"):
+            current_data = raw.split(":", 1)[1].strip()
+        elif raw == "" and current_event is not None and current_data is not None:
+            out.append({"event": current_event, "data": json.loads(current_data)})
+            current_event = current_data = None
+    return out
+
+
+def test_rerender_stream_emits_start_progress_done(client: TestClient) -> None:
+    job_id = _seed_cache()
+    response = client.post("/rerender/stream", json={"job_id": job_id, "layers": []})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = _parse_sse(response.text)
+    kinds = [e["event"] for e in events]
+    # Bookended by start/done, with at least one per-layer progress tick.
+    assert kinds[0] == "start"
+    assert kinds[-1] == "done"
+    assert "progress" in kinds
+    # The done event carries the rendered SVG so the client gets the
+    # result on the same channel as progress.
+    done = events[-1]["data"]
+    assert isinstance(done, dict)
+    assert "<svg" in done["payload"]["svg"]  # type: ignore[index]
+
+
+def test_rerender_stream_progress_payload_shape(client: TestClient) -> None:
+    job_id = _seed_cache()
+    response = client.post("/rerender/stream", json={"job_id": job_id, "layers": []})
+    events = _parse_sse(response.text)
+    progress = [e for e in events if e["event"] == "progress"]
+    assert progress, "expected at least one progress event"
+    payload = progress[0]["data"]["payload"]  # type: ignore[index]
+    assert 0 <= payload["percent"] <= 100
+    assert "layer_label" in payload
+    assert payload["layer_index"] >= 0
+    # Sequence numbers are monotonic + unique across the whole stream.
+    seqs = [e["data"]["sequence"] for e in events]  # type: ignore[index]
+    assert seqs == sorted(seqs)
+    assert len(set(seqs)) == len(seqs)
+
+
+def test_rerender_stream_404_when_job_not_cached(client: TestClient) -> None:
+    # The prep runs before the stream headers, so an unknown job is a real
+    # 404 status — not an error frame behind a 200.
+    response = client.post("/rerender/stream", json={"job_id": "unknown", "layers": []})
+    assert response.status_code == 404
+
+
+def test_rerender_stream_override_matches_plain_rerender(client: TestClient) -> None:
+    # A crosshatch override should produce <line> elements on both the
+    # streaming and the non-streaming endpoints.
+    job_id = _seed_cache()
+    body = {
+        "job_id": job_id,
+        "layers": [
+            {
+                "layer_id": "color-000000",
+                "algorithm": "crosshatch",
+                "algorithm_options": {"angle_deg": 0, "spacing_px": 2},
+            }
+        ],
+    }
+    response = client.post("/rerender/stream", json=body)
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    done = events[-1]["data"]
+    assert isinstance(done, dict)
+    assert "<line" in done["payload"]["svg"]  # type: ignore[index]

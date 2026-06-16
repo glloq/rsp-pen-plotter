@@ -3311,6 +3311,30 @@
             },
             "title": "Layers",
             "type": "array"
+          },
+          "target_height_mm": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Height Mm"
+          },
+          "target_width_mm": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Width Mm"
           }
         },
         "required": [
@@ -3990,7 +4014,7 @@
   },
   "info": {
     "title": "OmniPlot",
-    "version": "0.1.0"
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8563,6 +8587,77 @@
           }
         },
         "summary": "Rerender"
+      }
+    },
+    "/rerender/stream": {
+      "post": {
+        "description": "Re-render with real per-layer progress over Server-Sent Events.\n\nSame body + cache semantics as ``POST /rerender``; the difference is\nthe response: a ``text/event-stream`` of ``start`` / ``progress`` /\n``done`` (or ``error``) events. The prep (cache lookup, rehydration,\nresegmentation) is awaited here so a missing job is a clean 404 before\nthe stream headers go out \u2014 then only the per-layer render is streamed.",
+        "operationId": "rerender_stream_rerender_stream_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RerenderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rerender Stream"
       }
     },
     "/settings/palette-source": {
