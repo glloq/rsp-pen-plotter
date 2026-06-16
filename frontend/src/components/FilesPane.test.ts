@@ -2,9 +2,55 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import FilesPane from './FilesPane.vue'
+import { useLibraryStore } from '../stores/library'
+import type { LibraryFileRecord } from '../api/client'
+
+// IntersectionObserver stub: happy-dom's own never fires, so capture the
+// instances each FileListRow creates and let the test trigger them.
+// Locally-typed to avoid the DOM IntersectionObserver* names (eslint
+// no-undef).
+type IOEntry = { isIntersecting: boolean; target: Element }
+type IOCallback = (entries: IOEntry[], observer: unknown) => void
+
+class MockIO {
+  static instances: MockIO[] = []
+  cb: IOCallback
+  observed: Element[] = []
+  constructor(cb: IOCallback) {
+    this.cb = cb
+    MockIO.instances.push(this)
+  }
+  observe(el: Element): void {
+    this.observed.push(el)
+  }
+  disconnect(): void {}
+  unobserve(): void {}
+  takeRecords(): IOEntry[] {
+    return []
+  }
+  fire(): void {
+    this.cb(
+      this.observed.map((target) => ({ isIntersecting: true, target })),
+      this,
+    )
+  }
+}
+
+function makeRecord(id: string): LibraryFileRecord {
+  return {
+    file_id: id,
+    sha256: id,
+    source_file: `${id}.png`,
+    source_mime: 'image/png',
+    size_bytes: 2048,
+    layer_count: 2,
+    folder: '',
+    created_at: '2026-06-01T00:00:00Z',
+  }
+}
 
 const i18n = createI18n({
   legacy: false,
@@ -47,6 +93,10 @@ function mountPane() {
 
 describe('FilesPane', () => {
   beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => {
+    MockIO.instances = []
+    vi.unstubAllGlobals()
+  })
 
   it('renders the empty state when the library has no files', async () => {
     // The library store starts empty and FilesPane fetches /files on
@@ -72,5 +122,25 @@ describe('FilesPane', () => {
     await nextTick()
     const addBtn = wrapper.findAll('button').find((b) => b.text().includes('Add a file'))
     expect(addBtn).toBeDefined()
+  })
+
+  it('fetches a row’s thumbnail detail only once it scrolls into view (B3)', async () => {
+    vi.stubGlobal('IntersectionObserver', MockIO)
+    const library = useLibraryStore()
+    library.files = [makeRecord('f1'), makeRecord('f2')]
+    const ensure = vi.spyOn(library, 'ensureDetail').mockResolvedValue(undefined as never)
+
+    const wrapper = mountPane()
+    await nextTick()
+    // Both rows render, but nothing is fetched up front — the eager
+    // "ensureDetail for every id" pass is gone.
+    expect(wrapper.findAll('[data-test="file-row"]')).toHaveLength(2)
+    expect(ensure).not.toHaveBeenCalled()
+
+    // Scroll the rows into view → each lazily fetches its own detail.
+    for (const io of MockIO.instances) io.fire()
+    await nextTick()
+    expect(ensure).toHaveBeenCalledWith('f1')
+    expect(ensure).toHaveBeenCalledWith('f2')
   })
 })

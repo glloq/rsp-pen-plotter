@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
 import { confirmAction } from '../composables/confirm'
@@ -62,18 +62,13 @@ const rows = computed<Row[]>(() => {
   })
 })
 
-// Fetch full SVG for each listed file so the row can show a mini preview.
-// Detail is cached in the library store, so this is a no-op after the
-// first hit per file.
-watch(
-  () => rows.value.map((r) => r.file.file_id),
-  (ids) => {
-    for (const id of ids) {
-      if (!library.getDetail(id)) void library.ensureDetail(id)
-    }
-  },
-  { immediate: true },
-)
+// Lazily fetch a file's full SVG only once its row scrolls into view
+// (FileListRow emits ``visible``), instead of fetching every listed file
+// up front (audit B3). Detail is cached in the library store, so repeat
+// hits — and the thumbnail sanitize below — are no-ops after the first.
+function onRowVisible(fileId: string): void {
+  if (!library.getDetail(fileId)) void library.ensureDetail(fileId)
+}
 
 // Thumbnail cache keyed by file_id. Sanitizing through DOMPurify is the
 // most expensive part of rendering the inline preview, so we memoize per
@@ -353,6 +348,7 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
           @move="moveFile"
           @remove="removeFile"
           @dragstart="onDragStart"
+          @visible="onRowVisible"
         />
       </ul>
     </div>

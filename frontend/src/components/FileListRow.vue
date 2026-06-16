@@ -5,13 +5,15 @@
 // and emits intent events for edit / move / remove / dragstart. The
 // orchestrator forwards them to the library / job stores.
 
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord } from '../api/client'
+import { useInViewport } from '../composables/useInViewport'
 import { shortMime } from '../lib/labels'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   file: LibraryFileRecord
   placementCount: number
   configured: boolean
@@ -25,7 +27,22 @@ const emit = defineEmits<{
   move: [file: LibraryFileRecord]
   remove: [file: LibraryFileRecord]
   dragstart: [event: DragEvent, file: LibraryFileRecord]
+  /** Fired once when the row scrolls into view, so the pane can lazily
+   *  fetch + sanitize this file's thumbnail (audit B3) instead of doing
+   *  it for every row up front. */
+  visible: [fileId: string]
 }>()
+
+// Defer the expensive thumbnail work to when the row is actually on screen.
+const rootEl = ref<HTMLElement | null>(null)
+const onScreen = useInViewport(rootEl, { rootMargin: '300px' })
+watch(
+  onScreen,
+  (v) => {
+    if (v) emit('visible', props.file.file_id)
+  },
+  { immediate: true },
+)
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -36,6 +53,7 @@ function formatSize(bytes: number): string {
 
 <template>
   <li
+    ref="rootEl"
     class="group flex items-center gap-2 rounded border bg-slate-800 px-2 py-1.5 text-xs cursor-grab active:cursor-grabbing"
     :class="
       configured
