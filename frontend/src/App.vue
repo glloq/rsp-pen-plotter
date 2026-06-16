@@ -140,24 +140,32 @@ function onEditV2Cancel(): void {
 async function onEditV2Confirm(
   decision: import('./domain/policy/schemas').PolicyDecision,
 ): Promise<void> {
-  // Propagate the resolver recommendation to every layer of the
-  // selected placement, then trigger a single rerender so the canvas
-  // catches up. ``applyAlgorithmToAllLayers`` debounces internally so
-  // a missed-click double-confirm is safe. The placement must exist
-  // — the modal only opens when one is selected. Failures are
-  // surfaced via the existing rerender error path; we don't need to
-  // duplicate them here.
-  // QUALITY recommendations ship a multi-pass stack (e.g. double-pass
-  // crosshatch); apply it as passes so Generate matches the preview.
-  // Everything else stays a single algorithm across all layers.
-  const passes = decision.default_passes ?? []
-  if (passes.length) {
-    await store.applyPassesToAllLayers(passes)
-  } else {
-    await store.applyAlgorithmToAllLayers(
-      decision.default_algorithm,
-      (decision.default_options ?? {}) as Record<string, unknown>,
-    )
+  // Expert mode keeps its own per-layer truth: every expert edit (master
+  // style, per-layer algorithm / passes, ink + visibility) is committed
+  // LIVE to the placement's ``layer_algorithms`` as it's made, and the
+  // modal's ``confirm`` has just re-applied + re-uploaded that draft
+  // through the expert-draft path. Re-applying the resolver decision
+  // uniformly here would flatten every layer back onto a SINGLE algorithm,
+  // wiping the operator's per-band / per-layer work (e.g. a crosshatch
+  // Style-tab pick reverting to the resolver's scanlines). So in expert
+  // mode we save exactly what the operator configured and only close.
+  if (!uiMode.isExpert) {
+    // Assisted mode's preview is render-only — the chosen style never
+    // reached ``layer_algorithms`` yet. Propagate the resolver
+    // recommendation (or its multi-pass stack) to every layer and trigger
+    // a single rerender so the plan catches up. ``applyAlgorithmToAllLayers``
+    // debounces internally so a missed-click double-confirm is safe.
+    // QUALITY recommendations ship a multi-pass stack (e.g. double-pass
+    // crosshatch); apply it as passes so Generate matches the preview.
+    const passes = decision.default_passes ?? []
+    if (passes.length) {
+      await store.applyPassesToAllLayers(passes)
+    } else {
+      await store.applyAlgorithmToAllLayers(
+        decision.default_algorithm,
+        (decision.default_options ?? {}) as Record<string, unknown>,
+      )
+    }
   }
   ui.closeEditModal()
 }

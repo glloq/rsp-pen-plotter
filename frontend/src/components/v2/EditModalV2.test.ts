@@ -669,6 +669,95 @@ describe('EditModalV2 (beginner single-screen)', () => {
     ).toBe(false)
   })
 
+  it('expert save re-converts a non-rerenderable source so the style reaches the plan', async () => {
+    // Documents (PDF / DOCX) have no in-place /rerender route, so a Style-tab
+    // change would otherwise never reach the plan — the operator had to remove
+    // and re-add the file. Saving must re-convert from the source bytes,
+    // skipping the interactive overwrite prompt (the Save click is the intent).
+    const { useUiModeStore } = await import('../../stores/uiMode')
+    const { useJobStore } = await import('../../stores/job')
+    const { useFileManager } = await import('../../composables/useFileManager')
+
+    const job = useJobStore()
+    const id = job.addEmptyPlacement()
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            job_id: 'job-doc',
+            rerenderable: false,
+            source_file: 'doc.pdf',
+            source_mime: 'application/pdf',
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>',
+            layers: [],
+          }
+        : p,
+    )
+    job.selectPlacement(id)
+    const uploadSpy = vi.spyOn(job, 'upload').mockResolvedValue(undefined)
+
+    const wrapper = mountModal({
+      sourceName: 'doc.pdf',
+      previewSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+      initialSourceKind: 'pdf_doc',
+      skipOnboarding: true,
+    })
+    await flushPromises()
+    useUiModeStore().setMode('expert')
+    useFileManager().setFile(new File(['x'], 'doc.pdf', { type: 'application/pdf' }))
+    await nextTick()
+
+    await wrapper.find('[data-test="confirm-button"]').trigger('click')
+    await flushPromises()
+
+    // The source was re-converted from its bytes and the save still emitted so
+    // the modal closes.
+    expect(uploadSpy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('confirm')).toBeTruthy()
+  })
+
+  it('assisted save does not re-convert a non-rerenderable source (nothing to bake)', async () => {
+    // The assisted style stack is bitmap-only, so a document save in assisted
+    // mode has no conversion change to apply — it must not pay a re-convert
+    // round-trip.
+    const { useJobStore } = await import('../../stores/job')
+    const { useFileManager } = await import('../../composables/useFileManager')
+
+    const job = useJobStore()
+    const id = job.addEmptyPlacement()
+    job.placements = job.placements.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            job_id: 'job-doc',
+            rerenderable: false,
+            source_file: 'doc.pdf',
+            source_mime: 'application/pdf',
+            svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>',
+            layers: [],
+          }
+        : p,
+    )
+    job.selectPlacement(id)
+    const uploadSpy = vi.spyOn(job, 'upload').mockResolvedValue(undefined)
+
+    const wrapper = mountModal({
+      sourceName: 'doc.pdf',
+      previewSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+      initialSourceKind: 'pdf_doc',
+      skipOnboarding: true,
+    })
+    await flushPromises()
+    useFileManager().setFile(new File(['x'], 'doc.pdf', { type: 'application/pdf' }))
+    await nextTick()
+
+    await wrapper.find('[data-test="confirm-button"]').trigger('click')
+    await flushPromises()
+
+    expect(uploadSpy).not.toHaveBeenCalled()
+    expect(wrapper.emitted('confirm')).toBeTruthy()
+  })
+
   it('blocks closing while an expert apply is committing', async () => {
     // Closing mid-commit would let ``confirm`` emit after the modal is gone
     // (audit P1 §3). The close gate must swallow the close while the upload
@@ -744,6 +833,33 @@ describe('EditModalV2 (beginner single-screen)', () => {
     await flushPromises()
     await wrapper.find('[data-test="modal-v2-close"]').trigger('click')
     expect(confirmSpy).not.toHaveBeenCalled()
+    expect(wrapper.emitted('cancel')).toBeTruthy()
+    window.confirm = originalConfirm
+  })
+
+  it('warns before discarding an unsaved assisted style change on close', async () => {
+    // The assisted preview is render-only: changing the intent (or the
+    // custom-style stack) doesn't reach ``placement.svg`` until Save runs.
+    // Closing without saving would silently drop the change and leave the
+    // plan showing the old style, so the close gate must prompt first.
+    const confirmSpy = vi.fn().mockReturnValue(false)
+    const originalConfirm = window.confirm
+    window.confirm = confirmSpy as unknown as typeof window.confirm
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    // Change the assisted style without saving.
+    await wrapper.find('[data-test="intent-fast"]').trigger('click')
+    await flushPromises()
+
+    // Decline the discard → modal stays open.
+    await wrapper.find('[data-test="modal-v2-close"]').trigger('click')
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('cancel')).toBeFalsy()
+
+    // Accept the discard → modal closes.
+    confirmSpy.mockReturnValue(true)
+    await wrapper.find('[data-test="modal-v2-close"]').trigger('click')
     expect(wrapper.emitted('cancel')).toBeTruthy()
     window.confirm = originalConfirm
   })
