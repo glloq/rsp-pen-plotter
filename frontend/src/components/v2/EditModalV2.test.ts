@@ -748,6 +748,33 @@ describe('EditModalV2 (beginner single-screen)', () => {
     window.confirm = originalConfirm
   })
 
+  it('warns before discarding an unsaved assisted style change on close', async () => {
+    // The assisted preview is render-only: changing the intent (or the
+    // custom-style stack) doesn't reach ``placement.svg`` until Save runs.
+    // Closing without saving would silently drop the change and leave the
+    // plan showing the old style, so the close gate must prompt first.
+    const confirmSpy = vi.fn().mockReturnValue(false)
+    const originalConfirm = window.confirm
+    window.confirm = confirmSpy as unknown as typeof window.confirm
+    const wrapper = mountModal(PLACEMENT_PROPS)
+    await flushPromises()
+
+    // Change the assisted style without saving.
+    await wrapper.find('[data-test="intent-fast"]').trigger('click')
+    await flushPromises()
+
+    // Decline the discard → modal stays open.
+    await wrapper.find('[data-test="modal-v2-close"]').trigger('click')
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted('cancel')).toBeFalsy()
+
+    // Accept the discard → modal closes.
+    confirmSpy.mockReturnValue(true)
+    await wrapper.find('[data-test="modal-v2-close"]').trigger('click')
+    expect(wrapper.emitted('cancel')).toBeTruthy()
+    window.confirm = originalConfirm
+  })
+
   it('hides the intent grid and mounts the expert panel when uiMode is expert', async () => {
     // The header toggle / "Ouvrir l'éditeur complet" button flips
     // uiMode.mode to 'expert'; the modal must respond by swapping its

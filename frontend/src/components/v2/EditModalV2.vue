@@ -41,6 +41,7 @@ import { useEditorOnboarding } from '../../composables/useEditorOnboarding'
 import { useEditorDialogAccessibility } from '../../composables/useEditorDialogAccessibility'
 import type { EditTabId } from '../edit/EditTabs.vue'
 import { useEditorCustomStyles } from '../../composables/useEditorCustomStyles'
+import type { CustomStyleSelection } from './beginnerStyles'
 import EditorAssistedPanel from './EditorAssistedPanel.vue'
 import EditorExpertPanel from './EditorExpertPanel.vue'
 import EditorHeader from './EditorHeader.vue'
@@ -127,11 +128,32 @@ const {
   seedCustomStylesFromCommitted,
 } = useEditorCustomStyles({ sourceKind: () => sourceKind.value })
 
+// True once the operator has changed the assisted-mode style (goal or the
+// custom-style stack) without committing it via "Enregistrer le style".
+// The assisted preview is render-only — it never touches ``placement.svg``
+// until Save runs ``applyAlgorithmToAllLayers`` — so closing the modal with
+// the ✕ / Escape / backdrop would silently drop the change and leave the
+// plan showing the old style (the operator then had to remove + re-add the
+// file). This flag feeds the close guard so an unsaved style change prompts
+// the same discard confirmation the expert draft already gets. The seed on
+// open assigns ``customStyles`` directly (not through the panel emit), so it
+// never trips this — only an explicit operator edit does.
+const assistedDirty = ref(false)
+
 function selectGoal(g: Goal): void {
   if (goal.value === g && decision.value) return
   goal.value = g
+  assistedDirty.value = true
   // Direct operator action → resolve immediately for a responsive click.
   schedule('resolve-and-segment', { immediate: true })
+}
+
+// Operator edited the custom-style stack from the assisted panel (added /
+// removed a style or moved a knob). Mirror the new selection into our
+// writable ref and mark the session dirty so a close-without-save warns.
+function onCustomStyles(next: CustomStyleSelection[]): void {
+  customStyles.value = next
+  assistedDirty.value = true
 }
 
 // Surfaced when a palette switch fails to persist — keeps the toggle and
@@ -410,10 +432,20 @@ const saveDisabled = computed(
 // wizard never edits that draft — so confirming on an assisted-mode close
 // would nag the operator about changes they never made. Only the expert
 // tabs surface the draft, so only an expert close can lose real work.
-const hasUnsavedExpertDraft = computed(() => uiMode.isExpert && bitmapDraft.isDirty.value)
+//
+// Assisted mode has its own unsaved-work signal: ``assistedDirty`` flips
+// when the operator changes the goal or the custom-style stack. Those edits
+// only update the render-only preview, not ``placement.svg``, so closing
+// without Save would drop them. It's safe to OR in regardless of the current
+// mode — ``assistedDirty`` is set solely by assisted-panel handlers, so it
+// stays false for a pure expert session even when the bitmap draft reports
+// its default "dirty".
+const hasUnsavedChanges = computed(
+  () => (uiMode.isExpert && bitmapDraft.isDirty.value) || assistedDirty.value,
+)
 const { requestClose } = useEditorCloseGuard({
   applying,
-  isDirty: hasUnsavedExpertDraft,
+  isDirty: hasUnsavedChanges,
   // Defensive ``typeof`` guard: ``window.confirm`` is absent in some test
   // DOMs; treat "no dialog available" as "proceed" rather than throwing.
   confirmDiscard: () =>
@@ -732,10 +764,11 @@ watch(
              Single-screen, three clicks max to a usable Generate. -->
             <EditorAssistedPanel
               v-else
-              v-model:custom-styles="customStyles"
+              :custom-styles="customStyles"
               :goal="goal"
               :palette-mode="paletteMode"
               :can-customize-styles="canCustomizeStyles"
+              @update:custom-styles="onCustomStyles"
               @select-goal="selectGoal"
               @select-palette="selectPalette"
             />
