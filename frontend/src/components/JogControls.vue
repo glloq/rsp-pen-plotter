@@ -58,43 +58,48 @@ const corners = computed(() => {
     <div class="grid grid-cols-3 gap-1 w-36">
       <span />
       <button
-        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.jogUp')"
         :title="t('plotter.jogUp')"
+        :disabled="plotter.movementBusy"
         @click="jog(0, 1)"
       >
         ↑
       </button>
       <span />
       <button
-        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.jogLeft')"
         :title="t('plotter.jogLeft')"
+        :disabled="plotter.movementBusy"
         @click="jog(-1, 0)"
       >
         ←
       </button>
       <button
-        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.home')"
         :title="t('plotter.home')"
+        :disabled="plotter.movementBusy"
         @click="home"
       >
         ⌂
       </button>
       <button
-        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.jogRight')"
         :title="t('plotter.jogRight')"
+        :disabled="plotter.movementBusy"
         @click="jog(1, 0)"
       >
         →
       </button>
       <span />
       <button
-        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100"
+        class="rounded bg-slate-700 hover:bg-slate-600 py-2 text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
         :aria-label="t('plotter.jogDown')"
         :title="t('plotter.jogDown')"
+        :disabled="plotter.movementBusy"
         @click="jog(0, -1)"
       >
         ↓
@@ -120,7 +125,8 @@ const corners = computed(() => {
           class="w-16 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
         />
         <button
-          class="rounded bg-slate-700 px-3 py-1 text-slate-100 hover:bg-slate-600"
+          class="rounded bg-slate-700 px-3 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
+          :disabled="plotter.movementBusy"
           @click="gotoTarget"
         >
           {{ t('plotter.go') }}
@@ -130,9 +136,10 @@ const corners = computed(() => {
         <button
           v-for="corner in corners"
           :key="corner.label"
-          class="flex-1 rounded bg-slate-700 py-1 text-slate-100 hover:bg-slate-600"
+          class="flex-1 rounded bg-slate-700 py-1 text-slate-100 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
           :aria-label="t('plotter.gotoCorner', { x: corner.x, y: corner.y })"
           :title="`X${corner.x} Y${corner.y}`"
+          :disabled="plotter.movementBusy"
           @click="plotter.goto(corner.x, corner.y, job.selectedProfileName)"
         >
           {{ corner.label }}

@@ -31,6 +31,20 @@ export const useQueueStore = defineStore('queue', () => {
   let timer: ReturnType<typeof setTimeout> | null = null
   let inflight: Promise<void> | null = null
   let consecutiveErrors = 0
+  // Run ids with an action (pause/resume/cancel/delete) in flight. The
+  // cockpit binds button ``:disabled`` to ``isBusy(id)`` and the actions
+  // early-return while busy, so a double-click can't fire a second
+  // round-trip before the first reloads the queue. ``enqueuing`` is the
+  // same guard for the id-less enqueue path.
+  const busyIds = ref<ReadonlySet<string>>(new Set())
+  const enqueuing = ref(false)
+  const isBusy = (id: string): boolean => busyIds.value.has(id)
+  function setBusy(id: string, value: boolean): void {
+    const next = new Set(busyIds.value)
+    if (value) next.add(id)
+    else next.delete(id)
+    busyIds.value = next
+  }
 
   const active = computed(() => runs.value.filter((r) => ACTIVE.includes(r.state)))
 
@@ -98,30 +112,48 @@ export const useQueueStore = defineStore('queue', () => {
   }
 
   async function enqueue(name: string, profileName: string, gcode: string): Promise<void> {
+    if (enqueuing.value) return
+    enqueuing.value = true
     try {
       await enqueuePrint(name, profileName, gcode)
       await load()
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('queue.enqueueFailed'))
+      const message = errorDetail(err, i18n.global.t('queue.enqueueFailed'))
+      error.value = message
+      useToastStore().error(message)
+    } finally {
+      enqueuing.value = false
     }
   }
 
   async function act(id: string, action: 'pause' | 'resume' | 'cancel'): Promise<void> {
+    if (busyIds.value.has(id)) return
+    setBusy(id, true)
     try {
       await queueRunAction(id, action)
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('queue.actionFailed'))
+      const message = errorDetail(err, i18n.global.t('queue.actionFailed'))
+      error.value = message
+      useToastStore().error(message)
+    } finally {
+      await load()
+      setBusy(id, false)
     }
-    await load()
   }
 
   async function remove(id: string): Promise<void> {
+    if (busyIds.value.has(id)) return
+    setBusy(id, true)
     try {
       await deleteQueuedRun(id)
     } catch (err) {
-      error.value = errorDetail(err, i18n.global.t('queue.actionFailed'))
+      const message = errorDetail(err, i18n.global.t('queue.actionFailed'))
+      error.value = message
+      useToastStore().error(message)
+    } finally {
+      await load()
+      setBusy(id, false)
     }
-    await load()
   }
 
   function _schedule(): void {
@@ -158,5 +190,17 @@ export const useQueueStore = defineStore('queue', () => {
     }
   }
 
-  return { runs, active, error, load, enqueue, act, remove, startPolling, stopPolling }
+  return {
+    runs,
+    active,
+    error,
+    enqueuing,
+    isBusy,
+    load,
+    enqueue,
+    act,
+    remove,
+    startPolling,
+    stopPolling,
+  }
 })

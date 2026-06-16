@@ -181,29 +181,33 @@ async function activeCancel(): Promise<void> {
             </div>
             <button
               v-if="run.state === 'running'"
-              class="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] text-slate-100 hover:bg-slate-600"
+              class="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] text-slate-100 hover:bg-slate-600 disabled:opacity-40"
+              :disabled="queue.isBusy(run.id)"
               @click="queue.act(run.id, 'pause')"
             >
               ‖
             </button>
             <button
               v-if="run.state === 'paused'"
-              class="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] text-white hover:bg-emerald-500"
+              class="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] text-white hover:bg-emerald-500 disabled:opacity-40"
+              :disabled="queue.isBusy(run.id)"
               @click="queue.act(run.id, 'resume')"
             >
               ▶
             </button>
             <button
               v-if="['queued', 'running', 'paused'].includes(run.state)"
-              class="rounded bg-red-900/70 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-red-800"
+              class="rounded bg-red-900/70 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-red-800 disabled:opacity-40"
+              :disabled="queue.isBusy(run.id)"
               @click="cancelRun(run)"
             >
               ✕
             </button>
             <button
               v-else
-              class="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300 hover:bg-slate-600"
+              class="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300 hover:bg-slate-600 disabled:opacity-40"
               :aria-label="t('queue.delete')"
+              :disabled="queue.isBusy(run.id)"
               @click="queue.remove(run.id)"
             >
               ×

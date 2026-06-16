@@ -34,6 +34,10 @@
     "almostDone": "almost done…",
     "longerThanUsual": "taking longer than usual…",
     "rerendering": "Updating render…",
+    "macroRunning": "Running macro \"{name}\"…",
+    "macroDone": "Macro \"{name}\" done.",
+    "plotterMoving": "Moving the head…",
+    "plotterHoming": "Homing…",
     "cancel": "Cancel"
   },
   "header": {
@@ -1536,7 +1540,11 @@
     "description": "Description (optional)",
     "commands": "One command per line",
     "save": "Save macro",
-    "clear": "Clear"
+    "clear": "Clear",
+    "runFailed": "Could not run the macro.",
+    "loadFailed": "Could not load macros.",
+    "saveFailed": "Could not save the macro.",
+    "deleteFailed": "Could not delete the macro."
   },
   "swap": {
     "title": "Pen change required",
@@ -1573,7 +1581,8 @@
   },
   "history": {
     "title": "History",
-    "empty": "No jobs yet."
+    "empty": "No jobs yet.",
+    "loadFailed": "Couldn't load job history."
   },
   "audit": {
     "title": "Audit log",
