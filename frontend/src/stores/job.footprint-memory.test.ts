@@ -125,4 +125,54 @@ describe('library placements remember their footprint', () => {
     expect(p2.width_mm).toBeCloseTo(148, 3)
     expect(p2.height_mm).toBeCloseTo(210, 3)
   })
+
+  it('remembers the format chosen on an Edit-from-library draft', async () => {
+    // The exact reported flow: edit an already-processed file from the
+    // library (a hidden draft), pick A5 with the editor's format selector
+    // (fitSelectedPlacementToSheet), then drag-drop the file from the
+    // library. The draft is where the format is set, so its footprint must
+    // be persisted — otherwise the drop recomputes a too-big auto-fit size.
+    const store = useJobStore()
+    const library = useLibraryStore()
+    const draftId = await store.createPlacementFromLibrary('lib-1', undefined, {
+      asDraft: true,
+    })
+    store.selectPlacement(draftId)
+    store.fitSelectedPlacementToSheet({ width_mm: 148, height_mm: 210 })
+    await nextTick()
+    const saved = library.getFileSettings('lib-1')?.footprint_mm
+    expect(saved).toBeTruthy()
+    expect(saved!.width_mm).toBeCloseTo(148, 0)
+    expect(saved!.height_mm).toBeCloseTo(210, 0)
+
+    const dropId = await store.createPlacementFromLibrary('lib-1')
+    const dropped = store.placements.find((pl) => pl.id === dropId)!
+    expect(dropped.width_mm).toBeCloseTo(saved!.width_mm, 3)
+    expect(dropped.height_mm).toBeCloseTo(saved!.height_mm, 3)
+    // The bug was the drop coming back at the ~277 mm fit-to-workspace size.
+    expect(dropped.width_mm).toBeLessThan(160)
+  })
+
+  it('reopening the editor on a sized file does not clobber its footprint', async () => {
+    const store = useJobStore()
+    const library = useLibraryStore()
+    library.saveFileSettings('lib-1', {
+      layer_algorithms: {},
+      visibility: {},
+      footprint_mm: { width_mm: 148, height_mm: 210 },
+    })
+    // "Edit from library" creates a draft; it must open at the saved size.
+    const draftId = await store.createPlacementFromLibrary('lib-1', undefined, {
+      asDraft: true,
+    })
+    const draft = store.placements.find((pl) => pl.id === draftId)!
+    expect(draft.width_mm).toBeCloseTo(148, 3)
+    expect(draft.height_mm).toBeCloseTo(210, 3)
+    await nextTick()
+    // The saved footprint survived (not overwritten by an auto-fit).
+    expect(library.getFileSettings('lib-1')?.footprint_mm).toEqual({
+      width_mm: 148,
+      height_mm: 210,
+    })
+  })
 })
