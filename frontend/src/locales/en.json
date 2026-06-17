@@ -1659,12 +1659,14 @@
     "planPreviewImage": "Original image",
     "planPreviewImageHint": "Always shows the original source image. Lightest to render, but doesn't reflect the chosen style.",
     "camera": "Camera",
-    "cameraHint": "Show a live camera feed above the manual controls on the Plotter tab.",
-    "cameraEnable": "Enable camera feed",
-    "cameraEnableHint": "Display the configured stream on the Plotter tab.",
+    "cameraHint": "Show up to two live camera feeds (USB or Raspberry Pi) above the manual controls. Each camera is an MJPEG/HTTP stream URL.",
+    "cameraEnable": "Enabled",
     "cameraUrl": "Stream URL",
-    "cameraUrlHint": "MJPEG stream URL — e.g. http://raspberrypi.local:8080/?action=stream",
-    "cameraUrlPlaceholder": "http://…/stream"
+    "cameraUrlHint": "MJPEG/HTTP stream URL. USB webcam: mjpg-streamer / ustreamer; Pi camera: ustreamer / libcamera; or an IP camera. E.g. http://localhost:8080/?action=stream",
+    "cameraUrlPlaceholder": "http://…/stream",
+    "cameraLabel": "Label",
+    "cameraN": "Camera {n}",
+    "cameraOptional": "optional"
   },
   "updateModal": {
     "titleRunning": "Update in progress",
@@ -1911,6 +1913,7 @@
     "live": "Live",
     "notConfigured": "No camera configured",
     "configure": "Configure the camera →",
-    "streamError": "Video stream unavailable"
+    "streamError": "Video stream unavailable",
+    "defaultLabel": "Camera {n}"
   }
 }

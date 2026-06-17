@@ -101,28 +101,63 @@ function loadPlanPreviewMode(): PlanPreviewMode {
   }
 }
 
-// Optional workshop camera. When enabled with a stream URL, the Plotter
-// tab shows the live feed above the manual cockpit so the operator can
-// watch the bed without leaving the screen. Stored client-side (like the
-// other System-settings preferences) since it describes this browser's
-// view of the machine, not the machine itself.
+// Optional workshop cameras (up to two — typically one). Each is an
+// MJPEG/HTTP stream URL, which is hardware-agnostic: a USB webcam
+// (mjpg-streamer / ustreamer), a Raspberry Pi CSI camera (ustreamer /
+// libcamera) or an IP camera all expose one. When enabled with a URL the
+// Plotter tab shows the feed above the manual cockpit. Stored client-side
+// (like the other System-settings preferences).
+export interface CameraConfig {
+  enabled: boolean
+  url: string
+  // Operator-facing name (falls back to "Camera N" when blank).
+  label: string
+}
+
+// Fixed two slots so the config UI and the persisted shape stay stable;
+// the second is opt-in (disabled + blank by default).
+export const MAX_CAMERAS = 2
+
+const CAMERAS_KEY = 'omniplot.cameras'
+// Legacy single-camera keys, migrated into slot 0 on first load.
 const CAMERA_ENABLED_KEY = 'omniplot.cameraEnabled'
 const CAMERA_URL_KEY = 'omniplot.cameraUrl'
 
-function loadCameraEnabled(): boolean {
-  try {
-    return localStorage.getItem(CAMERA_ENABLED_KEY) === '1'
-  } catch {
-    return false
+function blankCamera(): CameraConfig {
+  return { enabled: false, url: '', label: '' }
+}
+
+function normalizeCamera(raw: unknown): CameraConfig {
+  const o = (raw ?? {}) as Record<string, unknown>
+  return {
+    enabled: o.enabled === true,
+    url: typeof o.url === 'string' ? o.url : '',
+    label: typeof o.label === 'string' ? o.label : '',
   }
 }
 
-function loadCameraUrl(): string {
-  try {
-    return localStorage.getItem(CAMERA_URL_KEY) ?? ''
-  } catch {
-    return ''
+function loadCameras(): CameraConfig[] {
+  const padded = (list: CameraConfig[]): CameraConfig[] => {
+    const out = list.slice(0, MAX_CAMERAS)
+    while (out.length < MAX_CAMERAS) out.push(blankCamera())
+    return out
   }
+  try {
+    const raw = localStorage.getItem(CAMERAS_KEY)
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw)
+      if (Array.isArray(parsed)) return padded(parsed.map(normalizeCamera))
+    }
+    // Migrate the pre-2-camera single config into slot 0.
+    const legacyUrl = localStorage.getItem(CAMERA_URL_KEY)
+    const legacyEnabled = localStorage.getItem(CAMERA_ENABLED_KEY) === '1'
+    if (legacyUrl !== null || legacyEnabled) {
+      return padded([{ enabled: legacyEnabled, url: legacyUrl ?? '', label: '' }])
+    }
+  } catch {
+    // localStorage unavailable / malformed JSON — fall through to default.
+  }
+  return padded([])
 }
 
 export const useUiStore = defineStore('ui', () => {
@@ -240,24 +275,21 @@ export const useUiStore = defineStore('ui', () => {
     }
   })
 
-  // Workshop camera config (System settings). Both halves persist
-  // independently so toggling the feed off keeps the saved URL.
-  const cameraEnabled = ref<boolean>(loadCameraEnabled())
-  const cameraUrl = ref<string>(loadCameraUrl())
-  watch(cameraEnabled, (value) => {
-    try {
-      localStorage.setItem(CAMERA_ENABLED_KEY, value ? '1' : '0')
-    } catch {
-      // localStorage unavailable — preference won't persist, no-op.
-    }
-  })
-  watch(cameraUrl, (value) => {
-    try {
-      localStorage.setItem(CAMERA_URL_KEY, value)
-    } catch {
-      // localStorage unavailable — preference won't persist, no-op.
-    }
-  })
+  // Workshop camera config (System settings) — up to two stream URLs.
+  // Deep watch so editing any slot's enabled / url / label re-persists the
+  // whole list as JSON.
+  const cameras = ref<CameraConfig[]>(loadCameras())
+  watch(
+    cameras,
+    (value) => {
+      try {
+        localStorage.setItem(CAMERAS_KEY, JSON.stringify(value))
+      } catch {
+        // localStorage unavailable — preference won't persist, no-op.
+      }
+    },
+    { deep: true },
+  )
 
   function setPreviewSheet(sheet: PreviewSheet | null): void {
     previewSheet.value = sheet
@@ -352,8 +384,7 @@ export const useUiStore = defineStore('ui', () => {
     updateState,
     updateNotificationsEnabled,
     planPreviewMode,
-    cameraEnabled,
-    cameraUrl,
+    cameras,
     setPreviewSheet,
     openSettings,
     closeSettings,

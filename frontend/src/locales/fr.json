@@ -1659,12 +1659,14 @@
     "planPreviewImage": "Image d'origine",
     "planPreviewImageHint": "Affiche toujours l'image source d'origine. Le plus léger à afficher, mais ne reflète pas le style choisi.",
     "camera": "Caméra",
-    "cameraHint": "Affiche un flux vidéo en direct au-dessus des contrôles manuels dans l'onglet Traceur.",
-    "cameraEnable": "Activer le flux caméra",
-    "cameraEnableHint": "Affiche le flux configuré dans l'onglet Traceur.",
+    "cameraHint": "Affiche jusqu'à deux flux vidéo en direct (USB ou Raspberry Pi) au-dessus des contrôles manuels. Chaque caméra est une URL de flux MJPEG/HTTP.",
+    "cameraEnable": "Activée",
     "cameraUrl": "URL du flux",
-    "cameraUrlHint": "URL du flux MJPEG — ex. http://raspberrypi.local:8080/?action=stream",
-    "cameraUrlPlaceholder": "http://…/flux"
+    "cameraUrlHint": "URL de flux MJPEG/HTTP. Webcam USB : mjpg-streamer / ustreamer ; caméra Pi : ustreamer / libcamera ; ou caméra IP. Ex. http://localhost:8080/?action=stream",
+    "cameraUrlPlaceholder": "http://…/flux",
+    "cameraLabel": "Nom",
+    "cameraN": "Caméra {n}",
+    "cameraOptional": "optionnelle"
   },
   "updateModal": {
     "titleRunning": "Mise à jour en cours",
@@ -1911,6 +1913,7 @@
     "live": "En direct",
     "notConfigured": "Aucune caméra configurée",
     "configure": "Configurer la caméra →",
-    "streamError": "Flux vidéo indisponible"
+    "streamError": "Flux vidéo indisponible",
+    "defaultLabel": "Caméra {n}"
   }
 }
