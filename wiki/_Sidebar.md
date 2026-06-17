@@ -26,6 +26,7 @@
 - [Machine profiles](Machine-Profiles.md)
 - [Pen magazine](Pen-Magazine.md)
 - [Per-slot calibration](Per-Slot-Calibration.md)
+- [Offset camera](Offset-Camera.md)
 - [Klipper config snippets](Klipper-Config.md)
 
 ### Troubleshooting

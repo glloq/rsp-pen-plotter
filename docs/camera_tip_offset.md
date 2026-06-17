@@ -1,8 +1,21 @@
 # Camera-assisted pen-tip offset — design study
 
-- **Status**: study / proposed (not yet implemented)
+- **Status**: Phase 1 (manual offset) + Phase 2 (vision measurement, annotated preview, optional guided travel & pen-fetch) implemented · only the `aruco` detector deferred
 - **Date**: 2026-06
 - **Companion ADR**: [`adr/0005-camera-tip-offset.md`](adr/0005-camera-tip-offset.md)
+
+> **Implementation note (Phase 2).** The shipped `dark_blob` detector uses
+> **Pillow + NumPy**, not OpenCV — both are already dependencies, so the
+> appliance needs nothing extra and the detector is unit-tested on synthetic
+> frames with no camera. The `aruco` detector (printed fiducial, sub-pixel)
+> remains future work behind the same `detector` field. Every measurement
+> returns an **annotated preview** (the frame with the tip marked) for
+> confirmation. **Guided travel** (`move_to_station`) and **automatic
+> pen-fetch** (`fetch_pen`) are both implemented as *optional* flags on the
+> measure call: with a connected plotter, `fetch_pen` loads the slot's pen via
+> a tool-change swap and `move_to_station` drives the head to
+> `station_position` before grabbing — otherwise the operator does these by
+> hand.
 
 > Goal: let OmniPlot register the **XY offset of each pen's tip** so that
 > strokes drawn with different pens land on the same logical coordinate, and
@@ -37,6 +50,23 @@ a millimetre in one pass.
 ## 2. Current state (what the code does today)
 
 Grounding the study in the code as it stands on `main`:
+
+### 2.0 Two independent, optional cameras
+
+OmniPlot keeps the **offset camera** and the **timelapse camera** fully
+separate — they are never shared:
+
+- **Offset camera** — `tip_calibration.camera_url` on the *machine profile*
+  (the measurement station is bolted to the machine). Used *only* for tip
+  measurement / scale. Optional; required only for automatic offset
+  calibration. The Couleurs-tab UI can point it at one of the configured
+  workshop cameras or take a dedicated URL.
+- **Timelapse camera** — the client-side workshop camera(s) (System →
+  Cameras, up to two), which also feed the Plotter-tab live view. The
+  Timelapse settings pick which slot to record. Optional; required only for
+  timelapse.
+
+Both are optional; each is required only for its own function.
 
 ### 2.1 A camera source already exists
 
@@ -343,18 +373,60 @@ slot grid already shows a calibration badge per slot — roadmap C.4). Per slot:
 
 ## 11. Delivery plan
 
-**Phase 1 — manual offset (no vision).** Add `PenSlot.xy_offset_mm` + the
-`gcode.py` injection + the per-pen preflight bounds + manual entry in the
-magazine UI + golden tests. This alone closes the wiki gap (§2.3) and is useful
-on any multi-pen machine with zero camera. *Smallest shippable, highest
-certainty.*
+**Phase 1 — manual offset (no vision).** ✅ **Implemented.** Adds
+`PenSlot.xy_offset_mm` + `offset_source`, the opt-in `MachineProfile.
+apply_pen_offsets` switch, the offset application at `gcode.py` (a pure
+post-`transform` translation, drawing strokes only), the offset-aware
+workspace bounds check (`_pen_offset_envelope`), manual entry + an opt-in
+toggle in the magazine UI (`MagazineEditor.vue`), and tests
+(`backend/tests/test_pen_offset.py`, `MagazineEditor.test.ts`). Off by default
+so existing profiles emit byte-identical G-code. This closes the wiki gap
+(§2.3) and is useful on any multi-pen machine with zero camera.
 
-**Phase 2 — vision automation.** Add `TipCalibrationConfig`, the
-`vision/tip_detect.py` module (optional OpenCV), the measure/commit API, the
-guided sequence, and the UI Measure/Accept flow. Builds entirely on Phase 1's
-persisted field, so it is additive.
+**Phase 2 — vision automation.** ✅ **Implemented.** `TipCalibrationConfig` on
+the profile; `vision/tip_detect.py` (`dark_blob` detector via Pillow+NumPy,
+`offset_between`, and a `TipCalibrator` session); the measure/status/reset API
+(`api/tip_calibration.py`); the UI station config + per-slot **Measure** flow
+that writes `offset_source: "vision"`; tests
+(`backend/tests/test_tip_calibration.py`, `MagazineEditor.test.ts`). Built
+entirely on Phase 1's persisted field, so it is additive.
 
-This ordering means the camera work is never on the critical path for the
+**Phase 2b — guided travel.** ✅ **Implemented (optional).** The measure call
+takes `move_to_station` + `station_position` + `profile_name`; when set it
+drives the head to the station via `controller.goto` before grabbing (409 if
+disconnected, 422 if under-specified). The magazine UI exposes a station X/Y +
+an auto-move toggle (enabled once a station position is set).
+
+**Phase 2c — automatic pen-fetch.** ✅ **Implemented (optional).** The measure
+call takes `fetch_pen`; when set it loads the slot's pen via the existing
+tool-change orchestrator (`ToolChangeOrchestrator.plan` → swap commands,
+streamed with their host-side dwells) before any travel. Host-macro / firmware
+magazines fetch automatically; a *manual* profile returns 409 ("load by hand").
+The magazine UI exposes a "Load pen from magazine" toggle. Order per measure:
+**fetch → travel → grab**.
+
+**Annotated preview.** ✅ **Implemented.** Every measurement returns the frame
+as a JPEG data URL with the detected tip marked (or the plain frame when
+nothing was found, so framing/lighting can be checked). The magazine UI shows
+it under the slot so the operator confirms the right blob was picked.
+
+**Operator controls (audit follow-up).** The full station config is editable
+in the Couleurs tab — camera URL, mm/pixel, reference slot, **detection zone
+(ROI)** as an X/Y/W/H pixel box, station **X/Y/Z**, and a **camera light** wired
+to a **Raspberry Pi GPIO pin**: the operator picks a pin (BCM) from the list the
+host reports (`GET …/gpio`), sets the polarity (`active_high`), aims with manual
+On/Off (`POST …/light`), and can auto-toggle it around each measurement. The Z
+travel rides on `goto`'s new optional Z word.
+
+**mm-per-pixel assistant.** Rather than guessing the scale, the operator
+presents a target of known size and calls `POST …/calibrate-scale`, which
+measures the target's pixel extent (`detect_object_extent`) and returns
+`mm_per_pixel = known_mm / extent`; the UI applies it to the config.
+
+**Still deferred.** Only the `aruco` detector (printed fiducial, sub-pixel),
+which needs OpenCV — additive behind the existing `detector` field.
+
+This ordering means the camera work was never on the critical path for the
 registration fix itself.
 
 ---
@@ -390,3 +462,4 @@ registration fix itself.
   `backend/pen_plotter/core/gcode.py:613`
 - Tool-change mechanisms: [`tool_change_mechanisms.md`](tool_change_mechanisms.md)
 - Per-slot calibration (the gap this closes): [`../wiki/Per-Slot-Calibration.md`](../wiki/Per-Slot-Calibration.md)
+- Operator guide: [`../wiki/Offset-Camera.md`](../wiki/Offset-Camera.md)

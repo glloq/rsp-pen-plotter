@@ -70,6 +70,16 @@ class PenSlot(BaseModel):
     # unset.
     pen_up_command: str | None = None
     pen_down_command: str | None = None
+    # Optional per-pen XY offset (machine mm) added to every stroke drawn with
+    # this pen, compensating for where this pen's tip sits relative to the
+    # reference pen so multi-pen layers register against one origin. Applied
+    # ONLY when the profile opts in via ``apply_pen_offsets``; defaults to
+    # (0, 0) so offset-unaware magazines emit byte-identical G-code. See
+    # ``docs/camera_tip_offset.md`` / ADR 0005.
+    xy_offset_mm: Point = Field(default_factory=lambda: Point(x=0.0, y=0.0))
+    # Provenance of ``xy_offset_mm`` so the UI can distinguish a hand-typed
+    # value from a (future) camera measurement and prompt re-measurement.
+    offset_source: Literal["unset", "manual", "vision"] = "unset"
 
 
 class EbbConfig(BaseModel):
@@ -96,6 +106,47 @@ class EbbConfig(BaseModel):
     serial_terminator: Literal["cr", "lf", "crlf"] = Field(
         default="cr", description="Line terminator the board expects; EiBotBoard uses CR."
     )
+
+
+class TipCameraRoi(BaseModel):
+    """Pixel region of the camera frame where a presented tip will appear."""
+
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+
+
+class TipCalibrationConfig(BaseModel):
+    """Dedicated-station camera setup for measuring per-pen XY offsets.
+
+    Optional on a profile; present only when the machine has a tip-measuring
+    station wired up (ADR 0005, phase 2). The vision pipeline reuses the
+    timelapse frame grabber against ``camera_url``. Offsets are measured
+    *relative to* ``reference_slot``, so the absolute station-to-bed
+    registration cancels out.
+    """
+
+    camera_url: str
+    # Machine-coordinate point where a pen is presented to the station. Stored
+    # for the guided travel; not required to take a measurement.
+    station_position: Point | None = None
+    # Optional Z height (machine mm) the head moves to at the station — for
+    # machines with a real Z axis, so the tip sits in the camera's focal plane.
+    # ``None`` leaves Z untouched (servo / Z-less machines).
+    station_z_mm: float | None = None
+    reference_slot: int = Field(default=0, ge=0)
+    mm_per_pixel: float = Field(gt=0.0)
+    detector: Literal["dark_blob"] = "dark_blob"
+    # Luminance cutoff (0–255): pixels darker than this are taken as "tip".
+    dark_threshold: int = Field(default=80, ge=0, le=255)
+    roi: TipCameraRoi | None = None
+    # Optional camera-light control via a Raspberry Pi GPIO pin (BCM
+    # numbering). The host drives the pin directly — the light is wired to the
+    # Pi, not the plotter. ``None`` → no light control. ``light_active_high``
+    # is ``False`` for relays/drivers that switch on when the pin is LOW.
+    light_gpio_pin: int | None = Field(default=None, ge=0, le=27)
+    light_active_high: bool = True
 
 
 class MachineProfile(BaseModel):
@@ -139,6 +190,17 @@ class MachineProfile(BaseModel):
     # Carousel / rack profiles ignore this — they travel to the calibrated
     # slot position (carousel) or drive their own swap macro (rack) instead.
     pen_change_position: Point | None = None
+    # Opt-in switch for per-pen XY tip-offset compensation. When ``True`` each
+    # pen's :attr:`PenSlot.xy_offset_mm` is added to its strokes during G-code
+    # generation so different pens register against one origin. Defaults to
+    # ``False`` so existing profiles emit byte-identical G-code — the feature
+    # is strictly opt-in (the operator chooses to turn it on). See
+    # ``docs/camera_tip_offset.md`` / ADR 0005.
+    apply_pen_offsets: bool = False
+    # Optional dedicated-station camera setup for measuring per-pen offsets
+    # automatically (ADR 0005, phase 2). When present, the magazine editor
+    # surfaces a "Measure" action per slot. ``None`` → manual entry only.
+    tip_calibration: TipCalibrationConfig | None = None
     # v0.2 Capability Model (roadmap A.5). Optional in YAML — when
     # absent we derive a default from ``tool_change_method`` so legacy
     # profiles load unchanged. When set, the explicit block wins and

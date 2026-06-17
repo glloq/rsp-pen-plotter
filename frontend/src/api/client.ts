@@ -176,6 +176,8 @@ export interface Point {
   y: number
 }
 
+export type OffsetSource = 'unset' | 'manual' | 'vision'
+
 export interface PenSlot {
   index: number
   name: string
@@ -184,6 +186,39 @@ export interface PenSlot {
   position: Point | null
   pen_up_command: string | null
   pen_down_command: string | null
+  // Per-pen XY tip offset (machine mm) added to this pen's strokes when the
+  // profile opts in via ``apply_pen_offsets``. Defaults to (0, 0). See
+  // docs/camera_tip_offset.md / ADR 0005.
+  xy_offset_mm?: Point
+  // Provenance of xy_offset_mm: hand-typed vs (future) camera measurement.
+  offset_source?: OffsetSource
+}
+
+export interface TipCameraRoi {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+// Dedicated-station camera setup for measuring per-pen XY offsets (ADR 0005
+// phase 2). Optional on a profile; present only when a tip-measuring station
+// is wired up. See docs/camera_tip_offset.md.
+export interface TipCalibrationConfig {
+  camera_url: string
+  station_position?: Point | null
+  // Optional absolute Z (machine mm) for the station move (machines with a
+  // real Z axis); null leaves Z untouched.
+  station_z_mm?: number | null
+  reference_slot: number
+  mm_per_pixel: number
+  detector: 'dark_blob'
+  dark_threshold: number
+  roi?: TipCameraRoi | null
+  // Optional camera-light control via a Raspberry Pi GPIO pin (BCM). The host
+  // drives the pin; the light is wired to the Pi, not the plotter.
+  light_gpio_pin?: number | null
+  light_active_high?: boolean
 }
 
 export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'
@@ -217,6 +252,15 @@ export interface MachineProfile {
   // (or a magazine load pause) so the operator can reach the holder. Null
   // falls back to the workspace home corner. Carousel/rack ignore it.
   pen_change_position?: Point | null
+  // Opt-in switch for per-pen XY tip-offset compensation. When true, each
+  // pen's xy_offset_mm is added to its strokes during generation. Defaults
+  // to false so the feature is strictly the operator's choice and existing
+  // profiles emit identical G-code. See docs/camera_tip_offset.md / ADR 0005.
+  apply_pen_offsets?: boolean
+  // Optional dedicated-station camera setup for measuring per-pen offsets
+  // automatically (ADR 0005 phase 2). When set, the magazine editor shows a
+  // "Measure" action per slot. Null/absent → manual offset entry only.
+  tip_calibration?: TipCalibrationConfig | null
   // v0.2 capability model — the runtime source of truth for *how* a
   // tool change executes (firmware trigger vs host macro vs manual
   // prompt). When set the backend persists it verbatim; when null it
@@ -239,6 +283,98 @@ export async function saveProfile(profile: MachineProfile): Promise<MachineProfi
 
 export async function deleteProfile(name: string): Promise<void> {
   await api.delete(`/profiles/${encodeURIComponent(name)}`)
+}
+
+export interface TipMeasureRequest {
+  slot: number
+  camera_url: string
+  mm_per_pixel: number
+  reference_slot?: number
+  dark_threshold?: number
+  roi?: TipCameraRoi | null
+  // Optional guided travel: move the head to station_position (needs a
+  // connected plotter + profile_name) before grabbing the frame.
+  move_to_station?: boolean
+  station_position?: Point | null
+  station_z_mm?: number | null
+  profile_name?: string | null
+  // Optional automatic pen-fetch: load this slot's pen via a tool-change swap
+  // before measuring (host-macro / firmware magazines; needs a connected
+  // plotter). Runs before move_to_station.
+  fetch_pen?: boolean
+  // Optional camera lighting via a Pi GPIO pin: switch the light on around the
+  // grab and off again. Independent of the plotter connection.
+  light?: boolean
+  light_gpio_pin?: number | null
+  light_active_high?: boolean
+}
+
+export interface TipMeasureResponse {
+  found: boolean
+  slot: number
+  is_reference: boolean
+  tip_px: Point | null
+  confidence: number
+  reference_measured: boolean
+  // Offset (mm) of this slot's tip vs the reference pen — write onto the
+  // slot's xy_offset_mm. Null until both this slot and the reference are
+  // measured this session.
+  offset_mm: Point | null
+  message: string
+  // Data URL (data:image/jpeg;base64,…) of the frame with the detected tip
+  // marked, for visual confirmation. Null when the frame couldn't be decoded.
+  annotated_image: string | null
+}
+
+// Measure one presented pen's tip at the calibration station. The reference
+// pen must be measured (any time this session) before a non-reference slot
+// yields an offset; call resetTipCalibration to start a fresh run.
+export async function measureTipOffset(req: TipMeasureRequest): Promise<TipMeasureResponse> {
+  const response = await api.post<TipMeasureResponse>('/plotter/tip-calibration/measure', req)
+  return response.data
+}
+
+export async function resetTipCalibration(): Promise<void> {
+  await api.post('/plotter/tip-calibration/reset')
+}
+
+export interface GpioInfo {
+  available: boolean
+  pins: number[]
+}
+
+// Selectable GPIO pins + whether GPIO control works on this host.
+export async function getTipGpio(): Promise<GpioInfo> {
+  const response = await api.get<GpioInfo>('/plotter/tip-calibration/gpio')
+  return response.data
+}
+
+// Manual station-light On/Off via a GPIO pin (for aiming the camera).
+export async function setTipLight(pin: number, on: boolean, activeHigh = true): Promise<void> {
+  await api.post('/plotter/tip-calibration/light', { pin, on, active_high: activeHigh })
+}
+
+export interface ScaleCalibrateResponse {
+  found: boolean
+  mm_per_pixel: number | null
+  width_px: number | null
+  height_px: number | null
+  annotated_image: string | null
+  message: string
+}
+
+// Derive mm-per-pixel from a known-size target presented at the station.
+export async function calibrateTipScale(req: {
+  camera_url: string
+  known_mm: number
+  dark_threshold?: number
+  roi?: TipCameraRoi | null
+}): Promise<ScaleCalibrateResponse> {
+  const response = await api.post<ScaleCalibrateResponse>(
+    '/plotter/tip-calibration/calibrate-scale',
+    req,
+  )
+  return response.data
 }
 
 export async function exportProfileYaml(name: string): Promise<string> {

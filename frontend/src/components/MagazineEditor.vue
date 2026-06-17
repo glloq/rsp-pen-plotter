@@ -15,13 +15,27 @@
 // won't be clobbered by a pen-colour save (the watcher in
 // ``useProfileDraft`` short-circuits while ``isUnsavedDraft`` is true).
 
-import { computed, onUnmounted, ref, toRaw } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, toRaw, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import type { MachineProfile, PenSlot, Point } from '../api/client'
+import type {
+  MachineProfile,
+  PenSlot,
+  Point,
+  TipCalibrationConfig,
+  TipMeasureResponse,
+} from '../api/client'
+import {
+  calibrateTipScale,
+  getTipGpio,
+  measureTipOffset,
+  resetTipCalibration,
+  setTipLight,
+} from '../api/client'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { canonicalHex } from '../lib/penWidth'
 import { useJobStore } from '../stores/job'
+import { useUiStore } from '../stores/ui'
 import { defaultPen, normalizePens } from '../composables/useProfileDraft'
 import ColorPicker from './ColorPicker.vue'
 
@@ -105,7 +119,9 @@ function matchAvailable(hex: string): string {
   return availableColors.ordered.find((c) => c.hex === canon)?.hex ?? ''
 }
 
-async function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
+// Persist a mutation against a plain clone of the active profile. Every
+// edit in this panel saves immediately (there's no Save button).
+async function commit(mutate: (next: MachineProfile) => void): Promise<void> {
   if (!profile.value) return
   saving.value = true
   error.value = null
@@ -118,8 +134,7 @@ async function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
     // ``normalizePens`` can pad against ``pen_slot_count``.
     const next: MachineProfile = structuredClone(toRaw(profile.value))
     normalizePens(next)
-    const target = next.pens?.find((p) => p.index === index)
-    if (target) Object.assign(target, patch)
+    mutate(next)
     await job.saveProfile(next)
     justSaved.value = true
     clearTimeout(savedTimer)
@@ -130,6 +145,308 @@ async function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
       t('profile.saveFailed')
   } finally {
     saving.value = false
+  }
+}
+
+function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
+  return commit((next) => {
+    const target = next.pens?.find((p) => p.index === index)
+    if (target) Object.assign(target, patch)
+  })
+}
+
+function patchProfile(patch: Partial<MachineProfile>): Promise<void> {
+  return commit((next) => Object.assign(next, patch))
+}
+
+// Per-pen XY tip offset — opt-in (see ADR 0005). The toggle lives at the
+// magazine level; the per-slot offset inputs only show once it's on.
+const applyPenOffsets = computed(() => profile.value?.apply_pen_offsets ?? false)
+
+function onApplyPenOffsets(enabled: boolean): void {
+  void patchProfile({ apply_pen_offsets: enabled })
+}
+
+function onOffset(pen: PenSlot, axis: 'x' | 'y', raw: string): void {
+  const thisVal = raw.trim() === '' ? 0 : Number(raw)
+  const current = pen.xy_offset_mm ?? { x: 0, y: 0 }
+  const next: Point = {
+    x: axis === 'x' ? (Number.isFinite(thisVal) ? thisVal : 0) : current.x,
+    y: axis === 'y' ? (Number.isFinite(thisVal) ? thisVal : 0) : current.y,
+  }
+  void patchPen(pen.index, { xy_offset_mm: next, offset_source: 'manual' })
+}
+
+// ── Camera tip-offset station (ADR 0005 phase 2) ─────────────────────────
+// The "Measure" buttons appear once a tip_calibration block exists on the
+// profile. Measuring is relative: the reference pen must be measured before
+// other pens yield an offset, so the panel tracks which slots are done.
+const tipConfig = computed<TipCalibrationConfig | null>(
+  () => profile.value?.tip_calibration ?? null,
+)
+const canMeasure = computed(() => applyPenOffsets.value && tipConfig.value != null)
+
+function defaultTipConfig(): TipCalibrationConfig {
+  return {
+    camera_url: '',
+    station_position: null,
+    reference_slot: 0,
+    mm_per_pixel: 0.1,
+    detector: 'dark_blob',
+    dark_threshold: 80,
+    roi: null,
+  }
+}
+
+// The offset camera is dedicated to tip measurement; it's independent of the
+// timelapse camera (chosen in Timelapse settings). For convenience the
+// operator can point it at one of the configured workshop cameras instead of
+// retyping a URL — both remain optional.
+const ui = useUiStore()
+const workshopCameras = computed(() => ui.cameras.filter((c) => c.enabled && c.url.trim()))
+
+function onPickCamera(url: string): void {
+  if (url) onTipConfig({ camera_url: url })
+}
+
+function onUseStation(enabled: boolean): void {
+  void patchProfile({ tip_calibration: enabled ? defaultTipConfig() : null })
+}
+
+function onTipConfig(patch: Partial<TipCalibrationConfig>): void {
+  const current = tipConfig.value ?? defaultTipConfig()
+  void patchProfile({ tip_calibration: { ...current, ...patch } })
+}
+
+// Optional guided travel: when on (and a station position is set), the head
+// is driven to the station before each measurement. Session-local — there's
+// no need to persist it on the profile.
+const autoMove = ref(false)
+const canAutoMove = computed(() => tipConfig.value?.station_position != null)
+
+// Optional automatic pen-fetch: load the slot's pen via a tool-change swap
+// before measuring (host-macro / firmware magazines). Session-local.
+const fetchPen = ref(false)
+
+function onStation(axis: 'x' | 'y', raw: string): void {
+  const cur = tipConfig.value?.station_position ?? null
+  const v = raw.trim() === '' ? null : Number(raw)
+  const other = axis === 'x' ? (cur?.y ?? null) : (cur?.x ?? null)
+  if (v === null && other === null) {
+    onTipConfig({ station_position: null })
+    return
+  }
+  onTipConfig({
+    station_position: {
+      x: axis === 'x' ? (v ?? 0) : (cur?.x ?? 0),
+      y: axis === 'y' ? (v ?? 0) : (cur?.y ?? 0),
+    },
+  })
+}
+
+function onStationZ(raw: string): void {
+  const v = raw.trim() === '' ? null : Number(raw)
+  onTipConfig({ station_z_mm: v !== null && Number.isFinite(v) ? v : null })
+}
+
+// Detection zone (ROI): four pixel fields. Clearing them all drops back to the
+// whole frame). The backend ROI model requires width/height > 0, so we hold
+// the four fields in a local draft while the operator fills them in and only
+// persist a complete, valid box (otherwise null = whole frame). The draft
+// re-seeds whenever the stored ROI changes (e.g. switching profiles).
+const roiDraft = reactive<{ x: string; y: string; width: string; height: string }>({
+  x: '',
+  y: '',
+  width: '',
+  height: '',
+})
+watch(
+  () => tipConfig.value?.roi ?? null,
+  (roi) => {
+    roiDraft.x = roi ? String(roi.x) : ''
+    roiDraft.y = roi ? String(roi.y) : ''
+    roiDraft.width = roi ? String(roi.width) : ''
+    roiDraft.height = roi ? String(roi.height) : ''
+  },
+  { immediate: true },
+)
+
+function _roiNum(raw: string): number {
+  const n = Math.floor(Number(raw))
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function onRoi(field: 'x' | 'y' | 'width' | 'height', raw: string): void {
+  roiDraft[field] = raw
+  const x = Math.max(0, _roiNum(roiDraft.x))
+  const y = Math.max(0, _roiNum(roiDraft.y))
+  const width = _roiNum(roiDraft.width)
+  const height = _roiNum(roiDraft.height)
+  // Persist only a complete, valid box; anything else means "whole frame".
+  onTipConfig({ roi: width > 0 && height > 0 ? { x, y, width, height } : null })
+}
+
+function clearRoi(): void {
+  roiDraft.x = roiDraft.y = roiDraft.width = roiDraft.height = ''
+  onTipConfig({ roi: null })
+}
+
+// Camera light via a Pi GPIO pin. ``lightDuringMeasure`` (session-local)
+// toggles auto on/off around each measurement; the manual buttons aim the
+// camera. Selectable pins + GPIO availability come from the backend.
+const lightDuringMeasure = ref(false)
+const gpioPins = ref<number[]>([])
+const gpioAvailable = ref(false)
+const lightPin = computed(() => tipConfig.value?.light_gpio_pin ?? null)
+const hasLight = computed(() => lightPin.value != null)
+
+async function loadGpio(): Promise<void> {
+  try {
+    const info = await getTipGpio()
+    gpioPins.value = info.pins
+    gpioAvailable.value = info.available
+  } catch {
+    gpioPins.value = []
+    gpioAvailable.value = false
+  }
+}
+
+function onLightPin(raw: string): void {
+  const v = raw === '' ? null : Math.floor(Number(raw))
+  onTipConfig({ light_gpio_pin: v })
+}
+
+function onLightActiveHigh(activeHigh: boolean): void {
+  onTipConfig({ light_active_high: activeHigh })
+}
+
+async function onManualLight(on: boolean): Promise<void> {
+  const pin = lightPin.value
+  if (pin == null) return
+  try {
+    await setTipLight(pin, on, tipConfig.value?.light_active_high ?? true)
+  } catch {
+    // Non-critical (e.g. no GPIO backend); the measurement path reports errors.
+  }
+}
+
+// Per-slot transient measurement feedback (busy + last message/confidence).
+interface MeasureState {
+  busy: boolean
+  message: string
+  ok: boolean
+  // Annotated frame (data URL) for visual confirmation of the detected tip.
+  image?: string | null
+}
+const measureState = reactive<Record<number, MeasureState>>({})
+
+function describeMeasurement(m: TipMeasureResponse): { message: string; ok: boolean } {
+  if (!m.found) {
+    return { message: m.message || t('magazine.measureNotFound'), ok: false }
+  }
+  if (m.is_reference) {
+    return {
+      message: t('magazine.measureRefDone', { c: Math.round(m.confidence * 100) }),
+      ok: true,
+    }
+  }
+  if (!m.reference_measured || !m.offset_mm) {
+    return { message: t('magazine.measureNeedRef'), ok: false }
+  }
+  return {
+    message: t('magazine.measureApplied', {
+      x: m.offset_mm.x.toFixed(2),
+      y: m.offset_mm.y.toFixed(2),
+      c: Math.round(m.confidence * 100),
+    }),
+    ok: true,
+  }
+}
+
+async function onMeasure(pen: PenSlot): Promise<void> {
+  const cfg = tipConfig.value
+  if (!cfg) return
+  measureState[pen.index] = { busy: true, message: '', ok: false }
+  try {
+    const m = await measureTipOffset({
+      slot: pen.index,
+      camera_url: cfg.camera_url,
+      mm_per_pixel: cfg.mm_per_pixel,
+      reference_slot: cfg.reference_slot,
+      dark_threshold: cfg.dark_threshold,
+      roi: cfg.roi,
+      fetch_pen: fetchPen.value,
+      move_to_station: autoMove.value && cfg.station_position != null,
+      station_position: cfg.station_position ?? null,
+      station_z_mm: cfg.station_z_mm ?? null,
+      profile_name: profile.value?.name ?? null,
+      light: lightDuringMeasure.value,
+      light_gpio_pin: cfg.light_gpio_pin ?? null,
+      light_active_high: cfg.light_active_high ?? true,
+    })
+    // Apply the measured offset when we have one (reference pen → (0,0),
+    // others → their delta). A not-found / no-reference result only reports.
+    if (m.found && (m.is_reference || m.offset_mm)) {
+      const offset: Point = m.offset_mm ?? { x: 0, y: 0 }
+      await patchPen(pen.index, { xy_offset_mm: offset, offset_source: 'vision' })
+    }
+    const { message, ok } = describeMeasurement(m)
+    measureState[pen.index] = { busy: false, message, ok, image: m.annotated_image }
+  } catch (err) {
+    const detail =
+      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+      t('magazine.measureFailed')
+    measureState[pen.index] = { busy: false, message: detail, ok: false }
+  }
+}
+
+async function onResetMeasurements(): Promise<void> {
+  try {
+    await resetTipCalibration()
+    for (const k of Object.keys(measureState)) delete measureState[Number(k)]
+  } catch {
+    // A reset failure is non-critical; the next measure run still works.
+  }
+}
+
+// mm-per-pixel assistant: present a target of known size, measure its pixel
+// extent, derive the scale and write it onto the config.
+const knownMm = ref(10)
+const scaleState = reactive<{ busy: boolean; message: string; ok: boolean; image?: string | null }>(
+  { busy: false, message: '', ok: false },
+)
+
+async function onCalibrateScale(): Promise<void> {
+  const cfg = tipConfig.value
+  if (!cfg || !(knownMm.value > 0)) return
+  scaleState.busy = true
+  scaleState.message = ''
+  try {
+    const r = await calibrateTipScale({
+      camera_url: cfg.camera_url,
+      known_mm: knownMm.value,
+      dark_threshold: cfg.dark_threshold,
+      roi: cfg.roi,
+    })
+    scaleState.image = r.annotated_image
+    if (r.found && r.mm_per_pixel) {
+      onTipConfig({ mm_per_pixel: Number(r.mm_per_pixel.toFixed(5)) })
+      scaleState.ok = true
+      scaleState.message = t('magazine.scaleApplied', {
+        v: r.mm_per_pixel.toFixed(4),
+        px: Math.round(Math.max(r.width_px ?? 0, r.height_px ?? 0)),
+      })
+    } else {
+      scaleState.ok = false
+      scaleState.message = r.message || t('magazine.scaleNotFound')
+    }
+  } catch (err) {
+    scaleState.ok = false
+    scaleState.message =
+      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+      t('magazine.scaleFailed')
+  } finally {
+    scaleState.busy = false
   }
 }
 
@@ -180,6 +497,7 @@ function displayLabel(name: string, hex: string): string {
   return name.trim() ? `${name} · ${hex}` : hex
 }
 
+onMounted(loadGpio)
 onUnmounted(() => clearTimeout(savedTimer))
 </script>
 
@@ -240,6 +558,392 @@ onUnmounted(() => clearTimeout(savedTimer))
            per-slot calibration block (gated by ``showsCalibration``). -->
       <template v-else>
         <p class="text-[11px] text-slate-500">{{ listHint }}</p>
+
+        <!-- Optional per-pen tip-offset compensation. Only meaningful for a
+             multi-pen magazine (carousel / rack), so it rides alongside the
+             per-slot calibration block and is off by default. -->
+        <div
+          v-if="showsCalibration"
+          class="rounded border border-slate-800 bg-slate-950/40 px-2 py-1.5"
+          data-test="magazine-offsets-toggle"
+        >
+          <label class="flex items-center gap-2 text-[11px] text-slate-300">
+            <input
+              type="checkbox"
+              :checked="applyPenOffsets"
+              class="rounded border-slate-600 bg-slate-900"
+              :disabled="saving"
+              data-test="apply-pen-offsets"
+              @change="(e) => onApplyPenOffsets((e.target as HTMLInputElement).checked)"
+            />
+            {{ t('magazine.applyOffsets') }}
+          </label>
+          <p class="mt-0.5 text-[11px] text-slate-500">{{ t('magazine.applyOffsetsHint') }}</p>
+
+          <!-- Optional camera measurement station: when configured, each slot
+               gets a "Measure" button that locates the tip and fills the
+               offset automatically. Without it, offsets are typed by hand. -->
+          <div v-if="applyPenOffsets" class="mt-2 border-t border-slate-800 pt-2">
+            <label class="flex items-center gap-2 text-[11px] text-slate-300">
+              <input
+                type="checkbox"
+                :checked="tipConfig != null"
+                class="rounded border-slate-600 bg-slate-900"
+                :disabled="saving"
+                data-test="use-tip-station"
+                @change="(e) => onUseStation((e.target as HTMLInputElement).checked)"
+              />
+              {{ t('magazine.useStation') }}
+            </label>
+
+            <div
+              v-if="tipConfig"
+              class="mt-1.5 grid grid-cols-2 gap-2"
+              data-test="tip-station-config"
+            >
+              <div class="col-span-2">
+                <p class="text-[11px] text-slate-400">{{ t('magazine.offsetCamera') }}</p>
+                <p class="text-[11px] text-slate-500">{{ t('magazine.offsetCameraHint') }}</p>
+                <!-- Quick-fill from a configured workshop camera (when any),
+                     otherwise just type a URL. The offset camera is dedicated
+                     to tip measurement — independent of the timelapse one. -->
+                <select
+                  v-if="workshopCameras.length"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  :disabled="saving"
+                  data-test="tip-camera-source"
+                  @change="(e) => onPickCamera((e.target as HTMLSelectElement).value)"
+                >
+                  <option value="">{{ t('magazine.cameraCustom') }}</option>
+                  <option v-for="(c, i) in workshopCameras" :key="i" :value="c.url">
+                    {{ c.label || t('magazine.cameraN', { n: i + 1 }) }}
+                  </option>
+                </select>
+                <input
+                  type="text"
+                  :value="tipConfig.camera_url"
+                  placeholder="http://localhost:8080/?action=snapshot"
+                  :disabled="saving"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+                  data-test="tip-camera-url"
+                  @change="(e) => onTipConfig({ camera_url: (e.target as HTMLInputElement).value })"
+                />
+              </div>
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('magazine.mmPerPixel') }}
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  :value="tipConfig.mm_per_pixel"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-mm-per-pixel"
+                  @change="
+                    (e) =>
+                      onTipConfig({ mm_per_pixel: Number((e.target as HTMLInputElement).value) })
+                  "
+                />
+              </label>
+
+              <!-- mm/pixel assistant: present a known-size target, measure its
+                   pixel extent, derive the scale. -->
+              <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
+                <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
+                  {{ t('magazine.scaleTitle') }}
+                </p>
+                <p class="mb-1 text-[11px] text-slate-500">{{ t('magazine.scaleHint') }}</p>
+                <div class="flex items-end gap-2">
+                  <label class="block text-[10px] text-slate-400"
+                    >{{ t('magazine.scaleKnownMm') }}
+                    <input
+                      v-model.number="knownMm"
+                      type="number"
+                      step="any"
+                      min="0"
+                      :disabled="saving || scaleState.busy"
+                      class="mt-0.5 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                      data-test="tip-scale-known-mm"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
+                    :disabled="saving || scaleState.busy || !(knownMm > 0)"
+                    data-test="tip-scale-measure"
+                    @click="onCalibrateScale"
+                  >
+                    {{
+                      scaleState.busy ? t('magazine.measuring') : '📐 ' + t('magazine.scaleMeasure')
+                    }}
+                  </button>
+                </div>
+                <p
+                  v-if="scaleState.message"
+                  class="mt-1 text-[11px]"
+                  :class="scaleState.ok ? 'text-emerald-400' : 'text-amber-400'"
+                  data-test="tip-scale-msg"
+                >
+                  {{ scaleState.message }}
+                </p>
+                <img
+                  v-if="scaleState.image"
+                  :src="scaleState.image"
+                  :alt="t('magazine.scaleTitle')"
+                  class="mt-1 max-h-40 w-auto rounded border border-slate-700"
+                  data-test="tip-scale-preview"
+                />
+              </div>
+
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('magazine.referenceSlot') }}
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  :value="tipConfig.reference_slot"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-reference-slot"
+                  @change="
+                    (e) =>
+                      onTipConfig({
+                        reference_slot: Math.max(
+                          0,
+                          Math.floor(Number((e.target as HTMLInputElement).value)),
+                        ),
+                      })
+                  "
+                />
+              </label>
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('magazine.stationX') }}
+                <input
+                  type="number"
+                  step="any"
+                  :value="tipConfig.station_position?.x ?? ''"
+                  placeholder="—"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-station-x"
+                  @change="(e) => onStation('x', (e.target as HTMLInputElement).value)"
+                />
+              </label>
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('magazine.stationY') }}
+                <input
+                  type="number"
+                  step="any"
+                  :value="tipConfig.station_position?.y ?? ''"
+                  placeholder="—"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-station-y"
+                  @change="(e) => onStation('y', (e.target as HTMLInputElement).value)"
+                />
+              </label>
+              <label class="col-span-2 block text-[11px] text-slate-400"
+                >{{ t('magazine.stationZ') }}
+                <input
+                  type="number"
+                  step="any"
+                  :value="tipConfig.station_z_mm ?? ''"
+                  placeholder="—"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-station-z"
+                  @change="(e) => onStationZ((e.target as HTMLInputElement).value)"
+                />
+              </label>
+              <label class="col-span-2 flex items-center gap-2 text-[11px] text-slate-300">
+                <input
+                  v-model="fetchPen"
+                  type="checkbox"
+                  class="rounded border-slate-600 bg-slate-900"
+                  :disabled="saving"
+                  data-test="tip-fetch-pen"
+                />
+                {{ t('magazine.fetchPen') }}
+              </label>
+              <label
+                class="col-span-2 flex items-center gap-2 text-[11px]"
+                :class="canAutoMove ? 'text-slate-300' : 'text-slate-600'"
+              >
+                <input
+                  v-model="autoMove"
+                  type="checkbox"
+                  class="rounded border-slate-600 bg-slate-900"
+                  :disabled="saving || !canAutoMove"
+                  data-test="tip-auto-move"
+                />
+                {{ t('magazine.autoMove') }}
+              </label>
+
+              <!-- Detection zone (ROI): restrict the search to a pixel box so
+                   clutter elsewhere in the frame is ignored. Blank = whole
+                   frame. -->
+              <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
+                <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
+                  {{ t('magazine.roiTitle') }}
+                </p>
+                <div class="grid grid-cols-4 gap-1.5" data-test="tip-roi">
+                  <label class="block text-[10px] text-slate-400"
+                    >X
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      :value="roiDraft.x"
+                      placeholder="—"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-roi-x"
+                      @change="(e) => onRoi('x', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <label class="block text-[10px] text-slate-400"
+                    >Y
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      :value="roiDraft.y"
+                      placeholder="—"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-roi-y"
+                      @change="(e) => onRoi('y', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <label class="block text-[10px] text-slate-400"
+                    >W
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      :value="roiDraft.width"
+                      placeholder="—"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-roi-w"
+                      @change="(e) => onRoi('width', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <label class="block text-[10px] text-slate-400"
+                    >H
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      :value="roiDraft.height"
+                      placeholder="—"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-roi-h"
+                      @change="(e) => onRoi('height', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                </div>
+                <button
+                  v-if="tipConfig.roi"
+                  type="button"
+                  class="mt-1 text-[10px] text-slate-400 underline hover:text-slate-200"
+                  :disabled="saving"
+                  data-test="tip-roi-clear"
+                  @click="clearRoi"
+                >
+                  {{ t('magazine.roiClear') }}
+                </button>
+              </div>
+
+              <!-- Camera light via a Pi GPIO pin: choose a pin + polarity,
+                   aim with the manual On/Off buttons, or auto on/off around a
+                   measurement. -->
+              <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
+                <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
+                  {{ t('magazine.lightTitle') }}
+                </p>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <label class="block text-[10px] text-slate-400"
+                    >{{ t('magazine.lightGpioPin') }}
+                    <select
+                      :value="tipConfig.light_gpio_pin ?? ''"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-light-pin"
+                      @change="(e) => onLightPin((e.target as HTMLSelectElement).value)"
+                    >
+                      <option value="">{{ t('magazine.lightNoPin') }}</option>
+                      <option v-for="p in gpioPins" :key="p" :value="p">GPIO {{ p }}</option>
+                    </select>
+                  </label>
+                  <label class="flex items-end gap-2 pb-1 text-[10px] text-slate-400">
+                    <input
+                      type="checkbox"
+                      :checked="tipConfig.light_active_high ?? true"
+                      class="rounded border-slate-600 bg-slate-900"
+                      :disabled="saving"
+                      data-test="tip-light-active-high"
+                      @change="(e) => onLightActiveHigh((e.target as HTMLInputElement).checked)"
+                    />
+                    {{ t('magazine.lightActiveHigh') }}
+                  </label>
+                </div>
+                <p
+                  v-if="!gpioAvailable"
+                  class="mt-1 text-[11px] text-amber-400"
+                  data-test="tip-gpio-warn"
+                >
+                  ⚠ {{ t('magazine.gpioUnavailable') }}
+                </p>
+                <div class="mt-1.5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                    :disabled="saving || !hasLight"
+                    data-test="tip-light-on"
+                    @click="onManualLight(true)"
+                  >
+                    💡 {{ t('magazine.lightOn') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+                    :disabled="saving || !hasLight"
+                    data-test="tip-light-off"
+                    @click="onManualLight(false)"
+                  >
+                    {{ t('magazine.lightOff') }}
+                  </button>
+                </div>
+                <label
+                  class="mt-1.5 flex items-center gap-2 text-[11px]"
+                  :class="hasLight ? 'text-slate-300' : 'text-slate-600'"
+                >
+                  <input
+                    v-model="lightDuringMeasure"
+                    type="checkbox"
+                    class="rounded border-slate-600 bg-slate-900"
+                    :disabled="saving || !hasLight"
+                    data-test="tip-light-during"
+                  />
+                  {{ t('magazine.lightDuringMeasure') }}
+                </label>
+              </div>
+
+              <button
+                type="button"
+                class="col-span-2 justify-self-start rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700"
+                :disabled="saving"
+                data-test="tip-reset"
+                @click="onResetMeasurements"
+              >
+                ↺ {{ t('magazine.resetMeasurements') }}
+              </button>
+              <p class="col-span-2 text-[11px] text-slate-500">{{ t('magazine.stationHint') }}</p>
+            </div>
+          </div>
+        </div>
 
         <ul v-if="pens.length" class="space-y-1.5">
           <li
@@ -371,6 +1075,70 @@ onUnmounted(() => clearTimeout(savedTimer))
                     "
                   />
                 </label>
+
+                <!-- Per-pen XY tip offset (only when the magazine opts in). -->
+                <template v-if="applyPenOffsets">
+                  <label class="block text-[11px] text-slate-400"
+                    >{{ t('magazine.offsetX') }}
+                    <input
+                      type="number"
+                      step="any"
+                      :value="pen.xy_offset_mm?.x ?? 0"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                      :data-test="`pen-offset-x-${pen.index}`"
+                      @change="(e) => onOffset(pen, 'x', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <label class="block text-[11px] text-slate-400"
+                    >{{ t('magazine.offsetY') }}
+                    <input
+                      type="number"
+                      step="any"
+                      :value="pen.xy_offset_mm?.y ?? 0"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                      :data-test="`pen-offset-y-${pen.index}`"
+                      @change="(e) => onOffset(pen, 'y', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <p class="col-span-2 text-[11px] text-slate-500">
+                    {{ t('magazine.offsetHint') }}
+                  </p>
+
+                  <!-- Camera measurement: present the pen at the station and
+                       fill its offset automatically (reference pen first). -->
+                  <div v-if="canMeasure" class="col-span-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
+                      :disabled="saving || measureState[pen.index]?.busy"
+                      :data-test="`pen-measure-${pen.index}`"
+                      @click="onMeasure(pen)"
+                    >
+                      {{
+                        measureState[pen.index]?.busy
+                          ? t('magazine.measuring')
+                          : '📷 ' + t('magazine.measure')
+                      }}
+                    </button>
+                    <span
+                      v-if="measureState[pen.index]?.message"
+                      class="text-[11px]"
+                      :class="measureState[pen.index]?.ok ? 'text-emerald-400' : 'text-amber-400'"
+                      :data-test="`pen-measure-msg-${pen.index}`"
+                    >
+                      {{ measureState[pen.index]?.message }}
+                    </span>
+                  </div>
+                  <img
+                    v-if="measureState[pen.index]?.image"
+                    :src="measureState[pen.index]!.image!"
+                    :alt="t('magazine.measurePreviewAlt')"
+                    class="col-span-2 max-h-40 w-auto rounded border border-slate-700"
+                    :data-test="`pen-measure-preview-${pen.index}`"
+                  />
+                </template>
               </div>
             </details>
           </li>

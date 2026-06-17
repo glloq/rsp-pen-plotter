@@ -1260,6 +1260,28 @@
         "title": "GotoRequest",
         "type": "object"
       },
+      "GpioInfo": {
+        "description": "Whether host GPIO is available + the pins the UI can offer.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "pins": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Pins",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "pins"
+        ],
+        "title": "GpioInfo",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1974,6 +1996,32 @@
         "title": "LayerPlan",
         "type": "object"
       },
+      "LightRequest": {
+        "description": "Body for ``POST /plotter/tip-calibration/light`` \u2014 manual On/Off.\n\nDrives the chosen Pi GPIO pin so the operator can light the station to aim\nthe camera before measuring.",
+        "properties": {
+          "active_high": {
+            "default": true,
+            "title": "Active High",
+            "type": "boolean"
+          },
+          "on": {
+            "default": true,
+            "title": "On",
+            "type": "boolean"
+          },
+          "pin": {
+            "maximum": 27.0,
+            "minimum": 0.0,
+            "title": "Pin",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pin"
+        ],
+        "title": "LightRequest",
+        "type": "object"
+      },
       "MachineCapabilities": {
         "description": "Top-level capability container exposed on :class:`MachineProfile`.",
         "properties": {
@@ -2005,6 +2053,11 @@
           "acceleration_mm_s2": {
             "title": "Acceleration Mm S2",
             "type": "number"
+          },
+          "apply_pen_offsets": {
+            "default": false,
+            "title": "Apply Pen Offsets",
+            "type": "boolean"
           },
           "arc_tolerance_mm": {
             "default": 0.1,
@@ -2104,6 +2157,16 @@
             "default": false,
             "title": "Supports Arcs",
             "type": "boolean"
+          },
+          "tip_calibration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipCalibrationConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "tool_change_command": {
             "title": "Tool Change Command",
@@ -2583,6 +2646,16 @@
             "title": "Name",
             "type": "string"
           },
+          "offset_source": {
+            "default": "unset",
+            "enum": [
+              "unset",
+              "manual",
+              "vision"
+            ],
+            "title": "Offset Source",
+            "type": "string"
+          },
           "pen_down_command": {
             "anyOf": [
               {
@@ -2614,6 +2687,9 @@
                 "type": "null"
               }
             ]
+          },
+          "xy_offset_mm": {
+            "$ref": "#/components/schemas/Point"
           }
         },
         "required": [
@@ -3671,6 +3747,106 @@
         "title": "RunRequest",
         "type": "object"
       },
+      "ScaleCalibrateRequest": {
+        "description": "Body for ``POST /plotter/tip-calibration/calibrate-scale``.\n\nThe operator presents a target of known physical size at the station; the\ndetector measures its pixel extent and we derive ``mm_per_pixel``.",
+        "properties": {
+          "camera_url": {
+            "title": "Camera Url",
+            "type": "string"
+          },
+          "dark_threshold": {
+            "default": 80,
+            "maximum": 255.0,
+            "minimum": 0.0,
+            "title": "Dark Threshold",
+            "type": "integer"
+          },
+          "known_mm": {
+            "exclusiveMinimum": 0.0,
+            "title": "Known Mm",
+            "type": "number"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipCameraRoi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "camera_url",
+          "known_mm"
+        ],
+        "title": "ScaleCalibrateRequest",
+        "type": "object"
+      },
+      "ScaleCalibrateResponse": {
+        "description": "Derived scale plus the measured extent and an annotated preview.",
+        "properties": {
+          "annotated_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotated Image"
+          },
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "height_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Px"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "mm_per_pixel": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mm Per Pixel"
+          },
+          "width_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Px"
+          }
+        },
+        "required": [
+          "found"
+        ],
+        "title": "ScaleCalibrateResponse",
+        "type": "object"
+      },
       "SegmentationMethod": {
         "description": "Segmentation strategy on the way into the renderer.",
         "enum": [
@@ -3900,6 +4076,328 @@
           "size_bytes"
         ],
         "title": "TimelapseSummary",
+        "type": "object"
+      },
+      "TipCalibrationConfig": {
+        "description": "Dedicated-station camera setup for measuring per-pen XY offsets.\n\nOptional on a profile; present only when the machine has a tip-measuring\nstation wired up (ADR 0005, phase 2). The vision pipeline reuses the\ntimelapse frame grabber against ``camera_url``. Offsets are measured\n*relative to* ``reference_slot``, so the absolute station-to-bed\nregistration cancels out.",
+        "properties": {
+          "camera_url": {
+            "title": "Camera Url",
+            "type": "string"
+          },
+          "dark_threshold": {
+            "default": 80,
+            "maximum": 255.0,
+            "minimum": 0.0,
+            "title": "Dark Threshold",
+            "type": "integer"
+          },
+          "detector": {
+            "const": "dark_blob",
+            "default": "dark_blob",
+            "title": "Detector",
+            "type": "string"
+          },
+          "light_active_high": {
+            "default": true,
+            "title": "Light Active High",
+            "type": "boolean"
+          },
+          "light_gpio_pin": {
+            "anyOf": [
+              {
+                "maximum": 27.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Light Gpio Pin"
+          },
+          "mm_per_pixel": {
+            "exclusiveMinimum": 0.0,
+            "title": "Mm Per Pixel",
+            "type": "number"
+          },
+          "reference_slot": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Reference Slot",
+            "type": "integer"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipCameraRoi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "station_position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "station_z_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Station Z Mm"
+          }
+        },
+        "required": [
+          "camera_url",
+          "mm_per_pixel"
+        ],
+        "title": "TipCalibrationConfig",
+        "type": "object"
+      },
+      "TipCalibrationStatus": {
+        "description": "Which slots have been measured in the current session.",
+        "properties": {
+          "measured_slots": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Measured Slots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "measured_slots"
+        ],
+        "title": "TipCalibrationStatus",
+        "type": "object"
+      },
+      "TipCameraRoi": {
+        "description": "Pixel region of the camera frame where a presented tip will appear.",
+        "properties": {
+          "height": {
+            "exclusiveMinimum": 0.0,
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "exclusiveMinimum": 0.0,
+            "title": "Width",
+            "type": "integer"
+          },
+          "x": {
+            "minimum": 0.0,
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "TipCameraRoi",
+        "type": "object"
+      },
+      "TipMeasureRequest": {
+        "description": "Body for ``POST /plotter/tip-calibration/measure``.\n\nCarries the station config inline (the SPA reads it from the active\nprofile) so the backend stays free of profile lookups.",
+        "properties": {
+          "camera_url": {
+            "title": "Camera Url",
+            "type": "string"
+          },
+          "dark_threshold": {
+            "default": 80,
+            "maximum": 255.0,
+            "minimum": 0.0,
+            "title": "Dark Threshold",
+            "type": "integer"
+          },
+          "fetch_pen": {
+            "default": false,
+            "title": "Fetch Pen",
+            "type": "boolean"
+          },
+          "light": {
+            "default": false,
+            "title": "Light",
+            "type": "boolean"
+          },
+          "light_active_high": {
+            "default": true,
+            "title": "Light Active High",
+            "type": "boolean"
+          },
+          "light_gpio_pin": {
+            "anyOf": [
+              {
+                "maximum": 27.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Light Gpio Pin"
+          },
+          "mm_per_pixel": {
+            "exclusiveMinimum": 0.0,
+            "title": "Mm Per Pixel",
+            "type": "number"
+          },
+          "move_to_station": {
+            "default": false,
+            "title": "Move To Station",
+            "type": "boolean"
+          },
+          "profile_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Name"
+          },
+          "reference_slot": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Reference Slot",
+            "type": "integer"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipCameraRoi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slot": {
+            "minimum": 0.0,
+            "title": "Slot",
+            "type": "integer"
+          },
+          "station_position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "station_z_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Station Z Mm"
+          }
+        },
+        "required": [
+          "slot",
+          "camera_url",
+          "mm_per_pixel"
+        ],
+        "title": "TipMeasureRequest",
+        "type": "object"
+      },
+      "TipMeasureResponse": {
+        "description": "Result of one measurement plus the offset it implies.",
+        "properties": {
+          "annotated_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotated Image"
+          },
+          "confidence": {
+            "default": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "is_reference": {
+            "title": "Is Reference",
+            "type": "boolean"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "offset_mm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference_measured": {
+            "default": false,
+            "title": "Reference Measured",
+            "type": "boolean"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "integer"
+          },
+          "tip_px": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "found",
+          "slot",
+          "is_reference"
+        ],
+        "title": "TipMeasureResponse",
         "type": "object"
       },
       "ToolChangeStrategy": {
@@ -7636,6 +8134,418 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Status"
+      }
+    },
+    "/plotter/tip-calibration/calibrate-scale": {
+      "post": {
+        "description": "Derive ``mm_per_pixel`` from a known-size target in the frame.\n\nUses the target's longest visible edge (max of width/height in pixels) so a\nsquare or round target of side/diameter ``known_mm`` gives a robust scale.",
+        "operationId": "calibrate_scale_plotter_tip_calibration_calibrate_scale_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScaleCalibrateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScaleCalibrateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Calibrate Scale"
+      }
+    },
+    "/plotter/tip-calibration/gpio": {
+      "get": {
+        "description": "List selectable GPIO pins and whether GPIO control works on this host.",
+        "operationId": "gpio_plotter_tip_calibration_gpio_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpioInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gpio"
+      }
+    },
+    "/plotter/tip-calibration/light": {
+      "post": {
+        "description": "Switch the station light on/off via its GPIO pin.",
+        "operationId": "light_plotter_tip_calibration_light_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LightRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Light Plotter Tip Calibration Light Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Light"
+      }
+    },
+    "/plotter/tip-calibration/measure": {
+      "post": {
+        "description": "Grab a frame for ``slot`` and locate its tip.\n\nOptional motion happens first, in order: ``fetch_pen`` loads the slot's\npen via an automatic swap, then ``move_to_station`` travels the head to\n``station_position`` (optional Z). Both need a connected plotter +\n``profile_name``; without them the operator presents the pen by hand. The\ncamera light (when ``light``) is on around the grab. Returns the implied\noffset once the reference slot has also been measured this session.",
+        "operationId": "measure_plotter_tip_calibration_measure_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TipMeasureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipMeasureResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Measure"
+      }
+    },
+    "/plotter/tip-calibration/reset": {
+      "post": {
+        "description": "Forget all measurements and start a fresh calibration run.",
+        "operationId": "reset_plotter_tip_calibration_reset_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipCalibrationStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset"
+      }
+    },
+    "/plotter/tip-calibration/status": {
+      "get": {
+        "description": "Slots measured so far this calibration run.",
+        "operationId": "status_plotter_tip_calibration_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipCalibrationStatus"
                 }
               }
             },

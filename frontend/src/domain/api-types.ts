@@ -941,6 +941,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plotter/tip-calibration/calibrate-scale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Calibrate Scale
+         * @description Derive ``mm_per_pixel`` from a known-size target in the frame.
+         *
+         *     Uses the target's longest visible edge (max of width/height in pixels) so a
+         *     square or round target of side/diameter ``known_mm`` gives a robust scale.
+         */
+        post: operations["calibrate_scale_plotter_tip_calibration_calibrate_scale_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/tip-calibration/gpio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gpio
+         * @description List selectable GPIO pins and whether GPIO control works on this host.
+         */
+        get: operations["gpio_plotter_tip_calibration_gpio_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/tip-calibration/light": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Light
+         * @description Switch the station light on/off via its GPIO pin.
+         */
+        post: operations["light_plotter_tip_calibration_light_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/tip-calibration/measure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Measure
+         * @description Grab a frame for ``slot`` and locate its tip.
+         *
+         *     Optional motion happens first, in order: ``fetch_pen`` loads the slot's
+         *     pen via an automatic swap, then ``move_to_station`` travels the head to
+         *     ``station_position`` (optional Z). Both need a connected plotter +
+         *     ``profile_name``; without them the operator presents the pen by hand. The
+         *     camera light (when ``light``) is on around the grab. Returns the implied
+         *     offset once the reference slot has also been measured this session.
+         */
+        post: operations["measure_plotter_tip_calibration_measure_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/tip-calibration/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset
+         * @description Forget all measurements and start a fresh calibration run.
+         */
+        post: operations["reset_plotter_tip_calibration_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/tip-calibration/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status
+         * @description Slots measured so far this calibration run.
+         */
+        get: operations["status_plotter_tip_calibration_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/policy/resolve": {
         parameters: {
             query?: never;
@@ -2398,6 +2528,16 @@ export interface components {
             /** Y Mm */
             y_mm: number;
         };
+        /**
+         * GpioInfo
+         * @description Whether host GPIO is available + the pins the UI can offer.
+         */
+        GpioInfo: {
+            /** Available */
+            available: boolean;
+            /** Pins */
+            pins: number[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -2802,6 +2942,27 @@ export interface components {
             target_pen_slot?: number | null;
         };
         /**
+         * LightRequest
+         * @description Body for ``POST /plotter/tip-calibration/light`` — manual On/Off.
+         *
+         *     Drives the chosen Pi GPIO pin so the operator can light the station to aim
+         *     the camera before measuring.
+         */
+        LightRequest: {
+            /**
+             * Active High
+             * @default true
+             */
+            active_high: boolean;
+            /**
+             * On
+             * @default true
+             */
+            on: boolean;
+            /** Pin */
+            pin: number;
+        };
+        /**
          * MachineCapabilities
          * @description Top-level capability container exposed on :class:`MachineProfile`.
          */
@@ -2834,6 +2995,11 @@ export interface components {
         MachineProfile: {
             /** Acceleration Mm S2 */
             acceleration_mm_s2: number;
+            /**
+             * Apply Pen Offsets
+             * @default false
+             */
+            apply_pen_offsets: boolean;
             /**
              * Arc Tolerance Mm
              * @default 0.1
@@ -2874,6 +3040,7 @@ export interface components {
              * @default false
              */
             supports_arcs: boolean;
+            tip_calibration?: components["schemas"]["TipCalibrationConfig"] | null;
             /** Tool Change Command */
             tool_change_command: string;
             /**
@@ -3124,11 +3291,18 @@ export interface components {
              * @default
              */
             name: string;
+            /**
+             * Offset Source
+             * @default unset
+             * @enum {string}
+             */
+            offset_source: "unset" | "manual" | "vision";
             /** Pen Down Command */
             pen_down_command?: string | null;
             /** Pen Up Command */
             pen_up_command?: string | null;
             position?: components["schemas"]["Point"] | null;
+            xy_offset_mm?: components["schemas"]["Point"];
         };
         /**
          * PlacementPlan
@@ -3639,6 +3813,46 @@ export interface components {
             profile_name?: string | null;
         };
         /**
+         * ScaleCalibrateRequest
+         * @description Body for ``POST /plotter/tip-calibration/calibrate-scale``.
+         *
+         *     The operator presents a target of known physical size at the station; the
+         *     detector measures its pixel extent and we derive ``mm_per_pixel``.
+         */
+        ScaleCalibrateRequest: {
+            /** Camera Url */
+            camera_url: string;
+            /**
+             * Dark Threshold
+             * @default 80
+             */
+            dark_threshold: number;
+            /** Known Mm */
+            known_mm: number;
+            roi?: components["schemas"]["TipCameraRoi"] | null;
+        };
+        /**
+         * ScaleCalibrateResponse
+         * @description Derived scale plus the measured extent and an annotated preview.
+         */
+        ScaleCalibrateResponse: {
+            /** Annotated Image */
+            annotated_image?: string | null;
+            /** Found */
+            found: boolean;
+            /** Height Px */
+            height_px?: number | null;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Mm Per Pixel */
+            mm_per_pixel?: number | null;
+            /** Width Px */
+            width_px?: number | null;
+        };
+        /**
          * SegmentationMethod
          * @description Segmentation strategy on the way into the renderer.
          * @enum {string}
@@ -3754,6 +3968,155 @@ export interface components {
             label: string;
             /** Size Bytes */
             size_bytes: number;
+        };
+        /**
+         * TipCalibrationConfig
+         * @description Dedicated-station camera setup for measuring per-pen XY offsets.
+         *
+         *     Optional on a profile; present only when the machine has a tip-measuring
+         *     station wired up (ADR 0005, phase 2). The vision pipeline reuses the
+         *     timelapse frame grabber against ``camera_url``. Offsets are measured
+         *     *relative to* ``reference_slot``, so the absolute station-to-bed
+         *     registration cancels out.
+         */
+        TipCalibrationConfig: {
+            /** Camera Url */
+            camera_url: string;
+            /**
+             * Dark Threshold
+             * @default 80
+             */
+            dark_threshold: number;
+            /**
+             * Detector
+             * @default dark_blob
+             * @constant
+             */
+            detector: "dark_blob";
+            /**
+             * Light Active High
+             * @default true
+             */
+            light_active_high: boolean;
+            /** Light Gpio Pin */
+            light_gpio_pin?: number | null;
+            /** Mm Per Pixel */
+            mm_per_pixel: number;
+            /**
+             * Reference Slot
+             * @default 0
+             */
+            reference_slot: number;
+            roi?: components["schemas"]["TipCameraRoi"] | null;
+            station_position?: components["schemas"]["Point"] | null;
+            /** Station Z Mm */
+            station_z_mm?: number | null;
+        };
+        /**
+         * TipCalibrationStatus
+         * @description Which slots have been measured in the current session.
+         */
+        TipCalibrationStatus: {
+            /** Measured Slots */
+            measured_slots: number[];
+        };
+        /**
+         * TipCameraRoi
+         * @description Pixel region of the camera frame where a presented tip will appear.
+         */
+        TipCameraRoi: {
+            /** Height */
+            height: number;
+            /** Width */
+            width: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /**
+         * TipMeasureRequest
+         * @description Body for ``POST /plotter/tip-calibration/measure``.
+         *
+         *     Carries the station config inline (the SPA reads it from the active
+         *     profile) so the backend stays free of profile lookups.
+         */
+        TipMeasureRequest: {
+            /** Camera Url */
+            camera_url: string;
+            /**
+             * Dark Threshold
+             * @default 80
+             */
+            dark_threshold: number;
+            /**
+             * Fetch Pen
+             * @default false
+             */
+            fetch_pen: boolean;
+            /**
+             * Light
+             * @default false
+             */
+            light: boolean;
+            /**
+             * Light Active High
+             * @default true
+             */
+            light_active_high: boolean;
+            /** Light Gpio Pin */
+            light_gpio_pin?: number | null;
+            /** Mm Per Pixel */
+            mm_per_pixel: number;
+            /**
+             * Move To Station
+             * @default false
+             */
+            move_to_station: boolean;
+            /** Profile Name */
+            profile_name?: string | null;
+            /**
+             * Reference Slot
+             * @default 0
+             */
+            reference_slot: number;
+            roi?: components["schemas"]["TipCameraRoi"] | null;
+            /** Slot */
+            slot: number;
+            station_position?: components["schemas"]["Point"] | null;
+            /** Station Z Mm */
+            station_z_mm?: number | null;
+        };
+        /**
+         * TipMeasureResponse
+         * @description Result of one measurement plus the offset it implies.
+         */
+        TipMeasureResponse: {
+            /** Annotated Image */
+            annotated_image?: string | null;
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /** Found */
+            found: boolean;
+            /** Is Reference */
+            is_reference: boolean;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            offset_mm?: components["schemas"]["Point"] | null;
+            /**
+             * Reference Measured
+             * @default false
+             */
+            reference_measured: boolean;
+            /** Slot */
+            slot: number;
+            tip_px?: components["schemas"]["Point"] | null;
         };
         /**
          * ToolChangeStrategy
@@ -5626,6 +5989,218 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calibrate_scale_plotter_tip_calibration_calibrate_scale_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScaleCalibrateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScaleCalibrateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gpio_plotter_tip_calibration_gpio_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GpioInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    light_plotter_tip_calibration_light_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LightRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    measure_plotter_tip_calibration_measure_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TipMeasureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipMeasureResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_plotter_tip_calibration_reset_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipCalibrationStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_plotter_tip_calibration_status_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TipCalibrationStatus"];
                 };
             };
             /** @description Validation Error */

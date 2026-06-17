@@ -1,14 +1,16 @@
 # 0005 — Camera-assisted per-pen XY tip offset via a dedicated station
 
-- **Status**: proposed (study)
+- **Status**: accepted (Phase 1 + Phase 2 shipped; only the `aruco` detector deferred)
 - **Date**: 2026-06
 
-> This ADR deviates from the "accepted-only" convention in
-> [`README.md`](./README.md): it captures a forward-looking structural
-> decision that is **under study, not yet implemented**, so it is marked
-> `proposed`. The engineering detail lives in
-> [`../camera_tip_offset.md`](../camera_tip_offset.md). Promote to `accepted`
-> when the first implementation lands.
+> Phase 1 (manual per-pen XY offset + opt-in switch) and Phase 2 (camera
+> measurement at a dedicated station) have landed, including the annotated
+> preview frame and the optional motion helpers — guided head-travel
+> (`move_to_station`) and automatic pen-fetch (`fetch_pen`). The shipped
+> detector uses Pillow+NumPy rather than OpenCV (see the implementation note
+> in the design doc); only the `aruco` detector remains deferred behind the
+> existing `detector` field. Engineering detail and delivery split live in
+> [`../camera_tip_offset.md`](../camera_tip_offset.md).
 
 ## Context
 

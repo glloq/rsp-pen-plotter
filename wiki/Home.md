@@ -29,6 +29,7 @@ If you just want to install the appliance, the
 - [Machine profiles explained](Machine-Profiles.md)
 - [Pen magazine & tool change](Pen-Magazine.md)
 - [Calibrating per-slot pen depth](Per-Slot-Calibration.md)
+- [Offset camera — measure per-pen offsets](Offset-Camera.md)
 - [Multi-pass plotting](Multi-Pass-Plotting.md)
 - [Klipper config snippets](Klipper-Config.md)
 

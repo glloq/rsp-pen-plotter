@@ -63,15 +63,28 @@ Expert mode. The per-layer override wins over the profile default and
 applies regardless of slot.
 
 If different pens need different XY offsets (the carousel doesn't
-centre the tip exactly above 0,0), the plan is a per-slot `xy_offset_mm`
-field that translates that pen's strokes by the offset — optionally
-measured automatically by a camera at a dedicated calibration station.
+centre the tip exactly above 0,0), turn on **per-pen tip offsets** in the
+Couleurs tab and give each slot an `xy_offset_mm`. The generator then
+translates that pen's strokes by the offset so layers drawn with
+different pens register against one origin.
 
-> **Not yet implemented.** This field does not exist in `PenSlot` today
-> and no stroke compensation is applied. The design — including the
-> camera-assisted measurement — is captured in
-> [`docs/adr/0005-camera-tip-offset.md`](../docs/adr/0005-camera-tip-offset.md)
-> and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
+The feature is **opt-in**: it's off by default (`apply_pen_offsets:
+false`), so existing profiles produce identical G-code until you enable
+it. Measure each offset relative to a reference pen — leave that pen at
+`0` and align the others to it.
+
+## Measuring offsets with a camera
+
+Instead of typing offsets, OmniPlot can **measure** them with a camera at a
+fixed station: present each pen, click *Measure*, and its `xy_offset_mm` is
+filled in automatically relative to a reference pen. The station also supports a
+detection zone (ROI), a Raspberry Pi **GPIO-driven light**, an **mm-per-pixel
+assistant**, and hands-free **fetch → travel → grab** on a connected plotter.
+
+> The **offset camera** is dedicated to this and is separate from the
+> **timelapse camera** (System → Cameras). Both are optional.
+
+See the dedicated guide: **[Offset camera](Offset-Camera.md)**.
 
 ## Logging
 
@@ -81,6 +94,7 @@ people tuning the same machine.
 
 ## See also
 
+- [Offset camera](Offset-Camera.md) — measure per-pen XY offsets automatically
 - [Pen magazine](Pen-Magazine.md)
 - [Machine profiles](Machine-Profiles.md)
 - [`docs/tool_change_mechanisms.md`](../docs/tool_change_mechanisms.md)
