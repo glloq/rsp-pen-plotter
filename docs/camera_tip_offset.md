@@ -462,3 +462,4 @@ registration fix itself.
   `backend/pen_plotter/core/gcode.py:613`
 - Tool-change mechanisms: [`tool_change_mechanisms.md`](tool_change_mechanisms.md)
 - Per-slot calibration (the gap this closes): [`../wiki/Per-Slot-Calibration.md`](../wiki/Per-Slot-Calibration.md)
+- Operator guide: [`../wiki/Offset-Camera.md`](../wiki/Offset-Camera.md)

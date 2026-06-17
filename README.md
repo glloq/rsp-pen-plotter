@@ -119,6 +119,8 @@ While printing:
 - guided pen-change pauses (software-driven, downloaded G-code stays
   portable — the `M0` survives)
 - per-slot calibration (servo depth per pen)
+- per-pen XY tip offsets, optionally measured by an offset camera at a
+  fixed station ([guide](wiki/Offset-Camera.md))
 - audit log of every sensitive action (connect, run, home, abort)
 - optional `OMNIPLOT_API_KEY` for LAN deployments
 

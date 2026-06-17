@@ -75,58 +75,16 @@ it. Measure each offset relative to a reference pen — leave that pen at
 
 ## Measuring offsets with a camera
 
-You can also **measure** offsets instead of typing them. Configure a
-`tip_calibration` block on the profile (a camera URL + `mm_per_pixel` +
-a reference slot) — in the Couleurs tab, tick *Measure with a camera
-station*.
+Instead of typing offsets, OmniPlot can **measure** them with a camera at a
+fixed station: present each pen, click *Measure*, and its `xy_offset_mm` is
+filled in automatically relative to a reference pen. The station also supports a
+detection zone (ROI), a Raspberry Pi **GPIO-driven light**, an **mm-per-pixel
+assistant**, and hands-free **fetch → travel → grab** on a connected plotter.
 
-> **Two separate cameras.** The **offset camera** (set here, on the
-> machine) is dedicated to tip measurement; the **timelapse camera** (System →
-> Cameras, used by the timelapse) is a different one. Both are optional —
-> each is only needed for its own job. You can point the offset camera at
-> one of the configured workshop cameras or give it its own URL. Then, with offsets enabled, each slot grows a **Measure**
-button:
+> The **offset camera** is dedicated to this and is separate from the
+> **timelapse camera** (System → Cameras). Both are optional.
 
-1. Present the **reference** pen at the station, click *Measure*.
-2. Present each other pen and click *Measure* — its `xy_offset_mm` is
-   filled in automatically (tagged as camera-measured) as the difference
-   from the reference.
-
-The detector finds the dark pen tip against the light station
-background, so the station wants even lighting and good contrast. After
-each measurement a **preview image** appears under the slot with the
-detected tip marked, so you can confirm the right point was picked before
-trusting the offset. *Reset measurements* starts a fresh run.
-
-Extra controls in the station config:
-
-- **Detection zone (ROI)** — restrict detection to a pixel box (X/Y/W/H)
-  so clutter elsewhere in the frame is ignored. Leave blank for the whole
-  frame; *Clear* removes it.
-- **Camera light** — wired to a **Raspberry Pi GPIO pin**. Pick a pin
-  (BCM) from the dropdown, set the polarity (*active high* / low), use the
-  **On/Off** buttons to aim the camera, or tick *Turn light on during each
-  measurement* to drive it automatically. (Pin selection saves even off a
-  Pi, but only a Pi with GPIO support actually switches the light.)
-- **mm-per-pixel assistant** — instead of guessing the scale, present a
-  target of known size (e.g. a 10 mm square), enter its size and click
-  *Measure scale*; the detector derives `mm_per_pixel` from its pixel
-  extent and fills it in.
-
-With a connected plotter you can also automate the motion:
-
-- *Load pen from magazine before measuring* fetches the slot's pen via
-  the normal tool-change swap (host-driven / firmware magazines; a manual
-  magazine still needs a hand swap).
-- Set a **station X/Y** (and optional **Z** for a motorised Z axis) and
-  tick *Move head to station before measuring* to drive the head there
-  automatically.
-
-With these on, each *Measure* does **fetch → travel → grab** in one click.
-
-> Design notes:
-> [`docs/adr/0005-camera-tip-offset.md`](../docs/adr/0005-camera-tip-offset.md)
-> and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
+See the dedicated guide: **[Offset camera](Offset-Camera.md)**.
 
 ## Logging
 
@@ -136,6 +94,7 @@ people tuning the same machine.
 
 ## See also
 
+- [Offset camera](Offset-Camera.md) — measure per-pen XY offsets automatically
 - [Pen magazine](Pen-Magazine.md)
 - [Machine profiles](Machine-Profiles.md)
 - [`docs/tool_change_mechanisms.md`](../docs/tool_change_mechanisms.md)
