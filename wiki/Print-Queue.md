@@ -123,5 +123,7 @@ All queue endpoints honour the optional `OMNIPLOT_API_KEY`.
 ## See also
 
 - [Pen magazine](Pen-Magazine.md)
+- [G-code library](G-code-Library.md) — save a program and re-print it on demand
+- [Manual control & cockpit](Manual-Control.md)
 - [`docs/api_reference.md`](../docs/api_reference.md) — Queue section
 - [`docs/hardware_streaming.md`](../docs/hardware_streaming.md)

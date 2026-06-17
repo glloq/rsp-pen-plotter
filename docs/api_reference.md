@@ -97,10 +97,11 @@ All return a `StatusResponse`:
 | Method & path | Body | Notes |
 | --- | --- | --- |
 | `GET /plotter/status` | — | Current connection/streaming snapshot |
+| `GET /plotter/commands` | — | Recent G-code lines sent to the device, for the Plotter-tab command history |
 | `POST /plotter/connect` | `{ "port", "baudrate", "terminator": "cr"\|"lf"\|"crlf" }` | Opens the serial link; `400` if it cannot open |
 | `POST /plotter/disconnect` | — | Aborts any job and closes the transport |
-| `POST /plotter/jog` | `{ "dx_mm", "dy_mm", "profile_name" }` | Relative move; `404` unknown profile, `409` if a job is active |
-| `POST /plotter/home` | query `profile_name` | Homes the machine; `404`/`409` as above |
+| `POST /plotter/jog` | `{ "dx_mm", "dy_mm", "dz_mm", "profile_name" }` | Relative move; `dz_mm` drives a motorised Z axis (defaults to `0`). `404` unknown profile, `409` if a job is active |
+| `POST /plotter/home` | query `profile_name`, optional `axis` (`X`/`Y`/`Z`) | Homes the machine — all axes, or a single `axis`; `404`/`409` as above, `422` on an invalid axis |
 | `POST /plotter/run` | `{ "gcode" }` | Starts streaming; `409` if a job already runs |
 | `POST /plotter/pause` | — | Pause the running job |
 | `POST /plotter/resume` | — | Resume a paused job |
@@ -160,6 +161,46 @@ the full row including `gcode`.
 | `POST /queue/{run_id}/resume` | Resume from checkpoint; also confirms a guided pen swap the run is waiting on |
 | `POST /queue/{run_id}/cancel` | Abort and clean up |
 | `DELETE /queue/{run_id}` | Remove a run; `409` while it is streaming (cancel first), `404` if unknown |
+
+## G-code file library
+
+Saved G-code programs the operator can re-print on demand. A saved program is
+just stored text — saving never starts a print; `POST /gcode-files/{id}/print`
+is the explicit launch (it enqueues the program as a run linked back via
+`gcode_file_id` and wakes the queue worker). Programs persist in the SQLite
+database (`OMNIPLOT_DB`). Each summary carries `length_mm_by_color` (per-colour
+drawn length in mm) so the UI can advance the ink odometer on a re-print.
+
+| Method & path | Notes |
+| --- | --- |
+| `GET /gcode-files` | List saved programs, newest first — summaries **without** the `gcode` payload |
+| `POST /gcode-files` | Save `{ name, profile_name, gcode, length_mm_by_color? }`; `422` if the program is empty |
+| `PATCH /gcode-files/{file_id}` | Rename; `404` if unknown |
+| `DELETE /gcode-files/{file_id}` | Delete; `404` if unknown |
+| `POST /gcode-files/{file_id}/print` | Enqueue the saved program as a run and wake the worker; `404` if the file or its profile is unknown |
+
+These endpoints honour the optional `OMNIPLOT_API_KEY`.
+
+## Timelapse
+
+Capture frames from a configured camera while a print runs, then assemble them
+into an H.264 MP4 with ffmpeg. Only one recording runs at a time. The frontend
+passes the camera's `stream_url` (cameras are configured client-side, in the
+Settings modal); the backend grabs JPEG frames from either a snapshot endpoint
+(`image/jpeg`) or an MJPEG stream (`multipart/x-mixed-replace`). Recordings are
+stored under `OMNIPLOT_TIMELAPSE_DIR`. Requires `ffmpeg` on `PATH`.
+
+| Method & path | Notes |
+| --- | --- |
+| `GET /timelapse/status` | Live recorder state (`recording`, `session_id`, `label`, `frame_count`, `interval_seconds`, `fps`, `started_at`, `error`) |
+| `POST /timelapse/start` | Begin capturing `{ stream_url, interval_seconds, fps, label? }`; `422` on a non-`http(s)` URL, `409` if already recording |
+| `POST /timelapse/stop` | Stop and assemble the MP4; returns a `TimelapseSummary`; `409` if not recording |
+| `GET /timelapse` | List saved recordings, newest first (`TimelapseSummary[]`) |
+| `GET /timelapse/{id}/video` | Download the MP4 (`video/mp4`); `404` if no video |
+| `DELETE /timelapse/{id}` | Delete a recording; `404` if unknown or still active |
+
+Constraints (enforced on both ends): interval `0.5`–`3600 s` (default `5`),
+FPS `1`–`60` (default `24`), frames capped at `8 MB` each and `100 000` total.
 
 ## Preflight, preview, rerender, optimize
 

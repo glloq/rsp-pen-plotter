@@ -45,9 +45,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/glloq/rsp-pen-plotter/main/b
 Then open `http://<pi-ip>:8000` from any device on your network. That's it.
 
 What the installer does: apt packages (`potrace`, `ghostscript`,
-`libreoffice-writer`), Node.js 22, the `uv` Python toolchain, builds the
-frontend, and (with `--service`) enables a `systemd` unit that auto-starts on
-boot and adds the user to the `dialout` group for USB serial access.
+`libreoffice-writer`, `ffmpeg`), Node.js 22, the `uv` Python toolchain, builds
+the frontend, and (with `--service`) enables a `systemd` unit that auto-starts
+on boot and adds the user to the `dialout` group for USB serial access.
 
 Drop `--service` to install without the systemd unit and launch manually
 with `./start.sh`. Full install / config reference:
@@ -116,11 +116,20 @@ Catch problems before the pen touches paper:
 While printing:
 
 - pause / resume / abort from the UI or a hardware button
+- a Repetier-style manual cockpit: X/Y/Z jog, per-axis homing, pen up/down,
+  and a live history of commands sent to the device
 - guided pen-change pauses (software-driven, downloaded G-code stays
   portable — the `M0` survives)
 - per-slot calibration (servo depth per pen)
+- watch the head through one or two network cameras, and record a timelapse —
+  manually or automatically for the whole print, exported as an MP4
+- an ink odometer that tracks drawn length per colour so you know when a pen
+  is due for a swap
 - audit log of every sensitive action (connect, run, home, abort)
 - optional `OMNIPLOT_API_KEY` for LAN deployments
+
+Generated a plot you'll want again? **Save it to the G-code library** and
+re-print it on demand — no re-conversion, straight back to the queue.
 
 ---
 
@@ -171,7 +180,8 @@ Any other plotter works as long as its G-code dialect is documented.
 ## Status
 
 End-to-end working: full conversion pipeline, colour separation, G-code
-generation, simulator, plotter connection, durable queue, audit trail,
+generation, simulator, plotter connection, manual cockpit, durable queue,
+G-code library, ink odometer, camera feeds + timelapse, audit trail,
 profile editor, presets, macros, optional API-key auth, one-command
 install, systemd auto-start. Backend ships 940 unit and integration tests.
 

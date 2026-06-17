@@ -24,8 +24,8 @@ does the same thing locally.
 
 Idempotent — every step is skipped when already satisfied.
 
-1. installs `potrace`, `ghostscript`, `libreoffice-writer` via apt
-   (needed by the bitmap, EPS and DOCX converters)
+1. installs `potrace`, `ghostscript`, `libreoffice-writer`, `ffmpeg` via apt
+   (needed by the bitmap, EPS and DOCX converters, and timelapse export)
 2. installs Node.js 20 via NodeSource if missing
 3. installs `uv` (the Python toolchain) into `~/.local/bin` if missing
 4. `uv sync` for the backend deps
@@ -61,6 +61,7 @@ override `HOST`, `PORT`, `OMNIPLOT_API_KEY`, `OMNIPLOT_DB`,
   - `potrace` — bitmap vectorisation
   - `ghostscript` — EPS / AI rasterisation
   - `libreoffice` — DOCX / ODT / RTF conversion
+  - `ffmpeg` — assembles timelapse frames into an MP4
 - A pen plotter for the hardware features (a DIY CoreXY or an AxiDraw); the
   full software chain runs and is validated in the simulator without any
   hardware.
@@ -87,6 +88,7 @@ Environment variables:
 | --- | --- | --- |
 | `OMNIPLOT_DB` | `backend/data/omniplot.db` | SQLite database path (jobs, queue, audit, library) |
 | `OMNIPLOT_PROFILES_DIR` | platform user dir | Where imported user profiles are stored |
+| `OMNIPLOT_TIMELAPSE_DIR` | `backend/data/timelapses` | Where timelapse recordings (frames, `video.mp4`, `meta.json`) are written |
 | `OMNIPLOT_IR_ENABLED` | unset | When `1`, the converter pipeline builds a `GeometryIR` artifact alongside the SVG and persists it in the `ir_artifact_cache` table. Write-only today; the IR-native render/optimize path consumes it next. |
 | `OMNIPLOT_OTEL_ENABLED` | unset | When `1`, installs the OpenTelemetry tracer provider and emits spans for `convert_file`, `segment_and_render`, `optimize_svg`, `generate_gcode`. Pair with `OMNIPLOT_OTEL_EXPORTER=console` to see them in stderr. |
 | `OMNIPLOT_SLO_EVAL_ENABLED` | unset | When `1` and the role serves HTTP, the lifespan starts the background SLO evaluator. It re-runs `evaluate_budgets` every `OMNIPLOT_SLO_EVAL_INTERVAL` seconds (default 60) on the accumulated samples and emits `slo_breach` log lines on breach. |
