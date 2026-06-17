@@ -92,15 +92,25 @@ each measurement a **preview image** appears under the slot with the
 detected tip marked, so you can confirm the right point was picked before
 trusting the offset. *Reset measurements* starts a fresh run.
 
+Extra controls in the station config:
+
+- **Detection zone (ROI)** — restrict detection to a pixel box (X/Y/W/H)
+  so clutter elsewhere in the frame is ignored. Leave blank for the whole
+  frame; *Clear* removes it.
+- **Camera light** — set a light-on / light-off command (e.g. `M355 S1` /
+  `M355 S0`). Use the **On/Off** buttons to aim the camera, or tick *Turn
+  light on during each measurement* to drive it automatically.
+
 With a connected plotter you can also automate the motion:
 
 - *Load pen from magazine before measuring* fetches the slot's pen via
   the normal tool-change swap (host-driven / firmware magazines; a manual
   magazine still needs a hand swap).
-- Set a **station X/Y** and tick *Move head to station before measuring*
-  to drive the head there automatically.
+- Set a **station X/Y** (and optional **Z** for a motorised Z axis) and
+  tick *Move head to station before measuring* to drive the head there
+  automatically.
 
-With both on, each *Measure* does **fetch → travel → grab** in one click.
+With these on, each *Measure* does **fetch → travel → grab** in one click.
 
 > Design notes:
 > [`docs/adr/0005-camera-tip-offset.md`](../docs/adr/0005-camera-tip-offset.md)

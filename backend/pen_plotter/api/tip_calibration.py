@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -53,11 +54,21 @@ class TipMeasureRequest(BaseModel):
     # is currently presented.
     move_to_station: bool = False
     station_position: Point | None = None
+    # Optional absolute Z (machine mm) for the station move, for machines with
+    # a real Z axis. ``None`` leaves Z untouched.
+    station_z_mm: float | None = None
     profile_name: str | None = None
     # Optional automatic pen-fetch: load this slot's pen via a tool-change
     # swap (host-macro / firmware profiles) before measuring. Manual-swap
     # profiles can't fetch on their own → 409. Runs before move_to_station.
     fetch_pen: bool = False
+    # Optional camera lighting: when ``light`` is set and a ``light_on_command``
+    # is given, the light is switched on around the measurement and off again
+    # afterwards. Needs a connected plotter (the light is driven by the
+    # controller).
+    light: bool = False
+    light_on_command: str | None = None
+    light_off_command: str | None = None
 
 
 class TipMeasureResponse(BaseModel):
@@ -125,8 +136,9 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
 
     Optional motion happens first, in order: ``fetch_pen`` loads the slot's
     pen via an automatic swap, then ``move_to_station`` travels the head to
-    ``station_position``. Both need a connected plotter + ``profile_name``;
-    without them the operator presents the pen by hand. Returns the implied
+    ``station_position`` (optional Z). Both need a connected plotter +
+    ``profile_name``; without them the operator presents the pen by hand. The
+    camera light (when ``light``) is on around the grab. Returns the implied
     offset once the reference slot has also been measured this session.
     """
     profile: MachineProfile | None = None
@@ -147,7 +159,12 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         if req.station_position is None:
             raise HTTPException(status_code=422, detail="move_to_station requires station_position")
         try:
-            await controller.goto(req.station_position.x, req.station_position.y, profile)
+            await controller.goto(
+                req.station_position.x,
+                req.station_position.y,
+                profile,
+                z_mm=req.station_z_mm,
+            )
         except RuntimeError as exc:  # disconnected / job in flight
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -156,6 +173,12 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         if req.roi
         else None
     )
+    light_on = req.light and bool(req.light_on_command and req.light_on_command.strip())
+    if light_on:
+        try:
+            await controller.send_commands([req.light_on_command.strip()])
+        except RuntimeError as exc:  # disconnected / job in flight
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:
         result = _calibrator.measure(
             slot=req.slot,
@@ -167,6 +190,11 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         )
     except Exception as exc:  # frame grab / decode failure
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
+    finally:
+        # Always switch the light back off, even if the grab failed.
+        if light_on and req.light_off_command and req.light_off_command.strip():
+            with contextlib.suppress(RuntimeError):
+                await controller.send_commands([req.light_off_command.strip()])
 
     m = result.measurement
     record("tip_calibration_measure", f"slot={req.slot} found={m.found} conf={m.confidence:.2f}")
@@ -208,3 +236,26 @@ async def reset() -> TipCalibrationStatus:
     _calibrator.reset()
     record("tip_calibration_reset")
     return TipCalibrationStatus(measured_slots=_calibrator.measured_slots)
+
+
+class LightRequest(BaseModel):
+    """Body for ``POST /plotter/tip-calibration/light`` — manual On/Off.
+
+    Sends one raw light command (the SPA passes the profile's
+    ``light_on_command`` or ``light_off_command``) so the operator can aim the
+    camera with the station lit before running a measurement.
+    """
+
+    command: str = Field(min_length=1)
+    on: bool = True
+
+
+@router.post("/plotter/tip-calibration/light")
+async def light(req: LightRequest) -> dict[str, bool]:
+    """Toggle the station light by sending one raw command to the plotter."""
+    try:
+        await controller.send_commands([req.command.strip()])
+    except RuntimeError as exc:  # disconnected / job in flight
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    record("tip_calibration_light", "on" if req.on else "off")
+    return {"on": req.on}

@@ -941,6 +941,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plotter/tip-calibration/light": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Light
+         * @description Toggle the station light by sending one raw command to the plotter.
+         */
+        post: operations["light_plotter_tip_calibration_light_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plotter/tip-calibration/measure": {
         parameters: {
             query?: never;
@@ -956,8 +976,9 @@ export interface paths {
          *
          *     Optional motion happens first, in order: ``fetch_pen`` loads the slot's
          *     pen via an automatic swap, then ``move_to_station`` travels the head to
-         *     ``station_position``. Both need a connected plotter + ``profile_name``;
-         *     without them the operator presents the pen by hand. Returns the implied
+         *     ``station_position`` (optional Z). Both need a connected plotter +
+         *     ``profile_name``; without them the operator presents the pen by hand. The
+         *     camera light (when ``light``) is on around the grab. Returns the implied
          *     offset once the reference slot has also been measured this session.
          */
         post: operations["measure_plotter_tip_calibration_measure_post"];
@@ -2868,6 +2889,23 @@ export interface components {
             target_pen_slot?: number | null;
         };
         /**
+         * LightRequest
+         * @description Body for ``POST /plotter/tip-calibration/light`` — manual On/Off.
+         *
+         *     Sends one raw light command (the SPA passes the profile's
+         *     ``light_on_command`` or ``light_off_command``) so the operator can aim the
+         *     camera with the station lit before running a measurement.
+         */
+        LightRequest: {
+            /** Command */
+            command: string;
+            /**
+             * On
+             * @default true
+             */
+            on: boolean;
+        };
+        /**
          * MachineCapabilities
          * @description Top-level capability container exposed on :class:`MachineProfile`.
          */
@@ -3858,6 +3896,10 @@ export interface components {
              * @constant
              */
             detector: "dark_blob";
+            /** Light Off Command */
+            light_off_command?: string | null;
+            /** Light On Command */
+            light_on_command?: string | null;
             /** Mm Per Pixel */
             mm_per_pixel: number;
             /**
@@ -3867,6 +3909,8 @@ export interface components {
             reference_slot: number;
             roi?: components["schemas"]["TipCameraRoi"] | null;
             station_position?: components["schemas"]["Point"] | null;
+            /** Station Z Mm */
+            station_z_mm?: number | null;
         };
         /**
          * TipCalibrationStatus
@@ -3910,6 +3954,15 @@ export interface components {
              * @default false
              */
             fetch_pen: boolean;
+            /**
+             * Light
+             * @default false
+             */
+            light: boolean;
+            /** Light Off Command */
+            light_off_command?: string | null;
+            /** Light On Command */
+            light_on_command?: string | null;
             /** Mm Per Pixel */
             mm_per_pixel: number;
             /**
@@ -3928,6 +3981,8 @@ export interface components {
             /** Slot */
             slot: number;
             station_position?: components["schemas"]["Point"] | null;
+            /** Station Z Mm */
+            station_z_mm?: number | null;
         };
         /**
          * TipMeasureResponse
@@ -5831,6 +5886,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    light_plotter_tip_calibration_light_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LightRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
                 };
             };
             /** @description Validation Error */

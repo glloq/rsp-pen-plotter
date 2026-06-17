@@ -15,7 +15,7 @@
 // won't be clobbered by a pen-colour save (the watcher in
 // ``useProfileDraft`` short-circuits while ``isUnsavedDraft`` is true).
 
-import { computed, onUnmounted, reactive, ref, toRaw } from 'vue'
+import { computed, onUnmounted, reactive, ref, toRaw, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -25,7 +25,7 @@ import type {
   TipCalibrationConfig,
   TipMeasureResponse,
 } from '../api/client'
-import { measureTipOffset, resetTipCalibration } from '../api/client'
+import { measureTipOffset, resetTipCalibration, setTipLight } from '../api/client'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { canonicalHex } from '../lib/penWidth'
 import { useJobStore } from '../stores/job'
@@ -226,6 +226,72 @@ function onStation(axis: 'x' | 'y', raw: string): void {
   })
 }
 
+function onStationZ(raw: string): void {
+  const v = raw.trim() === '' ? null : Number(raw)
+  onTipConfig({ station_z_mm: v !== null && Number.isFinite(v) ? v : null })
+}
+
+// Detection zone (ROI): four pixel fields. Clearing them all drops back to the
+// whole frame). The backend ROI model requires width/height > 0, so we hold
+// the four fields in a local draft while the operator fills them in and only
+// persist a complete, valid box (otherwise null = whole frame). The draft
+// re-seeds whenever the stored ROI changes (e.g. switching profiles).
+const roiDraft = reactive<{ x: string; y: string; width: string; height: string }>({
+  x: '',
+  y: '',
+  width: '',
+  height: '',
+})
+watch(
+  () => tipConfig.value?.roi ?? null,
+  (roi) => {
+    roiDraft.x = roi ? String(roi.x) : ''
+    roiDraft.y = roi ? String(roi.y) : ''
+    roiDraft.width = roi ? String(roi.width) : ''
+    roiDraft.height = roi ? String(roi.height) : ''
+  },
+  { immediate: true },
+)
+
+function _roiNum(raw: string): number {
+  const n = Math.floor(Number(raw))
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function onRoi(field: 'x' | 'y' | 'width' | 'height', raw: string): void {
+  roiDraft[field] = raw
+  const x = Math.max(0, _roiNum(roiDraft.x))
+  const y = Math.max(0, _roiNum(roiDraft.y))
+  const width = _roiNum(roiDraft.width)
+  const height = _roiNum(roiDraft.height)
+  // Persist only a complete, valid box; anything else means "whole frame".
+  onTipConfig({ roi: width > 0 && height > 0 ? { x, y, width, height } : null })
+}
+
+function clearRoi(): void {
+  roiDraft.x = roiDraft.y = roiDraft.width = roiDraft.height = ''
+  onTipConfig({ roi: null })
+}
+
+// Camera light. ``lightDuringMeasure`` (session-local) toggles auto on/off
+// around each measurement; the manual buttons are for aiming the camera.
+const lightDuringMeasure = ref(false)
+const hasLight = computed(() => Boolean(tipConfig.value?.light_on_command?.trim()))
+
+function onLightCommand(field: 'light_on_command' | 'light_off_command', raw: string): void {
+  onTipConfig({ [field]: raw.trim() ? raw : null })
+}
+
+async function onManualLight(on: boolean): Promise<void> {
+  const cmd = on ? tipConfig.value?.light_on_command : tipConfig.value?.light_off_command
+  if (!cmd?.trim()) return
+  try {
+    await setTipLight(cmd, on)
+  } catch {
+    // Non-critical (e.g. disconnected); the measurement path reports errors.
+  }
+}
+
 // Per-slot transient measurement feedback (busy + last message/confidence).
 interface MeasureState {
   busy: boolean
@@ -274,7 +340,11 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       fetch_pen: fetchPen.value,
       move_to_station: autoMove.value && cfg.station_position != null,
       station_position: cfg.station_position ?? null,
+      station_z_mm: cfg.station_z_mm ?? null,
       profile_name: profile.value?.name ?? null,
+      light: lightDuringMeasure.value,
+      light_on_command: cfg.light_on_command ?? null,
+      light_off_command: cfg.light_off_command ?? null,
     })
     // Apply the measured offset when we have one (reference pen → (0,0),
     // others → their delta). A not-found / no-reference result only reports.
@@ -526,6 +596,19 @@ onUnmounted(() => clearTimeout(savedTimer))
                   @change="(e) => onStation('y', (e.target as HTMLInputElement).value)"
                 />
               </label>
+              <label class="col-span-2 block text-[11px] text-slate-400"
+                >{{ t('magazine.stationZ') }}
+                <input
+                  type="number"
+                  step="any"
+                  :value="tipConfig.station_z_mm ?? ''"
+                  placeholder="—"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-station-z"
+                  @change="(e) => onStationZ((e.target as HTMLInputElement).value)"
+                />
+              </label>
               <label class="col-span-2 flex items-center gap-2 text-[11px] text-slate-300">
                 <input
                   v-model="fetchPen"
@@ -549,6 +632,157 @@ onUnmounted(() => clearTimeout(savedTimer))
                 />
                 {{ t('magazine.autoMove') }}
               </label>
+
+              <!-- Detection zone (ROI): restrict the search to a pixel box so
+                   clutter elsewhere in the frame is ignored. Blank = whole
+                   frame. -->
+              <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
+                <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
+                  {{ t('magazine.roiTitle') }}
+                </p>
+                <div class="grid grid-cols-4 gap-1.5" data-test="tip-roi">
+                  <label class="block text-[10px] text-slate-400"
+                    >X
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      :value="roiDraft.x"
+                      placeholder="—"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-roi-x"
+                      @change="(e) => onRoi('x', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <label class="block text-[10px] text-slate-400"
+                    >Y
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      :value="roiDraft.y"
+                      placeholder="—"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-roi-y"
+                      @change="(e) => onRoi('y', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <label class="block text-[10px] text-slate-400"
+                    >W
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      :value="roiDraft.width"
+                      placeholder="—"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-roi-w"
+                      @change="(e) => onRoi('width', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <label class="block text-[10px] text-slate-400"
+                    >H
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      :value="roiDraft.height"
+                      placeholder="—"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-roi-h"
+                      @change="(e) => onRoi('height', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                </div>
+                <button
+                  v-if="tipConfig.roi"
+                  type="button"
+                  class="mt-1 text-[10px] text-slate-400 underline hover:text-slate-200"
+                  :disabled="saving"
+                  data-test="tip-roi-clear"
+                  @click="clearRoi"
+                >
+                  {{ t('magazine.roiClear') }}
+                </button>
+              </div>
+
+              <!-- Camera light (On/Off): commands + auto on/off around a
+                   measurement + manual buttons for aiming. -->
+              <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
+                <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
+                  {{ t('magazine.lightTitle') }}
+                </p>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <label class="block text-[10px] text-slate-400"
+                    >{{ t('magazine.lightOnCommand') }}
+                    <input
+                      type="text"
+                      :value="tipConfig.light_on_command ?? ''"
+                      placeholder="M355 S1"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-[11px] text-slate-100"
+                      data-test="tip-light-on-cmd"
+                      @change="
+                        (e) =>
+                          onLightCommand('light_on_command', (e.target as HTMLInputElement).value)
+                      "
+                    />
+                  </label>
+                  <label class="block text-[10px] text-slate-400"
+                    >{{ t('magazine.lightOffCommand') }}
+                    <input
+                      type="text"
+                      :value="tipConfig.light_off_command ?? ''"
+                      placeholder="M355 S0"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-[11px] text-slate-100"
+                      data-test="tip-light-off-cmd"
+                      @change="
+                        (e) =>
+                          onLightCommand('light_off_command', (e.target as HTMLInputElement).value)
+                      "
+                    />
+                  </label>
+                </div>
+                <div class="mt-1.5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                    :disabled="saving || !hasLight"
+                    data-test="tip-light-on"
+                    @click="onManualLight(true)"
+                  >
+                    💡 {{ t('magazine.lightOn') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+                    :disabled="saving || !hasLight"
+                    data-test="tip-light-off"
+                    @click="onManualLight(false)"
+                  >
+                    {{ t('magazine.lightOff') }}
+                  </button>
+                </div>
+                <label
+                  class="mt-1.5 flex items-center gap-2 text-[11px]"
+                  :class="hasLight ? 'text-slate-300' : 'text-slate-600'"
+                >
+                  <input
+                    v-model="lightDuringMeasure"
+                    type="checkbox"
+                    class="rounded border-slate-600 bg-slate-900"
+                    :disabled="saving || !hasLight"
+                    data-test="tip-light-during"
+                  />
+                  {{ t('magazine.lightDuringMeasure') }}
+                </label>
+              </div>
+
               <button
                 type="button"
                 class="col-span-2 justify-self-start rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700"

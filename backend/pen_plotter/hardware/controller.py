@@ -210,10 +210,12 @@ class PlotterController:
         self._require_idle()
         await self._send_immediate(jog_command(dx_mm, dy_mm, profile, dz_mm=dz_mm))
 
-    async def goto(self, x_mm: float, y_mm: float, profile: MachineProfile) -> None:
-        """Move the head to an absolute workspace position."""
+    async def goto(
+        self, x_mm: float, y_mm: float, profile: MachineProfile, z_mm: float | None = None
+    ) -> None:
+        """Move the head to an absolute workspace position (optional Z)."""
         self._require_idle()
-        await self._send_immediate(goto_command(x_mm, y_mm, profile))
+        await self._send_immediate(goto_command(x_mm, y_mm, profile, z_mm=z_mm))
 
     async def home(self, profile: MachineProfile, axis: str | None = None) -> None:
         """Home the machine — all axes, or a single ``axis`` (X / Y / Z)."""

@@ -207,11 +207,17 @@ export interface TipCameraRoi {
 export interface TipCalibrationConfig {
   camera_url: string
   station_position?: Point | null
+  // Optional absolute Z (machine mm) for the station move (machines with a
+  // real Z axis); null leaves Z untouched.
+  station_z_mm?: number | null
   reference_slot: number
   mm_per_pixel: number
   detector: 'dark_blob'
   dark_threshold: number
   roi?: TipCameraRoi | null
+  // Optional camera-light control commands (e.g. M355 S1 / M355 S0).
+  light_on_command?: string | null
+  light_off_command?: string | null
 }
 
 export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'
@@ -289,11 +295,17 @@ export interface TipMeasureRequest {
   // connected plotter + profile_name) before grabbing the frame.
   move_to_station?: boolean
   station_position?: Point | null
+  station_z_mm?: number | null
   profile_name?: string | null
   // Optional automatic pen-fetch: load this slot's pen via a tool-change swap
   // before measuring (host-macro / firmware magazines; needs a connected
   // plotter). Runs before move_to_station.
   fetch_pen?: boolean
+  // Optional camera lighting: switch the light on around the grab and off
+  // again (needs a connected plotter).
+  light?: boolean
+  light_on_command?: string | null
+  light_off_command?: string | null
 }
 
 export interface TipMeasureResponse {
@@ -323,6 +335,12 @@ export async function measureTipOffset(req: TipMeasureRequest): Promise<TipMeasu
 
 export async function resetTipCalibration(): Promise<void> {
   await api.post('/plotter/tip-calibration/reset')
+}
+
+// Manual station-light On/Off (for aiming the camera). Sends one raw command
+// (the caller passes the profile's light_on_command / light_off_command).
+export async function setTipLight(command: string, on: boolean): Promise<void> {
+  await api.post('/plotter/tip-calibration/light', { command, on })
 }
 
 export async function exportProfileYaml(name: string): Promise<string> {

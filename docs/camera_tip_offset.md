@@ -393,6 +393,12 @@ as a JPEG data URL with the detected tip marked (or the plain frame when
 nothing was found, so framing/lighting can be checked). The magazine UI shows
 it under the slot so the operator confirms the right blob was picked.
 
+**Operator controls (audit follow-up).** The full station config is editable
+in the Couleurs tab — camera URL, mm/pixel, reference slot, **detection zone
+(ROI)** as an X/Y/W/H pixel box, station **X/Y/Z**, and **camera light** (on/off
+commands with manual On/Off buttons plus an auto "light during measurement"
+toggle, `POST …/light`). The Z travel rides on `goto`'s new optional Z word.
+
 **Still deferred.** Only the `aruco` detector (printed fiducial, sub-pixel),
 which needs OpenCV — additive behind the existing `detector` field.
 

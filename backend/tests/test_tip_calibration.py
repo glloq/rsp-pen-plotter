@@ -268,6 +268,28 @@ def test_measure_moves_head_to_station(
     assert any("X20.000 Y30.000" in line for line in connected.written)
 
 
+def test_move_to_station_includes_z_when_given(
+    client: TestClient, connected: MockTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _frame((100, 100)))
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={
+            "slot": 0,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "move_to_station": True,
+            "profile_name": PROFILE,
+            "station_position": {"x": 20, "y": 30},
+            "station_z_mm": 5,
+        },
+    )
+    assert resp.status_code == 200
+    assert any("Z5.000" in line for line in connected.written)
+
+
 def test_move_to_station_requires_position_and_profile(client: TestClient) -> None:
     resp = client.post(
         "/plotter/tip-calibration/measure",
@@ -362,6 +384,47 @@ def test_fetch_pen_on_manual_profile_is_409(
     )
     assert resp.status_code == 409
     assert "by hand" in resp.json()["message"]
+
+
+# ── camera lighting (audit fix) ──────────────────────────────────────────────
+
+
+def test_measure_toggles_light_around_grab(
+    client: TestClient, connected: MockTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _frame((100, 100)))
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={
+            "slot": 0,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "light": True,
+            "light_on_command": "M355 S1",
+            "light_off_command": "M355 S0",
+        },
+    )
+    assert resp.status_code == 200
+    assert "M355 S1" in connected.written
+    assert "M355 S0" in connected.written
+    # On before off.
+    assert connected.written.index("M355 S1") < connected.written.index("M355 S0")
+
+
+def test_light_endpoint_sends_command(client: TestClient, connected: MockTransport) -> None:
+    resp = client.post(
+        "/plotter/tip-calibration/light", json={"command": "M355 S1", "on": True}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"on": True}
+    assert "M355 S1" in connected.written
+
+
+def test_light_endpoint_when_disconnected_is_409(client: TestClient) -> None:
+    resp = client.post("/plotter/tip-calibration/light", json={"command": "M355 S1"})
+    assert resp.status_code == 409
 
 
 def test_fetch_pen_requires_profile(client: TestClient) -> None:

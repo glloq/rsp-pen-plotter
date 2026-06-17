@@ -19,10 +19,16 @@ import type { MachineProfile } from '../api/client'
 
 const saveSpy = vi.hoisted(() => vi.fn())
 const measureSpy = vi.hoisted(() => vi.fn())
+const lightSpy = vi.hoisted(() => vi.fn())
 
 vi.mock('../api/client', async (importActual) => {
   const actual = await importActual<typeof import('../api/client')>()
-  return { ...actual, measureTipOffset: measureSpy, resetTipCalibration: vi.fn() }
+  return {
+    ...actual,
+    measureTipOffset: measureSpy,
+    resetTipCalibration: vi.fn(),
+    setTipLight: lightSpy,
+  }
 })
 
 vi.mock('../stores/job', async () => {
@@ -140,6 +146,105 @@ describe('MagazineEditor', () => {
     setActivePinia(createPinia())
     saveSpy.mockClear()
     measureSpy.mockReset()
+    lightSpy.mockReset()
+  })
+
+  // Shared helper: a rack profile with offsets + a configured station.
+  function withStation(extra: Record<string, unknown> = {}): void {
+    const job = useJobStore()
+    job.profiles[0]!.tool_change_method = 'rack'
+    job.profiles[0]!.apply_pen_offsets = true
+    job.profiles[0]!.tip_calibration = {
+      camera_url: 'cam://x',
+      reference_slot: 0,
+      mm_per_pixel: 0.1,
+      detector: 'dark_blob',
+      dark_threshold: 80,
+      roi: null,
+      ...extra,
+    }
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 130, y: 100 },
+      confidence: 0.9,
+      reference_measured: true,
+      offset_mm: { x: 1, y: 0 },
+      message: 'ok',
+      annotated_image: null,
+    })
+  }
+
+  it('persists a detection-zone (ROI) and sends it when measuring', async () => {
+    withStation()
+    const wrapper = mountEditor()
+    await nextTick()
+
+    await wrapper.find('[data-test="tip-roi-x"]').setValue('10')
+    await wrapper.find('[data-test="tip-roi-x"]').trigger('change')
+    await wrapper.find('[data-test="tip-roi-w"]').setValue('40')
+    await wrapper.find('[data-test="tip-roi-w"]').trigger('change')
+    await wrapper.find('[data-test="tip-roi-h"]').setValue('30')
+    await wrapper.find('[data-test="tip-roi-h"]').trigger('change')
+    await nextTick()
+    const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
+    expect(saved.tip_calibration?.roi).toEqual({ x: 10, y: 0, width: 40, height: 30 })
+
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    expect(measureSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ roi: { x: 10, y: 0, width: 40, height: 30 } }),
+    )
+  })
+
+  it('sends an optional station Z with the measurement', async () => {
+    withStation({ station_position: { x: 20, y: 30 } })
+    const wrapper = mountEditor()
+    await nextTick()
+
+    await wrapper.find('[data-test="tip-station-z"]').setValue('4')
+    await wrapper.find('[data-test="tip-station-z"]').trigger('change')
+    await nextTick()
+    await wrapper.find('[data-test="tip-auto-move"]').setValue(true)
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+
+    expect(measureSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ move_to_station: true, station_z_mm: 4 }),
+    )
+  })
+
+  it('passes the light flag + commands when light-during-measure is on', async () => {
+    withStation({ light_on_command: 'M355 S1', light_off_command: 'M355 S0' })
+    const wrapper = mountEditor()
+    await nextTick()
+
+    await wrapper.find('[data-test="tip-light-during"]').setValue(true)
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+
+    expect(measureSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        light: true,
+        light_on_command: 'M355 S1',
+        light_off_command: 'M355 S0',
+      }),
+    )
+  })
+
+  it('manual light buttons send the configured command', async () => {
+    withStation({ light_on_command: 'M355 S1', light_off_command: 'M355 S0' })
+    const wrapper = mountEditor()
+    await nextTick()
+
+    await wrapper.find('[data-test="tip-light-on"]').trigger('click')
+    await flushPromises()
+    expect(lightSpy).toHaveBeenCalledWith('M355 S1', true)
+
+    await wrapper.find('[data-test="tip-light-off"]').trigger('click')
+    await flushPromises()
+    expect(lightSpy).toHaveBeenCalledWith('M355 S0', false)
   })
 
   it('persists an assigned available colour onto the pen slot', async () => {

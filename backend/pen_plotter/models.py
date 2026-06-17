@@ -129,14 +129,24 @@ class TipCalibrationConfig(BaseModel):
 
     camera_url: str
     # Machine-coordinate point where a pen is presented to the station. Stored
-    # for the (future) guided travel; not required to take a measurement.
+    # for the guided travel; not required to take a measurement.
     station_position: Point | None = None
+    # Optional Z height (machine mm) the head moves to at the station — for
+    # machines with a real Z axis, so the tip sits in the camera's focal plane.
+    # ``None`` leaves Z untouched (servo / Z-less machines).
+    station_z_mm: float | None = None
     reference_slot: int = Field(default=0, ge=0)
     mm_per_pixel: float = Field(gt=0.0)
     detector: Literal["dark_blob"] = "dark_blob"
     # Luminance cutoff (0–255): pixels darker than this are taken as "tip".
     dark_threshold: int = Field(default=80, ge=0, le=255)
     roi: TipCameraRoi | None = None
+    # Optional camera-light control: raw commands to switch a station light
+    # on / off (e.g. ``M355 S1`` / ``M355 S0``, or an ``M42`` relay). When set
+    # and lighting is requested, the light is turned on around a measurement
+    # and off again. ``None`` → no light control.
+    light_on_command: str | None = None
+    light_off_command: str | None = None
 
 
 class MachineProfile(BaseModel):

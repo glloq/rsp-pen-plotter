@@ -33,7 +33,9 @@ def jog_command(
     return ["G91", move, "G90"]
 
 
-def goto_command(x_mm: float, y_mm: float, profile: MachineProfile) -> list[str]:
+def goto_command(
+    x_mm: float, y_mm: float, profile: MachineProfile, z_mm: float | None = None
+) -> list[str]:
     """Build an absolute move to a workspace position.
 
     The pen is lifted first so the move never draws, and absolute mode is
@@ -43,15 +45,21 @@ def goto_command(x_mm: float, y_mm: float, profile: MachineProfile) -> list[str]
         x_mm: Absolute X target in millimeters.
         y_mm: Absolute Y target in millimeters.
         profile: The target machine profile (for travel speed and pen-up).
+        z_mm: Optional absolute Z target for a motorised Z axis. Added to the
+            move only when given so X/Y-only machines never see a ``Z`` word.
 
     Returns:
         The G-code lines for an absolute travel move.
     """
     feed = profile.travel_speed_mm_s * 60.0
+    move = f"G1 X{x_mm:.3f} Y{y_mm:.3f}"
+    if z_mm is not None:
+        move += f" Z{z_mm:.3f}"
+    move += f" F{feed:.1f}"
     return [
         "G90",
         profile.pen_up_command,
-        f"G1 X{x_mm:.3f} Y{y_mm:.3f} F{feed:.1f}",
+        move,
     ]
 
 

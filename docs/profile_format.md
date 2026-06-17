@@ -62,12 +62,14 @@ registration cancels out.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `camera_url` | string | Snapshot or MJPEG URL (same shape as the timelapse camera) |
-| `station_position` | `{ x, y }` \| null | Machine point where a pen is presented. Stored for future guided travel; not needed to measure |
+| `station_position` | `{ x, y }` \| null | Machine point where a pen is presented. Used by guided travel (`move_to_station`); not needed for hand-presented measurement |
+| `station_z_mm` | float \| null | Optional absolute Z at the station (machines with a real Z axis); `null` leaves Z untouched |
 | `reference_slot` | int (default `0`) | Pen the others are measured against (its own offset is `0`) |
 | `mm_per_pixel` | float (> 0) | Station pixel scale, calibrated once |
 | `detector` | `"dark_blob"` | Detection strategy. `dark_blob` (Pillow+NumPy) finds the darkest compact blob; no OpenCV required |
 | `dark_threshold` | int 0–255 (default `80`) | Luminance cutoff: pixels darker than this count as "tip" |
-| `roi` | `{ x, y, width, height }` \| null | Optional pixel region to constrain detection |
+| `roi` | `{ x, y, width, height }` \| null | Optional pixel region to constrain detection (whole frame when `null`). Editable in the Couleurs tab |
+| `light_on_command` / `light_off_command` | string \| null | Optional raw commands to switch a station light on/off (e.g. `M355 S1` / `M355 S0`). When set, the light can be toggled manually or driven automatically around a measurement |
 
 ```yaml
 tip_calibration:
@@ -77,6 +79,10 @@ tip_calibration:
   detector: "dark_blob"
   dark_threshold: 80
   station_position: { x: 20.0, y: 400.0 }
+  station_z_mm: 5.0                       # optional, real Z axis only
+  roi: { x: 200, y: 150, width: 240, height: 240 }   # optional
+  light_on_command: "M355 S1"             # optional camera light
+  light_off_command: "M355 S0"
 ```
 
 ### `MachineCapabilities` (v0.2, roadmap A.5)
