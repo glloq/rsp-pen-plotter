@@ -110,27 +110,31 @@ describe('GcodeFilesPanel', () => {
     )
   })
 
-  it('shows a generate-first hint and no save button when there is no G-code', async () => {
+  it('shows the empty state and no save button when there are no files', async () => {
     await seedJob(false)
     const wrapper = mountPanel()
     await flushPromises()
+    // Saving the current program now lives on the Simulation tab — this
+    // panel only manages already-saved files.
     expect(wrapper.find('[data-test="gcode-save-current"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain(en.gcodeFiles.generateFirst)
+    expect(wrapper.find('[data-test="gcode-file-list"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain(en.gcodeFiles.empty)
   })
 
-  it('saves the current program into the library and selects it', async () => {
-    const job = await seedJob(true)
+  it('lists saved files and enables Print once one is selected', async () => {
+    h.files = [fileSummary({ id: 'f1', name: 'logo' })]
+    await seedJob(false)
     const wrapper = mountPanel()
     await flushPromises()
 
-    await wrapper.find('[data-test="gcode-save-current"]').trigger('click')
-    await flushPromises()
-
-    expect(h.saveGcodeFile).toHaveBeenCalledWith('gcode', job.selectedProfileName, job.gcode)
-    // The new file appears and is auto-selected → Print is enabled.
-    expect(wrapper.find('[data-test="gcode-file-new1"]').exists()).toBe(true)
-    const printBtn = wrapper.find('[data-test="gcode-print-selected"]')
-    expect(printBtn.attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-test="gcode-file-f1"]').exists()).toBe(true)
+    // Nothing selected yet → Print disabled.
+    expect(wrapper.find('[data-test="gcode-print-selected"]').attributes('disabled')).toBeDefined()
+    await wrapper.find('[data-test="gcode-file-select-f1"]').trigger('click')
+    await nextTick()
+    expect(
+      wrapper.find('[data-test="gcode-print-selected"]').attributes('disabled'),
+    ).toBeUndefined()
   })
 
   it('prints the selected file on demand', async () => {

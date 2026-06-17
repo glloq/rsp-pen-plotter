@@ -1,31 +1,28 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useUiStore } from '../stores/ui'
-import GcodePreview from './GcodePreview.vue'
+import CameraView from './CameraView.vue'
 import JogControls from './JogControls.vue'
-import GcodeFilesPanel from './GcodeFilesPanel.vue'
 
+// Plotter tab: the workshop camera feed (top) above the manual cockpit.
+// The generated-G-code view and the saved-files library moved out to the
+// Simulation and Files tabs respectively, so this tab stays focused on
+// driving the machine by hand.
 const { t } = useI18n()
-const job = useJobStore()
 const plotter = usePlotterStore()
 const ui = useUiStore()
 const { status, error } = storeToRefs(plotter)
-
-const canSend = computed(() => Boolean(job.gcode))
-
-// Collapsible generated-G-code panel at the bottom of the tab. Defaults
-// to collapsed so the manual controls stay front-and-centre; the count
-// in the toggle label hints that there's something to expand.
-const gcodeOpen = ref(false)
-const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length : 0))
 </script>
 
 <template>
   <div class="flex h-full min-h-0 flex-col gap-2">
+    <!-- CAMERA — live workshop feed above the manual cockpit. Always
+         present: shows the configured stream, or a configure-hint that
+         links into System settings when no camera is set up. -->
+    <CameraView />
+
     <div
       class="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-3"
     >
@@ -80,40 +77,6 @@ const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length 
         <JogControls />
       </div>
       <p v-if="error" class="mt-1.5 text-xs text-red-400">{{ error }}</p>
-
-      <!-- G-code file library: save the current program, then pick one and
-           print it on demand. Always visible so the operator can manage
-           saved programs even while disconnected. -->
-      <section class="mt-3 space-y-1.5">
-        <h4 class="px-1 text-xs uppercase tracking-wider text-slate-500">
-          {{ t('gcodeFiles.title') }}
-        </h4>
-        <GcodeFilesPanel />
-      </section>
-    </div>
-
-    <!-- COLLAPSIBLE G-CODE PANEL (bottom of the tab) -->
-    <div class="shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-900">
-      <button
-        type="button"
-        class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-800/60"
-        :aria-expanded="gcodeOpen"
-        data-test="plotter-gcode-toggle"
-        @click="gcodeOpen = !gcodeOpen"
-      >
-        <span class="flex items-center gap-2">
-          <span aria-hidden="true" class="text-xs">{{ gcodeOpen ? '▾' : '▸' }}</span>
-          <span class="uppercase tracking-wide">{{ t('plotter.gcodeSection') }}</span>
-          <span v-if="canSend" class="text-xs text-slate-500"
-            >({{ gcodeLineCount }} {{ t('gcode.lines') }})</span
-          >
-        </span>
-        <span v-if="!canSend" class="text-xs text-slate-500">{{ t('canvas.gcodeEmpty') }}</span>
-      </button>
-      <div v-show="gcodeOpen" class="h-64 border-t border-slate-700" data-test="plotter-gcode-body">
-        <GcodePreview v-if="canSend" />
-        <p v-else class="p-4 text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
-      </div>
     </div>
   </div>
 </template>

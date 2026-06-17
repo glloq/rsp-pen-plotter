@@ -115,4 +115,15 @@ describe('PlotterControl — manual control always visible', () => {
     const jogUp = wrapper.find('button[aria-label="Jog up (Y+)"]')
     expect(jogUp.attributes('disabled')).toBeDefined()
   })
+
+  it('shows the workshop camera slot above the manual controls', async () => {
+    await seedProfile()
+    const wrapper = mountControl()
+    await nextTick()
+
+    // The camera feed lives at the top of the tab; with no camera
+    // configured it renders its configure-hint state.
+    expect(wrapper.find('[data-test="camera-view"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="camera-configure"]').exists()).toBe(true)
+  })
 })

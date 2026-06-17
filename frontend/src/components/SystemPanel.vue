@@ -16,7 +16,7 @@ import { useUiStore } from '../stores/ui'
 
 const { t, locale } = useI18n()
 const ui = useUiStore()
-const { updateNotificationsEnabled, planPreviewMode } = storeToRefs(ui)
+const { updateNotificationsEnabled, planPreviewMode, cameraEnabled, cameraUrl } = storeToRefs(ui)
 
 // Plan-tab rendering choices surfaced in System settings. 'auto' keeps
 // the WYSIWYG vector unless it's heavy enough to risk laggy scrolling.
@@ -204,6 +204,39 @@ onMounted(loadVersion)
             t('system.notifyOnStartupHint')
           }}</span>
         </span>
+      </label>
+    </div>
+
+    <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 space-y-2 text-xs">
+      <h3 class="text-[11px] uppercase tracking-wider text-slate-500">
+        {{ t('system.camera') }}
+      </h3>
+      <p class="text-[11px] text-slate-500">{{ t('system.cameraHint') }}</p>
+      <label class="flex items-start gap-2 text-slate-300">
+        <input
+          v-model="cameraEnabled"
+          type="checkbox"
+          class="mt-0.5 h-3.5 w-3.5 shrink-0 accent-emerald-500"
+          data-test="camera-enable"
+        />
+        <span class="leading-snug">
+          {{ t('system.cameraEnable') }}
+          <span class="mt-0.5 block text-[11px] text-slate-500">{{
+            t('system.cameraEnableHint')
+          }}</span>
+        </span>
+      </label>
+      <label class="block space-y-1">
+        <span class="text-[11px] text-slate-400">{{ t('system.cameraUrl') }}</span>
+        <input
+          v-model="cameraUrl"
+          type="url"
+          inputmode="url"
+          :placeholder="t('system.cameraUrlPlaceholder')"
+          class="w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100 placeholder:text-slate-600"
+          data-test="camera-url"
+        />
+        <span class="block text-[11px] text-slate-500">{{ t('system.cameraUrlHint') }}</span>
       </label>
     </div>
 
