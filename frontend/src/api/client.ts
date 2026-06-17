@@ -214,6 +214,8 @@ export interface TipCalibrationConfig {
   mm_per_pixel: number
   detector: 'dark_blob'
   dark_threshold: number
+  // Frames to grab and average per measurement (1–20; noise reduction).
+  samples?: number
   roi?: TipCameraRoi | null
   // Optional camera-light control via a Raspberry Pi GPIO pin (BCM). The host
   // drives the pin; the light is wired to the Pi, not the plotter.
@@ -291,6 +293,8 @@ export interface TipMeasureRequest {
   mm_per_pixel: number
   reference_slot?: number
   dark_threshold?: number
+  // Frames to grab and average per measurement (1–20; noise reduction).
+  samples?: number
   roi?: TipCameraRoi | null
   // Optional guided travel: move the head to station_position (needs a
   // connected plotter + profile_name) before grabbing the frame.

@@ -1985,6 +1985,8 @@
     "lowConfidence": "Low confidence ({c}%) — not applied. Tune lighting, zone or threshold and retry.",
     "testDetection": "Test detection",
     "testResult": "Detected ({c}% confidence)",
+    "samples": "Frames to average",
+    "largeOffset": "⚠ large offset ({mm} mm) — check the marked frame",
     "progress": "{k}/{n} measured",
     "clearOffset": "Clear this pen's offset",
     "enable": "Use a camera to measure offsets",

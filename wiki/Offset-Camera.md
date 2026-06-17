@@ -90,6 +90,9 @@ automatically). The panel is a short guided flow:
    - **Camera light** *(optional)* — the GPIO pin + polarity (see above).
    - **Dark threshold** *(Advanced)* — the luminance cutoff for "tip" (0–255).
      Raise it if the tip is faint; lower it if shadows are picked up.
+   - **Frames to average** *(Advanced)* — grab and average several frames per
+     measurement (1–20) to cut detector noise on a shaky or noisy feed. Higher
+     is steadier but slower; leave at `1` for a clean, well-lit station.
 
 Use **🔍 Test detection** (under the camera) to dry-run the detector and see
 the confidence + marked frame **without writing any offset** — handy for
@@ -106,6 +109,7 @@ tip_calibration:
   reference_slot: 0
   mm_per_pixel: 0.05
   dark_threshold: 80
+  samples: 1                              # frames to average per measurement
   station_position: { x: 20.0, y: 400.0 }
   station_z_mm: 5.0                       # optional, motorised Z only
   roi: { x: 200, y: 150, width: 240, height: 240 }   # optional
@@ -188,6 +192,8 @@ and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
 | *Camera read failed* (502) | The camera URL is unreachable or not a JPEG/MJPEG stream |
 | Light won't switch | Not running on a Pi, or the GPIO library is missing; check the GPIO availability warning; verify the pin and **active high/low** |
 | Offsets look shifted by a constant | You re-measured pens without re-measuring the reference — **Reset measurements** and start from the reference |
+| Measured offset jumps between tries | Noisy feed — raise **Frames to average** so each measure averages several frames |
+| *⚠ large offset* warning | The detector likely locked onto the wrong blob — check the marked frame, tighten the **ROI**, and re-measure |
 | Measure asks to load by hand | The profile changes pens manually; load the pen yourself, then Measure (auto-fetch needs a host/firmware magazine) |
 
 ---

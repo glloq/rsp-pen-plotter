@@ -48,6 +48,8 @@ class TipMeasureRequest(BaseModel):
     mm_per_pixel: float = Field(gt=0.0)
     reference_slot: int = Field(default=0, ge=0)
     dark_threshold: int = Field(default=80, ge=0, le=255)
+    # Number of frames to grab and average per measurement (noise reduction).
+    samples: int = Field(default=1, ge=1, le=20)
     roi: TipCameraRoi | None = None
     # Optional guided travel: when ``move_to_station`` is set, the head is
     # moved to ``station_position`` (machine mm) before the frame is grabbed,
@@ -188,6 +190,7 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
             mm_per_pixel=req.mm_per_pixel,
             dark_threshold=req.dark_threshold,
             roi=roi,
+            samples=req.samples,
         )
     except Exception as exc:  # frame grab / decode failure
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc

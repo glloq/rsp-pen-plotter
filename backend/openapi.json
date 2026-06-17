@@ -4137,6 +4137,13 @@
               }
             ]
           },
+          "samples": {
+            "default": 1,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Samples",
+            "type": "integer"
+          },
           "station_position": {
             "anyOf": [
               {
@@ -4294,6 +4301,13 @@
                 "type": "null"
               }
             ]
+          },
+          "samples": {
+            "default": 1,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Samples",
+            "type": "integer"
           },
           "slot": {
             "minimum": 0.0,

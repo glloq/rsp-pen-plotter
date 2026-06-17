@@ -149,6 +149,7 @@ function defaultTipConfig(): TipCalibrationConfig {
     mm_per_pixel: 0.1,
     detector: 'dark_blob',
     dark_threshold: 80,
+    samples: 1,
     roi: null,
   }
 }
@@ -164,6 +165,11 @@ function onTipConfig(patch: Partial<TipCalibrationConfig>): void {
 
 function onPickCamera(url: string): void {
   if (url) onTipConfig({ camera_url: url })
+}
+
+function onSamples(raw: string): void {
+  const v = Math.floor(Number(raw))
+  onTipConfig({ samples: Number.isFinite(v) ? Math.min(20, Math.max(1, v)) : 1 })
 }
 
 // Session-local per-measurement options.
@@ -281,6 +287,12 @@ const measureState = reactive<Record<number, MeasureState>>({})
 // can't silently corrupt a pen's offset.
 const MIN_CONFIDENCE = 0.35
 
+// A measured offset larger than this (mm from the reference tip) is almost
+// certainly a mis-detection — adjacent pen tips sit a few mm apart, not
+// centimetres. The result is still applied (it cleared the confidence gate),
+// but flagged so the operator can sanity-check the marked frame.
+const SUSPICIOUS_OFFSET_MM = 50
+
 function describeMeasurement(m: TipMeasureResponse): { message: string; ok: boolean } {
   if (!m.found) return { message: m.message || t('magazine.measureNotFound'), ok: false }
   if (m.confidence < MIN_CONFIDENCE)
@@ -295,14 +307,18 @@ function describeMeasurement(m: TipMeasureResponse): { message: string; ok: bool
     }
   if (!m.reference_measured || !m.offset_mm)
     return { message: t('magazine.measureNeedRef'), ok: false }
-  return {
-    message: t('magazine.measureApplied', {
-      x: m.offset_mm.x.toFixed(2),
-      y: m.offset_mm.y.toFixed(2),
-      c: Math.round(m.confidence * 100),
-    }),
-    ok: true,
-  }
+  const message = t('magazine.measureApplied', {
+    x: m.offset_mm.x.toFixed(2),
+    y: m.offset_mm.y.toFixed(2),
+    c: Math.round(m.confidence * 100),
+  })
+  const magnitude = Math.hypot(m.offset_mm.x, m.offset_mm.y)
+  if (magnitude > SUSPICIOUS_OFFSET_MM)
+    return {
+      message: message + ' ' + t('offsetCamera.largeOffset', { mm: Math.round(magnitude) }),
+      ok: true,
+    }
+  return { message, ok: true }
 }
 
 async function onMeasure(pen: PenSlot): Promise<void> {
@@ -316,6 +332,7 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       mm_per_pixel: cfg.mm_per_pixel,
       reference_slot: cfg.reference_slot,
       dark_threshold: cfg.dark_threshold,
+      samples: cfg.samples,
       roi: cfg.roi,
       fetch_pen: fetchPen.value,
       move_to_station: autoMove.value && cfg.station_position != null,
@@ -379,6 +396,7 @@ async function onTestDetection(): Promise<void> {
       mm_per_pixel: cfg.mm_per_pixel,
       reference_slot: cfg.reference_slot,
       dark_threshold: cfg.dark_threshold,
+      samples: cfg.samples,
       roi: cfg.roi,
       light: lightDuringMeasure.value,
       light_gpio_pin: cfg.light_gpio_pin ?? null,
@@ -740,6 +758,20 @@ onUnmounted(() => clearTimeout(savedTimer))
                           ),
                         })
                     "
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('offsetCamera.samples') }}
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    step="1"
+                    :value="tipConfig.samples ?? 1"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="tip-samples"
+                    @change="(e) => onSamples((e.target as HTMLInputElement).value)"
                   />
                 </label>
                 <label class="block text-[11px] text-slate-400"

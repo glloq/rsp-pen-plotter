@@ -140,6 +140,8 @@ class TipCalibrationConfig(BaseModel):
     detector: Literal["dark_blob"] = "dark_blob"
     # Luminance cutoff (0–255): pixels darker than this are taken as "tip".
     dark_threshold: int = Field(default=80, ge=0, le=255)
+    # Number of frames to grab and average per measurement (noise reduction).
+    samples: int = Field(default=1, ge=1, le=20)
     roi: TipCameraRoi | None = None
     # Optional camera-light control via a Raspberry Pi GPIO pin (BCM
     # numbering). The host drives the pin directly — the light is wired to the

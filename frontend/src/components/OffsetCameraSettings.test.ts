@@ -107,6 +107,8 @@ const i18n = createI18n({
         lowConfidence: 'Low confidence {c}%',
         testDetection: 'Test detection',
         testResult: 'Detected {c}%',
+        samples: 'Frames to average',
+        largeOffset: '⚠ large offset ({mm} mm)',
         progress: '{k}/{n} measured',
         clearOffset: 'Clear',
       },
@@ -334,6 +336,57 @@ describe('OffsetCameraSettings', () => {
     expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.dark_threshold).toBe(
       120,
     )
+  })
+
+  it('persists the frames-to-average count and sends it when measuring', async () => {
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+    const input = wrapper.find('[data-test="tip-samples"]')
+    expect(input.exists()).toBe(true)
+    await input.setValue('4')
+    await input.trigger('change')
+    await nextTick()
+    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.samples).toBe(4)
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    expect(measureSpy).toHaveBeenCalledWith(expect.objectContaining({ samples: 4 }))
+  })
+
+  it('clamps the frames-to-average count to 1–20', async () => {
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+    const input = wrapper.find('[data-test="tip-samples"]')
+    await input.setValue('99')
+    await input.trigger('change')
+    await nextTick()
+    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.samples).toBe(20)
+  })
+
+  it('flags a suspiciously large offset but still applies it', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 800, y: 100 },
+      confidence: 0.9,
+      reference_measured: true,
+      offset_mm: { x: 70, y: 0 }, // 70 mm — beyond the sanity bound
+      message: 'ok',
+      annotated_image: 'data:image/jpeg;base64,AAAA',
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    await nextTick()
+    // Still written (it cleared the confidence gate)…
+    const pen1 = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).pens?.find((p) => p.index === 1)
+    expect(pen1?.offset_source).toBe('vision')
+    // …but the message carries the large-offset warning.
+    expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('large offset')
   })
 
   it('test detection shows a result without writing an offset', async () => {

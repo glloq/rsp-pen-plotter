@@ -252,6 +252,31 @@ def _encode_box(frame: bytes, box: tuple[int, int, int, int]) -> bytes | None:
     return buf.getvalue()
 
 
+def average_tips(samples: list[TipMeasurement]) -> TipMeasurement:
+    """Average the found tips across repeated samples to cut detector noise.
+
+    Found samples are averaged in both pixels and mm; the confidence is the
+    mean of theirs. With no found sample, the last (not-found) measurement is
+    returned so its message / preview still surface. The annotated frame of the
+    last found sample is kept for review.
+    """
+    found = [m for m in samples if m.found and m.tip_px and m.tip_mm]
+    if not found:
+        return samples[-1]
+    n = len(found)
+    px = (sum(m.tip_px[0] for m in found) / n, sum(m.tip_px[1] for m in found) / n)
+    mm = (sum(m.tip_mm[0] for m in found) / n, sum(m.tip_mm[1] for m in found) / n)
+    confidence = sum(m.confidence for m in found) / n
+    return TipMeasurement(
+        found=True,
+        tip_px=px,
+        tip_mm=mm,
+        confidence=confidence,
+        message=f"averaged {n}/{len(samples)}",
+        annotated_jpeg=found[-1].annotated_jpeg,
+    )
+
+
 @dataclass
 class MeasureResult:
     """One slot's measurement plus the offset it implies (when available)."""
@@ -272,6 +297,7 @@ class TipCalibrator:
     """
 
     def __init__(self, grabber: FrameGrabber, detector: TipDetector = detect_tip_dark_blob) -> None:
+        """Store the injected frame grabber and tip detector."""
         self._grab = grabber
         self._detect = detector
         self._tips: dict[int, TipMeasurement] = {}
@@ -298,17 +324,23 @@ class TipCalibrator:
         mm_per_pixel: float,
         dark_threshold: int = 80,
         roi: Roi | None = None,
+        samples: int = 1,
     ) -> MeasureResult:
-        """Grab a frame for ``slot`` and detect its tip, storing the result.
+        """Grab ``samples`` frame(s) for ``slot`` and detect its tip, storing it.
 
-        Returns the measurement and — once the reference slot has also been
-        measured — the offset this slot implies relative to it. Raises
-        ``RuntimeError`` only if the frame grab itself fails (propagated from
-        the grabber); a frame with no detectable tip is a normal, low/zero
+        With ``samples > 1`` the tip is averaged across grabs to reduce
+        detector noise. Returns the measurement and — once the reference slot
+        has also been measured — the offset this slot implies relative to it.
+        Raises ``RuntimeError`` only if a frame grab itself fails (propagated
+        from the grabber); a frame with no detectable tip is a normal, low/zero
         confidence result, not an error.
         """
-        frame = self._grab(camera_url)
-        measurement = self._detect(frame, mm_per_pixel, dark_threshold, roi)
+        n = max(1, samples)
+        shots = [
+            self._detect(self._grab(camera_url), mm_per_pixel, dark_threshold, roi)
+            for _ in range(n)
+        ]
+        measurement = average_tips(shots)
         if measurement.found:
             self._tips[slot] = measurement
 

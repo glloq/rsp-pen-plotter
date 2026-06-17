@@ -1985,6 +1985,8 @@
     "lowConfidence": "Confiance faible ({c} %) — non appliqué. Ajuste l'éclairage, la zone ou le seuil puis réessaie.",
     "testDetection": "Tester la détection",
     "testResult": "Détecté ({c} % de confiance)",
+    "samples": "Images à moyenner",
+    "largeOffset": "⚠ offset élevé ({mm} mm) — vérifie l'image marquée",
     "progress": "{k}/{n} mesurés",
     "clearOffset": "Effacer l'offset de ce stylo",
     "enable": "Utiliser une caméra pour mesurer les offsets",
