@@ -3,8 +3,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { confirmAction } from '../composables/confirm'
-import { ensureMagazineLoaded } from '../composables/magazineGate'
-import { useInkOdometer } from '../composables/useInkOdometer'
+import { useLaunchCurrentJob } from '../composables/useLaunchCurrentJob'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useQueueStore } from '../stores/queue'
@@ -17,7 +16,7 @@ const plotter = usePlotterStore()
 const queue = useQueueStore()
 const job = useJobStore()
 const { status: plotterStatus } = storeToRefs(plotter)
-const { commitCurrentJob } = useInkOdometer()
+const { launch } = useLaunchCurrentJob()
 
 // Header transport controls: prefer the queued active run when one is
 // live so the buttons drive the canonical queue lifecycle. Fall back
@@ -54,29 +53,10 @@ async function onPlay(): Promise<void> {
     }
     return
   }
-  if (!job.gcode) return
-  // Magazine gate: on multi-pen multicolour jobs, ask the operator to
-  // load the planned inks (with slot remapping) before sending. The
-  // modal carries its own launch button, so the generic confirm only
-  // runs when the gate was skipped (mono / single-ink jobs).
-  const gate = await ensureMagazineLoaded()
-  if (gate === 'cancelled') return
-  if (gate === 'skipped') {
-    const confirmed = await confirmAction({
-      title: t('confirm.sendJobTitle'),
-      message: t('confirm.sendJobMsg'),
-      confirmLabel: t('plotter.sendJob'),
-      cancelLabel: t('confirm.cancel'),
-    })
-    if (!confirmed) return
-  }
-  // Re-read the G-code: confirming the gate may have regenerated it.
-  if (job.gcode) {
-    await plotter.run(job.gcode)
-    // Advance the ink odometer only on a real launch (send succeeded) —
-    // never on save, so the counters reflect ink actually drawn.
-    if (!plotter.error) commitCurrentJob()
-  }
+  // Idle → send the current job. The gate → confirm → run → ink-odometer
+  // commit sequence is shared with the Simulation-tab "Start print" via
+  // useLaunchCurrentJob, which also guards against a double-fire.
+  await launch()
 }
 
 async function onPause(): Promise<void> {

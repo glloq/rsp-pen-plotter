@@ -2,9 +2,7 @@
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { confirmAction } from '../composables/confirm'
-import { ensureMagazineLoaded } from '../composables/magazineGate'
-import { useInkOdometer } from '../composables/useInkOdometer'
+import { useLaunchCurrentJob } from '../composables/useLaunchCurrentJob'
 import { useSaveCurrentGcode } from '../composables/useSaveCurrentGcode'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
@@ -57,37 +55,20 @@ const gcodeOpen = ref(true)
 const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length : 0))
 
 // "Start print" lives in the simulator header so the operator can fire
-// the job straight from the preview they just reviewed. It mirrors the
-// header transport's direct-send path: requires a live connection + a
-// generated G-code, then sends after a confirmation.
-const canStartPrint = computed(() => Boolean(job.gcode) && plotterStatus.value.connected)
-const { commitCurrentJob } = useInkOdometer()
-
-async function startPrint(): Promise<void> {
-  if (!job.gcode || !plotterStatus.value.connected) return
-  // Magazine gate first (multi-pen multicolour jobs): the modal asks
-  // to load the planned inks and carries its own launch button; the
-  // generic confirm only runs when the gate was skipped.
-  const gate = await ensureMagazineLoaded()
-  if (gate === 'cancelled') return
-  if (gate === 'skipped') {
-    const confirmed = await confirmAction({
-      title: t('confirm.sendJobTitle'),
-      message: t('confirm.sendJobMsg'),
-      confirmLabel: t('plotter.sendJob'),
-      cancelLabel: t('confirm.cancel'),
-    })
-    if (!confirmed) return
-  }
-  // Re-read the G-code: confirming the gate may have regenerated it.
-  if (job.gcode) {
-    await plotter.run(job.gcode)
-    // Advance the ink odometer only on a real launch — i.e. the send
-    // succeeded. This is the one point per-colour lengths still match
-    // what's drawn; saving never touches the odometer.
-    if (!plotter.error) commitCurrentJob()
-  }
-}
+// the job straight from the preview they just reviewed. It shares the
+// header transport's launch path (gate → confirm → run → ink-odometer
+// commit) via ``useLaunchCurrentJob``. Disabled while the machine is busy
+// (running / paused) so the operator can't re-send mid-plot — which would
+// also double-count ink — mirroring the header, which flips Play → Pause
+// during a run.
+const canStartPrint = computed(
+  () =>
+    Boolean(job.gcode) &&
+    plotterStatus.value.connected &&
+    plotterStatus.value.state !== 'running' &&
+    plotterStatus.value.state !== 'paused',
+)
+const { launch: startPrint } = useLaunchCurrentJob()
 </script>
 
 <template>

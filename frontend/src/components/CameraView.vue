@@ -11,13 +11,25 @@
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
+import { useInViewport } from '../composables/useInViewport'
 import { useUiStore } from '../stores/ui'
 
 const { t } = useI18n()
 const ui = useUiStore()
 const { cameraEnabled, cameraUrl } = storeToRefs(ui)
 
-const active = computed(() => cameraEnabled.value && cameraUrl.value.trim().length > 0)
+// Trimmed stream URL — the <img> must not receive the stray whitespace a
+// pasted URL can carry (which some browsers fail to normalise).
+const streamSrc = computed(() => cameraUrl.value.trim())
+const active = computed(() => cameraEnabled.value && streamSrc.value.length > 0)
+
+// Only hold the (long-lived) MJPEG connection open while the panel is
+// actually on screen. The Plotter tab is kept mounted via ``v-show``, so
+// without this the <img> would keep pulling + decoding frames on every
+// other tab. IntersectionObserver flips this both ways; it degrades to
+// always-visible where the observer is unavailable (tests / old browsers).
+const root = ref<HTMLElement | null>(null)
+const visible = useInViewport(root, { once: false })
 
 // Track load failures so a dead stream shows an error rather than a
 // broken-image icon. Reset whenever the source or enabled flag changes
@@ -30,6 +42,7 @@ watch([cameraEnabled, cameraUrl], () => {
 
 <template>
   <section
+    ref="root"
     class="shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-900"
     data-test="camera-view"
   >
@@ -47,19 +60,23 @@ watch([cameraEnabled, cameraUrl], () => {
       </span>
     </header>
 
-    <!-- Live feed. -->
+    <!-- Live feed — only mounted while on screen so the stream is torn
+         down on other tabs. -->
     <div v-if="active" class="flex items-center justify-center bg-black">
       <img
-        v-if="!errored"
-        :src="cameraUrl"
+        v-if="!errored && visible"
+        :src="streamSrc"
         :alt="t('camera.title')"
         class="max-h-56 w-full object-contain"
         data-test="camera-stream"
         @error="errored = true"
       />
-      <div v-else class="flex w-full flex-col items-center gap-1 px-3 py-6 text-center">
+      <div
+        v-else-if="errored"
+        class="flex w-full flex-col items-center gap-1 px-3 py-6 text-center"
+      >
         <p class="text-xs text-red-300">{{ t('camera.streamError') }}</p>
-        <p class="font-mono text-[10px] break-all text-slate-500">{{ cameraUrl }}</p>
+        <p class="font-mono text-[10px] break-all text-slate-500">{{ streamSrc }}</p>
       </div>
     </div>
 
