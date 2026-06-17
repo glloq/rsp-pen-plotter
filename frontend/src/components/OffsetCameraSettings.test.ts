@@ -80,7 +80,41 @@ const i18n = createI18n({
   locale: 'en',
   messages: {
     en: {
-      offsetCamera: { title: 'Offset camera', hint: 'hint', needsMagazine: 'needs magazine' },
+      offsetCamera: {
+        title: 'Offset camera',
+        hint: 'hint',
+        needsMagazine: 'needs magazine',
+        enable: 'Use a camera',
+        step1: '1 Camera',
+        step1Hint: 'point it',
+        step2: '2 Scale',
+        step2Hint: 'mm per pixel',
+        step3: '3 Measure',
+        step3Hint: 'reference first',
+        advanced: 'Advanced',
+        scaleSet: 'Scale {v}',
+        scaleUnset: 'Scale not set',
+        statusReference: 'Reference',
+        statusMeasured: 'Measured',
+        statusManual: 'Manual',
+        statusPending: 'Not measured',
+        manualPresent: 'present by hand',
+        guidedStart: 'Guided measurement',
+        guidedStep: 'Step {k}/{n} — {pen}',
+        guidedPresent: 'Present {pen}',
+        guidedMeasure: 'Measure this pen',
+        guidedDone: 'Done',
+        lowConfidence: 'Low confidence {c}%',
+        testDetection: 'Test detection',
+        testResult: 'Detected {c}%',
+        samples: 'Frames to average',
+        largeOffset: '⚠ large offset ({mm} mm)',
+        repeatability: '(±{mm} mm)',
+        unstable: '⚠ frames vary by {mm} mm',
+        progress: '{k}/{n} measured',
+        clearOffset: 'Clear',
+      },
+      cameraPreview: { empty: 'no url', retry: 'retry', refresh: 'refresh' },
       magazine: {
         noProfile: 'No profile',
         saved: 'Saved',
@@ -95,6 +129,7 @@ const i18n = createI18n({
         cameraCustom: 'Custom URL',
         cameraN: 'Camera {n}',
         mmPerPixel: 'mm per pixel',
+        darkThreshold: 'Dark threshold',
         referenceSlot: 'Reference slot',
         stationX: 'Station X',
         stationY: 'Station Y',
@@ -208,6 +243,237 @@ describe('OffsetCameraSettings', () => {
     const pen0 = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).pens?.find((p) => p.index === 0)
     expect(pen0?.xy_offset_mm).toEqual({ x: 1.25, y: 0 })
     expect(pen0?.offset_source).toBe('manual')
+  })
+
+  it('shows a per-pen status badge (reference vs measured)', async () => {
+    withStation()
+    const job = useJobStore()
+    // Slot 1 has a camera-measured offset; slot 0 is the reference.
+    job.profiles[0]!.pens![1]!.offset_source = 'vision'
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find('[data-test="offset-status-0"]').text()).toBe('Reference')
+    expect(wrapper.find('[data-test="offset-status-1"]').text()).toBe('Measured')
+  })
+
+  it('works without a magazine: no fetch toggle, manual-present hint, measure available', async () => {
+    const job = useJobStore()
+    job.profiles[0]!.tool_change_method = 'manual_pause'
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+    // Auto-fetch is magazine-only; hidden on a manual machine.
+    expect(wrapper.find('[data-test="tip-fetch-pen"]').exists()).toBe(false)
+    // The hand-presentation hint appears, and measuring still works.
+    expect(wrapper.find('[data-test="manual-present-hint"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="pen-measure-1"]').exists()).toBe(true)
+  })
+
+  it('shows the auto-fetch toggle with a magazine (rack)', async () => {
+    withStation() // mock profile is tool_change_method: 'rack'
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find('[data-test="tip-fetch-pen"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="manual-present-hint"]').exists()).toBe(false)
+  })
+
+  it('guided sequence walks pens reference-first and advances on success', async () => {
+    withStation() // reference_slot 0, station configured
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    await wrapper.find('[data-test="guide-start"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="guide-panel"]').exists()).toBe(true)
+    // Step 1 = reference pen (slot 0).
+    expect(wrapper.find('[data-test="guide-step"]').text()).toContain('1/2')
+
+    await wrapper.find('[data-test="guide-measure"]').trigger('click')
+    await flushPromises()
+    // Advanced to slot 1.
+    expect(wrapper.find('[data-test="guide-step"]').text()).toContain('2/2')
+
+    await wrapper.find('[data-test="guide-measure"]').trigger('click')
+    await flushPromises()
+    // Sequence complete → wizard closed.
+    expect(wrapper.find('[data-test="guide-panel"]').exists()).toBe(false)
+
+    expect(measureSpy).toHaveBeenCalledTimes(2)
+    expect(measureSpy.mock.calls[0]![0]).toMatchObject({ slot: 0 })
+    expect(measureSpy.mock.calls[1]![0]).toMatchObject({ slot: 1 })
+  })
+
+  it('does not apply a low-confidence measurement', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 130, y: 100 },
+      confidence: 0.1, // below the trust threshold
+      reference_measured: true,
+      offset_mm: { x: 1.8, y: -0.5 },
+      message: 'ok',
+      annotated_image: 'data:image/jpeg;base64,AAAA',
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    saveSpy.mockClear()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    // Not written, but the frame + warning are shown.
+    expect(saveSpy).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('Low confidence')
+    expect(wrapper.find('[data-test="pen-measure-preview-1"]').exists()).toBe(true)
+  })
+
+  it('persists the dark threshold from the Advanced panel', async () => {
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+    const input = wrapper.find('[data-test="tip-dark-threshold"]')
+    await input.setValue('120')
+    await input.trigger('change')
+    await nextTick()
+    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.dark_threshold).toBe(
+      120,
+    )
+  })
+
+  it('persists the frames-to-average count and sends it when measuring', async () => {
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+    const input = wrapper.find('[data-test="tip-samples"]')
+    expect(input.exists()).toBe(true)
+    await input.setValue('4')
+    await input.trigger('change')
+    await nextTick()
+    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.samples).toBe(4)
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    expect(measureSpy).toHaveBeenCalledWith(expect.objectContaining({ samples: 4 }))
+  })
+
+  it('clamps the frames-to-average count to 1–20', async () => {
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+    const input = wrapper.find('[data-test="tip-samples"]')
+    await input.setValue('99')
+    await input.trigger('change')
+    await nextTick()
+    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.samples).toBe(20)
+  })
+
+  it('flags a suspiciously large offset but still applies it', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 800, y: 100 },
+      confidence: 0.9,
+      reference_measured: true,
+      offset_mm: { x: 70, y: 0 }, // 70 mm — beyond the sanity bound
+      message: 'ok',
+      annotated_image: 'data:image/jpeg;base64,AAAA',
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    await nextTick()
+    // Still written (it cleared the confidence gate)…
+    const pen1 = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).pens?.find((p) => p.index === 1)
+    expect(pen1?.offset_source).toBe('vision')
+    // …but the message carries the large-offset warning.
+    expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('large offset')
+  })
+
+  it('shows the repeatability spread of an averaged measurement', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 130, y: 100 },
+      confidence: 0.9,
+      spread_mm: 0.4, // tight agreement
+      reference_measured: true,
+      offset_mm: { x: 1, y: 0 },
+      message: 'ok',
+      annotated_image: null,
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('±0.40 mm')
+  })
+
+  it('warns and still applies when averaged frames disagree too much', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 130, y: 100 },
+      confidence: 0.9,
+      spread_mm: 3.0, // beyond the stability bound
+      reference_measured: true,
+      offset_mm: { x: 1, y: 0 },
+      message: 'ok',
+      annotated_image: null,
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    await nextTick()
+    // Applied (confident per frame)…
+    const pen1 = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).pens?.find((p) => p.index === 1)
+    expect(pen1?.offset_source).toBe('vision')
+    // …but the instability warning shows.
+    expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('frames vary by')
+  })
+
+  it('test detection shows a result without writing an offset', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 0,
+      is_reference: true,
+      tip_px: { x: 100, y: 100 },
+      confidence: 0.9,
+      reference_measured: true,
+      offset_mm: { x: 0, y: 0 },
+      message: 'ok',
+      annotated_image: 'data:image/jpeg;base64,AAAA',
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    saveSpy.mockClear()
+    await wrapper.find('[data-test="tip-test"]').trigger('click')
+    await flushPromises()
+    expect(measureSpy).toHaveBeenCalled()
+    expect(saveSpy).not.toHaveBeenCalled() // dry run — nothing persisted
+    expect(wrapper.find('[data-test="tip-test-preview"]').exists()).toBe(true)
+  })
+
+  it('clears a pen offset back to unset', async () => {
+    withStation()
+    const job = useJobStore()
+    job.profiles[0]!.pens![1]!.offset_source = 'vision'
+    job.profiles[0]!.pens![1]!.xy_offset_mm = { x: 2, y: 1 }
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find('[data-test="pen-clear-1"]').trigger('click')
+    await nextTick()
+    const pen1 = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).pens?.find((p) => p.index === 1)
+    expect(pen1?.offset_source).toBe('unset')
+    expect(pen1?.xy_offset_mm).toEqual({ x: 0, y: 0 })
   })
 
   it('hides Measure until a station is configured', async () => {

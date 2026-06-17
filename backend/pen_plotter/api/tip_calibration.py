@@ -48,6 +48,8 @@ class TipMeasureRequest(BaseModel):
     mm_per_pixel: float = Field(gt=0.0)
     reference_slot: int = Field(default=0, ge=0)
     dark_threshold: int = Field(default=80, ge=0, le=255)
+    # Number of frames to grab and average per measurement (noise reduction).
+    samples: int = Field(default=1, ge=1, le=20)
     roi: TipCameraRoi | None = None
     # Optional guided travel: when ``move_to_station`` is set, the head is
     # moved to ``station_position`` (machine mm) before the frame is grabbed,
@@ -80,6 +82,9 @@ class TipMeasureResponse(BaseModel):
     is_reference: bool
     tip_px: Point | None = None
     confidence: float = 0.0
+    # Repeatability across averaged frames (mm): how far the farthest sample
+    # sat from the aggregated tip. 0 for a single frame; large ⇒ unstable.
+    spread_mm: float | None = None
     reference_measured: bool = False
     # Offset (mm) of this slot's tip relative to the reference pen — the value
     # to write onto the slot's ``xy_offset_mm``. ``None`` until both this slot
@@ -188,6 +193,7 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
             mm_per_pixel=req.mm_per_pixel,
             dark_threshold=req.dark_threshold,
             roi=roi,
+            samples=req.samples,
         )
     except Exception as exc:  # frame grab / decode failure
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
@@ -210,6 +216,7 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         is_reference=result.is_reference,
         tip_px=Point(x=m.tip_px[0], y=m.tip_px[1]) if m.tip_px else None,
         confidence=m.confidence,
+        spread_mm=m.spread_mm,
         reference_measured=result.reference_measured,
         offset_mm=(
             Point(x=result.offset_mm[0], y=result.offset_mm[1]) if result.offset_mm else None

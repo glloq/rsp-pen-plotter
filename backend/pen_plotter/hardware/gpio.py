@@ -28,7 +28,9 @@ AVAILABLE_GPIO_PINS: tuple[int, ...] = (
 class GpioBackend(Protocol):
     """Minimal GPIO output backend: drive ``pin`` to a boolean level."""
 
-    def set(self, pin: int, value: bool) -> None: ...
+    def set(self, pin: int, value: bool) -> None:
+        """Drive ``pin`` HIGH (``True``) or LOW (``False``)."""
+        ...
 
 
 class _LgpioBackend:
@@ -86,6 +88,7 @@ class LightController:
     """Drives a GPIO-connected light. Thread-safe; backend resolved lazily."""
 
     def __init__(self, backend: object = _UNSET) -> None:
+        """Resolve the GPIO backend lazily, or honour an injected one."""
         # ``_UNSET`` → resolve the real backend now; an explicit value (incl.
         # ``None``) is honoured so tests inject a fake or force "unavailable".
         self._backend: GpioBackend | None = (

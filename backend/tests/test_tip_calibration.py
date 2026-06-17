@@ -20,6 +20,7 @@ from pen_plotter.main import app
 from pen_plotter.vision.tip_detect import (
     Roi,
     TipCalibrator,
+    average_tips,
     detect_tip_dark_blob,
     offset_between,
 )
@@ -163,6 +164,74 @@ def test_calibrator_derives_offset_after_reference() -> None:
     assert calib.measured_slots == []
 
 
+# ── multi-frame averaging ────────────────────────────────────────────────────
+
+
+def test_average_tips_takes_the_median() -> None:
+    shots = [
+        detect_tip_dark_blob(_frame((100, 100)), mm_per_pixel=0.1),
+        detect_tip_dark_blob(_frame((120, 100)), mm_per_pixel=0.1),
+    ]
+    avg = average_tips(shots)
+    assert avg.found and avg.tip_px is not None
+    # Median of x ∈ {99.5, 119.5} ≈ 109.5; y unchanged.
+    assert avg.tip_px[0] == pytest.approx(109.5, abs=0.5)
+    assert avg.tip_px[1] == pytest.approx(99.5, abs=0.5)
+    assert "median of 2/2" in avg.message
+    # spread = farthest sample from the median ≈ |119.5-109.5|*0.1 = 1.0 mm.
+    assert avg.spread_mm == pytest.approx(1.0, abs=0.1)
+
+
+def test_average_tips_is_robust_to_one_outlier() -> None:
+    # Two tight samples + one wildly off frame. The median ignores the outlier
+    # where a mean would be dragged ~6 px (0.6 mm) toward it.
+    shots = [
+        detect_tip_dark_blob(_frame((100, 100)), mm_per_pixel=0.1),
+        detect_tip_dark_blob(_frame((101, 100)), mm_per_pixel=0.1),
+        detect_tip_dark_blob(_frame((180, 100)), mm_per_pixel=0.1),  # outlier
+    ]
+    avg = average_tips(shots)
+    assert avg.found and avg.tip_px is not None
+    # Median x ≈ 100.5 px (the middle sample), not pulled toward 180.
+    assert avg.tip_px[0] == pytest.approx(100.5, abs=1.0)
+
+
+def test_average_tips_skips_not_found_samples() -> None:
+    shots = [
+        detect_tip_dark_blob(_frame((100, 100)), mm_per_pixel=0.1),
+        detect_tip_dark_blob(_frame(None), mm_per_pixel=0.1),  # miss
+    ]
+    avg = average_tips(shots)
+    assert avg.found and avg.tip_px is not None
+    # Only the found sample contributes.
+    assert avg.tip_px[0] == pytest.approx(99.5, abs=0.5)
+    assert "median of 1/2" in avg.message
+    assert avg.spread_mm == pytest.approx(0.0, abs=0.01)
+
+
+def test_average_tips_returns_last_when_none_found() -> None:
+    shots = [detect_tip_dark_blob(_frame(None), mm_per_pixel=0.1) for _ in range(2)]
+    avg = average_tips(shots)
+    assert not avg.found
+
+
+def test_calibrator_samples_grabs_and_averages() -> None:
+    # Two alternating frames; with samples=2 the measured tip is their mean.
+    frames = [_frame((100, 100)), _frame((120, 100))]
+    calls = {"n": 0}
+
+    def grab(url: str) -> bytes:
+        frame = frames[calls["n"] % len(frames)]
+        calls["n"] += 1
+        return frame
+
+    calib = TipCalibrator(grabber=grab)
+    r = calib.measure(slot=0, reference_slot=0, camera_url="x", mm_per_pixel=0.1, samples=2)
+    assert calls["n"] == 2  # grabbed twice
+    assert r.measurement.found and r.measurement.tip_px is not None
+    assert r.measurement.tip_px[0] == pytest.approx(109.5, abs=0.5)
+
+
 # ── API ──────────────────────────────────────────────────────────────────────
 
 
@@ -201,6 +270,30 @@ def test_measure_endpoint_returns_offset_after_reference(client: TestClient) -> 
     assert body["offset_mm"]["y"] == pytest.approx(0.0, abs=0.2)
     # The response carries a JPEG data URL preview for operator confirmation.
     assert body["annotated_image"].startswith("data:image/jpeg;base64,")
+
+
+def test_measure_endpoint_honours_samples(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    calls = {"n": 0}
+
+    def grab(url: str) -> bytes:
+        calls["n"] += 1
+        return _frame((100, 100))
+
+    monkeypatch.setattr(api._calibrator, "_grab", grab)
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1, "samples": 3},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["found"] is True
+    assert calls["n"] == 3  # grabbed three frames and averaged
+    # Identical frames → perfect repeatability.
+    assert body["spread_mm"] == pytest.approx(0.0, abs=0.01)
 
 
 def test_status_and_reset_endpoints(client: TestClient) -> None:
@@ -373,14 +466,17 @@ def test_fetch_then_move_orders_swap_before_travel(
     assert swap_idx < station_idx
 
 
-def test_fetch_pen_on_manual_profile_is_409(
-    client: TestClient, connected: MockTransport
-) -> None:
+def test_fetch_pen_on_manual_profile_is_409(client: TestClient, connected: MockTransport) -> None:
     # A manual-swap profile can't fetch on its own — load by hand.
     resp = client.post(
         "/plotter/tip-calibration/measure",
-        json={"slot": 1, "camera_url": "cam://x", "mm_per_pixel": 0.1, "fetch_pen": True,
-              "profile_name": PROFILE},
+        json={
+            "slot": 1,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "fetch_pen": True,
+            "profile_name": PROFILE,
+        },
     )
     assert resp.status_code == 409
     assert "by hand" in resp.json()["message"]
@@ -524,7 +620,12 @@ def test_fetch_pen_requires_profile(client: TestClient) -> None:
 def test_fetch_pen_when_disconnected_is_409(client: TestClient) -> None:
     resp = client.post(
         "/plotter/tip-calibration/measure",
-        json={"slot": 1, "camera_url": "cam://x", "mm_per_pixel": 0.1, "fetch_pen": True,
-              "profile_name": RACK_PROFILE},
+        json={
+            "slot": 1,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "fetch_pen": True,
+            "profile_name": RACK_PROFILE,
+        },
     )
     assert resp.status_code == 409

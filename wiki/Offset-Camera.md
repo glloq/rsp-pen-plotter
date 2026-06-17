@@ -66,23 +66,40 @@ the UI.
 
 ## Configure it
 
-Settings → **Cameras** tab → **Offset camera**, on a multi-pen profile:
+Settings → **Cameras** tab → **Offset camera**. Works on any profile with
+**more than one pen — with or without a magazine** (a manual / multi-holder
+machine measures pens presented by hand; a carousel/rack can also fetch them
+automatically). The panel is a short guided flow:
 
 1. Turn on **per-pen tip offsets** (`apply_pen_offsets`). This is the opt-in
    switch — off by default, so nothing changes until you enable it.
-2. Tick **Measure with a camera station** to reveal the station config.
+2. Tick **Use a camera to measure offsets** to reveal the station config.
 3. Fill in:
-   - **Offset camera** — pick a configured workshop camera or paste a
-     snapshot/MJPEG URL.
+   - **① Offset camera** — pick a configured workshop camera or paste a
+     snapshot/MJPEG URL. A **live preview** appears; once a detection zone is
+     set it's drawn as a rectangle on the feed so you can aim it.
    - **mm per pixel** — the station's pixel scale. Don't guess it: use the
      [scale assistant](#mm-per-pixel-assistant) below.
    - **Reference slot** — the pen the others are measured against (its own
      offset is `0`).
-   - **Detection zone (ROI)** *(optional)* — an X/Y/W/H pixel box to constrain
-     detection to where the tip appears. Leave blank for the whole frame.
+   - **Detection zone (ROI)** *(optional)* — constrain detection to where the
+     tip appears. **Drag a rectangle directly on the live preview** to set it
+     (or type X/Y/W/H under Advanced). Leave blank for the whole frame.
    - **Station X/Y** *(optional)* and **Z** *(optional, motorised Z only)* —
      where the head presents a pen, for guided travel.
    - **Camera light** *(optional)* — the GPIO pin + polarity (see above).
+   - **Dark threshold** *(Advanced)* — the luminance cutoff for "tip" (0–255).
+     Raise it if the tip is faint; lower it if shadows are picked up.
+   - **Frames to average** *(Advanced)* — grab several frames per measurement
+     (1–20) and take the **median** tip, so noise and the odd bad frame are
+     rejected. Higher is steadier but slower; leave at `1` for a clean,
+     well-lit station. When >1, the result reports a repeatability figure
+     (*±X mm*) and warns if the frames disagree too much.
+
+Use **🔍 Test detection** (under the camera) to dry-run the detector and see
+the confidence + marked frame **without writing any offset** — handy for
+tuning the zone, threshold and lighting. A measurement below ~35% confidence
+is reported but **not applied**, so a bad detection can't corrupt an offset.
 
 Or set it straight in the profile YAML — see
 [`docs/profile_format.md`](../docs/profile_format.md#tipcalibrationconfig-camera-offset-station-adr-0005):
@@ -94,6 +111,7 @@ tip_calibration:
   reference_slot: 0
   mm_per_pixel: 0.05
   dark_threshold: 80
+  samples: 1                              # frames to average per measurement
   station_position: { x: 20.0, y: 400.0 }
   station_z_mm: 5.0                       # optional, motorised Z only
   roi: { x: 200, y: 150, width: 240, height: 240 }   # optional
@@ -119,7 +137,13 @@ the ROI.
 
 ## Calibration workflow
 
-With offsets enabled and the station configured:
+The quickest path is **🧭 Guided measurement**: it walks you through the pens
+one at a time, reference first, showing the live feed and prompting you to
+present each pen (or fetching it from the magazine), then advancing on a
+successful measure. Each pen also carries a status badge — *Reference*,
+*Measured*, *Manual* or *Not measured*.
+
+Prefer to do it by hand? With offsets enabled and the station configured:
 
 1. Present (or fetch) the **reference** pen and click **Measure**. Its offset
    is `0` by definition; this records the reference tip position.
@@ -170,6 +194,9 @@ and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
 | *Camera read failed* (502) | The camera URL is unreachable or not a JPEG/MJPEG stream |
 | Light won't switch | Not running on a Pi, or the GPIO library is missing; check the GPIO availability warning; verify the pin and **active high/low** |
 | Offsets look shifted by a constant | You re-measured pens without re-measuring the reference — **Reset measurements** and start from the reference |
+| Measured offset jumps between tries | Noisy feed — raise **Frames to average** so each measure takes the median of several frames |
+| *⚠ frames vary by N mm* warning | The averaged frames disagreed (unstable feed/lighting) — steady the mount, improve lighting, then re-measure |
+| *⚠ large offset* warning | The detector likely locked onto the wrong blob — check the marked frame, tighten the **ROI**, and re-measure |
 | Measure asks to load by hand | The profile changes pens manually; load the pen yourself, then Measure (auto-fetch needs a host/firmware magazine) |
 
 ---

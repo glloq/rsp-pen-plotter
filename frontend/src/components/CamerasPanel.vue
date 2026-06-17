@@ -11,6 +11,7 @@
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '../stores/ui'
+import CameraPreview from './CameraPreview.vue'
 import OffsetCameraSettings from './OffsetCameraSettings.vue'
 import TimelapseSettings from './TimelapseSettings.vue'
 
@@ -74,6 +75,11 @@ const { cameras } = storeToRefs(ui)
             :data-test="`camera-url-${i}`"
           />
         </label>
+        <CameraPreview
+          v-if="cam.enabled && cam.url.trim()"
+          :url="cam.url"
+          :label="cam.label || t('system.cameraN', { n: i + 1 })"
+        />
       </div>
       <p class="text-[11px] text-slate-500">{{ t('system.cameraUrlHint') }}</p>
     </div>

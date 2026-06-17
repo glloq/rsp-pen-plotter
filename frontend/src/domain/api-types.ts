@@ -4008,6 +4008,11 @@ export interface components {
              */
             reference_slot: number;
             roi?: components["schemas"]["TipCameraRoi"] | null;
+            /**
+             * Samples
+             * @default 1
+             */
+            samples: number;
             station_position?: components["schemas"]["Point"] | null;
             /** Station Z Mm */
             station_z_mm?: number | null;
@@ -4081,6 +4086,11 @@ export interface components {
              */
             reference_slot: number;
             roi?: components["schemas"]["TipCameraRoi"] | null;
+            /**
+             * Samples
+             * @default 1
+             */
+            samples: number;
             /** Slot */
             slot: number;
             station_position?: components["schemas"]["Point"] | null;
@@ -4116,6 +4126,8 @@ export interface components {
             reference_measured: boolean;
             /** Slot */
             slot: number;
+            /** Spread Mm */
+            spread_mm?: number | null;
             tip_px?: components["schemas"]["Point"] | null;
         };
         /**

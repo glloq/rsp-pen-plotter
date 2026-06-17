@@ -4137,6 +4137,13 @@
               }
             ]
           },
+          "samples": {
+            "default": 1,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Samples",
+            "type": "integer"
+          },
           "station_position": {
             "anyOf": [
               {
@@ -4295,6 +4302,13 @@
               }
             ]
           },
+          "samples": {
+            "default": 1,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Samples",
+            "type": "integer"
+          },
           "slot": {
             "minimum": 0.0,
             "title": "Slot",
@@ -4380,6 +4394,17 @@
           "slot": {
             "title": "Slot",
             "type": "integer"
+          },
+          "spread_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Mm"
           },
           "tip_px": {
             "anyOf": [

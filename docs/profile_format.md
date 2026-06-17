@@ -68,6 +68,7 @@ registration cancels out.
 | `mm_per_pixel` | float (> 0) | Station pixel scale, calibrated once |
 | `detector` | `"dark_blob"` | Detection strategy. `dark_blob` (Pillow+NumPy) finds the darkest compact blob; no OpenCV required |
 | `dark_threshold` | int 0–255 (default `80`) | Luminance cutoff: pixels darker than this count as "tip" |
+| `samples` | int 1–20 (default `1`) | Frames grabbed and averaged per measurement; raise it to cut detector noise at the cost of a slower measure |
 | `roi` | `{ x, y, width, height }` \| null | Optional pixel region to constrain detection (whole frame when `null`). Editable in Settings → Cameras → Offset camera |
 | `light_gpio_pin` | int 0–27 \| null | Optional Raspberry Pi **GPIO pin** (BCM) driving a station light. The host toggles the pin (the light is wired to the Pi, not the plotter); manual On/Off + auto on/off around a measurement |
 | `light_active_high` | bool (default `true`) | `false` for relays/drivers that switch on when the pin is LOW |
@@ -79,6 +80,7 @@ tip_calibration:
   mm_per_pixel: 0.05
   detector: "dark_blob"
   dark_threshold: 80
+  samples: 1                              # frames to average per measurement
   station_position: { x: 20.0, y: 400.0 }
   station_z_mm: 5.0                       # optional, real Z axis only
   roi: { x: 200, y: 150, width: 240, height: 240 }   # optional
