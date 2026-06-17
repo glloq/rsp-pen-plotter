@@ -129,7 +129,7 @@ reference. The offset is persisted onto the slot via the normal `POST
 
 | Endpoint | Body | Purpose |
 | --- | --- | --- |
-| `POST /plotter/tip-calibration/measure` | `{ "slot", "camera_url", "mm_per_pixel", "reference_slot", "dark_threshold"?, "roi"? }` | Grab one frame, locate the tip, return `{ found, tip_px, confidence, reference_measured, offset_mm, … }`. `502` if the camera read fails |
+| `POST /plotter/tip-calibration/measure` | `{ "slot", "camera_url", "mm_per_pixel", "reference_slot", "dark_threshold"?, "roi"?, "move_to_station"?, "station_position"?, "profile_name"? }` | Grab one frame, locate the tip, return `{ found, tip_px, confidence, reference_measured, offset_mm, … }`. With `move_to_station` the head first travels to `station_position` (needs a connected plotter + `profile_name`; `409` disconnected, `422` under-specified). `502` if the camera read fails |
 | `GET /plotter/tip-calibration/status` | — | `{ "measured_slots": [...] }` for the current session |
 | `POST /plotter/tip-calibration/reset` | — | Forget all measurements (start a fresh run) |
 

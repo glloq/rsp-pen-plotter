@@ -285,6 +285,11 @@ export interface TipMeasureRequest {
   reference_slot?: number
   dark_threshold?: number
   roi?: TipCameraRoi | null
+  // Optional guided travel: move the head to station_position (needs a
+  // connected plotter + profile_name) before grabbing the frame.
+  move_to_station?: boolean
+  station_position?: Point | null
+  profile_name?: string | null
 }
 
 export interface TipMeasureResponse {

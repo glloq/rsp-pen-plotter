@@ -319,6 +319,50 @@ describe('MagazineEditor', () => {
     expect(pen1?.offset_source).toBe('vision')
   })
 
+  it('passes guided travel when auto-move is enabled and a station is set', async () => {
+    const job = useJobStore()
+    job.profiles[0]!.tool_change_method = 'rack'
+    job.profiles[0]!.apply_pen_offsets = true
+    job.profiles[0]!.tip_calibration = {
+      camera_url: 'cam://x',
+      reference_slot: 0,
+      mm_per_pixel: 0.1,
+      detector: 'dark_blob',
+      dark_threshold: 80,
+      roi: null,
+      station_position: { x: 20, y: 30 },
+    }
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 0,
+      is_reference: true,
+      tip_px: { x: 100, y: 100 },
+      confidence: 0.9,
+      reference_measured: true,
+      offset_mm: { x: 0, y: 0 },
+      message: 'ok',
+    })
+
+    const wrapper = mountEditor()
+    await nextTick()
+
+    // Enable the (now available) auto-move toggle, then measure.
+    const autoMove = wrapper.find('[data-test="tip-auto-move"]')
+    await autoMove.setValue(true)
+    await wrapper.find('[data-test="pen-measure-0"]').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(measureSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slot: 0,
+        move_to_station: true,
+        station_position: { x: 20, y: 30 },
+        profile_name: 'P',
+      }),
+    )
+  })
+
   it('reports a failed detection without applying an offset', async () => {
     const job = useJobStore()
     job.profiles[0]!.tool_change_method = 'rack'

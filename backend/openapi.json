@@ -4058,6 +4058,22 @@
             "title": "Mm Per Pixel",
             "type": "number"
           },
+          "move_to_station": {
+            "default": false,
+            "title": "Move To Station",
+            "type": "boolean"
+          },
+          "profile_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Name"
+          },
           "reference_slot": {
             "default": 0,
             "minimum": 0.0,
@@ -4078,6 +4094,16 @@
             "minimum": 0.0,
             "title": "Slot",
             "type": "integer"
+          },
+          "station_position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -7902,7 +7928,7 @@
     },
     "/plotter/tip-calibration/measure": {
       "post": {
-        "description": "Grab a frame for ``slot`` and locate its tip.\n\nDoes not move the head \u2014 the operator presents the pen at the station\n(guided automatic travel is a later increment). Returns the implied\noffset once the reference slot has also been measured this session.",
+        "description": "Grab a frame for ``slot`` and locate its tip.\n\nWith ``move_to_station`` the head first travels to ``station_position``\n(needs a connected plotter + ``profile_name``); otherwise the operator\npresents the pen by hand. Returns the implied offset once the reference\nslot has also been measured this session.",
         "operationId": "measure_plotter_tip_calibration_measure_post",
         "parameters": [
           {

@@ -1,6 +1,6 @@
 # Camera-assisted pen-tip offset — design study
 
-- **Status**: Phase 1 (manual offset) + Phase 2 (vision measurement) implemented · guided head-travel deferred
+- **Status**: Phase 1 (manual offset) + Phase 2 (vision measurement, with optional guided travel) implemented
 - **Date**: 2026-06
 - **Companion ADR**: [`adr/0005-camera-tip-offset.md`](adr/0005-camera-tip-offset.md)
 
@@ -8,10 +8,12 @@
 > **Pillow + NumPy**, not OpenCV — both are already dependencies, so the
 > appliance needs nothing extra and the detector is unit-tested on synthetic
 > frames with no camera. The `aruco` detector (printed fiducial, sub-pixel)
-> remains future work behind the same `detector` field. Automatic head travel
-> to the station is also deferred: today the operator **presents each pen at
-> the station and clicks Measure**; the orchestrated travel sequence (§7) is
-> the next increment.
+> remains future work behind the same `detector` field. **Guided travel** is
+> implemented as an *optional* `move_to_station` on the measure call: with a
+> connected plotter it drives the head to `station_position` before grabbing
+> the frame; otherwise the operator presents the pen by hand. Automatic
+> *pen-fetch* (loading the right pen from the magazine before travelling) is
+> still future work.
 
 > Goal: let OmniPlot register the **XY offset of each pen's tip** so that
 > strokes drawn with different pens land on the same logical coordinate, and
@@ -370,9 +372,15 @@ that writes `offset_source: "vision"`; tests
 (`backend/tests/test_tip_calibration.py`, `MagazineEditor.test.ts`). Built
 entirely on Phase 1's persisted field, so it is additive.
 
-**Deferred (Phase 2b).** Automatic head travel to the station (the operator
-presents pens by hand today), the `aruco` detector, and a returned annotated
-preview frame. These are additive on top of the shipped surface.
+**Phase 2b — guided travel.** ✅ **Implemented (optional).** The measure call
+takes `move_to_station` + `station_position` + `profile_name`; when set it
+drives the head to the station via `controller.goto` before grabbing (409 if
+disconnected, 422 if under-specified). The magazine UI exposes a station X/Y +
+an auto-move toggle (enabled once a station position is set).
+
+**Still deferred.** Automatic *pen-fetch* (loading the right pen from the
+magazine before travel), the `aruco` detector, and a returned annotated preview
+frame. All additive on top of the shipped surface.
 
 This ordering means the camera work was never on the critical path for the
 registration fix itself.

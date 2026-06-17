@@ -200,6 +200,28 @@ function onTipConfig(patch: Partial<TipCalibrationConfig>): void {
   void patchProfile({ tip_calibration: { ...current, ...patch } })
 }
 
+// Optional guided travel: when on (and a station position is set), the head
+// is driven to the station before each measurement. Session-local — there's
+// no need to persist it on the profile.
+const autoMove = ref(false)
+const canAutoMove = computed(() => tipConfig.value?.station_position != null)
+
+function onStation(axis: 'x' | 'y', raw: string): void {
+  const cur = tipConfig.value?.station_position ?? null
+  const v = raw.trim() === '' ? null : Number(raw)
+  const other = axis === 'x' ? (cur?.y ?? null) : (cur?.x ?? null)
+  if (v === null && other === null) {
+    onTipConfig({ station_position: null })
+    return
+  }
+  onTipConfig({
+    station_position: {
+      x: axis === 'x' ? (v ?? 0) : (cur?.x ?? 0),
+      y: axis === 'y' ? (v ?? 0) : (cur?.y ?? 0),
+    },
+  })
+}
+
 // Per-slot transient measurement feedback (busy + last message/confidence).
 interface MeasureState {
   busy: boolean
@@ -243,6 +265,9 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       reference_slot: cfg.reference_slot,
       dark_threshold: cfg.dark_threshold,
       roi: cfg.roi,
+      move_to_station: autoMove.value && cfg.station_position != null,
+      station_position: cfg.station_position ?? null,
+      profile_name: profile.value?.name ?? null,
     })
     // Apply the measured offset when we have one (reference pen → (0,0),
     // others → their delta). A not-found / no-reference result only reports.
@@ -467,6 +492,45 @@ onUnmounted(() => clearTimeout(savedTimer))
                       })
                   "
                 />
+              </label>
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('magazine.stationX') }}
+                <input
+                  type="number"
+                  step="any"
+                  :value="tipConfig.station_position?.x ?? ''"
+                  placeholder="—"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-station-x"
+                  @change="(e) => onStation('x', (e.target as HTMLInputElement).value)"
+                />
+              </label>
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('magazine.stationY') }}
+                <input
+                  type="number"
+                  step="any"
+                  :value="tipConfig.station_position?.y ?? ''"
+                  placeholder="—"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-station-y"
+                  @change="(e) => onStation('y', (e.target as HTMLInputElement).value)"
+                />
+              </label>
+              <label
+                class="col-span-2 flex items-center gap-2 text-[11px]"
+                :class="canAutoMove ? 'text-slate-300' : 'text-slate-600'"
+              >
+                <input
+                  v-model="autoMove"
+                  type="checkbox"
+                  class="rounded border-slate-600 bg-slate-900"
+                  :disabled="saving || !canAutoMove"
+                  data-test="tip-auto-move"
+                />
+                {{ t('magazine.autoMove') }}
               </label>
               <button
                 type="button"

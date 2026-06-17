@@ -14,6 +14,8 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from pen_plotter.hardware.controller import controller
+from pen_plotter.hardware.transport import MockTransport
 from pen_plotter.main import app
 from pen_plotter.vision.tip_detect import (
     Roi,
@@ -21,6 +23,8 @@ from pen_plotter.vision.tip_detect import (
     detect_tip_dark_blob,
     offset_between,
 )
+
+PROFILE = "Custom CoreXY A3"
 
 
 def _frame(blob_xy: tuple[int, int] | None, size: tuple[int, int] = (200, 200)) -> bytes:
@@ -204,3 +208,70 @@ def test_measure_surfaces_camera_failure_as_502(
     assert resp.status_code == 502
     # The app normalizes HTTPException into the {code, message, details} envelope.
     assert "stream offline" in resp.json()["message"]
+
+
+# ── guided head travel (phase 2b) ────────────────────────────────────────────
+
+
+@pytest.fixture
+def connected() -> MockTransport:
+    """Attach a mock transport to the shared controller and detach afterwards."""
+    transport = MockTransport()
+    controller.attach(transport)
+    yield transport
+    controller.abort()
+    controller._transport = None
+    controller._streamer = None
+    controller._task = None
+
+
+def test_measure_moves_head_to_station(
+    client: TestClient, connected: MockTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _frame((100, 100)))
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={
+            "slot": 0,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "move_to_station": True,
+            "profile_name": PROFILE,
+            "station_position": {"x": 20, "y": 30},
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["found"] is True
+    # The head was driven to the station before the frame was grabbed.
+    assert any("X20.000 Y30.000" in line for line in connected.written)
+
+
+def test_move_to_station_requires_position_and_profile(client: TestClient) -> None:
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={
+            "slot": 0,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "move_to_station": True,
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_move_to_station_when_disconnected_is_409(client: TestClient) -> None:
+    # No ``connected`` fixture → the controller has no transport.
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={
+            "slot": 0,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "move_to_station": True,
+            "profile_name": PROFILE,
+            "station_position": {"x": 20, "y": 30},
+        },
+    )
+    assert resp.status_code == 409

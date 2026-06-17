@@ -90,9 +90,12 @@ The detector finds the dark pen tip against the light station
 background, so the station wants even lighting and good contrast. *Reset
 measurements* starts a fresh run.
 
-> **What's still by hand.** Today you position each pen at the station
-> yourself; automatic head travel to the station is a later increment.
-> Design notes:
+If you set a **station X/Y** and tick *Move head to station before
+measuring*, a connected plotter drives the head there automatically
+before each frame — otherwise you present the pen by hand.
+
+> **What's still by hand.** Loading the right pen from the magazine
+> before travel (pen-fetch) isn't automated yet. Design notes:
 > [`docs/adr/0005-camera-tip-offset.md`](../docs/adr/0005-camera-tip-offset.md)
 > and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
 

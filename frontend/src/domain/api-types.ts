@@ -954,9 +954,10 @@ export interface paths {
          * Measure
          * @description Grab a frame for ``slot`` and locate its tip.
          *
-         *     Does not move the head — the operator presents the pen at the station
-         *     (guided automatic travel is a later increment). Returns the implied
-         *     offset once the reference slot has also been measured this session.
+         *     With ``move_to_station`` the head first travels to ``station_position``
+         *     (needs a connected plotter + ``profile_name``); otherwise the operator
+         *     presents the pen by hand. Returns the implied offset once the reference
+         *     slot has also been measured this session.
          */
         post: operations["measure_plotter_tip_calibration_measure_post"];
         delete?: never;
@@ -3906,6 +3907,13 @@ export interface components {
             /** Mm Per Pixel */
             mm_per_pixel: number;
             /**
+             * Move To Station
+             * @default false
+             */
+            move_to_station: boolean;
+            /** Profile Name */
+            profile_name?: string | null;
+            /**
              * Reference Slot
              * @default 0
              */
@@ -3913,6 +3921,7 @@ export interface components {
             roi?: components["schemas"]["TipCameraRoi"] | null;
             /** Slot */
             slot: number;
+            station_position?: components["schemas"]["Point"] | null;
         };
         /**
          * TipMeasureResponse

@@ -18,7 +18,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from pen_plotter.audit import record
+from pen_plotter.hardware.controller import controller
 from pen_plotter.models import Point, TipCameraRoi
+from pen_plotter.profiles import get_profile
 from pen_plotter.timelapse import grab_jpeg
 from pen_plotter.vision.tip_detect import Roi, TipCalibrator
 
@@ -41,6 +43,14 @@ class TipMeasureRequest(BaseModel):
     reference_slot: int = Field(default=0, ge=0)
     dark_threshold: int = Field(default=80, ge=0, le=255)
     roi: TipCameraRoi | None = None
+    # Optional guided travel: when ``move_to_station`` is set, the head is
+    # moved to ``station_position`` (machine mm) before the frame is grabbed,
+    # so the operator need not jog by hand. Requires a connected plotter and
+    # ``profile_name`` (for the dialect / transform). Omit to measure whatever
+    # is currently presented.
+    move_to_station: bool = False
+    station_position: Point | None = None
+    profile_name: str | None = None
 
 
 class TipMeasureResponse(BaseModel):
@@ -63,10 +73,25 @@ class TipMeasureResponse(BaseModel):
 async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
     """Grab a frame for ``slot`` and locate its tip.
 
-    Does not move the head — the operator presents the pen at the station
-    (guided automatic travel is a later increment). Returns the implied
-    offset once the reference slot has also been measured this session.
+    With ``move_to_station`` the head first travels to ``station_position``
+    (needs a connected plotter + ``profile_name``); otherwise the operator
+    presents the pen by hand. Returns the implied offset once the reference
+    slot has also been measured this session.
     """
+    if req.move_to_station:
+        if req.station_position is None or req.profile_name is None:
+            raise HTTPException(
+                status_code=422,
+                detail="move_to_station requires station_position and profile_name",
+            )
+        profile = get_profile(req.profile_name)
+        if profile is None:
+            raise HTTPException(status_code=404, detail=f"Unknown profile: {req.profile_name!r}")
+        try:
+            await controller.goto(req.station_position.x, req.station_position.y, profile)
+        except RuntimeError as exc:  # disconnected / job in flight
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     roi = (
         Roi(x=req.roi.x, y=req.roi.y, width=req.roi.width, height=req.roi.height)
         if req.roi
