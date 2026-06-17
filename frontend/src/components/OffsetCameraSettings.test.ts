@@ -80,7 +80,26 @@ const i18n = createI18n({
   locale: 'en',
   messages: {
     en: {
-      offsetCamera: { title: 'Offset camera', hint: 'hint', needsMagazine: 'needs magazine' },
+      offsetCamera: {
+        title: 'Offset camera',
+        hint: 'hint',
+        needsMagazine: 'needs magazine',
+        enable: 'Use a camera',
+        step1: '1 Camera',
+        step1Hint: 'point it',
+        step2: '2 Scale',
+        step2Hint: 'mm per pixel',
+        step3: '3 Measure',
+        step3Hint: 'reference first',
+        advanced: 'Advanced',
+        scaleSet: 'Scale {v}',
+        scaleUnset: 'Scale not set',
+        statusReference: 'Reference',
+        statusMeasured: 'Measured',
+        statusManual: 'Manual',
+        statusPending: 'Not measured',
+      },
+      cameraPreview: { empty: 'no url', retry: 'retry', refresh: 'refresh' },
       magazine: {
         noProfile: 'No profile',
         saved: 'Saved',
@@ -208,6 +227,17 @@ describe('OffsetCameraSettings', () => {
     const pen0 = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).pens?.find((p) => p.index === 0)
     expect(pen0?.xy_offset_mm).toEqual({ x: 1.25, y: 0 })
     expect(pen0?.offset_source).toBe('manual')
+  })
+
+  it('shows a per-pen status badge (reference vs measured)', async () => {
+    withStation()
+    const job = useJobStore()
+    // Slot 1 has a camera-measured offset; slot 0 is the reference.
+    job.profiles[0]!.pens![1]!.offset_source = 'vision'
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find('[data-test="offset-status-0"]').text()).toBe('Reference')
+    expect(wrapper.find('[data-test="offset-status-1"]').text()).toBe('Measured')
   })
 
   it('hides Measure until a station is configured', async () => {

@@ -1,14 +1,10 @@
 <script setup lang="ts">
 // Offset-camera settings — the full per-pen XY tip-offset feature, grouped
-// under Settings → Cameras (alongside the workshop cameras and the timelapse).
-//
-// The offset camera is a dedicated, optional camera at a fixed measurement
-// station; it is independent of the timelapse camera. This panel owns the
-// station configuration (camera source, mm/pixel + scale assistant, reference
-// slot, detection ROI, station X/Y/Z, and a Raspberry Pi GPIO-driven light)
-// AND the per-slot measurement (the "Measure" buttons that fill each pen's
-// xy_offset_mm). Edits persist immediately to the active profile via the same
-// saveProfile path the magazine editor uses.
+// under Settings → Cameras. Presented as a guided flow: a master toggle, then
+// (1) camera + live preview, (2) scale, (3) per-pen measurement, with the
+// rarely-touched knobs (detection zone, station position, GPIO light) folded
+// under an Advanced disclosure. Edits persist immediately to the active
+// profile via the same saveProfile path the magazine editor uses.
 
 import { computed, onMounted, onUnmounted, reactive, ref, toRaw, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -30,6 +26,7 @@ import {
 import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import { defaultPen, normalizePens } from '../composables/useProfileDraft'
+import CameraPreview from './CameraPreview.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
@@ -112,6 +109,26 @@ const tipConfig = computed<TipCalibrationConfig | null>(
 )
 const canMeasure = computed(() => applyPenOffsets.value && tipConfig.value != null)
 const workshopCameras = computed(() => ui.cameras.filter((c) => c.enabled && c.url.trim()))
+
+const scaleLabel = computed(() =>
+  tipConfig.value
+    ? t('offsetCamera.scaleSet', { v: tipConfig.value.mm_per_pixel })
+    : t('offsetCamera.scaleUnset'),
+)
+
+// One-word status per pen, driving a coloured badge in the measure list.
+function penStatus(pen: PenSlot): { label: string; cls: string } {
+  if (tipConfig.value && pen.index === tipConfig.value.reference_slot) {
+    return { label: t('offsetCamera.statusReference'), cls: 'bg-sky-900/60 text-sky-200' }
+  }
+  if (pen.offset_source === 'vision') {
+    return { label: t('offsetCamera.statusMeasured'), cls: 'bg-emerald-900/60 text-emerald-200' }
+  }
+  if (pen.offset_source === 'manual') {
+    return { label: t('offsetCamera.statusManual'), cls: 'bg-slate-700 text-slate-200' }
+  }
+  return { label: t('offsetCamera.statusPending'), cls: 'bg-slate-800 text-slate-400' }
+}
 
 function defaultTipConfig(): TipCalibrationConfig {
   return {
@@ -380,6 +397,7 @@ onUnmounted(() => clearTimeout(savedTimer))
     </p>
 
     <template v-else>
+      <!-- Master switch. -->
       <label class="flex items-center gap-2 text-[11px] text-slate-300">
         <input
           type="checkbox"
@@ -393,421 +411,472 @@ onUnmounted(() => clearTimeout(savedTimer))
       </label>
       <p class="text-[11px] text-slate-500">{{ t('magazine.applyOffsetsHint') }}</p>
 
-      <div v-if="applyPenOffsets" class="space-y-3 border-t border-slate-800 pt-2">
-        <label class="flex items-center gap-2 text-[11px] text-slate-300">
-          <input
-            type="checkbox"
-            :checked="tipConfig != null"
-            class="rounded border-slate-600 bg-slate-900"
-            :disabled="saving"
-            data-test="use-tip-station"
-            @change="(e) => onUseStation((e.target as HTMLInputElement).checked)"
-          />
-          {{ t('magazine.useStation') }}
-        </label>
-
-        <div v-if="tipConfig" class="grid grid-cols-2 gap-2" data-test="tip-station-config">
-          <div class="col-span-2">
-            <p class="text-[11px] text-slate-400">{{ t('magazine.offsetCamera') }}</p>
-            <p class="text-[11px] text-slate-500">{{ t('magazine.offsetCameraHint') }}</p>
-            <select
-              v-if="workshopCameras.length"
-              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-              :disabled="saving"
-              data-test="tip-camera-source"
-              @change="(e) => onPickCamera((e.target as HTMLSelectElement).value)"
-            >
-              <option value="">{{ t('magazine.cameraCustom') }}</option>
-              <option v-for="(c, i) in workshopCameras" :key="i" :value="c.url">
-                {{ c.label || t('magazine.cameraN', { n: i + 1 }) }}
-              </option>
-            </select>
+      <div v-if="applyPenOffsets" class="space-y-2">
+        <!-- ── Step 1+2: the camera (optional). ──────────────────────── -->
+        <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-2">
+          <label class="flex items-center gap-2 text-[11px] text-slate-300">
             <input
-              type="text"
-              :value="tipConfig.camera_url"
-              placeholder="http://localhost:8080/?action=snapshot"
-              :disabled="saving"
-              class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
-              data-test="tip-camera-url"
-              @change="(e) => onTipConfig({ camera_url: (e.target as HTMLInputElement).value })"
-            />
-          </div>
-
-          <label class="block text-[11px] text-slate-400"
-            >{{ t('magazine.mmPerPixel') }}
-            <input
-              type="number"
-              step="any"
-              min="0"
-              :value="tipConfig.mm_per_pixel"
-              :disabled="saving"
-              class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-              data-test="tip-mm-per-pixel"
-              @change="
-                (e) => onTipConfig({ mm_per_pixel: Number((e.target as HTMLInputElement).value) })
-              "
-            />
-          </label>
-
-          <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
-            <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
-              {{ t('magazine.scaleTitle') }}
-            </p>
-            <p class="mb-1 text-[11px] text-slate-500">{{ t('magazine.scaleHint') }}</p>
-            <div class="flex items-end gap-2">
-              <label class="block text-[10px] text-slate-400"
-                >{{ t('magazine.scaleKnownMm') }}
-                <input
-                  v-model.number="knownMm"
-                  type="number"
-                  step="any"
-                  min="0"
-                  :disabled="saving || scaleState.busy"
-                  class="mt-0.5 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                  data-test="tip-scale-known-mm"
-                />
-              </label>
-              <button
-                type="button"
-                class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
-                :disabled="saving || scaleState.busy || !(knownMm > 0)"
-                data-test="tip-scale-measure"
-                @click="onCalibrateScale"
-              >
-                {{ scaleState.busy ? t('magazine.measuring') : '📐 ' + t('magazine.scaleMeasure') }}
-              </button>
-            </div>
-            <p
-              v-if="scaleState.message"
-              class="mt-1 text-[11px]"
-              :class="scaleState.ok ? 'text-emerald-400' : 'text-amber-400'"
-              data-test="tip-scale-msg"
-            >
-              {{ scaleState.message }}
-            </p>
-            <img
-              v-if="scaleState.image"
-              :src="scaleState.image"
-              :alt="t('magazine.scaleTitle')"
-              class="mt-1 max-h-40 w-auto rounded border border-slate-700"
-              data-test="tip-scale-preview"
-            />
-          </div>
-
-          <label class="block text-[11px] text-slate-400"
-            >{{ t('magazine.referenceSlot') }}
-            <input
-              type="number"
-              step="1"
-              min="0"
-              :value="tipConfig.reference_slot"
-              :disabled="saving"
-              class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-              data-test="tip-reference-slot"
-              @change="
-                (e) =>
-                  onTipConfig({
-                    reference_slot: Math.max(
-                      0,
-                      Math.floor(Number((e.target as HTMLInputElement).value)),
-                    ),
-                  })
-              "
-            />
-          </label>
-          <label class="block text-[11px] text-slate-400"
-            >{{ t('magazine.stationX') }}
-            <input
-              type="number"
-              step="any"
-              :value="tipConfig.station_position?.x ?? ''"
-              placeholder="—"
-              :disabled="saving"
-              class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-              data-test="tip-station-x"
-              @change="(e) => onStation('x', (e.target as HTMLInputElement).value)"
-            />
-          </label>
-          <label class="block text-[11px] text-slate-400"
-            >{{ t('magazine.stationY') }}
-            <input
-              type="number"
-              step="any"
-              :value="tipConfig.station_position?.y ?? ''"
-              placeholder="—"
-              :disabled="saving"
-              class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-              data-test="tip-station-y"
-              @change="(e) => onStation('y', (e.target as HTMLInputElement).value)"
-            />
-          </label>
-          <label class="col-span-2 block text-[11px] text-slate-400"
-            >{{ t('magazine.stationZ') }}
-            <input
-              type="number"
-              step="any"
-              :value="tipConfig.station_z_mm ?? ''"
-              placeholder="—"
-              :disabled="saving"
-              class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-              data-test="tip-station-z"
-              @change="(e) => onStationZ((e.target as HTMLInputElement).value)"
-            />
-          </label>
-          <label class="col-span-2 flex items-center gap-2 text-[11px] text-slate-300">
-            <input
-              v-model="fetchPen"
               type="checkbox"
+              :checked="tipConfig != null"
               class="rounded border-slate-600 bg-slate-900"
               :disabled="saving"
-              data-test="tip-fetch-pen"
+              data-test="use-tip-station"
+              @change="(e) => onUseStation((e.target as HTMLInputElement).checked)"
             />
-            {{ t('magazine.fetchPen') }}
-          </label>
-          <label
-            class="col-span-2 flex items-center gap-2 text-[11px]"
-            :class="canAutoMove ? 'text-slate-300' : 'text-slate-600'"
-          >
-            <input
-              v-model="autoMove"
-              type="checkbox"
-              class="rounded border-slate-600 bg-slate-900"
-              :disabled="saving || !canAutoMove"
-              data-test="tip-auto-move"
-            />
-            {{ t('magazine.autoMove') }}
+            {{ t('offsetCamera.enable') }}
           </label>
 
-          <!-- Detection zone (ROI). -->
-          <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
-            <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
-              {{ t('magazine.roiTitle') }}
-            </p>
-            <div class="grid grid-cols-4 gap-1.5" data-test="tip-roi">
-              <label class="block text-[10px] text-slate-400"
-                >X
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  :value="roiDraft.x"
-                  placeholder="—"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
-                  data-test="tip-roi-x"
-                  @change="(e) => onRoi('x', (e.target as HTMLInputElement).value)"
-                />
-              </label>
-              <label class="block text-[10px] text-slate-400"
-                >Y
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  :value="roiDraft.y"
-                  placeholder="—"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
-                  data-test="tip-roi-y"
-                  @change="(e) => onRoi('y', (e.target as HTMLInputElement).value)"
-                />
-              </label>
-              <label class="block text-[10px] text-slate-400"
-                >W
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  :value="roiDraft.width"
-                  placeholder="—"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
-                  data-test="tip-roi-w"
-                  @change="(e) => onRoi('width', (e.target as HTMLInputElement).value)"
-                />
-              </label>
-              <label class="block text-[10px] text-slate-400"
-                >H
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  :value="roiDraft.height"
-                  placeholder="—"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
-                  data-test="tip-roi-h"
-                  @change="(e) => onRoi('height', (e.target as HTMLInputElement).value)"
-                />
-              </label>
-            </div>
-            <button
-              v-if="tipConfig.roi"
-              type="button"
-              class="mt-1 text-[10px] text-slate-400 underline hover:text-slate-200"
-              :disabled="saving"
-              data-test="tip-roi-clear"
-              @click="clearRoi"
-            >
-              {{ t('magazine.roiClear') }}
-            </button>
-          </div>
-
-          <!-- Camera light via a Pi GPIO pin. -->
-          <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
-            <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
-              {{ t('magazine.lightTitle') }}
-            </p>
-            <div class="grid grid-cols-2 gap-1.5">
-              <label class="block text-[10px] text-slate-400"
-                >{{ t('magazine.lightGpioPin') }}
-                <select
-                  :value="tipConfig.light_gpio_pin ?? ''"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
-                  data-test="tip-light-pin"
-                  @change="(e) => onLightPin((e.target as HTMLSelectElement).value)"
-                >
-                  <option value="">{{ t('magazine.lightNoPin') }}</option>
-                  <option v-for="p in gpioPins" :key="p" :value="p">GPIO {{ p }}</option>
-                </select>
-              </label>
-              <label class="flex items-end gap-2 pb-1 text-[10px] text-slate-400">
-                <input
-                  type="checkbox"
-                  :checked="tipConfig.light_active_high ?? true"
-                  class="rounded border-slate-600 bg-slate-900"
-                  :disabled="saving"
-                  data-test="tip-light-active-high"
-                  @change="(e) => onLightActiveHigh((e.target as HTMLInputElement).checked)"
-                />
-                {{ t('magazine.lightActiveHigh') }}
-              </label>
-            </div>
-            <p
-              v-if="!gpioAvailable"
-              class="mt-1 text-[11px] text-amber-400"
-              data-test="tip-gpio-warn"
-            >
-              ⚠ {{ t('magazine.gpioUnavailable') }}
-            </p>
-            <div class="mt-1.5 flex items-center gap-2">
-              <button
-                type="button"
-                class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700 disabled:opacity-40"
-                :disabled="saving || !hasLight"
-                data-test="tip-light-on"
-                @click="onManualLight(true)"
+          <div v-if="tipConfig" class="mt-2 space-y-3">
+            <!-- Step 1 — camera + live preview. -->
+            <div class="space-y-1.5">
+              <p class="text-[11px] font-semibold text-slate-300">{{ t('offsetCamera.step1') }}</p>
+              <p class="text-[11px] text-slate-500">{{ t('offsetCamera.step1Hint') }}</p>
+              <select
+                v-if="workshopCameras.length"
+                class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                :disabled="saving"
+                data-test="tip-camera-source"
+                @change="(e) => onPickCamera((e.target as HTMLSelectElement).value)"
               >
-                💡 {{ t('magazine.lightOn') }}
-              </button>
-              <button
-                type="button"
-                class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700 disabled:opacity-40"
-                :disabled="saving || !hasLight"
-                data-test="tip-light-off"
-                @click="onManualLight(false)"
-              >
-                {{ t('magazine.lightOff') }}
-              </button>
-            </div>
-            <label
-              class="mt-1.5 flex items-center gap-2 text-[11px]"
-              :class="hasLight ? 'text-slate-300' : 'text-slate-600'"
-            >
+                <option value="">{{ t('magazine.cameraCustom') }}</option>
+                <option v-for="(c, i) in workshopCameras" :key="i" :value="c.url">
+                  {{ c.label || t('magazine.cameraN', { n: i + 1 }) }}
+                </option>
+              </select>
               <input
-                v-model="lightDuringMeasure"
-                type="checkbox"
-                class="rounded border-slate-600 bg-slate-900"
-                :disabled="saving || !hasLight"
-                data-test="tip-light-during"
+                type="text"
+                :value="tipConfig.camera_url"
+                placeholder="http://localhost:8080/?action=snapshot"
+                :disabled="saving"
+                class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+                data-test="tip-camera-url"
+                @change="(e) => onTipConfig({ camera_url: (e.target as HTMLInputElement).value })"
               />
-              {{ t('magazine.lightDuringMeasure') }}
-            </label>
-          </div>
+              <CameraPreview
+                :url="tipConfig.camera_url"
+                :label="t('offsetCamera.title')"
+                height="md"
+              />
+            </div>
 
-          <button
-            type="button"
-            class="col-span-2 justify-self-start rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700"
-            :disabled="saving"
-            data-test="tip-reset"
-            @click="onResetMeasurements"
-          >
-            ↺ {{ t('magazine.resetMeasurements') }}
-          </button>
+            <!-- Step 2 — scale. -->
+            <div class="space-y-1.5 border-t border-slate-800 pt-2">
+              <div class="flex items-center justify-between">
+                <p class="text-[11px] font-semibold text-slate-300">
+                  {{ t('offsetCamera.step2') }}
+                </p>
+                <span
+                  class="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300"
+                  data-test="scale-chip"
+                  >{{ scaleLabel }}</span
+                >
+              </div>
+              <p class="text-[11px] text-slate-500">{{ t('offsetCamera.step2Hint') }}</p>
+              <div class="flex flex-wrap items-end gap-2">
+                <label class="block text-[10px] text-slate-400"
+                  >{{ t('magazine.mmPerPixel') }}
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    :value="tipConfig.mm_per_pixel"
+                    :disabled="saving"
+                    class="mt-0.5 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="tip-mm-per-pixel"
+                    @change="
+                      (e) =>
+                        onTipConfig({ mm_per_pixel: Number((e.target as HTMLInputElement).value) })
+                    "
+                  />
+                </label>
+                <span class="pb-1 text-[10px] text-slate-500">{{
+                  t('offsetCamera.step2Hint')
+                }}</span>
+              </div>
+              <div class="rounded border border-slate-800 bg-slate-950/40 p-2">
+                <p class="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
+                  {{ t('magazine.scaleTitle') }}
+                </p>
+                <p class="mb-1 text-[11px] text-slate-500">{{ t('magazine.scaleHint') }}</p>
+                <div class="flex items-end gap-2">
+                  <label class="block text-[10px] text-slate-400"
+                    >{{ t('magazine.scaleKnownMm') }}
+                    <input
+                      v-model.number="knownMm"
+                      type="number"
+                      step="any"
+                      min="0"
+                      :disabled="saving || scaleState.busy"
+                      class="mt-0.5 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                      data-test="tip-scale-known-mm"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
+                    :disabled="saving || scaleState.busy || !(knownMm > 0)"
+                    data-test="tip-scale-measure"
+                    @click="onCalibrateScale"
+                  >
+                    {{
+                      scaleState.busy ? t('magazine.measuring') : '📐 ' + t('magazine.scaleMeasure')
+                    }}
+                  </button>
+                </div>
+                <p
+                  v-if="scaleState.message"
+                  class="mt-1 text-[11px]"
+                  :class="scaleState.ok ? 'text-emerald-400' : 'text-amber-400'"
+                  data-test="tip-scale-msg"
+                >
+                  {{ scaleState.message }}
+                </p>
+                <img
+                  v-if="scaleState.image"
+                  :src="scaleState.image"
+                  :alt="t('magazine.scaleTitle')"
+                  class="mt-1 max-h-40 w-auto rounded border border-slate-700"
+                  data-test="tip-scale-preview"
+                />
+              </div>
+            </div>
+
+            <!-- Advanced — detection zone, station position, light. -->
+            <details class="border-t border-slate-800 pt-2" data-test="tip-advanced">
+              <summary
+                class="cursor-pointer text-[11px] font-semibold text-slate-400 hover:text-slate-200"
+              >
+                {{ t('offsetCamera.advanced') }}
+              </summary>
+              <div class="mt-2 grid grid-cols-2 gap-2">
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('magazine.referenceSlot') }}
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    :value="tipConfig.reference_slot"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="tip-reference-slot"
+                    @change="
+                      (e) =>
+                        onTipConfig({
+                          reference_slot: Math.max(
+                            0,
+                            Math.floor(Number((e.target as HTMLInputElement).value)),
+                          ),
+                        })
+                    "
+                  />
+                </label>
+                <span></span>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('magazine.stationX') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="tipConfig.station_position?.x ?? ''"
+                    placeholder="—"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="tip-station-x"
+                    @change="(e) => onStation('x', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('magazine.stationY') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="tipConfig.station_position?.y ?? ''"
+                    placeholder="—"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="tip-station-y"
+                    @change="(e) => onStation('y', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="col-span-2 block text-[11px] text-slate-400"
+                  >{{ t('magazine.stationZ') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="tipConfig.station_z_mm ?? ''"
+                    placeholder="—"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="tip-station-z"
+                    @change="(e) => onStationZ((e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="col-span-2 flex items-center gap-2 text-[11px] text-slate-300">
+                  <input
+                    v-model="fetchPen"
+                    type="checkbox"
+                    class="rounded border-slate-600 bg-slate-900"
+                    :disabled="saving"
+                    data-test="tip-fetch-pen"
+                  />
+                  {{ t('magazine.fetchPen') }}
+                </label>
+                <label
+                  class="col-span-2 flex items-center gap-2 text-[11px]"
+                  :class="canAutoMove ? 'text-slate-300' : 'text-slate-600'"
+                >
+                  <input
+                    v-model="autoMove"
+                    type="checkbox"
+                    class="rounded border-slate-600 bg-slate-900"
+                    :disabled="saving || !canAutoMove"
+                    data-test="tip-auto-move"
+                  />
+                  {{ t('magazine.autoMove') }}
+                </label>
+
+                <!-- Detection zone (ROI). -->
+                <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <p class="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
+                    {{ t('magazine.roiTitle') }}
+                  </p>
+                  <div class="grid grid-cols-4 gap-1.5" data-test="tip-roi">
+                    <label class="block text-[10px] text-slate-400"
+                      >X
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        :value="roiDraft.x"
+                        placeholder="—"
+                        :disabled="saving"
+                        class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                        data-test="tip-roi-x"
+                        @change="(e) => onRoi('x', (e.target as HTMLInputElement).value)"
+                      />
+                    </label>
+                    <label class="block text-[10px] text-slate-400"
+                      >Y
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        :value="roiDraft.y"
+                        placeholder="—"
+                        :disabled="saving"
+                        class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                        data-test="tip-roi-y"
+                        @change="(e) => onRoi('y', (e.target as HTMLInputElement).value)"
+                      />
+                    </label>
+                    <label class="block text-[10px] text-slate-400"
+                      >W
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        :value="roiDraft.width"
+                        placeholder="—"
+                        :disabled="saving"
+                        class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                        data-test="tip-roi-w"
+                        @change="(e) => onRoi('width', (e.target as HTMLInputElement).value)"
+                      />
+                    </label>
+                    <label class="block text-[10px] text-slate-400"
+                      >H
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        :value="roiDraft.height"
+                        placeholder="—"
+                        :disabled="saving"
+                        class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                        data-test="tip-roi-h"
+                        @change="(e) => onRoi('height', (e.target as HTMLInputElement).value)"
+                      />
+                    </label>
+                  </div>
+                  <button
+                    v-if="tipConfig.roi"
+                    type="button"
+                    class="mt-1 text-[10px] text-slate-400 underline hover:text-slate-200"
+                    :disabled="saving"
+                    data-test="tip-roi-clear"
+                    @click="clearRoi"
+                  >
+                    {{ t('magazine.roiClear') }}
+                  </button>
+                </div>
+
+                <!-- Camera light via a Pi GPIO pin. -->
+                <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
+                  <p class="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
+                    {{ t('magazine.lightTitle') }}
+                  </p>
+                  <div class="grid grid-cols-2 gap-1.5">
+                    <label class="block text-[10px] text-slate-400"
+                      >{{ t('magazine.lightGpioPin') }}
+                      <select
+                        :value="tipConfig.light_gpio_pin ?? ''"
+                        :disabled="saving"
+                        class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                        data-test="tip-light-pin"
+                        @change="(e) => onLightPin((e.target as HTMLSelectElement).value)"
+                      >
+                        <option value="">{{ t('magazine.lightNoPin') }}</option>
+                        <option v-for="p in gpioPins" :key="p" :value="p">GPIO {{ p }}</option>
+                      </select>
+                    </label>
+                    <label class="flex items-end gap-2 pb-1 text-[10px] text-slate-400">
+                      <input
+                        type="checkbox"
+                        :checked="tipConfig.light_active_high ?? true"
+                        class="rounded border-slate-600 bg-slate-900"
+                        :disabled="saving"
+                        data-test="tip-light-active-high"
+                        @change="(e) => onLightActiveHigh((e.target as HTMLInputElement).checked)"
+                      />
+                      {{ t('magazine.lightActiveHigh') }}
+                    </label>
+                  </div>
+                  <p
+                    v-if="!gpioAvailable"
+                    class="mt-1 text-[11px] text-amber-400"
+                    data-test="tip-gpio-warn"
+                  >
+                    ⚠ {{ t('magazine.gpioUnavailable') }}
+                  </p>
+                  <div class="mt-1.5 flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700 disabled:opacity-40"
+                      :disabled="saving || !hasLight"
+                      data-test="tip-light-on"
+                      @click="onManualLight(true)"
+                    >
+                      💡 {{ t('magazine.lightOn') }}
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+                      :disabled="saving || !hasLight"
+                      data-test="tip-light-off"
+                      @click="onManualLight(false)"
+                    >
+                      {{ t('magazine.lightOff') }}
+                    </button>
+                  </div>
+                  <label
+                    class="mt-1.5 flex items-center gap-2 text-[11px]"
+                    :class="hasLight ? 'text-slate-300' : 'text-slate-600'"
+                  >
+                    <input
+                      v-model="lightDuringMeasure"
+                      type="checkbox"
+                      class="rounded border-slate-600 bg-slate-900"
+                      :disabled="saving || !hasLight"
+                      data-test="tip-light-during"
+                    />
+                    {{ t('magazine.lightDuringMeasure') }}
+                  </label>
+                </div>
+
+                <button
+                  type="button"
+                  class="col-span-2 justify-self-start rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700"
+                  :disabled="saving"
+                  data-test="tip-reset"
+                  @click="onResetMeasurements"
+                >
+                  ↺ {{ t('magazine.resetMeasurements') }}
+                </button>
+              </div>
+            </details>
+          </div>
         </div>
 
-        <!-- Per-slot offsets + Measure. -->
-        <ul class="space-y-1.5 border-t border-slate-800 pt-2">
-          <li
-            v-for="pen in pens"
-            :key="pen.index"
-            class="rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5"
-            :data-test="`offset-row-${pen.index}`"
-          >
-            <div class="grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-2">
-              <span class="text-center font-mono text-[11px] text-slate-500">#{{ pen.index }}</span>
-              <span class="truncate text-[11px] text-slate-300">{{
-                pen.name || `Pen ${pen.index}`
-              }}</span>
-              <label class="block text-[10px] text-slate-400"
-                >{{ t('magazine.offsetX') }}
-                <input
-                  type="number"
-                  step="any"
-                  :value="pen.xy_offset_mm?.x ?? 0"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
-                  :data-test="`pen-offset-x-${pen.index}`"
-                  @change="(e) => onOffset(pen, 'x', (e.target as HTMLInputElement).value)"
-                />
-              </label>
-              <label class="block text-[10px] text-slate-400"
-                >{{ t('magazine.offsetY') }}
-                <input
-                  type="number"
-                  step="any"
-                  :value="pen.xy_offset_mm?.y ?? 0"
-                  :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
-                  :data-test="`pen-offset-y-${pen.index}`"
-                  @change="(e) => onOffset(pen, 'y', (e.target as HTMLInputElement).value)"
-                />
-              </label>
-            </div>
-            <div v-if="canMeasure" class="mt-1 flex items-center gap-2">
-              <button
-                type="button"
-                class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
-                :disabled="saving || measureState[pen.index]?.busy"
-                :data-test="`pen-measure-${pen.index}`"
-                @click="onMeasure(pen)"
-              >
-                {{
-                  measureState[pen.index]?.busy
-                    ? t('magazine.measuring')
-                    : '📷 ' + t('magazine.measure')
-                }}
-              </button>
-              <span
+        <!-- ── Step 3: per-pen offsets + measurement. ────────────────── -->
+        <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-2">
+          <p class="text-[11px] font-semibold text-slate-300">{{ t('offsetCamera.step3') }}</p>
+          <p class="mb-1 text-[11px] text-slate-500">
+            {{ canMeasure ? t('offsetCamera.step3Hint') : t('magazine.offsetHint') }}
+          </p>
+          <ul class="space-y-1.5">
+            <li
+              v-for="pen in pens"
+              :key="pen.index"
+              class="rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5"
+              :data-test="`offset-row-${pen.index}`"
+            >
+              <div class="grid grid-cols-[2rem_1fr_auto] items-center gap-2">
+                <span class="text-center font-mono text-[11px] text-slate-500"
+                  >#{{ pen.index }}</span
+                >
+                <span class="truncate text-[11px] text-slate-300">{{
+                  pen.name || `Pen ${pen.index}`
+                }}</span>
+                <span
+                  class="rounded px-1.5 py-0.5 text-[9px] font-medium"
+                  :class="penStatus(pen).cls"
+                  :data-test="`offset-status-${pen.index}`"
+                  >{{ penStatus(pen).label }}</span
+                >
+              </div>
+              <div class="mt-1 grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                <label class="block text-[10px] text-slate-400"
+                  >{{ t('magazine.offsetX') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="pen.xy_offset_mm?.x ?? 0"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                    :data-test="`pen-offset-x-${pen.index}`"
+                    @change="(e) => onOffset(pen, 'x', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <label class="block text-[10px] text-slate-400"
+                  >{{ t('magazine.offsetY') }}
+                  <input
+                    type="number"
+                    step="any"
+                    :value="pen.xy_offset_mm?.y ?? 0"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                    :data-test="`pen-offset-y-${pen.index}`"
+                    @change="(e) => onOffset(pen, 'y', (e.target as HTMLInputElement).value)"
+                  />
+                </label>
+                <button
+                  v-if="canMeasure"
+                  type="button"
+                  class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
+                  :disabled="saving || measureState[pen.index]?.busy"
+                  :data-test="`pen-measure-${pen.index}`"
+                  @click="onMeasure(pen)"
+                >
+                  {{ measureState[pen.index]?.busy ? t('magazine.measuring') : '📷' }}
+                </button>
+              </div>
+              <p
                 v-if="measureState[pen.index]?.message"
-                class="text-[11px]"
+                class="mt-1 text-[11px]"
                 :class="measureState[pen.index]?.ok ? 'text-emerald-400' : 'text-amber-400'"
                 :data-test="`pen-measure-msg-${pen.index}`"
               >
                 {{ measureState[pen.index]?.message }}
-              </span>
-            </div>
-            <img
-              v-if="measureState[pen.index]?.image"
-              :src="measureState[pen.index]!.image!"
-              :alt="t('magazine.measurePreviewAlt')"
-              class="mt-1 max-h-40 w-auto rounded border border-slate-700"
-              :data-test="`pen-measure-preview-${pen.index}`"
-            />
-          </li>
-        </ul>
-        <p class="text-[11px] text-slate-500">{{ t('magazine.offsetHint') }}</p>
+              </p>
+              <img
+                v-if="measureState[pen.index]?.image"
+                :src="measureState[pen.index]!.image!"
+                :alt="t('magazine.measurePreviewAlt')"
+                class="mt-1 max-h-40 w-auto rounded border border-slate-700"
+                :data-test="`pen-measure-preview-${pen.index}`"
+              />
+            </li>
+          </ul>
+        </div>
       </div>
 
       <p v-if="error" class="text-[11px] text-red-400">{{ error }}</p>
