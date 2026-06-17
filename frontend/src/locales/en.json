@@ -1919,6 +1919,7 @@
   "timelapse": {
     "title": "Timelapse",
     "hint": "Capture frames from a camera during a print, then export an MP4.",
+    "auto": "Auto-record during prints",
     "start": "Start recording",
     "stop": "Stop & save",
     "recording": "Recording",

@@ -68,6 +68,7 @@ function mountPanel() {
 
 describe('TimelapsePanel', () => {
   beforeEach(() => {
+    localStorage.clear()
     setActivePinia(createPinia())
     useUiStore().canvasTab = 'plotter'
     h.getTimelapseStatus.mockReset().mockResolvedValue({ ...IDLE })

@@ -1919,6 +1919,7 @@
   "timelapse": {
     "title": "Timelapse",
     "hint": "Capture des images depuis une caméra pendant une impression, puis exporte un MP4.",
+    "auto": "Enregistrer automatiquement pendant les impressions",
     "start": "Démarrer l'enregistrement",
     "stop": "Arrêter et enregistrer",
     "recording": "Enregistrement",

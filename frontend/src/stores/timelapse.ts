@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import {
   deleteTimelapse,
   downloadTimelapseVideo,
@@ -28,11 +28,69 @@ const IDLE: TimelapseStatus = {
   error: null,
 }
 
+// Persisted capture settings, shared by the manual "Start" control and
+// the auto-record-during-prints hook (so both use the same camera /
+// interval / fps).
+interface TimelapseSettings {
+  autoEnabled: boolean
+  intervalSeconds: number
+  fps: number
+  // Which ``ui.cameras`` slot to record from.
+  cameraSlot: number
+}
+
+const SETTINGS_KEY = 'omniplot.timelapseSettings'
+
+function loadSettings(): TimelapseSettings {
+  const fallback: TimelapseSettings = {
+    autoEnabled: false,
+    intervalSeconds: 5,
+    fps: 24,
+    cameraSlot: 0,
+  }
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<TimelapseSettings>
+      return {
+        autoEnabled: p.autoEnabled === true,
+        intervalSeconds: typeof p.intervalSeconds === 'number' ? p.intervalSeconds : 5,
+        fps: typeof p.fps === 'number' ? p.fps : 24,
+        cameraSlot: typeof p.cameraSlot === 'number' ? p.cameraSlot : 0,
+      }
+    }
+  } catch {
+    // localStorage unavailable / malformed — use defaults.
+  }
+  return fallback
+}
+
 export const useTimelapseStore = defineStore('timelapse', () => {
   const status = ref<TimelapseStatus>({ ...IDLE })
   const files = ref<TimelapseSummary[]>([])
   const busy = ref(false)
   const error = ref<string | null>(null)
+
+  const initial = loadSettings()
+  const autoEnabled = ref(initial.autoEnabled)
+  const intervalSeconds = ref(initial.intervalSeconds)
+  const fps = ref(initial.fps)
+  const cameraSlot = ref(initial.cameraSlot)
+  watch([autoEnabled, intervalSeconds, fps, cameraSlot], () => {
+    try {
+      localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify({
+          autoEnabled: autoEnabled.value,
+          intervalSeconds: intervalSeconds.value,
+          fps: fps.value,
+          cameraSlot: cameraSlot.value,
+        }),
+      )
+    } catch {
+      // localStorage unavailable — settings won't persist, no-op.
+    }
+  })
 
   async function refreshStatus(): Promise<void> {
     try {
@@ -117,5 +175,20 @@ export const useTimelapseStore = defineStore('timelapse', () => {
     }
   }
 
-  return { status, files, busy, error, refreshStatus, refreshList, start, stop, remove, download }
+  return {
+    status,
+    files,
+    busy,
+    error,
+    autoEnabled,
+    intervalSeconds,
+    fps,
+    cameraSlot,
+    refreshStatus,
+    refreshList,
+    start,
+    stop,
+    remove,
+    download,
+  }
 })
