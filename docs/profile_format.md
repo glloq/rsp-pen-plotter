@@ -29,6 +29,7 @@ the same name.
 | `pen_slot_count` | int | Number of physical pen slots |
 | `pens` | list of `PenSlot` \| null | The magazine (see below). When omitted, one default slot per `pen_slot_count` is synthesized |
 | `pen_change_position` | `{ x, y }` \| null | Machine-coordinate park point for *manual* pen swaps / magazine load pauses, so the head clears the drawing. `null` falls back to the workspace home corner (`x_min` / `y_min`); carousel and rack profiles ignore it |
+| `apply_pen_offsets` | bool (default `false`) | Opt-in switch for per-pen XY tip-offset compensation. When `true`, each slot's `xy_offset_mm` is added to that pen's strokes so different pens register against one origin. Off by default → identical G-code. See [`camera_tip_offset.md`](camera_tip_offset.md) / ADR 0005 |
 | `supports_arcs` | bool (default `false`) | Enable G2/G3 arc fitting |
 | `arc_tolerance_mm` | float (default `0.1`) | Max deviation when fitting arcs |
 | `ebb` | `EbbConfig` \| null | Required only when `gcode_dialect: "ebb"` |
@@ -47,6 +48,8 @@ One entry per magazine position:
 | `position` | `{ x, y }` \| null | Slot coordinates for carousel / rack pickups |
 | `pen_up_command` | string \| null | Per-slot calibration: overrides the profile's pen-up command (e.g. a different servo depth) |
 | `pen_down_command` | string \| null | Per-slot calibration: overrides the profile's pen-down command |
+| `xy_offset_mm` | `{ x, y }` (default `{0, 0}`) | Per-pen XY tip offset (machine mm) added to this pen's strokes, **only** when the profile sets `apply_pen_offsets: true`. Measure relative to a reference pen (leave that pen at `0`) |
+| `offset_source` | `"unset"` \| `"manual"` \| `"vision"` (default `"unset"`) | Provenance of `xy_offset_mm`: hand-typed vs camera-measured. UI hint only |
 
 ### `MachineCapabilities` (v0.2, roadmap A.5)
 

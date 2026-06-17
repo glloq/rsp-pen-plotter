@@ -1,14 +1,12 @@
 # 0005 — Camera-assisted per-pen XY tip offset via a dedicated station
 
-- **Status**: proposed (study)
+- **Status**: accepted (Phase 1 implemented · Phase 2 vision pending)
 - **Date**: 2026-06
 
-> This ADR deviates from the "accepted-only" convention in
-> [`README.md`](./README.md): it captures a forward-looking structural
-> decision that is **under study, not yet implemented**, so it is marked
-> `proposed`. The engineering detail lives in
-> [`../camera_tip_offset.md`](../camera_tip_offset.md). Promote to `accepted`
-> when the first implementation lands.
+> Phase 1 (the manual per-pen XY offset + opt-in switch) has landed, so this
+> ADR is now `accepted`; Phase 2 (camera measurement at a dedicated station)
+> remains future work. The engineering detail and delivery split live in
+> [`../camera_tip_offset.md`](../camera_tip_offset.md).
 
 ## Context
 

@@ -1540,6 +1540,11 @@
     "penUpOverride": "Override stylo levé",
     "penDownOverride": "Override stylo baissé",
     "useProfileDefault": "Défaut du profil",
+    "applyOffsets": "Offsets d'embout par stylo",
+    "applyOffsetsHint": "Optionnel. Décale les traits de chaque stylo d'un offset XY calibré pour que les calques dessinés avec des stylos différents se recalent sur une même origine. Désactivé par défaut — le G-code reste inchangé tant que tu ne l'actives pas.",
+    "offsetX": "Offset X (mm)",
+    "offsetY": "Offset Y (mm)",
+    "offsetHint": "Relatif au stylo de référence ; laisse à 0 le stylo sur lequel tu alignes les autres.",
     "saved": "Enregistré"
   },
   "macros": {

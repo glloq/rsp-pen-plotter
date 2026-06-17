@@ -9,9 +9,9 @@ Format: shortened MADR. One file per decision, numbered in the filename
 (`NNNN-slug.md`). Status is normally one of `accepted`, `superseded by …`,
 `deprecated`. We don't usually track `proposed` here — the repo runs through
 PR review so anything that landed in `adr/` is by definition accepted. The one
-exception is a forward-looking *study* recorded ahead of implementation (e.g.
-[0005](./0005-camera-tip-offset.md)); it carries `proposed` until the first
-code lands, then flips to `accepted`.
+exception is a forward-looking *study* recorded ahead of implementation: it may
+carry `proposed` until the first code lands, then flips to `accepted` (as
+[0005](./0005-camera-tip-offset.md) did once its Phase 1 shipped).
 
 | ADR | Status | Subject |
 |---|---|---|
@@ -19,7 +19,7 @@ code lands, then flips to `accepted`.
 | [0002-vpype-dependency.md](./0002-vpype-dependency.md) | accepted | Use vpype for layout / optimization / G-code emission |
 | [0003-pydantic.md](./0003-pydantic.md) | accepted | Pydantic models for every API boundary + persistence schema |
 | [0004-sqlite.md](./0004-sqlite.md) | accepted | SQLite (with SQLModel) for job history + audit + library metadata |
-| [0005-camera-tip-offset.md](./0005-camera-tip-offset.md) | proposed | Camera-assisted per-pen XY tip offset via a dedicated measurement station |
+| [0005-camera-tip-offset.md](./0005-camera-tip-offset.md) | accepted | Camera-assisted per-pen XY tip offset via a dedicated measurement station (Phase 1 manual offset shipped; Phase 2 vision pending) |
 
 ## When to write a new ADR
 

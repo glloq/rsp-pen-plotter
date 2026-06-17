@@ -70,6 +70,16 @@ class PenSlot(BaseModel):
     # unset.
     pen_up_command: str | None = None
     pen_down_command: str | None = None
+    # Optional per-pen XY offset (machine mm) added to every stroke drawn with
+    # this pen, compensating for where this pen's tip sits relative to the
+    # reference pen so multi-pen layers register against one origin. Applied
+    # ONLY when the profile opts in via ``apply_pen_offsets``; defaults to
+    # (0, 0) so offset-unaware magazines emit byte-identical G-code. See
+    # ``docs/camera_tip_offset.md`` / ADR 0005.
+    xy_offset_mm: Point = Field(default_factory=lambda: Point(x=0.0, y=0.0))
+    # Provenance of ``xy_offset_mm`` so the UI can distinguish a hand-typed
+    # value from a (future) camera measurement and prompt re-measurement.
+    offset_source: Literal["unset", "manual", "vision"] = "unset"
 
 
 class EbbConfig(BaseModel):
@@ -139,6 +149,13 @@ class MachineProfile(BaseModel):
     # Carousel / rack profiles ignore this — they travel to the calibrated
     # slot position (carousel) or drive their own swap macro (rack) instead.
     pen_change_position: Point | None = None
+    # Opt-in switch for per-pen XY tip-offset compensation. When ``True`` each
+    # pen's :attr:`PenSlot.xy_offset_mm` is added to its strokes during G-code
+    # generation so different pens register against one origin. Defaults to
+    # ``False`` so existing profiles emit byte-identical G-code — the feature
+    # is strictly opt-in (the operator chooses to turn it on). See
+    # ``docs/camera_tip_offset.md`` / ADR 0005.
+    apply_pen_offsets: bool = False
     # v0.2 Capability Model (roadmap A.5). Optional in YAML — when
     # absent we derive a default from ``tool_change_method`` so legacy
     # profiles load unchanged. When set, the explicit block wins and

@@ -1540,6 +1540,11 @@
     "penUpOverride": "Pen-up override",
     "penDownOverride": "Pen-down override",
     "useProfileDefault": "Profile default",
+    "applyOffsets": "Per-pen tip offsets",
+    "applyOffsetsHint": "Optional. Shift each pen's strokes by a calibrated XY offset so layers drawn with different pens register against one origin. Off by default — the G-code is unchanged until you enable it.",
+    "offsetX": "Offset X (mm)",
+    "offsetY": "Offset Y (mm)",
+    "offsetHint": "Relative to the reference pen; leave at 0 for the pen you align the others to.",
     "saved": "Saved"
   },
   "macros": {

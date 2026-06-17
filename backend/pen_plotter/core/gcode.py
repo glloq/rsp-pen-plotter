@@ -24,7 +24,7 @@ from pen_plotter.core.pause_logic import (
 )
 from pen_plotter.core.toolpath import _doc_from_svg
 from pen_plotter.domain.print_plan import LayerPlan, ScaleMode
-from pen_plotter.models import MachineProfile, Placement
+from pen_plotter.models import MachineProfile, PenSlot, Placement
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 _env = Environment(
@@ -247,14 +247,56 @@ def _make_transform(
     return transform
 
 
+def _pen_offset(profile: MachineProfile, pen: PenSlot | None) -> tuple[float, float]:
+    """XY offset (machine mm) to add to ``pen``'s strokes.
+
+    Zero unless the profile opts into ``apply_pen_offsets`` — so an
+    offset-unaware profile (the default) emits byte-identical G-code.
+    """
+    if not profile.apply_pen_offsets or pen is None:
+        return 0.0, 0.0
+    return pen.xy_offset_mm.x, pen.xy_offset_mm.y
+
+
+def _pen_offset_envelope(profile: MachineProfile) -> tuple[float, float, float, float]:
+    """Bounding box ``(min_x, min_y, max_x, max_y)`` of installed pens' offsets.
+
+    Used to widen the workspace bounds check: any pen can shift its strokes by
+    its own offset, so the drawing fits only if the most-shifted pen still
+    fits. Always includes the origin so the envelope never shrinks the box, and
+    collapses to all-zeros when offsets are disabled.
+
+    Conservatively spans **all installed pens**, not just the ones a given plan
+    draws with — the bounds helper is plan-agnostic. It can therefore warn
+    slightly early if an unused pen carries a large offset; given tip offsets
+    are typically sub-millimetre this is a safe trade for never missing a real
+    out-of-bounds.
+    """
+    if not profile.apply_pen_offsets:
+        return 0.0, 0.0, 0.0, 0.0
+    xs = [0.0]
+    ys = [0.0]
+    for pen in profile.effective_pens():
+        if pen.installed:
+            xs.append(pen.xy_offset_mm.x)
+            ys.append(pen.xy_offset_mm.y)
+    return min(xs), min(ys), max(xs), max(ys)
+
+
 def _exceeds_workspace(
     bounds: _Bounds,
     transform: Callable[[float, float], tuple[float, float]],
     profile: MachineProfile,
 ) -> bool:
-    """Whether the transformed drawing falls outside the workspace bounds."""
+    """Whether the transformed drawing falls outside the workspace bounds.
+
+    When per-pen offsets are enabled the check widens by the offset envelope
+    (:func:`_pen_offset_envelope`) so a pen whose offset would push its strokes
+    off the bed is flagged before the run.
+    """
     ws = profile.workspace
     tol = 0.01
+    off_min_x, off_min_y, off_max_x, off_max_y = _pen_offset_envelope(profile)
     corners = [
         transform(bounds.x_min, bounds.y_min),
         transform(bounds.x_min, bounds.y_max),
@@ -262,7 +304,10 @@ def _exceeds_workspace(
         transform(bounds.x_max, bounds.y_max),
     ]
     return any(
-        x < ws.x_min - tol or x > ws.x_max + tol or y < ws.y_min - tol or y > ws.y_max + tol
+        x + off_min_x < ws.x_min - tol
+        or x + off_max_x > ws.x_max + tol
+        or y + off_min_y < ws.y_min - tol
+        or y + off_max_y > ws.y_max + tol
         for x, y in corners
     )
 
@@ -608,10 +653,18 @@ def _generate_gcode_impl(
             pen_up_line = (pen and pen.pen_up_command) or pen_up_t.render(profile=profile)
             pen_down_line = (pen and pen.pen_down_command) or pen_down_t.render(profile=profile)
 
+            # Per-pen XY tip offset (opt-in; (0, 0) when disabled). Added to
+            # drawing strokes only — never to magazine / park / pen-change
+            # moves, which are physical machine points.
+            off_x, off_y = _pen_offset(profile, pen)
+
             travel_feed = profile.travel_speed_mm_s * 60.0
 
             for polyline in layer.polylines:
-                machine_points = [transform(px, py) for px, py in polyline]
+                machine_points = [
+                    (mx + off_x, my + off_y)
+                    for mx, my in (transform(px, py) for px, py in polyline)
+                ]
                 start = machine_points[0]
                 out.append(pen_up_line)
                 out.append(travel_t.render(x=start[0], y=start[1], feed=travel_feed))

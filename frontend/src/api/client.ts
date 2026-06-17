@@ -176,6 +176,8 @@ export interface Point {
   y: number
 }
 
+export type OffsetSource = 'unset' | 'manual' | 'vision'
+
 export interface PenSlot {
   index: number
   name: string
@@ -184,6 +186,12 @@ export interface PenSlot {
   position: Point | null
   pen_up_command: string | null
   pen_down_command: string | null
+  // Per-pen XY tip offset (machine mm) added to this pen's strokes when the
+  // profile opts in via ``apply_pen_offsets``. Defaults to (0, 0). See
+  // docs/camera_tip_offset.md / ADR 0005.
+  xy_offset_mm?: Point
+  // Provenance of xy_offset_mm: hand-typed vs (future) camera measurement.
+  offset_source?: OffsetSource
 }
 
 export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'
@@ -217,6 +225,11 @@ export interface MachineProfile {
   // (or a magazine load pause) so the operator can reach the holder. Null
   // falls back to the workspace home corner. Carousel/rack ignore it.
   pen_change_position?: Point | null
+  // Opt-in switch for per-pen XY tip-offset compensation. When true, each
+  // pen's xy_offset_mm is added to its strokes during generation. Defaults
+  // to false so the feature is strictly the operator's choice and existing
+  // profiles emit identical G-code. See docs/camera_tip_offset.md / ADR 0005.
+  apply_pen_offsets?: boolean
   // v0.2 capability model — the runtime source of truth for *how* a
   // tool change executes (firmware trigger vs host macro vs manual
   // prompt). When set the backend persists it verbatim; when null it

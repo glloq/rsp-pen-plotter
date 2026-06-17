@@ -2835,6 +2835,11 @@ export interface components {
             /** Acceleration Mm S2 */
             acceleration_mm_s2: number;
             /**
+             * Apply Pen Offsets
+             * @default false
+             */
+            apply_pen_offsets: boolean;
+            /**
              * Arc Tolerance Mm
              * @default 0.1
              */
@@ -3124,11 +3129,18 @@ export interface components {
              * @default
              */
             name: string;
+            /**
+             * Offset Source
+             * @default unset
+             * @enum {string}
+             */
+            offset_source: "unset" | "manual" | "vision";
             /** Pen Down Command */
             pen_down_command?: string | null;
             /** Pen Up Command */
             pen_up_command?: string | null;
             position?: components["schemas"]["Point"] | null;
+            xy_offset_mm?: components["schemas"]["Point"];
         };
         /**
          * PlacementPlan

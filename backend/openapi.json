@@ -2006,6 +2006,11 @@
             "title": "Acceleration Mm S2",
             "type": "number"
           },
+          "apply_pen_offsets": {
+            "default": false,
+            "title": "Apply Pen Offsets",
+            "type": "boolean"
+          },
           "arc_tolerance_mm": {
             "default": 0.1,
             "title": "Arc Tolerance Mm",
@@ -2583,6 +2588,16 @@
             "title": "Name",
             "type": "string"
           },
+          "offset_source": {
+            "default": "unset",
+            "enum": [
+              "unset",
+              "manual",
+              "vision"
+            ],
+            "title": "Offset Source",
+            "type": "string"
+          },
           "pen_down_command": {
             "anyOf": [
               {
@@ -2614,6 +2629,9 @@
                 "type": "null"
               }
             ]
+          },
+          "xy_offset_mm": {
+            "$ref": "#/components/schemas/Point"
           }
         },
         "required": [

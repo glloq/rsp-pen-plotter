@@ -99,6 +99,11 @@ const i18n = createI18n({
         penUpOverride: 'Pen-up override',
         penDownOverride: 'Pen-down override',
         useProfileDefault: 'Profile default',
+        applyOffsets: 'Per-pen tip offsets',
+        applyOffsetsHint: 'offset hint',
+        offsetX: 'Offset X',
+        offsetY: 'Offset Y',
+        offsetHint: 'relative to reference',
       },
       availableColors: { pickColor: 'Pick' },
       colorPicker: { title: 'Colour', cancel: 'Cancel', confirm: 'OK' },
@@ -202,6 +207,43 @@ describe('MagazineEditor', () => {
     expect(saveSpy).toHaveBeenCalled()
     const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
     expect(saved.pens?.find((p) => p.index === 0)?.position).toEqual({ x: 42, y: 0 })
+  })
+
+  it('keeps tip offsets opt-in: toggle off by default, no offset inputs', async () => {
+    useJobStore().profiles[0]!.tool_change_method = 'rack'
+    const wrapper = mountEditor()
+    await nextTick()
+
+    const toggle = wrapper.find('[data-test="apply-pen-offsets"]')
+    expect(toggle.exists()).toBe(true)
+    expect((toggle.element as HTMLInputElement).checked).toBe(false)
+    // The per-slot offset inputs stay hidden until the operator opts in.
+    expect(wrapper.find('[data-test="pen-offset-x-0"]').exists()).toBe(false)
+  })
+
+  it('enables offsets and saves a per-slot XY offset with manual provenance', async () => {
+    useJobStore().profiles[0]!.tool_change_method = 'rack'
+    const wrapper = mountEditor()
+    await nextTick()
+
+    // Opt in → the flag is persisted on the profile.
+    const toggle = wrapper.find('[data-test="apply-pen-offsets"]')
+    await toggle.setValue(true)
+    await toggle.trigger('change')
+    await nextTick()
+    let saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
+    expect(saved.apply_pen_offsets).toBe(true)
+
+    // The offset inputs are now visible; set slot 0's X offset.
+    const xInput = wrapper.find('[data-test="pen-offset-x-0"]')
+    expect(xInput.exists()).toBe(true)
+    await xInput.setValue('1.25')
+    await xInput.trigger('change')
+    await nextTick()
+    saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
+    const pen0 = saved.pens?.find((p) => p.index === 0)
+    expect(pen0?.xy_offset_mm).toEqual({ x: 1.25, y: 0 })
+    expect(pen0?.offset_source).toBe('manual')
   })
 
   it('saves a per-slot pen-up override and clears it back to null', async () => {

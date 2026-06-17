@@ -105,7 +105,9 @@ function matchAvailable(hex: string): string {
   return availableColors.ordered.find((c) => c.hex === canon)?.hex ?? ''
 }
 
-async function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
+// Persist a mutation against a plain clone of the active profile. Every
+// edit in this panel saves immediately (there's no Save button).
+async function commit(mutate: (next: MachineProfile) => void): Promise<void> {
   if (!profile.value) return
   saving.value = true
   error.value = null
@@ -118,8 +120,7 @@ async function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
     // ``normalizePens`` can pad against ``pen_slot_count``.
     const next: MachineProfile = structuredClone(toRaw(profile.value))
     normalizePens(next)
-    const target = next.pens?.find((p) => p.index === index)
-    if (target) Object.assign(target, patch)
+    mutate(next)
     await job.saveProfile(next)
     justSaved.value = true
     clearTimeout(savedTimer)
@@ -131,6 +132,35 @@ async function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
   } finally {
     saving.value = false
   }
+}
+
+function patchPen(index: number, patch: Partial<PenSlot>): Promise<void> {
+  return commit((next) => {
+    const target = next.pens?.find((p) => p.index === index)
+    if (target) Object.assign(target, patch)
+  })
+}
+
+function patchProfile(patch: Partial<MachineProfile>): Promise<void> {
+  return commit((next) => Object.assign(next, patch))
+}
+
+// Per-pen XY tip offset — opt-in (see ADR 0005). The toggle lives at the
+// magazine level; the per-slot offset inputs only show once it's on.
+const applyPenOffsets = computed(() => profile.value?.apply_pen_offsets ?? false)
+
+function onApplyPenOffsets(enabled: boolean): void {
+  void patchProfile({ apply_pen_offsets: enabled })
+}
+
+function onOffset(pen: PenSlot, axis: 'x' | 'y', raw: string): void {
+  const thisVal = raw.trim() === '' ? 0 : Number(raw)
+  const current = pen.xy_offset_mm ?? { x: 0, y: 0 }
+  const next: Point = {
+    x: axis === 'x' ? (Number.isFinite(thisVal) ? thisVal : 0) : current.x,
+    y: axis === 'y' ? (Number.isFinite(thisVal) ? thisVal : 0) : current.y,
+  }
+  void patchPen(pen.index, { xy_offset_mm: next, offset_source: 'manual' })
 }
 
 function onSelectColor(index: number, value: string): void {
@@ -240,6 +270,28 @@ onUnmounted(() => clearTimeout(savedTimer))
            per-slot calibration block (gated by ``showsCalibration``). -->
       <template v-else>
         <p class="text-[11px] text-slate-500">{{ listHint }}</p>
+
+        <!-- Optional per-pen tip-offset compensation. Only meaningful for a
+             multi-pen magazine (carousel / rack), so it rides alongside the
+             per-slot calibration block and is off by default. -->
+        <div
+          v-if="showsCalibration"
+          class="rounded border border-slate-800 bg-slate-950/40 px-2 py-1.5"
+          data-test="magazine-offsets-toggle"
+        >
+          <label class="flex items-center gap-2 text-[11px] text-slate-300">
+            <input
+              type="checkbox"
+              :checked="applyPenOffsets"
+              class="rounded border-slate-600 bg-slate-900"
+              :disabled="saving"
+              data-test="apply-pen-offsets"
+              @change="(e) => onApplyPenOffsets((e.target as HTMLInputElement).checked)"
+            />
+            {{ t('magazine.applyOffsets') }}
+          </label>
+          <p class="mt-0.5 text-[11px] text-slate-500">{{ t('magazine.applyOffsetsHint') }}</p>
+        </div>
 
         <ul v-if="pens.length" class="space-y-1.5">
           <li
@@ -371,6 +423,37 @@ onUnmounted(() => clearTimeout(savedTimer))
                     "
                   />
                 </label>
+
+                <!-- Per-pen XY tip offset (only when the magazine opts in). -->
+                <template v-if="applyPenOffsets">
+                  <label class="block text-[11px] text-slate-400"
+                    >{{ t('magazine.offsetX') }}
+                    <input
+                      type="number"
+                      step="any"
+                      :value="pen.xy_offset_mm?.x ?? 0"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                      :data-test="`pen-offset-x-${pen.index}`"
+                      @change="(e) => onOffset(pen, 'x', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <label class="block text-[11px] text-slate-400"
+                    >{{ t('magazine.offsetY') }}
+                    <input
+                      type="number"
+                      step="any"
+                      :value="pen.xy_offset_mm?.y ?? 0"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                      :data-test="`pen-offset-y-${pen.index}`"
+                      @change="(e) => onOffset(pen, 'y', (e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                  <p class="col-span-2 text-[11px] text-slate-500">
+                    {{ t('magazine.offsetHint') }}
+                  </p>
+                </template>
               </div>
             </details>
           </li>

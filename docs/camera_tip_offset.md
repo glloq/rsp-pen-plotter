@@ -1,6 +1,6 @@
 # Camera-assisted pen-tip offset — design study
 
-- **Status**: study / proposed (not yet implemented)
+- **Status**: Phase 1 (manual offset) implemented · Phase 2 (vision) proposed
 - **Date**: 2026-06
 - **Companion ADR**: [`adr/0005-camera-tip-offset.md`](adr/0005-camera-tip-offset.md)
 
@@ -343,11 +343,15 @@ slot grid already shows a calibration badge per slot — roadmap C.4). Per slot:
 
 ## 11. Delivery plan
 
-**Phase 1 — manual offset (no vision).** Add `PenSlot.xy_offset_mm` + the
-`gcode.py` injection + the per-pen preflight bounds + manual entry in the
-magazine UI + golden tests. This alone closes the wiki gap (§2.3) and is useful
-on any multi-pen machine with zero camera. *Smallest shippable, highest
-certainty.*
+**Phase 1 — manual offset (no vision).** ✅ **Implemented.** Adds
+`PenSlot.xy_offset_mm` + `offset_source`, the opt-in `MachineProfile.
+apply_pen_offsets` switch, the offset application at `gcode.py` (a pure
+post-`transform` translation, drawing strokes only), the offset-aware
+workspace bounds check (`_pen_offset_envelope`), manual entry + an opt-in
+toggle in the magazine UI (`MagazineEditor.vue`), and tests
+(`backend/tests/test_pen_offset.py`, `MagazineEditor.test.ts`). Off by default
+so existing profiles emit byte-identical G-code. This closes the wiki gap
+(§2.3) and is useful on any multi-pen machine with zero camera.
 
 **Phase 2 — vision automation.** Add `TipCalibrationConfig`, the
 `vision/tip_detect.py` module (optional OpenCV), the measure/commit API, the
