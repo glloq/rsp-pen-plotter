@@ -20,6 +20,8 @@ import type { MachineProfile } from '../api/client'
 const saveSpy = vi.hoisted(() => vi.fn())
 const measureSpy = vi.hoisted(() => vi.fn())
 const lightSpy = vi.hoisted(() => vi.fn())
+const gpioSpy = vi.hoisted(() => vi.fn())
+const scaleSpy = vi.hoisted(() => vi.fn())
 
 vi.mock('../api/client', async (importActual) => {
   const actual = await importActual<typeof import('../api/client')>()
@@ -28,6 +30,8 @@ vi.mock('../api/client', async (importActual) => {
     measureTipOffset: measureSpy,
     resetTipCalibration: vi.fn(),
     setTipLight: lightSpy,
+    getTipGpio: gpioSpy,
+    calibrateTipScale: scaleSpy,
   }
 })
 
@@ -147,6 +151,9 @@ describe('MagazineEditor', () => {
     saveSpy.mockClear()
     measureSpy.mockReset()
     lightSpy.mockReset()
+    gpioSpy.mockReset()
+    gpioSpy.mockResolvedValue({ available: true, pins: [17, 18, 27] })
+    scaleSpy.mockReset()
   })
 
   // Shared helper: a rack profile with offsets + a configured station.
@@ -215,10 +222,10 @@ describe('MagazineEditor', () => {
     )
   })
 
-  it('passes the light flag + commands when light-during-measure is on', async () => {
-    withStation({ light_on_command: 'M355 S1', light_off_command: 'M355 S0' })
+  it('passes the light flag + GPIO pin when light-during-measure is on', async () => {
+    withStation({ light_gpio_pin: 17, light_active_high: true })
     const wrapper = mountEditor()
-    await nextTick()
+    await flushPromises()
 
     await wrapper.find('[data-test="tip-light-during"]').setValue(true)
     await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
@@ -227,24 +234,56 @@ describe('MagazineEditor', () => {
     expect(measureSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         light: true,
-        light_on_command: 'M355 S1',
-        light_off_command: 'M355 S0',
+        light_gpio_pin: 17,
+        light_active_high: true,
       }),
     )
   })
 
-  it('manual light buttons send the configured command', async () => {
-    withStation({ light_on_command: 'M355 S1', light_off_command: 'M355 S0' })
+  it('manual light buttons drive the configured GPIO pin', async () => {
+    withStation({ light_gpio_pin: 17, light_active_high: true })
     const wrapper = mountEditor()
-    await nextTick()
+    await flushPromises()
 
     await wrapper.find('[data-test="tip-light-on"]').trigger('click')
     await flushPromises()
-    expect(lightSpy).toHaveBeenCalledWith('M355 S1', true)
+    expect(lightSpy).toHaveBeenCalledWith(17, true, true)
 
     await wrapper.find('[data-test="tip-light-off"]').trigger('click')
     await flushPromises()
-    expect(lightSpy).toHaveBeenCalledWith('M355 S0', false)
+    expect(lightSpy).toHaveBeenCalledWith(17, false, true)
+  })
+
+  it('offers the GPIO pins from the backend in the pin dropdown', async () => {
+    withStation()
+    const wrapper = mountEditor()
+    await flushPromises()
+    const options = wrapper.find('[data-test="tip-light-pin"]').findAll('option')
+    // "none" + the three pins from the mocked gpio endpoint.
+    expect(options.map((o) => o.text())).toContain('GPIO 18')
+  })
+
+  it('runs the mm/pixel assistant and applies the derived scale', async () => {
+    withStation()
+    scaleSpy.mockResolvedValue({
+      found: true,
+      mm_per_pixel: 0.5,
+      width_px: 40,
+      height_px: 40,
+      annotated_image: 'data:image/jpeg;base64,AAAA',
+      message: 'ok',
+    })
+    const wrapper = mountEditor()
+    await flushPromises()
+
+    await wrapper.find('[data-test="tip-scale-known-mm"]').setValue(20)
+    await wrapper.find('[data-test="tip-scale-measure"]').trigger('click')
+    await flushPromises()
+
+    expect(scaleSpy).toHaveBeenCalledWith(expect.objectContaining({ known_mm: 20 }))
+    const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
+    expect(saved.tip_calibration?.mm_per_pixel).toBe(0.5)
+    expect(wrapper.find('[data-test="tip-scale-preview"]').exists()).toBe(true)
   })
 
   it('persists an assigned available colour onto the pen slot', async () => {

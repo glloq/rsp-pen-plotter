@@ -1260,6 +1260,28 @@
         "title": "GotoRequest",
         "type": "object"
       },
+      "GpioInfo": {
+        "description": "Whether host GPIO is available + the pins the UI can offer.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "pins": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Pins",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "pins"
+        ],
+        "title": "GpioInfo",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1975,21 +1997,27 @@
         "type": "object"
       },
       "LightRequest": {
-        "description": "Body for ``POST /plotter/tip-calibration/light`` \u2014 manual On/Off.\n\nSends one raw light command (the SPA passes the profile's\n``light_on_command`` or ``light_off_command``) so the operator can aim the\ncamera with the station lit before running a measurement.",
+        "description": "Body for ``POST /plotter/tip-calibration/light`` \u2014 manual On/Off.\n\nDrives the chosen Pi GPIO pin so the operator can light the station to aim\nthe camera before measuring.",
         "properties": {
-          "command": {
-            "minLength": 1,
-            "title": "Command",
-            "type": "string"
+          "active_high": {
+            "default": true,
+            "title": "Active High",
+            "type": "boolean"
           },
           "on": {
             "default": true,
             "title": "On",
             "type": "boolean"
+          },
+          "pin": {
+            "maximum": 27.0,
+            "minimum": 0.0,
+            "title": "Pin",
+            "type": "integer"
           }
         },
         "required": [
-          "command"
+          "pin"
         ],
         "title": "LightRequest",
         "type": "object"
@@ -3719,6 +3747,106 @@
         "title": "RunRequest",
         "type": "object"
       },
+      "ScaleCalibrateRequest": {
+        "description": "Body for ``POST /plotter/tip-calibration/calibrate-scale``.\n\nThe operator presents a target of known physical size at the station; the\ndetector measures its pixel extent and we derive ``mm_per_pixel``.",
+        "properties": {
+          "camera_url": {
+            "title": "Camera Url",
+            "type": "string"
+          },
+          "dark_threshold": {
+            "default": 80,
+            "maximum": 255.0,
+            "minimum": 0.0,
+            "title": "Dark Threshold",
+            "type": "integer"
+          },
+          "known_mm": {
+            "exclusiveMinimum": 0.0,
+            "title": "Known Mm",
+            "type": "number"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipCameraRoi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "camera_url",
+          "known_mm"
+        ],
+        "title": "ScaleCalibrateRequest",
+        "type": "object"
+      },
+      "ScaleCalibrateResponse": {
+        "description": "Derived scale plus the measured extent and an annotated preview.",
+        "properties": {
+          "annotated_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotated Image"
+          },
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "height_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Px"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "mm_per_pixel": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mm Per Pixel"
+          },
+          "width_px": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Px"
+          }
+        },
+        "required": [
+          "found"
+        ],
+        "title": "ScaleCalibrateResponse",
+        "type": "object"
+      },
       "SegmentationMethod": {
         "description": "Segmentation strategy on the way into the renderer.",
         "enum": [
@@ -3970,27 +4098,23 @@
             "title": "Detector",
             "type": "string"
           },
-          "light_off_command": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Light Off Command"
+          "light_active_high": {
+            "default": true,
+            "title": "Light Active High",
+            "type": "boolean"
           },
-          "light_on_command": {
+          "light_gpio_pin": {
             "anyOf": [
               {
-                "type": "string"
+                "maximum": 27.0,
+                "minimum": 0.0,
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Light On Command"
+            "title": "Light Gpio Pin"
           },
           "mm_per_pixel": {
             "exclusiveMinimum": 0.0,
@@ -4116,27 +4240,23 @@
             "title": "Light",
             "type": "boolean"
           },
-          "light_off_command": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Light Off Command"
+          "light_active_high": {
+            "default": true,
+            "title": "Light Active High",
+            "type": "boolean"
           },
-          "light_on_command": {
+          "light_gpio_pin": {
             "anyOf": [
               {
-                "type": "string"
+                "maximum": 27.0,
+                "minimum": 0.0,
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Light On Command"
+            "title": "Light Gpio Pin"
           },
           "mm_per_pixel": {
             "exclusiveMinimum": 0.0,
@@ -8033,9 +8153,145 @@
         "summary": "Status"
       }
     },
+    "/plotter/tip-calibration/calibrate-scale": {
+      "post": {
+        "description": "Derive ``mm_per_pixel`` from a known-size target in the frame.\n\nUses the target's longest visible edge (max of width/height in pixels) so a\nsquare or round target of side/diameter ``known_mm`` gives a robust scale.",
+        "operationId": "calibrate_scale_plotter_tip_calibration_calibrate_scale_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScaleCalibrateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScaleCalibrateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Calibrate Scale"
+      }
+    },
+    "/plotter/tip-calibration/gpio": {
+      "get": {
+        "description": "List selectable GPIO pins and whether GPIO control works on this host.",
+        "operationId": "gpio_plotter_tip_calibration_gpio_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpioInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gpio"
+      }
+    },
     "/plotter/tip-calibration/light": {
       "post": {
-        "description": "Toggle the station light by sending one raw command to the plotter.",
+        "description": "Switch the station light on/off via its GPIO pin.",
         "operationId": "light_plotter_tip_calibration_light_post",
         "parameters": [
           {

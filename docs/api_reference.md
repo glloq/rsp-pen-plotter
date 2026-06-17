@@ -129,10 +129,12 @@ reference. The offset is persisted onto the slot via the normal `POST
 
 | Endpoint | Body | Purpose |
 | --- | --- | --- |
-| `POST /plotter/tip-calibration/measure` | `{ "slot", "camera_url", "mm_per_pixel", "reference_slot", "dark_threshold"?, "roi"?, "fetch_pen"?, "move_to_station"?, "station_position"?, "station_z_mm"?, "profile_name"?, "light"?, "light_on_command"?, "light_off_command"? }` | Grab one frame, locate the tip, return `{ found, tip_px, confidence, reference_measured, offset_mm, annotated_image, … }` (`annotated_image` is a JPEG data URL with the tip marked). Optional motion first (order: fetch → travel → grab): `fetch_pen` loads the slot's pen via a tool-change swap; `move_to_station` then travels to `station_position` (+ optional `station_z_mm`). With `light` the camera light is switched on around the grab and off after. Motion/light need a connected plotter + `profile_name` (`409` disconnected / manual-swap profile, `422` under-specified). `502` if the camera read fails |
+| `POST /plotter/tip-calibration/measure` | `{ "slot", "camera_url", "mm_per_pixel", "reference_slot", "dark_threshold"?, "roi"?, "fetch_pen"?, "move_to_station"?, "station_position"?, "station_z_mm"?, "profile_name"?, "light"?, "light_gpio_pin"?, "light_active_high"? }` | Grab one frame, locate the tip, return `{ found, tip_px, confidence, reference_measured, offset_mm, annotated_image, … }` (`annotated_image` is a JPEG data URL with the tip marked). Optional motion first (order: fetch → travel → grab): `fetch_pen` loads the slot's pen via a tool-change swap; `move_to_station` then travels to `station_position` (+ optional `station_z_mm`). With `light` the GPIO-driven camera light is switched on around the grab and off after. Motion needs a connected plotter + `profile_name` (`409`, `422`); light needs host GPIO (`503`). `502` if the camera read fails |
 | `GET /plotter/tip-calibration/status` | — | `{ "measured_slots": [...] }` for the current session |
 | `POST /plotter/tip-calibration/reset` | — | Forget all measurements (start a fresh run) |
-| `POST /plotter/tip-calibration/light` | `{ "command", "on"? }` | Manual station-light On/Off — sends one raw command (for aiming the camera). `409` if disconnected |
+| `POST /plotter/tip-calibration/calibrate-scale` | `{ "camera_url", "known_mm", "dark_threshold"?, "roi"? }` | mm-per-pixel assistant: measure a known-size target's pixel extent and return `{ found, mm_per_pixel, width_px, height_px, annotated_image, … }`. `502` if the camera read fails |
+| `GET /plotter/tip-calibration/gpio` | — | `{ "available", "pins": [...] }` — selectable BCM GPIO pins and whether host GPIO control works |
+| `POST /plotter/tip-calibration/light` | `{ "pin", "on"?, "active_high"? }` | Manual station-light On/Off via a GPIO pin (for aiming the camera). `503` if host GPIO is unavailable |
 
 ## Files library
 

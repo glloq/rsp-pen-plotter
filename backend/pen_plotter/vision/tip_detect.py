@@ -182,6 +182,76 @@ def detect_tip_dark_blob(
     )
 
 
+@dataclass(frozen=True)
+class ScaleMeasurement:
+    """Pixel extent of a known-size target, for the mm-per-pixel assistant."""
+
+    found: bool
+    width_px: float | None = None
+    height_px: float | None = None
+    annotated_jpeg: bytes | None = None
+    message: str = ""
+
+
+def detect_object_extent(
+    frame: bytes,
+    dark_threshold: int = 80,
+    roi: Roi | None = None,
+) -> ScaleMeasurement:
+    """Measure the dark target's pixel bounding box, for scale calibration.
+
+    The operator presents an object of *known* physical size (e.g. a 10 mm
+    square); this returns its width/height in pixels so ``mm_per_pixel`` can be
+    derived as ``known_mm / extent_px``. Same thresholding as the tip detector,
+    but it reports the blob's extent (not its centroid) and marks the box.
+    """
+    gray = _decode_gray(frame)
+    off_x, off_y = 0, 0
+    if roi is not None:
+        x0, y0 = max(0, roi.x), max(0, roi.y)
+        x1 = min(gray.shape[1], roi.x + roi.width)
+        y1 = min(gray.shape[0], roi.y + roi.height)
+        if x1 <= x0 or y1 <= y0:
+            return ScaleMeasurement(found=False, message="ROI is empty or outside the frame")
+        gray = gray[y0:y1, x0:x1]
+        off_x, off_y = x0, y0
+
+    mask = gray < dark_threshold
+    if not mask.any():
+        return ScaleMeasurement(
+            found=False,
+            message="no dark target — check lighting / threshold",
+            annotated_jpeg=_encode_preview(frame, None),
+        )
+
+    ys, xs = np.nonzero(mask)
+    x_min, x_max = int(xs.min()) + off_x, int(xs.max()) + off_x
+    y_min, y_max = int(ys.min()) + off_y, int(ys.max()) + off_y
+    width_px = float(x_max - x_min + 1)
+    height_px = float(y_max - y_min + 1)
+    return ScaleMeasurement(
+        found=True,
+        width_px=width_px,
+        height_px=height_px,
+        annotated_jpeg=_encode_box(frame, (x_min, y_min, x_max, y_max)),
+        message="ok",
+    )
+
+
+def _encode_box(frame: bytes, box: tuple[int, int, int, int]) -> bytes | None:
+    """JPEG preview with a green bounding box drawn around the target."""
+    try:
+        with Image.open(io.BytesIO(frame)) as img:
+            rgb = img.convert("RGB")
+    except Exception:
+        return None
+    x_min, y_min, x_max, y_max = box
+    ImageDraw.Draw(rgb).rectangle([(x_min, y_min), (x_max, y_max)], outline=(0, 200, 0), width=2)
+    buf = io.BytesIO()
+    rgb.save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
+
+
 @dataclass
 class MeasureResult:
     """One slot's measurement plus the offset it implies (when available)."""
@@ -209,6 +279,10 @@ class TipCalibrator:
     def reset(self) -> None:
         """Forget all measurements (start a fresh calibration run)."""
         self._tips.clear()
+
+    def grab(self, camera_url: str) -> bytes:
+        """Grab one frame via the injected grabber (used by scale calibration)."""
+        return self._grab(camera_url)
 
     @property
     def measured_slots(self) -> list[int]:

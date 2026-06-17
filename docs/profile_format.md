@@ -69,7 +69,8 @@ registration cancels out.
 | `detector` | `"dark_blob"` | Detection strategy. `dark_blob` (Pillow+NumPy) finds the darkest compact blob; no OpenCV required |
 | `dark_threshold` | int 0–255 (default `80`) | Luminance cutoff: pixels darker than this count as "tip" |
 | `roi` | `{ x, y, width, height }` \| null | Optional pixel region to constrain detection (whole frame when `null`). Editable in the Couleurs tab |
-| `light_on_command` / `light_off_command` | string \| null | Optional raw commands to switch a station light on/off (e.g. `M355 S1` / `M355 S0`). When set, the light can be toggled manually or driven automatically around a measurement |
+| `light_gpio_pin` | int 0–27 \| null | Optional Raspberry Pi **GPIO pin** (BCM) driving a station light. The host toggles the pin (the light is wired to the Pi, not the plotter); manual On/Off + auto on/off around a measurement |
+| `light_active_high` | bool (default `true`) | `false` for relays/drivers that switch on when the pin is LOW |
 
 ```yaml
 tip_calibration:
@@ -81,9 +82,13 @@ tip_calibration:
   station_position: { x: 20.0, y: 400.0 }
   station_z_mm: 5.0                       # optional, real Z axis only
   roi: { x: 200, y: 150, width: 240, height: 240 }   # optional
-  light_on_command: "M355 S1"             # optional camera light
-  light_off_command: "M355 S0"
+  light_gpio_pin: 17                      # optional Pi GPIO (BCM) light
+  light_active_high: true
 ```
+
+`mm_per_pixel` can be set by hand or via the **mm-per-pixel assistant** in the
+Couleurs tab: present a target of known size, click *Measure scale*, and the
+detector derives it from the target's pixel extent.
 
 ### `MachineCapabilities` (v0.2, roadmap A.5)
 

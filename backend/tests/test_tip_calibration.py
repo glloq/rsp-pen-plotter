@@ -386,11 +386,30 @@ def test_fetch_pen_on_manual_profile_is_409(
     assert "by hand" in resp.json()["message"]
 
 
-# ── camera lighting (audit fix) ──────────────────────────────────────────────
+# ── camera lighting via GPIO (audit fix) ─────────────────────────────────────
 
 
-def test_measure_toggles_light_around_grab(
-    client: TestClient, connected: MockTransport, monkeypatch: pytest.MonkeyPatch
+class _FakeGpio:
+    """Records GPIO writes so the lighting wiring is testable off-Pi."""
+
+    def __init__(self) -> None:
+        self.writes: list[tuple[int, bool]] = []
+
+    def set(self, pin: int, value: bool) -> None:
+        self.writes.append((pin, value))
+
+
+@pytest.fixture
+def gpio(monkeypatch: pytest.MonkeyPatch) -> _FakeGpio:
+    from pen_plotter.hardware import gpio as gpio_mod
+
+    fake = _FakeGpio()
+    monkeypatch.setattr(gpio_mod.light, "_backend", fake)
+    return fake
+
+
+def test_measure_toggles_gpio_light_around_grab(
+    client: TestClient, gpio: _FakeGpio, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from pen_plotter.api import tip_calibration as api
 
@@ -402,29 +421,96 @@ def test_measure_toggles_light_around_grab(
             "camera_url": "cam://x",
             "mm_per_pixel": 0.1,
             "light": True,
-            "light_on_command": "M355 S1",
-            "light_off_command": "M355 S0",
+            "light_gpio_pin": 17,
         },
     )
     assert resp.status_code == 200
-    assert "M355 S1" in connected.written
-    assert "M355 S0" in connected.written
-    # On before off.
-    assert connected.written.index("M355 S1") < connected.written.index("M355 S0")
+    # On (True) before off (False), both on pin 17.
+    assert gpio.writes == [(17, True), (17, False)]
 
 
-def test_light_endpoint_sends_command(client: TestClient, connected: MockTransport) -> None:
-    resp = client.post(
-        "/plotter/tip-calibration/light", json={"command": "M355 S1", "on": True}
+def test_measure_light_active_low_inverts_levels(
+    client: TestClient, gpio: _FakeGpio, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _frame((100, 100)))
+    client.post(
+        "/plotter/tip-calibration/measure",
+        json={
+            "slot": 0,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "light": True,
+            "light_gpio_pin": 17,
+            "light_active_high": False,
+        },
     )
+    # Active-low: "on" drives the pin LOW, "off" drives it HIGH.
+    assert gpio.writes == [(17, False), (17, True)]
+
+
+def test_light_endpoint_drives_pin(client: TestClient, gpio: _FakeGpio) -> None:
+    resp = client.post("/plotter/tip-calibration/light", json={"pin": 17, "on": True})
     assert resp.status_code == 200
     assert resp.json() == {"on": True}
-    assert "M355 S1" in connected.written
+    assert gpio.writes == [(17, True)]
 
 
-def test_light_endpoint_when_disconnected_is_409(client: TestClient) -> None:
-    resp = client.post("/plotter/tip-calibration/light", json={"command": "M355 S1"})
-    assert resp.status_code == 409
+def test_light_endpoint_without_gpio_backend_is_503(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.hardware import gpio as gpio_mod
+
+    monkeypatch.setattr(gpio_mod.light, "_backend", None)
+    resp = client.post("/plotter/tip-calibration/light", json={"pin": 17, "on": True})
+    assert resp.status_code == 503
+
+
+def test_gpio_endpoint_lists_pins(client: TestClient, gpio: _FakeGpio) -> None:
+    body = client.get("/plotter/tip-calibration/gpio").json()
+    assert body["available"] is True
+    assert 17 in body["pins"]
+
+
+# ── mm-per-pixel scale assistant ─────────────────────────────────────────────
+
+
+def test_calibrate_scale_derives_mm_per_pixel(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    # A 40 px wide / 40 px tall dark square (the _frame blob is 10 px; use a
+    # bigger one by stacking). Build a 40 px square target directly.
+    arr = np.full((200, 200), 240, dtype=np.uint8)
+    arr[80:120, 60:100] = 10  # 40×40 px dark square
+    buf = io.BytesIO()
+    Image.fromarray(arr, mode="L").save(buf, format="PNG")
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: buf.getvalue())
+
+    resp = client.post(
+        "/plotter/tip-calibration/calibrate-scale",
+        json={"camera_url": "cam://x", "known_mm": 20.0},
+    )
+    body = resp.json()
+    assert body["found"] is True
+    # 40 px extent for a 20 mm target → 0.5 mm/px.
+    assert body["mm_per_pixel"] == pytest.approx(0.5, abs=0.02)
+    assert body["annotated_image"].startswith("data:image/jpeg;base64,")
+
+
+def test_calibrate_scale_not_found_on_blank(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _frame(None))
+    resp = client.post(
+        "/plotter/tip-calibration/calibrate-scale",
+        json={"camera_url": "cam://x", "known_mm": 20.0},
+    )
+    assert resp.json()["found"] is False
 
 
 def test_fetch_pen_requires_profile(client: TestClient) -> None:

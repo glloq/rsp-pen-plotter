@@ -23,10 +23,12 @@ from pydantic import BaseModel, Field
 
 from pen_plotter.audit import record
 from pen_plotter.hardware.controller import controller
+from pen_plotter.hardware.gpio import AVAILABLE_GPIO_PINS
+from pen_plotter.hardware.gpio import light as gpio_light
 from pen_plotter.models import MachineProfile, Point, TipCameraRoi
 from pen_plotter.profiles import get_profile
 from pen_plotter.timelapse import grab_jpeg
-from pen_plotter.vision.tip_detect import Roi, TipCalibrator
+from pen_plotter.vision.tip_detect import Roi, TipCalibrator, detect_object_extent
 
 router = APIRouter()
 
@@ -62,13 +64,12 @@ class TipMeasureRequest(BaseModel):
     # swap (host-macro / firmware profiles) before measuring. Manual-swap
     # profiles can't fetch on their own → 409. Runs before move_to_station.
     fetch_pen: bool = False
-    # Optional camera lighting: when ``light`` is set and a ``light_on_command``
-    # is given, the light is switched on around the measurement and off again
-    # afterwards. Needs a connected plotter (the light is driven by the
-    # controller).
+    # Optional camera lighting via a Pi GPIO pin: when ``light`` is set and a
+    # ``light_gpio_pin`` is given, the host switches the light on around the
+    # measurement and off again. Independent of the plotter connection.
     light: bool = False
-    light_on_command: str | None = None
-    light_off_command: str | None = None
+    light_gpio_pin: int | None = Field(default=None, ge=0, le=27)
+    light_active_high: bool = True
 
 
 class TipMeasureResponse(BaseModel):
@@ -173,12 +174,12 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         if req.roi
         else None
     )
-    light_on = req.light and bool(req.light_on_command and req.light_on_command.strip())
+    light_on = req.light and req.light_gpio_pin is not None
     if light_on:
         try:
-            await controller.send_commands([req.light_on_command.strip()])
-        except RuntimeError as exc:  # disconnected / job in flight
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+            gpio_light.set(req.light_gpio_pin, True, req.light_active_high)
+        except RuntimeError as exc:  # no GPIO backend on this host
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
     try:
         result = _calibrator.measure(
             slot=req.slot,
@@ -192,9 +193,9 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
     finally:
         # Always switch the light back off, even if the grab failed.
-        if light_on and req.light_off_command and req.light_off_command.strip():
+        if light_on:
             with contextlib.suppress(RuntimeError):
-                await controller.send_commands([req.light_off_command.strip()])
+                gpio_light.set(req.light_gpio_pin, False, req.light_active_high)
 
     m = result.measurement
     record("tip_calibration_measure", f"slot={req.slot} found={m.found} conf={m.confidence:.2f}")
@@ -238,24 +239,100 @@ async def reset() -> TipCalibrationStatus:
     return TipCalibrationStatus(measured_slots=_calibrator.measured_slots)
 
 
+class ScaleCalibrateRequest(BaseModel):
+    """Body for ``POST /plotter/tip-calibration/calibrate-scale``.
+
+    The operator presents a target of known physical size at the station; the
+    detector measures its pixel extent and we derive ``mm_per_pixel``.
+    """
+
+    camera_url: str
+    known_mm: float = Field(gt=0.0)
+    dark_threshold: int = Field(default=80, ge=0, le=255)
+    roi: TipCameraRoi | None = None
+
+
+class ScaleCalibrateResponse(BaseModel):
+    """Derived scale plus the measured extent and an annotated preview."""
+
+    found: bool
+    mm_per_pixel: float | None = None
+    width_px: float | None = None
+    height_px: float | None = None
+    annotated_image: str | None = None
+    message: str = ""
+
+
+@router.post("/plotter/tip-calibration/calibrate-scale")
+async def calibrate_scale(req: ScaleCalibrateRequest) -> ScaleCalibrateResponse:
+    """Derive ``mm_per_pixel`` from a known-size target in the frame.
+
+    Uses the target's longest visible edge (max of width/height in pixels) so a
+    square or round target of side/diameter ``known_mm`` gives a robust scale.
+    """
+    roi = (
+        Roi(x=req.roi.x, y=req.roi.y, width=req.roi.width, height=req.roi.height)
+        if req.roi
+        else None
+    )
+    try:
+        frame = _calibrator.grab(req.camera_url)
+    except Exception as exc:  # frame grab failure
+        raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
+
+    m = detect_object_extent(frame, req.dark_threshold, roi)
+    annotated = (
+        "data:image/jpeg;base64," + base64.b64encode(m.annotated_jpeg).decode()
+        if m.annotated_jpeg
+        else None
+    )
+    if not m.found or not m.width_px or not m.height_px:
+        return ScaleCalibrateResponse(found=False, annotated_image=annotated, message=m.message)
+
+    extent = max(m.width_px, m.height_px)
+    mm_per_pixel = req.known_mm / extent
+    record("tip_calibration_scale", f"known={req.known_mm}mm extent={extent:.1f}px")
+    return ScaleCalibrateResponse(
+        found=True,
+        mm_per_pixel=mm_per_pixel,
+        width_px=m.width_px,
+        height_px=m.height_px,
+        annotated_image=annotated,
+        message="ok",
+    )
+
+
+class GpioInfo(BaseModel):
+    """Whether host GPIO is available + the pins the UI can offer."""
+
+    available: bool
+    pins: list[int]
+
+
+@router.get("/plotter/tip-calibration/gpio")
+async def gpio() -> GpioInfo:
+    """List selectable GPIO pins and whether GPIO control works on this host."""
+    return GpioInfo(available=gpio_light.available, pins=list(AVAILABLE_GPIO_PINS))
+
+
 class LightRequest(BaseModel):
     """Body for ``POST /plotter/tip-calibration/light`` — manual On/Off.
 
-    Sends one raw light command (the SPA passes the profile's
-    ``light_on_command`` or ``light_off_command``) so the operator can aim the
-    camera with the station lit before running a measurement.
+    Drives the chosen Pi GPIO pin so the operator can light the station to aim
+    the camera before measuring.
     """
 
-    command: str = Field(min_length=1)
+    pin: int = Field(ge=0, le=27)
     on: bool = True
+    active_high: bool = True
 
 
 @router.post("/plotter/tip-calibration/light")
 async def light(req: LightRequest) -> dict[str, bool]:
-    """Toggle the station light by sending one raw command to the plotter."""
+    """Switch the station light on/off via its GPIO pin."""
     try:
-        await controller.send_commands([req.command.strip()])
-    except RuntimeError as exc:  # disconnected / job in flight
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    record("tip_calibration_light", "on" if req.on else "off")
+        gpio_light.set(req.pin, req.on, req.active_high)
+    except RuntimeError as exc:  # no GPIO backend on this host
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    record("tip_calibration_light", f"pin={req.pin} {'on' if req.on else 'off'}")
     return {"on": req.on}

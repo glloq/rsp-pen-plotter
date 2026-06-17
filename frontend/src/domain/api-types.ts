@@ -941,6 +941,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plotter/tip-calibration/calibrate-scale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Calibrate Scale
+         * @description Derive ``mm_per_pixel`` from a known-size target in the frame.
+         *
+         *     Uses the target's longest visible edge (max of width/height in pixels) so a
+         *     square or round target of side/diameter ``known_mm`` gives a robust scale.
+         */
+        post: operations["calibrate_scale_plotter_tip_calibration_calibrate_scale_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plotter/tip-calibration/gpio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gpio
+         * @description List selectable GPIO pins and whether GPIO control works on this host.
+         */
+        get: operations["gpio_plotter_tip_calibration_gpio_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plotter/tip-calibration/light": {
         parameters: {
             query?: never;
@@ -952,7 +995,7 @@ export interface paths {
         put?: never;
         /**
          * Light
-         * @description Toggle the station light by sending one raw command to the plotter.
+         * @description Switch the station light on/off via its GPIO pin.
          */
         post: operations["light_plotter_tip_calibration_light_post"];
         delete?: never;
@@ -2485,6 +2528,16 @@ export interface components {
             /** Y Mm */
             y_mm: number;
         };
+        /**
+         * GpioInfo
+         * @description Whether host GPIO is available + the pins the UI can offer.
+         */
+        GpioInfo: {
+            /** Available */
+            available: boolean;
+            /** Pins */
+            pins: number[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -2892,18 +2945,22 @@ export interface components {
          * LightRequest
          * @description Body for ``POST /plotter/tip-calibration/light`` — manual On/Off.
          *
-         *     Sends one raw light command (the SPA passes the profile's
-         *     ``light_on_command`` or ``light_off_command``) so the operator can aim the
-         *     camera with the station lit before running a measurement.
+         *     Drives the chosen Pi GPIO pin so the operator can light the station to aim
+         *     the camera before measuring.
          */
         LightRequest: {
-            /** Command */
-            command: string;
+            /**
+             * Active High
+             * @default true
+             */
+            active_high: boolean;
             /**
              * On
              * @default true
              */
             on: boolean;
+            /** Pin */
+            pin: number;
         };
         /**
          * MachineCapabilities
@@ -3756,6 +3813,46 @@ export interface components {
             profile_name?: string | null;
         };
         /**
+         * ScaleCalibrateRequest
+         * @description Body for ``POST /plotter/tip-calibration/calibrate-scale``.
+         *
+         *     The operator presents a target of known physical size at the station; the
+         *     detector measures its pixel extent and we derive ``mm_per_pixel``.
+         */
+        ScaleCalibrateRequest: {
+            /** Camera Url */
+            camera_url: string;
+            /**
+             * Dark Threshold
+             * @default 80
+             */
+            dark_threshold: number;
+            /** Known Mm */
+            known_mm: number;
+            roi?: components["schemas"]["TipCameraRoi"] | null;
+        };
+        /**
+         * ScaleCalibrateResponse
+         * @description Derived scale plus the measured extent and an annotated preview.
+         */
+        ScaleCalibrateResponse: {
+            /** Annotated Image */
+            annotated_image?: string | null;
+            /** Found */
+            found: boolean;
+            /** Height Px */
+            height_px?: number | null;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Mm Per Pixel */
+            mm_per_pixel?: number | null;
+            /** Width Px */
+            width_px?: number | null;
+        };
+        /**
          * SegmentationMethod
          * @description Segmentation strategy on the way into the renderer.
          * @enum {string}
@@ -3896,10 +3993,13 @@ export interface components {
              * @constant
              */
             detector: "dark_blob";
-            /** Light Off Command */
-            light_off_command?: string | null;
-            /** Light On Command */
-            light_on_command?: string | null;
+            /**
+             * Light Active High
+             * @default true
+             */
+            light_active_high: boolean;
+            /** Light Gpio Pin */
+            light_gpio_pin?: number | null;
             /** Mm Per Pixel */
             mm_per_pixel: number;
             /**
@@ -3959,10 +4059,13 @@ export interface components {
              * @default false
              */
             light: boolean;
-            /** Light Off Command */
-            light_off_command?: string | null;
-            /** Light On Command */
-            light_on_command?: string | null;
+            /**
+             * Light Active High
+             * @default true
+             */
+            light_active_high: boolean;
+            /** Light Gpio Pin */
+            light_gpio_pin?: number | null;
             /** Mm Per Pixel */
             mm_per_pixel: number;
             /**
@@ -5886,6 +5989,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calibrate_scale_plotter_tip_calibration_calibrate_scale_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScaleCalibrateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScaleCalibrateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gpio_plotter_tip_calibration_gpio_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GpioInfo"];
                 };
             };
             /** @description Validation Error */

@@ -215,9 +215,10 @@ export interface TipCalibrationConfig {
   detector: 'dark_blob'
   dark_threshold: number
   roi?: TipCameraRoi | null
-  // Optional camera-light control commands (e.g. M355 S1 / M355 S0).
-  light_on_command?: string | null
-  light_off_command?: string | null
+  // Optional camera-light control via a Raspberry Pi GPIO pin (BCM). The host
+  // drives the pin; the light is wired to the Pi, not the plotter.
+  light_gpio_pin?: number | null
+  light_active_high?: boolean
 }
 
 export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'
@@ -301,11 +302,11 @@ export interface TipMeasureRequest {
   // before measuring (host-macro / firmware magazines; needs a connected
   // plotter). Runs before move_to_station.
   fetch_pen?: boolean
-  // Optional camera lighting: switch the light on around the grab and off
-  // again (needs a connected plotter).
+  // Optional camera lighting via a Pi GPIO pin: switch the light on around the
+  // grab and off again. Independent of the plotter connection.
   light?: boolean
-  light_on_command?: string | null
-  light_off_command?: string | null
+  light_gpio_pin?: number | null
+  light_active_high?: boolean
 }
 
 export interface TipMeasureResponse {
@@ -337,10 +338,43 @@ export async function resetTipCalibration(): Promise<void> {
   await api.post('/plotter/tip-calibration/reset')
 }
 
-// Manual station-light On/Off (for aiming the camera). Sends one raw command
-// (the caller passes the profile's light_on_command / light_off_command).
-export async function setTipLight(command: string, on: boolean): Promise<void> {
-  await api.post('/plotter/tip-calibration/light', { command, on })
+export interface GpioInfo {
+  available: boolean
+  pins: number[]
+}
+
+// Selectable GPIO pins + whether GPIO control works on this host.
+export async function getTipGpio(): Promise<GpioInfo> {
+  const response = await api.get<GpioInfo>('/plotter/tip-calibration/gpio')
+  return response.data
+}
+
+// Manual station-light On/Off via a GPIO pin (for aiming the camera).
+export async function setTipLight(pin: number, on: boolean, activeHigh = true): Promise<void> {
+  await api.post('/plotter/tip-calibration/light', { pin, on, active_high: activeHigh })
+}
+
+export interface ScaleCalibrateResponse {
+  found: boolean
+  mm_per_pixel: number | null
+  width_px: number | null
+  height_px: number | null
+  annotated_image: string | null
+  message: string
+}
+
+// Derive mm-per-pixel from a known-size target presented at the station.
+export async function calibrateTipScale(req: {
+  camera_url: string
+  known_mm: number
+  dark_threshold?: number
+  roi?: TipCameraRoi | null
+}): Promise<ScaleCalibrateResponse> {
+  const response = await api.post<ScaleCalibrateResponse>(
+    '/plotter/tip-calibration/calibrate-scale',
+    req,
+  )
+  return response.data
 }
 
 export async function exportProfileYaml(name: string): Promise<string> {

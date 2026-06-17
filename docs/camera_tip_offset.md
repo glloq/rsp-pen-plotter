@@ -395,9 +395,16 @@ it under the slot so the operator confirms the right blob was picked.
 
 **Operator controls (audit follow-up).** The full station config is editable
 in the Couleurs tab — camera URL, mm/pixel, reference slot, **detection zone
-(ROI)** as an X/Y/W/H pixel box, station **X/Y/Z**, and **camera light** (on/off
-commands with manual On/Off buttons plus an auto "light during measurement"
-toggle, `POST …/light`). The Z travel rides on `goto`'s new optional Z word.
+(ROI)** as an X/Y/W/H pixel box, station **X/Y/Z**, and a **camera light** wired
+to a **Raspberry Pi GPIO pin**: the operator picks a pin (BCM) from the list the
+host reports (`GET …/gpio`), sets the polarity (`active_high`), aims with manual
+On/Off (`POST …/light`), and can auto-toggle it around each measurement. The Z
+travel rides on `goto`'s new optional Z word.
+
+**mm-per-pixel assistant.** Rather than guessing the scale, the operator
+presents a target of known size and calls `POST …/calibrate-scale`, which
+measures the target's pixel extent (`detect_object_extent`) and returns
+`mm_per_pixel = known_mm / extent`; the UI applies it to the config.
 
 **Still deferred.** Only the `aruco` detector (printed fiducial, sub-pixel),
 which needs OpenCV — additive behind the existing `detector` field.

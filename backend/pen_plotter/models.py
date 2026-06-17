@@ -141,12 +141,12 @@ class TipCalibrationConfig(BaseModel):
     # Luminance cutoff (0–255): pixels darker than this are taken as "tip".
     dark_threshold: int = Field(default=80, ge=0, le=255)
     roi: TipCameraRoi | None = None
-    # Optional camera-light control: raw commands to switch a station light
-    # on / off (e.g. ``M355 S1`` / ``M355 S0``, or an ``M42`` relay). When set
-    # and lighting is requested, the light is turned on around a measurement
-    # and off again. ``None`` → no light control.
-    light_on_command: str | None = None
-    light_off_command: str | None = None
+    # Optional camera-light control via a Raspberry Pi GPIO pin (BCM
+    # numbering). The host drives the pin directly — the light is wired to the
+    # Pi, not the plotter. ``None`` → no light control. ``light_active_high``
+    # is ``False`` for relays/drivers that switch on when the pin is LOW.
+    light_gpio_pin: int | None = Field(default=None, ge=0, le=27)
+    light_active_high: bool = True
 
 
 class MachineProfile(BaseModel):

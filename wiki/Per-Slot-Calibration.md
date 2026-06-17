@@ -97,9 +97,15 @@ Extra controls in the station config:
 - **Detection zone (ROI)** — restrict detection to a pixel box (X/Y/W/H)
   so clutter elsewhere in the frame is ignored. Leave blank for the whole
   frame; *Clear* removes it.
-- **Camera light** — set a light-on / light-off command (e.g. `M355 S1` /
-  `M355 S0`). Use the **On/Off** buttons to aim the camera, or tick *Turn
-  light on during each measurement* to drive it automatically.
+- **Camera light** — wired to a **Raspberry Pi GPIO pin**. Pick a pin
+  (BCM) from the dropdown, set the polarity (*active high* / low), use the
+  **On/Off** buttons to aim the camera, or tick *Turn light on during each
+  measurement* to drive it automatically. (Pin selection saves even off a
+  Pi, but only a Pi with GPIO support actually switches the light.)
+- **mm-per-pixel assistant** — instead of guessing the scale, present a
+  target of known size (e.g. a 10 mm square), enter its size and click
+  *Measure scale*; the detector derives `mm_per_pixel` from its pixel
+  extent and fills it in.
 
 With a connected plotter you can also automate the motion:
 

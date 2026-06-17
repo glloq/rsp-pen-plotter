@@ -15,7 +15,7 @@
 // won't be clobbered by a pen-colour save (the watcher in
 // ``useProfileDraft`` short-circuits while ``isUnsavedDraft`` is true).
 
-import { computed, onUnmounted, reactive, ref, toRaw, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, toRaw, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -25,7 +25,13 @@ import type {
   TipCalibrationConfig,
   TipMeasureResponse,
 } from '../api/client'
-import { measureTipOffset, resetTipCalibration, setTipLight } from '../api/client'
+import {
+  calibrateTipScale,
+  getTipGpio,
+  measureTipOffset,
+  resetTipCalibration,
+  setTipLight,
+} from '../api/client'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { canonicalHex } from '../lib/penWidth'
 import { useJobStore } from '../stores/job'
@@ -273,22 +279,42 @@ function clearRoi(): void {
   onTipConfig({ roi: null })
 }
 
-// Camera light. ``lightDuringMeasure`` (session-local) toggles auto on/off
-// around each measurement; the manual buttons are for aiming the camera.
+// Camera light via a Pi GPIO pin. ``lightDuringMeasure`` (session-local)
+// toggles auto on/off around each measurement; the manual buttons aim the
+// camera. Selectable pins + GPIO availability come from the backend.
 const lightDuringMeasure = ref(false)
-const hasLight = computed(() => Boolean(tipConfig.value?.light_on_command?.trim()))
+const gpioPins = ref<number[]>([])
+const gpioAvailable = ref(false)
+const lightPin = computed(() => tipConfig.value?.light_gpio_pin ?? null)
+const hasLight = computed(() => lightPin.value != null)
 
-function onLightCommand(field: 'light_on_command' | 'light_off_command', raw: string): void {
-  onTipConfig({ [field]: raw.trim() ? raw : null })
+async function loadGpio(): Promise<void> {
+  try {
+    const info = await getTipGpio()
+    gpioPins.value = info.pins
+    gpioAvailable.value = info.available
+  } catch {
+    gpioPins.value = []
+    gpioAvailable.value = false
+  }
+}
+
+function onLightPin(raw: string): void {
+  const v = raw === '' ? null : Math.floor(Number(raw))
+  onTipConfig({ light_gpio_pin: v })
+}
+
+function onLightActiveHigh(activeHigh: boolean): void {
+  onTipConfig({ light_active_high: activeHigh })
 }
 
 async function onManualLight(on: boolean): Promise<void> {
-  const cmd = on ? tipConfig.value?.light_on_command : tipConfig.value?.light_off_command
-  if (!cmd?.trim()) return
+  const pin = lightPin.value
+  if (pin == null) return
   try {
-    await setTipLight(cmd, on)
+    await setTipLight(pin, on, tipConfig.value?.light_active_high ?? true)
   } catch {
-    // Non-critical (e.g. disconnected); the measurement path reports errors.
+    // Non-critical (e.g. no GPIO backend); the measurement path reports errors.
   }
 }
 
@@ -343,8 +369,8 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       station_z_mm: cfg.station_z_mm ?? null,
       profile_name: profile.value?.name ?? null,
       light: lightDuringMeasure.value,
-      light_on_command: cfg.light_on_command ?? null,
-      light_off_command: cfg.light_off_command ?? null,
+      light_gpio_pin: cfg.light_gpio_pin ?? null,
+      light_active_high: cfg.light_active_high ?? true,
     })
     // Apply the measured offset when we have one (reference pen → (0,0),
     // others → their delta). A not-found / no-reference result only reports.
@@ -368,6 +394,47 @@ async function onResetMeasurements(): Promise<void> {
     for (const k of Object.keys(measureState)) delete measureState[Number(k)]
   } catch {
     // A reset failure is non-critical; the next measure run still works.
+  }
+}
+
+// mm-per-pixel assistant: present a target of known size, measure its pixel
+// extent, derive the scale and write it onto the config.
+const knownMm = ref(10)
+const scaleState = reactive<{ busy: boolean; message: string; ok: boolean; image?: string | null }>(
+  { busy: false, message: '', ok: false },
+)
+
+async function onCalibrateScale(): Promise<void> {
+  const cfg = tipConfig.value
+  if (!cfg || !(knownMm.value > 0)) return
+  scaleState.busy = true
+  scaleState.message = ''
+  try {
+    const r = await calibrateTipScale({
+      camera_url: cfg.camera_url,
+      known_mm: knownMm.value,
+      dark_threshold: cfg.dark_threshold,
+      roi: cfg.roi,
+    })
+    scaleState.image = r.annotated_image
+    if (r.found && r.mm_per_pixel) {
+      onTipConfig({ mm_per_pixel: Number(r.mm_per_pixel.toFixed(5)) })
+      scaleState.ok = true
+      scaleState.message = t('magazine.scaleApplied', {
+        v: r.mm_per_pixel.toFixed(4),
+        px: Math.round(Math.max(r.width_px ?? 0, r.height_px ?? 0)),
+      })
+    } else {
+      scaleState.ok = false
+      scaleState.message = r.message || t('magazine.scaleNotFound')
+    }
+  } catch (err) {
+    scaleState.ok = false
+    scaleState.message =
+      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+      t('magazine.scaleFailed')
+  } finally {
+    scaleState.busy = false
   }
 }
 
@@ -418,6 +485,7 @@ function displayLabel(name: string, hex: string): string {
   return name.trim() ? `${name} · ${hex}` : hex
 }
 
+onMounted(loadGpio)
 onUnmounted(() => clearTimeout(savedTimer))
 </script>
 
@@ -549,6 +617,56 @@ onUnmounted(() => clearTimeout(savedTimer))
                   "
                 />
               </label>
+
+              <!-- mm/pixel assistant: present a known-size target, measure its
+                   pixel extent, derive the scale. -->
+              <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
+                <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
+                  {{ t('magazine.scaleTitle') }}
+                </p>
+                <p class="mb-1 text-[11px] text-slate-500">{{ t('magazine.scaleHint') }}</p>
+                <div class="flex items-end gap-2">
+                  <label class="block text-[10px] text-slate-400"
+                    >{{ t('magazine.scaleKnownMm') }}
+                    <input
+                      v-model.number="knownMm"
+                      type="number"
+                      step="any"
+                      min="0"
+                      :disabled="saving || scaleState.busy"
+                      class="mt-0.5 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                      data-test="tip-scale-known-mm"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
+                    :disabled="saving || scaleState.busy || !(knownMm > 0)"
+                    data-test="tip-scale-measure"
+                    @click="onCalibrateScale"
+                  >
+                    {{
+                      scaleState.busy ? t('magazine.measuring') : '📐 ' + t('magazine.scaleMeasure')
+                    }}
+                  </button>
+                </div>
+                <p
+                  v-if="scaleState.message"
+                  class="mt-1 text-[11px]"
+                  :class="scaleState.ok ? 'text-emerald-400' : 'text-amber-400'"
+                  data-test="tip-scale-msg"
+                >
+                  {{ scaleState.message }}
+                </p>
+                <img
+                  v-if="scaleState.image"
+                  :src="scaleState.image"
+                  :alt="t('magazine.scaleTitle')"
+                  class="mt-1 max-h-40 w-auto rounded border border-slate-700"
+                  data-test="tip-scale-preview"
+                />
+              </div>
+
               <label class="block text-[11px] text-slate-400"
                 >{{ t('magazine.referenceSlot') }}
                 <input
@@ -710,44 +828,46 @@ onUnmounted(() => clearTimeout(savedTimer))
                 </button>
               </div>
 
-              <!-- Camera light (On/Off): commands + auto on/off around a
-                   measurement + manual buttons for aiming. -->
+              <!-- Camera light via a Pi GPIO pin: choose a pin + polarity,
+                   aim with the manual On/Off buttons, or auto on/off around a
+                   measurement. -->
               <div class="col-span-2 rounded border border-slate-800 bg-slate-950/40 p-2">
                 <p class="mb-1 text-[11px] uppercase tracking-wider text-slate-500">
                   {{ t('magazine.lightTitle') }}
                 </p>
                 <div class="grid grid-cols-2 gap-1.5">
                   <label class="block text-[10px] text-slate-400"
-                    >{{ t('magazine.lightOnCommand') }}
-                    <input
-                      type="text"
-                      :value="tipConfig.light_on_command ?? ''"
-                      placeholder="M355 S1"
+                    >{{ t('magazine.lightGpioPin') }}
+                    <select
+                      :value="tipConfig.light_gpio_pin ?? ''"
                       :disabled="saving"
-                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-[11px] text-slate-100"
-                      data-test="tip-light-on-cmd"
-                      @change="
-                        (e) =>
-                          onLightCommand('light_on_command', (e.target as HTMLInputElement).value)
-                      "
-                    />
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-[11px] text-slate-100"
+                      data-test="tip-light-pin"
+                      @change="(e) => onLightPin((e.target as HTMLSelectElement).value)"
+                    >
+                      <option value="">{{ t('magazine.lightNoPin') }}</option>
+                      <option v-for="p in gpioPins" :key="p" :value="p">GPIO {{ p }}</option>
+                    </select>
                   </label>
-                  <label class="block text-[10px] text-slate-400"
-                    >{{ t('magazine.lightOffCommand') }}
+                  <label class="flex items-end gap-2 pb-1 text-[10px] text-slate-400">
                     <input
-                      type="text"
-                      :value="tipConfig.light_off_command ?? ''"
-                      placeholder="M355 S0"
+                      type="checkbox"
+                      :checked="tipConfig.light_active_high ?? true"
+                      class="rounded border-slate-600 bg-slate-900"
                       :disabled="saving"
-                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-[11px] text-slate-100"
-                      data-test="tip-light-off-cmd"
-                      @change="
-                        (e) =>
-                          onLightCommand('light_off_command', (e.target as HTMLInputElement).value)
-                      "
+                      data-test="tip-light-active-high"
+                      @change="(e) => onLightActiveHigh((e.target as HTMLInputElement).checked)"
                     />
+                    {{ t('magazine.lightActiveHigh') }}
                   </label>
                 </div>
+                <p
+                  v-if="!gpioAvailable"
+                  class="mt-1 text-[11px] text-amber-400"
+                  data-test="tip-gpio-warn"
+                >
+                  ⚠ {{ t('magazine.gpioUnavailable') }}
+                </p>
                 <div class="mt-1.5 flex items-center gap-2">
                   <button
                     type="button"
