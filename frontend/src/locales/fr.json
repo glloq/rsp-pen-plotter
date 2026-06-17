@@ -1462,6 +1462,8 @@
     "newPlotterFailed": "Impossible d'enregistrer le profil",
     "startPrint": "Lancer l'impression",
     "gcodeSection": "G-code généré",
+    "commandHistory": "Commandes envoyées",
+    "commandHistoryEmpty": "Aucune commande envoyée pour le moment.",
     "controlHint": "Connecte le traceur, pilote-le manuellement et lance les impressions depuis cet onglet.",
     "settingsTitle": "Réglages du traceur",
     "saveGcode": "Enregistrer le G-code"

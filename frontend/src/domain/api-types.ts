@@ -712,6 +712,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plotter/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Commands
+         * @description Return the rolling history of G-code lines sent to the plotter.
+         */
+        get: operations["commands_plotter_commands_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plotter/connect": {
         parameters: {
             query?: never;
@@ -1895,6 +1915,14 @@ export interface components {
          * @enum {string}
          */
         CommandSource: "machine" | "host" | "operator";
+        /**
+         * CommandsResponse
+         * @description Recent G-code lines written to the device, oldest first.
+         */
+        CommandsResponse: {
+            /** Commands */
+            commands: string[];
+        };
         /**
          * ConnectRequest
          * @description Serial connection parameters.
@@ -5003,6 +5031,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    commands_plotter_commands_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandsResponse"];
                 };
             };
             /** @description Validation Error */

@@ -65,6 +65,19 @@ async def test_home_when_connected_returns_200(connected: MockTransport) -> None
 
 
 @pytest.mark.asyncio
+async def test_commands_endpoint_returns_sent_history(connected: MockTransport) -> None:
+    """GET /plotter/commands surfaces the G-code actually written to the device."""
+    async with _client() as client:
+        # Fresh connection (the fixture's attach) → empty history.
+        assert (await client.get("/plotter/commands")).json()["commands"] == []
+        await client.post(
+            "/plotter/jog", json={"dx_mm": 5, "dy_mm": -2, "profile_name": PROFILE}
+        )
+        commands = (await client.get("/plotter/commands")).json()["commands"]
+    assert any("X5.000 Y-2.000" in line for line in commands)
+
+
+@pytest.mark.asyncio
 async def test_run_then_pause_resume_abort(connected: MockTransport) -> None:
     async with _client() as client:
         run = await client.post("/plotter/run", json={"gcode": "G0 X1\nG0 X2\n"})

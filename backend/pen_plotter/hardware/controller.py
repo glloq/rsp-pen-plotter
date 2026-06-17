@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import logging
 import os
+from collections import deque
 
 from pen_plotter.hardware.commands import goto_command, home_command, jog_command
 from pen_plotter.hardware.streamer import (
@@ -42,6 +43,11 @@ _EMERGENCY_BYTES: dict[str, bytes] = {
 # idempotent (sent/acked/state) so dropping intermediates is safe.
 _SUBSCRIBER_QUEUE_MAXSIZE = 256
 
+# How many of the most-recent G-code lines written to the device are kept
+# for the "commands sent" history surfaced in the Plotter tab. A rolling
+# window: during a long job it simply tails the latest lines.
+_COMMAND_LOG_MAXLEN = 200
+
 
 def _fake_hardware_enabled() -> bool:
     """Return True when OMNIPLOT_FAKE_HARDWARE asks for in-process mocking.
@@ -67,6 +73,11 @@ class PlotterController:
         # so two concurrent HTTP requests cannot interleave their bytes
         # on the serial line or steal each other's ``ok`` response.
         self._send_lock = asyncio.Lock()
+        # Rolling history of G-code lines actually written to the device —
+        # manual commands (``_send_immediate``) and streamed job / pen /
+        # swap lines (via the streamer's ``on_send``) — surfaced read-only
+        # in the Plotter tab. Capped so it can't grow without bound.
+        self._command_log: deque[str] = deque(maxlen=_COMMAND_LOG_MAXLEN)
 
     @property
     def connected(self) -> bool:
@@ -80,8 +91,19 @@ class PlotterController:
             return self._streamer.progress
         return StreamProgress(total=0, sent=0, acked=0, state=StreamState.IDLE)
 
+    @property
+    def command_log(self) -> list[str]:
+        """The recent G-code lines sent to the device, oldest first."""
+        return list(self._command_log)
+
+    def _record_sent(self, line: str) -> None:
+        """Append one written line to the rolling command history."""
+        self._command_log.append(line)
+
     def attach(self, transport: Transport) -> None:
         """Attach an already-open transport (used in tests and after connect)."""
+        # A fresh connection starts a fresh command history.
+        self._command_log.clear()
         self._transport = transport
 
     async def open_serial(self, port: str, baudrate: int = 115200, terminator: str = "\n") -> None:
@@ -167,6 +189,7 @@ class PlotterController:
             # into the live stream.
             self._require_idle()
             for line in lines:
+                self._record_sent(line)
                 await transport.write_line(line)
                 while True:
                     try:
@@ -245,6 +268,7 @@ class PlotterController:
                 transport,
                 on_progress=self._broadcast,
                 swap_actions=swap_actions,
+                on_send=self._record_sent,
             )
             self._task = asyncio.create_task(self._streamer.run(gcode))
             self._task.add_done_callback(self._on_task_done)
@@ -298,6 +322,7 @@ class PlotterController:
                 on_progress=_combined,
                 pause_points=pause_points,
                 swap_actions=swap_actions,
+                on_send=self._record_sent,
             )
             task = asyncio.create_task(streamer.run(gcode))
             task.add_done_callback(self._on_task_done)

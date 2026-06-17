@@ -611,6 +611,23 @@
         "title": "CommandSource",
         "type": "string"
       },
+      "CommandsResponse": {
+        "description": "Recent G-code lines written to the device, oldest first.",
+        "properties": {
+          "commands": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Commands",
+            "type": "array"
+          }
+        },
+        "required": [
+          "commands"
+        ],
+        "title": "CommandsResponse",
+        "type": "object"
+      },
       "ConnectRequest": {
         "description": "Serial connection parameters.",
         "properties": {
@@ -6708,6 +6725,69 @@
           }
         },
         "summary": "Abort"
+      }
+    },
+    "/plotter/commands": {
+      "get": {
+        "description": "Return the rolling history of G-code lines sent to the plotter.",
+        "operationId": "commands_plotter_commands_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Commands"
       }
     },
     "/plotter/connect": {

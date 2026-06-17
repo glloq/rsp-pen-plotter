@@ -640,6 +640,14 @@ export async function plotterCommand(action: 'pause' | 'resume' | 'abort'): Prom
   return response.data
 }
 
+/** Rolling history of the G-code lines actually written to the device
+ *  (manual jogs / homing / pen moves + streamed job lines), oldest first.
+ *  Capped server-side; read-only. */
+export async function getPlotterCommands(): Promise<string[]> {
+  const response = await api.get<{ commands: string[] }>('/plotter/commands')
+  return response.data.commands
+}
+
 export interface SystemUpdateResponse {
   ok: boolean
   previous_commit: string | null
