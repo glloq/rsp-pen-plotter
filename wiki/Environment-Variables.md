@@ -30,13 +30,15 @@ shell before `./start.sh`.
 | `OMNIPLOT_MACROS_FILE` | `backend/data/macros.json` | JSON store for user macros. |
 | `OMNIPLOT_USER_PRESETS` | `backend/data/user_presets.json` | JSON store for user-created presets. |
 | `OMNIPLOT_PROFILES_DIR` | platform user dir | Where imported user profiles are stored. |
+| `OMNIPLOT_TIMELAPSE_DIR` | `backend/data/timelapses` | Where timelapse recordings (frames, `video.mp4`, `meta.json`) are written, one folder per recording. |
 | `OMNIPLOT_STATIC_DIR` | `frontend/dist` | Override where the built UI is served from. |
 
 ## Tooling
 
-The external binaries the converters call (`libreoffice` / `soffice`,
-`gs`, `potrace`) are resolved from `PATH` via `shutil.which` — there is
-no per-binary override variable. Install them where `PATH` finds them.
+The external binaries OmniPlot calls (`libreoffice` / `soffice`, `gs`,
+`potrace` for the converters, and `ffmpeg` to assemble timelapses) are
+resolved from `PATH` via `shutil.which` — there is no per-binary override
+variable. Install them where `PATH` finds them.
 
 ## Uploads, rate limiting & caches
 

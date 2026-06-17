@@ -64,13 +64,20 @@ SVG groups to layers — both layer extraction and G-code generation consume it.
 backend/pen_plotter/
 ├── main.py             FastAPI app, CORS, router wiring, /health, lifespan
 ├── models.py           Shared Pydantic contracts (MachineProfile, LayerInfo, Job, EbbConfig)
-├── persistence.py      SQLModel job-history storage (OMNIPLOT_DB)
+├── persistence.py      SQLModel storage — jobs, queue, library, available colours (OMNIPLOT_DB)
+├── queue.py            Durable print queue + checkpointing worker
+├── gcode_library.py    Saved-program store (save / list / re-print)
+├── timelapse.py        Frame capture + ffmpeg MP4 assembly (OMNIPLOT_TIMELAPSE_DIR)
 ├── presets.py          Built-in parameter presets
 ├── api/                HTTP + WebSocket routers
 │   ├── upload.py       POST /upload  (dispatch via converter registry)
 │   ├── optimize.py     POST /optimize
 │   ├── generate.py     POST /generate (routes ebb → core/ebb, else core/gcode)
-│   ├── plotter.py      /plotter/* control + /ws/plotter progress
+│   ├── plotter.py      /plotter/* control (jog/home/commands) + /ws/plotter progress
+│   ├── queue.py        /queue/* durable run lifecycle
+│   ├── gcode_files.py  /gcode-files/* saved-program library
+│   ├── timelapse.py    /timelapse/* recording + MP4 download
+│   ├── available_colors.py  /available-colors/* ink inventory + odometer
 │   ├── profiles.py     profile list / get / export / import
 │   ├── presets.py      GET /presets
 │   ├── jobs.py         job history
@@ -108,9 +115,13 @@ frontend/src/
 ├── api/client.ts       Typed axios client + WebSocket URL helper
 ├── stores/
 │   ├── job.ts          Upload, layers, optimization, generation state
-│   └── plotter.ts      Connection, streaming status, WebSocket
-├── components/         FileUpload, SvgPreview, LayerPanel, LayerCard,
-│                       GcodePreview, Simulator, JogControls, PlotterPanel, JobHistory
+│   ├── plotter.ts      Connection, streaming status, WebSocket
+│   ├── queue.ts        Print-queue polling and run actions
+│   ├── gcodeFiles.ts   Saved-program library
+│   └── timelapse.ts    Recorder state + settings (camera config in ui.ts)
+├── components/         FileUpload, SvgPreview, LayerPanel, LayerCard, GcodePreview,
+│                       Simulator, PlotterControl, JogControls, GcodeFilesPanel,
+│                       CameraView, TimelapsePanel, SettingsModal, JobHistory
 ├── lib/gcode.ts        Browser-side G-code parser for the simulator
 └── locales/            en.json, fr.json (vue-i18n messages)
 ```

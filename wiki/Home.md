@@ -16,6 +16,14 @@ If you just want to install the appliance, the
 3. [Understanding the editor](The-Editor.md)
 4. [Picking the right algorithm](Picking-the-Right-Algorithm.md)
 
+### I'm at the machine, plotting
+
+- [Manual control & the plotter cockpit](Manual-Control.md)
+- [Print queue & resume](Print-Queue.md)
+- [G-code library — save & re-print](G-code-Library.md)
+- [Camera & timelapse](Camera-and-Timelapse.md)
+- [Ink odometer](Ink-Odometer.md)
+
 ### I'm tuning a particular machine
 
 - [Machine profiles explained](Machine-Profiles.md)
