@@ -83,14 +83,11 @@ describe('TimelapsePanel', () => {
     vi.unstubAllGlobals()
   })
 
-  it('is collapsed by default and prompts to configure a camera', async () => {
+  it('prompts to configure a camera when none is set', async () => {
     const wrapper = mountPanel()
     await flushPromises()
 
-    expect(wrapper.find('[data-test="timelapse-toggle"]').attributes('aria-expanded')).toBe('false')
-    await wrapper.find('[data-test="timelapse-toggle"]').trigger('click')
-    await flushPromises()
-    // No camera configured → hint, no start control.
+    // Always-visible condensed card: no camera configured → hint, no controls.
     expect(wrapper.find('[data-test="timelapse-no-camera"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="timelapse-start"]').exists()).toBe(false)
     wrapper.unmount()
@@ -101,8 +98,6 @@ describe('TimelapsePanel', () => {
     const wrapper = mountPanel()
     await flushPromises()
 
-    await wrapper.find('[data-test="timelapse-toggle"]').trigger('click')
-    await flushPromises()
     await wrapper.find('[data-test="timelapse-start"]').trigger('click')
     await flushPromises()
 
@@ -121,10 +116,8 @@ describe('TimelapsePanel', () => {
     const wrapper = mountPanel()
     await flushPromises()
 
-    // Live REC indicator in the (collapsed) header.
+    // Live REC indicator in the header.
     expect(wrapper.find('[data-test="timelapse-rec"]').exists()).toBe(true)
-    await wrapper.find('[data-test="timelapse-toggle"]').trigger('click')
-    await flushPromises()
     await wrapper.find('[data-test="timelapse-stop"]').trigger('click')
     await flushPromises()
 
@@ -140,10 +133,7 @@ describe('TimelapsePanel', () => {
     const wrapper = mountPanel()
     await flushPromises()
 
-    await wrapper.find('[data-test="timelapse-toggle"]').trigger('click')
-    await flushPromises()
     expect(wrapper.find('[data-test="timelapse-file-t9"]').exists()).toBe(true)
-
     await wrapper.find('[data-test="timelapse-download-t9"]').trigger('click')
     await flushPromises()
     expect(h.downloadTimelapseVideo).toHaveBeenCalledWith('t9')

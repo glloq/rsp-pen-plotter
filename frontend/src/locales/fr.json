@@ -1921,7 +1921,6 @@
   },
   "timelapse": {
     "title": "Timelapse",
-    "hint": "Capture des images depuis une caméra pendant une impression, puis exporte un MP4.",
     "settingsTitle": "Réglages timelapse par défaut",
     "settingsHint": "Valeurs par défaut pour l'enregistrement. Démarrage/arrêt et clips enregistrés sont dans l'onglet Traceur.",
     "auto": "Enregistrer automatiquement pendant les impressions",
@@ -1931,8 +1930,6 @@
     "camera": "Caméra",
     "interval": "Intervalle (s)",
     "fps": "FPS (lecture)",
-    "label": "Nom",
-    "labelPlaceholder": "ex. spirale",
     "frames": "images",
     "noCamera": "Activez d'abord une caméra dans les réglages système.",
     "empty": "Aucun timelapse.",

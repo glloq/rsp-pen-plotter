@@ -66,67 +66,73 @@ const smallBtn =
 </script>
 
 <template>
-  <div class="space-y-1.5">
-    <div class="flex flex-wrap items-start gap-2">
+  <div class="space-y-3">
+    <div class="flex flex-wrap items-start gap-x-6 gap-y-3">
       <!-- X/Y jog cross — ⌂ centre homes all axes -->
-      <div class="grid w-[5rem] shrink-0 grid-cols-3 gap-1">
-        <span />
-        <button
-          :class="jogBtn"
-          :aria-label="t('plotter.jogUp')"
-          :title="t('plotter.jogUp')"
-          :disabled="controlsDisabled"
-          @click="jog(0, 1)"
+      <div class="shrink-0">
+        <span class="mb-1 block text-center text-[10px] uppercase tracking-wider text-slate-500"
+          >X / Y</span
         >
-          ↑
-        </button>
-        <span />
-        <button
-          :class="jogBtn"
-          :aria-label="t('plotter.jogLeft')"
-          :title="t('plotter.jogLeft')"
-          :disabled="controlsDisabled"
-          @click="jog(-1, 0)"
-        >
-          ←
-        </button>
-        <button
-          :class="jogBtn"
-          :aria-label="t('plotter.homeAll')"
-          :title="t('plotter.homeAll')"
-          :disabled="controlsDisabled"
-          data-test="home-all"
-          @click="homeAxis()"
-        >
-          ⌂
-        </button>
-        <button
-          :class="jogBtn"
-          :aria-label="t('plotter.jogRight')"
-          :title="t('plotter.jogRight')"
-          :disabled="controlsDisabled"
-          @click="jog(1, 0)"
-        >
-          →
-        </button>
-        <span />
-        <button
-          :class="jogBtn"
-          :aria-label="t('plotter.jogDown')"
-          :title="t('plotter.jogDown')"
-          :disabled="controlsDisabled"
-          @click="jog(0, -1)"
-        >
-          ↓
-        </button>
-        <span />
+        <div class="grid w-24 grid-cols-3 gap-1">
+          <span />
+          <button
+            :class="jogBtn"
+            :aria-label="t('plotter.jogUp')"
+            :title="t('plotter.jogUp')"
+            :disabled="controlsDisabled"
+            @click="jog(0, 1)"
+          >
+            ↑
+          </button>
+          <span />
+          <button
+            :class="jogBtn"
+            :aria-label="t('plotter.jogLeft')"
+            :title="t('plotter.jogLeft')"
+            :disabled="controlsDisabled"
+            @click="jog(-1, 0)"
+          >
+            ←
+          </button>
+          <button
+            :class="jogBtn"
+            :aria-label="t('plotter.homeAll')"
+            :title="t('plotter.homeAll')"
+            :disabled="controlsDisabled"
+            data-test="home-all"
+            @click="homeAxis()"
+          >
+            ⌂
+          </button>
+          <button
+            :class="jogBtn"
+            :aria-label="t('plotter.jogRight')"
+            :title="t('plotter.jogRight')"
+            :disabled="controlsDisabled"
+            @click="jog(1, 0)"
+          >
+            →
+          </button>
+          <span />
+          <button
+            :class="jogBtn"
+            :aria-label="t('plotter.jogDown')"
+            :title="t('plotter.jogDown')"
+            :disabled="controlsDisabled"
+            @click="jog(0, -1)"
+          >
+            ↓
+          </button>
+          <span />
+        </div>
       </div>
 
       <!-- Z jog column -->
-      <div class="flex flex-col gap-1">
+      <div class="flex shrink-0 flex-col gap-1">
         <span class="text-center text-[10px] uppercase tracking-wider text-slate-500">Z</span>
         <button
           :class="smallBtn"
+          class="w-12"
           :aria-label="t('plotter.jogZUp')"
           :title="t('plotter.jogZUp')"
           :disabled="controlsDisabled"
@@ -137,6 +143,7 @@ const smallBtn =
         </button>
         <button
           :class="smallBtn"
+          class="w-12"
           :aria-label="t('plotter.jogZDown')"
           :title="t('plotter.jogZDown')"
           :disabled="controlsDisabled"
@@ -148,13 +155,14 @@ const smallBtn =
       </div>
 
       <!-- Pen servo lift / lower -->
-      <div class="flex flex-col gap-1">
+      <div class="flex shrink-0 flex-col gap-1">
         <span class="text-center text-[10px] uppercase tracking-wider text-slate-500">{{
           t('plotter.penControl')
         }}</span>
         <button
           type="button"
           :class="smallBtn"
+          class="w-12"
           :disabled="controlsDisabled || !penUpCmd"
           :title="penUpCmd || t('plotter.penUp')"
           data-test="manual-pen-up"
@@ -165,6 +173,7 @@ const smallBtn =
         <button
           type="button"
           :class="smallBtn"
+          class="w-12"
           :disabled="controlsDisabled || !penDownCmd"
           :title="penDownCmd || t('plotter.penDown')"
           data-test="manual-pen-down"
@@ -175,14 +184,14 @@ const smallBtn =
       </div>
 
       <!-- Per-axis homing -->
-      <div class="flex min-w-0 flex-1 flex-col gap-1">
+      <div class="flex shrink-0 flex-col gap-1">
         <span class="text-[10px] uppercase tracking-wider text-slate-500">{{
           t('plotter.homeLabel')
         }}</span>
         <div class="flex gap-1">
           <button
             :class="smallBtn"
-            class="flex-1"
+            class="w-10"
             :aria-label="t('plotter.homeX')"
             :title="t('plotter.homeX')"
             :disabled="controlsDisabled"
@@ -193,7 +202,7 @@ const smallBtn =
           </button>
           <button
             :class="smallBtn"
-            class="flex-1"
+            class="w-10"
             :aria-label="t('plotter.homeY')"
             :title="t('plotter.homeY')"
             :disabled="controlsDisabled"
@@ -204,7 +213,7 @@ const smallBtn =
           </button>
           <button
             :class="smallBtn"
-            class="flex-1"
+            class="w-10"
             :aria-label="t('plotter.homeZ')"
             :title="t('plotter.homeZ')"
             :disabled="controlsDisabled"
@@ -218,14 +227,14 @@ const smallBtn =
     </div>
 
     <!-- Shared step size as segmented buttons (X / Y / Z) -->
-    <div class="flex items-center gap-1.5">
+    <div class="flex items-center gap-1.5 border-t border-slate-700/60 pt-2">
       <span class="text-[11px] text-slate-400">{{ t('plotter.stepLabel') }}</span>
       <div class="flex gap-1" role="group" :aria-label="t('plotter.stepLabel')">
         <button
           v-for="s in STEPS"
           :key="s"
           type="button"
-          class="rounded px-1.5 py-0.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+          class="rounded px-2 py-0.5 text-[11px] disabled:cursor-not-allowed disabled:opacity-40"
           :class="
             step === s
               ? 'bg-emerald-600 text-white'

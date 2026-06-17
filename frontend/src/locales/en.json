@@ -1921,7 +1921,6 @@
   },
   "timelapse": {
     "title": "Timelapse",
-    "hint": "Capture frames from a camera during a print, then export an MP4.",
     "settingsTitle": "Timelapse defaults",
     "settingsHint": "Defaults applied when recording. Start/stop and saved clips live on the Plotter tab.",
     "auto": "Auto-record during prints",
@@ -1931,8 +1930,6 @@
     "camera": "Camera",
     "interval": "Interval (s)",
     "fps": "Playback FPS",
-    "label": "Name",
-    "labelPlaceholder": "e.g. spiral-print",
     "frames": "frames",
     "noCamera": "Enable a camera in System settings first.",
     "empty": "No timelapses yet.",
