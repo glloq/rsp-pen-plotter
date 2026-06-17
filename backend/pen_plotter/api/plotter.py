@@ -148,14 +148,17 @@ async def goto(request: GotoRequest) -> StatusResponse:
 
 
 @router.post("/plotter/home")
-async def home(profile_name: str) -> StatusResponse:
-    """Home the machine."""
+async def home(profile_name: str, axis: str | None = None) -> StatusResponse:
+    """Home the machine — all axes, or a single ``axis`` (X / Y / Z)."""
     profile = _profile_or_404(profile_name)
+    normalized = axis.strip().upper() if axis else None
+    if normalized is not None and normalized not in ("X", "Y", "Z"):
+        raise HTTPException(status_code=422, detail=f"Invalid axis: {axis!r}")
     try:
-        await controller.home(profile)
+        await controller.home(profile, normalized)
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    record("plotter.home", profile_name)
+    record("plotter.home", f"{profile_name} axis={normalized or 'all'}")
     return _status()
 
 

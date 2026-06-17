@@ -812,7 +812,7 @@ export interface paths {
         put?: never;
         /**
          * Home
-         * @description Home the machine.
+         * @description Home the machine — all axes, or a single ``axis`` (X / Y / Z).
          */
         post: operations["home_plotter_home_post"];
         delete?: never;
@@ -5153,6 +5153,7 @@ export interface operations {
         parameters: {
             query: {
                 profile_name: string;
+                axis?: string | null;
                 token?: string | null;
             };
             header?: {

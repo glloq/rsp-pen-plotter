@@ -5,20 +5,21 @@ import { confirmAction } from '../composables/confirm'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 
-// Compact Repetier-style manual cockpit: an X/Y jog cross (with Home in
-// the centre) on the left, a Z jog column (motorised Z), and the pen
-// servo lift/lower beside it. One shared step selector drives X/Y/Z.
-// Deliberately no "go to point / corners" — this stays minimal.
+// Compact Repetier-style manual cockpit: an X/Y jog cross (⌂ centre =
+// Home all), a motorised-Z jog column, the pen servo lift/lower, and
+// per-axis Home X/Y/Z buttons. The step is a segmented button row (no
+// dropdown) shared by X/Y/Z. Deliberately no "go to point / corners".
 
 const { t } = useI18n()
 const plotter = usePlotterStore()
 const job = useJobStore()
-const step = ref(10)
+
+const STEPS = [0.1, 0.5, 1, 10, 50] as const
+const step = ref<number>(10)
 
 // Manual moves need a live, idle machine. The cockpit stays mounted at
 // all times and greys out whenever the head can't be driven: no
-// connection, a move already in flight, or a job running / paused (which
-// owns the head).
+// connection, a move already in flight, or a job running / paused.
 const controlsDisabled = computed(
   () =>
     !plotter.status.connected ||
@@ -35,14 +36,14 @@ function jogZ(dz: number): void {
   plotter.jog(0, 0, job.selectedProfileName, dz * step.value)
 }
 
-async function home(): Promise<void> {
+async function homeAxis(axis?: 'X' | 'Y' | 'Z'): Promise<void> {
   const confirmed = await confirmAction({
     title: t('confirm.homeTitle'),
     message: t('confirm.homeMsg'),
     confirmLabel: t('plotter.home'),
     cancelLabel: t('confirm.cancel'),
   })
-  if (confirmed) plotter.home(job.selectedProfileName)
+  if (confirmed) plotter.home(job.selectedProfileName, axis)
 }
 
 const penUpCmd = computed(() => job.selectedProfile?.pen_up_command ?? '')
@@ -60,17 +61,15 @@ async function penDown(): Promise<void> {
 
 const jogBtn =
   'rounded bg-slate-700 hover:bg-slate-600 py-1 text-sm text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
-const axisBtn =
-  'rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs font-medium text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
-const penBtn =
-  'rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-[11px] text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
+const smallBtn =
+  'rounded bg-slate-700 hover:bg-slate-600 px-2 py-1 text-[11px] font-medium text-slate-100 disabled:opacity-40 disabled:cursor-not-allowed'
 </script>
 
 <template>
-  <div class="space-y-2">
-    <div class="flex items-start gap-3">
-      <!-- X/Y jog cross with Home in the centre -->
-      <div class="grid w-[5.5rem] shrink-0 grid-cols-3 gap-1">
+  <div class="space-y-1.5">
+    <div class="flex flex-wrap items-start gap-2">
+      <!-- X/Y jog cross — ⌂ centre homes all axes -->
+      <div class="grid w-[5rem] shrink-0 grid-cols-3 gap-1">
         <span />
         <button
           :class="jogBtn"
@@ -93,10 +92,11 @@ const penBtn =
         </button>
         <button
           :class="jogBtn"
-          :aria-label="t('plotter.home')"
-          :title="t('plotter.home')"
+          :aria-label="t('plotter.homeAll')"
+          :title="t('plotter.homeAll')"
           :disabled="controlsDisabled"
-          @click="home"
+          data-test="home-all"
+          @click="homeAxis()"
         >
           ⌂
         </button>
@@ -122,11 +122,11 @@ const penBtn =
         <span />
       </div>
 
-      <!-- Z jog column (motorised Z) -->
-      <div class="flex flex-col items-stretch gap-1">
+      <!-- Z jog column -->
+      <div class="flex flex-col gap-1">
         <span class="text-center text-[10px] uppercase tracking-wider text-slate-500">Z</span>
         <button
-          :class="axisBtn"
+          :class="smallBtn"
           :aria-label="t('plotter.jogZUp')"
           :title="t('plotter.jogZUp')"
           :disabled="controlsDisabled"
@@ -136,7 +136,7 @@ const penBtn =
           Z+
         </button>
         <button
-          :class="axisBtn"
+          :class="smallBtn"
           :aria-label="t('plotter.jogZDown')"
           :title="t('plotter.jogZDown')"
           :disabled="controlsDisabled"
@@ -148,49 +148,98 @@ const penBtn =
       </div>
 
       <!-- Pen servo lift / lower -->
-      <div class="flex min-w-0 flex-1 flex-col gap-1">
-        <span class="text-[10px] uppercase tracking-wider text-slate-500">{{
+      <div class="flex flex-col gap-1">
+        <span class="text-center text-[10px] uppercase tracking-wider text-slate-500">{{
           t('plotter.penControl')
         }}</span>
         <button
           type="button"
-          :class="penBtn"
+          :class="smallBtn"
           :disabled="controlsDisabled || !penUpCmd"
-          :title="penUpCmd"
+          :title="penUpCmd || t('plotter.penUp')"
           data-test="manual-pen-up"
           @click="penUp"
         >
-          ▲ {{ t('plotter.penUp') }}
+          ▲
         </button>
         <button
           type="button"
-          :class="penBtn"
+          :class="smallBtn"
           :disabled="controlsDisabled || !penDownCmd"
-          :title="penDownCmd"
+          :title="penDownCmd || t('plotter.penDown')"
           data-test="manual-pen-down"
           @click="penDown"
         >
-          ▼ {{ t('plotter.penDown') }}
+          ▼
         </button>
-        <p v-if="!penUpCmd || !penDownCmd" class="text-[10px] leading-tight text-slate-500">
-          {{ t('plotter.penCommandsMissing') }}
-        </p>
+      </div>
+
+      <!-- Per-axis homing -->
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <span class="text-[10px] uppercase tracking-wider text-slate-500">{{
+          t('plotter.homeLabel')
+        }}</span>
+        <div class="flex gap-1">
+          <button
+            :class="smallBtn"
+            class="flex-1"
+            :aria-label="t('plotter.homeX')"
+            :title="t('plotter.homeX')"
+            :disabled="controlsDisabled"
+            data-test="home-x"
+            @click="homeAxis('X')"
+          >
+            ⌂X
+          </button>
+          <button
+            :class="smallBtn"
+            class="flex-1"
+            :aria-label="t('plotter.homeY')"
+            :title="t('plotter.homeY')"
+            :disabled="controlsDisabled"
+            data-test="home-y"
+            @click="homeAxis('Y')"
+          >
+            ⌂Y
+          </button>
+          <button
+            :class="smallBtn"
+            class="flex-1"
+            :aria-label="t('plotter.homeZ')"
+            :title="t('plotter.homeZ')"
+            :disabled="controlsDisabled"
+            data-test="home-z"
+            @click="homeAxis('Z')"
+          >
+            ⌂Z
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Shared step size for X / Y / Z -->
-    <label class="flex items-center gap-1.5 text-[11px] text-slate-400">
-      <span>{{ t('plotter.step') }}</span>
-      <select
-        v-model.number="step"
-        :disabled="controlsDisabled"
-        class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[11px] text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <option :value="0.1">0.1 mm</option>
-        <option :value="1">1 mm</option>
-        <option :value="10">10 mm</option>
-        <option :value="50">50 mm</option>
-      </select>
-    </label>
+    <!-- Shared step size as segmented buttons (X / Y / Z) -->
+    <div class="flex items-center gap-1.5">
+      <span class="text-[11px] text-slate-400">{{ t('plotter.stepLabel') }}</span>
+      <div class="flex gap-1" role="group" :aria-label="t('plotter.stepLabel')">
+        <button
+          v-for="s in STEPS"
+          :key="s"
+          type="button"
+          class="rounded px-1.5 py-0.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+          :class="
+            step === s
+              ? 'bg-emerald-600 text-white'
+              : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+          "
+          :aria-pressed="step === s"
+          :disabled="controlsDisabled"
+          :data-test="`step-${s}`"
+          @click="step = s"
+        >
+          {{ s }}
+        </button>
+      </div>
+      <span class="text-[10px] text-slate-500">mm</span>
+    </div>
   </div>
 </template>

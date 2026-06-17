@@ -159,8 +159,8 @@ export const usePlotterStore = defineStore('plotter', () => {
     withMovement(() => plotterJog(dx, dy, profileName, dz))
   const goto = (x: number, y: number, profileName: string): Promise<void> =>
     withMovement(() => plotterGoto(x, y, profileName), i18n.global.t('toast.plotterMoving'))
-  const home = (profileName: string): Promise<void> =>
-    withMovement(() => plotterHome(profileName), i18n.global.t('toast.plotterHoming'))
+  const home = (profileName: string, axis?: 'X' | 'Y' | 'Z'): Promise<void> =>
+    withMovement(() => plotterHome(profileName, axis), i18n.global.t('toast.plotterHoming'))
   const run = (gcode: string): Promise<void> =>
     withErrors(
       () => plotterRun(gcode),

@@ -6986,7 +6986,7 @@
     },
     "/plotter/home": {
       "post": {
-        "description": "Home the machine.",
+        "description": "Home the machine \u2014 all axes, or a single ``axis`` (X / Y / Z).",
         "operationId": "home_plotter_home_post",
         "parameters": [
           {
@@ -6996,6 +6996,22 @@
             "schema": {
               "title": "Profile Name",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "axis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Axis"
             }
           },
           {

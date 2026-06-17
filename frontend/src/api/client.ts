@@ -613,9 +613,13 @@ export async function plotterGoto(
   return response.data
 }
 
-export async function plotterHome(profileName: string): Promise<PlotterStatus> {
+export async function plotterHome(
+  profileName: string,
+  axis?: 'X' | 'Y' | 'Z',
+): Promise<PlotterStatus> {
+  const axisParam = axis ? `&axis=${axis}` : ''
   const response = await api.post<PlotterStatus>(
-    `/plotter/home?profile_name=${encodeURIComponent(profileName)}`,
+    `/plotter/home?profile_name=${encodeURIComponent(profileName)}${axisParam}`,
   )
   return response.data
 }

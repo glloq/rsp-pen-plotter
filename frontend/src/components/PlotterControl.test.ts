@@ -85,7 +85,7 @@ describe('PlotterControl — manual control always visible', () => {
     const jogUp = wrapper.find('button[aria-label="Jog up (Y+)"]')
     expect(jogUp.exists()).toBe(true)
     expect(jogUp.attributes('disabled')).toBeDefined()
-    const home = wrapper.find('button[aria-label="Home"]')
+    const home = wrapper.find('[data-test="home-all"]')
     expect(home.attributes('disabled')).toBeDefined()
   })
 

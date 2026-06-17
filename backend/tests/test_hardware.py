@@ -78,6 +78,13 @@ def test_home_command_grbl() -> None:
     assert home_command(_profile()) == ["$H"]
 
 
+def test_home_command_single_axis_grbl() -> None:
+    assert home_command(_profile(), "X") == ["$HX"]
+    assert home_command(_profile(), "z") == ["$HZ"]
+    # An unknown axis falls back to homing everything.
+    assert home_command(_profile(), "W") == ["$H"]
+
+
 def test_goto_command_is_absolute_and_lifts_pen() -> None:
     profile = _profile()
     lines = goto_command(12.5, 34.0, profile)
