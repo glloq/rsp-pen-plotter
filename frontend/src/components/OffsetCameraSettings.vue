@@ -110,6 +110,17 @@ const tipConfig = computed<TipCalibrationConfig | null>(
 const canMeasure = computed(() => applyPenOffsets.value && tipConfig.value != null)
 const workshopCameras = computed(() => ui.cameras.filter((c) => c.enabled && c.url.trim()))
 
+// A magazine (carousel / rack, or a firmware / host-macro changer) can fetch
+// the pen automatically. Without one — a manual / single-holder machine — the
+// operator presents each pen at the station by hand. Per-pen offsets work in
+// both cases; only the auto-fetch affordance is magazine-specific.
+const hasMagazine = computed(() => {
+  const mode = profile.value?.capabilities?.tool_change.mode
+  if (mode === 'firmware' || mode === 'host_macro') return true
+  const method = profile.value?.tool_change_method
+  return method === 'carousel' || method === 'rack'
+})
+
 const scaleLabel = computed(() =>
   tipConfig.value
     ? t('offsetCamera.scaleSet', { v: tipConfig.value.mm_per_pixel })
@@ -455,6 +466,7 @@ onUnmounted(() => clearTimeout(savedTimer))
               <CameraPreview
                 :url="tipConfig.camera_url"
                 :label="t('offsetCamera.title')"
+                :roi="tipConfig.roi"
                 height="md"
               />
             </div>
@@ -610,7 +622,10 @@ onUnmounted(() => clearTimeout(savedTimer))
                     @change="(e) => onStationZ((e.target as HTMLInputElement).value)"
                   />
                 </label>
-                <label class="col-span-2 flex items-center gap-2 text-[11px] text-slate-300">
+                <label
+                  v-if="hasMagazine"
+                  class="col-span-2 flex items-center gap-2 text-[11px] text-slate-300"
+                >
                   <input
                     v-model="fetchPen"
                     type="checkbox"
@@ -801,6 +816,13 @@ onUnmounted(() => clearTimeout(savedTimer))
           <p class="text-[11px] font-semibold text-slate-300">{{ t('offsetCamera.step3') }}</p>
           <p class="mb-1 text-[11px] text-slate-500">
             {{ canMeasure ? t('offsetCamera.step3Hint') : t('magazine.offsetHint') }}
+          </p>
+          <p
+            v-if="canMeasure && !hasMagazine"
+            class="mb-1 text-[11px] text-sky-300"
+            data-test="manual-present-hint"
+          >
+            🖐 {{ t('offsetCamera.manualPresent') }}
           </p>
           <ul class="space-y-1.5">
             <li

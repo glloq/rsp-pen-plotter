@@ -37,6 +37,20 @@ describe('CameraPreview', () => {
     expect(wrapper.find('[data-test="preview-live"]').exists()).toBe(true)
   })
 
+  it('overlays the detection zone when a ROI is set', async () => {
+    const wrapper = mount(CameraPreview, {
+      props: { url: 'http://cam/stream', roi: { x: 10, y: 10, width: 40, height: 40 } },
+      global: { plugins: [i18n] },
+    })
+    const img = wrapper.find('[data-test="preview-img"]')
+    // happy-dom reports 0 natural dimensions; stub them so the overlay maps.
+    Object.defineProperty(img.element, 'naturalWidth', { value: 200, configurable: true })
+    Object.defineProperty(img.element, 'naturalHeight', { value: 200, configurable: true })
+    await img.trigger('load')
+    await nextTick()
+    expect(wrapper.find('[data-test="preview-roi"]').exists()).toBe(true)
+  })
+
   it('falls back to an error state and recovers on retry', async () => {
     const wrapper = mountPreview('http://cam/stream')
     await wrapper.find('[data-test="preview-img"]').trigger('error')

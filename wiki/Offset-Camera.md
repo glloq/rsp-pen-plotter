@@ -66,14 +66,18 @@ the UI.
 
 ## Configure it
 
-Settings → **Cameras** tab → **Offset camera**, on a multi-pen profile:
+Settings → **Cameras** tab → **Offset camera**. Works on any profile with
+**more than one pen — with or without a magazine** (a manual / multi-holder
+machine measures pens presented by hand; a carousel/rack can also fetch them
+automatically). The panel is a short guided flow:
 
 1. Turn on **per-pen tip offsets** (`apply_pen_offsets`). This is the opt-in
    switch — off by default, so nothing changes until you enable it.
-2. Tick **Measure with a camera station** to reveal the station config.
+2. Tick **Use a camera to measure offsets** to reveal the station config.
 3. Fill in:
-   - **Offset camera** — pick a configured workshop camera or paste a
-     snapshot/MJPEG URL.
+   - **① Offset camera** — pick a configured workshop camera or paste a
+     snapshot/MJPEG URL. A **live preview** appears; once a detection zone is
+     set it's drawn as a rectangle on the feed so you can aim it.
    - **mm per pixel** — the station's pixel scale. Don't guess it: use the
      [scale assistant](#mm-per-pixel-assistant) below.
    - **Reference slot** — the pen the others are measured against (its own

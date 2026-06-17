@@ -1973,7 +1973,8 @@
   "offsetCamera": {
     "title": "Offset camera",
     "hint": "A dedicated camera at a fixed station measures each pen's tip so OmniPlot can work out the XY offset between pens. Optional and separate from the timelapse camera.",
-    "needsMagazine": "Per-pen offsets need a multi-pen magazine (carousel or rack).",
+    "needsMagazine": "Per-pen offsets need more than one pen (with or without a magazine).",
+    "manualPresent": "No magazine: present each pen at the station by hand, then Measure.",
     "enable": "Use a camera to measure offsets",
     "step1": "1 · Camera",
     "step1Hint": "Point the offset camera at the measurement station.",
