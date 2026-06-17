@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -299,6 +299,7 @@ describe('MagazineEditor', () => {
       reference_measured: true,
       offset_mm: { x: 1.8, y: -0.5 },
       message: 'ok',
+      annotated_image: 'data:image/jpeg;base64,AAAA',
     })
 
     const wrapper = mountEditor()
@@ -307,7 +308,7 @@ describe('MagazineEditor', () => {
     const btn = wrapper.find('[data-test="pen-measure-1"]')
     expect(btn.exists()).toBe(true)
     await btn.trigger('click')
-    await nextTick()
+    await flushPromises()
     await nextTick()
 
     expect(measureSpy).toHaveBeenCalledWith(
@@ -317,6 +318,10 @@ describe('MagazineEditor', () => {
     const pen1 = saved.pens?.find((p) => p.index === 1)
     expect(pen1?.xy_offset_mm).toEqual({ x: 1.8, y: -0.5 })
     expect(pen1?.offset_source).toBe('vision')
+    // The annotated preview is shown for confirmation.
+    const preview = wrapper.find('[data-test="pen-measure-preview-1"]')
+    expect(preview.exists()).toBe(true)
+    expect(preview.attributes('src')).toBe('data:image/jpeg;base64,AAAA')
   })
 
   it('passes guided travel when auto-move is enabled and a station is set', async () => {

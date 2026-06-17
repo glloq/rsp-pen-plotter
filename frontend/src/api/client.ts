@@ -308,6 +308,9 @@ export interface TipMeasureResponse {
   // measured this session.
   offset_mm: Point | null
   message: string
+  // Data URL (data:image/jpeg;base64,…) of the frame with the detected tip
+  // marked, for visual confirmation. Null when the frame couldn't be decoded.
+  annotated_image: string | null
 }
 
 // Measure one presented pen's tip at the calibration station. The reference

@@ -59,6 +59,24 @@ def test_dark_blob_not_found_on_blank_frame() -> None:
     assert m.tip_px is None
 
 
+def test_annotated_preview_is_a_valid_jpeg() -> None:
+    m = detect_tip_dark_blob(_frame((120, 80)), mm_per_pixel=0.1)
+    assert m.found and m.annotated_jpeg is not None
+    # Decodes as a JPEG of the same size, and the marker added red where the
+    # source was uniformly grey.
+    with Image.open(io.BytesIO(m.annotated_jpeg)) as img:
+        assert img.format == "JPEG"
+        assert img.size == (200, 200)
+        px = img.convert("RGB").getpixel((120, 80))
+    assert px[0] > px[1] + 40 and px[0] > px[2] + 40  # reddish marker
+
+
+def test_blank_frame_still_returns_a_preview() -> None:
+    # Even with no tip, the operator gets the frame back to check framing.
+    m = detect_tip_dark_blob(_frame(None), mm_per_pixel=0.1)
+    assert m.annotated_jpeg is not None
+
+
 def test_dark_blob_rejects_swamped_frame() -> None:
     # A frame that is almost entirely dark → lighting/threshold wrong.
     arr = np.full((100, 100), 5, dtype=np.uint8)
@@ -181,6 +199,8 @@ def test_measure_endpoint_returns_offset_after_reference(client: TestClient) -> 
     assert body["reference_measured"] is True
     assert body["offset_mm"]["x"] == pytest.approx(3.0, abs=0.2)
     assert body["offset_mm"]["y"] == pytest.approx(0.0, abs=0.2)
+    # The response carries a JPEG data URL preview for operator confirmation.
+    assert body["annotated_image"].startswith("data:image/jpeg;base64,")
 
 
 def test_status_and_reset_endpoints(client: TestClient) -> None:

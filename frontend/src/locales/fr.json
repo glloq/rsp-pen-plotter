@@ -1562,6 +1562,7 @@
     "measureNotFound": "Aucun embout détecté — vérifie le cadrage, l'éclairage ou le seuil.",
     "measureNeedRef": "Mesure d'abord le stylo de référence.",
     "measureFailed": "Échec de la mesure.",
+    "measurePreviewAlt": "Embout détecté",
     "saved": "Enregistré"
   },
   "macros": {

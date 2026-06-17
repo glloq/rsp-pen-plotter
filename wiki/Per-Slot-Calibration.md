@@ -87,8 +87,10 @@ button:
    from the reference.
 
 The detector finds the dark pen tip against the light station
-background, so the station wants even lighting and good contrast. *Reset
-measurements* starts a fresh run.
+background, so the station wants even lighting and good contrast. After
+each measurement a **preview image** appears under the slot with the
+detected tip marked, so you can confirm the right point was picked before
+trusting the offset. *Reset measurements* starts a fresh run.
 
 With a connected plotter you can also automate the motion:
 

@@ -129,7 +129,7 @@ reference. The offset is persisted onto the slot via the normal `POST
 
 | Endpoint | Body | Purpose |
 | --- | --- | --- |
-| `POST /plotter/tip-calibration/measure` | `{ "slot", "camera_url", "mm_per_pixel", "reference_slot", "dark_threshold"?, "roi"?, "fetch_pen"?, "move_to_station"?, "station_position"?, "profile_name"? }` | Grab one frame, locate the tip, return `{ found, tip_px, confidence, reference_measured, offset_mm, … }`. Optional motion first (order: fetch → travel → grab): `fetch_pen` loads the slot's pen via a tool-change swap; `move_to_station` then travels to `station_position`. Both need a connected plotter + `profile_name` (`409` disconnected / manual-swap profile, `422` under-specified). `502` if the camera read fails |
+| `POST /plotter/tip-calibration/measure` | `{ "slot", "camera_url", "mm_per_pixel", "reference_slot", "dark_threshold"?, "roi"?, "fetch_pen"?, "move_to_station"?, "station_position"?, "profile_name"? }` | Grab one frame, locate the tip, return `{ found, tip_px, confidence, reference_measured, offset_mm, annotated_image, … }` (`annotated_image` is a JPEG data URL with the tip marked). Optional motion first (order: fetch → travel → grab): `fetch_pen` loads the slot's pen via a tool-change swap; `move_to_station` then travels to `station_position`. Both need a connected plotter + `profile_name` (`409` disconnected / manual-swap profile, `422` under-specified). `502` if the camera read fails |
 | `GET /plotter/tip-calibration/status` | — | `{ "measured_slots": [...] }` for the current session |
 | `POST /plotter/tip-calibration/reset` | — | Forget all measurements (start a fresh run) |
 

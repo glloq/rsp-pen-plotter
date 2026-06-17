@@ -4122,6 +4122,17 @@
       "TipMeasureResponse": {
         "description": "Result of one measurement plus the offset it implies.",
         "properties": {
+          "annotated_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotated Image"
+          },
           "confidence": {
             "default": 0.0,
             "title": "Confidence",

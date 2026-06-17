@@ -1562,6 +1562,7 @@
     "measureNotFound": "No tip detected — check framing, lighting or threshold.",
     "measureNeedRef": "Measure the reference pen first.",
     "measureFailed": "Measurement failed.",
+    "measurePreviewAlt": "Detected pen tip",
     "saved": "Saved"
   },
   "macros": {

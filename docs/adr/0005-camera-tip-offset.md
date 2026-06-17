@@ -1,15 +1,15 @@
 # 0005 — Camera-assisted per-pen XY tip offset via a dedicated station
 
-- **Status**: accepted (Phase 1 + Phase 2 + optional guided travel & pen-fetch implemented)
+- **Status**: accepted (Phase 1 + Phase 2 shipped; only the `aruco` detector deferred)
 - **Date**: 2026-06
 
-> Phase 1 (manual per-pen XY offset + opt-in switch), Phase 2 (camera
-> measurement at a dedicated station), and the optional motion helpers —
-> guided head-travel (`move_to_station`) and automatic pen-fetch
-> (`fetch_pen`) — have all landed. The shipped detector uses Pillow+NumPy
-> rather than OpenCV (see the implementation note in the design doc); the
-> `aruco` detector and a returned annotated frame remain deferred. Engineering
-> detail and delivery split live in
+> Phase 1 (manual per-pen XY offset + opt-in switch) and Phase 2 (camera
+> measurement at a dedicated station) have landed, including the annotated
+> preview frame and the optional motion helpers — guided head-travel
+> (`move_to_station`) and automatic pen-fetch (`fetch_pen`). The shipped
+> detector uses Pillow+NumPy rather than OpenCV (see the implementation note
+> in the design doc); only the `aruco` detector remains deferred behind the
+> existing `detector` field. Engineering detail and delivery split live in
 > [`../camera_tip_offset.md`](../camera_tip_offset.md).
 
 ## Context

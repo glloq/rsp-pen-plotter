@@ -28,7 +28,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 # A frame grabber maps a camera URL to JPEG bytes (see ``timelapse.grab_jpeg``).
 FrameGrabber = Callable[[str], bytes]
@@ -58,6 +58,11 @@ class TipMeasurement:
     tip_mm: tuple[float, float] | None = None
     confidence: float = 0.0
     message: str = ""
+    # JPEG of the frame with the detected tip marked (or the plain frame when
+    # nothing was found), so the operator can confirm the right blob was
+    # picked before trusting the offset. ``None`` when the frame couldn't be
+    # decoded (e.g. a config error before any image was read).
+    annotated_jpeg: bytes | None = None
 
 
 # A detector maps (frame bytes, mm/pixel, threshold, ROI) to a measurement.
@@ -81,6 +86,29 @@ def _decode_gray(frame: bytes) -> np.ndarray:
     """Decode JPEG/PNG bytes to a 2-D uint8 luminance array."""
     with Image.open(io.BytesIO(frame)) as img:
         return np.asarray(img.convert("L"), dtype=np.uint8)
+
+
+def _encode_preview(frame: bytes, tip_px: tuple[float, float] | None) -> bytes | None:
+    """JPEG preview of ``frame``, with a red marker at ``tip_px`` when given.
+
+    Returns ``None`` if the frame can't be decoded. Re-encodes to JPEG so the
+    response content type is consistent regardless of the camera's format.
+    """
+    try:
+        with Image.open(io.BytesIO(frame)) as img:
+            rgb = img.convert("RGB")
+    except Exception:
+        return None
+    if tip_px is not None:
+        cx, cy = tip_px
+        r = max(6, min(rgb.width, rgb.height) // 40)
+        draw = ImageDraw.Draw(rgb)
+        draw.line([(cx - 2 * r, cy), (cx + 2 * r, cy)], fill=(255, 0, 0), width=2)
+        draw.line([(cx, cy - 2 * r), (cx, cy + 2 * r)], fill=(255, 0, 0), width=2)
+        draw.ellipse([(cx - r, cy - r), (cx + r, cy + r)], outline=(255, 0, 0), width=2)
+    buf = io.BytesIO()
+    rgb.save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
 
 
 def detect_tip_dark_blob(
@@ -119,7 +147,11 @@ def detect_tip_dark_blob(
     dark = int(mask.sum())
     total = gray.size
     if dark == 0:
-        return TipMeasurement(found=False, message="no dark pixels — check lighting / threshold")
+        return TipMeasurement(
+            found=False,
+            message="no dark pixels — check lighting / threshold",
+            annotated_jpeg=_encode_preview(frame, None),
+        )
 
     coverage = dark / total
     # A real tip is a small compact blob. If the dark region swamps the frame
@@ -130,6 +162,7 @@ def detect_tip_dark_blob(
             found=False,
             confidence=0.0,
             message="dark region covers the frame — adjust lighting or threshold",
+            annotated_jpeg=_encode_preview(frame, None),
         )
 
     ys, xs = np.nonzero(mask)
@@ -145,6 +178,7 @@ def detect_tip_dark_blob(
         tip_mm=(cx * mm_per_pixel, cy * mm_per_pixel),
         confidence=confidence,
         message="ok",
+        annotated_jpeg=_encode_preview(frame, (cx, cy)),
     )
 
 

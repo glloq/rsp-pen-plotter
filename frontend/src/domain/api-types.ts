@@ -3934,6 +3934,8 @@ export interface components {
          * @description Result of one measurement plus the offset it implies.
          */
         TipMeasureResponse: {
+            /** Annotated Image */
+            annotated_image?: string | null;
             /**
              * Confidence
              * @default 0

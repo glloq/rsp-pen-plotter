@@ -231,6 +231,8 @@ interface MeasureState {
   busy: boolean
   message: string
   ok: boolean
+  // Annotated frame (data URL) for visual confirmation of the detected tip.
+  image?: string | null
 }
 const measureState = reactive<Record<number, MeasureState>>({})
 
@@ -281,7 +283,7 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       await patchPen(pen.index, { xy_offset_mm: offset, offset_source: 'vision' })
     }
     const { message, ok } = describeMeasurement(m)
-    measureState[pen.index] = { busy: false, message, ok }
+    measureState[pen.index] = { busy: false, message, ok, image: m.annotated_image }
   } catch (err) {
     const detail =
       (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -747,6 +749,13 @@ onUnmounted(() => clearTimeout(savedTimer))
                       {{ measureState[pen.index]?.message }}
                     </span>
                   </div>
+                  <img
+                    v-if="measureState[pen.index]?.image"
+                    :src="measureState[pen.index]!.image!"
+                    :alt="t('magazine.measurePreviewAlt')"
+                    class="col-span-2 max-h-40 w-auto rounded border border-slate-700"
+                    :data-test="`pen-measure-preview-${pen.index}`"
+                  />
                 </template>
               </div>
             </details>

@@ -1,6 +1,6 @@
 # Camera-assisted pen-tip offset — design study
 
-- **Status**: Phase 1 (manual offset) + Phase 2 (vision measurement) + optional guided travel & pen-fetch implemented
+- **Status**: Phase 1 (manual offset) + Phase 2 (vision measurement, annotated preview, optional guided travel & pen-fetch) implemented · only the `aruco` detector deferred
 - **Date**: 2026-06
 - **Companion ADR**: [`adr/0005-camera-tip-offset.md`](adr/0005-camera-tip-offset.md)
 
@@ -8,12 +8,14 @@
 > **Pillow + NumPy**, not OpenCV — both are already dependencies, so the
 > appliance needs nothing extra and the detector is unit-tested on synthetic
 > frames with no camera. The `aruco` detector (printed fiducial, sub-pixel)
-> remains future work behind the same `detector` field. **Guided travel**
-> (`move_to_station`) and **automatic pen-fetch** (`fetch_pen`) are both
-> implemented as *optional* flags on the measure call: with a connected
-> plotter, `fetch_pen` loads the slot's pen via a tool-change swap and
-> `move_to_station` drives the head to `station_position` before grabbing —
-> otherwise the operator does these by hand.
+> remains future work behind the same `detector` field. Every measurement
+> returns an **annotated preview** (the frame with the tip marked) for
+> confirmation. **Guided travel** (`move_to_station`) and **automatic
+> pen-fetch** (`fetch_pen`) are both implemented as *optional* flags on the
+> measure call: with a connected plotter, `fetch_pen` loads the slot's pen via
+> a tool-change swap and `move_to_station` drives the head to
+> `station_position` before grabbing — otherwise the operator does these by
+> hand.
 
 > Goal: let OmniPlot register the **XY offset of each pen's tip** so that
 > strokes drawn with different pens land on the same logical coordinate, and
@@ -386,8 +388,13 @@ magazines fetch automatically; a *manual* profile returns 409 ("load by hand").
 The magazine UI exposes a "Load pen from magazine" toggle. Order per measure:
 **fetch → travel → grab**.
 
-**Still deferred.** The `aruco` detector and a returned annotated preview
-frame. Both additive on top of the shipped surface.
+**Annotated preview.** ✅ **Implemented.** Every measurement returns the frame
+as a JPEG data URL with the detected tip marked (or the plain frame when
+nothing was found, so framing/lighting can be checked). The magazine UI shows
+it under the slot so the operator confirms the right blob was picked.
+
+**Still deferred.** Only the `aruco` detector (printed fiducial, sub-pixel),
+which needs OpenCV — additive behind the existing `detector` field.
 
 This ordering means the camera work was never on the critical path for the
 registration fix itself.

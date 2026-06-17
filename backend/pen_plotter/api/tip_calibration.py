@@ -15,6 +15,7 @@ whole flow with a fake camera.
 from __future__ import annotations
 
 import asyncio
+import base64
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -73,6 +74,10 @@ class TipMeasureResponse(BaseModel):
     # and the reference have been measured.
     offset_mm: Point | None = None
     message: str = ""
+    # Data URL (``data:image/jpeg;base64,…``) of the frame with the detected
+    # tip marked — for the operator to confirm the right blob was picked.
+    # ``None`` when the frame couldn't be decoded.
+    annotated_image: str | None = None
 
 
 async def _fetch_pen(profile: MachineProfile, slot: int) -> None:
@@ -165,6 +170,11 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
 
     m = result.measurement
     record("tip_calibration_measure", f"slot={req.slot} found={m.found} conf={m.confidence:.2f}")
+    annotated = (
+        "data:image/jpeg;base64," + base64.b64encode(m.annotated_jpeg).decode()
+        if m.annotated_jpeg
+        else None
+    )
     return TipMeasureResponse(
         found=m.found,
         slot=result.slot,
@@ -176,6 +186,7 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
             Point(x=result.offset_mm[0], y=result.offset_mm[1]) if result.offset_mm else None
         ),
         message=m.message,
+        annotated_image=annotated,
     )
 
 
