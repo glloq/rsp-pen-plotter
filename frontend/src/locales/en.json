@@ -1915,5 +1915,30 @@
     "configure": "Configure the camera →",
     "streamError": "Video stream unavailable",
     "defaultLabel": "Camera {n}"
+  },
+  "timelapse": {
+    "title": "Timelapse",
+    "hint": "Capture frames from a camera during a print, then export an MP4.",
+    "start": "Start recording",
+    "stop": "Stop & save",
+    "recording": "Recording",
+    "camera": "Camera",
+    "interval": "Interval (s)",
+    "fps": "Playback FPS",
+    "label": "Name",
+    "labelPlaceholder": "e.g. spiral-print",
+    "frames": "frames",
+    "noCamera": "Enable a camera in System settings first.",
+    "empty": "No timelapses yet.",
+    "download": "Download MP4",
+    "delete": "Delete",
+    "deleteTitle": "Delete this timelapse?",
+    "deleteMsg": "“{name}” and its video will be removed.",
+    "saved": "Timelapse saved ({count} frames).",
+    "listFailed": "Could not load timelapses.",
+    "startFailed": "Could not start the timelapse.",
+    "stopFailed": "Could not stop the timelapse.",
+    "deleteFailed": "Could not delete the timelapse.",
+    "downloadFailed": "Could not download the video."
   }
 }

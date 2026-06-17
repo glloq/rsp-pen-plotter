@@ -78,10 +78,12 @@ install_system_deps() {
     return
   fi
 
-  # Only the packages strictly needed by converters; anything else is a
-  # user choice. We always install these because they're tiny and the
-  # converter pipeline silently fails without them.
-  local pkgs=(potrace ghostscript libreoffice-writer)
+  # Only the packages strictly needed by converters + the camera
+  # timelapse; anything else is a user choice. We always install these
+  # because they're tiny and the converter / timelapse pipeline silently
+  # fails without them. ``ffmpeg`` assembles captured frames into the
+  # downloadable timelapse MP4.
+  local pkgs=(potrace ghostscript libreoffice-writer ffmpeg)
   local missing=()
   for pkg in "${pkgs[@]}"; do
     dpkg -s "$pkg" >/dev/null 2>&1 || missing+=("$pkg")

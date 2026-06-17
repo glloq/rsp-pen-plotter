@@ -7,6 +7,7 @@ import { usePlotterStore } from '../stores/plotter'
 import { useUiStore } from '../stores/ui'
 import CameraView from './CameraView.vue'
 import JogControls from './JogControls.vue'
+import TimelapsePanel from './TimelapsePanel.vue'
 
 // Plotter tab: the workshop camera feed (top) above the manual cockpit,
 // with a collapsible "commands sent" history at the bottom. The
@@ -67,6 +68,10 @@ onUnmounted(stopPolling)
          present: shows the configured stream, or a configure-hint that
          links into System settings when no camera is set up. -->
     <CameraView />
+
+    <!-- TIMELAPSE — capture frames from a camera + export an MP4.
+         Collapsed by default. -->
+    <TimelapsePanel />
 
     <div
       class="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-3"

@@ -1915,5 +1915,30 @@
     "configure": "Configurer la caméra →",
     "streamError": "Flux vidéo indisponible",
     "defaultLabel": "Caméra {n}"
+  },
+  "timelapse": {
+    "title": "Timelapse",
+    "hint": "Capture des images depuis une caméra pendant une impression, puis exporte un MP4.",
+    "start": "Démarrer l'enregistrement",
+    "stop": "Arrêter et enregistrer",
+    "recording": "Enregistrement",
+    "camera": "Caméra",
+    "interval": "Intervalle (s)",
+    "fps": "FPS (lecture)",
+    "label": "Nom",
+    "labelPlaceholder": "ex. spirale",
+    "frames": "images",
+    "noCamera": "Activez d'abord une caméra dans les réglages système.",
+    "empty": "Aucun timelapse.",
+    "download": "Télécharger le MP4",
+    "delete": "Supprimer",
+    "deleteTitle": "Supprimer ce timelapse ?",
+    "deleteMsg": "« {name} » et sa vidéo seront supprimés.",
+    "saved": "Timelapse enregistré ({count} images).",
+    "listFailed": "Impossible de charger les timelapses.",
+    "startFailed": "Impossible de démarrer le timelapse.",
+    "stopFailed": "Impossible d'arrêter le timelapse.",
+    "deleteFailed": "Impossible de supprimer le timelapse.",
+    "downloadFailed": "Impossible de télécharger la vidéo."
   }
 }

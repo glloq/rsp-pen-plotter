@@ -44,6 +44,7 @@ from pen_plotter.api.rerender import router as rerender_router
 from pen_plotter.api.settings import router as settings_router
 from pen_plotter.api.slo import router as slo_router
 from pen_plotter.api.system import router as system_router
+from pen_plotter.api.timelapse import router as timelapse_router
 from pen_plotter.api.upload import router as upload_router
 from pen_plotter.application.file_library import integrity_scan
 from pen_plotter.auth import API_KEY_ENV, require_api_key, verify_auth_configuration
@@ -296,6 +297,7 @@ app.include_router(policy_router, dependencies=_GUARDED)
 app.include_router(plotter_router, dependencies=_GUARDED)
 app.include_router(queue_router, dependencies=_GUARDED)
 app.include_router(gcode_files_router, dependencies=_GUARDED)
+app.include_router(timelapse_router, dependencies=_GUARDED)
 app.include_router(audit_router, dependencies=_GUARDED)
 app.include_router(jobs_router, dependencies=_GUARDED)
 app.include_router(presets_router, dependencies=_GUARDED)

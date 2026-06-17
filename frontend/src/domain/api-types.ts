@@ -1605,6 +1605,138 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/timelapse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All
+         * @description List saved timelapses, newest first.
+         */
+        get: operations["list_all_timelapse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/timelapse/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start
+         * @description Begin capturing frames from the given camera stream URL.
+         *
+         *     Raises:
+         *         HTTPException: 422 on a non-http(s) URL, 409 if already recording.
+         */
+        post: operations["start_timelapse_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/timelapse/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status
+         * @description Return the current recording status.
+         */
+        get: operations["status_timelapse_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/timelapse/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop
+         * @description Stop recording, assemble the MP4, and return the saved summary.
+         *
+         *     Raises:
+         *         HTTPException: 409 if no recording is in progress.
+         */
+        post: operations["stop_timelapse_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/timelapse/{timelapse_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete
+         * @description Delete a saved timelapse (the active recording cannot be deleted).
+         *
+         *     Raises:
+         *         HTTPException: 404 if unknown or currently recording.
+         */
+        delete: operations["delete_timelapse__timelapse_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/timelapse/{timelapse_id}/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Video
+         * @description Download a timelapse's MP4.
+         *
+         *     Raises:
+         *         HTTPException: 404 if the timelapse has no assembled video.
+         */
+        get: operations["download_video_timelapse__timelapse_id__video_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/upload": {
         parameters: {
             query?: never;
@@ -3541,6 +3673,87 @@ export interface components {
             state: string;
             /** Total */
             total: number;
+        };
+        /**
+         * TimelapseStartRequest
+         * @description Body for ``POST /timelapse/start``.
+         */
+        TimelapseStartRequest: {
+            /**
+             * Fps
+             * @default 24
+             */
+            fps: number;
+            /**
+             * Interval Seconds
+             * @default 5
+             */
+            interval_seconds: number;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /** Stream Url */
+            stream_url: string;
+        };
+        /**
+         * TimelapseStatus
+         * @description The active recording (or the idle state).
+         */
+        TimelapseStatus: {
+            /** Error */
+            error?: string | null;
+            /**
+             * Fps
+             * @default 0
+             */
+            fps: number;
+            /**
+             * Frame Count
+             * @default 0
+             */
+            frame_count: number;
+            /**
+             * Interval Seconds
+             * @default 0
+             */
+            interval_seconds: number;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /** Recording */
+            recording: boolean;
+            /** Session Id */
+            session_id?: string | null;
+            /** Started At */
+            started_at?: string | null;
+        };
+        /**
+         * TimelapseSummary
+         * @description A saved timelapse's metadata (no frames / payload).
+         */
+        TimelapseSummary: {
+            /** Created At */
+            created_at: string;
+            /** Duration Seconds */
+            duration_seconds: number;
+            /** Fps */
+            fps: number;
+            /** Frame Count */
+            frame_count: number;
+            /** Has Video */
+            has_video: boolean;
+            /** Id */
+            id: string;
+            /** Interval Seconds */
+            interval_seconds: number;
+            /** Label */
+            label: string;
+            /** Size Bytes */
+            size_bytes: number;
         };
         /**
          * ToolChangeStrategy
@@ -6515,6 +6728,214 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_timelapse_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelapseSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_timelapse_start_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimelapseStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelapseStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_timelapse_status_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelapseStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_timelapse_stop_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelapseSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_timelapse__timelapse_id__delete: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                timelapse_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_video_timelapse__timelapse_id__video_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                timelapse_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
