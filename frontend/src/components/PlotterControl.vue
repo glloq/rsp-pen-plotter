@@ -64,34 +64,35 @@ onUnmounted(stopPolling)
 
 <template>
   <div class="flex h-full min-h-0 flex-col gap-2">
-    <!-- CAMERA — live workshop feed above the manual cockpit. Always
-         present: shows the configured stream, or a configure-hint that
-         links into System settings when no camera is set up. -->
-    <CameraView />
+    <!-- MONITOR — the live camera feed fills the left, with condensed
+         timelapse controls on the right; stacks on narrow screens. This
+         row grows to take the spare height so the feed stays large. -->
+    <div class="flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
+      <CameraView class="min-h-0 flex-1" />
+      <TimelapsePanel class="max-h-72 min-h-0 shrink-0 lg:max-h-none lg:w-80" />
+    </div>
 
-    <!-- TIMELAPSE — capture frames from a camera + export an MP4.
-         Collapsed by default. -->
-    <TimelapsePanel />
-
-    <div
-      class="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-3"
-    >
-      <!-- Tab toolbar: connection status + a connect shortcut + entry into
-           the settings modal (connection, profile, colours, macros, queue).
-           This title labels the manual cockpit directly below it. -->
-      <header class="mb-2 flex items-center justify-between gap-2">
-        <h3 class="flex items-center gap-2 text-sm font-semibold text-slate-100">
-          {{ t('plotter.tabManual') }}
-          <span class="flex items-center gap-1.5 text-[11px] font-normal">
+    <!-- MANUAL CONTROL — compact cockpit (CNC / laser / 3D-printer style),
+         greyed + disabled until a plotter is connected. -->
+    <section class="shrink-0 rounded-lg border border-slate-700 bg-slate-900 p-3">
+      <header class="mb-2.5 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <h3 class="text-sm font-semibold text-slate-100">{{ t('plotter.tabManual') }}</h3>
+          <span
+            class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
+            :class="
+              status.connected
+                ? 'bg-emerald-950/50 text-emerald-300'
+                : 'bg-slate-800 text-slate-400'
+            "
+          >
             <span
               class="inline-block h-1.5 w-1.5 rounded-full"
               :class="status.connected ? 'bg-emerald-400' : 'bg-slate-600'"
             />
-            <span :class="status.connected ? 'text-emerald-300' : 'text-slate-500'">
-              {{ status.connected ? t('plotter.connected') : t('machine.disconnected') }}
-            </span>
+            {{ status.connected ? t('plotter.connected') : t('machine.disconnected') }}
           </span>
-        </h3>
+        </div>
         <div class="flex items-center gap-1.5">
           <button
             v-if="!status.connected"
@@ -114,20 +115,16 @@ onUnmounted(stopPolling)
         </div>
       </header>
 
-      <!-- MANUAL CONTROL — always mounted (CNC / laser / 3D-printer style),
-           greyed + disabled until a plotter is connected. The whole cockpit
-           (jog pad + pen + go-to + corners) is one compact two-column card
-           so the tab fits without scrolling. -->
       <div
-        class="rounded-lg border border-slate-700 bg-slate-800 p-2 transition-opacity"
-        :class="{ 'opacity-50': !status.connected }"
+        class="rounded-lg border border-slate-700 bg-slate-800/60 p-3 transition-opacity"
+        :class="{ 'pointer-events-none opacity-50': !status.connected }"
         :aria-disabled="!status.connected"
         data-test="manual-control"
       >
         <JogControls />
       </div>
-      <p v-if="error" class="mt-1.5 text-xs text-red-400">{{ error }}</p>
-    </div>
+      <p v-if="error" class="mt-2 text-xs text-red-400">{{ error }}</p>
+    </section>
 
     <!-- COMMAND HISTORY — collapsible log of the G-code actually sent to
          the plotter (manual jogs / homing / pen + streamed job lines).

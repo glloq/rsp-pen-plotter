@@ -63,11 +63,11 @@ watch([selected, streamSrc], () => {
 <template>
   <section
     ref="root"
-    class="shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-900"
+    class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900"
     data-test="camera-view"
   >
-    <header class="flex items-center gap-2 border-b border-slate-700 px-3 py-1.5">
-      <span class="text-[11px] uppercase tracking-wider text-slate-400">{{
+    <header class="flex shrink-0 items-center gap-2 border-b border-slate-700 px-3 py-1.5">
+      <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-300">{{
         t('camera.title')
       }}</span>
 
@@ -100,22 +100,20 @@ watch([selected, streamSrc], () => {
       </span>
     </header>
 
-    <!-- Live feed — only mounted while on screen so the stream is torn
-         down on other tabs. ``:key`` forces a fresh <img> on a switch. -->
-    <div v-if="active" class="flex items-center justify-center bg-black">
+    <!-- Live feed — fills the remaining height; only mounted while on
+         screen so the stream is torn down on other tabs. ``:key`` forces a
+         fresh <img> on a switch. -->
+    <div v-if="active" class="flex min-h-0 flex-1 items-center justify-center bg-black">
       <img
         v-if="!errored && visible"
         :key="streamSrc"
         :src="streamSrc"
         :alt="current ? cameraLabel(current) : t('camera.title')"
-        class="max-h-56 w-full object-contain"
+        class="max-h-full max-w-full object-contain"
         data-test="camera-stream"
         @error="errored = true"
       />
-      <div
-        v-else-if="errored"
-        class="flex w-full flex-col items-center gap-1 px-3 py-6 text-center"
-      >
+      <div v-else-if="errored" class="flex flex-col items-center gap-1 px-3 text-center">
         <p class="text-xs text-red-300">{{ t('camera.streamError') }}</p>
         <p class="font-mono text-[10px] break-all text-slate-500">{{ streamSrc }}</p>
       </div>
@@ -125,11 +123,11 @@ watch([selected, streamSrc], () => {
     <button
       v-else
       type="button"
-      class="flex w-full flex-col items-center gap-1 px-3 py-6 text-center hover:bg-slate-800/60"
+      class="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-3 py-8 text-center hover:bg-slate-800/60"
       data-test="camera-configure"
       @click="ui.openSettings('system')"
     >
-      <span aria-hidden="true" class="text-2xl">📷</span>
+      <span aria-hidden="true" class="text-3xl">📷</span>
       <span class="text-xs text-slate-400">{{ t('camera.notConfigured') }}</span>
       <span class="text-[11px] text-sky-400">{{ t('camera.configure') }}</span>
     </button>
