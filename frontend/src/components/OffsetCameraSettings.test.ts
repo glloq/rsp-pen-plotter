@@ -104,6 +104,11 @@ const i18n = createI18n({
         guidedPresent: 'Present {pen}',
         guidedMeasure: 'Measure this pen',
         guidedDone: 'Done',
+        lowConfidence: 'Low confidence {c}%',
+        testDetection: 'Test detection',
+        testResult: 'Detected {c}%',
+        progress: '{k}/{n} measured',
+        clearOffset: 'Clear',
       },
       cameraPreview: { empty: 'no url', retry: 'retry', refresh: 'refresh' },
       magazine: {
@@ -120,6 +125,7 @@ const i18n = createI18n({
         cameraCustom: 'Custom URL',
         cameraN: 'Camera {n}',
         mmPerPixel: 'mm per pixel',
+        darkThreshold: 'Dark threshold',
         referenceSlot: 'Reference slot',
         stationX: 'Station X',
         stationY: 'Station Y',
@@ -291,6 +297,80 @@ describe('OffsetCameraSettings', () => {
     expect(measureSpy).toHaveBeenCalledTimes(2)
     expect(measureSpy.mock.calls[0]![0]).toMatchObject({ slot: 0 })
     expect(measureSpy.mock.calls[1]![0]).toMatchObject({ slot: 1 })
+  })
+
+  it('does not apply a low-confidence measurement', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 130, y: 100 },
+      confidence: 0.1, // below the trust threshold
+      reference_measured: true,
+      offset_mm: { x: 1.8, y: -0.5 },
+      message: 'ok',
+      annotated_image: 'data:image/jpeg;base64,AAAA',
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    saveSpy.mockClear()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    // Not written, but the frame + warning are shown.
+    expect(saveSpy).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('Low confidence')
+    expect(wrapper.find('[data-test="pen-measure-preview-1"]').exists()).toBe(true)
+  })
+
+  it('persists the dark threshold from the Advanced panel', async () => {
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+    const input = wrapper.find('[data-test="tip-dark-threshold"]')
+    await input.setValue('120')
+    await input.trigger('change')
+    await nextTick()
+    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.dark_threshold).toBe(
+      120,
+    )
+  })
+
+  it('test detection shows a result without writing an offset', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 0,
+      is_reference: true,
+      tip_px: { x: 100, y: 100 },
+      confidence: 0.9,
+      reference_measured: true,
+      offset_mm: { x: 0, y: 0 },
+      message: 'ok',
+      annotated_image: 'data:image/jpeg;base64,AAAA',
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    saveSpy.mockClear()
+    await wrapper.find('[data-test="tip-test"]').trigger('click')
+    await flushPromises()
+    expect(measureSpy).toHaveBeenCalled()
+    expect(saveSpy).not.toHaveBeenCalled() // dry run — nothing persisted
+    expect(wrapper.find('[data-test="tip-test-preview"]').exists()).toBe(true)
+  })
+
+  it('clears a pen offset back to unset', async () => {
+    withStation()
+    const job = useJobStore()
+    job.profiles[0]!.pens![1]!.offset_source = 'vision'
+    job.profiles[0]!.pens![1]!.xy_offset_mm = { x: 2, y: 1 }
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find('[data-test="pen-clear-1"]').trigger('click')
+    await nextTick()
+    const pen1 = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).pens?.find((p) => p.index === 1)
+    expect(pen1?.offset_source).toBe('unset')
+    expect(pen1?.xy_offset_mm).toEqual({ x: 0, y: 0 })
   })
 
   it('hides Measure until a station is configured', async () => {

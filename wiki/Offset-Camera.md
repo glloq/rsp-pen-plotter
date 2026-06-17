@@ -88,6 +88,13 @@ automatically). The panel is a short guided flow:
    - **Station X/Y** *(optional)* and **Z** *(optional, motorised Z only)* —
      where the head presents a pen, for guided travel.
    - **Camera light** *(optional)* — the GPIO pin + polarity (see above).
+   - **Dark threshold** *(Advanced)* — the luminance cutoff for "tip" (0–255).
+     Raise it if the tip is faint; lower it if shadows are picked up.
+
+Use **🔍 Test detection** (under the camera) to dry-run the detector and see
+the confidence + marked frame **without writing any offset** — handy for
+tuning the zone, threshold and lighting. A measurement below ~35% confidence
+is reported but **not applied**, so a bad detection can't corrupt an offset.
 
 Or set it straight in the profile YAML — see
 [`docs/profile_format.md`](../docs/profile_format.md#tipcalibrationconfig-camera-offset-station-adr-0005):

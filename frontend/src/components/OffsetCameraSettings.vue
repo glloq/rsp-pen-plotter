@@ -276,8 +276,18 @@ interface MeasureState {
 }
 const measureState = reactive<Record<number, MeasureState>>({})
 
+// Below this detection confidence a measurement is treated as untrusted: it's
+// shown (with the frame) but NOT written, so a blurry / wrong-blob detection
+// can't silently corrupt a pen's offset.
+const MIN_CONFIDENCE = 0.35
+
 function describeMeasurement(m: TipMeasureResponse): { message: string; ok: boolean } {
   if (!m.found) return { message: m.message || t('magazine.measureNotFound'), ok: false }
+  if (m.confidence < MIN_CONFIDENCE)
+    return {
+      message: t('offsetCamera.lowConfidence', { c: Math.round(m.confidence * 100) }),
+      ok: false,
+    }
   if (m.is_reference)
     return {
       message: t('magazine.measureRefDone', { c: Math.round(m.confidence * 100) }),
@@ -316,17 +326,76 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       light_gpio_pin: cfg.light_gpio_pin ?? null,
       light_active_high: cfg.light_active_high ?? true,
     })
-    if (m.found && (m.is_reference || m.offset_mm)) {
+    const { message, ok } = describeMeasurement(m)
+    // Only write a trusted result (found + confident enough).
+    if (ok && (m.is_reference || m.offset_mm)) {
       const offset: Point = m.offset_mm ?? { x: 0, y: 0 }
       await patchPen(pen.index, { xy_offset_mm: offset, offset_source: 'vision' })
     }
-    const { message, ok } = describeMeasurement(m)
     measureState[pen.index] = { busy: false, message, ok, image: m.annotated_image }
   } catch (err) {
     const detail =
       (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
       t('magazine.measureFailed')
     measureState[pen.index] = { busy: false, message: detail, ok: false }
+  }
+}
+
+// Clear a pen's offset back to zero / unmeasured.
+function onClearOffset(pen: PenSlot): void {
+  void patchPen(pen.index, { xy_offset_mm: { x: 0, y: 0 }, offset_source: 'unset' })
+}
+
+// Progress: how many installed pens are done (the reference counts as done).
+const installedPens = computed(() => pens.value.filter((p) => p.installed))
+const measuredCount = computed(
+  () =>
+    installedPens.value.filter(
+      (p) =>
+        (tipConfig.value && p.index === tipConfig.value.reference_slot) ||
+        (p.offset_source && p.offset_source !== 'unset'),
+    ).length,
+)
+
+// ── Test detection (dry run) ───────────────────────────────────────────────
+// Run the detector on the current view WITHOUT writing any offset, so the
+// operator can tune lighting / zone / threshold before committing. Measures
+// the reference slot's view; the result is reported, not applied.
+const testState = reactive<{ busy: boolean; message: string; ok: boolean; image?: string | null }>({
+  busy: false,
+  message: '',
+  ok: false,
+})
+
+async function onTestDetection(): Promise<void> {
+  const cfg = tipConfig.value
+  if (!cfg) return
+  testState.busy = true
+  testState.message = ''
+  try {
+    const m = await measureTipOffset({
+      slot: cfg.reference_slot,
+      camera_url: cfg.camera_url,
+      mm_per_pixel: cfg.mm_per_pixel,
+      reference_slot: cfg.reference_slot,
+      dark_threshold: cfg.dark_threshold,
+      roi: cfg.roi,
+      light: lightDuringMeasure.value,
+      light_gpio_pin: cfg.light_gpio_pin ?? null,
+      light_active_high: cfg.light_active_high ?? true,
+    })
+    testState.image = m.annotated_image
+    testState.ok = m.found && m.confidence >= MIN_CONFIDENCE
+    testState.message = m.found
+      ? t('offsetCamera.testResult', { c: Math.round(m.confidence * 100) })
+      : m.message || t('magazine.measureNotFound')
+  } catch (err) {
+    testState.ok = false
+    testState.message =
+      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+      t('magazine.measureFailed')
+  } finally {
+    testState.busy = false
   }
 }
 
@@ -507,6 +576,37 @@ onUnmounted(() => clearTimeout(savedTimer))
                 height="md"
                 @update:roi="(r) => onTipConfig({ roi: r })"
               />
+              <!-- Dry-run detection: tune framing / zone / threshold without
+                   writing any offset. -->
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="rounded border border-slate-600 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                  :disabled="saving || testState.busy || !tipConfig.camera_url.trim()"
+                  data-test="tip-test"
+                  @click="onTestDetection"
+                >
+                  {{
+                    testState.busy
+                      ? t('magazine.measuring')
+                      : '🔍 ' + t('offsetCamera.testDetection')
+                  }}
+                </button>
+                <span
+                  v-if="testState.message"
+                  class="text-[11px]"
+                  :class="testState.ok ? 'text-emerald-400' : 'text-amber-400'"
+                  data-test="tip-test-msg"
+                  >{{ testState.message }}</span
+                >
+              </div>
+              <img
+                v-if="testState.image"
+                :src="testState.image"
+                :alt="t('offsetCamera.testDetection')"
+                class="max-h-40 w-auto rounded border border-slate-700"
+                data-test="tip-test-preview"
+              />
             </div>
 
             <!-- Step 2 — scale. -->
@@ -620,7 +720,28 @@ onUnmounted(() => clearTimeout(savedTimer))
                     "
                   />
                 </label>
-                <span></span>
+                <label class="block text-[11px] text-slate-400"
+                  >{{ t('magazine.darkThreshold') }}
+                  <input
+                    type="number"
+                    min="0"
+                    max="255"
+                    step="1"
+                    :value="tipConfig.dark_threshold"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="tip-dark-threshold"
+                    @change="
+                      (e) =>
+                        onTipConfig({
+                          dark_threshold: Math.min(
+                            255,
+                            Math.max(0, Math.floor(Number((e.target as HTMLInputElement).value))),
+                          ),
+                        })
+                    "
+                  />
+                </label>
                 <label class="block text-[11px] text-slate-400"
                   >{{ t('magazine.stationX') }}
                   <input
@@ -851,7 +972,14 @@ onUnmounted(() => clearTimeout(savedTimer))
 
         <!-- ── Step 3: per-pen offsets + measurement. ────────────────── -->
         <div class="rounded-lg border border-slate-700 bg-slate-900/40 p-2">
-          <p class="text-[11px] font-semibold text-slate-300">{{ t('offsetCamera.step3') }}</p>
+          <div class="flex items-center justify-between">
+            <p class="text-[11px] font-semibold text-slate-300">{{ t('offsetCamera.step3') }}</p>
+            <span
+              class="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300"
+              data-test="offset-progress"
+              >{{ t('offsetCamera.progress', { k: measuredCount, n: installedPens.length }) }}</span
+            >
+          </div>
           <p class="mb-1 text-[11px] text-slate-500">
             {{ canMeasure ? t('offsetCamera.step3Hint') : t('magazine.offsetHint') }}
           </p>
@@ -994,16 +1122,30 @@ onUnmounted(() => clearTimeout(savedTimer))
                     @change="(e) => onOffset(pen, 'y', (e.target as HTMLInputElement).value)"
                   />
                 </label>
-                <button
-                  v-if="canMeasure"
-                  type="button"
-                  class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
-                  :disabled="saving || measureState[pen.index]?.busy"
-                  :data-test="`pen-measure-${pen.index}`"
-                  @click="onMeasure(pen)"
-                >
-                  {{ measureState[pen.index]?.busy ? t('magazine.measuring') : '📷' }}
-                </button>
+                <div class="flex items-center gap-1">
+                  <button
+                    v-if="canMeasure"
+                    type="button"
+                    class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
+                    :disabled="saving || measureState[pen.index]?.busy"
+                    :data-test="`pen-measure-${pen.index}`"
+                    @click="onMeasure(pen)"
+                  >
+                    {{ measureState[pen.index]?.busy ? t('magazine.measuring') : '📷' }}
+                  </button>
+                  <button
+                    v-if="pen.offset_source && pen.offset_source !== 'unset'"
+                    type="button"
+                    class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-700 hover:text-slate-200 disabled:opacity-50"
+                    :disabled="saving"
+                    :title="t('offsetCamera.clearOffset')"
+                    :aria-label="t('offsetCamera.clearOffset')"
+                    :data-test="`pen-clear-${pen.index}`"
+                    @click="onClearOffset(pen)"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
               <p
                 v-if="measureState[pen.index]?.message"
