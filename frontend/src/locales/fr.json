@@ -703,6 +703,7 @@
   "canvas": {
     "sheet": "Plan",
     "simulator": "Simulation",
+    "files": "Fichiers G-code",
     "gcode": "G-code",
     "simulatorUnavailable": "Le simulateur n'est pas disponible pour ce dialecte.",
     "gcodeEmpty": "Aucun G-code généré pour le moment.",
@@ -1462,7 +1463,8 @@
     "startPrint": "Lancer l'impression",
     "gcodeSection": "G-code généré",
     "controlHint": "Connecte le traceur, pilote-le manuellement et lance les impressions depuis cet onglet.",
-    "settingsTitle": "Réglages du traceur"
+    "settingsTitle": "Réglages du traceur",
+    "saveGcode": "Enregistrer le G-code"
   },
   "assignedColor": {
     "title": "Couleur du calque",
@@ -1587,8 +1589,6 @@
   },
   "gcodeFiles": {
     "title": "Fichiers G-code",
-    "saveCurrent": "Enregistrer le G-code courant",
-    "generateFirst": "Générez le G-code pour pouvoir l'enregistrer.",
     "empty": "Aucun fichier G-code. Générez un dessin puis enregistrez-le ici.",
     "print": "Imprimer la sélection",
     "rename": "Renommer",
@@ -1655,7 +1655,14 @@
     "planPreviewSvg": "Aperçu du style",
     "planPreviewSvgHint": "Affiche toujours le style choisi — un véritable aperçu de ce qui sera tracé. Peut être lent sur les dessins très denses.",
     "planPreviewImage": "Image d'origine",
-    "planPreviewImageHint": "Affiche toujours l'image source d'origine. Le plus léger à afficher, mais ne reflète pas le style choisi."
+    "planPreviewImageHint": "Affiche toujours l'image source d'origine. Le plus léger à afficher, mais ne reflète pas le style choisi.",
+    "camera": "Caméra",
+    "cameraHint": "Affiche un flux vidéo en direct au-dessus des contrôles manuels dans l'onglet Traceur.",
+    "cameraEnable": "Activer le flux caméra",
+    "cameraEnableHint": "Affiche le flux configuré dans l'onglet Traceur.",
+    "cameraUrl": "URL du flux",
+    "cameraUrlHint": "URL du flux MJPEG — ex. http://raspberrypi.local:8080/?action=stream",
+    "cameraUrlPlaceholder": "http://…/flux"
   },
   "updateModal": {
     "titleRunning": "Mise à jour en cours",
@@ -1896,5 +1903,12 @@
       "next": "Suivant",
       "save": "Enregistrer"
     }
+  },
+  "camera": {
+    "title": "Caméra",
+    "live": "En direct",
+    "notConfigured": "Aucune caméra configurée",
+    "configure": "Configurer la caméra →",
+    "streamError": "Flux vidéo indisponible"
   }
 }

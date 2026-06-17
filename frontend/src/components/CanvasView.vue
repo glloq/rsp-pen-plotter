@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { confirmAction } from '../composables/confirm'
 import { ensureMagazineLoaded } from '../composables/magazineGate'
+import { useInkOdometer } from '../composables/useInkOdometer'
+import { useSaveCurrentGcode } from '../composables/useSaveCurrentGcode'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useUiStore, type CanvasTab } from '../stores/ui'
@@ -12,6 +14,8 @@ import Simulator from './Simulator.vue'
 import PlotterControl from './PlotterControl.vue'
 import PlanRail from './PlanRail.vue'
 import SimRail from './SimRail.vue'
+import GcodePreview from './GcodePreview.vue'
+import GcodeFilesPanel from './GcodeFilesPanel.vue'
 import AppFooter from './AppFooter.vue'
 
 const { t } = useI18n()
@@ -26,11 +30,13 @@ const canSimulate = computed(() => job.selectedProfile?.gcode_dialect !== 'ebb')
 const tabs = computed<Array<{ id: CanvasTab; label: string; available: boolean; hint?: string }>>(
   () => [
     { id: 'sheet', label: t('canvas.sheet'), available: true },
-    {
-      id: 'simulator',
-      label: t('canvas.simulator'),
-      available: Boolean(job.gcode) && canSimulate.value,
-    },
+    // Available as soon as a G-code exists — even for dialects the visual
+    // simulator can't replay (ebb): the tab still hosts the program text,
+    // the Save action and the Start-print button.
+    { id: 'simulator', label: t('canvas.simulator'), available: Boolean(job.gcode) },
+    // Saved-programs library — always reachable, independent of the
+    // current job.
+    { id: 'files', label: t('canvas.files'), available: true },
     { id: 'plotter', label: t('canvas.plotter'), available: true },
   ],
 )
@@ -39,11 +45,23 @@ function select(tab: CanvasTab): void {
   canvasTab.value = tab
 }
 
+// Save the current program into the library — the simulator tab's
+// secondary action, beside "Start print". Lives here (shared composable)
+// so the odometer bookkeeping stays in one place.
+const { canSave, saving, saveCurrent } = useSaveCurrentGcode()
+
+// Collapsible current-G-code panel under the simulator preview. Defaults
+// open so the operator sees the program they're about to save or print;
+// the toggle label carries the line count.
+const gcodeOpen = ref(true)
+const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length : 0))
+
 // "Start print" lives in the simulator header so the operator can fire
 // the job straight from the preview they just reviewed. It mirrors the
 // header transport's direct-send path: requires a live connection + a
 // generated G-code, then sends after a confirmation.
 const canStartPrint = computed(() => Boolean(job.gcode) && plotterStatus.value.connected)
+const { commitCurrentJob } = useInkOdometer()
 
 async function startPrint(): Promise<void> {
   if (!job.gcode || !plotterStatus.value.connected) return
@@ -62,7 +80,13 @@ async function startPrint(): Promise<void> {
     if (!confirmed) return
   }
   // Re-read the G-code: confirming the gate may have regenerated it.
-  if (job.gcode) await plotter.run(job.gcode)
+  if (job.gcode) {
+    await plotter.run(job.gcode)
+    // Advance the ink odometer only on a real launch — i.e. the send
+    // succeeded. This is the one point per-colour lengths still match
+    // what's drawn; saving never touches the odometer.
+    if (!plotter.error) commitCurrentJob()
+  }
 }
 </script>
 
@@ -90,21 +114,34 @@ async function startPrint(): Promise<void> {
         {{ tab.label }}
       </button>
 
-      <!-- Simulator-tab header action: send the reviewed job to the
-           plotter. Disabled (greyed) until both a G-code and a live
-           connection are available. -->
-      <button
-        v-if="canvasTab === 'simulator'"
-        type="button"
-        class="ml-auto flex items-center gap-1 rounded bg-emerald-600 px-3 py-1 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
-        :disabled="!canStartPrint"
-        :title="plotterStatus.connected ? t('plotter.startPrint') : t('plotter.manualDisconnected')"
-        data-test="simulator-start-print"
-        @click="startPrint"
-      >
-        <span aria-hidden="true">▶</span>
-        {{ t('plotter.startPrint') }}
-      </button>
+      <!-- Simulator-tab header actions: save the reviewed program into the
+           library, or send it straight to the plotter. Save needs a
+           G-code; Start print also needs a live connection. -->
+      <div v-if="canvasTab === 'simulator'" class="ml-auto flex items-center gap-2">
+        <button
+          type="button"
+          class="flex items-center gap-1 rounded border border-sky-600 px-3 py-1 text-sm font-medium text-sky-200 hover:bg-sky-600/20 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!canSave || saving"
+          data-test="simulator-save-gcode"
+          @click="saveCurrent"
+        >
+          <span aria-hidden="true">💾</span>
+          {{ t('plotter.saveGcode') }}
+        </button>
+        <button
+          type="button"
+          class="flex items-center gap-1 rounded bg-emerald-600 px-3 py-1 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!canStartPrint"
+          :title="
+            plotterStatus.connected ? t('plotter.startPrint') : t('plotter.manualDisconnected')
+          "
+          data-test="simulator-start-print"
+          @click="startPrint"
+        >
+          <span aria-hidden="true">▶</span>
+          {{ t('plotter.startPrint') }}
+        </button>
+      </div>
     </nav>
 
     <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3">
@@ -117,16 +154,60 @@ async function startPrint(): Promise<void> {
         </div>
         <PlanRail />
       </div>
-      <div v-show="canvasTab === 'simulator'" class="flex h-full min-h-0">
-        <div class="flex min-h-0 flex-1 flex-col">
-          <Simulator v-if="canSimulate && job.gcode" />
-          <p v-else-if="!canSimulate" class="text-sm text-slate-500">
-            {{ t('canvas.simulatorUnavailable') }}
-          </p>
-          <p v-else class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
+      <div v-show="canvasTab === 'simulator'" class="flex h-full min-h-0 flex-col gap-2">
+        <div class="flex min-h-0 flex-1">
+          <div class="flex min-h-0 flex-1 flex-col">
+            <Simulator v-if="canSimulate && job.gcode" />
+            <p v-else-if="!canSimulate" class="text-sm text-slate-500">
+              {{ t('canvas.simulatorUnavailable') }}
+            </p>
+            <p v-else class="text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
+          </div>
+          <SimRail v-if="canSimulate && job.gcode" />
         </div>
-        <SimRail v-if="canSimulate && job.gcode" />
+
+        <!-- Current generated G-code — the program about to be saved or
+             printed. Collapsible so the simulator canvas keeps the height
+             by default; the toggle carries the line count. -->
+        <div class="shrink-0 overflow-hidden rounded-lg border border-slate-700 bg-slate-900">
+          <button
+            type="button"
+            class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-800/60"
+            :aria-expanded="gcodeOpen"
+            data-test="simulator-gcode-toggle"
+            @click="gcodeOpen = !gcodeOpen"
+          >
+            <span class="flex items-center gap-2">
+              <span aria-hidden="true" class="text-xs">{{ gcodeOpen ? '▾' : '▸' }}</span>
+              <span class="uppercase tracking-wide">{{ t('plotter.gcodeSection') }}</span>
+              <span v-if="job.gcode" class="text-xs text-slate-500"
+                >({{ gcodeLineCount }} {{ t('gcode.lines') }})</span
+              >
+            </span>
+            <span v-if="!job.gcode" class="text-xs text-slate-500">{{
+              t('canvas.gcodeEmpty')
+            }}</span>
+          </button>
+          <div
+            v-show="gcodeOpen"
+            class="h-64 border-t border-slate-700"
+            data-test="simulator-gcode-body"
+          >
+            <GcodePreview v-if="job.gcode" />
+            <p v-else class="p-4 text-sm text-slate-500">{{ t('canvas.gcodeEmpty') }}</p>
+          </div>
+        </div>
       </div>
+
+      <!-- Saved-programs library: the full list of stored G-code files,
+           pick one and print it on demand. -->
+      <div v-show="canvasTab === 'files'" class="flex h-full min-h-0 flex-col overflow-y-auto">
+        <div class="rounded-lg border border-slate-700 bg-slate-900 p-3">
+          <h3 class="mb-2 text-sm font-semibold text-slate-100">{{ t('gcodeFiles.title') }}</h3>
+          <GcodeFilesPanel />
+        </div>
+      </div>
+
       <div v-show="canvasTab === 'plotter'" class="flex h-full min-h-0 flex-col">
         <PlotterControl />
       </div>

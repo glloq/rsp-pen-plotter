@@ -1000,6 +1000,13 @@
             "title": "Gcode",
             "type": "string"
           },
+          "length_mm_by_color": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Length Mm By Color",
+            "type": "object"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1042,6 +1049,13 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "length_mm_by_color": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Length Mm By Color",
+            "type": "object"
           },
           "line_count": {
             "title": "Line Count",

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
-export type CanvasTab = 'sheet' | 'simulator' | 'plotter'
+export type CanvasTab = 'sheet' | 'simulator' | 'files' | 'plotter'
 export type SettingsTab = 'system' | 'history' | 'audit' | 'slo' | 'manifests'
 export type PlotterTab = 'connection' | 'profile' | 'colors' | 'macros' | 'queue'
 
@@ -98,6 +98,30 @@ function loadPlanPreviewMode(): PlanPreviewMode {
     return 'auto'
   } catch {
     return 'auto'
+  }
+}
+
+// Optional workshop camera. When enabled with a stream URL, the Plotter
+// tab shows the live feed above the manual cockpit so the operator can
+// watch the bed without leaving the screen. Stored client-side (like the
+// other System-settings preferences) since it describes this browser's
+// view of the machine, not the machine itself.
+const CAMERA_ENABLED_KEY = 'omniplot.cameraEnabled'
+const CAMERA_URL_KEY = 'omniplot.cameraUrl'
+
+function loadCameraEnabled(): boolean {
+  try {
+    return localStorage.getItem(CAMERA_ENABLED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function loadCameraUrl(): string {
+  try {
+    return localStorage.getItem(CAMERA_URL_KEY) ?? ''
+  } catch {
+    return ''
   }
 }
 
@@ -216,6 +240,25 @@ export const useUiStore = defineStore('ui', () => {
     }
   })
 
+  // Workshop camera config (System settings). Both halves persist
+  // independently so toggling the feed off keeps the saved URL.
+  const cameraEnabled = ref<boolean>(loadCameraEnabled())
+  const cameraUrl = ref<string>(loadCameraUrl())
+  watch(cameraEnabled, (value) => {
+    try {
+      localStorage.setItem(CAMERA_ENABLED_KEY, value ? '1' : '0')
+    } catch {
+      // localStorage unavailable — preference won't persist, no-op.
+    }
+  })
+  watch(cameraUrl, (value) => {
+    try {
+      localStorage.setItem(CAMERA_URL_KEY, value)
+    } catch {
+      // localStorage unavailable — preference won't persist, no-op.
+    }
+  })
+
   function setPreviewSheet(sheet: PreviewSheet | null): void {
     previewSheet.value = sheet
   }
@@ -309,6 +352,8 @@ export const useUiStore = defineStore('ui', () => {
     updateState,
     updateNotificationsEnabled,
     planPreviewMode,
+    cameraEnabled,
+    cameraUrl,
     setPreviewSheet,
     openSettings,
     closeSettings,

@@ -2119,6 +2119,10 @@ export interface components {
         GcodeFileCreate: {
             /** Gcode */
             gcode: string;
+            /** Length Mm By Color */
+            length_mm_by_color?: {
+                [key: string]: number;
+            };
             /** Name */
             name: string;
             /** Profile Name */
@@ -2144,6 +2148,10 @@ export interface components {
             created_at: string;
             /** Id */
             id: string;
+            /** Length Mm By Color */
+            length_mm_by_color?: {
+                [key: string]: number;
+            };
             /** Line Count */
             line_count: number;
             /** Name */

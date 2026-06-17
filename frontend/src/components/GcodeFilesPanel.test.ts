@@ -35,6 +35,7 @@ import en from '../locales/en.json'
 import GcodeFilesPanel from './GcodeFilesPanel.vue'
 import { useJobStore } from '../stores/job'
 import { useQueueStore } from '../stores/queue'
+import { useAvailableColorsStore } from '../stores/availableColors'
 import type { MachineProfile } from '../api/client'
 
 const i18n = createI18n({
@@ -52,6 +53,7 @@ function fileSummary(over: Partial<GcodeFileSummary> = {}): GcodeFileSummary {
     profile_name: 'P',
     line_count: 4,
     size_bytes: 120,
+    length_mm_by_color: {},
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...over,
@@ -110,27 +112,31 @@ describe('GcodeFilesPanel', () => {
     )
   })
 
-  it('shows a generate-first hint and no save button when there is no G-code', async () => {
+  it('shows the empty state and no save button when there are no files', async () => {
     await seedJob(false)
     const wrapper = mountPanel()
     await flushPromises()
+    // Saving the current program now lives on the Simulation tab — this
+    // panel only manages already-saved files.
     expect(wrapper.find('[data-test="gcode-save-current"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain(en.gcodeFiles.generateFirst)
+    expect(wrapper.find('[data-test="gcode-file-list"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain(en.gcodeFiles.empty)
   })
 
-  it('saves the current program into the library and selects it', async () => {
-    const job = await seedJob(true)
+  it('lists saved files and enables Print once one is selected', async () => {
+    h.files = [fileSummary({ id: 'f1', name: 'logo' })]
+    await seedJob(false)
     const wrapper = mountPanel()
     await flushPromises()
 
-    await wrapper.find('[data-test="gcode-save-current"]').trigger('click')
-    await flushPromises()
-
-    expect(h.saveGcodeFile).toHaveBeenCalledWith('gcode', job.selectedProfileName, job.gcode)
-    // The new file appears and is auto-selected → Print is enabled.
-    expect(wrapper.find('[data-test="gcode-file-new1"]').exists()).toBe(true)
-    const printBtn = wrapper.find('[data-test="gcode-print-selected"]')
-    expect(printBtn.attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-test="gcode-file-f1"]').exists()).toBe(true)
+    // Nothing selected yet → Print disabled.
+    expect(wrapper.find('[data-test="gcode-print-selected"]').attributes('disabled')).toBeDefined()
+    await wrapper.find('[data-test="gcode-file-select-f1"]').trigger('click')
+    await nextTick()
+    expect(
+      wrapper.find('[data-test="gcode-print-selected"]').attributes('disabled'),
+    ).toBeUndefined()
   })
 
   it('prints the selected file on demand', async () => {
@@ -145,6 +151,24 @@ describe('GcodeFilesPanel', () => {
     await flushPromises()
 
     expect(h.printGcodeFile).toHaveBeenCalledWith('f1')
+  })
+
+  it('advances the ink odometer from the file lengths when printing', async () => {
+    h.files = [fileSummary({ id: 'f1', name: 'logo', length_mm_by_color: { '#ff0000': 90 } })]
+    await seedJob(false)
+    const colors = useAvailableColorsStore()
+    const odo = vi.spyOn(colors, 'addToOdometer').mockResolvedValue()
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    await wrapper.find('[data-test="gcode-file-select-f1"]').trigger('click')
+    await nextTick()
+    await wrapper.find('[data-test="gcode-print-selected"]').trigger('click')
+    await flushPromises()
+
+    // Re-printing a saved file is a real plot → ink is accounted for from
+    // the per-colour lengths stored with the file.
+    expect(odo).toHaveBeenCalledWith('#ff0000', 90)
   })
 
   it('shows the live state inline for a file that is printing, and blocks its actions', async () => {

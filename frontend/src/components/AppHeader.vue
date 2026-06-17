@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { confirmAction } from '../composables/confirm'
 import { ensureMagazineLoaded } from '../composables/magazineGate'
+import { useInkOdometer } from '../composables/useInkOdometer'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useQueueStore } from '../stores/queue'
@@ -16,6 +17,7 @@ const plotter = usePlotterStore()
 const queue = useQueueStore()
 const job = useJobStore()
 const { status: plotterStatus } = storeToRefs(plotter)
+const { commitCurrentJob } = useInkOdometer()
 
 // Header transport controls: prefer the queued active run when one is
 // live so the buttons drive the canonical queue lifecycle. Fall back
@@ -69,7 +71,12 @@ async function onPlay(): Promise<void> {
     if (!confirmed) return
   }
   // Re-read the G-code: confirming the gate may have regenerated it.
-  if (job.gcode) await plotter.run(job.gcode)
+  if (job.gcode) {
+    await plotter.run(job.gcode)
+    // Advance the ink odometer only on a real launch (send succeeded) —
+    // never on save, so the counters reflect ink actually drawn.
+    if (!plotter.error) commitCurrentJob()
+  }
 }
 
 async function onPause(): Promise<void> {

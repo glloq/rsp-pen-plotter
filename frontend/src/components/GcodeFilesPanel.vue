@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// G-code file library for the Plotter tab.
+// Saved G-code library (Files tab).
 //
-// Lists the saved G-code programs (files) and lets the operator save the
-// current program, pick one and print it on demand, rename or delete it.
-// Saving never starts a print — printing is the explicit "Print selection"
-// action, which enqueues the file as a run on the plotter.
+// Lists the stored G-code programs (files) and lets the operator pick
+// one and print it on demand, rename or delete it. Saving the current
+// program is the Simulation tab's job (``useSaveCurrentGcode``); this
+// panel is purely the manager for what's already been saved.
 //
 // Per the agreed design the list shows the active print's state inline
 // ("printing") with no cockpit here: pause / stop live in the header
@@ -15,18 +15,15 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { GcodeFileSummary, PrintRun } from '../api/client'
 import { confirmAction } from '../composables/confirm'
-import { useAvailableColorsStore } from '../stores/availableColors'
+import { useInkOdometer } from '../composables/useInkOdometer'
 import { useGcodeFilesStore } from '../stores/gcodeFiles'
-import { useJobStore } from '../stores/job'
 import { useQueueStore } from '../stores/queue'
 
 const { t } = useI18n()
-const job = useJobStore()
 const files = useGcodeFilesStore()
 const queue = useQueueStore()
-const availableColors = useAvailableColorsStore()
+const inkOdometer = useInkOdometer()
 
-const canSave = computed(() => Boolean(job.gcode))
 const selectedId = ref<string | null>(null)
 
 // Active runs keyed by the library file they were launched from, so a
@@ -52,32 +49,20 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
 }
 
-function logOdometerForCurrentJob(): void {
-  for (const [hex, mm] of Object.entries(job.lengthMmByColor)) {
-    void availableColors.addToOdometer(hex, mm)
-  }
-}
-
-async function saveCurrent(): Promise<void> {
-  if (!job.gcode) return
-  const name = job.job?.source_file ?? 'gcode'
-  const created = await files.save(name, job.selectedProfileName, job.gcode)
-  if (created) {
-    selectedId.value = created.id
-    // The saved program is what the operator intends to draw, and the
-    // file no longer carries per-colour lengths — advance the ink
-    // odometer here, the one point the current job's data still matches.
-    logOdometerForCurrentJob()
-  }
-}
-
 async function printSelected(): Promise<void> {
   const id = selectedId.value
   if (!id) return
+  const file = files.files.find((f) => f.id === id)
   const ok = await files.print(id)
-  // Pull the queue immediately so the row flips to "printing" without
-  // waiting for the next poll tick.
-  if (ok) await queue.load()
+  if (ok) {
+    // A real plot was launched → advance the ink odometer from the
+    // lengths captured when the file was saved (the G-code text alone
+    // can't be decomposed by colour).
+    if (file) inkOdometer.commit(file.length_mm_by_color)
+    // Pull the queue immediately so the row flips to "printing" without
+    // waiting for the next poll tick.
+    await queue.load()
+  }
 }
 
 // Inline rename.
@@ -125,19 +110,6 @@ onMounted(() => {
 
 <template>
   <div class="space-y-2" data-test="gcode-files-panel">
-    <!-- Save the current generated program into the library. -->
-    <button
-      v-if="canSave"
-      type="button"
-      class="w-full rounded bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-50"
-      :disabled="files.saving"
-      data-test="gcode-save-current"
-      @click="saveCurrent"
-    >
-      + {{ t('gcodeFiles.saveCurrent') }}
-    </button>
-    <p v-else class="px-1 text-xs text-slate-500">{{ t('gcodeFiles.generateFirst') }}</p>
-
     <!-- File list. -->
     <ul v-if="files.hasFiles" class="space-y-1" data-test="gcode-file-list">
       <li

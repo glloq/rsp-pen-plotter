@@ -67,6 +67,39 @@ async def test_save_list_rename_delete() -> None:
 
 
 @pytest.mark.asyncio
+async def test_length_by_color_round_trips() -> None:
+    """Per-colour lengths sent at save time survive into the list projection."""
+    lengths = {"#ff0000": 120.5, "#0000ff": 30.0}
+    async with _client() as client:
+        created = await client.post(
+            "/gcode-files",
+            json={
+                "name": "inked",
+                "profile_name": PROFILE,
+                "gcode": GCODE,
+                "length_mm_by_color": lengths,
+            },
+        )
+        assert created.status_code == 200, created.text
+        assert created.json()["length_mm_by_color"] == lengths
+
+        listed = await client.get("/gcode-files")
+        assert listed.json()[0]["length_mm_by_color"] == lengths
+
+
+@pytest.mark.asyncio
+async def test_length_by_color_defaults_to_empty() -> None:
+    """Omitting the per-colour lengths stores an empty mapping, not null."""
+    async with _client() as client:
+        created = await client.post(
+            "/gcode-files",
+            json={"name": "plain", "profile_name": PROFILE, "gcode": GCODE},
+        )
+        assert created.status_code == 200, created.text
+        assert created.json()["length_mm_by_color"] == {}
+
+
+@pytest.mark.asyncio
 async def test_empty_gcode_is_rejected() -> None:
     """Saving a blank program is a 422, not a useless empty row."""
     async with _client() as client:

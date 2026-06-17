@@ -703,6 +703,7 @@
   "canvas": {
     "sheet": "Layout",
     "simulator": "Simulator",
+    "files": "G-code files",
     "gcode": "G-code",
     "simulatorUnavailable": "Simulator unavailable for this dialect.",
     "gcodeEmpty": "No G-code generated yet.",
@@ -1462,7 +1463,8 @@
     "startPrint": "Start print",
     "gcodeSection": "Generated G-code",
     "controlHint": "Connect the plotter, drive it manually and start prints from this tab.",
-    "settingsTitle": "Plotter settings"
+    "settingsTitle": "Plotter settings",
+    "saveGcode": "Save G-code"
   },
   "assignedColor": {
     "title": "Layer colour",
@@ -1587,8 +1589,6 @@
   },
   "gcodeFiles": {
     "title": "G-code files",
-    "saveCurrent": "Save current G-code",
-    "generateFirst": "Generate G-code first to save it.",
     "empty": "No G-code files yet. Generate a drawing, then save it here.",
     "print": "Print selection",
     "rename": "Rename",
@@ -1655,7 +1655,14 @@
     "planPreviewSvg": "Style preview",
     "planPreviewSvgHint": "Always shows the chosen style — a true preview of what will be plotted. May feel slow on very dense drawings.",
     "planPreviewImage": "Original image",
-    "planPreviewImageHint": "Always shows the original source image. Lightest to render, but doesn't reflect the chosen style."
+    "planPreviewImageHint": "Always shows the original source image. Lightest to render, but doesn't reflect the chosen style.",
+    "camera": "Camera",
+    "cameraHint": "Show a live camera feed above the manual controls on the Plotter tab.",
+    "cameraEnable": "Enable camera feed",
+    "cameraEnableHint": "Display the configured stream on the Plotter tab.",
+    "cameraUrl": "Stream URL",
+    "cameraUrlHint": "MJPEG stream URL — e.g. http://raspberrypi.local:8080/?action=stream",
+    "cameraUrlPlaceholder": "http://…/stream"
   },
   "updateModal": {
     "titleRunning": "Update in progress",
@@ -1896,5 +1903,12 @@
       "next": "Next",
       "save": "Save"
     }
+  },
+  "camera": {
+    "title": "Camera",
+    "live": "Live",
+    "notConfigured": "No camera configured",
+    "configure": "Configure the camera →",
+    "streamError": "Video stream unavailable"
   }
 }
