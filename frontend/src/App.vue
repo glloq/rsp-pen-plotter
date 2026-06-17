@@ -29,13 +29,13 @@ import ManifestFallbackBanner from './components/ManifestFallbackBanner.vue'
 const loadEditModal = () => import('./components/v2/EditModalV2.vue')
 const loadWorkshop = () => import('./components/v2/WorkshopMode.vue')
 const loadPerfOverlay = () => import('./components/v2/PerfOverlay.vue')
-// SettingsDrawer + PlotterSettingsModal are gated by ``v-if`` so they
+// SettingsModal + PlotterSettingsModal are gated by ``v-if`` so they
 // never render until the operator opens them — moving them out of the
 // main bundle shrinks the boot-time JS by ~40 kB gzip (ProfileEditor +
-// AvailableColorsPanel + MacroPanel + the five SystemPanel-family
-// tabs). Idle-time prefetch (below) warms the chunk so the first open
-// still hits a hot cache.
-const loadSettingsDrawer = () => import('./components/SettingsDrawer.vue')
+// AvailableColorsPanel + MacroPanel + the SystemPanel-family panels).
+// Idle-time prefetch (below) warms the chunk so the first open still
+// hits a hot cache.
+const loadSettingsModal = () => import('./components/SettingsModal.vue')
 const loadPlotterSettingsModal = () => import('./components/PlotterSettingsModal.vue')
 // Minimal skeleton shown only while the modal chunk is in flight (the
 // 200 ms ``delay`` swallows any near-instant load so this never flashes
@@ -70,7 +70,7 @@ const EditModalV2 = defineAsyncComponent({
 })
 const WorkshopMode = defineAsyncComponent(loadWorkshop)
 const PerfOverlay = defineAsyncComponent(loadPerfOverlay)
-const SettingsDrawer = defineAsyncComponent(loadSettingsDrawer)
+const SettingsModal = defineAsyncComponent(loadSettingsModal)
 const PlotterSettingsModal = defineAsyncComponent(loadPlotterSettingsModal)
 
 // Pull the heavy lazy chunks into cache during idle time so the first
@@ -96,7 +96,7 @@ function prefetchHeavySurfaces(): void {
   scheduleIdle(() => {
     void loadEditModal().catch(() => undefined)
     void loadWorkshop().catch(() => undefined)
-    void loadSettingsDrawer().catch(() => undefined)
+    void loadSettingsModal().catch(() => undefined)
     void loadPlotterSettingsModal().catch(() => undefined)
   })
 }
@@ -425,7 +425,7 @@ onBeforeUnmount(() => {
       <CanvasView />
     </main>
 
-    <SettingsDrawer />
+    <SettingsModal />
     <PlotterSettingsModal />
     <!-- Edit modal — V2 wizard is the only surface (v0.2 migration).
          ``:key`` re-mounts when the operator switches files so local

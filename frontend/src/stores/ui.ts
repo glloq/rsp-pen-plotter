@@ -2,7 +2,11 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
 export type CanvasTab = 'sheet' | 'simulator' | 'files' | 'plotter'
-export type SettingsTab = 'system' | 'history' | 'audit' | 'slo' | 'manifests'
+// Top-level sections of the centred Settings modal. The former
+// developer/diagnostics tabs (audit, slo, manifests) are no longer
+// first-class tabs — they're collapsed under the single ``advanced``
+// section so the panel reads as operator settings, not observability.
+export type SettingsTab = 'system' | 'timelapse' | 'history' | 'advanced'
 export type PlotterTab = 'connection' | 'profile' | 'colors' | 'macros' | 'queue'
 
 export interface PreviewSheet {
