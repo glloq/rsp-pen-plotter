@@ -36,6 +36,7 @@ recipes live in the [`wiki/`](../wiki/Home.md) folder instead.
 | [profile_format.md](profile_format.md) | Machine profile YAML schema and the bundled examples |
 | [hardware_streaming.md](hardware_streaming.md) | Serial transport, the G-code streamer, EBB, templates |
 | [tool_change_mechanisms.md](tool_change_mechanisms.md) | How pen swaps are handled across firmwares |
+| [camera_tip_offset.md](camera_tip_offset.md) | Design study — camera-measured per-pen XY tip offset (see ADR 0005) |
 | [frontend.md](frontend.md) | Vue component map, Pinia stores, i18n, SVG safety |
 | [plugin-sdk.md](plugin-sdk.md) | Plugin architecture and extension points |
 | [contract_architecture.md](contract_architecture.md) | Shared contracts (Pydantic + TS types) |

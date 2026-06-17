@@ -63,9 +63,15 @@ Expert mode. The per-layer override wins over the profile default and
 applies regardless of slot.
 
 If different pens need different XY offsets (the carousel doesn't
-centre the tip exactly above 0,0), use the per-slot `xy_offset_mm`
-field in the profile. The generator translates that pen's strokes by
-the offset.
+centre the tip exactly above 0,0), the plan is a per-slot `xy_offset_mm`
+field that translates that pen's strokes by the offset — optionally
+measured automatically by a camera at a dedicated calibration station.
+
+> **Not yet implemented.** This field does not exist in `PenSlot` today
+> and no stroke compensation is applied. The design — including the
+> camera-assisted measurement — is captured in
+> [`docs/adr/0005-camera-tip-offset.md`](../docs/adr/0005-camera-tip-offset.md)
+> and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
 
 ## Logging
 

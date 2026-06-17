@@ -5,10 +5,13 @@ ADR captures **what** was decided, **why** the alternatives lost, and **what
 trade-offs that locked us into** — so future contributors can tell which
 choices are accidents of history and which are load-bearing.
 
-Format: shortened MADR. One file per decision, dated in the filename
-(`YYYY-MM-DD-slug.md`). Status is one of `accepted`, `superseded by …`,
-`deprecated`. We don't track `proposed` here — the repo already runs through
-PR review so anything that landed in `adr/` is by definition accepted.
+Format: shortened MADR. One file per decision, numbered in the filename
+(`NNNN-slug.md`). Status is normally one of `accepted`, `superseded by …`,
+`deprecated`. We don't usually track `proposed` here — the repo runs through
+PR review so anything that landed in `adr/` is by definition accepted. The one
+exception is a forward-looking *study* recorded ahead of implementation (e.g.
+[0005](./0005-camera-tip-offset.md)); it carries `proposed` until the first
+code lands, then flips to `accepted`.
 
 | ADR | Status | Subject |
 |---|---|---|
@@ -16,6 +19,7 @@ PR review so anything that landed in `adr/` is by definition accepted.
 | [0002-vpype-dependency.md](./0002-vpype-dependency.md) | accepted | Use vpype for layout / optimization / G-code emission |
 | [0003-pydantic.md](./0003-pydantic.md) | accepted | Pydantic models for every API boundary + persistence schema |
 | [0004-sqlite.md](./0004-sqlite.md) | accepted | SQLite (with SQLModel) for job history + audit + library metadata |
+| [0005-camera-tip-offset.md](./0005-camera-tip-offset.md) | proposed | Camera-assisted per-pen XY tip offset via a dedicated measurement station |
 
 ## When to write a new ADR
 
