@@ -93,9 +93,7 @@ function onReset(layerId: string, payload: { hex: string | null }): void {
           :class="{ 'is-open': openLayerId === ink.layerId }"
           :aria-expanded="openLayerId === ink.layerId"
           :title="
-            openLayerId === ink.layerId
-              ? t('v2.modal.layerAssignClose')
-              : t('v2.modal.layerAssign')
+            openLayerId === ink.layerId ? t('v2.modal.layerAssignClose') : t('v2.modal.layerAssign')
           "
           :aria-label="t('v2.modal.layerAssign')"
           :data-test="`modal-v2-ink-assign-${ink.layerId}`"

@@ -138,8 +138,7 @@ def test_rack_without_calibrated_positions_warns() -> None:
     """Host (rack) swaps travel to calibrated slot positions; an
     uncalibrated slot silently skips its move steps, so preflight must
     flag every used slot that has no position."""
-    from pen_plotter.domain.capability import derive_capabilities
-    from pen_plotter.domain.capability import HostSwapPlan, HostSwapStep
+    from pen_plotter.domain.capability import HostSwapPlan, HostSwapStep, derive_capabilities
     from pen_plotter.models import PenSlot
 
     caps = derive_capabilities("rack", 2)

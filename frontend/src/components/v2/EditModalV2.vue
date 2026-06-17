@@ -243,9 +243,7 @@ const sheetOutline = computed<SheetOutline | null>(() => {
 // expert live preview), so hide + re-assign work on every image, committed
 // or not. The picker strips are the only thing the parent still owns.
 const installedPenColors = computed<string[]>(() =>
-  (job.selectedProfile?.pens ?? [])
-    .filter((p) => p.installed && p.color)
-    .map((p) => p.color),
+  (job.selectedProfile?.pens ?? []).filter((p) => p.installed && p.color).map((p) => p.color),
 )
 // Manual-pick strip — the FULL magazine ∪ inventory, regardless of the
 // global palette source, so an explicit override offers every owned ink
