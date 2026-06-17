@@ -290,6 +290,10 @@ export interface TipMeasureRequest {
   move_to_station?: boolean
   station_position?: Point | null
   profile_name?: string | null
+  // Optional automatic pen-fetch: load this slot's pen via a tool-change swap
+  // before measuring (host-macro / firmware magazines; needs a connected
+  // plotter). Runs before move_to_station.
+  fetch_pen?: boolean
 }
 
 export interface TipMeasureResponse {

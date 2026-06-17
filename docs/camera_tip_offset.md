@@ -1,6 +1,6 @@
 # Camera-assisted pen-tip offset — design study
 
-- **Status**: Phase 1 (manual offset) + Phase 2 (vision measurement, with optional guided travel) implemented
+- **Status**: Phase 1 (manual offset) + Phase 2 (vision measurement) + optional guided travel & pen-fetch implemented
 - **Date**: 2026-06
 - **Companion ADR**: [`adr/0005-camera-tip-offset.md`](adr/0005-camera-tip-offset.md)
 
@@ -8,12 +8,12 @@
 > **Pillow + NumPy**, not OpenCV — both are already dependencies, so the
 > appliance needs nothing extra and the detector is unit-tested on synthetic
 > frames with no camera. The `aruco` detector (printed fiducial, sub-pixel)
-> remains future work behind the same `detector` field. **Guided travel** is
-> implemented as an *optional* `move_to_station` on the measure call: with a
-> connected plotter it drives the head to `station_position` before grabbing
-> the frame; otherwise the operator presents the pen by hand. Automatic
-> *pen-fetch* (loading the right pen from the magazine before travelling) is
-> still future work.
+> remains future work behind the same `detector` field. **Guided travel**
+> (`move_to_station`) and **automatic pen-fetch** (`fetch_pen`) are both
+> implemented as *optional* flags on the measure call: with a connected
+> plotter, `fetch_pen` loads the slot's pen via a tool-change swap and
+> `move_to_station` drives the head to `station_position` before grabbing —
+> otherwise the operator does these by hand.
 
 > Goal: let OmniPlot register the **XY offset of each pen's tip** so that
 > strokes drawn with different pens land on the same logical coordinate, and
@@ -378,9 +378,16 @@ drives the head to the station via `controller.goto` before grabbing (409 if
 disconnected, 422 if under-specified). The magazine UI exposes a station X/Y +
 an auto-move toggle (enabled once a station position is set).
 
-**Still deferred.** Automatic *pen-fetch* (loading the right pen from the
-magazine before travel), the `aruco` detector, and a returned annotated preview
-frame. All additive on top of the shipped surface.
+**Phase 2c — automatic pen-fetch.** ✅ **Implemented (optional).** The measure
+call takes `fetch_pen`; when set it loads the slot's pen via the existing
+tool-change orchestrator (`ToolChangeOrchestrator.plan` → swap commands,
+streamed with their host-side dwells) before any travel. Host-macro / firmware
+magazines fetch automatically; a *manual* profile returns 409 ("load by hand").
+The magazine UI exposes a "Load pen from magazine" toggle. Order per measure:
+**fetch → travel → grab**.
+
+**Still deferred.** The `aruco` detector and a returned annotated preview
+frame. Both additive on top of the shipped surface.
 
 This ordering means the camera work was never on the critical path for the
 registration fix itself.

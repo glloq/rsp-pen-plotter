@@ -14,12 +14,14 @@ whole flow with a fake camera.
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from pen_plotter.audit import record
 from pen_plotter.hardware.controller import controller
-from pen_plotter.models import Point, TipCameraRoi
+from pen_plotter.models import MachineProfile, Point, TipCameraRoi
 from pen_plotter.profiles import get_profile
 from pen_plotter.timelapse import grab_jpeg
 from pen_plotter.vision.tip_detect import Roi, TipCalibrator
@@ -51,6 +53,10 @@ class TipMeasureRequest(BaseModel):
     move_to_station: bool = False
     station_position: Point | None = None
     profile_name: str | None = None
+    # Optional automatic pen-fetch: load this slot's pen via a tool-change
+    # swap (host-macro / firmware profiles) before measuring. Manual-swap
+    # profiles can't fetch on their own → 409. Runs before move_to_station.
+    fetch_pen: bool = False
 
 
 class TipMeasureResponse(BaseModel):
@@ -69,24 +75,72 @@ class TipMeasureResponse(BaseModel):
     message: str = ""
 
 
+async def _fetch_pen(profile: MachineProfile, slot: int) -> None:
+    """Drive an automatic swap to load ``slot``'s pen before measuring.
+
+    Reuses the tool-change orchestrator: a host-macro / firmware profile
+    yields the swap commands, which we send immediately (honouring the
+    per-line ``wait_ms`` dwell host-side, exactly as the streamer does for a
+    host-timed swap). A *manual* profile can't fetch on its own — the operator
+    loads the pen by hand — so that surfaces as a 409.
+    """
+    from pen_plotter.domain.toolchange.orchestrator import (
+        PauseKind,
+        SwapContext,
+        ToolChangeOrchestrator,
+    )
+
+    pen = next((p for p in profile.effective_pens() if p.index == slot), None)
+    plan = ToolChangeOrchestrator(profile).plan(
+        SwapContext(
+            slot_index=slot,
+            pen_label=pen.name if pen else "",
+            pen_color=pen.color if pen else "",
+        )
+    )
+    if plan.pause_kind == PauseKind.OPERATOR_CONFIRM:
+        raise HTTPException(
+            status_code=409,
+            detail="This profile changes pens manually; load the pen by hand, then measure.",
+        )
+    try:
+        for cmd in plan.commands:
+            if cmd.send.strip():
+                await controller.send_commands([cmd.send])
+            if cmd.wait_ms > 0:
+                await asyncio.sleep(cmd.wait_ms / 1000.0)
+    except RuntimeError as exc:  # disconnected / job in flight
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    record("tip_calibration_fetch", f"slot={slot} mode={plan.mode.value}")
+
+
 @router.post("/plotter/tip-calibration/measure")
 async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
     """Grab a frame for ``slot`` and locate its tip.
 
-    With ``move_to_station`` the head first travels to ``station_position``
-    (needs a connected plotter + ``profile_name``); otherwise the operator
-    presents the pen by hand. Returns the implied offset once the reference
-    slot has also been measured this session.
+    Optional motion happens first, in order: ``fetch_pen`` loads the slot's
+    pen via an automatic swap, then ``move_to_station`` travels the head to
+    ``station_position``. Both need a connected plotter + ``profile_name``;
+    without them the operator presents the pen by hand. Returns the implied
+    offset once the reference slot has also been measured this session.
     """
-    if req.move_to_station:
-        if req.station_position is None or req.profile_name is None:
+    profile: MachineProfile | None = None
+    if req.fetch_pen or req.move_to_station:
+        if req.profile_name is None:
             raise HTTPException(
                 status_code=422,
-                detail="move_to_station requires station_position and profile_name",
+                detail="fetch_pen / move_to_station require profile_name",
             )
         profile = get_profile(req.profile_name)
         if profile is None:
             raise HTTPException(status_code=404, detail=f"Unknown profile: {req.profile_name!r}")
+
+    if req.fetch_pen and profile is not None:
+        await _fetch_pen(profile, req.slot)
+
+    if req.move_to_station and profile is not None:
+        if req.station_position is None:
+            raise HTTPException(status_code=422, detail="move_to_station requires station_position")
         try:
             await controller.goto(req.station_position.x, req.station_position.y, profile)
         except RuntimeError as exc:  # disconnected / job in flight

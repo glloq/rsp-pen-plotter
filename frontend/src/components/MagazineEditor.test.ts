@@ -363,6 +363,42 @@ describe('MagazineEditor', () => {
     )
   })
 
+  it('passes fetch_pen when the load-from-magazine toggle is on', async () => {
+    const job = useJobStore()
+    job.profiles[0]!.tool_change_method = 'rack'
+    job.profiles[0]!.apply_pen_offsets = true
+    job.profiles[0]!.tip_calibration = {
+      camera_url: 'cam://x',
+      reference_slot: 0,
+      mm_per_pixel: 0.1,
+      detector: 'dark_blob',
+      dark_threshold: 80,
+      roi: null,
+    }
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 130, y: 100 },
+      confidence: 0.9,
+      reference_measured: true,
+      offset_mm: { x: 1.8, y: 0 },
+      message: 'ok',
+    })
+
+    const wrapper = mountEditor()
+    await nextTick()
+
+    await wrapper.find('[data-test="tip-fetch-pen"]').setValue(true)
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(measureSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ slot: 1, fetch_pen: true, profile_name: 'P' }),
+    )
+  })
+
   it('reports a failed detection without applying an offset', async () => {
     const job = useJobStore()
     job.profiles[0]!.tool_change_method = 'rack'

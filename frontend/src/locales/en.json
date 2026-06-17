@@ -1551,6 +1551,7 @@
     "referenceSlot": "Reference slot",
     "stationX": "Station X (mm)",
     "stationY": "Station Y (mm)",
+    "fetchPen": "Load pen from magazine before measuring (needs a connected plotter)",
     "autoMove": "Move head to station before measuring (needs a connected plotter)",
     "stationHint": "Present each pen at the station and click Measure. Measure the reference pen first; the others are then offset relative to it.",
     "resetMeasurements": "Reset measurements",

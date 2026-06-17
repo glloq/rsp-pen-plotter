@@ -206,6 +206,10 @@ function onTipConfig(patch: Partial<TipCalibrationConfig>): void {
 const autoMove = ref(false)
 const canAutoMove = computed(() => tipConfig.value?.station_position != null)
 
+// Optional automatic pen-fetch: load the slot's pen via a tool-change swap
+// before measuring (host-macro / firmware magazines). Session-local.
+const fetchPen = ref(false)
+
 function onStation(axis: 'x' | 'y', raw: string): void {
   const cur = tipConfig.value?.station_position ?? null
   const v = raw.trim() === '' ? null : Number(raw)
@@ -265,6 +269,7 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       reference_slot: cfg.reference_slot,
       dark_threshold: cfg.dark_threshold,
       roi: cfg.roi,
+      fetch_pen: fetchPen.value,
       move_to_station: autoMove.value && cfg.station_position != null,
       station_position: cfg.station_position ?? null,
       profile_name: profile.value?.name ?? null,
@@ -518,6 +523,16 @@ onUnmounted(() => clearTimeout(savedTimer))
                   data-test="tip-station-y"
                   @change="(e) => onStation('y', (e.target as HTMLInputElement).value)"
                 />
+              </label>
+              <label class="col-span-2 flex items-center gap-2 text-[11px] text-slate-300">
+                <input
+                  v-model="fetchPen"
+                  type="checkbox"
+                  class="rounded border-slate-600 bg-slate-900"
+                  :disabled="saving"
+                  data-test="tip-fetch-pen"
+                />
+                {{ t('magazine.fetchPen') }}
               </label>
               <label
                 class="col-span-2 flex items-center gap-2 text-[11px]"

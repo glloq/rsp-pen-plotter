@@ -275,3 +275,87 @@ def test_move_to_station_when_disconnected_is_409(client: TestClient) -> None:
         },
     )
     assert resp.status_code == 409
+
+
+# ── automatic pen-fetch (phase 2c) ───────────────────────────────────────────
+
+RACK_PROFILE = "Custom CoreXY A3 (rack)"
+
+
+def test_fetch_pen_streams_the_swap_then_measures(
+    client: TestClient, connected: MockTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _frame((100, 100)))
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={
+            "slot": 1,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "fetch_pen": True,
+            "profile_name": RACK_PROFILE,
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["found"] is True
+    # The host-macro swap was streamed to the device before measuring.
+    assert any("G53 G0 Z5" in line for line in connected.written)
+    # The slot index was substituted into the rack travel line.
+    assert any("X10" in line for line in connected.written)
+
+
+def test_fetch_then_move_orders_swap_before_travel(
+    client: TestClient, connected: MockTransport, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _frame((100, 100)))
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={
+            "slot": 1,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "fetch_pen": True,
+            "move_to_station": True,
+            "station_position": {"x": 20, "y": 30},
+            "profile_name": RACK_PROFILE,
+        },
+    )
+    assert resp.status_code == 200
+    written = connected.written
+    swap_idx = next(i for i, line in enumerate(written) if "G53 G0 Z5" in line)
+    station_idx = next(i for i, line in enumerate(written) if "X20.000 Y30.000" in line)
+    assert swap_idx < station_idx
+
+
+def test_fetch_pen_on_manual_profile_is_409(
+    client: TestClient, connected: MockTransport
+) -> None:
+    # A manual-swap profile can't fetch on its own — load by hand.
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 1, "camera_url": "cam://x", "mm_per_pixel": 0.1, "fetch_pen": True,
+              "profile_name": PROFILE},
+    )
+    assert resp.status_code == 409
+    assert "by hand" in resp.json()["message"]
+
+
+def test_fetch_pen_requires_profile(client: TestClient) -> None:
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 1, "camera_url": "cam://x", "mm_per_pixel": 0.1, "fetch_pen": True},
+    )
+    assert resp.status_code == 422
+
+
+def test_fetch_pen_when_disconnected_is_409(client: TestClient) -> None:
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 1, "camera_url": "cam://x", "mm_per_pixel": 0.1, "fetch_pen": True,
+              "profile_name": RACK_PROFILE},
+    )
+    assert resp.status_code == 409

@@ -1551,6 +1551,7 @@
     "referenceSlot": "Slot de référence",
     "stationX": "Station X (mm)",
     "stationY": "Station Y (mm)",
+    "fetchPen": "Charger le stylo depuis le magasin avant de mesurer (traceur connecté requis)",
     "autoMove": "Déplacer la tête vers la station avant de mesurer (traceur connecté requis)",
     "stationHint": "Présente chaque stylo à la station puis clique sur Mesurer. Mesure d'abord le stylo de référence ; les autres sont ensuite décalés par rapport à lui.",
     "resetMeasurements": "Réinitialiser les mesures",

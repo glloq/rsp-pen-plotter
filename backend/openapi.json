@@ -4053,6 +4053,11 @@
             "title": "Dark Threshold",
             "type": "integer"
           },
+          "fetch_pen": {
+            "default": false,
+            "title": "Fetch Pen",
+            "type": "boolean"
+          },
           "mm_per_pixel": {
             "exclusiveMinimum": 0.0,
             "title": "Mm Per Pixel",
@@ -7928,7 +7933,7 @@
     },
     "/plotter/tip-calibration/measure": {
       "post": {
-        "description": "Grab a frame for ``slot`` and locate its tip.\n\nWith ``move_to_station`` the head first travels to ``station_position``\n(needs a connected plotter + ``profile_name``); otherwise the operator\npresents the pen by hand. Returns the implied offset once the reference\nslot has also been measured this session.",
+        "description": "Grab a frame for ``slot`` and locate its tip.\n\nOptional motion happens first, in order: ``fetch_pen`` loads the slot's\npen via an automatic swap, then ``move_to_station`` travels the head to\n``station_position``. Both need a connected plotter + ``profile_name``;\nwithout them the operator presents the pen by hand. Returns the implied\noffset once the reference slot has also been measured this session.",
         "operationId": "measure_plotter_tip_calibration_measure_post",
         "parameters": [
           {

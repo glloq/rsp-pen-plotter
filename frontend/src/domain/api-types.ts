@@ -954,10 +954,11 @@ export interface paths {
          * Measure
          * @description Grab a frame for ``slot`` and locate its tip.
          *
-         *     With ``move_to_station`` the head first travels to ``station_position``
-         *     (needs a connected plotter + ``profile_name``); otherwise the operator
-         *     presents the pen by hand. Returns the implied offset once the reference
-         *     slot has also been measured this session.
+         *     Optional motion happens first, in order: ``fetch_pen`` loads the slot's
+         *     pen via an automatic swap, then ``move_to_station`` travels the head to
+         *     ``station_position``. Both need a connected plotter + ``profile_name``;
+         *     without them the operator presents the pen by hand. Returns the implied
+         *     offset once the reference slot has also been measured this session.
          */
         post: operations["measure_plotter_tip_calibration_measure_post"];
         delete?: never;
@@ -3904,6 +3905,11 @@ export interface components {
              * @default 80
              */
             dark_threshold: number;
+            /**
+             * Fetch Pen
+             * @default false
+             */
+            fetch_pen: boolean;
             /** Mm Per Pixel */
             mm_per_pixel: number;
             /**
