@@ -19,6 +19,7 @@ vi.mock('../api/client', async (orig) => {
 
 import { useSaveCurrentGcode } from './useSaveCurrentGcode'
 import { useJobStore } from '../stores/job'
+import { useAvailableColorsStore } from '../stores/availableColors'
 
 function makeProfile(): MachineProfile {
   return {
@@ -77,5 +78,19 @@ describe('useSaveCurrentGcode', () => {
     const created = await saveCurrent()
     expect(created).toBeNull()
     expect(h.saveGcodeFile).not.toHaveBeenCalled()
+  })
+
+  it('never advances the ink odometer on save', async () => {
+    await seedJob(true)
+    const colors = useAvailableColorsStore()
+    const odo = vi.spyOn(colors, 'addToOdometer').mockResolvedValue()
+    const { saveCurrent } = useSaveCurrentGcode()
+
+    await saveCurrent()
+
+    // Saving stores the program but must not touch ink accounting — that
+    // happens only when a plot is actually launched.
+    expect(h.saveGcodeFile).toHaveBeenCalled()
+    expect(odo).not.toHaveBeenCalled()
   })
 })

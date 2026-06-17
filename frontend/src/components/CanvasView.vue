@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { confirmAction } from '../composables/confirm'
 import { ensureMagazineLoaded } from '../composables/magazineGate'
+import { useInkOdometer } from '../composables/useInkOdometer'
 import { useSaveCurrentGcode } from '../composables/useSaveCurrentGcode'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
@@ -60,6 +61,7 @@ const gcodeLineCount = computed(() => (job.gcode ? job.gcode.split('\n').length 
 // header transport's direct-send path: requires a live connection + a
 // generated G-code, then sends after a confirmation.
 const canStartPrint = computed(() => Boolean(job.gcode) && plotterStatus.value.connected)
+const { commitCurrentJob } = useInkOdometer()
 
 async function startPrint(): Promise<void> {
   if (!job.gcode || !plotterStatus.value.connected) return
@@ -78,7 +80,13 @@ async function startPrint(): Promise<void> {
     if (!confirmed) return
   }
   // Re-read the G-code: confirming the gate may have regenerated it.
-  if (job.gcode) await plotter.run(job.gcode)
+  if (job.gcode) {
+    await plotter.run(job.gcode)
+    // Advance the ink odometer only on a real launch — i.e. the send
+    // succeeded. This is the one point per-colour lengths still match
+    // what's drawn; saving never touches the odometer.
+    if (!plotter.error) commitCurrentJob()
+  }
 }
 </script>
 
