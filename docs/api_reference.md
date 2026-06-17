@@ -118,6 +118,21 @@ attached.
 Absolute move to `{ "x_mm", "y_mm", "profile_name" }`. Same error codes as
 `/jog`.
 
+## Tip-offset calibration (camera)
+
+Measure per-pen XY offsets at a dedicated camera station (ADR 0005, phase 2).
+The station config (`camera_url`, `mm_per_pixel`, `reference_slot`, …) lives on
+the profile and is passed inline. Measurement is **relative**: measure the
+reference pen first, then each other pen reports its offset versus the
+reference. The offset is persisted onto the slot via the normal `POST
+/profiles` path (the magazine editor does this on Accept).
+
+| Endpoint | Body | Purpose |
+| --- | --- | --- |
+| `POST /plotter/tip-calibration/measure` | `{ "slot", "camera_url", "mm_per_pixel", "reference_slot", "dark_threshold"?, "roi"? }` | Grab one frame, locate the tip, return `{ found, tip_px, confidence, reference_measured, offset_mm, … }`. `502` if the camera read fails |
+| `GET /plotter/tip-calibration/status` | — | `{ "measured_slots": [...] }` for the current session |
+| `POST /plotter/tip-calibration/reset` | — | Forget all measurements (start a fresh run) |
+
 ## Files library
 
 The library is the persistent home of every uploaded file. Uploads add to it,

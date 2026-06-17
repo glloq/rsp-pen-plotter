@@ -30,6 +30,7 @@ the same name.
 | `pens` | list of `PenSlot` \| null | The magazine (see below). When omitted, one default slot per `pen_slot_count` is synthesized |
 | `pen_change_position` | `{ x, y }` \| null | Machine-coordinate park point for *manual* pen swaps / magazine load pauses, so the head clears the drawing. `null` falls back to the workspace home corner (`x_min` / `y_min`); carousel and rack profiles ignore it |
 | `apply_pen_offsets` | bool (default `false`) | Opt-in switch for per-pen XY tip-offset compensation. When `true`, each slot's `xy_offset_mm` is added to that pen's strokes so different pens register against one origin. Off by default → identical G-code. See [`camera_tip_offset.md`](camera_tip_offset.md) / ADR 0005 |
+| `tip_calibration` | `TipCalibrationConfig` \| null | Optional dedicated-station camera setup for measuring `xy_offset_mm` automatically (see below). `null` → manual offset entry only |
 | `supports_arcs` | bool (default `false`) | Enable G2/G3 arc fitting |
 | `arc_tolerance_mm` | float (default `0.1`) | Max deviation when fitting arcs |
 | `ebb` | `EbbConfig` \| null | Required only when `gcode_dialect: "ebb"` |
@@ -50,6 +51,33 @@ One entry per magazine position:
 | `pen_down_command` | string \| null | Per-slot calibration: overrides the profile's pen-down command |
 | `xy_offset_mm` | `{ x, y }` (default `{0, 0}`) | Per-pen XY tip offset (machine mm) added to this pen's strokes, **only** when the profile sets `apply_pen_offsets: true`. Measure relative to a reference pen (leave that pen at `0`) |
 | `offset_source` | `"unset"` \| `"manual"` \| `"vision"` (default `"unset"`) | Provenance of `xy_offset_mm`: hand-typed vs camera-measured. UI hint only |
+
+### `TipCalibrationConfig` (camera offset station, ADR 0005)
+
+Optional. Present only when a camera station measures pen tips. The vision
+pipeline reuses the timelapse frame grabber against `camera_url`. Offsets are
+measured **relative to** `reference_slot`, so the absolute station-to-bed
+registration cancels out.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `camera_url` | string | Snapshot or MJPEG URL (same shape as the timelapse camera) |
+| `station_position` | `{ x, y }` \| null | Machine point where a pen is presented. Stored for future guided travel; not needed to measure |
+| `reference_slot` | int (default `0`) | Pen the others are measured against (its own offset is `0`) |
+| `mm_per_pixel` | float (> 0) | Station pixel scale, calibrated once |
+| `detector` | `"dark_blob"` | Detection strategy. `dark_blob` (Pillow+NumPy) finds the darkest compact blob; no OpenCV required |
+| `dark_threshold` | int 0–255 (default `80`) | Luminance cutoff: pixels darker than this count as "tip" |
+| `roi` | `{ x, y, width, height }` \| null | Optional pixel region to constrain detection |
+
+```yaml
+tip_calibration:
+  camera_url: "http://localhost:8080/?action=snapshot"
+  reference_slot: 0
+  mm_per_pixel: 0.05
+  detector: "dark_blob"
+  dark_threshold: 80
+  station_position: { x: 20.0, y: 400.0 }
+```
 
 ### `MachineCapabilities` (v0.2, roadmap A.5)
 

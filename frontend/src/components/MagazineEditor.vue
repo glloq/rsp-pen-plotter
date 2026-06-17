@@ -15,10 +15,17 @@
 // won't be clobbered by a pen-colour save (the watcher in
 // ``useProfileDraft`` short-circuits while ``isUnsavedDraft`` is true).
 
-import { computed, onUnmounted, ref, toRaw } from 'vue'
+import { computed, onUnmounted, reactive, ref, toRaw } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import type { MachineProfile, PenSlot, Point } from '../api/client'
+import type {
+  MachineProfile,
+  PenSlot,
+  Point,
+  TipCalibrationConfig,
+  TipMeasureResponse,
+} from '../api/client'
+import { measureTipOffset, resetTipCalibration } from '../api/client'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { canonicalHex } from '../lib/penWidth'
 import { useJobStore } from '../stores/job'
@@ -163,6 +170,105 @@ function onOffset(pen: PenSlot, axis: 'x' | 'y', raw: string): void {
   void patchPen(pen.index, { xy_offset_mm: next, offset_source: 'manual' })
 }
 
+// ── Camera tip-offset station (ADR 0005 phase 2) ─────────────────────────
+// The "Measure" buttons appear once a tip_calibration block exists on the
+// profile. Measuring is relative: the reference pen must be measured before
+// other pens yield an offset, so the panel tracks which slots are done.
+const tipConfig = computed<TipCalibrationConfig | null>(
+  () => profile.value?.tip_calibration ?? null,
+)
+const canMeasure = computed(() => applyPenOffsets.value && tipConfig.value != null)
+
+function defaultTipConfig(): TipCalibrationConfig {
+  return {
+    camera_url: '',
+    station_position: null,
+    reference_slot: 0,
+    mm_per_pixel: 0.1,
+    detector: 'dark_blob',
+    dark_threshold: 80,
+    roi: null,
+  }
+}
+
+function onUseStation(enabled: boolean): void {
+  void patchProfile({ tip_calibration: enabled ? defaultTipConfig() : null })
+}
+
+function onTipConfig(patch: Partial<TipCalibrationConfig>): void {
+  const current = tipConfig.value ?? defaultTipConfig()
+  void patchProfile({ tip_calibration: { ...current, ...patch } })
+}
+
+// Per-slot transient measurement feedback (busy + last message/confidence).
+interface MeasureState {
+  busy: boolean
+  message: string
+  ok: boolean
+}
+const measureState = reactive<Record<number, MeasureState>>({})
+
+function describeMeasurement(m: TipMeasureResponse): { message: string; ok: boolean } {
+  if (!m.found) {
+    return { message: m.message || t('magazine.measureNotFound'), ok: false }
+  }
+  if (m.is_reference) {
+    return {
+      message: t('magazine.measureRefDone', { c: Math.round(m.confidence * 100) }),
+      ok: true,
+    }
+  }
+  if (!m.reference_measured || !m.offset_mm) {
+    return { message: t('magazine.measureNeedRef'), ok: false }
+  }
+  return {
+    message: t('magazine.measureApplied', {
+      x: m.offset_mm.x.toFixed(2),
+      y: m.offset_mm.y.toFixed(2),
+      c: Math.round(m.confidence * 100),
+    }),
+    ok: true,
+  }
+}
+
+async function onMeasure(pen: PenSlot): Promise<void> {
+  const cfg = tipConfig.value
+  if (!cfg) return
+  measureState[pen.index] = { busy: true, message: '', ok: false }
+  try {
+    const m = await measureTipOffset({
+      slot: pen.index,
+      camera_url: cfg.camera_url,
+      mm_per_pixel: cfg.mm_per_pixel,
+      reference_slot: cfg.reference_slot,
+      dark_threshold: cfg.dark_threshold,
+      roi: cfg.roi,
+    })
+    // Apply the measured offset when we have one (reference pen → (0,0),
+    // others → their delta). A not-found / no-reference result only reports.
+    if (m.found && (m.is_reference || m.offset_mm)) {
+      const offset: Point = m.offset_mm ?? { x: 0, y: 0 }
+      await patchPen(pen.index, { xy_offset_mm: offset, offset_source: 'vision' })
+    }
+    const { message, ok } = describeMeasurement(m)
+    measureState[pen.index] = { busy: false, message, ok }
+  } catch (err) {
+    const detail =
+      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+      t('magazine.measureFailed')
+    measureState[pen.index] = { busy: false, message: detail, ok: false }
+  }
+}
+
+async function onResetMeasurements(): Promise<void> {
+  try {
+    await resetTipCalibration()
+    for (const k of Object.keys(measureState)) delete measureState[Number(k)]
+  } catch {
+    // A reset failure is non-critical; the next measure run still works.
+  }
+}
+
 function onSelectColor(index: number, value: string): void {
   if (!value) return
   void patchPen(index, { color: value })
@@ -291,6 +397,89 @@ onUnmounted(() => clearTimeout(savedTimer))
             {{ t('magazine.applyOffsets') }}
           </label>
           <p class="mt-0.5 text-[11px] text-slate-500">{{ t('magazine.applyOffsetsHint') }}</p>
+
+          <!-- Optional camera measurement station: when configured, each slot
+               gets a "Measure" button that locates the tip and fills the
+               offset automatically. Without it, offsets are typed by hand. -->
+          <div v-if="applyPenOffsets" class="mt-2 border-t border-slate-800 pt-2">
+            <label class="flex items-center gap-2 text-[11px] text-slate-300">
+              <input
+                type="checkbox"
+                :checked="tipConfig != null"
+                class="rounded border-slate-600 bg-slate-900"
+                :disabled="saving"
+                data-test="use-tip-station"
+                @change="(e) => onUseStation((e.target as HTMLInputElement).checked)"
+              />
+              {{ t('magazine.useStation') }}
+            </label>
+
+            <div
+              v-if="tipConfig"
+              class="mt-1.5 grid grid-cols-2 gap-2"
+              data-test="tip-station-config"
+            >
+              <label class="col-span-2 block text-[11px] text-slate-400"
+                >{{ t('magazine.cameraUrl') }}
+                <input
+                  type="text"
+                  :value="tipConfig.camera_url"
+                  placeholder="http://localhost:8080/?action=snapshot"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+                  data-test="tip-camera-url"
+                  @change="(e) => onTipConfig({ camera_url: (e.target as HTMLInputElement).value })"
+                />
+              </label>
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('magazine.mmPerPixel') }}
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  :value="tipConfig.mm_per_pixel"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-mm-per-pixel"
+                  @change="
+                    (e) =>
+                      onTipConfig({ mm_per_pixel: Number((e.target as HTMLInputElement).value) })
+                  "
+                />
+              </label>
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('magazine.referenceSlot') }}
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  :value="tipConfig.reference_slot"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-reference-slot"
+                  @change="
+                    (e) =>
+                      onTipConfig({
+                        reference_slot: Math.max(
+                          0,
+                          Math.floor(Number((e.target as HTMLInputElement).value)),
+                        ),
+                      })
+                  "
+                />
+              </label>
+              <button
+                type="button"
+                class="col-span-2 justify-self-start rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700"
+                :disabled="saving"
+                data-test="tip-reset"
+                @click="onResetMeasurements"
+              >
+                ↺ {{ t('magazine.resetMeasurements') }}
+              </button>
+              <p class="col-span-2 text-[11px] text-slate-500">{{ t('magazine.stationHint') }}</p>
+            </div>
+          </div>
         </div>
 
         <ul v-if="pens.length" class="space-y-1.5">
@@ -453,6 +642,32 @@ onUnmounted(() => clearTimeout(savedTimer))
                   <p class="col-span-2 text-[11px] text-slate-500">
                     {{ t('magazine.offsetHint') }}
                   </p>
+
+                  <!-- Camera measurement: present the pen at the station and
+                       fill its offset automatically (reference pen first). -->
+                  <div v-if="canMeasure" class="col-span-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
+                      :disabled="saving || measureState[pen.index]?.busy"
+                      :data-test="`pen-measure-${pen.index}`"
+                      @click="onMeasure(pen)"
+                    >
+                      {{
+                        measureState[pen.index]?.busy
+                          ? t('magazine.measuring')
+                          : '📷 ' + t('magazine.measure')
+                      }}
+                    </button>
+                    <span
+                      v-if="measureState[pen.index]?.message"
+                      class="text-[11px]"
+                      :class="measureState[pen.index]?.ok ? 'text-emerald-400' : 'text-amber-400'"
+                      :data-test="`pen-measure-msg-${pen.index}`"
+                    >
+                      {{ measureState[pen.index]?.message }}
+                    </span>
+                  </div>
                 </template>
               </div>
             </details>

@@ -2110,6 +2110,16 @@
             "title": "Supports Arcs",
             "type": "boolean"
           },
+          "tip_calibration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipCalibrationConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "tool_change_command": {
             "title": "Tool Change Command",
             "type": "string"
@@ -3918,6 +3928,223 @@
           "size_bytes"
         ],
         "title": "TimelapseSummary",
+        "type": "object"
+      },
+      "TipCalibrationConfig": {
+        "description": "Dedicated-station camera setup for measuring per-pen XY offsets.\n\nOptional on a profile; present only when the machine has a tip-measuring\nstation wired up (ADR 0005, phase 2). The vision pipeline reuses the\ntimelapse frame grabber against ``camera_url``. Offsets are measured\n*relative to* ``reference_slot``, so the absolute station-to-bed\nregistration cancels out.",
+        "properties": {
+          "camera_url": {
+            "title": "Camera Url",
+            "type": "string"
+          },
+          "dark_threshold": {
+            "default": 80,
+            "maximum": 255.0,
+            "minimum": 0.0,
+            "title": "Dark Threshold",
+            "type": "integer"
+          },
+          "detector": {
+            "const": "dark_blob",
+            "default": "dark_blob",
+            "title": "Detector",
+            "type": "string"
+          },
+          "mm_per_pixel": {
+            "exclusiveMinimum": 0.0,
+            "title": "Mm Per Pixel",
+            "type": "number"
+          },
+          "reference_slot": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Reference Slot",
+            "type": "integer"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipCameraRoi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "station_position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "camera_url",
+          "mm_per_pixel"
+        ],
+        "title": "TipCalibrationConfig",
+        "type": "object"
+      },
+      "TipCalibrationStatus": {
+        "description": "Which slots have been measured in the current session.",
+        "properties": {
+          "measured_slots": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Measured Slots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "measured_slots"
+        ],
+        "title": "TipCalibrationStatus",
+        "type": "object"
+      },
+      "TipCameraRoi": {
+        "description": "Pixel region of the camera frame where a presented tip will appear.",
+        "properties": {
+          "height": {
+            "exclusiveMinimum": 0.0,
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "exclusiveMinimum": 0.0,
+            "title": "Width",
+            "type": "integer"
+          },
+          "x": {
+            "minimum": 0.0,
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "minimum": 0.0,
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "title": "TipCameraRoi",
+        "type": "object"
+      },
+      "TipMeasureRequest": {
+        "description": "Body for ``POST /plotter/tip-calibration/measure``.\n\nCarries the station config inline (the SPA reads it from the active\nprofile) so the backend stays free of profile lookups.",
+        "properties": {
+          "camera_url": {
+            "title": "Camera Url",
+            "type": "string"
+          },
+          "dark_threshold": {
+            "default": 80,
+            "maximum": 255.0,
+            "minimum": 0.0,
+            "title": "Dark Threshold",
+            "type": "integer"
+          },
+          "mm_per_pixel": {
+            "exclusiveMinimum": 0.0,
+            "title": "Mm Per Pixel",
+            "type": "number"
+          },
+          "reference_slot": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Reference Slot",
+            "type": "integer"
+          },
+          "roi": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TipCameraRoi"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slot": {
+            "minimum": 0.0,
+            "title": "Slot",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "slot",
+          "camera_url",
+          "mm_per_pixel"
+        ],
+        "title": "TipMeasureRequest",
+        "type": "object"
+      },
+      "TipMeasureResponse": {
+        "description": "Result of one measurement plus the offset it implies.",
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "is_reference": {
+            "title": "Is Reference",
+            "type": "boolean"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "offset_mm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference_measured": {
+            "default": false,
+            "title": "Reference Measured",
+            "type": "boolean"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "integer"
+          },
+          "tip_px": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "found",
+          "slot",
+          "is_reference"
+        ],
+        "title": "TipMeasureResponse",
         "type": "object"
       },
       "ToolChangeStrategy": {
@@ -7654,6 +7881,205 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Status"
+      }
+    },
+    "/plotter/tip-calibration/measure": {
+      "post": {
+        "description": "Grab a frame for ``slot`` and locate its tip.\n\nDoes not move the head \u2014 the operator presents the pen at the station\n(guided automatic travel is a later increment). Returns the implied\noffset once the reference slot has also been measured this session.",
+        "operationId": "measure_plotter_tip_calibration_measure_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TipMeasureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipMeasureResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Measure"
+      }
+    },
+    "/plotter/tip-calibration/reset": {
+      "post": {
+        "description": "Forget all measurements and start a fresh calibration run.",
+        "operationId": "reset_plotter_tip_calibration_reset_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipCalibrationStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset"
+      }
+    },
+    "/plotter/tip-calibration/status": {
+      "get": {
+        "description": "Slots measured so far this calibration run.",
+        "operationId": "status_plotter_tip_calibration_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TipCalibrationStatus"
                 }
               }
             },

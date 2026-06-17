@@ -194,6 +194,26 @@ export interface PenSlot {
   offset_source?: OffsetSource
 }
 
+export interface TipCameraRoi {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+// Dedicated-station camera setup for measuring per-pen XY offsets (ADR 0005
+// phase 2). Optional on a profile; present only when a tip-measuring station
+// is wired up. See docs/camera_tip_offset.md.
+export interface TipCalibrationConfig {
+  camera_url: string
+  station_position?: Point | null
+  reference_slot: number
+  mm_per_pixel: number
+  detector: 'dark_blob'
+  dark_threshold: number
+  roi?: TipCameraRoi | null
+}
+
 export type GcodeDialect = 'grbl' | 'marlin' | 'klipper' | 'ebb' | 'custom'
 export type Origin = 'top_left' | 'bottom_left'
 export type ToolChangeMethod = 'manual_pause' | 'carousel' | 'rack' | 'none'
@@ -230,6 +250,10 @@ export interface MachineProfile {
   // to false so the feature is strictly the operator's choice and existing
   // profiles emit identical G-code. See docs/camera_tip_offset.md / ADR 0005.
   apply_pen_offsets?: boolean
+  // Optional dedicated-station camera setup for measuring per-pen offsets
+  // automatically (ADR 0005 phase 2). When set, the magazine editor shows a
+  // "Measure" action per slot. Null/absent → manual offset entry only.
+  tip_calibration?: TipCalibrationConfig | null
   // v0.2 capability model — the runtime source of truth for *how* a
   // tool change executes (firmware trigger vs host macro vs manual
   // prompt). When set the backend persists it verbatim; when null it
@@ -252,6 +276,41 @@ export async function saveProfile(profile: MachineProfile): Promise<MachineProfi
 
 export async function deleteProfile(name: string): Promise<void> {
   await api.delete(`/profiles/${encodeURIComponent(name)}`)
+}
+
+export interface TipMeasureRequest {
+  slot: number
+  camera_url: string
+  mm_per_pixel: number
+  reference_slot?: number
+  dark_threshold?: number
+  roi?: TipCameraRoi | null
+}
+
+export interface TipMeasureResponse {
+  found: boolean
+  slot: number
+  is_reference: boolean
+  tip_px: Point | null
+  confidence: number
+  reference_measured: boolean
+  // Offset (mm) of this slot's tip vs the reference pen — write onto the
+  // slot's xy_offset_mm. Null until both this slot and the reference are
+  // measured this session.
+  offset_mm: Point | null
+  message: string
+}
+
+// Measure one presented pen's tip at the calibration station. The reference
+// pen must be measured (any time this session) before a non-reference slot
+// yields an offset; call resetTipCalibration to start a fresh run.
+export async function measureTipOffset(req: TipMeasureRequest): Promise<TipMeasureResponse> {
+  const response = await api.post<TipMeasureResponse>('/plotter/tip-calibration/measure', req)
+  return response.data
+}
+
+export async function resetTipCalibration(): Promise<void> {
+  await api.post('/plotter/tip-calibration/reset')
 }
 
 export async function exportProfileYaml(name: string): Promise<string> {

@@ -73,10 +73,26 @@ false`), so existing profiles produce identical G-code until you enable
 it. Measure each offset relative to a reference pen — leave that pen at
 `0` and align the others to it.
 
-> **Camera measurement is still on the roadmap.** Today you type the
-> offsets in by hand (or set `xy_offset_mm` per slot in the profile
-> YAML). Automatically measuring them with a camera at a dedicated
-> calibration station is the next phase — design in
+## Measuring offsets with a camera
+
+You can also **measure** offsets instead of typing them. Configure a
+`tip_calibration` block on the profile (a camera URL + `mm_per_pixel` +
+a reference slot) — in the Couleurs tab, tick *Measure with a camera
+station*. Then, with offsets enabled, each slot grows a **Measure**
+button:
+
+1. Present the **reference** pen at the station, click *Measure*.
+2. Present each other pen and click *Measure* — its `xy_offset_mm` is
+   filled in automatically (tagged as camera-measured) as the difference
+   from the reference.
+
+The detector finds the dark pen tip against the light station
+background, so the station wants even lighting and good contrast. *Reset
+measurements* starts a fresh run.
+
+> **What's still by hand.** Today you position each pen at the station
+> yourself; automatic head travel to the station is a later increment.
+> Design notes:
 > [`docs/adr/0005-camera-tip-offset.md`](../docs/adr/0005-camera-tip-offset.md)
 > and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
 

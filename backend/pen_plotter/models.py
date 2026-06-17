@@ -108,6 +108,37 @@ class EbbConfig(BaseModel):
     )
 
 
+class TipCameraRoi(BaseModel):
+    """Pixel region of the camera frame where a presented tip will appear."""
+
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+
+
+class TipCalibrationConfig(BaseModel):
+    """Dedicated-station camera setup for measuring per-pen XY offsets.
+
+    Optional on a profile; present only when the machine has a tip-measuring
+    station wired up (ADR 0005, phase 2). The vision pipeline reuses the
+    timelapse frame grabber against ``camera_url``. Offsets are measured
+    *relative to* ``reference_slot``, so the absolute station-to-bed
+    registration cancels out.
+    """
+
+    camera_url: str
+    # Machine-coordinate point where a pen is presented to the station. Stored
+    # for the (future) guided travel; not required to take a measurement.
+    station_position: Point | None = None
+    reference_slot: int = Field(default=0, ge=0)
+    mm_per_pixel: float = Field(gt=0.0)
+    detector: Literal["dark_blob"] = "dark_blob"
+    # Luminance cutoff (0–255): pixels darker than this are taken as "tip".
+    dark_threshold: int = Field(default=80, ge=0, le=255)
+    roi: TipCameraRoi | None = None
+
+
 class MachineProfile(BaseModel):
     """Describes a target pen plotter.
 
@@ -156,6 +187,10 @@ class MachineProfile(BaseModel):
     # is strictly opt-in (the operator chooses to turn it on). See
     # ``docs/camera_tip_offset.md`` / ADR 0005.
     apply_pen_offsets: bool = False
+    # Optional dedicated-station camera setup for measuring per-pen offsets
+    # automatically (ADR 0005, phase 2). When present, the magazine editor
+    # surfaces a "Measure" action per slot. ``None`` → manual entry only.
+    tip_calibration: TipCalibrationConfig | None = None
     # v0.2 Capability Model (roadmap A.5). Optional in YAML — when
     # absent we derive a default from ``tool_change_method`` so legacy
     # profiles load unchanged. When set, the explicit block wins and

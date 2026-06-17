@@ -1,8 +1,17 @@
 # Camera-assisted pen-tip offset — design study
 
-- **Status**: Phase 1 (manual offset) implemented · Phase 2 (vision) proposed
+- **Status**: Phase 1 (manual offset) + Phase 2 (vision measurement) implemented · guided head-travel deferred
 - **Date**: 2026-06
 - **Companion ADR**: [`adr/0005-camera-tip-offset.md`](adr/0005-camera-tip-offset.md)
+
+> **Implementation note (Phase 2).** The shipped `dark_blob` detector uses
+> **Pillow + NumPy**, not OpenCV — both are already dependencies, so the
+> appliance needs nothing extra and the detector is unit-tested on synthetic
+> frames with no camera. The `aruco` detector (printed fiducial, sub-pixel)
+> remains future work behind the same `detector` field. Automatic head travel
+> to the station is also deferred: today the operator **presents each pen at
+> the station and clicks Measure**; the orchestrated travel sequence (§7) is
+> the next increment.
 
 > Goal: let OmniPlot register the **XY offset of each pen's tip** so that
 > strokes drawn with different pens land on the same logical coordinate, and
@@ -353,12 +362,19 @@ toggle in the magazine UI (`MagazineEditor.vue`), and tests
 so existing profiles emit byte-identical G-code. This closes the wiki gap
 (§2.3) and is useful on any multi-pen machine with zero camera.
 
-**Phase 2 — vision automation.** Add `TipCalibrationConfig`, the
-`vision/tip_detect.py` module (optional OpenCV), the measure/commit API, the
-guided sequence, and the UI Measure/Accept flow. Builds entirely on Phase 1's
-persisted field, so it is additive.
+**Phase 2 — vision automation.** ✅ **Implemented.** `TipCalibrationConfig` on
+the profile; `vision/tip_detect.py` (`dark_blob` detector via Pillow+NumPy,
+`offset_between`, and a `TipCalibrator` session); the measure/status/reset API
+(`api/tip_calibration.py`); the UI station config + per-slot **Measure** flow
+that writes `offset_source: "vision"`; tests
+(`backend/tests/test_tip_calibration.py`, `MagazineEditor.test.ts`). Built
+entirely on Phase 1's persisted field, so it is additive.
 
-This ordering means the camera work is never on the critical path for the
+**Deferred (Phase 2b).** Automatic head travel to the station (the operator
+presents pens by hand today), the `aruco` detector, and a returned annotated
+preview frame. These are additive on top of the shipped surface.
+
+This ordering means the camera work was never on the critical path for the
 registration fix itself.
 
 ---
