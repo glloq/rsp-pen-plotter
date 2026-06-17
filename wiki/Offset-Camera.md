@@ -82,8 +82,9 @@ automatically). The panel is a short guided flow:
      [scale assistant](#mm-per-pixel-assistant) below.
    - **Reference slot** — the pen the others are measured against (its own
      offset is `0`).
-   - **Detection zone (ROI)** *(optional)* — an X/Y/W/H pixel box to constrain
-     detection to where the tip appears. Leave blank for the whole frame.
+   - **Detection zone (ROI)** *(optional)* — constrain detection to where the
+     tip appears. **Drag a rectangle directly on the live preview** to set it
+     (or type X/Y/W/H under Advanced). Leave blank for the whole frame.
    - **Station X/Y** *(optional)* and **Z** *(optional, motorised Z only)* —
      where the head presents a pen, for guided travel.
    - **Camera light** *(optional)* — the GPIO pin + polarity (see above).
@@ -123,7 +124,13 @@ the ROI.
 
 ## Calibration workflow
 
-With offsets enabled and the station configured:
+The quickest path is **🧭 Guided measurement**: it walks you through the pens
+one at a time, reference first, showing the live feed and prompting you to
+present each pen (or fetching it from the magazine), then advancing on a
+successful measure. Each pen also carries a status badge — *Reference*,
+*Measured*, *Manual* or *Not measured*.
+
+Prefer to do it by hand? With offsets enabled and the station configured:
 
 1. Present (or fetch) the **reference** pen and click **Measure**. Its offset
    is `0` by definition; this records the reference tip position.

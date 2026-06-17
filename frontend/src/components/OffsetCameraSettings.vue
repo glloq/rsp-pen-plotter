@@ -330,6 +330,42 @@ async function onMeasure(pen: PenSlot): Promise<void> {
   }
 }
 
+// ── Guided sequence ────────────────────────────────────────────────────────
+// Walk the operator through measuring every installed pen, reference first.
+// On a manual machine each step prompts to present the pen by hand; with a
+// magazine the fetch toggle loads it. Advances only on a successful measure.
+const guided = ref(false)
+const guideStep = ref(0)
+const guideOrder = computed<number[]>(() => {
+  if (!tipConfig.value) return []
+  const refSlot = tipConfig.value.reference_slot
+  const installed = pens.value.filter((p) => p.installed).map((p) => p.index)
+  if (!installed.includes(refSlot)) return installed
+  return [refSlot, ...installed.filter((i) => i !== refSlot)]
+})
+const guidePen = computed<PenSlot | null>(() => {
+  const idx = guideOrder.value[guideStep.value]
+  return idx == null ? null : (pens.value.find((p) => p.index === idx) ?? null)
+})
+
+function startGuide(): void {
+  guideStep.value = 0
+  guided.value = true
+}
+
+function cancelGuide(): void {
+  guided.value = false
+}
+
+async function measureGuided(): Promise<void> {
+  const pen = guidePen.value
+  if (!pen) return
+  await onMeasure(pen)
+  if (!measureState[pen.index]?.ok) return // failed — let the operator retry
+  if (guideStep.value < guideOrder.value.length - 1) guideStep.value++
+  else guided.value = false
+}
+
 async function onResetMeasurements(): Promise<void> {
   try {
     await resetTipCalibration()
@@ -467,7 +503,9 @@ onUnmounted(() => clearTimeout(savedTimer))
                 :url="tipConfig.camera_url"
                 :label="t('offsetCamera.title')"
                 :roi="tipConfig.roi"
+                editable
                 height="md"
+                @update:roi="(r) => onTipConfig({ roi: r })"
               />
             </div>
 
@@ -824,7 +862,93 @@ onUnmounted(() => clearTimeout(savedTimer))
           >
             🖐 {{ t('offsetCamera.manualPresent') }}
           </p>
-          <ul class="space-y-1.5">
+
+          <!-- Guided sequence: a one-pen-at-a-time wizard with a live view. -->
+          <button
+            v-if="canMeasure && !guided"
+            type="button"
+            class="mb-2 rounded border border-sky-700 bg-sky-950/40 px-2 py-1 text-[11px] text-sky-200 hover:bg-sky-900/50"
+            data-test="guide-start"
+            @click="startGuide"
+          >
+            🧭 {{ t('offsetCamera.guidedStart') }}
+          </button>
+
+          <div
+            v-if="guided && guidePen"
+            class="mb-2 space-y-2 rounded-lg border border-sky-800 bg-sky-950/20 p-2"
+            data-test="guide-panel"
+          >
+            <div class="flex items-center justify-between">
+              <p class="text-[11px] font-semibold text-sky-200" data-test="guide-step">
+                {{
+                  t('offsetCamera.guidedStep', {
+                    k: guideStep + 1,
+                    n: guideOrder.length,
+                    pen: guidePen.name || `Pen ${guidePen.index}`,
+                  })
+                }}
+              </p>
+              <span
+                class="rounded px-1.5 py-0.5 text-[9px] font-medium"
+                :class="penStatus(guidePen).cls"
+                >{{ penStatus(guidePen).label }}</span
+              >
+            </div>
+            <p v-if="!hasMagazine" class="text-[11px] text-sky-300">
+              🖐
+              {{
+                t('offsetCamera.guidedPresent', { pen: guidePen.name || `Pen ${guidePen.index}` })
+              }}
+            </p>
+            <CameraPreview
+              v-if="tipConfig"
+              :url="tipConfig.camera_url"
+              :label="t('offsetCamera.title')"
+              :roi="tipConfig.roi"
+              height="md"
+            />
+            <p
+              v-if="measureState[guidePen.index]?.message"
+              class="text-[11px]"
+              :class="measureState[guidePen.index]?.ok ? 'text-emerald-400' : 'text-amber-400'"
+              data-test="guide-msg"
+            >
+              {{ measureState[guidePen.index]?.message }}
+            </p>
+            <img
+              v-if="measureState[guidePen.index]?.image"
+              :src="measureState[guidePen.index]!.image!"
+              :alt="t('magazine.measurePreviewAlt')"
+              class="max-h-40 w-auto rounded border border-slate-700"
+              data-test="guide-result"
+            />
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
+                :disabled="saving || measureState[guidePen.index]?.busy"
+                data-test="guide-measure"
+                @click="measureGuided"
+              >
+                {{
+                  measureState[guidePen.index]?.busy
+                    ? t('magazine.measuring')
+                    : '📷 ' + t('offsetCamera.guidedMeasure')
+                }}
+              </button>
+              <button
+                type="button"
+                class="rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700"
+                data-test="guide-cancel"
+                @click="cancelGuide"
+              >
+                {{ t('offsetCamera.guidedDone') }}
+              </button>
+            </div>
+          </div>
+
+          <ul v-if="!guided" class="space-y-1.5">
             <li
               v-for="pen in pens"
               :key="pen.index"

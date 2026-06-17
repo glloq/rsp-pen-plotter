@@ -99,6 +99,11 @@ const i18n = createI18n({
         statusManual: 'Manual',
         statusPending: 'Not measured',
         manualPresent: 'present by hand',
+        guidedStart: 'Guided measurement',
+        guidedStep: 'Step {k}/{n} — {pen}',
+        guidedPresent: 'Present {pen}',
+        guidedMeasure: 'Measure this pen',
+        guidedDone: 'Done',
       },
       cameraPreview: { empty: 'no url', retry: 'retry', refresh: 'refresh' },
       magazine: {
@@ -260,6 +265,32 @@ describe('OffsetCameraSettings', () => {
     await flushPromises()
     expect(wrapper.find('[data-test="tip-fetch-pen"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="manual-present-hint"]').exists()).toBe(false)
+  })
+
+  it('guided sequence walks pens reference-first and advances on success', async () => {
+    withStation() // reference_slot 0, station configured
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    await wrapper.find('[data-test="guide-start"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="guide-panel"]').exists()).toBe(true)
+    // Step 1 = reference pen (slot 0).
+    expect(wrapper.find('[data-test="guide-step"]').text()).toContain('1/2')
+
+    await wrapper.find('[data-test="guide-measure"]').trigger('click')
+    await flushPromises()
+    // Advanced to slot 1.
+    expect(wrapper.find('[data-test="guide-step"]').text()).toContain('2/2')
+
+    await wrapper.find('[data-test="guide-measure"]').trigger('click')
+    await flushPromises()
+    // Sequence complete → wizard closed.
+    expect(wrapper.find('[data-test="guide-panel"]').exists()).toBe(false)
+
+    expect(measureSpy).toHaveBeenCalledTimes(2)
+    expect(measureSpy.mock.calls[0]![0]).toMatchObject({ slot: 0 })
+    expect(measureSpy.mock.calls[1]![0]).toMatchObject({ slot: 1 })
   })
 
   it('hides Measure until a station is configured', async () => {

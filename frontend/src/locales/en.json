@@ -1968,13 +1968,19 @@
   "cameraPreview": {
     "empty": "No camera URL yet",
     "retry": "Retry",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "dragHint": "Drag to set the detection zone"
   },
   "offsetCamera": {
     "title": "Offset camera",
     "hint": "A dedicated camera at a fixed station measures each pen's tip so OmniPlot can work out the XY offset between pens. Optional and separate from the timelapse camera.",
     "needsMagazine": "Per-pen offsets need more than one pen (with or without a magazine).",
     "manualPresent": "No magazine: present each pen at the station by hand, then Measure.",
+    "guidedStart": "Guided measurement",
+    "guidedStep": "Step {k}/{n} — {pen}",
+    "guidedPresent": "Present {pen} at the station, then Measure.",
+    "guidedMeasure": "Measure this pen",
+    "guidedDone": "Done",
     "enable": "Use a camera to measure offsets",
     "step1": "1 · Camera",
     "step1Hint": "Point the offset camera at the measurement station.",

@@ -1968,13 +1968,19 @@
   "cameraPreview": {
     "empty": "Pas encore d'URL caméra",
     "retry": "Réessayer",
-    "refresh": "Rafraîchir"
+    "refresh": "Rafraîchir",
+    "dragHint": "Glisse pour définir la zone de détection"
   },
   "offsetCamera": {
     "title": "Caméra d'offset",
     "hint": "Une caméra dédiée, à une station fixe, mesure l'embout de chaque stylo pour déterminer l'offset XY entre stylos. Optionnelle et distincte de la caméra timelapse.",
     "needsMagazine": "Les offsets par stylo nécessitent plus d'un stylo (avec ou sans magasin).",
     "manualPresent": "Sans magasin : présente chaque stylo à la station à la main, puis Mesurer.",
+    "guidedStart": "Mesure guidée",
+    "guidedStep": "Étape {k}/{n} — {pen}",
+    "guidedPresent": "Présente {pen} à la station, puis Mesurer.",
+    "guidedMeasure": "Mesurer ce stylo",
+    "guidedDone": "Terminé",
     "enable": "Utiliser une caméra pour mesurer les offsets",
     "step1": "1 · Caméra",
     "step1Hint": "Pointe la caméra d'offset vers la station de mesure.",

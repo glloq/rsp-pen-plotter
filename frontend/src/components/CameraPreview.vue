@@ -3,13 +3,12 @@
 // from a URL with loading / error / empty states and a refresh button.
 //
 // Used by the Cameras settings tab — for each workshop camera and for the
-// offset camera — so the operator can confirm a URL actually produces a feed
-// before relying on it. Hardware-agnostic: a plain <img> renders an MJPEG
-// stream as a live feed and a snapshot endpoint as a still.
+// offset camera — so the operator can confirm a URL actually produces a feed.
 //
-// Optionally overlays the detection-zone (ROI) rectangle on the feed so the
-// operator can see exactly where the offset detector will look — mapped from
-// source pixels onto the object-contain-scaled <img>.
+// Optionally overlays the detection-zone (ROI) rectangle on the feed, mapped
+// from source pixels onto the object-contain-scaled <img>. When `editable`,
+// the operator can drag a new zone directly on the feed; the box is emitted
+// (in source pixels) via `update:roi`.
 
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -25,20 +24,20 @@ const props = withDefaults(
   defineProps<{
     url: string
     label?: string
-    // Compact height for inline previews; taller for a focused view.
     height?: 'sm' | 'md'
-    // Detection zone in source pixels; drawn as an overlay when set.
     roi?: Roi | null
+    // Allow dragging a new ROI rectangle directly on the feed.
+    editable?: boolean
   }>(),
-  { label: '', height: 'sm', roi: null },
+  { label: '', height: 'sm', roi: null, editable: false },
 )
+
+const emit = defineEmits<{ (e: 'update:roi', roi: Roi): void }>()
 
 const { t } = useI18n()
 
 const trimmed = computed(() => props.url.trim())
 const errored = ref(false)
-// Cache-buster so "refresh" re-pulls a snapshot URL (and restarts a stalled
-// MJPEG stream) without the operator editing the URL.
 const nonce = ref(0)
 const src = computed(() => {
   if (!trimmed.value) return ''
@@ -46,7 +45,6 @@ const src = computed(() => {
   return nonce.value ? `${trimmed.value}${sep}_op=${nonce.value}` : trimmed.value
 })
 
-// A changed URL deserves a fresh attempt.
 watch(trimmed, () => {
   errored.value = false
 })
@@ -58,35 +56,50 @@ function refresh(): void {
 
 const heightClass = computed(() => (props.height === 'md' ? 'h-48' : 'h-28'))
 
-// ── ROI overlay ───────────────────────────────────────────────────────────
+// ── Geometry: map between source pixels and on-screen (object-contain) px ──
 const containerEl = ref<HTMLElement | null>(null)
 const imgEl = ref<HTMLImageElement | null>(null)
 const natural = ref<{ w: number; h: number } | null>(null)
 const box = ref<{ left: number; top: number; width: number; height: number } | null>(null)
 
+interface Geom {
+  scale: number
+  offX: number
+  offY: number
+  rectLeft: number
+  rectTop: number
+}
+function geom(): Geom | null {
+  const container = containerEl.value
+  if (!container || !natural.value || natural.value.w <= 0 || natural.value.h <= 0) return null
+  const rect = container.getBoundingClientRect()
+  const cw = rect.width
+  const ch = rect.height
+  if (cw <= 0 || ch <= 0) return null
+  const scale = Math.min(cw / natural.value.w, ch / natural.value.h)
+  if (scale <= 0) return null
+  return {
+    scale,
+    offX: (cw - natural.value.w * scale) / 2,
+    offY: (ch - natural.value.h * scale) / 2,
+    rectLeft: rect.left,
+    rectTop: rect.top,
+  }
+}
+
 function computeBox(): void {
   const roi = props.roi
-  const img = imgEl.value
-  const container = containerEl.value
-  if (!roi || !natural.value || !container || natural.value.w <= 0 || natural.value.h <= 0) {
+  const g = geom()
+  if (!roi || !g) {
     box.value = null
     return
   }
-  const cw = container.clientWidth
-  const ch = container.clientHeight
-  // object-contain: the image is scaled uniformly and letter-boxed.
-  const scale = Math.min(cw / natural.value.w, ch / natural.value.h)
-  const renderedW = natural.value.w * scale
-  const renderedH = natural.value.h * scale
-  const offX = (cw - renderedW) / 2
-  const offY = (ch - renderedH) / 2
   box.value = {
-    left: offX + roi.x * scale,
-    top: offY + roi.y * scale,
-    width: roi.width * scale,
-    height: roi.height * scale,
+    left: g.offX + roi.x * g.scale,
+    top: g.offY + roi.y * g.scale,
+    width: roi.width * g.scale,
+    height: roi.height * g.scale,
   }
-  void img // keep the ref reactive dependency explicit
 }
 
 function onLoad(): void {
@@ -106,14 +119,73 @@ watch(containerEl, (el) => {
   }
 })
 onBeforeUnmount(() => ro?.disconnect())
+
+// ── Drag-to-draw ROI ──────────────────────────────────────────────────────
+const dragging = ref(false)
+// Live box in container pixels while dragging.
+const dragBox = ref<{ left: number; top: number; width: number; height: number } | null>(null)
+let startLocal: { x: number; y: number } | null = null
+let dragGeom: Geom | null = null
+
+function localPoint(e: PointerEvent, g: Geom): { x: number; y: number } {
+  return { x: e.clientX - g.rectLeft, y: e.clientY - g.rectTop }
+}
+
+function onPointerdown(e: PointerEvent): void {
+  if (!props.editable) return
+  const g = geom()
+  if (!g) return
+  dragGeom = g
+  startLocal = localPoint(e, g)
+  dragging.value = true
+  dragBox.value = { left: startLocal.x, top: startLocal.y, width: 0, height: 0 }
+  ;(e.target as Element).setPointerCapture?.(e.pointerId)
+}
+
+function onPointermove(e: PointerEvent): void {
+  if (!dragging.value || !startLocal || !dragGeom) return
+  const p = localPoint(e, dragGeom)
+  dragBox.value = {
+    left: Math.min(startLocal.x, p.x),
+    top: Math.min(startLocal.y, p.y),
+    width: Math.abs(p.x - startLocal.x),
+    height: Math.abs(p.y - startLocal.y),
+  }
+}
+
+function onPointerup(): void {
+  if (!dragging.value || !dragBox.value || !dragGeom || !natural.value) {
+    dragging.value = false
+    dragBox.value = null
+    return
+  }
+  const g = dragGeom
+  // Container px → source px, clamped to the image bounds.
+  const toSrc = (lpx: number, off: number, max: number) =>
+    Math.round(Math.min(Math.max((lpx - off) / g.scale, 0), max))
+  const x0 = toSrc(dragBox.value.left, g.offX, natural.value.w)
+  const y0 = toSrc(dragBox.value.top, g.offY, natural.value.h)
+  const x1 = toSrc(dragBox.value.left + dragBox.value.width, g.offX, natural.value.w)
+  const y1 = toSrc(dragBox.value.top + dragBox.value.height, g.offY, natural.value.h)
+  dragging.value = false
+  dragBox.value = null
+  dragGeom = null
+  const width = x1 - x0
+  const height = y1 - y0
+  // Ignore a stray click / sub-pixel drag.
+  if (width >= 2 && height >= 2) emit('update:roi', { x: x0, y: y0, width, height })
+}
 </script>
 
 <template>
   <div
     ref="containerEl"
     class="relative flex items-center justify-center overflow-hidden rounded border border-slate-700 bg-black"
-    :class="heightClass"
+    :class="[heightClass, editable && trimmed && !errored ? 'cursor-crosshair' : '']"
     data-test="camera-preview"
+    @pointerdown="onPointerdown"
+    @pointermove="onPointermove"
+    @pointerup="onPointerup"
   >
     <!-- Empty: no URL yet. -->
     <p
@@ -149,20 +221,21 @@ onBeforeUnmount(() => ro?.disconnect())
         ref="imgEl"
         :src="src"
         :alt="label || t('camera.title')"
-        class="max-h-full max-w-full object-contain"
+        class="max-h-full max-w-full select-none object-contain"
+        draggable="false"
         data-test="preview-img"
         @load="onLoad"
         @error="errored = true"
       />
-      <!-- Detection-zone overlay. -->
+      <!-- Detection-zone overlay (stored ROI, or the live drag box). -->
       <div
-        v-if="box"
+        v-if="dragBox || box"
         class="pointer-events-none absolute border-2 border-emerald-400/80"
         :style="{
-          left: box.left + 'px',
-          top: box.top + 'px',
-          width: box.width + 'px',
-          height: box.height + 'px',
+          left: (dragBox ?? box)!.left + 'px',
+          top: (dragBox ?? box)!.top + 'px',
+          width: (dragBox ?? box)!.width + 'px',
+          height: (dragBox ?? box)!.height + 'px',
         }"
         data-test="preview-roi"
       />
@@ -172,6 +245,13 @@ onBeforeUnmount(() => ro?.disconnect())
       >
         <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
         {{ t('camera.live') }}
+      </span>
+      <span
+        v-if="editable"
+        class="pointer-events-none absolute bottom-1 left-1 rounded bg-black/50 px-1.5 py-0.5 text-[9px] text-slate-300"
+        data-test="preview-drag-hint"
+      >
+        {{ t('cameraPreview.dragHint') }}
       </span>
       <button
         type="button"
