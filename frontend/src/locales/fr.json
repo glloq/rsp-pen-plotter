@@ -726,9 +726,12 @@
   "settings": {
     "title": "Réglages",
     "close": "Fermer",
-    "history": "Historique",
-    "audit": "Audit",
     "system": "Système",
+    "timelapse": "Timelapse",
+    "history": "Historique",
+    "advanced": "Avancé",
+    "advancedHint": "Outils de diagnostic et d'observabilité — la plupart des utilisateurs n'en ont pas besoin.",
+    "audit": "Audit",
     "slo": "SLO",
     "manifests": "Manifestes"
   },
@@ -1919,6 +1922,8 @@
   "timelapse": {
     "title": "Timelapse",
     "hint": "Capture des images depuis une caméra pendant une impression, puis exporte un MP4.",
+    "settingsTitle": "Réglages timelapse par défaut",
+    "settingsHint": "Valeurs par défaut pour l'enregistrement. Démarrage/arrêt et clips enregistrés sont dans l'onglet Traceur.",
     "auto": "Enregistrer automatiquement pendant les impressions",
     "start": "Démarrer l'enregistrement",
     "stop": "Arrêter et enregistrer",

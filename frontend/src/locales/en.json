@@ -726,9 +726,12 @@
   "settings": {
     "title": "Settings",
     "close": "Close",
-    "history": "History",
-    "audit": "Audit",
     "system": "System",
+    "timelapse": "Timelapse",
+    "history": "History",
+    "advanced": "Advanced",
+    "advancedHint": "Diagnostics and observability tools — most operators never need these.",
+    "audit": "Audit",
     "slo": "SLO",
     "manifests": "Manifests"
   },
@@ -1919,6 +1922,8 @@
   "timelapse": {
     "title": "Timelapse",
     "hint": "Capture frames from a camera during a print, then export an MP4.",
+    "settingsTitle": "Timelapse defaults",
+    "settingsHint": "Defaults applied when recording. Start/stop and saved clips live on the Plotter tab.",
     "auto": "Auto-record during prints",
     "start": "Start recording",
     "stop": "Stop & save",

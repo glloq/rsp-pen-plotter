@@ -43,7 +43,7 @@ const tabs: Array<{ id: PlotterTab; label: string; icon: string }> = [
   { id: 'macros', label: 'plotter.tabMacros', icon: '⌘' },
 ]
 
-// Lazy-mount tabs on first visit. Same rationale as SettingsDrawer:
+// Lazy-mount tabs on first visit. Same rationale as SettingsModal:
 // previously, opening the modal mounted ProfileEditor, AvailableColorsPanel
 // AND MacroPanel at the same time even though the operator sees one at a
 // time. ProfileEditor in particular instantiates ``useProfileDraft`` and

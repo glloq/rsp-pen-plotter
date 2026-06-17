@@ -101,11 +101,6 @@ onMounted(loadVersion)
 
 <template>
   <section class="space-y-4">
-    <header>
-      <h2 class="text-base font-semibold text-slate-100">{{ t('system.title') }}</h2>
-      <p class="mt-1 text-xs text-slate-400">{{ t('system.subtitle') }}</p>
-    </header>
-
     <div class="rounded-lg border border-slate-700 bg-slate-800 p-3 text-xs">
       <h3 class="mb-2 text-[11px] uppercase tracking-wider text-slate-500">
         {{ t('system.language') }}
