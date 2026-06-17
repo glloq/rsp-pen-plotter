@@ -58,6 +58,11 @@ class TipMeasurement:
     tip_mm: tuple[float, float] | None = None
     confidence: float = 0.0
     message: str = ""
+    # Repeatability across averaged frames (mm): the farthest any contributing
+    # sample's tip sat from the aggregated tip. ``0.0`` for a single frame,
+    # ``None`` when nothing was found. A large value means the frames disagreed
+    # — a sign of an unstable feed / detection.
+    spread_mm: float | None = None
     # JPEG of the frame with the detected tip marked (or the plain frame when
     # nothing was found), so the operator can confirm the right blob was
     # picked before trusting the offset. ``None`` when the frame couldn't be
@@ -253,27 +258,44 @@ def _encode_box(frame: bytes, box: tuple[int, int, int, int]) -> bytes | None:
 
 
 def average_tips(samples: list[TipMeasurement]) -> TipMeasurement:
-    """Average the found tips across repeated samples to cut detector noise.
+    """Aggregate the found tips across repeated samples to cut detector noise.
 
-    Found samples are averaged in both pixels and mm; the confidence is the
-    mean of theirs. With no found sample, the last (not-found) measurement is
-    returned so its message / preview still surface. The annotated frame of the
-    last found sample is kept for review.
+    Uses the **median** of the found tips (pixels and mm) so a single bad frame
+    among ``n`` — a stray dark blob, a momentary glitch — can't drag the result
+    off the true tip the way a mean would. The confidence is the median of
+    theirs, and ``spread_mm`` reports how far the farthest contributing sample
+    sat from the median (a repeatability / stability signal).
+
+    With no found sample, the last (not-found) measurement is returned so its
+    message / preview still surface. The annotated frame of the sample closest
+    to the median is kept for review.
     """
     found = [m for m in samples if m.found and m.tip_px and m.tip_mm]
     if not found:
         return samples[-1]
     n = len(found)
-    px = (sum(m.tip_px[0] for m in found) / n, sum(m.tip_px[1] for m in found) / n)
-    mm = (sum(m.tip_mm[0] for m in found) / n, sum(m.tip_mm[1] for m in found) / n)
-    confidence = sum(m.confidence for m in found) / n
+    px = (
+        float(np.median([m.tip_px[0] for m in found])),
+        float(np.median([m.tip_px[1] for m in found])),
+    )
+    mm = (
+        float(np.median([m.tip_mm[0] for m in found])),
+        float(np.median([m.tip_mm[1] for m in found])),
+    )
+    confidence = float(np.median([m.confidence for m in found]))
+    # Repeatability: farthest contributing sample from the median tip (mm).
+    dists = [np.hypot(m.tip_mm[0] - mm[0], m.tip_mm[1] - mm[1]) for m in found]
+    spread_mm = float(max(dists))
+    # Keep the preview of whichever sample landed closest to the median.
+    closest = min(found, key=lambda m: np.hypot(m.tip_mm[0] - mm[0], m.tip_mm[1] - mm[1]))
     return TipMeasurement(
         found=True,
         tip_px=px,
         tip_mm=mm,
         confidence=confidence,
-        message=f"averaged {n}/{len(samples)}",
-        annotated_jpeg=found[-1].annotated_jpeg,
+        message=f"median of {n}/{len(samples)}",
+        spread_mm=spread_mm,
+        annotated_jpeg=closest.annotated_jpeg,
     )
 
 

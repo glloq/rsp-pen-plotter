@@ -167,17 +167,33 @@ def test_calibrator_derives_offset_after_reference() -> None:
 # ── multi-frame averaging ────────────────────────────────────────────────────
 
 
-def test_average_tips_averages_found_samples() -> None:
+def test_average_tips_takes_the_median() -> None:
     shots = [
         detect_tip_dark_blob(_frame((100, 100)), mm_per_pixel=0.1),
         detect_tip_dark_blob(_frame((120, 100)), mm_per_pixel=0.1),
     ]
     avg = average_tips(shots)
     assert avg.found and avg.tip_px is not None
-    # Mean of x ∈ {99.5, 119.5} ≈ 109.5; y unchanged.
+    # Median of x ∈ {99.5, 119.5} ≈ 109.5; y unchanged.
     assert avg.tip_px[0] == pytest.approx(109.5, abs=0.5)
     assert avg.tip_px[1] == pytest.approx(99.5, abs=0.5)
-    assert "averaged 2/2" in avg.message
+    assert "median of 2/2" in avg.message
+    # spread = farthest sample from the median ≈ |119.5-109.5|*0.1 = 1.0 mm.
+    assert avg.spread_mm == pytest.approx(1.0, abs=0.1)
+
+
+def test_average_tips_is_robust_to_one_outlier() -> None:
+    # Two tight samples + one wildly off frame. The median ignores the outlier
+    # where a mean would be dragged ~6 px (0.6 mm) toward it.
+    shots = [
+        detect_tip_dark_blob(_frame((100, 100)), mm_per_pixel=0.1),
+        detect_tip_dark_blob(_frame((101, 100)), mm_per_pixel=0.1),
+        detect_tip_dark_blob(_frame((180, 100)), mm_per_pixel=0.1),  # outlier
+    ]
+    avg = average_tips(shots)
+    assert avg.found and avg.tip_px is not None
+    # Median x ≈ 100.5 px (the middle sample), not pulled toward 180.
+    assert avg.tip_px[0] == pytest.approx(100.5, abs=1.0)
 
 
 def test_average_tips_skips_not_found_samples() -> None:
@@ -189,7 +205,8 @@ def test_average_tips_skips_not_found_samples() -> None:
     assert avg.found and avg.tip_px is not None
     # Only the found sample contributes.
     assert avg.tip_px[0] == pytest.approx(99.5, abs=0.5)
-    assert "averaged 1/2" in avg.message
+    assert "median of 1/2" in avg.message
+    assert avg.spread_mm == pytest.approx(0.0, abs=0.01)
 
 
 def test_average_tips_returns_last_when_none_found() -> None:
@@ -272,8 +289,11 @@ def test_measure_endpoint_honours_samples(
         json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1, "samples": 3},
     )
     assert resp.status_code == 200
-    assert resp.json()["found"] is True
+    body = resp.json()
+    assert body["found"] is True
     assert calls["n"] == 3  # grabbed three frames and averaged
+    # Identical frames → perfect repeatability.
+    assert body["spread_mm"] == pytest.approx(0.0, abs=0.01)
 
 
 def test_status_and_reset_endpoints(client: TestClient) -> None:
@@ -446,14 +466,17 @@ def test_fetch_then_move_orders_swap_before_travel(
     assert swap_idx < station_idx
 
 
-def test_fetch_pen_on_manual_profile_is_409(
-    client: TestClient, connected: MockTransport
-) -> None:
+def test_fetch_pen_on_manual_profile_is_409(client: TestClient, connected: MockTransport) -> None:
     # A manual-swap profile can't fetch on its own — load by hand.
     resp = client.post(
         "/plotter/tip-calibration/measure",
-        json={"slot": 1, "camera_url": "cam://x", "mm_per_pixel": 0.1, "fetch_pen": True,
-              "profile_name": PROFILE},
+        json={
+            "slot": 1,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "fetch_pen": True,
+            "profile_name": PROFILE,
+        },
     )
     assert resp.status_code == 409
     assert "by hand" in resp.json()["message"]
@@ -597,7 +620,12 @@ def test_fetch_pen_requires_profile(client: TestClient) -> None:
 def test_fetch_pen_when_disconnected_is_409(client: TestClient) -> None:
     resp = client.post(
         "/plotter/tip-calibration/measure",
-        json={"slot": 1, "camera_url": "cam://x", "mm_per_pixel": 0.1, "fetch_pen": True,
-              "profile_name": RACK_PROFILE},
+        json={
+            "slot": 1,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "fetch_pen": True,
+            "profile_name": RACK_PROFILE,
+        },
     )
     assert resp.status_code == 409

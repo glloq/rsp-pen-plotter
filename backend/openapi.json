@@ -4395,6 +4395,17 @@
             "title": "Slot",
             "type": "integer"
           },
+          "spread_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Mm"
+          },
           "tip_px": {
             "anyOf": [
               {

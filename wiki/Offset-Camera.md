@@ -90,9 +90,11 @@ automatically). The panel is a short guided flow:
    - **Camera light** *(optional)* — the GPIO pin + polarity (see above).
    - **Dark threshold** *(Advanced)* — the luminance cutoff for "tip" (0–255).
      Raise it if the tip is faint; lower it if shadows are picked up.
-   - **Frames to average** *(Advanced)* — grab and average several frames per
-     measurement (1–20) to cut detector noise on a shaky or noisy feed. Higher
-     is steadier but slower; leave at `1` for a clean, well-lit station.
+   - **Frames to average** *(Advanced)* — grab several frames per measurement
+     (1–20) and take the **median** tip, so noise and the odd bad frame are
+     rejected. Higher is steadier but slower; leave at `1` for a clean,
+     well-lit station. When >1, the result reports a repeatability figure
+     (*±X mm*) and warns if the frames disagree too much.
 
 Use **🔍 Test detection** (under the camera) to dry-run the detector and see
 the confidence + marked frame **without writing any offset** — handy for
@@ -192,7 +194,8 @@ and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
 | *Camera read failed* (502) | The camera URL is unreachable or not a JPEG/MJPEG stream |
 | Light won't switch | Not running on a Pi, or the GPIO library is missing; check the GPIO availability warning; verify the pin and **active high/low** |
 | Offsets look shifted by a constant | You re-measured pens without re-measuring the reference — **Reset measurements** and start from the reference |
-| Measured offset jumps between tries | Noisy feed — raise **Frames to average** so each measure averages several frames |
+| Measured offset jumps between tries | Noisy feed — raise **Frames to average** so each measure takes the median of several frames |
+| *⚠ frames vary by N mm* warning | The averaged frames disagreed (unstable feed/lighting) — steady the mount, improve lighting, then re-measure |
 | *⚠ large offset* warning | The detector likely locked onto the wrong blob — check the marked frame, tighten the **ROI**, and re-measure |
 | Measure asks to load by hand | The profile changes pens manually; load the pen yourself, then Measure (auto-fetch needs a host/firmware magazine) |
 

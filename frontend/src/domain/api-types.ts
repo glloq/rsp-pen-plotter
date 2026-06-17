@@ -4126,6 +4126,8 @@ export interface components {
             reference_measured: boolean;
             /** Slot */
             slot: number;
+            /** Spread Mm */
+            spread_mm?: number | null;
             tip_px?: components["schemas"]["Point"] | null;
         };
         /**

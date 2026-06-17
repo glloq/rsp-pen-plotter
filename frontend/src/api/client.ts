@@ -319,6 +319,9 @@ export interface TipMeasureResponse {
   is_reference: boolean
   tip_px: Point | null
   confidence: number
+  // Repeatability across averaged frames (mm): how far the farthest sample sat
+  // from the aggregated tip. 0 for a single frame; large ⇒ unstable feed.
+  spread_mm?: number | null
   reference_measured: boolean
   // Offset (mm) of this slot's tip vs the reference pen — write onto the
   // slot's xy_offset_mm. Null until both this slot and the reference are

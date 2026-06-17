@@ -1987,6 +1987,8 @@
     "testResult": "Détecté ({c} % de confiance)",
     "samples": "Images à moyenner",
     "largeOffset": "⚠ offset élevé ({mm} mm) — vérifie l'image marquée",
+    "repeatability": "(±{mm} mm)",
+    "unstable": "⚠ les images varient de {mm} mm — refais la mesure sur un flux plus stable",
     "progress": "{k}/{n} mesurés",
     "clearOffset": "Effacer l'offset de ce stylo",
     "enable": "Utiliser une caméra pour mesurer les offsets",

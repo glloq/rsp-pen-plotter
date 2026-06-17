@@ -82,6 +82,9 @@ class TipMeasureResponse(BaseModel):
     is_reference: bool
     tip_px: Point | None = None
     confidence: float = 0.0
+    # Repeatability across averaged frames (mm): how far the farthest sample
+    # sat from the aggregated tip. 0 for a single frame; large ⇒ unstable.
+    spread_mm: float | None = None
     reference_measured: bool = False
     # Offset (mm) of this slot's tip relative to the reference pen — the value
     # to write onto the slot's ``xy_offset_mm``. ``None`` until both this slot
@@ -213,6 +216,7 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         is_reference=result.is_reference,
         tip_px=Point(x=m.tip_px[0], y=m.tip_px[1]) if m.tip_px else None,
         confidence=m.confidence,
+        spread_mm=m.spread_mm,
         reference_measured=result.reference_measured,
         offset_mm=(
             Point(x=result.offset_mm[0], y=result.offset_mm[1]) if result.offset_mm else None

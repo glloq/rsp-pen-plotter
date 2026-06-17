@@ -293,6 +293,21 @@ const MIN_CONFIDENCE = 0.35
 // but flagged so the operator can sanity-check the marked frame.
 const SUSPICIOUS_OFFSET_MM = 50
 
+// When several frames are averaged (samples > 1), how far apart they landed is
+// a repeatability signal. Above this the feed is too unstable to trust the
+// reading — the result is still shown, with a nudge to re-measure.
+const SUSPICIOUS_SPREAD_MM = 1.5
+
+// Repeatability suffix for an averaged measurement: a quiet "± X mm" normally,
+// an explicit warning when the frames disagreed too much. Empty for a single
+// frame (spread 0 / absent).
+function spreadNote(m: TipMeasureResponse): string {
+  const s = m.spread_mm
+  if (s == null || s <= 0) return ''
+  if (s > SUSPICIOUS_SPREAD_MM) return ' ' + t('offsetCamera.unstable', { mm: s.toFixed(2) })
+  return ' ' + t('offsetCamera.repeatability', { mm: s.toFixed(2) })
+}
+
 function describeMeasurement(m: TipMeasureResponse): { message: string; ok: boolean } {
   if (!m.found) return { message: m.message || t('magazine.measureNotFound'), ok: false }
   if (m.confidence < MIN_CONFIDENCE)
@@ -302,23 +317,20 @@ function describeMeasurement(m: TipMeasureResponse): { message: string; ok: bool
     }
   if (m.is_reference)
     return {
-      message: t('magazine.measureRefDone', { c: Math.round(m.confidence * 100) }),
+      message: t('magazine.measureRefDone', { c: Math.round(m.confidence * 100) }) + spreadNote(m),
       ok: true,
     }
   if (!m.reference_measured || !m.offset_mm)
     return { message: t('magazine.measureNeedRef'), ok: false }
-  const message = t('magazine.measureApplied', {
+  let message = t('magazine.measureApplied', {
     x: m.offset_mm.x.toFixed(2),
     y: m.offset_mm.y.toFixed(2),
     c: Math.round(m.confidence * 100),
   })
   const magnitude = Math.hypot(m.offset_mm.x, m.offset_mm.y)
   if (magnitude > SUSPICIOUS_OFFSET_MM)
-    return {
-      message: message + ' ' + t('offsetCamera.largeOffset', { mm: Math.round(magnitude) }),
-      ok: true,
-    }
-  return { message, ok: true }
+    message += ' ' + t('offsetCamera.largeOffset', { mm: Math.round(magnitude) })
+  return { message: message + spreadNote(m), ok: true }
 }
 
 async function onMeasure(pen: PenSlot): Promise<void> {
@@ -403,9 +415,10 @@ async function onTestDetection(): Promise<void> {
       light_active_high: cfg.light_active_high ?? true,
     })
     testState.image = m.annotated_image
-    testState.ok = m.found && m.confidence >= MIN_CONFIDENCE
+    const stable = (m.spread_mm ?? 0) <= SUSPICIOUS_SPREAD_MM
+    testState.ok = m.found && m.confidence >= MIN_CONFIDENCE && stable
     testState.message = m.found
-      ? t('offsetCamera.testResult', { c: Math.round(m.confidence * 100) })
+      ? t('offsetCamera.testResult', { c: Math.round(m.confidence * 100) }) + spreadNote(m)
       : m.message || t('magazine.measureNotFound')
   } catch (err) {
     testState.ok = false

@@ -109,6 +109,8 @@ const i18n = createI18n({
         testResult: 'Detected {c}%',
         samples: 'Frames to average',
         largeOffset: '⚠ large offset ({mm} mm)',
+        repeatability: '(±{mm} mm)',
+        unstable: '⚠ frames vary by {mm} mm',
         progress: '{k}/{n} measured',
         clearOffset: 'Clear',
       },
@@ -387,6 +389,54 @@ describe('OffsetCameraSettings', () => {
     expect(pen1?.offset_source).toBe('vision')
     // …but the message carries the large-offset warning.
     expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('large offset')
+  })
+
+  it('shows the repeatability spread of an averaged measurement', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 130, y: 100 },
+      confidence: 0.9,
+      spread_mm: 0.4, // tight agreement
+      reference_measured: true,
+      offset_mm: { x: 1, y: 0 },
+      message: 'ok',
+      annotated_image: null,
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('±0.40 mm')
+  })
+
+  it('warns and still applies when averaged frames disagree too much', async () => {
+    withStation()
+    measureSpy.mockResolvedValue({
+      found: true,
+      slot: 1,
+      is_reference: false,
+      tip_px: { x: 130, y: 100 },
+      confidence: 0.9,
+      spread_mm: 3.0, // beyond the stability bound
+      reference_measured: true,
+      offset_mm: { x: 1, y: 0 },
+      message: 'ok',
+      annotated_image: null,
+    })
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    await nextTick()
+    // Applied (confident per frame)…
+    const pen1 = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).pens?.find((p) => p.index === 1)
+    expect(pen1?.offset_source).toBe('vision')
+    // …but the instability warning shows.
+    expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('frames vary by')
   })
 
   it('test detection shows a result without writing an offset', async () => {

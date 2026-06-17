@@ -1987,6 +1987,8 @@
     "testResult": "Detected ({c}% confidence)",
     "samples": "Frames to average",
     "largeOffset": "⚠ large offset ({mm} mm) — check the marked frame",
+    "repeatability": "(±{mm} mm)",
+    "unstable": "⚠ frames vary by {mm} mm — re-measure on a steadier feed",
     "progress": "{k}/{n} measured",
     "clearOffset": "Clear this pen's offset",
     "enable": "Use a camera to measure offsets",
