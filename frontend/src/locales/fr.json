@@ -1918,7 +1918,6 @@
   },
   "timelapse": {
     "title": "Timelapse",
-    "hint": "Capture des images depuis une caméra pendant une impression, puis exporte un MP4.",
     "auto": "Enregistrer automatiquement pendant les impressions",
     "start": "Démarrer l'enregistrement",
     "stop": "Arrêter et enregistrer",
@@ -1926,8 +1925,6 @@
     "camera": "Caméra",
     "interval": "Intervalle (s)",
     "fps": "FPS (lecture)",
-    "label": "Nom",
-    "labelPlaceholder": "ex. spirale",
     "frames": "images",
     "noCamera": "Activez d'abord une caméra dans les réglages système.",
     "empty": "Aucun timelapse.",
