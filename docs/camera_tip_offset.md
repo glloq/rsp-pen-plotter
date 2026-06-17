@@ -51,6 +51,23 @@ a millimetre in one pass.
 
 Grounding the study in the code as it stands on `main`:
 
+### 2.0 Two independent, optional cameras
+
+OmniPlot keeps the **offset camera** and the **timelapse camera** fully
+separate — they are never shared:
+
+- **Offset camera** — `tip_calibration.camera_url` on the *machine profile*
+  (the measurement station is bolted to the machine). Used *only* for tip
+  measurement / scale. Optional; required only for automatic offset
+  calibration. The Couleurs-tab UI can point it at one of the configured
+  workshop cameras or take a dedicated URL.
+- **Timelapse camera** — the client-side workshop camera(s) (System →
+  Cameras, up to two), which also feed the Plotter-tab live view. The
+  Timelapse settings pick which slot to record. Optional; required only for
+  timelapse.
+
+Both are optional; each is required only for its own function.
+
 ### 2.1 A camera source already exists
 
 `backend/pen_plotter/timelapse.py` already grabs JPEG frames from a generic

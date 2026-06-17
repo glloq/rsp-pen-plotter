@@ -61,7 +61,7 @@ registration cancels out.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `camera_url` | string | Snapshot or MJPEG URL (same shape as the timelapse camera) |
+| `camera_url` | string | Snapshot or MJPEG URL of the **dedicated offset camera** — used only for tip measurement, independent of the timelapse camera. Optional overall (the whole block is), required for auto-offset |
 | `station_position` | `{ x, y }` \| null | Machine point where a pen is presented. Used by guided travel (`move_to_station`); not needed for hand-presented measurement |
 | `station_z_mm` | float \| null | Optional absolute Z at the station (machines with a real Z axis); `null` leaves Z untouched |
 | `reference_slot` | int (default `0`) | Pen the others are measured against (its own offset is `0`) |

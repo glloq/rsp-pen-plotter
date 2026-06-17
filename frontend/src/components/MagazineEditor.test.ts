@@ -7,6 +7,7 @@ import { nextTick } from 'vue'
 import MagazineEditor from './MagazineEditor.vue'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { useJobStore } from '../stores/job'
+import { useUiStore } from '../stores/ui'
 import type { MachineProfile } from '../api/client'
 
 // Regression guard for the "assigned colour stays black" bug: the
@@ -261,6 +262,22 @@ describe('MagazineEditor', () => {
     const options = wrapper.find('[data-test="tip-light-pin"]').findAll('option')
     // "none" + the three pins from the mocked gpio endpoint.
     expect(options.map((o) => o.text())).toContain('GPIO 18')
+  })
+
+  it('can point the offset camera at a configured workshop camera', async () => {
+    withStation()
+    const ui = useUiStore()
+    ui.cameras[0] = { enabled: true, url: 'http://cam-a/stream', label: 'Offset cam' }
+    const wrapper = mountEditor()
+    await flushPromises()
+
+    const select = wrapper.find('[data-test="tip-camera-source"]')
+    expect(select.exists()).toBe(true)
+    await select.setValue('http://cam-a/stream')
+    await nextTick()
+
+    const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
+    expect(saved.tip_calibration?.camera_url).toBe('http://cam-a/stream')
   })
 
   it('runs the mm/pixel assistant and applies the derived scale', async () => {

@@ -35,6 +35,7 @@ import {
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { canonicalHex } from '../lib/penWidth'
 import { useJobStore } from '../stores/job'
+import { useUiStore } from '../stores/ui'
 import { defaultPen, normalizePens } from '../composables/useProfileDraft'
 import ColorPicker from './ColorPicker.vue'
 
@@ -195,6 +196,17 @@ function defaultTipConfig(): TipCalibrationConfig {
     dark_threshold: 80,
     roi: null,
   }
+}
+
+// The offset camera is dedicated to tip measurement; it's independent of the
+// timelapse camera (chosen in Timelapse settings). For convenience the
+// operator can point it at one of the configured workshop cameras instead of
+// retyping a URL — both remain optional.
+const ui = useUiStore()
+const workshopCameras = computed(() => ui.cameras.filter((c) => c.enabled && c.url.trim()))
+
+function onPickCamera(url: string): void {
+  if (url) onTipConfig({ camera_url: url })
 }
 
 function onUseStation(enabled: boolean): void {
@@ -589,18 +601,34 @@ onUnmounted(() => clearTimeout(savedTimer))
               class="mt-1.5 grid grid-cols-2 gap-2"
               data-test="tip-station-config"
             >
-              <label class="col-span-2 block text-[11px] text-slate-400"
-                >{{ t('magazine.cameraUrl') }}
+              <div class="col-span-2">
+                <p class="text-[11px] text-slate-400">{{ t('magazine.offsetCamera') }}</p>
+                <p class="text-[11px] text-slate-500">{{ t('magazine.offsetCameraHint') }}</p>
+                <!-- Quick-fill from a configured workshop camera (when any),
+                     otherwise just type a URL. The offset camera is dedicated
+                     to tip measurement — independent of the timelapse one. -->
+                <select
+                  v-if="workshopCameras.length"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  :disabled="saving"
+                  data-test="tip-camera-source"
+                  @change="(e) => onPickCamera((e.target as HTMLSelectElement).value)"
+                >
+                  <option value="">{{ t('magazine.cameraCustom') }}</option>
+                  <option v-for="(c, i) in workshopCameras" :key="i" :value="c.url">
+                    {{ c.label || t('magazine.cameraN', { n: i + 1 }) }}
+                  </option>
+                </select>
                 <input
                   type="text"
                   :value="tipConfig.camera_url"
                   placeholder="http://localhost:8080/?action=snapshot"
                   :disabled="saving"
-                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
+                  class="mt-1 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-100"
                   data-test="tip-camera-url"
                   @change="(e) => onTipConfig({ camera_url: (e.target as HTMLInputElement).value })"
                 />
-              </label>
+              </div>
               <label class="block text-[11px] text-slate-400"
                 >{{ t('magazine.mmPerPixel') }}
                 <input

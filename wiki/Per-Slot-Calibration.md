@@ -78,7 +78,13 @@ it. Measure each offset relative to a reference pen — leave that pen at
 You can also **measure** offsets instead of typing them. Configure a
 `tip_calibration` block on the profile (a camera URL + `mm_per_pixel` +
 a reference slot) — in the Couleurs tab, tick *Measure with a camera
-station*. Then, with offsets enabled, each slot grows a **Measure**
+station*.
+
+> **Two separate cameras.** The **offset camera** (set here, on the
+> machine) is dedicated to tip measurement; the **timelapse camera** (System →
+> Cameras, used by the timelapse) is a different one. Both are optional —
+> each is only needed for its own job. You can point the offset camera at
+> one of the configured workshop cameras or give it its own URL. Then, with offsets enabled, each slot grows a **Measure**
 button:
 
 1. Present the **reference** pen at the station, click *Measure*.
