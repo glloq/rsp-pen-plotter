@@ -1,10 +1,14 @@
 <script setup lang="ts">
-// Timelapse controls for the Plotter tab — collapsed by default.
+// Timelapse *recording* controls for the Plotter tab.
 //
-// Captures frames from a configured camera (the chosen camera's stream
-// URL is handed to the backend, which does the grabbing) and, on stop,
-// assembles a downloadable MP4. Below the controls is the library of
-// saved timelapses with download / delete.
+// Captures frames from a configured camera (the chosen camera's stream URL
+// is handed to the backend, which does the grabbing) and, on stop, assembles
+// a downloadable MP4. Below the controls is the library of saved timelapses
+// with download / delete.
+//
+// The *settings* (auto-record, default camera, interval, FPS) live in
+// Settings → Timelapse and are shared through the store, so this panel only
+// drives start / stop and lists the results. The header gear jumps there.
 
 import { computed, onUnmounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -19,43 +23,31 @@ const { t } = useI18n()
 const ui = useUiStore()
 const timelapse = useTimelapseStore()
 const { cameras } = storeToRefs(ui)
-// Capture settings (interval / fps / camera slot / auto) live in the store
-// so the auto-during-prints hook shares them.
-const { status, files, busy, autoEnabled, intervalSeconds, fps, cameraSlot } =
-  storeToRefs(timelapse)
+// Capture settings (interval / fps / camera slot) live in the store so the
+// Settings panel and the auto-during-prints hook share them; this panel
+// only reads them when firing a manual recording.
+const { status, files, busy, intervalSeconds, fps, cameraSlot } = storeToRefs(timelapse)
 
-// Cameras available to record from (enabled + with a URL), tagged with
-// their original slot index so the picker and auto-capture agree.
-interface Cam {
-  slot: number
-  url: string
-  label: string
-}
-const activeCameras = computed<Cam[]>(() =>
-  cameras.value
-    .map((c, i) => ({
-      slot: i,
-      enabled: c.enabled,
-      url: c.url.trim(),
-      label: c.label.trim() || t('camera.defaultLabel', { n: i + 1 }),
-    }))
-    .filter((c) => c.enabled && c.url.length > 0)
-    .map((c) => ({ slot: c.slot, url: c.url, label: c.label })),
+// Slots of cameras available to record from (enabled + with a URL).
+const activeSlots = computed<number[]>(() =>
+  cameras.value.flatMap((c, i) => (c.enabled && c.url.trim().length > 0 ? [i] : [])),
 )
 
-// Keep the selected slot pointing at a configured camera.
+// Keep the selected slot pointing at a configured camera so a manual start
+// never resolves to a disabled/removed camera even if the operator never
+// opened the settings panel (where the same guard runs).
 watch(
-  activeCameras,
-  (list) => {
-    if (list.length && !list.some((c) => c.slot === cameraSlot.value)) {
-      cameraSlot.value = list[0]!.slot
+  activeSlots,
+  (slots) => {
+    if (slots.length && !slots.includes(cameraSlot.value)) {
+      cameraSlot.value = slots[0]!
     }
   },
   { immediate: true },
 )
 
 const canStart = computed(
-  () => activeCameras.value.length > 0 && !status.value.recording && !busy.value,
+  () => activeSlots.value.length > 0 && !status.value.recording && !busy.value,
 )
 
 async function start(): Promise<void> {
@@ -126,14 +118,26 @@ function formatDate(iso: string): string {
       <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-300">
         🎬 {{ t('timelapse.title') }}
       </span>
-      <span
-        v-if="status.recording"
-        class="flex items-center gap-1 text-[10px] font-medium text-red-300"
-        data-test="timelapse-rec"
-      >
-        <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-        {{ t('timelapse.recording') }} · {{ status.frame_count }}
-      </span>
+      <div class="flex items-center gap-2">
+        <span
+          v-if="status.recording"
+          class="flex items-center gap-1 text-[10px] font-medium text-red-300"
+          data-test="timelapse-rec"
+        >
+          <span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+          {{ t('timelapse.recording') }} · {{ status.frame_count }}
+        </span>
+        <button
+          type="button"
+          class="rounded p-0.5 text-slate-500 hover:text-slate-200"
+          :title="t('timelapse.settingsTitle')"
+          :aria-label="t('timelapse.settingsTitle')"
+          data-test="timelapse-open-settings"
+          @click="ui.openSettings('timelapse')"
+        >
+          ⚙
+        </button>
+      </div>
     </header>
 
     <div
@@ -142,7 +146,7 @@ function formatDate(iso: string): string {
     >
       <!-- No camera configured to record from. -->
       <p
-        v-if="activeCameras.length === 0"
+        v-if="activeSlots.length === 0"
         class="rounded border border-dashed border-slate-700 px-2 py-3 text-center text-[11px] leading-snug text-slate-500"
         data-test="timelapse-no-camera"
       >
@@ -150,19 +154,6 @@ function formatDate(iso: string): string {
       </p>
 
       <template v-else>
-        <!-- Auto-record for the duration of every print. -->
-        <label
-          class="flex items-center gap-2 rounded bg-slate-800/60 px-2 py-1.5 text-[11px] text-slate-300"
-        >
-          <input
-            v-model="autoEnabled"
-            type="checkbox"
-            class="h-3.5 w-3.5 shrink-0 accent-emerald-500"
-            data-test="timelapse-auto"
-          />
-          <span class="leading-snug">{{ t('timelapse.auto') }}</span>
-        </label>
-
         <!-- Recording: live state + stop. -->
         <div
           v-if="status.recording"
@@ -182,62 +173,17 @@ function formatDate(iso: string): string {
           </button>
         </div>
 
-        <!-- Idle: capture controls. -->
-        <div v-else class="space-y-2">
-          <label v-if="activeCameras.length > 1" class="block space-y-1">
-            <span class="text-[10px] uppercase tracking-wider text-slate-500">{{
-              t('timelapse.camera')
-            }}</span>
-            <select
-              v-model="cameraSlot"
-              class="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
-              data-test="timelapse-camera"
-            >
-              <option v-for="c in activeCameras" :key="c.slot" :value="c.slot">
-                {{ c.label }}
-              </option>
-            </select>
-          </label>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="block space-y-1">
-              <span class="text-[10px] uppercase tracking-wider text-slate-500">{{
-                t('timelapse.interval')
-              }}</span>
-              <input
-                v-model.number="intervalSeconds"
-                type="number"
-                min="0.5"
-                max="3600"
-                step="0.5"
-                class="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
-                data-test="timelapse-interval"
-              />
-            </label>
-            <label class="block space-y-1">
-              <span class="text-[10px] uppercase tracking-wider text-slate-500">{{
-                t('timelapse.fps')
-              }}</span>
-              <input
-                v-model.number="fps"
-                type="number"
-                min="1"
-                max="60"
-                step="1"
-                class="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-xs text-slate-100"
-                data-test="timelapse-fps"
-              />
-            </label>
-          </div>
-          <button
-            type="button"
-            class="w-full rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
-            :disabled="!canStart"
-            data-test="timelapse-start"
-            @click="start"
-          >
-            ⏺ {{ t('timelapse.start') }}
-          </button>
-        </div>
+        <!-- Idle: one-tap start using the defaults from Settings → Timelapse. -->
+        <button
+          v-else
+          type="button"
+          class="w-full rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!canStart"
+          data-test="timelapse-start"
+          @click="start"
+        >
+          ⏺ {{ t('timelapse.start') }}
+        </button>
       </template>
 
       <!-- Saved timelapses. -->
@@ -256,7 +202,8 @@ function formatDate(iso: string): string {
                 }}</span>
                 <span class="text-[10px] text-slate-500">
                   {{ file.frame_count }} {{ t('timelapse.frames') }} · {{ file.duration_seconds }}s
-                  · {{ formatSize(file.size_bytes) }}
+                  ·
+                  {{ formatSize(file.size_bytes) }}
                 </span>
               </div>
               <button
