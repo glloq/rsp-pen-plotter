@@ -49,9 +49,9 @@ watch(
   { immediate: true },
 )
 
-// Jump to the System tab where the camera streams are configured.
+// The camera streams are configured in the Cameras tab (above this section).
 function goToCameras(): void {
-  ui.settingsTab = 'system'
+  ui.settingsTab = 'cameras'
 }
 </script>
 

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,6 @@ import { nextTick } from 'vue'
 import MagazineEditor from './MagazineEditor.vue'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { useJobStore } from '../stores/job'
-import { useUiStore } from '../stores/ui'
 import type { MachineProfile } from '../api/client'
 
 // Regression guard for the "assigned colour stays black" bug: the
@@ -17,24 +16,11 @@ import type { MachineProfile } from '../api/client'
 // below is a *real* Pinia store (so ``storeToRefs`` works) whose
 // ``saveProfile`` mirrors the backend round-trip by replacing the
 // selected profile with the persisted shape.
+//
+// Per-pen offsets / the offset camera moved to OffsetCameraSettings — see
+// OffsetCameraSettings.test.ts.
 
 const saveSpy = vi.hoisted(() => vi.fn())
-const measureSpy = vi.hoisted(() => vi.fn())
-const lightSpy = vi.hoisted(() => vi.fn())
-const gpioSpy = vi.hoisted(() => vi.fn())
-const scaleSpy = vi.hoisted(() => vi.fn())
-
-vi.mock('../api/client', async (importActual) => {
-  const actual = await importActual<typeof import('../api/client')>()
-  return {
-    ...actual,
-    measureTipOffset: measureSpy,
-    resetTipCalibration: vi.fn(),
-    setTipLight: lightSpy,
-    getTipGpio: gpioSpy,
-    calibrateTipScale: scaleSpy,
-  }
-})
 
 vi.mock('../stores/job', async () => {
   const { defineStore } = await import('pinia')
@@ -116,24 +102,6 @@ const i18n = createI18n({
         penUpOverride: 'Pen-up override',
         penDownOverride: 'Pen-down override',
         useProfileDefault: 'Profile default',
-        applyOffsets: 'Per-pen tip offsets',
-        applyOffsetsHint: 'offset hint',
-        offsetX: 'Offset X',
-        offsetY: 'Offset Y',
-        offsetHint: 'relative to reference',
-        useStation: 'Measure with a camera station',
-        cameraUrl: 'Camera URL',
-        mmPerPixel: 'mm per pixel',
-        referenceSlot: 'Reference slot',
-        stationHint: 'station hint',
-        resetMeasurements: 'Reset measurements',
-        measure: 'Measure',
-        measuring: 'Measuring…',
-        measureRefDone: 'Reference set',
-        measureApplied: 'Offset {x}, {y} mm applied',
-        measureNotFound: 'No tip detected',
-        measureNeedRef: 'Measure the reference pen first',
-        measureFailed: 'Measurement failed',
       },
       availableColors: { pickColor: 'Pick' },
       colorPicker: { title: 'Colour', cancel: 'Cancel', confirm: 'OK' },
@@ -150,157 +118,6 @@ describe('MagazineEditor', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     saveSpy.mockClear()
-    measureSpy.mockReset()
-    lightSpy.mockReset()
-    gpioSpy.mockReset()
-    gpioSpy.mockResolvedValue({ available: true, pins: [17, 18, 27] })
-    scaleSpy.mockReset()
-  })
-
-  // Shared helper: a rack profile with offsets + a configured station.
-  function withStation(extra: Record<string, unknown> = {}): void {
-    const job = useJobStore()
-    job.profiles[0]!.tool_change_method = 'rack'
-    job.profiles[0]!.apply_pen_offsets = true
-    job.profiles[0]!.tip_calibration = {
-      camera_url: 'cam://x',
-      reference_slot: 0,
-      mm_per_pixel: 0.1,
-      detector: 'dark_blob',
-      dark_threshold: 80,
-      roi: null,
-      ...extra,
-    }
-    measureSpy.mockResolvedValue({
-      found: true,
-      slot: 1,
-      is_reference: false,
-      tip_px: { x: 130, y: 100 },
-      confidence: 0.9,
-      reference_measured: true,
-      offset_mm: { x: 1, y: 0 },
-      message: 'ok',
-      annotated_image: null,
-    })
-  }
-
-  it('persists a detection-zone (ROI) and sends it when measuring', async () => {
-    withStation()
-    const wrapper = mountEditor()
-    await nextTick()
-
-    await wrapper.find('[data-test="tip-roi-x"]').setValue('10')
-    await wrapper.find('[data-test="tip-roi-x"]').trigger('change')
-    await wrapper.find('[data-test="tip-roi-w"]').setValue('40')
-    await wrapper.find('[data-test="tip-roi-w"]').trigger('change')
-    await wrapper.find('[data-test="tip-roi-h"]').setValue('30')
-    await wrapper.find('[data-test="tip-roi-h"]').trigger('change')
-    await nextTick()
-    const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
-    expect(saved.tip_calibration?.roi).toEqual({ x: 10, y: 0, width: 40, height: 30 })
-
-    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
-    await flushPromises()
-    expect(measureSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ roi: { x: 10, y: 0, width: 40, height: 30 } }),
-    )
-  })
-
-  it('sends an optional station Z with the measurement', async () => {
-    withStation({ station_position: { x: 20, y: 30 } })
-    const wrapper = mountEditor()
-    await nextTick()
-
-    await wrapper.find('[data-test="tip-station-z"]').setValue('4')
-    await wrapper.find('[data-test="tip-station-z"]').trigger('change')
-    await nextTick()
-    await wrapper.find('[data-test="tip-auto-move"]').setValue(true)
-    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
-    await flushPromises()
-
-    expect(measureSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ move_to_station: true, station_z_mm: 4 }),
-    )
-  })
-
-  it('passes the light flag + GPIO pin when light-during-measure is on', async () => {
-    withStation({ light_gpio_pin: 17, light_active_high: true })
-    const wrapper = mountEditor()
-    await flushPromises()
-
-    await wrapper.find('[data-test="tip-light-during"]').setValue(true)
-    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
-    await flushPromises()
-
-    expect(measureSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        light: true,
-        light_gpio_pin: 17,
-        light_active_high: true,
-      }),
-    )
-  })
-
-  it('manual light buttons drive the configured GPIO pin', async () => {
-    withStation({ light_gpio_pin: 17, light_active_high: true })
-    const wrapper = mountEditor()
-    await flushPromises()
-
-    await wrapper.find('[data-test="tip-light-on"]').trigger('click')
-    await flushPromises()
-    expect(lightSpy).toHaveBeenCalledWith(17, true, true)
-
-    await wrapper.find('[data-test="tip-light-off"]').trigger('click')
-    await flushPromises()
-    expect(lightSpy).toHaveBeenCalledWith(17, false, true)
-  })
-
-  it('offers the GPIO pins from the backend in the pin dropdown', async () => {
-    withStation()
-    const wrapper = mountEditor()
-    await flushPromises()
-    const options = wrapper.find('[data-test="tip-light-pin"]').findAll('option')
-    // "none" + the three pins from the mocked gpio endpoint.
-    expect(options.map((o) => o.text())).toContain('GPIO 18')
-  })
-
-  it('can point the offset camera at a configured workshop camera', async () => {
-    withStation()
-    const ui = useUiStore()
-    ui.cameras[0] = { enabled: true, url: 'http://cam-a/stream', label: 'Offset cam' }
-    const wrapper = mountEditor()
-    await flushPromises()
-
-    const select = wrapper.find('[data-test="tip-camera-source"]')
-    expect(select.exists()).toBe(true)
-    await select.setValue('http://cam-a/stream')
-    await nextTick()
-
-    const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
-    expect(saved.tip_calibration?.camera_url).toBe('http://cam-a/stream')
-  })
-
-  it('runs the mm/pixel assistant and applies the derived scale', async () => {
-    withStation()
-    scaleSpy.mockResolvedValue({
-      found: true,
-      mm_per_pixel: 0.5,
-      width_px: 40,
-      height_px: 40,
-      annotated_image: 'data:image/jpeg;base64,AAAA',
-      message: 'ok',
-    })
-    const wrapper = mountEditor()
-    await flushPromises()
-
-    await wrapper.find('[data-test="tip-scale-known-mm"]').setValue(20)
-    await wrapper.find('[data-test="tip-scale-measure"]').trigger('click')
-    await flushPromises()
-
-    expect(scaleSpy).toHaveBeenCalledWith(expect.objectContaining({ known_mm: 20 }))
-    const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
-    expect(saved.tip_calibration?.mm_per_pixel).toBe(0.5)
-    expect(wrapper.find('[data-test="tip-scale-preview"]').exists()).toBe(true)
   })
 
   it('persists an assigned available colour onto the pen slot', async () => {
@@ -388,217 +205,6 @@ describe('MagazineEditor', () => {
     expect(saveSpy).toHaveBeenCalled()
     const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
     expect(saved.pens?.find((p) => p.index === 0)?.position).toEqual({ x: 42, y: 0 })
-  })
-
-  it('keeps tip offsets opt-in: toggle off by default, no offset inputs', async () => {
-    useJobStore().profiles[0]!.tool_change_method = 'rack'
-    const wrapper = mountEditor()
-    await nextTick()
-
-    const toggle = wrapper.find('[data-test="apply-pen-offsets"]')
-    expect(toggle.exists()).toBe(true)
-    expect((toggle.element as HTMLInputElement).checked).toBe(false)
-    // The per-slot offset inputs stay hidden until the operator opts in.
-    expect(wrapper.find('[data-test="pen-offset-x-0"]').exists()).toBe(false)
-  })
-
-  it('enables offsets and saves a per-slot XY offset with manual provenance', async () => {
-    useJobStore().profiles[0]!.tool_change_method = 'rack'
-    const wrapper = mountEditor()
-    await nextTick()
-
-    // Opt in → the flag is persisted on the profile.
-    const toggle = wrapper.find('[data-test="apply-pen-offsets"]')
-    await toggle.setValue(true)
-    await toggle.trigger('change')
-    await nextTick()
-    let saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
-    expect(saved.apply_pen_offsets).toBe(true)
-
-    // The offset inputs are now visible; set slot 0's X offset.
-    const xInput = wrapper.find('[data-test="pen-offset-x-0"]')
-    expect(xInput.exists()).toBe(true)
-    await xInput.setValue('1.25')
-    await xInput.trigger('change')
-    await nextTick()
-    saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
-    const pen0 = saved.pens?.find((p) => p.index === 0)
-    expect(pen0?.xy_offset_mm).toEqual({ x: 1.25, y: 0 })
-    expect(pen0?.offset_source).toBe('manual')
-  })
-
-  it('hides Measure buttons until a camera station is configured', async () => {
-    const job = useJobStore()
-    job.profiles[0]!.tool_change_method = 'rack'
-    job.profiles[0]!.apply_pen_offsets = true
-    const wrapper = mountEditor()
-    await nextTick()
-    // Offsets on but no tip_calibration → no per-slot Measure button.
-    expect(wrapper.find('[data-test="pen-measure-1"]').exists()).toBe(false)
-    // The station toggle is offered so the operator can turn it on.
-    expect(wrapper.find('[data-test="use-tip-station"]').exists()).toBe(true)
-  })
-
-  it('measures a tip and applies the offset with vision provenance', async () => {
-    const job = useJobStore()
-    job.profiles[0]!.tool_change_method = 'rack'
-    job.profiles[0]!.apply_pen_offsets = true
-    job.profiles[0]!.tip_calibration = {
-      camera_url: 'cam://x',
-      reference_slot: 0,
-      mm_per_pixel: 0.1,
-      detector: 'dark_blob',
-      dark_threshold: 80,
-      roi: null,
-    }
-    measureSpy.mockResolvedValue({
-      found: true,
-      slot: 1,
-      is_reference: false,
-      tip_px: { x: 130, y: 100 },
-      confidence: 0.9,
-      reference_measured: true,
-      offset_mm: { x: 1.8, y: -0.5 },
-      message: 'ok',
-      annotated_image: 'data:image/jpeg;base64,AAAA',
-    })
-
-    const wrapper = mountEditor()
-    await nextTick()
-
-    const btn = wrapper.find('[data-test="pen-measure-1"]')
-    expect(btn.exists()).toBe(true)
-    await btn.trigger('click')
-    await flushPromises()
-    await nextTick()
-
-    expect(measureSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ slot: 1, camera_url: 'cam://x', reference_slot: 0 }),
-    )
-    const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
-    const pen1 = saved.pens?.find((p) => p.index === 1)
-    expect(pen1?.xy_offset_mm).toEqual({ x: 1.8, y: -0.5 })
-    expect(pen1?.offset_source).toBe('vision')
-    // The annotated preview is shown for confirmation.
-    const preview = wrapper.find('[data-test="pen-measure-preview-1"]')
-    expect(preview.exists()).toBe(true)
-    expect(preview.attributes('src')).toBe('data:image/jpeg;base64,AAAA')
-  })
-
-  it('passes guided travel when auto-move is enabled and a station is set', async () => {
-    const job = useJobStore()
-    job.profiles[0]!.tool_change_method = 'rack'
-    job.profiles[0]!.apply_pen_offsets = true
-    job.profiles[0]!.tip_calibration = {
-      camera_url: 'cam://x',
-      reference_slot: 0,
-      mm_per_pixel: 0.1,
-      detector: 'dark_blob',
-      dark_threshold: 80,
-      roi: null,
-      station_position: { x: 20, y: 30 },
-    }
-    measureSpy.mockResolvedValue({
-      found: true,
-      slot: 0,
-      is_reference: true,
-      tip_px: { x: 100, y: 100 },
-      confidence: 0.9,
-      reference_measured: true,
-      offset_mm: { x: 0, y: 0 },
-      message: 'ok',
-    })
-
-    const wrapper = mountEditor()
-    await nextTick()
-
-    // Enable the (now available) auto-move toggle, then measure.
-    const autoMove = wrapper.find('[data-test="tip-auto-move"]')
-    await autoMove.setValue(true)
-    await wrapper.find('[data-test="pen-measure-0"]').trigger('click')
-    await nextTick()
-    await nextTick()
-
-    expect(measureSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        slot: 0,
-        move_to_station: true,
-        station_position: { x: 20, y: 30 },
-        profile_name: 'P',
-      }),
-    )
-  })
-
-  it('passes fetch_pen when the load-from-magazine toggle is on', async () => {
-    const job = useJobStore()
-    job.profiles[0]!.tool_change_method = 'rack'
-    job.profiles[0]!.apply_pen_offsets = true
-    job.profiles[0]!.tip_calibration = {
-      camera_url: 'cam://x',
-      reference_slot: 0,
-      mm_per_pixel: 0.1,
-      detector: 'dark_blob',
-      dark_threshold: 80,
-      roi: null,
-    }
-    measureSpy.mockResolvedValue({
-      found: true,
-      slot: 1,
-      is_reference: false,
-      tip_px: { x: 130, y: 100 },
-      confidence: 0.9,
-      reference_measured: true,
-      offset_mm: { x: 1.8, y: 0 },
-      message: 'ok',
-    })
-
-    const wrapper = mountEditor()
-    await nextTick()
-
-    await wrapper.find('[data-test="tip-fetch-pen"]').setValue(true)
-    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
-    await nextTick()
-    await nextTick()
-
-    expect(measureSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ slot: 1, fetch_pen: true, profile_name: 'P' }),
-    )
-  })
-
-  it('reports a failed detection without applying an offset', async () => {
-    const job = useJobStore()
-    job.profiles[0]!.tool_change_method = 'rack'
-    job.profiles[0]!.apply_pen_offsets = true
-    job.profiles[0]!.tip_calibration = {
-      camera_url: 'cam://x',
-      reference_slot: 0,
-      mm_per_pixel: 0.1,
-      detector: 'dark_blob',
-      dark_threshold: 80,
-      roi: null,
-    }
-    measureSpy.mockResolvedValue({
-      found: false,
-      slot: 1,
-      is_reference: false,
-      tip_px: null,
-      confidence: 0,
-      reference_measured: false,
-      offset_mm: null,
-      message: 'no tip',
-    })
-
-    const wrapper = mountEditor()
-    await nextTick()
-    saveSpy.mockClear()
-
-    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
-    await nextTick()
-    await nextTick()
-
-    // Nothing persisted, and the operator sees the feedback message.
-    expect(saveSpy).not.toHaveBeenCalled()
-    expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toBeTruthy()
   })
 
   it('saves a per-slot pen-up override and clears it back to null', async () => {

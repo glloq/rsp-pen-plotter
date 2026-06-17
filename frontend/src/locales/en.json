@@ -728,6 +728,7 @@
     "close": "Close",
     "system": "System",
     "timelapse": "Timelapse",
+    "cameras": "Cameras",
     "history": "History",
     "advanced": "Advanced",
     "advancedHint": "Diagnostics and observability tools — most operators never need these.",
@@ -1707,7 +1708,7 @@
     "planPreviewImage": "Original image",
     "planPreviewImageHint": "Always shows the original source image. Lightest to render, but doesn't reflect the chosen style.",
     "camera": "Camera",
-    "cameraHint": "Show up to two live camera feeds (USB or Raspberry Pi) above the manual controls, and feed the timelapse. Each camera is an MJPEG/HTTP stream URL. The offset-measurement camera is configured separately, per machine, in the Colours tab.",
+    "cameraHint": "Up to two live camera feeds (USB or Raspberry Pi) shown above the manual controls; they also feed the timelapse. Each camera is an MJPEG/HTTP stream URL. The offset-measurement camera is configured separately, per machine, in the Offset camera section below.",
     "cameraEnable": "Enabled",
     "cameraUrl": "Stream URL",
     "cameraUrlHint": "MJPEG/HTTP stream URL. USB webcam: mjpg-streamer / ustreamer; Pi camera: ustreamer / libcamera; or an IP camera. E.g. http://localhost:8080/?action=stream",
@@ -1963,6 +1964,11 @@
     "configure": "Configure the camera →",
     "streamError": "Video stream unavailable",
     "defaultLabel": "Camera {n}"
+  },
+  "offsetCamera": {
+    "title": "Offset camera",
+    "hint": "A dedicated camera at a fixed station measures each pen's tip so OmniPlot can work out the XY offset between pens. Optional and separate from the timelapse camera.",
+    "needsMagazine": "Per-pen offsets need a multi-pen magazine (carousel or rack)."
   },
   "timelapse": {
     "title": "Timelapse",

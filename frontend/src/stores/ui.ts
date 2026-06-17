@@ -6,7 +6,7 @@ export type CanvasTab = 'sheet' | 'simulator' | 'files' | 'plotter'
 // developer/diagnostics tabs (audit, slo, manifests) are no longer
 // first-class tabs — they're collapsed under the single ``advanced``
 // section so the panel reads as operator settings, not observability.
-export type SettingsTab = 'system' | 'timelapse' | 'history' | 'advanced'
+export type SettingsTab = 'system' | 'cameras' | 'history' | 'advanced'
 export type PlotterTab = 'connection' | 'profile' | 'colors' | 'macros' | 'queue'
 
 export interface PreviewSheet {

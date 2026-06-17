@@ -63,10 +63,10 @@ Expert mode. The per-layer override wins over the profile default and
 applies regardless of slot.
 
 If different pens need different XY offsets (the carousel doesn't
-centre the tip exactly above 0,0), turn on **per-pen tip offsets** in the
-Couleurs tab and give each slot an `xy_offset_mm`. The generator then
-translates that pen's strokes by the offset so layers drawn with
-different pens register against one origin.
+centre the tip exactly above 0,0), turn on **per-pen tip offsets** in
+Settings → Cameras → Offset camera and give each slot an `xy_offset_mm`.
+The generator then translates that pen's strokes by the offset so layers
+drawn with different pens register against one origin.
 
 The feature is **opt-in**: it's off by default (`apply_pen_offsets:
 false`), so existing profiles produce identical G-code until you enable
@@ -81,8 +81,9 @@ filled in automatically relative to a reference pen. The station also supports a
 detection zone (ROI), a Raspberry Pi **GPIO-driven light**, an **mm-per-pixel
 assistant**, and hands-free **fetch → travel → grab** on a connected plotter.
 
-> The **offset camera** is dedicated to this and is separate from the
-> **timelapse camera** (System → Cameras). Both are optional.
+> The **offset camera** is dedicated to this and is a different camera from
+> the **timelapse camera** — both are configured (and both optional) under
+> Settings → Cameras.
 
 See the dedicated guide: **[Offset camera](Offset-Camera.md)**.
 
