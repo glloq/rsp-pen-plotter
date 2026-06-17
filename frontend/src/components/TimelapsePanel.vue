@@ -133,7 +133,7 @@ function formatDate(iso: string): string {
           :title="t('timelapse.settingsTitle')"
           :aria-label="t('timelapse.settingsTitle')"
           data-test="timelapse-open-settings"
-          @click="ui.openSettings('timelapse')"
+          @click="ui.openSettings('cameras')"
         >
           ⚙
         </button>

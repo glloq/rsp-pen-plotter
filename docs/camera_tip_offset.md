@@ -59,7 +59,7 @@ separate — they are never shared:
 - **Offset camera** — `tip_calibration.camera_url` on the *machine profile*
   (the measurement station is bolted to the machine). Used *only* for tip
   measurement / scale. Optional; required only for automatic offset
-  calibration. The Couleurs-tab UI can point it at one of the configured
+  calibration. The Settings → Cameras UI can point it at one of the configured
   workshop cameras or take a dedicated URL.
 - **Timelapse camera** — the client-side workshop camera(s) (System →
   Cameras, up to two), which also feed the Plotter-tab live view. The
@@ -411,7 +411,8 @@ nothing was found, so framing/lighting can be checked). The magazine UI shows
 it under the slot so the operator confirms the right blob was picked.
 
 **Operator controls (audit follow-up).** The full station config is editable
-in the Couleurs tab — camera URL, mm/pixel, reference slot, **detection zone
+in Settings → Cameras → Offset camera (a dedicated `OffsetCameraSettings`
+panel) — camera URL, mm/pixel, reference slot, **detection zone
 (ROI)** as an X/Y/W/H pixel box, station **X/Y/Z**, and a **camera light** wired
 to a **Raspberry Pi GPIO pin**: the operator picks a pin (BCM) from the list the
 host reports (`GET …/gpio`), sets the polarity (`active_high`), aims with manual

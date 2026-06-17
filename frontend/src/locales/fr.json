@@ -728,6 +728,7 @@
     "close": "Fermer",
     "system": "Système",
     "timelapse": "Timelapse",
+    "cameras": "Caméras",
     "history": "Historique",
     "advanced": "Avancé",
     "advancedHint": "Outils de diagnostic et d'observabilité — la plupart des utilisateurs n'en ont pas besoin.",
@@ -1707,7 +1708,7 @@
     "planPreviewImage": "Image d'origine",
     "planPreviewImageHint": "Affiche toujours l'image source d'origine. Le plus léger à afficher, mais ne reflète pas le style choisi.",
     "camera": "Caméra",
-    "cameraHint": "Affiche jusqu'à deux flux vidéo en direct (USB ou Raspberry Pi) au-dessus des contrôles manuels, et alimente le timelapse. Chaque caméra est une URL de flux MJPEG/HTTP. La caméra de mesure d'offset se configure à part, par machine, dans l'onglet Couleurs.",
+    "cameraHint": "Jusqu'à deux flux vidéo en direct (USB ou Raspberry Pi) affichés au-dessus des contrôles manuels ; ils alimentent aussi le timelapse. Chaque caméra est une URL de flux MJPEG/HTTP. La caméra de mesure d'offset se configure à part, par machine, dans la section Caméra d'offset ci-dessous.",
     "cameraEnable": "Activée",
     "cameraUrl": "URL du flux",
     "cameraUrlHint": "URL de flux MJPEG/HTTP. Webcam USB : mjpg-streamer / ustreamer ; caméra Pi : ustreamer / libcamera ; ou caméra IP. Ex. http://localhost:8080/?action=stream",
@@ -1963,6 +1964,11 @@
     "configure": "Configurer la caméra →",
     "streamError": "Flux vidéo indisponible",
     "defaultLabel": "Caméra {n}"
+  },
+  "offsetCamera": {
+    "title": "Caméra d'offset",
+    "hint": "Une caméra dédiée, à une station fixe, mesure l'embout de chaque stylo pour déterminer l'offset XY entre stylos. Optionnelle et distincte de la caméra timelapse.",
+    "needsMagazine": "Les offsets par stylo nécessitent un magasin multi-stylos (carrousel ou rack)."
   },
   "timelapse": {
     "title": "Timelapse",

@@ -18,8 +18,8 @@ each is only needed for its own function:
 
 | Camera | Where it's set | Used for | Required when |
 | --- | --- | --- | --- |
-| **Offset camera** | Per machine, on the profile (`tip_calibration`) — Couleurs tab | Tip-offset / scale measurement only | Automatic offset calibration |
-| **Timelapse camera** | System → Cameras (client-side, up to two) | Plotter live view + timelapse | Recording a timelapse |
+| **Offset camera** | Per machine, on the profile (`tip_calibration`) — Settings → Cameras → Offset camera | Tip-offset / scale measurement only | Automatic offset calibration |
+| **Timelapse camera** | Settings → Cameras (client-side, up to two) | Plotter live view + timelapse | Recording a timelapse |
 
 They never share a feed. The offset camera lives with the machine because the
 station is bolted to it; the timelapse camera is a workshop/session
@@ -66,7 +66,7 @@ the UI.
 
 ## Configure it
 
-Settings → **Couleurs** tab (the magazine editor), on a carousel/rack profile:
+Settings → **Cameras** tab → **Offset camera**, on a multi-pen profile:
 
 1. Turn on **per-pen tip offsets** (`apply_pen_offsets`). This is the opt-in
    switch — off by default, so nothing changes until you enable it.

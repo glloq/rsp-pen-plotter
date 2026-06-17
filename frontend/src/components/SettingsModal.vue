@@ -9,7 +9,7 @@ import AuditPanel from './AuditPanel.vue'
 import ManifestsPanel from './ManifestsPanel.vue'
 import SloPanel from './SloPanel.vue'
 import SystemPanel from './SystemPanel.vue'
-import TimelapseSettings from './TimelapseSettings.vue'
+import CamerasPanel from './CamerasPanel.vue'
 
 const { t } = useI18n()
 const ui = useUiStore()
@@ -20,7 +20,7 @@ const { settingsOpen, settingsTab } = storeToRefs(ui)
 // modal reads as operator settings first.
 const tabs: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'system', label: 'settings.system', icon: '⚙' },
-  { id: 'timelapse', label: 'settings.timelapse', icon: '🎬' },
+  { id: 'cameras', label: 'settings.cameras', icon: '🎬' },
   { id: 'history', label: 'settings.history', icon: '🕘' },
   { id: 'advanced', label: 'settings.advanced', icon: '🛠' },
 ]
@@ -33,7 +33,7 @@ const tabs: Array<{ id: SettingsTab; label: string; icon: string }> = [
 // while a never-visited tab pays nothing.
 const visited = reactive<Record<SettingsTab, boolean>>({
   system: false,
-  timelapse: false,
+  cameras: false,
   history: false,
   advanced: false,
 })
@@ -120,8 +120,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
           <div v-show="settingsTab === 'system'">
             <SystemPanel v-if="visited.system" />
           </div>
-          <div v-show="settingsTab === 'timelapse'">
-            <TimelapseSettings v-if="visited.timelapse" />
+          <div v-show="settingsTab === 'cameras'">
+            <CamerasPanel v-if="visited.cameras" />
           </div>
           <div v-show="settingsTab === 'history'">
             <JobHistory v-if="visited.history" />

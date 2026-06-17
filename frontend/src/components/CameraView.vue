@@ -125,7 +125,7 @@ watch([selected, streamSrc], () => {
       type="button"
       class="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-3 py-8 text-center hover:bg-slate-800/60"
       data-test="camera-configure"
-      @click="ui.openSettings('system')"
+      @click="ui.openSettings('cameras')"
     >
       <span aria-hidden="true" class="text-3xl">📷</span>
       <span class="text-xs text-slate-400">{{ t('camera.notConfigured') }}</span>

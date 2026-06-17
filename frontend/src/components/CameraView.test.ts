@@ -59,7 +59,7 @@ describe('CameraView', () => {
     vi.unstubAllGlobals()
   })
 
-  it('shows a configure hint that opens System settings when no camera is set', async () => {
+  it('shows a configure hint that opens Cameras settings when no camera is set', async () => {
     const ui = useUiStore()
     const wrapper = mountView()
     await nextTick()
@@ -70,7 +70,7 @@ describe('CameraView', () => {
 
     await cta.trigger('click')
     expect(ui.settingsOpen).toBe(true)
-    expect(ui.settingsTab).toBe('system')
+    expect(ui.settingsTab).toBe('cameras')
   })
 
   it('renders a single live stream without a switcher', async () => {
