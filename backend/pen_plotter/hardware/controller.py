@@ -192,10 +192,10 @@ class PlotterController:
         self._require_idle()
         await self._send_immediate(goto_command(x_mm, y_mm, profile))
 
-    async def home(self, profile: MachineProfile) -> None:
-        """Home the machine."""
+    async def home(self, profile: MachineProfile, axis: str | None = None) -> None:
+        """Home the machine — all axes, or a single ``axis`` (X / Y / Z)."""
         self._require_idle()
-        await self._send_immediate(home_command(profile))
+        await self._send_immediate(home_command(profile, axis))
 
     async def send_commands(self, lines: list[str]) -> None:
         """Send raw control lines immediately, e.g. for a user macro.

@@ -55,21 +55,33 @@ def goto_command(x_mm: float, y_mm: float, profile: MachineProfile) -> list[str]
     ]
 
 
-def home_command(profile: MachineProfile) -> list[str]:
+def home_command(profile: MachineProfile, axis: str | None = None) -> list[str]:
     """Build a homing command appropriate for the profile's dialect.
 
     Args:
         profile: The target machine profile.
+        axis: Optional single axis to home (``"X"``, ``"Y"`` or ``"Z"``).
+            ``None`` homes all axes (the default). Single-axis homing maps to
+            ``$HX`` (GRBL) / ``G28 X`` (Marlin/Klipper); on a dialect without
+            firmware homing it parks that axis at the workspace minimum (a
+            ``Z`` request just raises the pen, the closest analogue).
 
     Returns:
-        The G-code lines that home the machine.
+        The G-code lines that home the requested axis (or the whole machine).
     """
+    ax = (axis or "").strip().upper() or None
     if profile.gcode_dialect == "grbl":
-        return ["$H"]
+        return [f"$H{ax}"] if ax in ("X", "Y", "Z") else ["$H"]
     if profile.gcode_dialect in ("marlin", "klipper"):
-        return ["G28 X Y"]
-    return [
-        "G90",
-        profile.pen_up_command,
-        f"G0 X{profile.workspace.x_min:.3f} Y{profile.workspace.y_min:.3f}",
-    ]
+        return [f"G28 {ax}"] if ax in ("X", "Y", "Z") else ["G28 X Y"]
+    # Fallback (ebb / custom): no firmware homing — park instead.
+    lines = ["G90", profile.pen_up_command]
+    if ax == "X":
+        lines.append(f"G0 X{profile.workspace.x_min:.3f}")
+    elif ax == "Y":
+        lines.append(f"G0 Y{profile.workspace.y_min:.3f}")
+    elif ax == "Z":
+        pass  # pen already raised above — the closest thing to a "Z home"
+    else:
+        lines.append(f"G0 X{profile.workspace.x_min:.3f} Y{profile.workspace.y_min:.3f}")
+    return lines

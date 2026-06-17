@@ -66,6 +66,7 @@ describe('JogControls — Repetier-style X/Y/Z', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(client.plotterJog).mockClear()
+    vi.mocked(client.plotterHome).mockClear()
   })
 
   it('jogs Z by the selected step (Z+ / Z−) with dx/dy = 0', async () => {
@@ -93,6 +94,36 @@ describe('JogControls — Repetier-style X/Y/Z', () => {
     expect(client.plotterJog).toHaveBeenLastCalledWith(10, 0, 'P', 0)
   })
 
+  it('homes a single axis, and the centre button homes all', async () => {
+    seed(true)
+    const wrapper = mountJog()
+    await nextTick()
+
+    await wrapper.find('[data-test="home-x"]').trigger('click')
+    await flushPromises()
+    expect(client.plotterHome).toHaveBeenLastCalledWith('P', 'X')
+
+    await wrapper.find('[data-test="home-z"]').trigger('click')
+    await flushPromises()
+    expect(client.plotterHome).toHaveBeenLastCalledWith('P', 'Z')
+
+    await wrapper.find('[data-test="home-all"]').trigger('click')
+    await flushPromises()
+    expect(client.plotterHome).toHaveBeenLastCalledWith('P', undefined)
+  })
+
+  it('uses the selected step button for the jog distance', async () => {
+    seed(true)
+    const wrapper = mountJog()
+    await nextTick()
+
+    await wrapper.find('[data-test="step-0.5"]').trigger('click')
+    await nextTick()
+    await wrapper.find('[data-test="jog-z-up"]').trigger('click')
+    await flushPromises()
+    expect(client.plotterJog).toHaveBeenLastCalledWith(0, 0, 'P', 0.5)
+  })
+
   it('disables every control when disconnected', async () => {
     seed(false)
     const wrapper = mountJog()
@@ -100,5 +131,7 @@ describe('JogControls — Repetier-style X/Y/Z', () => {
     expect(wrapper.find('[data-test="jog-z-up"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('button[aria-label="Jog up (Y+)"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-test="manual-pen-up"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-test="home-x"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-test="step-1"]').attributes('disabled')).toBeDefined()
   })
 })
