@@ -9,6 +9,10 @@
 - [Picking the right algorithm](Picking-the-Right-Algorithm.md)
 - [Multi-pass plotting](Multi-Pass-Plotting.md)
 - [Print queue & resume](Print-Queue.md)
+- [G-code library](G-code-Library.md)
+- [Manual control & cockpit](Manual-Control.md)
+- [Camera & timelapse](Camera-and-Timelapse.md)
+- [Ink odometer](Ink-Odometer.md)
 
 ### File types
 - [Supported file types](Supported-File-Types.md)

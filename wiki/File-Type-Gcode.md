@@ -42,6 +42,10 @@ on a multi-pen profile still halts at swap boundaries.
 
 If `OMNIPLOT_API_KEY` is set, add `-H 'X-API-Key: <key>'` to both calls.
 
+> **In the UI:** to print a known-good program repeatedly without the API,
+> save it to the [G-code library](G-code-Library.md) from the Simulator tab and
+> re-print it on demand from the **G-code files** tab.
+
 > The `pen_plotter.sdk` package is a *plugin* SDK (converters, algorithms,
 > profiles) — it is not an HTTP client. Use `curl`, `httpx` or any HTTP
 > library against the endpoints above.
