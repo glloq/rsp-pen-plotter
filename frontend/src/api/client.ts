@@ -640,6 +640,82 @@ export async function plotterCommand(action: 'pause' | 'resume' | 'abort'): Prom
   return response.data
 }
 
+/** Rolling history of the G-code lines actually written to the device
+ *  (manual jogs / homing / pen moves + streamed job lines), oldest first.
+ *  Capped server-side; read-only. */
+export async function getPlotterCommands(): Promise<string[]> {
+  const response = await api.get<{ commands: string[] }>('/plotter/commands')
+  return response.data.commands
+}
+
+/** Live state of the camera timelapse recorder. */
+export interface TimelapseStatus {
+  recording: boolean
+  session_id: string | null
+  label: string
+  frame_count: number
+  interval_seconds: number
+  fps: number
+  started_at: string | null
+  error: string | null
+}
+
+/** A saved timelapse's metadata (no frames / payload). */
+export interface TimelapseSummary {
+  id: string
+  label: string
+  created_at: string
+  interval_seconds: number
+  fps: number
+  frame_count: number
+  duration_seconds: number
+  has_video: boolean
+  size_bytes: number
+}
+
+export async function getTimelapseStatus(): Promise<TimelapseStatus> {
+  const response = await api.get<TimelapseStatus>('/timelapse/status')
+  return response.data
+}
+
+export async function startTimelapse(
+  streamUrl: string,
+  intervalSeconds: number,
+  fps: number,
+  label = '',
+): Promise<TimelapseStatus> {
+  const response = await api.post<TimelapseStatus>('/timelapse/start', {
+    stream_url: streamUrl,
+    interval_seconds: intervalSeconds,
+    fps,
+    label,
+  })
+  return response.data
+}
+
+export async function stopTimelapse(): Promise<TimelapseSummary> {
+  const response = await api.post<TimelapseSummary>('/timelapse/stop')
+  return response.data
+}
+
+export async function listTimelapses(): Promise<TimelapseSummary[]> {
+  const response = await api.get<TimelapseSummary[]>('/timelapse')
+  return response.data
+}
+
+export async function deleteTimelapse(id: string): Promise<void> {
+  await api.delete(`/timelapse/${encodeURIComponent(id)}`)
+}
+
+/** Fetch the assembled MP4 as a Blob (via the authenticated client, so it
+ *  works even when an API key is set) for a client-side download. */
+export async function downloadTimelapseVideo(id: string): Promise<Blob> {
+  const response = await api.get<Blob>(`/timelapse/${encodeURIComponent(id)}/video`, {
+    responseType: 'blob',
+  })
+  return response.data
+}
+
 export interface SystemUpdateResponse {
   ok: boolean
   previous_commit: string | null

@@ -21,12 +21,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system deps for converters
+      - name: Install system deps for converters + timelapse
+        # ffmpeg assembles the camera timelapse MP4 (the real-encode test
+        # is skipped when it's absent — installing it here exercises it).
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             potrace ghostscript libpango-1.0-0 libpangoft2-1.0-0 \
-            libharfbuzz0b libcairo2 libffi-dev shared-mime-info
+            libharfbuzz0b libcairo2 libffi-dev shared-mime-info ffmpeg
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3

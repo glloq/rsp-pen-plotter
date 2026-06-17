@@ -112,6 +112,7 @@ class GcodeStreamer:
         ack_timeout_s: float = 30.0,
         pause_points: dict[int, str] | None = None,
         swap_actions: dict[int, SwapAction] | None = None,
+        on_send: Callable[[str], None] | None = None,
     ) -> None:
         """Create a streamer.
 
@@ -121,6 +122,9 @@ class GcodeStreamer:
                 and on state changes.
             ack_timeout_s: Maximum time to wait for an ``ok`` before failing,
                 guarding against a stalled or disconnected controller.
+            on_send: Optional synchronous callback invoked with each command
+                line just before it is written to the transport, so the
+                controller can keep a rolling history of what was sent.
             pause_points: Optional ``{executable_line_index: prompt}`` mapping.
                 When streaming reaches such a line it is skipped and the stream
                 enters ``WAITING`` until resumed. **Legacy** — kept for
@@ -138,6 +142,7 @@ class GcodeStreamer:
         self._ack_timeout_s = ack_timeout_s
         self._pause_points = pause_points or {}
         self._swap_actions = swap_actions or {}
+        self._on_send = on_send
         self._resume = asyncio.Event()
         self._resume.set()
         # ``_abort`` is an Event (not a plain bool) so the inline-swap
@@ -183,6 +188,12 @@ class GcodeStreamer:
         """Invoke the progress callback if one is registered."""
         if self._on_progress is not None:
             await self._on_progress(self.progress)
+
+    async def _send_line(self, line: str) -> None:
+        """Record (for the controller's command history) then write one line."""
+        if self._on_send is not None:
+            self._on_send(line)
+        await self._transport.write_line(line)
 
     async def _wait_ok(self) -> None:
         """Read responses until an ``ok`` is seen, raising on error or timeout.
@@ -249,7 +260,7 @@ class GcodeStreamer:
                 await self._emit()
                 continue
 
-            await self._transport.write_line(command)
+            await self._send_line(command)
             self.progress.sent += 1
             try:
                 await self._wait_ok()
@@ -299,7 +310,7 @@ class GcodeStreamer:
                 await self._resume.wait()
                 if self._aborted:
                     return True
-                await self._transport.write_line(cmd.send)
+                await self._send_line(cmd.send)
                 try:
                     await self._wait_ok()
                 except StreamError:

@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia, storeToRefs } from 'pinia'
 import { createI18n } from 'vue-i18n'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+
+const h = vi.hoisted(() => ({ getPlotterCommands: vi.fn() }))
 
 vi.mock('../api/client', async (orig) => {
   const actual = await orig<typeof import('../api/client')>()
@@ -11,6 +13,7 @@ vi.mock('../api/client', async (orig) => {
     ...actual,
     listQueue: vi.fn(async () => []),
     listGcodeFiles: vi.fn(async () => []),
+    getPlotterCommands: h.getPlotterCommands,
   }
 })
 
@@ -18,6 +21,7 @@ import en from '../locales/en.json'
 import PlotterControl from './PlotterControl.vue'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
+import { useUiStore } from '../stores/ui'
 import type { MachineProfile } from '../api/client'
 
 const i18n = createI18n({
@@ -66,6 +70,7 @@ function mountControl() {
 describe('PlotterControl — manual control always visible', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    h.getPlotterCommands.mockReset().mockResolvedValue(['G28', 'M3 S0'])
   })
 
   it('renders the manual controls even while disconnected, greyed + disabled', async () => {
@@ -125,5 +130,28 @@ describe('PlotterControl — manual control always visible', () => {
     // configured it renders its configure-hint state.
     expect(wrapper.find('[data-test="camera-view"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="camera-configure"]').exists()).toBe(true)
+  })
+
+  it('reveals the sent-command history on demand, collapsed by default', async () => {
+    await seedProfile()
+    // The history only polls while the Plotter tab is the active canvas tab.
+    useUiStore().canvasTab = 'plotter'
+    const wrapper = mountControl()
+    await nextTick()
+
+    // Collapsed by default: toggle reports not-expanded and no fetch has
+    // fired yet (the log is only polled while open).
+    const toggle = wrapper.find('[data-test="plotter-history-toggle"]')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(h.getPlotterCommands).not.toHaveBeenCalled()
+
+    // Expanding it polls the server-side log and renders the lines.
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(h.getPlotterCommands).toHaveBeenCalled()
+    expect(wrapper.find('[data-test="plotter-history-body"]').text()).toContain('M3 S0')
+
+    wrapper.unmount() // clear the poll interval
   })
 })

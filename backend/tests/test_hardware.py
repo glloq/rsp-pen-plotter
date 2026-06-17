@@ -106,6 +106,26 @@ async def test_controller_runs_job_with_mock_transport() -> None:
 
 
 @pytest.mark.asyncio
+async def test_command_log_records_manual_and_streamed_lines() -> None:
+    controller = PlotterController()
+    controller.attach(MockTransport())
+    # Manual command → its emitted G-code is recorded.
+    await controller.jog(5.0, 0.0, _profile())
+    # Streamed job → each line is recorded, in order.
+    await controller.run("G0 X1\nG0 X2\n")
+    await asyncio.sleep(0.05)
+
+    log = controller.command_log
+    assert "G0 X1" in log and "G0 X2" in log
+    assert log.index("G0 X1") < log.index("G0 X2")
+    assert any("X5.000" in line for line in log)
+
+    # A fresh connection starts a fresh history.
+    controller.attach(MockTransport())
+    assert controller.command_log == []
+
+
+@pytest.mark.asyncio
 async def test_controller_jog_requires_connection() -> None:
     controller = PlotterController()
     with pytest.raises(RuntimeError):

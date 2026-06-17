@@ -552,5 +552,4 @@ useEditorPreviewSvgEffects({
   border-radius: 2px;
   font-variant-numeric: tabular-nums;
 }
-
 </style>

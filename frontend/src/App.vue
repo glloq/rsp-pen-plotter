@@ -107,6 +107,7 @@ import { useAvailableColorsStore } from './stores/availableColors'
 import { useFeatureFlag } from './composables/useFeatureFlag'
 import { useJobStore } from './stores/job'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
+import { useTimelapseAutoCapture } from './composables/useTimelapseAutoCapture'
 import { useLibraryStore } from './stores/library'
 import { usePerfStore } from './stores/perf'
 import { useQueueStore } from './stores/queue'
@@ -126,6 +127,12 @@ const availableColors = useAvailableColorsStore()
 const perf = usePerfStore()
 const queue = useQueueStore()
 const uploads = useUploadsStore()
+
+// Auto-record a timelapse for the duration of a print (when enabled in the
+// timelapse settings). Installed once here so it watches the plotter run
+// state for the whole app lifetime.
+useTimelapseAutoCapture()
+
 const dragDepth = ref(0)
 const dropping = ref(false)
 

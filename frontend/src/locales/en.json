@@ -1462,6 +1462,8 @@
     "newPlotterFailed": "Could not save the new profile",
     "startPrint": "Start print",
     "gcodeSection": "Generated G-code",
+    "commandHistory": "Sent commands",
+    "commandHistoryEmpty": "No commands sent yet.",
     "controlHint": "Connect the plotter, drive it manually and start prints from this tab.",
     "settingsTitle": "Plotter settings",
     "saveGcode": "Save G-code"
@@ -1657,12 +1659,14 @@
     "planPreviewImage": "Original image",
     "planPreviewImageHint": "Always shows the original source image. Lightest to render, but doesn't reflect the chosen style.",
     "camera": "Camera",
-    "cameraHint": "Show a live camera feed above the manual controls on the Plotter tab.",
-    "cameraEnable": "Enable camera feed",
-    "cameraEnableHint": "Display the configured stream on the Plotter tab.",
+    "cameraHint": "Show up to two live camera feeds (USB or Raspberry Pi) above the manual controls. Each camera is an MJPEG/HTTP stream URL.",
+    "cameraEnable": "Enabled",
     "cameraUrl": "Stream URL",
-    "cameraUrlHint": "MJPEG stream URL — e.g. http://raspberrypi.local:8080/?action=stream",
-    "cameraUrlPlaceholder": "http://…/stream"
+    "cameraUrlHint": "MJPEG/HTTP stream URL. USB webcam: mjpg-streamer / ustreamer; Pi camera: ustreamer / libcamera; or an IP camera. E.g. http://localhost:8080/?action=stream",
+    "cameraUrlPlaceholder": "http://…/stream",
+    "cameraLabel": "Label",
+    "cameraN": "Camera {n}",
+    "cameraOptional": "optional"
   },
   "updateModal": {
     "titleRunning": "Update in progress",
@@ -1909,6 +1913,33 @@
     "live": "Live",
     "notConfigured": "No camera configured",
     "configure": "Configure the camera →",
-    "streamError": "Video stream unavailable"
+    "streamError": "Video stream unavailable",
+    "defaultLabel": "Camera {n}"
+  },
+  "timelapse": {
+    "title": "Timelapse",
+    "hint": "Capture frames from a camera during a print, then export an MP4.",
+    "auto": "Auto-record during prints",
+    "start": "Start recording",
+    "stop": "Stop & save",
+    "recording": "Recording",
+    "camera": "Camera",
+    "interval": "Interval (s)",
+    "fps": "Playback FPS",
+    "label": "Name",
+    "labelPlaceholder": "e.g. spiral-print",
+    "frames": "frames",
+    "noCamera": "Enable a camera in System settings first.",
+    "empty": "No timelapses yet.",
+    "download": "Download MP4",
+    "delete": "Delete",
+    "deleteTitle": "Delete this timelapse?",
+    "deleteMsg": "“{name}” and its video will be removed.",
+    "saved": "Timelapse saved ({count} frames).",
+    "listFailed": "Could not load timelapses.",
+    "startFailed": "Could not start the timelapse.",
+    "stopFailed": "Could not stop the timelapse.",
+    "deleteFailed": "Could not delete the timelapse.",
+    "downloadFailed": "Could not download the video."
   }
 }

@@ -74,6 +74,12 @@ class StatusResponse(BaseModel):
     message: str | None = None
 
 
+class CommandsResponse(BaseModel):
+    """Recent G-code lines written to the device, oldest first."""
+
+    commands: list[str]
+
+
 def _status() -> StatusResponse:
     """Build a status snapshot from the controller."""
     p = controller.progress
@@ -98,6 +104,12 @@ def _profile_or_404(name: str) -> MachineProfile:
 async def status() -> StatusResponse:
     """Return the current connection and streaming status."""
     return _status()
+
+
+@router.get("/plotter/commands")
+async def commands() -> CommandsResponse:
+    """Return the rolling history of G-code lines sent to the plotter."""
+    return CommandsResponse(commands=controller.command_log)
 
 
 @router.post("/plotter/connect")

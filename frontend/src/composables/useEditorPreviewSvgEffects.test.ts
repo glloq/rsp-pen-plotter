@@ -78,7 +78,7 @@ describe('computeLayerColorOpacityMap', () => {
     expect(map.get('#f5c518')).toBe(0)
   })
 
-  it("within a layer, the source colour is written last (wins its own fields)", () => {
+  it('within a layer, the source colour is written last (wins its own fields)', () => {
     // A single layer whose assigned ink differs from its centroid: both keys
     // resolve to the SAME visibility, and the source key reflects the final
     // write. Hidden → both 0.
