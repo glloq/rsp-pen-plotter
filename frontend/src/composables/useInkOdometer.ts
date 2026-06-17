@@ -16,11 +16,19 @@ export function useInkOdometer() {
   const job = useJobStore()
   const availableColors = useAvailableColorsStore()
 
-  function commitCurrentJob(): void {
-    for (const [hex, mm] of Object.entries(job.lengthMmByColor)) {
+  // Advance each ink's odometer by the given per-colour lengths (mm,
+  // keyed by canonical hex). Used both for the current job and for a
+  // saved file's stored lengths on a library re-print.
+  function commit(lengthMmByColor: Record<string, number>): void {
+    for (const [hex, mm] of Object.entries(lengthMmByColor)) {
       void availableColors.addToOdometer(hex, mm)
     }
   }
 
-  return { commitCurrentJob }
+  // Convenience: commit the current job's per-colour lengths.
+  function commitCurrentJob(): void {
+    commit(job.lengthMmByColor)
+  }
+
+  return { commit, commitCurrentJob }
 }

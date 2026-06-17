@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import Engine
+from sqlalchemy import JSON, Column, Engine
 from sqlmodel import Field, Session, SQLModel, desc, select
 
 from pen_plotter.persistence import engine as default_engine
@@ -34,6 +34,13 @@ class GcodeFile(SQLModel, table=True):
     gcode: str
     line_count: int = 0
     size_bytes: int = 0
+    # Per-colour drawn length (mm), keyed by canonical hex. Captured at save
+    # time from the job that produced the program so a later re-print from
+    # the library can still advance the ink odometer — the G-code text alone
+    # no longer carries this. Nullable JSON column (auto-added on existing
+    # databases by ``_add_missing_columns``); pre-migration rows read back as
+    # ``None`` and callers coerce to an empty mapping.
+    length_mm_by_color: dict[str, float] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -42,6 +49,7 @@ def save_gcode_file(
     name: str,
     profile_name: str,
     gcode: str,
+    length_mm_by_color: dict[str, float] | None = None,
     target: Engine = default_engine,
 ) -> GcodeFile:
     """Persist a new G-code program. Returns the stored row."""
@@ -52,6 +60,7 @@ def save_gcode_file(
         gcode=gcode,
         line_count=len(gcode.splitlines()),
         size_bytes=len(gcode.encode("utf-8")),
+        length_mm_by_color=length_mm_by_color or {},
     )
     with Session(target) as session:
         session.add(record)

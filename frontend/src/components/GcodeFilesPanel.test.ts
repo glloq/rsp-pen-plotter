@@ -35,6 +35,7 @@ import en from '../locales/en.json'
 import GcodeFilesPanel from './GcodeFilesPanel.vue'
 import { useJobStore } from '../stores/job'
 import { useQueueStore } from '../stores/queue'
+import { useAvailableColorsStore } from '../stores/availableColors'
 import type { MachineProfile } from '../api/client'
 
 const i18n = createI18n({
@@ -52,6 +53,7 @@ function fileSummary(over: Partial<GcodeFileSummary> = {}): GcodeFileSummary {
     profile_name: 'P',
     line_count: 4,
     size_bytes: 120,
+    length_mm_by_color: {},
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...over,
@@ -149,6 +151,24 @@ describe('GcodeFilesPanel', () => {
     await flushPromises()
 
     expect(h.printGcodeFile).toHaveBeenCalledWith('f1')
+  })
+
+  it('advances the ink odometer from the file lengths when printing', async () => {
+    h.files = [fileSummary({ id: 'f1', name: 'logo', length_mm_by_color: { '#ff0000': 90 } })]
+    await seedJob(false)
+    const colors = useAvailableColorsStore()
+    const odo = vi.spyOn(colors, 'addToOdometer').mockResolvedValue()
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    await wrapper.find('[data-test="gcode-file-select-f1"]').trigger('click')
+    await nextTick()
+    await wrapper.find('[data-test="gcode-print-selected"]').trigger('click')
+    await flushPromises()
+
+    // Re-printing a saved file is a real plot → ink is accounted for from
+    // the per-colour lengths stored with the file.
+    expect(odo).toHaveBeenCalledWith('#ff0000', 90)
   })
 
   it('shows the live state inline for a file that is printing, and blocks its actions', async () => {

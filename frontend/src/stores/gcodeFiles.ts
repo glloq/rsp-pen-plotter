@@ -51,11 +51,12 @@ export const useGcodeFilesStore = defineStore('gcodeFiles', () => {
     name: string,
     profileName: string,
     gcode: string,
+    lengthMmByColor: Record<string, number> = {},
   ): Promise<GcodeFileSummary | null> {
     if (saving.value) return null
     saving.value = true
     try {
-      const created = await saveGcodeFile(name, profileName, gcode)
+      const created = await saveGcodeFile(name, profileName, gcode, lengthMmByColor)
       await refresh()
       useToastStore().success(i18n.global.t('gcodeFiles.saved', { name: created.name }))
       return created

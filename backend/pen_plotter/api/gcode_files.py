@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from pen_plotter import gcode_library as lib
 from pen_plotter import queue as q
@@ -31,6 +31,10 @@ class GcodeFileSummary(BaseModel):
     profile_name: str
     line_count: int
     size_bytes: int
+    # Per-colour drawn length (mm), keyed by canonical hex. Empty for
+    # programs saved before this was tracked. Lets the UI advance the ink
+    # odometer when a saved file is re-printed.
+    length_mm_by_color: dict[str, float] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -42,6 +46,7 @@ def _file_summary(record_: lib.GcodeFile) -> GcodeFileSummary:
         profile_name=record_.profile_name,
         line_count=record_.line_count or 0,
         size_bytes=record_.size_bytes or 0,
+        length_mm_by_color=record_.length_mm_by_color or {},
         created_at=record_.created_at,
         updated_at=record_.updated_at,
     )
@@ -53,6 +58,9 @@ class GcodeFileCreate(BaseModel):
     name: str
     profile_name: str
     gcode: str
+    # Per-colour drawn length (mm) for the program, keyed by canonical hex.
+    # Optional: omitted by older clients and stored as an empty mapping.
+    length_mm_by_color: dict[str, float] = Field(default_factory=dict)
 
 
 class GcodeFilePatch(BaseModel):
@@ -79,7 +87,12 @@ async def create_file(body: GcodeFileCreate) -> GcodeFileSummary:
     """
     if not body.gcode.strip():
         raise HTTPException(status_code=422, detail="Cannot save an empty G-code program.")
-    saved = lib.save_gcode_file(body.name.strip() or "gcode", body.profile_name, body.gcode)
+    saved = lib.save_gcode_file(
+        body.name.strip() or "gcode",
+        body.profile_name,
+        body.gcode,
+        body.length_mm_by_color,
+    )
     record("gcode.save", f"{saved.name} ({saved.id})")
     return _file_summary(saved)
 

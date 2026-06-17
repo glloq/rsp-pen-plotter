@@ -53,6 +53,7 @@ describe('useSaveCurrentGcode', () => {
         profile_name: 'P',
         line_count: 2,
         size_bytes: 10,
+        length_mm_by_color: {},
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
       }),
@@ -66,7 +67,8 @@ describe('useSaveCurrentGcode', () => {
 
     const created = await saveCurrent()
     // No source file is loaded in this fixture, so it falls back to 'gcode'.
-    expect(h.saveGcodeFile).toHaveBeenCalledWith('gcode', job.selectedProfileName, job.gcode)
+    // No placements either → empty per-colour lengths.
+    expect(h.saveGcodeFile).toHaveBeenCalledWith('gcode', job.selectedProfileName, job.gcode, {})
     expect(created?.id).toBe('new1')
   })
 

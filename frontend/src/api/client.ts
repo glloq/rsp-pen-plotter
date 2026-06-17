@@ -518,6 +518,10 @@ export interface GcodeFileSummary {
   profile_name: string
   line_count: number
   size_bytes: number
+  /** Per-colour drawn length (mm), keyed by canonical hex. Captured at
+   *  save time so re-printing the file can still advance the ink
+   *  odometer. Empty for files saved before this was tracked. */
+  length_mm_by_color: Record<string, number>
   created_at: string
   updated_at: string
 }
@@ -531,11 +535,13 @@ export async function saveGcodeFile(
   name: string,
   profileName: string,
   gcode: string,
+  lengthMmByColor: Record<string, number> = {},
 ): Promise<GcodeFileSummary> {
   const response = await api.post<GcodeFileSummary>('/gcode-files', {
     name,
     profile_name: profileName,
     gcode,
+    length_mm_by_color: lengthMmByColor,
   })
   return response.data
 }

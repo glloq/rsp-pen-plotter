@@ -15,12 +15,14 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { GcodeFileSummary, PrintRun } from '../api/client'
 import { confirmAction } from '../composables/confirm'
+import { useInkOdometer } from '../composables/useInkOdometer'
 import { useGcodeFilesStore } from '../stores/gcodeFiles'
 import { useQueueStore } from '../stores/queue'
 
 const { t } = useI18n()
 const files = useGcodeFilesStore()
 const queue = useQueueStore()
+const inkOdometer = useInkOdometer()
 
 const selectedId = ref<string | null>(null)
 
@@ -50,10 +52,17 @@ function formatSize(bytes: number): string {
 async function printSelected(): Promise<void> {
   const id = selectedId.value
   if (!id) return
+  const file = files.files.find((f) => f.id === id)
   const ok = await files.print(id)
-  // Pull the queue immediately so the row flips to "printing" without
-  // waiting for the next poll tick.
-  if (ok) await queue.load()
+  if (ok) {
+    // A real plot was launched → advance the ink odometer from the
+    // lengths captured when the file was saved (the G-code text alone
+    // can't be decomposed by colour).
+    if (file) inkOdometer.commit(file.length_mm_by_color)
+    // Pull the queue immediately so the row flips to "printing" without
+    // waiting for the next poll tick.
+    await queue.load()
+  }
 }
 
 // Inline rename.
