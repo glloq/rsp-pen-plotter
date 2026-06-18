@@ -107,19 +107,21 @@ function onOffset(pen: PenSlot, axis: 'x' | 'y', raw: string): void {
 const tipConfig = computed<TipCalibrationConfig | null>(
   () => profile.value?.tip_calibration ?? null,
 )
-const canMeasure = computed(() => applyPenOffsets.value && tipConfig.value != null)
 const workshopCameras = computed(() => ui.cameras.filter((c) => c.enabled && c.url.trim()))
 
 // A magazine (carousel / rack, or a firmware / host-macro changer) can fetch
-// the pen automatically. Without one — a manual / single-holder machine — the
-// operator presents each pen at the station by hand. Per-pen offsets work in
-// both cases; only the auto-fetch affordance is magazine-specific.
+// and present each pen repeatably at a camera station. In manual-change mode
+// the operator inserts pens during the job, so pre-measuring every colour here
+// is misleading; that flow is intentionally hidden.
 const hasMagazine = computed(() => {
   const mode = profile.value?.capabilities?.tool_change.mode
   if (mode === 'firmware' || mode === 'host_macro') return true
   const method = profile.value?.tool_change_method
   return method === 'carousel' || method === 'rack'
 })
+const canMeasure = computed(
+  () => hasMagazine.value && applyPenOffsets.value && tipConfig.value != null,
+)
 
 const scaleLabel = computed(() =>
   tipConfig.value
@@ -170,6 +172,11 @@ function onPickCamera(url: string): void {
 function onSamples(raw: string): void {
   const v = Math.floor(Number(raw))
   onTipConfig({ samples: Number.isFinite(v) ? Math.min(20, Math.max(1, v)) : 1 })
+}
+
+function onReferenceSlot(raw: string): void {
+  const v = Math.max(0, Math.floor(Number(raw)))
+  if (Number.isFinite(v)) onTipConfig({ reference_slot: v })
 }
 
 // Session-local per-measurement options.
@@ -242,6 +249,23 @@ const gpioPins = ref<number[]>([])
 const gpioAvailable = ref(false)
 const lightPin = computed(() => tipConfig.value?.light_gpio_pin ?? null)
 const hasLight = computed(() => lightPin.value != null)
+const lightState = reactive<{ message: string; ok: boolean }>({ message: '', ok: false })
+
+// A configured station light is almost always meant to be used for the
+// measurement itself. Default to the safe/user-friendly path when the operator
+// selects a pin, and clear it when the pin is removed.
+watch(
+  lightPin,
+  (pin) => {
+    if (pin == null) {
+      lightDuringMeasure.value = false
+      lightState.message = ''
+      return
+    }
+    lightDuringMeasure.value = true
+  },
+  { immediate: true },
+)
 
 async function loadGpio(): Promise<void> {
   try {
@@ -255,7 +279,8 @@ async function loadGpio(): Promise<void> {
 }
 
 function onLightPin(raw: string): void {
-  const v = raw === '' ? null : Math.floor(Number(raw))
+  const parsed = Math.floor(Number(raw))
+  const v = raw === '' || !Number.isFinite(parsed) ? null : parsed
   onTipConfig({ light_gpio_pin: v })
 }
 
@@ -266,12 +291,54 @@ function onLightActiveHigh(activeHigh: boolean): void {
 async function onManualLight(on: boolean): Promise<void> {
   const pin = lightPin.value
   if (pin == null) return
+  lightState.message = ''
   try {
     await setTipLight(pin, on, tipConfig.value?.light_active_high ?? true)
+    lightState.ok = true
+    lightState.message = t(on ? 'offsetCamera.lightOnOk' : 'offsetCamera.lightOffOk')
   } catch {
-    // Non-critical (e.g. no GPIO backend); the measurement path reports errors.
+    lightState.ok = false
+    lightState.message = t('offsetCamera.lightFailed')
   }
 }
+
+// Operator-facing readiness chips. They keep the guided flow simple by showing
+// what is ready, what is optional, and what still blocks a camera measurement.
+interface ReadinessItem {
+  key: string
+  ok: boolean
+  optional: boolean
+}
+
+const readiness = computed<ReadinessItem[]>(() => {
+  const cfg = tipConfig.value
+  if (!cfg) return []
+  return [
+    { key: 'camera', ok: cfg.camera_url.trim().length > 0, optional: false },
+    { key: 'scale', ok: cfg.mm_per_pixel > 0, optional: false },
+    {
+      key: 'reference',
+      ok: pens.value.some((p) => p.installed && p.index === cfg.reference_slot),
+      optional: false,
+    },
+    { key: 'zone', ok: cfg.roi != null, optional: true },
+    { key: 'light', ok: hasLight.value, optional: true },
+  ]
+})
+
+function readinessClass(item: ReadinessItem): string {
+  if (item.ok) return 'border-emerald-800 bg-emerald-950/40 text-emerald-200'
+  if (item.optional) return 'border-slate-700 bg-slate-900/60 text-slate-400'
+  return 'border-amber-800 bg-amber-950/30 text-amber-200'
+}
+
+const blockingReadiness = computed(() => readiness.value.find((item) => !item.optional && !item.ok))
+const cameraMeasurementReady = computed(() => canMeasure.value && blockingReadiness.value == null)
+const setupHint = computed(() =>
+  blockingReadiness.value
+    ? t(`offsetCamera.next.${blockingReadiness.value.key}`)
+    : t('offsetCamera.next.ready'),
+)
 
 // ── Measurement ──────────────────────────────────────────────────────────
 interface MeasureState {
@@ -375,16 +442,11 @@ function onClearOffset(pen: PenSlot): void {
   void patchPen(pen.index, { xy_offset_mm: { x: 0, y: 0 }, offset_source: 'unset' })
 }
 
-// Progress: how many installed pens are done (the reference counts as done).
 const installedPens = computed(() => pens.value.filter((p) => p.installed))
-const measuredCount = computed(
-  () =>
-    installedPens.value.filter(
-      (p) =>
-        (tipConfig.value && p.index === tipConfig.value.reference_slot) ||
-        (p.offset_source && p.offset_source !== 'unset'),
-    ).length,
-)
+function isPenMeasured(pen: PenSlot): boolean {
+  return !!pen.offset_source && pen.offset_source !== 'unset'
+}
+const measuredCount = computed(() => installedPens.value.filter(isPenMeasured).length)
 
 // ── Test detection (dry run) ───────────────────────────────────────────────
 // Run the detector on the current view WITHOUT writing any offset, so the
@@ -447,9 +509,31 @@ const guidePen = computed<PenSlot | null>(() => {
   const idx = guideOrder.value[guideStep.value]
   return idx == null ? null : (pens.value.find((p) => p.index === idx) ?? null)
 })
+const nextGuideIndex = computed(() => {
+  const next = guideOrder.value.findIndex((idx) => {
+    const pen = pens.value.find((p) => p.index === idx)
+    return pen != null && !isPenMeasured(pen)
+  })
+  return next >= 0 ? next : 0
+})
+const nextGuidePen = computed<PenSlot | null>(() => {
+  const idx = guideOrder.value[nextGuideIndex.value]
+  return idx == null ? null : (pens.value.find((p) => p.index === idx) ?? null)
+})
+const guideStartText = computed(() =>
+  nextGuidePen.value && measuredCount.value < installedPens.value.length
+    ? t('offsetCamera.guidedStartNext', {
+        pen: nextGuidePen.value.name || `Pen ${nextGuidePen.value.index}`,
+      })
+    : t('offsetCamera.guidedStartReview'),
+)
+
+function measureActionLabel(pen: PenSlot): string {
+  return isPenMeasured(pen) ? t('offsetCamera.remeasureButton') : t('offsetCamera.measureButton')
+}
 
 function startGuide(): void {
-  guideStep.value = 0
+  guideStep.value = nextGuideIndex.value
   guided.value = true
 }
 
@@ -542,6 +626,13 @@ onUnmounted(() => clearTimeout(savedTimer))
     <p v-else-if="!isMultiPen" class="text-[11px] text-slate-500">
       {{ t('offsetCamera.needsMagazine') }}
     </p>
+    <div
+      v-else-if="!hasMagazine"
+      class="rounded border border-sky-800 bg-sky-950/30 p-2 text-[11px] text-sky-200"
+      data-test="offset-manual-mode-note"
+    >
+      {{ t('offsetCamera.manualModeOnlyDuringSwap') }}
+    </div>
 
     <template v-else>
       <!-- Master switch. -->
@@ -607,6 +698,18 @@ onUnmounted(() => clearTimeout(savedTimer))
                 height="md"
                 @update:roi="(r) => onTipConfig({ roi: r })"
               />
+              <div class="grid grid-cols-2 gap-1.5 sm:grid-cols-5" data-test="tip-readiness">
+                <span
+                  v-for="item in readiness"
+                  :key="item.key"
+                  class="rounded border px-2 py-1 text-[10px]"
+                  :class="readinessClass(item)"
+                  :data-test="`tip-ready-${item.key}`"
+                >
+                  {{ item.ok ? '✓' : item.optional ? '·' : '⚠' }}
+                  {{ t(`offsetCamera.ready.${item.key}`) }}
+                </span>
+              </div>
               <!-- Dry-run detection: tune framing / zone / threshold without
                    writing any offset. -->
               <div class="flex items-center gap-2">
@@ -730,27 +833,6 @@ onUnmounted(() => clearTimeout(savedTimer))
                 {{ t('offsetCamera.advanced') }}
               </summary>
               <div class="mt-2 grid grid-cols-2 gap-2">
-                <label class="block text-[11px] text-slate-400"
-                  >{{ t('magazine.referenceSlot') }}
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    :value="tipConfig.reference_slot"
-                    :disabled="saving"
-                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                    data-test="tip-reference-slot"
-                    @change="
-                      (e) =>
-                        onTipConfig({
-                          reference_slot: Math.max(
-                            0,
-                            Math.floor(Number((e.target as HTMLInputElement).value)),
-                          ),
-                        })
-                    "
-                  />
-                </label>
                 <label class="block text-[11px] text-slate-400"
                   >{{ t('magazine.darkThreshold') }}
                   <input
@@ -985,6 +1067,14 @@ onUnmounted(() => clearTimeout(savedTimer))
                     >
                       {{ t('magazine.lightOff') }}
                     </button>
+                    <span
+                      v-if="lightState.message"
+                      class="text-[11px]"
+                      :class="lightState.ok ? 'text-emerald-400' : 'text-amber-400'"
+                      data-test="tip-light-msg"
+                    >
+                      {{ lightState.message }}
+                    </span>
                   </div>
                   <label
                     class="mt-1.5 flex items-center gap-2 text-[11px]"
@@ -1028,6 +1118,36 @@ onUnmounted(() => clearTimeout(savedTimer))
           <p class="mb-1 text-[11px] text-slate-500">
             {{ canMeasure ? t('offsetCamera.step3Hint') : t('magazine.offsetHint') }}
           </p>
+          <label
+            v-if="tipConfig"
+            class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-800 bg-slate-950/40 px-2 py-1.5 text-[11px] text-slate-300"
+            data-test="tip-reference-row"
+          >
+            <span class="text-slate-400">{{ t('magazine.referenceSlot') }}</span>
+            <select
+              :value="tipConfig.reference_slot"
+              :disabled="saving"
+              class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+              data-test="tip-reference-slot"
+              @change="(e) => onReferenceSlot((e.target as HTMLSelectElement).value)"
+            >
+              <option v-for="pen in installedPens" :key="pen.index" :value="pen.index">
+                #{{ pen.index }} · {{ pen.name || `Pen ${pen.index}` }}
+              </option>
+            </select>
+          </label>
+          <p
+            v-if="canMeasure"
+            class="mb-2 rounded border px-2 py-1 text-[11px]"
+            :class="
+              cameraMeasurementReady
+                ? 'border-emerald-800 bg-emerald-950/30 text-emerald-200'
+                : 'border-amber-800 bg-amber-950/30 text-amber-200'
+            "
+            data-test="offset-next-action"
+          >
+            {{ cameraMeasurementReady ? '✓' : '⚠' }} {{ setupHint }}
+          </p>
           <p
             v-if="canMeasure && !hasMagazine"
             class="mb-1 text-[11px] text-sky-300"
@@ -1040,11 +1160,13 @@ onUnmounted(() => clearTimeout(savedTimer))
           <button
             v-if="canMeasure && !guided"
             type="button"
-            class="mb-2 rounded border border-sky-700 bg-sky-950/40 px-2 py-1 text-[11px] text-sky-200 hover:bg-sky-900/50"
+            class="mb-2 rounded border border-sky-700 bg-sky-950/40 px-2 py-1 text-[11px] text-sky-200 hover:bg-sky-900/50 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="saving || !cameraMeasurementReady"
             data-test="guide-start"
+            :title="setupHint"
             @click="startGuide"
           >
-            🧭 {{ t('offsetCamera.guidedStart') }}
+            🧭 {{ guideStartText }}
           </button>
 
           <div
@@ -1100,8 +1222,9 @@ onUnmounted(() => clearTimeout(savedTimer))
               <button
                 type="button"
                 class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
-                :disabled="saving || measureState[guidePen.index]?.busy"
+                :disabled="saving || !cameraMeasurementReady || measureState[guidePen.index]?.busy"
                 data-test="guide-measure"
+                :title="setupHint"
                 @click="measureGuided"
               >
                 {{
@@ -1172,11 +1295,16 @@ onUnmounted(() => clearTimeout(savedTimer))
                     v-if="canMeasure"
                     type="button"
                     class="rounded border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] text-emerald-200 hover:bg-emerald-900/50 disabled:opacity-50"
-                    :disabled="saving || measureState[pen.index]?.busy"
+                    :disabled="saving || !cameraMeasurementReady || measureState[pen.index]?.busy"
                     :data-test="`pen-measure-${pen.index}`"
+                    :title="setupHint"
                     @click="onMeasure(pen)"
                   >
-                    {{ measureState[pen.index]?.busy ? t('magazine.measuring') : '📷' }}
+                    {{
+                      measureState[pen.index]?.busy
+                        ? t('magazine.measuring')
+                        : '📷 ' + measureActionLabel(pen)
+                    }}
                   </button>
                   <button
                     v-if="pen.offset_source && pen.offset_source !== 'unset'"
