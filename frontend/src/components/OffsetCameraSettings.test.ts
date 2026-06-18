@@ -84,6 +84,7 @@ const i18n = createI18n({
         title: 'Offset camera',
         hint: 'hint',
         needsMagazine: 'needs magazine',
+        manualModeOnlyDuringSwap: 'manual mode note',
         enable: 'Use a camera',
         step1: '1 Camera',
         step1Hint: 'point it',
@@ -276,17 +277,19 @@ describe('OffsetCameraSettings', () => {
     expect(wrapper.find('[data-test="offset-status-1"]').text()).toBe('Measured')
   })
 
-  it('works without a magazine: no fetch toggle, manual-present hint, measure available', async () => {
+  it('hides independent camera measurements in manual pen-change mode', async () => {
     const job = useJobStore()
     job.profiles[0]!.tool_change_method = 'manual_pause'
     withStation()
     const wrapper = mountPanel()
     await flushPromises()
-    // Auto-fetch is magazine-only; hidden on a manual machine.
+
+    expect(wrapper.find('[data-test="offset-manual-mode-note"]').text()).toContain(
+      'manual mode note',
+    )
     expect(wrapper.find('[data-test="tip-fetch-pen"]').exists()).toBe(false)
-    // The hand-presentation hint appears, and measuring still works.
-    expect(wrapper.find('[data-test="manual-present-hint"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="pen-measure-1"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="manual-present-hint"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="pen-measure-1"]').exists()).toBe(false)
   })
 
   it('shows the auto-fetch toggle with a magazine (rack)', async () => {

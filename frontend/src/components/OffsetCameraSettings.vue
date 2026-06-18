@@ -619,6 +619,13 @@ onUnmounted(() => clearTimeout(savedTimer))
     <p v-else-if="!isMultiPen" class="text-[11px] text-slate-500">
       {{ t('offsetCamera.needsMagazine') }}
     </p>
+    <div
+      v-else-if="!hasMagazine"
+      class="rounded border border-sky-800 bg-sky-950/30 p-2 text-[11px] text-sky-200"
+      data-test="offset-manual-mode-note"
+    >
+      {{ t('offsetCamera.manualModeOnlyDuringSwap') }}
+    </div>
 
     <template v-else>
       <!-- Master switch. -->
