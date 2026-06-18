@@ -101,10 +101,6 @@ const i18n = createI18n({
         statusPending: 'Not measured',
         manualPresent: 'present by hand',
         guidedStart: 'Guided measurement',
-        guidedStartNext: 'Measure {pen}',
-        guidedStartReview: 'Review measurements',
-        measureButton: 'Measure',
-        remeasureButton: 'Remeasure',
         guidedStep: 'Step {k}/{n} — {pen}',
         guidedPresent: 'Present {pen}',
         guidedMeasure: 'Measure this pen',
@@ -118,22 +114,6 @@ const i18n = createI18n({
         unstable: '⚠ frames vary by {mm} mm',
         progress: '{k}/{n} measured',
         clearOffset: 'Clear',
-        ready: {
-          camera: 'Camera',
-          scale: 'Scale',
-          reference: 'Reference',
-          zone: 'Zone',
-          light: 'Light',
-        },
-        next: {
-          camera: 'Next camera',
-          scale: 'Next scale',
-          reference: 'Next reference',
-          ready: 'Ready to measure',
-        },
-        lightOnOk: 'Light on',
-        lightOffOk: 'Light off',
-        lightFailed: 'Light failed',
       },
       cameraPreview: { empty: 'no url', retry: 'retry', refresh: 'refresh' },
       magazine: {
@@ -324,32 +304,6 @@ describe('OffsetCameraSettings', () => {
     expect(measureSpy).toHaveBeenCalledTimes(2)
     expect(measureSpy.mock.calls[0]![0]).toMatchObject({ slot: 0 })
     expect(measureSpy.mock.calls[1]![0]).toMatchObject({ slot: 1 })
-  })
-
-  it('counts only actually measured pens and resumes the guide at the next pending pen', async () => {
-    withStation()
-    const job = useJobStore()
-    job.profiles[0]!.pens![0]!.offset_source = 'vision'
-    const wrapper = mountPanel()
-    await flushPromises()
-
-    expect(wrapper.find('[data-test="offset-progress"]').text()).toContain('1/2')
-    expect(wrapper.find('[data-test="guide-start"]').text()).toContain('Measure Pen 1')
-
-    await wrapper.find('[data-test="guide-start"]').trigger('click')
-    await nextTick()
-    expect(wrapper.find('[data-test="guide-step"]').text()).toContain('2/2')
-  })
-
-  it('uses explicit measure and remeasure labels for per-pen actions', async () => {
-    withStation()
-    const job = useJobStore()
-    job.profiles[0]!.pens![0]!.offset_source = 'vision'
-    const wrapper = mountPanel()
-    await flushPromises()
-
-    expect(wrapper.find('[data-test="pen-measure-0"]').text()).toContain('Remeasure')
-    expect(wrapper.find('[data-test="pen-measure-1"]').text()).toContain('Measure')
   })
 
   it('does not apply a low-confidence measurement', async () => {
@@ -603,66 +557,11 @@ describe('OffsetCameraSettings', () => {
     withStation({ light_gpio_pin: 17, light_active_high: true })
     const wrapper = mountPanel()
     await flushPromises()
+    await wrapper.find('[data-test="tip-light-during"]').setValue(true)
     await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
     await flushPromises()
     expect(measureSpy).toHaveBeenCalledWith(
       expect.objectContaining({ light: true, light_gpio_pin: 17, light_active_high: true }),
-    )
-  })
-
-  it('shows station readiness chips so setup blockers are visible', async () => {
-    withStation({ camera_url: '', mm_per_pixel: 0, roi: null })
-    const wrapper = mountPanel()
-    await flushPromises()
-    expect(wrapper.find('[data-test="tip-ready-camera"]').text()).toContain('⚠')
-    expect(wrapper.find('[data-test="tip-ready-scale"]').text()).toContain('⚠')
-    expect(wrapper.find('[data-test="tip-ready-reference"]').text()).toContain('✓')
-    expect(wrapper.find('[data-test="tip-ready-zone"]').text()).toContain('·')
-  })
-
-  it('shows the next setup action and blocks camera measurement until ready', async () => {
-    withStation({ camera_url: '' })
-    const wrapper = mountPanel()
-    await flushPromises()
-    expect(wrapper.find('[data-test="offset-next-action"]').text()).toContain('Next camera')
-    expect((wrapper.find('[data-test="guide-start"]').element as HTMLButtonElement).disabled).toBe(
-      true,
-    )
-    expect((wrapper.find('[data-test="pen-measure-1"]').element as HTMLButtonElement).disabled).toBe(
-      true,
-    )
-  })
-
-  it('marks the guided camera flow ready when required setup is complete', async () => {
-    withStation()
-    const wrapper = mountPanel()
-    await flushPromises()
-    expect(wrapper.find('[data-test="offset-next-action"]').text()).toContain('Ready to measure')
-    expect((wrapper.find('[data-test="guide-start"]').element as HTMLButtonElement).disabled).toBe(
-      false,
-    )
-  })
-
-  it('keeps the reference pen selector visible in the measurement step', async () => {
-    withStation()
-    const wrapper = mountPanel()
-    await flushPromises()
-
-    const reference = wrapper.find('[data-test="tip-reference-slot"]')
-    expect(reference.exists()).toBe(true)
-    await reference.setValue('1')
-    await nextTick()
-    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.reference_slot).toBe(
-      1,
-    )
-  })
-
-  it('defaults light-during-measure on when a GPIO light pin is configured', async () => {
-    withStation({ light_gpio_pin: 17 })
-    const wrapper = mountPanel()
-    await flushPromises()
-    expect((wrapper.find('[data-test="tip-light-during"]').element as HTMLInputElement).checked).toBe(
-      true,
     )
   })
 
@@ -673,11 +572,9 @@ describe('OffsetCameraSettings', () => {
     await wrapper.find('[data-test="tip-light-on"]').trigger('click')
     await flushPromises()
     expect(lightSpy).toHaveBeenCalledWith(17, true, true)
-    expect(wrapper.find('[data-test="tip-light-msg"]').text()).toBe('Light on')
     await wrapper.find('[data-test="tip-light-off"]').trigger('click')
     await flushPromises()
     expect(lightSpy).toHaveBeenCalledWith(17, false, true)
-    expect(wrapper.find('[data-test="tip-light-msg"]').text()).toBe('Light off')
   })
 
   it('offers the GPIO pins from the backend in the pin dropdown', async () => {

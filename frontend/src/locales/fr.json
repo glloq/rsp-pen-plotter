@@ -2005,26 +2005,6 @@
     "statusMeasured": "Mesuré",
     "statusManual": "Manuel",
     "statusPending": "Non mesuré",
-    "ready": {
-      "camera": "Caméra",
-      "scale": "Échelle",
-      "reference": "Référence",
-      "zone": "Zone",
-      "light": "Éclairage"
-    },
-    "lightOnOk": "Éclairage allumé",
-    "lightOffOk": "Éclairage éteint",
-    "lightFailed": "Échec du contrôle de l'éclairage",
-    "next": {
-      "camera": "Prochaine étape : choisis ou colle l'URL de la caméra d'offset.",
-      "scale": "Prochaine étape : vérifie l'échelle en mm/pixel, ou mesure une cible connue.",
-      "reference": "Prochaine étape : choisis un stylo de référence installé avant de mesurer.",
-      "ready": "Prêt : lance la mesure guidée, stylo de référence d'abord."
-    },
-    "guidedStartNext": "Mesurer {pen}",
-    "guidedStartReview": "Revoir les mesures",
-    "measureButton": "Mesurer",
-    "remeasureButton": "Re-mesurer",
     "manualModeOnlyDuringSwap": "Mode changement manuel : ne mesure pas toutes les couleurs à l'avance ici. Mesure/vérifie l'offset au moment où l'opérateur change réellement de stylo, ou utilise ce flux caméra uniquement avec un magasin répétable."
   },
   "timelapse": {
