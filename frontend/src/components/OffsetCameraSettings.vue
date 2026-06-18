@@ -107,21 +107,19 @@ function onOffset(pen: PenSlot, axis: 'x' | 'y', raw: string): void {
 const tipConfig = computed<TipCalibrationConfig | null>(
   () => profile.value?.tip_calibration ?? null,
 )
+const canMeasure = computed(() => applyPenOffsets.value && tipConfig.value != null)
 const workshopCameras = computed(() => ui.cameras.filter((c) => c.enabled && c.url.trim()))
 
 // A magazine (carousel / rack, or a firmware / host-macro changer) can fetch
-// and present each pen repeatably at a camera station. In manual-change mode
-// the operator inserts pens during the job, so pre-measuring every colour here
-// is misleading; that flow is intentionally hidden.
+// the pen automatically. Without one — a manual / single-holder machine — the
+// operator presents each pen at the station by hand. Per-pen offsets work in
+// both cases; only the auto-fetch affordance is magazine-specific.
 const hasMagazine = computed(() => {
   const mode = profile.value?.capabilities?.tool_change.mode
   if (mode === 'firmware' || mode === 'host_macro') return true
   const method = profile.value?.tool_change_method
   return method === 'carousel' || method === 'rack'
 })
-const canMeasure = computed(
-  () => hasMagazine.value && applyPenOffsets.value && tipConfig.value != null,
-)
 
 const scaleLabel = computed(() =>
   tipConfig.value
