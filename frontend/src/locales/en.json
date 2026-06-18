@@ -2005,7 +2005,26 @@
     "statusMeasured": "Measured",
     "statusManual": "Manual",
     "statusPending": "Not measured",
-    "manualModeOnlyDuringSwap": "Manual pen-change mode: do not pre-measure every colour here. Measure/check offsets when the operator actually swaps the pen, or use this camera flow only with a repeatable magazine."
+    "ready": {
+      "camera": "Camera",
+      "scale": "Scale",
+      "reference": "Reference",
+      "zone": "Zone",
+      "light": "Light"
+    },
+    "lightOnOk": "Light on",
+    "lightOffOk": "Light off",
+    "lightFailed": "Light control failed",
+    "next": {
+      "camera": "Next: choose or paste the offset camera URL.",
+      "scale": "Next: confirm the scale in mm/pixel, or measure a known target.",
+      "reference": "Next: choose an installed reference pen before measuring.",
+      "ready": "Ready: start the guided measurement, reference pen first."
+    },
+    "guidedStartNext": "Measure {pen}",
+    "guidedStartReview": "Review measurements",
+    "measureButton": "Measure",
+    "remeasureButton": "Remeasure"
   },
   "timelapse": {
     "title": "Timelapse",
