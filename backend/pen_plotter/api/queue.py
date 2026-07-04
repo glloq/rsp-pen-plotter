@@ -48,6 +48,7 @@ class PrintRunSummary(BaseModel):
     priority: int
     error: str | None = None
     swap_prompt: str | None = None
+    swap_slot: int | None = None
     skipped_layers: list[str] = []
     idempotency_key: str | None = None
     gcode_file_id: str | None = None
@@ -66,6 +67,7 @@ def _summary(run: q.PrintRun) -> PrintRunSummary:
         priority=run.priority,
         error=run.error,
         swap_prompt=run.swap_prompt,
+        swap_slot=run.swap_slot,
         skipped_layers=list(run.skipped_layers or []),
         idempotency_key=run.idempotency_key,
         gcode_file_id=run.gcode_file_id,

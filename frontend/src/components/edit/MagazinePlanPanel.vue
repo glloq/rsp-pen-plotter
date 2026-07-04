@@ -24,6 +24,7 @@ const {
   plan,
   needed,
   swapsUnsupported,
+  multiplePlacements,
   nameFor,
   magazineReady,
   inventoryPool,
@@ -54,6 +55,16 @@ async function onApply(): Promise<void> {
         {{ t('magazinePlan.summary', { inks: plan.inkCount, slots: slotCount }) }}
       </span>
     </div>
+
+    <!-- The plan covers the selected placement only; warn when the sheet
+         holds several so the operator knows it's partial. -->
+    <p
+      v-if="multiplePlacements"
+      class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-[10px] text-amber-200"
+      data-test="magazine-plan-multi-placement"
+    >
+      {{ t('magazinePlan.multiPlacementWarning') }}
+    </p>
 
     <!-- Initial loading: what to mount before the print starts. -->
     <div class="space-y-1">

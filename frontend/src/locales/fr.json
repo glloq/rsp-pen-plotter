@@ -925,6 +925,7 @@
   "magazinePlan": {
     "title": "Préparer le magasin",
     "summary": "{inks} couleur(s) · {slots} emplacement(s)",
+    "multiPlacementWarning": "Ce plan ne couvre que le placement sélectionné. La feuille comporte plusieurs placements — vérifie que les autres n’utilisent pas des encres ignorées par ce chargement.",
     "initialTitle": "À monter avant de lancer :",
     "swapsTitle": "Échanges pendant le tracé ({count}) :",
     "pauseNote": "Le tracé se mettra en pause à chaque échange et indiquera la couleur à monter.",
@@ -1533,6 +1534,8 @@
     "slotCount": "Nombre d'emplacements",
     "noProfile": "Aucun profil sélectionné.",
     "noAvailable": "Ajoute d'abord une couleur disponible.",
+    "calibrateOffsets": "Calibrer les offsets de superposition →",
+    "emptyInventoryHint": "Aucune couleur enregistrée — choisis un hex avec la pastille, ou ajoute des couleurs ci-dessous pour constituer ton inventaire.",
     "customColor": "Personnalisé ({hex})",
     "empty": "Aucun emplacement dans le magasin.",
     "calibration": "Calibration",

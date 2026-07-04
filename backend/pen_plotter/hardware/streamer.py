@@ -53,6 +53,11 @@ class SwapAction(BaseModel):
     kind: Literal["operator_confirm", "firmware", "host_timed", "none"]
     prompt: str | None = None
     commands: list[SwapCommandLine] = Field(default_factory=list)
+    # Magazine slot this swap targets, when the boundary names one (pen /
+    # magazine load). ``None`` for a mono colour change with no slot. Carried
+    # structurally so the UI doesn't have to parse it back out of ``prompt``
+    # (which is localised free text).
+    slot: int | None = None
 
 
 class StreamState(StrEnum):
@@ -76,6 +81,9 @@ class StreamProgress:
     acked: int
     state: StreamState
     message: str | None = None
+    # Magazine slot the current operator-confirm swap targets (mirrors
+    # ``SwapAction.slot``); ``None`` when not paused for a slot-bearing swap.
+    slot: int | None = None
 
 
 class StreamError(Exception):
@@ -285,6 +293,7 @@ class GcodeStreamer:
         if action.kind == "operator_confirm":
             self.progress.state = StreamState.WAITING
             self.progress.message = action.prompt
+            self.progress.slot = action.slot
             self._resume.clear()
             await self._emit()
             await self._resume.wait()
@@ -292,6 +301,7 @@ class GcodeStreamer:
                 return True
             self.progress.state = StreamState.RUNNING
             self.progress.message = None
+            self.progress.slot = None
             return False
 
         # Inline command sequences (firmware / host_timed / none).
@@ -322,9 +332,7 @@ class GcodeStreamer:
                     # rather than waiting up to ``wait_ms`` for the next
                     # iteration's abort check.
                     try:
-                        await asyncio.wait_for(
-                            self._abort.wait(), cmd.wait_ms / 1000.0
-                        )
+                        await asyncio.wait_for(self._abort.wait(), cmd.wait_ms / 1000.0)
                         return True
                     except TimeoutError:
                         pass

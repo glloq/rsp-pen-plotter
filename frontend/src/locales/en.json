@@ -925,6 +925,7 @@
   "magazinePlan": {
     "title": "Prepare the magazine",
     "summary": "{inks} ink(s) · {slots} slot(s)",
+    "multiPlacementWarning": "This plan covers the selected placement only. The sheet has several placements — check the others don’t need inks this loading ignores.",
     "initialTitle": "Mount before starting:",
     "swapsTitle": "Mid-print swaps ({count}):",
     "pauseNote": "The print pauses at each swap and names the ink to mount.",
@@ -1533,6 +1534,8 @@
     "slotCount": "Slot count",
     "noProfile": "No profile selected.",
     "noAvailable": "Add an available colour first.",
+    "calibrateOffsets": "Calibrate colour-overlay offsets →",
+    "emptyInventoryHint": "No saved colours yet — pick a hex with the swatch, or add colours below to build your inventory.",
     "customColor": "Custom ({hex})",
     "empty": "No slots in the magazine.",
     "calibration": "Calibration",

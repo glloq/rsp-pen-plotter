@@ -90,9 +90,7 @@ class PrintRun(SQLModel, table=True):
     # produced by the ``ToolChangeOrchestrator`` (roadmap 2.3 wire).
     # Streamer consumes this when available and falls back to
     # ``pause_points`` for runs queued before the column existed.
-    swap_actions: dict[str, dict[str, Any]] = Field(
-        default_factory=dict, sa_column=Column(JSON)
-    )
+    swap_actions: dict[str, dict[str, Any]] = Field(default_factory=dict, sa_column=Column(JSON))
     # Operator-facing prompt for the swap the run is currently halted on
     # (e.g. "Change pen to Red (#ff0000)" or "Load Red into magazine slot
     # 2"). Set while the streamer sits in its ``WAITING`` state for an
@@ -101,6 +99,11 @@ class PrintRun(SQLModel, table=True):
     # to do and bridge the gap between the controller's transient WAITING
     # state and the durable run state the UI drives off of.
     swap_prompt: str | None = None
+    # Magazine slot the current swap targets, mirrored from the streamer's
+    # ``StreamProgress.slot`` alongside ``swap_prompt``. Lets the UI show a
+    # slot badge without parsing the localised prompt text. ``None`` for a
+    # mono colour change (no slot) or when the run isn't paused for a swap.
+    swap_slot: int | None = None
     # Layers that were skipped at runtime under a ``skip_layer`` recovery
     # policy. Populated when the streamer raises ``StreamError`` and the
     # active policy says "skip and continue" — see ``_skip_to_next_layer``.
@@ -417,12 +420,14 @@ class PrintQueue:
                     swap_waiting = True
                     fields["state"] = RunState.PAUSED
                     fields["swap_prompt"] = getattr(progress, "message", None)
+                    fields["swap_slot"] = getattr(progress, "slot", None)
             elif state == StreamState.RUNNING and swap_waiting:
                 # Streaming resumed past the swap — clear the prompt and
                 # restore the running state.
                 swap_waiting = False
                 fields["state"] = RunState.RUNNING
                 fields["swap_prompt"] = None
+                fields["swap_slot"] = None
             state_flipped = state != last_stream_state
             last_stream_state = state
             now = time.monotonic()
@@ -523,9 +528,7 @@ class PrintQueue:
                 # Connection / busy race — give the run back to the queue
                 # so the worker retries once the controller frees up.
                 _log.warning("Run %s could not stream (%s); re-queueing.", run.id, exc)
-                _update(
-                    run.id, self._engine, state=RunState.QUEUED, acked_lines=latest_acked
-                )
+                _update(run.id, self._engine, state=RunState.QUEUED, acked_lines=latest_acked)
             else:
                 _log.exception("Run %s failed unexpectedly", run.id)
                 _update(
@@ -546,6 +549,7 @@ class PrintQueue:
                 state=RunState.COMPLETED,
                 acked_lines=run.total_lines,
                 swap_prompt=None,
+                swap_slot=None,
             )
         elif final.state == StreamState.ABORTED:
             state = RunState.CANCELED if self._cancel_requested else RunState.PAUSED
@@ -555,7 +559,7 @@ class PrintQueue:
             # checkpoint — with throttled writes the last flushed value
             # can lag the true acked count (e.g. an emergency-stop cancel
             # never reaches the streamer's ABORTED emit).
-            clear = {"swap_prompt": None} if state == RunState.CANCELED else {}
+            clear = {"swap_prompt": None, "swap_slot": None} if state == RunState.CANCELED else {}
             _update(run.id, self._engine, state=state, acked_lines=latest_acked, **clear)
         return True
 
