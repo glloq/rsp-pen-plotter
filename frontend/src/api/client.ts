@@ -608,6 +608,11 @@ export interface PrintRun {
    *  change; null otherwise. Drives the swap modal + the "Action requise"
    *  hint, and lets the cockpit tell a swap pause from a plain pause. */
   swap_prompt?: string | null
+  /** Magazine slot the current swap targets, carried structurally so the
+   *  UI shows a slot badge without parsing it out of the (localised)
+   *  ``swap_prompt`` text. Null for a mono colour change (no slot) or when
+   *  the run isn't paused for a slot-bearing swap. */
+  swap_slot?: number | null
   /** Layers skipped at runtime under a ``skip_layer`` recovery
    *  policy. Populated by the backend when ``StreamError`` triggers
    *  the skip-and-continue path; empty otherwise. The UI surfaces it

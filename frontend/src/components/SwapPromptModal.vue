@@ -37,6 +37,11 @@ const visible = computed(() => run.value?.state === 'paused' && Boolean(run.valu
 // "Vert prairie foncé" wins over "Vert prairie").
 const promptText = computed<string>(() => run.value?.swap_prompt ?? '')
 const promptSlot = computed<number | null>(() => {
+  // Prefer the structured slot the backend now carries on the run — it's
+  // language-independent. Fall back to parsing the prompt text for runs
+  // queued before ``swap_slot`` existed (English prompts only).
+  const structured = run.value?.swap_slot
+  if (typeof structured === 'number') return structured
   const m = /(?:pen|magazine)\s+slot\s+(\d+)/i.exec(promptText.value)
   return m ? Number(m[1]) : null
 })

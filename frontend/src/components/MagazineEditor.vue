@@ -26,11 +26,13 @@ import type { MachineProfile, PenSlot, Point } from '../api/client'
 import { useAvailableColorsStore } from '../stores/availableColors'
 import { canonicalHex } from '../lib/penWidth'
 import { useJobStore } from '../stores/job'
+import { useUiStore } from '../stores/ui'
 import { defaultPen, normalizePens } from '../composables/useProfileDraft'
 import ColorPicker from './ColorPicker.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
+const ui = useUiStore()
 const { selectedProfile } = storeToRefs(job)
 const availableColors = useAvailableColorsStore()
 
@@ -192,6 +194,20 @@ function displayLabel(name: string, hex: string): string {
   return name.trim() ? `${name} · ${hex}` : hex
 }
 
+// Per-pen XY tip offsets (colour-overlay registration) live in their own
+// panel — Settings → Cameras → Offset camera. That's a different modal
+// from the Plotter drawer this editor sits in, so the shortcut closes
+// this one before opening the settings modal on the Cameras tab.
+const showOffsetLink = computed(() => colorMode.value !== 'mono' && pens.value.length > 1)
+function openOffsetCamera(): void {
+  ui.closePlotterSettings()
+  ui.openSettings('cameras')
+}
+
+// True when the operator has no saved inventory yet: the slot <select>
+// then has nothing to offer, so point them at the swatch / add section.
+const inventoryEmpty = computed(() => availableColors.ordered.length === 0)
+
 onUnmounted(() => clearTimeout(savedTimer))
 </script>
 
@@ -252,6 +268,18 @@ onUnmounted(() => clearTimeout(savedTimer))
            per-slot calibration block (gated by ``showsCalibration``). -->
       <template v-else>
         <p class="text-[11px] text-slate-500">{{ listHint }}</p>
+
+        <!-- Shortcut to the per-pen XY offset calibration (colour-overlay
+             registration) which lives in a separate settings panel. -->
+        <button
+          v-if="showOffsetLink"
+          type="button"
+          class="inline-flex items-center gap-1 rounded border border-sky-800 bg-sky-950/30 px-2 py-1 text-[11px] text-sky-200 hover:bg-sky-900/40"
+          data-test="magazine-offset-link"
+          @click="openOffsetCamera"
+        >
+          🎯 {{ t('magazine.calibrateOffsets') }}
+        </button>
 
         <ul v-if="pens.length" class="space-y-1.5">
           <li
@@ -390,6 +418,14 @@ onUnmounted(() => clearTimeout(savedTimer))
 
         <p v-else class="text-xs text-slate-500">{{ t('magazine.empty') }}</p>
       </template>
+
+      <p
+        v-if="inventoryEmpty"
+        class="text-[11px] text-slate-500"
+        data-test="magazine-empty-inventory-hint"
+      >
+        {{ t('magazine.emptyInventoryHint') }}
+      </p>
 
       <p v-if="error" class="text-[11px] text-red-400">{{ error }}</p>
     </template>

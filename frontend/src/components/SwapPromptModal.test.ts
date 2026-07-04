@@ -89,6 +89,15 @@ describe('SwapPromptModal', () => {
     expect((swatch.element as HTMLElement).style.backgroundColor).toBe('#00ff00')
   })
 
+  it('prefers the structured swap_slot over parsing the prompt text', () => {
+    const queue = useQueueStore()
+    // Prompt names slot 2, but the structured field says 5 — the backend
+    // field wins so a localised prompt can never mislead the badge.
+    queue.runs = [run({ swap_prompt: 'Insert pen slot 2: Red #ff0000', swap_slot: 5 })]
+    const wrapper = mountModal()
+    expect(wrapper.find('[data-test="swap-prompt-slot"]').text()).toBe('Slot 5')
+  })
+
   it('falls back to an inventory name match when the prompt has no hex', async () => {
     const { useAvailableColorsStore } = await import('../stores/availableColors')
     const inventory = useAvailableColorsStore()

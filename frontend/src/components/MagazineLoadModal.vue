@@ -25,8 +25,16 @@ const gate = useMagazineGateState()
 const job = useJobStore()
 const toasts = useToastStore()
 
-const { slotCount, plan, swapsUnsupported, nameFor, remappedSwaps, applying, applyPlan } =
-  useMagazinePlan()
+const {
+  slotCount,
+  plan,
+  swapsUnsupported,
+  multiplePlacements,
+  nameFor,
+  remappedSwaps,
+  applying,
+  applyPlan,
+} = useMagazinePlan()
 
 // planSlot → physical slot, editable through the selects. Reset to the
 // identity every time the modal opens so a previous session's remap
@@ -125,6 +133,17 @@ function cancel(): void {
         <h2 class="text-lg font-semibold text-slate-100">{{ t('magazinePlan.launchTitle') }}</h2>
         <p class="text-xs text-slate-400">{{ t('magazinePlan.launchIntro') }}</p>
       </header>
+
+      <!-- The plan covers the selected placement only — warn before launch
+           when the sheet holds several, so the operator can confirm the
+           other placements don't need inks this loading ignores. -->
+      <p
+        v-if="multiplePlacements"
+        class="rounded border border-amber-700 bg-amber-950/40 px-2.5 py-1.5 text-[11px] text-amber-200"
+        data-test="magazine-load-multi-placement"
+      >
+        {{ t('magazinePlan.multiPlacementWarning') }}
+      </p>
 
       <!-- Initial loading with editable slot assignment. -->
       <ul class="space-y-1.5">

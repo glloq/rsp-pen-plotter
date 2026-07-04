@@ -149,6 +149,7 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
                 pending = SwapAction(
                     kind="operator_confirm",
                     prompt=f"Load {label} into magazine slot {slot_index}, then press Resume.",
+                    slot=slot_index,
                 )
             else:
                 context = _context_from_comment(comment)
@@ -177,6 +178,7 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
                                 f"{head} — automated swap is not configured for "
                                 "this profile; swap by hand, then press Resume."
                             ),
+                            slot=context.slot_index,
                         )
                     else:
                         pending = SwapAction(
@@ -186,6 +188,7 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
                                 SwapCommandLine(send=c.send, wait_ms=c.wait_ms)
                                 for c in plan.commands
                             ],
+                            slot=context.slot_index,
                         )
         if not code:
             continue

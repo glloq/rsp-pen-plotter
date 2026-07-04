@@ -619,14 +619,12 @@ onUnmounted(() => clearTimeout(savedTimer))
     <p v-else-if="!isMultiPen" class="text-[11px] text-slate-500">
       {{ t('offsetCamera.needsMagazine') }}
     </p>
-    <div
-      v-else-if="!hasMagazine"
-      class="rounded border border-sky-800 bg-sky-950/30 p-2 text-[11px] text-sky-200"
-      data-test="offset-manual-mode-note"
-    >
-      {{ t('offsetCamera.manualModeOnlyDuringSwap') }}
-    </div>
 
+    <!-- Per-pen offsets work on any multi-pen machine. A magazine auto-fetches
+         the pen (``fetch_pen`` toggle); without one, the operator presents each
+         pen at the station by hand — the ``manualPresent`` / ``guidedPresent``
+         hints below drive that path. So the full flow renders whenever the
+         machine has more than one pen, magazine or not. -->
     <template v-else>
       <!-- Master switch. -->
       <label class="flex items-center gap-2 text-[11px] text-slate-300">

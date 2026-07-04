@@ -64,6 +64,14 @@ export function useMagazinePlan() {
     () => plan.value.swaps.length > 0 && store.selectedProfile?.tool_change_method === 'none',
   )
 
+  // The plan only covers the SELECTED placement (see file header). When the
+  // sheet carries more than one placement the loading plan is therefore
+  // partial — other placements may need inks not in this plan, or the same
+  // slot for a different ink. Surface that so the operator doesn't trust a
+  // plan that silently ignores the rest of the sheet. (A cross-placement
+  // planner is a separate feature; this is the guardrail until then.)
+  const multiplePlacements = computed<boolean>(() => store.visiblePlacements.length > 1)
+
   const inventoryNameByHex = computed(() => {
     const map = new Map<string, string>()
     for (const entry of availableColors.colors) {
@@ -183,6 +191,7 @@ export function useMagazinePlan() {
     plan,
     needed,
     swapsUnsupported,
+    multiplePlacements,
     nameFor,
     remappedInitial,
     remappedSwaps,
