@@ -14,6 +14,7 @@ const measureSpy = vi.hoisted(() => vi.fn())
 const lightSpy = vi.hoisted(() => vi.fn())
 const gpioSpy = vi.hoisted(() => vi.fn())
 const scaleSpy = vi.hoisted(() => vi.fn())
+const detectorsSpy = vi.hoisted(() => vi.fn())
 
 vi.mock('../api/client', async (importActual) => {
   const actual = await importActual<typeof import('../api/client')>()
@@ -23,6 +24,7 @@ vi.mock('../api/client', async (importActual) => {
     resetTipCalibration: vi.fn(),
     setTipLight: lightSpy,
     getTipGpio: gpioSpy,
+    getTipDetectors: detectorsSpy,
     calibrateTipScale: scaleSpy,
   }
 })
@@ -111,6 +113,13 @@ const i18n = createI18n({
         largeOffset: '⚠ large offset ({mm} mm)',
         repeatability: '(±{mm} mm)',
         unstable: '⚠ frames vary by {mm} mm',
+        detector: 'Detector',
+        detectorDarkBlob: 'Dark blob',
+        detectorAruco: 'ArUco fiducial',
+        arucoHint: 'attach a marker',
+        arucoUnavailable: 'OpenCV not installed',
+        arucoDict: 'Marker family',
+        arucoMarkerId: 'Marker id',
         progress: '{k}/{n} measured',
         clearOffset: 'Clear',
       },
@@ -205,6 +214,11 @@ describe('OffsetCameraSettings', () => {
     lightSpy.mockReset()
     gpioSpy.mockReset()
     gpioSpy.mockResolvedValue({ available: true, pins: [17, 18, 27] })
+    detectorsSpy.mockReset()
+    detectorsSpy.mockResolvedValue({
+      aruco_available: true,
+      aruco_dictionaries: ['4X4_50', '5X5_50', 'APRILTAG_36h11'],
+    })
     scaleSpy.mockReset()
   })
 
@@ -437,6 +451,56 @@ describe('OffsetCameraSettings', () => {
     expect(pen1?.offset_source).toBe('vision')
     // …but the instability warning shows.
     expect(wrapper.find('[data-test="pen-measure-msg-1"]').text()).toContain('frames vary by')
+  })
+
+  it('selects the ArUco detector and reveals its options', async () => {
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+    // ArUco options are hidden until the detector is switched.
+    expect(wrapper.find('[data-test="tip-aruco-marker-id"]').exists()).toBe(false)
+    const select = wrapper.find('[data-test="tip-detector"]')
+    await select.setValue('aruco')
+    await select.trigger('change')
+    await nextTick()
+    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.detector).toBe(
+      'aruco',
+    )
+    expect(wrapper.find('[data-test="tip-aruco-dict"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="tip-aruco-marker-id"]').exists()).toBe(true)
+  })
+
+  it('persists an ArUco marker id and dictionary, and sends them when measuring', async () => {
+    withStation({ detector: 'aruco' })
+    const wrapper = mountPanel()
+    await flushPromises()
+    const dict = wrapper.find('[data-test="tip-aruco-dict"]')
+    await dict.setValue('5X5_50')
+    await dict.trigger('change')
+    const id = wrapper.find('[data-test="tip-aruco-marker-id"]')
+    await id.setValue('3')
+    await id.trigger('change')
+    await nextTick()
+    const cfg = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration
+    expect(cfg?.aruco_dictionary).toBe('5X5_50')
+    expect(cfg?.aruco_marker_id).toBe(3)
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    expect(measureSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detector: 'aruco',
+        aruco_dictionary: '5X5_50',
+        aruco_marker_id: 3,
+      }),
+    )
+  })
+
+  it('warns when ArUco is selected but OpenCV is unavailable on the host', async () => {
+    detectorsSpy.mockResolvedValue({ aruco_available: false, aruco_dictionaries: ['4X4_50'] })
+    withStation({ detector: 'aruco' })
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find('[data-test="tip-aruco-warn"]').exists()).toBe(true)
   })
 
   it('test detection shows a result without writing an offset', async () => {

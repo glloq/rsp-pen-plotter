@@ -171,8 +171,20 @@ def detect_tip_dark_blob(
         )
 
     ys, xs = np.nonzero(mask)
-    cx = float(xs.mean()) + off_x
-    cy = float(ys.mean()) + off_y
+    # Sub-pixel centroid: weight each tip pixel by how *dark* it is, so the
+    # estimate is pulled toward the true tip rather than sitting at the centre
+    # of a hard binary mask. This makes the result robust to the exact
+    # threshold and to anti-aliased / soft tip edges. Falls back to the plain
+    # centroid in the degenerate case where every tip pixel is exactly at the
+    # threshold (zero total weight).
+    weights = (dark_threshold - gray[ys, xs].astype(np.float64)).clip(min=0.0)
+    wsum = float(weights.sum())
+    if wsum > 0:
+        cx = float((xs * weights).sum() / wsum) + off_x
+        cy = float((ys * weights).sum() / wsum) + off_y
+    else:
+        cx = float(xs.mean()) + off_x
+        cy = float(ys.mean()) + off_y
     # Confidence: peaks for a small, well-defined blob; falls off as the blob
     # vanishes (noise) or grows to fill the frame.
     confidence = float(max(0.0, min(1.0, 1.0 - abs(coverage - 0.02) / 0.3)))
@@ -270,24 +282,30 @@ def average_tips(samples: list[TipMeasurement]) -> TipMeasurement:
     message / preview still surface. The annotated frame of the sample closest
     to the median is kept for review.
     """
-    found = [m for m in samples if m.found and m.tip_px and m.tip_mm]
+    # (tip_px, tip_mm, confidence, measurement) for each found sample. Building
+    # the tuple inside the guarded comprehension narrows the Optional coords.
+    found = [
+        (m.tip_px, m.tip_mm, m.confidence, m)
+        for m in samples
+        if m.found and m.tip_px is not None and m.tip_mm is not None
+    ]
     if not found:
         return samples[-1]
     n = len(found)
     px = (
-        float(np.median([m.tip_px[0] for m in found])),
-        float(np.median([m.tip_px[1] for m in found])),
+        float(np.median([p[0][0] for p in found])),
+        float(np.median([p[0][1] for p in found])),
     )
     mm = (
-        float(np.median([m.tip_mm[0] for m in found])),
-        float(np.median([m.tip_mm[1] for m in found])),
+        float(np.median([p[1][0] for p in found])),
+        float(np.median([p[1][1] for p in found])),
     )
-    confidence = float(np.median([m.confidence for m in found]))
+    confidence = float(np.median([p[2] for p in found]))
     # Repeatability: farthest contributing sample from the median tip (mm).
-    dists = [np.hypot(m.tip_mm[0] - mm[0], m.tip_mm[1] - mm[1]) for m in found]
+    dists = [np.hypot(p[1][0] - mm[0], p[1][1] - mm[1]) for p in found]
     spread_mm = float(max(dists))
     # Keep the preview of whichever sample landed closest to the median.
-    closest = min(found, key=lambda m: np.hypot(m.tip_mm[0] - mm[0], m.tip_mm[1] - mm[1]))
+    closest = min(found, key=lambda p: np.hypot(p[1][0] - mm[0], p[1][1] - mm[1]))[3]
     return TipMeasurement(
         found=True,
         tip_px=px,
@@ -347,20 +365,22 @@ class TipCalibrator:
         dark_threshold: int = 80,
         roi: Roi | None = None,
         samples: int = 1,
+        detector: TipDetector | None = None,
     ) -> MeasureResult:
         """Grab ``samples`` frame(s) for ``slot`` and detect its tip, storing it.
 
         With ``samples > 1`` the tip is averaged across grabs to reduce
-        detector noise. Returns the measurement and — once the reference slot
-        has also been measured — the offset this slot implies relative to it.
-        Raises ``RuntimeError`` only if a frame grab itself fails (propagated
-        from the grabber); a frame with no detectable tip is a normal, low/zero
-        confidence result, not an error.
+        detector noise. ``detector`` overrides the injected default for this
+        call (e.g. the ArUco fiducial detector). Returns the measurement and —
+        once the reference slot has also been measured — the offset this slot
+        implies relative to it. Raises ``RuntimeError`` only if a frame grab
+        itself fails (propagated from the grabber); a frame with no detectable
+        tip is a normal, low/zero confidence result, not an error.
         """
+        detect = detector or self._detect
         n = max(1, samples)
         shots = [
-            self._detect(self._grab(camera_url), mm_per_pixel, dark_threshold, roi)
-            for _ in range(n)
+            detect(self._grab(camera_url), mm_per_pixel, dark_threshold, roi) for _ in range(n)
         ]
         measurement = average_tips(shots)
         if measurement.found:

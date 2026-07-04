@@ -66,9 +66,11 @@ registration cancels out.
 | `station_z_mm` | float \| null | Optional absolute Z at the station (machines with a real Z axis); `null` leaves Z untouched |
 | `reference_slot` | int (default `0`) | Pen the others are measured against (its own offset is `0`) |
 | `mm_per_pixel` | float (> 0) | Station pixel scale, calibrated once |
-| `detector` | `"dark_blob"` | Detection strategy. `dark_blob` (Pillow+NumPy) finds the darkest compact blob; no OpenCV required |
-| `dark_threshold` | int 0–255 (default `80`) | Luminance cutoff: pixels darker than this count as "tip" |
-| `samples` | int 1–20 (default `1`) | Frames grabbed and averaged per measurement; raise it to cut detector noise at the cost of a slower measure |
+| `detector` | `"dark_blob"` \| `"aruco"` | Detection strategy. `dark_blob` (Pillow+NumPy) finds the darkest compact blob and needs no extra deps; `aruco` detects a printed fiducial's sub-pixel centre and needs `opencv-contrib-python` on the host (`pip install -e '.[aruco]'`) |
+| `dark_threshold` | int 0–255 (default `80`) | Luminance cutoff: pixels darker than this count as "tip" (`dark_blob` only) |
+| `aruco_dictionary` | string (default `"4X4_50"`) | ArUco marker family: `4X4_50`, `4X4_100`, `5X5_50`, `6X6_50`, `APRILTAG_36h11` (`aruco` only) |
+| `aruco_marker_id` | int ≥ 0 \| null | Pin detection to one marker id; recommended if several markers may be in view (`aruco` only) |
+| `samples` | int 1–20 (default `1`) | Frames grabbed and averaged (median) per measurement; raise it to cut detector noise at the cost of a slower measure |
 | `roi` | `{ x, y, width, height }` \| null | Optional pixel region to constrain detection (whole frame when `null`). Editable in Settings → Cameras → Offset camera |
 | `light_gpio_pin` | int 0–27 \| null | Optional Raspberry Pi **GPIO pin** (BCM) driving a station light. The host toggles the pin (the light is wired to the Pi, not the plotter); manual On/Off + auto on/off around a measurement |
 | `light_active_high` | bool (default `true`) | `false` for relays/drivers that switch on when the pin is LOW |

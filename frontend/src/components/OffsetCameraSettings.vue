@@ -18,6 +18,7 @@ import type {
 } from '../api/client'
 import {
   calibrateTipScale,
+  getTipDetectors,
   getTipGpio,
   measureTipOffset,
   resetTipCalibration,
@@ -149,6 +150,8 @@ function defaultTipConfig(): TipCalibrationConfig {
     mm_per_pixel: 0.1,
     detector: 'dark_blob',
     dark_threshold: 80,
+    aruco_dictionary: '4X4_50',
+    aruco_marker_id: null,
     samples: 1,
     roi: null,
   }
@@ -170,6 +173,19 @@ function onPickCamera(url: string): void {
 function onSamples(raw: string): void {
   const v = Math.floor(Number(raw))
   onTipConfig({ samples: Number.isFinite(v) ? Math.min(20, Math.max(1, v)) : 1 })
+}
+
+function onDetector(value: string): void {
+  onTipConfig({ detector: value === 'aruco' ? 'aruco' : 'dark_blob' })
+}
+
+function onArucoDict(value: string): void {
+  onTipConfig({ aruco_dictionary: value })
+}
+
+function onArucoMarkerId(raw: string): void {
+  const v = raw.trim() === '' ? null : Math.floor(Number(raw))
+  onTipConfig({ aruco_marker_id: v !== null && Number.isFinite(v) && v >= 0 ? v : null })
 }
 
 // Session-local per-measurement options.
@@ -234,6 +250,21 @@ function onRoi(field: 'x' | 'y' | 'width' | 'height', raw: string): void {
 function clearRoi(): void {
   roiDraft.x = roiDraft.y = roiDraft.width = roiDraft.height = ''
   onTipConfig({ roi: null })
+}
+
+// Detector capabilities (resolved from the host).
+const detector = computed(() => tipConfig.value?.detector ?? 'dark_blob')
+const arucoAvailable = ref(true)
+const arucoDicts = ref<string[]>(['4X4_50'])
+
+async function loadDetectors(): Promise<void> {
+  try {
+    const info = await getTipDetectors()
+    arucoAvailable.value = info.aruco_available
+    if (info.aruco_dictionaries.length) arucoDicts.value = info.aruco_dictionaries
+  } catch {
+    // Non-critical: keep the optimistic defaults so the picker still works.
+  }
 }
 
 // Camera light via a Pi GPIO pin.
@@ -344,6 +375,9 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       mm_per_pixel: cfg.mm_per_pixel,
       reference_slot: cfg.reference_slot,
       dark_threshold: cfg.dark_threshold,
+      detector: cfg.detector,
+      aruco_dictionary: cfg.aruco_dictionary,
+      aruco_marker_id: cfg.aruco_marker_id ?? null,
       samples: cfg.samples,
       roi: cfg.roi,
       fetch_pen: fetchPen.value,
@@ -408,6 +442,9 @@ async function onTestDetection(): Promise<void> {
       mm_per_pixel: cfg.mm_per_pixel,
       reference_slot: cfg.reference_slot,
       dark_threshold: cfg.dark_threshold,
+      detector: cfg.detector,
+      aruco_dictionary: cfg.aruco_dictionary,
+      aruco_marker_id: cfg.aruco_marker_id ?? null,
       samples: cfg.samples,
       roi: cfg.roi,
       light: lightDuringMeasure.value,
@@ -519,7 +556,10 @@ async function onCalibrateScale(): Promise<void> {
   }
 }
 
-onMounted(loadGpio)
+onMounted(() => {
+  void loadGpio()
+  void loadDetectors()
+})
 onUnmounted(() => clearTimeout(savedTimer))
 </script>
 
@@ -730,6 +770,58 @@ onUnmounted(() => clearTimeout(savedTimer))
                 {{ t('offsetCamera.advanced') }}
               </summary>
               <div class="mt-2 grid grid-cols-2 gap-2">
+                <!-- Detector: dark blob vs ArUco fiducial. -->
+                <label class="col-span-2 block text-[11px] text-slate-400"
+                  >{{ t('offsetCamera.detector') }}
+                  <select
+                    :value="detector"
+                    :disabled="saving"
+                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                    data-test="tip-detector"
+                    @change="(e) => onDetector((e.target as HTMLSelectElement).value)"
+                  >
+                    <option value="dark_blob">{{ t('offsetCamera.detectorDarkBlob') }}</option>
+                    <option value="aruco">{{ t('offsetCamera.detectorAruco') }}</option>
+                  </select>
+                </label>
+                <div v-if="detector === 'aruco'" class="col-span-2 grid grid-cols-2 gap-2">
+                  <p
+                    v-if="!arucoAvailable"
+                    class="col-span-2 text-[11px] text-amber-400"
+                    data-test="tip-aruco-warn"
+                  >
+                    ⚠ {{ t('offsetCamera.arucoUnavailable') }}
+                  </p>
+                  <p class="col-span-2 text-[11px] text-slate-500">
+                    {{ t('offsetCamera.arucoHint') }}
+                  </p>
+                  <label class="block text-[11px] text-slate-400"
+                    >{{ t('offsetCamera.arucoDict') }}
+                    <select
+                      :value="tipConfig.aruco_dictionary ?? '4X4_50'"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                      data-test="tip-aruco-dict"
+                      @change="(e) => onArucoDict((e.target as HTMLSelectElement).value)"
+                    >
+                      <option v-for="d in arucoDicts" :key="d" :value="d">{{ d }}</option>
+                    </select>
+                  </label>
+                  <label class="block text-[11px] text-slate-400"
+                    >{{ t('offsetCamera.arucoMarkerId') }}
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      :value="tipConfig.aruco_marker_id ?? ''"
+                      placeholder="—"
+                      :disabled="saving"
+                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                      data-test="tip-aruco-marker-id"
+                      @change="(e) => onArucoMarkerId((e.target as HTMLInputElement).value)"
+                    />
+                  </label>
+                </div>
                 <label class="block text-[11px] text-slate-400"
                   >{{ t('magazine.referenceSlot') }}
                   <input

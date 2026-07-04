@@ -212,8 +212,13 @@ export interface TipCalibrationConfig {
   station_z_mm?: number | null
   reference_slot: number
   mm_per_pixel: number
-  detector: 'dark_blob'
+  // dark_blob (no extra deps) finds the darkest blob; aruco detects a printed
+  // fiducial's sub-pixel centre and needs opencv-contrib-python on the host.
+  detector: 'dark_blob' | 'aruco'
   dark_threshold: number
+  // ArUco marker family + optional specific marker id (aruco detector only).
+  aruco_dictionary?: string
+  aruco_marker_id?: number | null
   // Frames to grab and average per measurement (1–20; noise reduction).
   samples?: number
   roi?: TipCameraRoi | null
@@ -293,6 +298,10 @@ export interface TipMeasureRequest {
   mm_per_pixel: number
   reference_slot?: number
   dark_threshold?: number
+  // Detector selection. 'aruco' needs opencv-contrib-python on the host.
+  detector?: 'dark_blob' | 'aruco'
+  aruco_dictionary?: string
+  aruco_marker_id?: number | null
   // Frames to grab and average per measurement (1–20; noise reduction).
   samples?: number
   roi?: TipCameraRoi | null
@@ -353,6 +362,18 @@ export interface GpioInfo {
 // Selectable GPIO pins + whether GPIO control works on this host.
 export async function getTipGpio(): Promise<GpioInfo> {
   const response = await api.get<GpioInfo>('/plotter/tip-calibration/gpio')
+  return response.data
+}
+
+export interface DetectorsInfo {
+  // Whether opencv-contrib-python (cv2.aruco) is installed on the host.
+  aruco_available: boolean
+  aruco_dictionaries: string[]
+}
+
+// Which detectors work on this host + the ArUco dictionaries to offer.
+export async function getTipDetectors(): Promise<DetectorsInfo> {
+  const response = await api.get<DetectorsInfo>('/plotter/tip-calibration/detectors')
   return response.data
 }
 

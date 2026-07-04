@@ -60,6 +60,22 @@ def test_dark_blob_not_found_on_blank_frame() -> None:
     assert m.tip_px is None
 
 
+def test_dark_blob_subpixel_weights_toward_darker_pixels() -> None:
+    # A 20-px-wide blob whose left half is very dark (10) and right half is just
+    # under threshold (70). A plain binary centroid sits at the geometric middle
+    # (x ≈ 59.5); the intensity-weighted centroid is pulled left, toward the
+    # darker half — a sub-pixel shift a hard mask can't express.
+    arr = np.full((100, 100), 240, dtype=np.uint8)
+    arr[45:55, 50:60] = 10  # dark left half
+    arr[45:55, 60:70] = 70  # faint right half (still < 80 threshold)
+    buf = io.BytesIO()
+    Image.fromarray(arr, mode="L").save(buf, format="PNG")
+    m = detect_tip_dark_blob(buf.getvalue(), mm_per_pixel=0.1, dark_threshold=80)
+    assert m.found and m.tip_px is not None
+    geometric_middle = 59.5  # centre of the full 50..69 dark span
+    assert m.tip_px[0] < geometric_middle - 1.0  # pulled toward the darker side
+
+
 def test_annotated_preview_is_a_valid_jpeg() -> None:
     m = detect_tip_dark_blob(_frame((120, 80)), mm_per_pixel=0.1)
     assert m.found and m.annotated_jpeg is not None
@@ -230,6 +246,37 @@ def test_calibrator_samples_grabs_and_averages() -> None:
     assert calls["n"] == 2  # grabbed twice
     assert r.measurement.found and r.measurement.tip_px is not None
     assert r.measurement.tip_px[0] == pytest.approx(109.5, abs=0.5)
+
+
+# ── ArUco fiducial detector (optional OpenCV path) ───────────────────────────
+
+
+def test_marker_center_is_the_mean_of_corners() -> None:
+    from pen_plotter.vision.aruco_detect import _marker_center
+
+    # A 20-px square marker with top-left at (100, 50) → centre (110, 60).
+    corners = np.array([[[100, 50], [120, 50], [120, 70], [100, 70]]], dtype=np.float32)
+    cx, cy = _marker_center(corners)
+    assert cx == pytest.approx(110.0)
+    assert cy == pytest.approx(60.0)
+
+
+def test_aruco_detector_reports_unavailable_without_opencv() -> None:
+    # OpenCV isn't a base dependency; the detector degrades to a clear
+    # not-found result (never raises) so the app runs without it.
+    from pen_plotter.vision.aruco_detect import aruco_available, detect_tip_aruco
+
+    if aruco_available():  # pragma: no cover - only when opencv is installed
+        pytest.skip("opencv is installed on this host")
+    m = detect_tip_aruco(_frame((100, 100)), mm_per_pixel=0.1)
+    assert not m.found
+    assert "opencv" in m.message.lower()
+
+
+def test_aruco_detector_rejects_nonpositive_scale() -> None:
+    from pen_plotter.vision.aruco_detect import detect_tip_aruco
+
+    assert not detect_tip_aruco(_frame((50, 50)), mm_per_pixel=0.0).found
 
 
 # ── API ──────────────────────────────────────────────────────────────────────
@@ -567,6 +614,67 @@ def test_gpio_endpoint_lists_pins(client: TestClient, gpio: _FakeGpio) -> None:
     body = client.get("/plotter/tip-calibration/gpio").json()
     assert body["available"] is True
     assert 17 in body["pins"]
+
+
+# ── detector selection ───────────────────────────────────────────────────────
+
+
+def test_detectors_endpoint_lists_capabilities(client: TestClient) -> None:
+    body = client.get("/plotter/tip-calibration/detectors").json()
+    assert "aruco_available" in body
+    assert isinstance(body["aruco_available"], bool)
+    assert "4X4_50" in body["aruco_dictionaries"]
+
+
+def test_measure_with_aruco_routes_to_the_aruco_detector(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+    from pen_plotter.vision.tip_detect import TipMeasurement
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _frame((100, 100)))
+    seen: dict[str, object] = {}
+
+    def fake_aruco(frame, mm_per_pixel, dark_threshold=80, roi=None, *, dictionary, marker_id):
+        seen["dictionary"] = dictionary
+        seen["marker_id"] = marker_id
+        return TipMeasurement(found=True, tip_px=(10.0, 20.0), tip_mm=(1.0, 2.0), confidence=1.0)
+
+    monkeypatch.setattr(api, "detect_tip_aruco", fake_aruco)
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={
+            "slot": 0,
+            "camera_url": "cam://x",
+            "mm_per_pixel": 0.1,
+            "detector": "aruco",
+            "aruco_dictionary": "5X5_50",
+            "aruco_marker_id": 7,
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["found"] is True
+    # The request's dictionary / marker id were threaded through to the detector.
+    assert seen == {"dictionary": "5X5_50", "marker_id": 7}
+
+
+def test_measure_with_aruco_unavailable_is_not_found(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # With no OpenCV the real detector returns a clean not-found (HTTP 200,
+    # found=False) rather than erroring the request.
+    from pen_plotter.api import tip_calibration as api
+    from pen_plotter.vision.aruco_detect import aruco_available
+
+    if aruco_available():  # pragma: no cover - only when opencv is installed
+        pytest.skip("opencv is installed on this host")
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _frame((100, 100)))
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1, "detector": "aruco"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["found"] is False
 
 
 # ── mm-per-pixel scale assistant ─────────────────────────────────────────────

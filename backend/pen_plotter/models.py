@@ -137,9 +137,18 @@ class TipCalibrationConfig(BaseModel):
     station_z_mm: float | None = None
     reference_slot: int = Field(default=0, ge=0)
     mm_per_pixel: float = Field(gt=0.0)
-    detector: Literal["dark_blob"] = "dark_blob"
-    # Luminance cutoff (0–255): pixels darker than this are taken as "tip".
+    # ``dark_blob`` (Pillow+NumPy, no extra deps) finds the darkest compact
+    # blob; ``aruco`` detects a printed fiducial's sub-pixel centre and needs
+    # ``opencv-contrib-python`` on the host.
+    detector: Literal["dark_blob", "aruco"] = "dark_blob"
+    # Luminance cutoff (0–255): pixels darker than this are taken as "tip"
+    # (``dark_blob`` only).
     dark_threshold: int = Field(default=80, ge=0, le=255)
+    # ArUco marker family and, optionally, the specific marker id to lock onto
+    # (recommended when more than one marker may be in view). Used by the
+    # ``aruco`` detector only.
+    aruco_dictionary: str = "4X4_50"
+    aruco_marker_id: int | None = Field(default=None, ge=0)
     # Number of frames to grab and average per measurement (noise reduction).
     samples: int = Field(default=1, ge=1, le=20)
     roi: TipCameraRoi | None = None

@@ -88,8 +88,12 @@ automatically). The panel is a short guided flow:
    - **Station X/Y** *(optional)* and **Z** *(optional, motorised Z only)* —
      where the head presents a pen, for guided travel.
    - **Camera light** *(optional)* — the GPIO pin + polarity (see above).
+   - **Detector** *(Advanced)* — `Dark blob` (default, no extra deps) or
+     `ArUco fiducial` (sub-pixel, needs OpenCV — see
+     [below](#aruco-fiducial-detector-optional-sub-pixel)).
    - **Dark threshold** *(Advanced)* — the luminance cutoff for "tip" (0–255).
-     Raise it if the tip is faint; lower it if shadows are picked up.
+     Raise it if the tip is faint; lower it if shadows are picked up
+     (dark-blob detector only).
    - **Frames to average** *(Advanced)* — grab several frames per measurement
      (1–20) and take the **median** tip, so noise and the odd bad frame are
      rejected. Higher is steadier but slower; leave at `1` for a clean,
@@ -171,13 +175,33 @@ With both on, each **Measure** does **fetch → travel → grab** in one click.
 ## How it works
 
 - The default **`dark_blob`** detector (Pillow + NumPy, no OpenCV) thresholds
-  the frame and takes the centroid of the darkest compact region as the tip.
+  the frame and takes the **intensity-weighted** centroid of the darkest
+  compact region as the tip. Weighting by how dark each pixel is gives a
+  sub-pixel estimate that's robust to the exact threshold and to soft edges.
 - Measurement is **relative**: each pen's offset is the *difference* between
   its tip position and the reference pen's, so the absolute station-to-bed
   registration cancels out — you never have to align the camera to the bed.
 - The offset is applied as a pure translation of that pen's strokes during
   G-code generation; with every offset at `0` the output is byte-identical to
   the offset-free path.
+
+### ArUco fiducial detector (optional, sub-pixel)
+
+For the most robust, lighting-independent measurement, switch the **Detector**
+(Settings → Cameras → Offset camera → Advanced) to **ArUco fiducial**:
+
+- Print a small **ArUco marker** and attach it **rigidly to the pen** (or its
+  holder). Its centre is detected to sub-pixel precision and is immune to
+  lighting/contrast, unlike a dark blob.
+- The marker needn't sit exactly on the tip: because offsets are **relative**,
+  any constant marker→tip displacement (same carriage geometry for every pen)
+  cancels out — just like the station-to-bed registration does.
+- Pick the **marker family** (dictionary) you printed and, if more than one
+  marker can ever be in view, pin a specific **marker id**.
+- ArUco needs **OpenCV** on the host — install the optional extra:
+  `uv pip install -e '.[aruco]'` (pulls in `opencv-contrib-python-headless`).
+  Without it the UI shows a warning and the detector reports "unavailable"; the
+  rest of the app is unaffected.
 
 Full design notes:
 [`docs/adr/0005-camera-tip-offset.md`](../docs/adr/0005-camera-tip-offset.md)
@@ -197,6 +221,8 @@ and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
 | Measured offset jumps between tries | Noisy feed — raise **Frames to average** so each measure takes the median of several frames |
 | *⚠ frames vary by N mm* warning | The averaged frames disagreed (unstable feed/lighting) — steady the mount, improve lighting, then re-measure |
 | *⚠ large offset* warning | The detector likely locked onto the wrong blob — check the marked frame, tighten the **ROI**, and re-measure |
+| ArUco option warns *OpenCV not installed* | Install the optional extra on the host: `uv pip install -e '.[aruco]'` |
+| *no ArUco marker detected* | Wrong **marker family**, marker out of frame/too small/blurry, or a **marker id** pinned that isn't present — widen the ROI and check the printed dictionary |
 | Measure asks to load by hand | The profile changes pens manually; load the pen yourself, then Measure (auto-fetch needs a host/firmware magazine) |
 
 ---

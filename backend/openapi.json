@@ -712,6 +712,28 @@
         "title": "Deprecation",
         "type": "object"
       },
+      "DetectorsInfo": {
+        "description": "Detector capabilities the UI can offer, resolved on the host.\n\n``aruco_available`` reflects whether opencv-contrib-python is installed, so\nthe SPA can warn before the operator picks the ArUco detector.",
+        "properties": {
+          "aruco_available": {
+            "title": "Aruco Available",
+            "type": "boolean"
+          },
+          "aruco_dictionaries": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Aruco Dictionaries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "aruco_available",
+          "aruco_dictionaries"
+        ],
+        "title": "DetectorsInfo",
+        "type": "object"
+      },
       "DocumentAnalysis": {
         "description": "Container returned by :func:`extract_blocks`.",
         "properties": {
@@ -4081,6 +4103,23 @@
       "TipCalibrationConfig": {
         "description": "Dedicated-station camera setup for measuring per-pen XY offsets.\n\nOptional on a profile; present only when the machine has a tip-measuring\nstation wired up (ADR 0005, phase 2). The vision pipeline reuses the\ntimelapse frame grabber against ``camera_url``. Offsets are measured\n*relative to* ``reference_slot``, so the absolute station-to-bed\nregistration cancels out.",
         "properties": {
+          "aruco_dictionary": {
+            "default": "4X4_50",
+            "title": "Aruco Dictionary",
+            "type": "string"
+          },
+          "aruco_marker_id": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aruco Marker Id"
+          },
           "camera_url": {
             "title": "Camera Url",
             "type": "string"
@@ -4093,8 +4132,11 @@
             "type": "integer"
           },
           "detector": {
-            "const": "dark_blob",
             "default": "dark_blob",
+            "enum": [
+              "dark_blob",
+              "aruco"
+            ],
             "title": "Detector",
             "type": "string"
           },
@@ -4226,6 +4268,23 @@
       "TipMeasureRequest": {
         "description": "Body for ``POST /plotter/tip-calibration/measure``.\n\nCarries the station config inline (the SPA reads it from the active\nprofile) so the backend stays free of profile lookups.",
         "properties": {
+          "aruco_dictionary": {
+            "default": "4X4_50",
+            "title": "Aruco Dictionary",
+            "type": "string"
+          },
+          "aruco_marker_id": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aruco Marker Id"
+          },
           "camera_url": {
             "title": "Camera Url",
             "type": "string"
@@ -4236,6 +4295,15 @@
             "minimum": 0.0,
             "title": "Dark Threshold",
             "type": "integer"
+          },
+          "detector": {
+            "default": "dark_blob",
+            "enum": [
+              "dark_blob",
+              "aruco"
+            ],
+            "title": "Detector",
+            "type": "string"
           },
           "fetch_pen": {
             "default": false,
@@ -8249,6 +8317,69 @@
           }
         },
         "summary": "Calibrate Scale"
+      }
+    },
+    "/plotter/tip-calibration/detectors": {
+      "get": {
+        "description": "Report which detectors work on this host and the ArUco dictionaries.",
+        "operationId": "detectors_plotter_tip_calibration_detectors_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectorsInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detectors"
       }
     },
     "/plotter/tip-calibration/gpio": {

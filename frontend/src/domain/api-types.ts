@@ -964,6 +964,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plotter/tip-calibration/detectors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detectors
+         * @description Report which detectors work on this host and the ArUco dictionaries.
+         */
+        get: operations["detectors_plotter_tip_calibration_detectors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plotter/tip-calibration/gpio": {
         parameters: {
             query?: never;
@@ -2236,6 +2256,19 @@ export interface components {
             reason: string;
             /** Remove After */
             remove_after: number;
+        };
+        /**
+         * DetectorsInfo
+         * @description Detector capabilities the UI can offer, resolved on the host.
+         *
+         *     ``aruco_available`` reflects whether opencv-contrib-python is installed, so
+         *     the SPA can warn before the operator picks the ArUco detector.
+         */
+        DetectorsInfo: {
+            /** Aruco Available */
+            aruco_available: boolean;
+            /** Aruco Dictionaries */
+            aruco_dictionaries: string[];
         };
         /**
          * DocumentAnalysis
@@ -3980,6 +4013,13 @@ export interface components {
          *     registration cancels out.
          */
         TipCalibrationConfig: {
+            /**
+             * Aruco Dictionary
+             * @default 4X4_50
+             */
+            aruco_dictionary: string;
+            /** Aruco Marker Id */
+            aruco_marker_id?: number | null;
             /** Camera Url */
             camera_url: string;
             /**
@@ -3990,9 +4030,9 @@ export interface components {
             /**
              * Detector
              * @default dark_blob
-             * @constant
+             * @enum {string}
              */
-            detector: "dark_blob";
+            detector: "dark_blob" | "aruco";
             /**
              * Light Active High
              * @default true
@@ -4047,6 +4087,13 @@ export interface components {
          *     profile) so the backend stays free of profile lookups.
          */
         TipMeasureRequest: {
+            /**
+             * Aruco Dictionary
+             * @default 4X4_50
+             */
+            aruco_dictionary: string;
+            /** Aruco Marker Id */
+            aruco_marker_id?: number | null;
             /** Camera Url */
             camera_url: string;
             /**
@@ -4054,6 +4101,12 @@ export interface components {
              * @default 80
              */
             dark_threshold: number;
+            /**
+             * Detector
+             * @default dark_blob
+             * @enum {string}
+             */
+            detector: "dark_blob" | "aruco";
             /**
              * Fetch Pen
              * @default false
@@ -6038,6 +6091,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScaleCalibrateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detectors_plotter_tip_calibration_detectors_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetectorsInfo"];
                 };
             };
             /** @description Validation Error */

@@ -17,6 +17,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+from functools import partial
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -28,7 +30,13 @@ from pen_plotter.hardware.gpio import light as gpio_light
 from pen_plotter.models import MachineProfile, Point, TipCameraRoi
 from pen_plotter.profiles import get_profile
 from pen_plotter.timelapse import grab_jpeg
-from pen_plotter.vision.tip_detect import Roi, TipCalibrator, detect_object_extent
+from pen_plotter.vision.aruco_detect import aruco_available, detect_tip_aruco
+from pen_plotter.vision.tip_detect import (
+    Roi,
+    TipCalibrator,
+    TipDetector,
+    detect_object_extent,
+)
 
 router = APIRouter()
 
@@ -48,6 +56,11 @@ class TipMeasureRequest(BaseModel):
     mm_per_pixel: float = Field(gt=0.0)
     reference_slot: int = Field(default=0, ge=0)
     dark_threshold: int = Field(default=80, ge=0, le=255)
+    # Detector selection. ``aruco`` needs opencv-contrib-python on the host; it
+    # falls back to a clear not-found result when unavailable.
+    detector: Literal["dark_blob", "aruco"] = "dark_blob"
+    aruco_dictionary: str = "4X4_50"
+    aruco_marker_id: int | None = Field(default=None, ge=0)
     # Number of frames to grab and average per measurement (noise reduction).
     samples: int = Field(default=1, ge=1, le=20)
     roi: TipCameraRoi | None = None
@@ -179,10 +192,19 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         if req.roi
         else None
     )
-    light_on = req.light and req.light_gpio_pin is not None
-    if light_on:
+    # Pick the detector: the injected default (dark_blob) or the ArUco fiducial
+    # detector bound to the request's dictionary / marker id.
+    detector: TipDetector | None = None
+    if req.detector == "aruco":
+        detector = partial(
+            detect_tip_aruco,
+            dictionary=req.aruco_dictionary,
+            marker_id=req.aruco_marker_id,
+        )
+    light_pin = req.light_gpio_pin if (req.light and req.light_gpio_pin is not None) else None
+    if light_pin is not None:
         try:
-            gpio_light.set(req.light_gpio_pin, True, req.light_active_high)
+            gpio_light.set(light_pin, True, req.light_active_high)
         except RuntimeError as exc:  # no GPIO backend on this host
             raise HTTPException(status_code=503, detail=str(exc)) from exc
     try:
@@ -194,14 +216,15 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
             dark_threshold=req.dark_threshold,
             roi=roi,
             samples=req.samples,
+            detector=detector,
         )
     except Exception as exc:  # frame grab / decode failure
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
     finally:
         # Always switch the light back off, even if the grab failed.
-        if light_on:
+        if light_pin is not None:
             with contextlib.suppress(RuntimeError):
-                gpio_light.set(req.light_gpio_pin, False, req.light_active_high)
+                gpio_light.set(light_pin, False, req.light_active_high)
 
     m = result.measurement
     record("tip_calibration_measure", f"slot={req.slot} found={m.found} conf={m.confidence:.2f}")
@@ -320,6 +343,25 @@ class GpioInfo(BaseModel):
 async def gpio() -> GpioInfo:
     """List selectable GPIO pins and whether GPIO control works on this host."""
     return GpioInfo(available=gpio_light.available, pins=list(AVAILABLE_GPIO_PINS))
+
+
+class DetectorsInfo(BaseModel):
+    """Detector capabilities the UI can offer, resolved on the host.
+
+    ``aruco_available`` reflects whether opencv-contrib-python is installed, so
+    the SPA can warn before the operator picks the ArUco detector.
+    """
+
+    aruco_available: bool
+    aruco_dictionaries: list[str]
+
+
+@router.get("/plotter/tip-calibration/detectors")
+async def detectors() -> DetectorsInfo:
+    """Report which detectors work on this host and the ArUco dictionaries."""
+    from pen_plotter.vision.aruco_detect import _DICTS
+
+    return DetectorsInfo(aruco_available=aruco_available(), aruco_dictionaries=list(_DICTS))
 
 
 class LightRequest(BaseModel):
