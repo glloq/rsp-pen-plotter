@@ -411,7 +411,13 @@ class PrintQueue:
             latest_acked = absolute
             fields: dict[str, object] = {}
             state = getattr(progress, "state", None)
-            if state == StreamState.WAITING:
+            # Only an *operator-confirm* swap becomes a durable ``paused`` run.
+            # An automated inline swap (firmware / host_timed) also transits
+            # ``WAITING`` but drives itself to completion — surfacing it as a
+            # paused run would pop the operator "change the pen" modal for a
+            # rack/carousel swap that needs no human, and let a stray Cancel
+            # abort the swap mid-sequence.
+            if state == StreamState.WAITING and getattr(progress, "needs_operator", False):
                 # The streamer parked for an operator-confirm swap. Surface
                 # it as a durable ``paused`` run carrying the prompt so the
                 # cockpit/header/atelier can show what to do + offer Resume

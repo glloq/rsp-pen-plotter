@@ -120,7 +120,20 @@ ci-dessous.
 - Diffusion progression via `_broadcast` en `put_nowait` drop-oldest sur file
   bornée : un client WebSocket lent ne bloque jamais le streamer. **Correct.**
 
-### Finding A — **[HAUTE]** Un swap automatisé (magasin rack/host) s'affiche comme une pause opérateur
+### Finding A — **[HAUTE — CORRIGÉ]** Un swap automatisé (magasin rack/host) s'affichait comme une pause opérateur
+
+> **Statut : corrigé** dans ce même lot. Ajout d'un discriminant
+> `StreamProgress.needs_operator` (True uniquement pour un swap
+> `operator_confirm`). La queue ne repasse plus le run en `PAUSED` que
+> pour ces swaps ; les swaps inline automatiques (`firmware`/`host_timed`)
+> transitent toujours par `WAITING` (le run reste « occupé ») mais sans
+> `swap_prompt`, donc le `SwapPromptModal` ne s'ouvre plus. Le flag est aussi
+> propagé sur `/plotter/status` + `/ws/plotter` et le
+> `PlotterSettingsModal` (chemin direct `/plotter/run`) gate désormais son
+> encart « tool change — Continue » sur `needs_operator`. Tests ajoutés :
+> `test_needs_operator_flag_distinguishes_swap_kinds` (streamer) et
+> `test_automated_swap_does_not_surface_as_operator_pause` (queue).
+> Description d'origine conservée ci-dessous pour traçabilité.
 
 **Reproduit** (script `scratchpad/repro.py` pendant l'audit) :
 
@@ -179,7 +192,7 @@ latence pour l'apparition du modal après le park).
 
 | # | Axe | Constat | Priorité |
 |---|-----|---------|----------|
-| A | Suivi / couleur auto | Swap automatisé (rack/host) surfacé comme pause opérateur → modal parasite, Annuler avorte le swap | **Haute** |
+| A | Suivi / couleur auto | Swap automatisé (rack/host) surfacé comme pause opérateur → modal parasite, Annuler avorte le swap | **Haute — ✅ corrigé** |
 | 1 | Envoi G-code | `M6` firmware bloquant peut dépasser `ack_timeout_s` (30 s) | Moyenne |
 | 3 | Envoi G-code | Dwell `host_timed` compté depuis l'ack, pas depuis la fin de mouvement (sync `M400` à la charge du profil) | Basse |
 | 2 | Envoi G-code | Pas de checksum/renvoi Marlin (liaisons bruitées) | Basse |

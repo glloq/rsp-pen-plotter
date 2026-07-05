@@ -81,9 +81,17 @@ class StreamProgress:
     acked: int
     state: StreamState
     message: str | None = None
-    # Magazine slot the current operator-confirm swap targets (mirrors
-    # ``SwapAction.slot``); ``None`` when not paused for a slot-bearing swap.
+    # Magazine slot the current swap targets (mirrors ``SwapAction.slot``);
+    # ``None`` when the current swap names no slot.
     slot: int | None = None
+    # True only while the streamer is parked on an *operator-confirm* swap
+    # that genuinely needs a human to act + press Resume. An automated inline
+    # swap (firmware / host_timed) also transits ``WAITING`` but drives itself
+    # to completion, so it leaves this ``False`` — consumers (queue, cockpit)
+    # must gate their "waiting for operator" UI on this flag, not on the raw
+    # ``WAITING`` state, or an automated rack/carousel swap pops a spurious
+    # "change the pen" prompt.
+    needs_operator: bool = False
 
 
 class StreamError(Exception):
@@ -294,6 +302,7 @@ class GcodeStreamer:
             self.progress.state = StreamState.WAITING
             self.progress.message = action.prompt
             self.progress.slot = action.slot
+            self.progress.needs_operator = True
             self._resume.clear()
             await self._emit()
             await self._resume.wait()
@@ -302,6 +311,7 @@ class GcodeStreamer:
             self.progress.state = StreamState.RUNNING
             self.progress.message = None
             self.progress.slot = None
+            self.progress.needs_operator = False
             return False
 
         # Inline command sequences (firmware / host_timed / none).
@@ -311,8 +321,14 @@ class GcodeStreamer:
         # streamer treats them uniformly by emitting commands one at
         # a time with the per-line dwell.
         if action.commands:
+            # Automated swap in progress. We still transit ``WAITING`` (so the
+            # queue's "busy" guard keeps the run active) but leave
+            # ``needs_operator`` False — the streamer drives this swap to
+            # completion itself, no human action required.
             self.progress.state = StreamState.WAITING
             self.progress.message = f"swap ({action.kind})"
+            self.progress.slot = action.slot
+            self.progress.needs_operator = False
             await self._emit()
             for cmd in action.commands:
                 # Honour a pause() issued mid-swap: block here until
@@ -338,5 +354,6 @@ class GcodeStreamer:
                         pass
             self.progress.state = StreamState.RUNNING
             self.progress.message = None
+            self.progress.slot = None
             await self._emit()
         return False

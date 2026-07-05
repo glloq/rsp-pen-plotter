@@ -200,6 +200,46 @@ async def test_swap_pause_surfaces_as_paused_with_prompt() -> None:
     assert done.swap_prompt is None
 
 
+@pytest.mark.asyncio
+async def test_automated_swap_does_not_surface_as_operator_pause() -> None:
+    """An automated inline swap (firmware / host_timed) transits the
+    streamer's WAITING state but drives itself to completion. The queue
+    must NOT mirror it as a ``paused`` run with a swap_prompt — doing so
+    would pop the operator "change the pen" modal for a rack/carousel swap
+    that needs no human, and let a stray Cancel abort it mid-sequence."""
+    import asyncio
+
+    from pen_plotter.hardware.streamer import SwapAction, SwapCommandLine
+
+    engine = _engine()
+    run = enqueue("job", PROFILE, "G1 X1\nG1 X2\nG1 X3\n", target=engine)
+    # Inject an automated host_timed swap at exec index 1, with a dwell long
+    # enough that the WAITING window is observable during the run.
+    action = SwapAction(
+        kind="host_timed",
+        commands=[SwapCommandLine(send="M280 P0 S90", wait_ms=40)],
+        slot=2,
+    )
+    _update(run.id, engine, swap_actions={"1": action.model_dump(mode="json")})
+    queue, _ = _queue(engine)
+
+    task = asyncio.create_task(queue.run_next())
+    saw_paused = False
+    for _ in range(200):
+        await asyncio.sleep(0)
+        current = get_run(run.id, engine)
+        if current.state == RunState.PAUSED:
+            saw_paused = True
+        if task.done():
+            break
+    await asyncio.wait_for(task, timeout=2.0)
+
+    assert not saw_paused, "automated swap must never surface as a paused run"
+    done = get_run(run.id, engine)
+    assert done.state == RunState.COMPLETED
+    assert done.swap_prompt is None
+
+
 def test_enqueue_computes_guided_pause_points() -> None:
     engine = _engine()
     # A program with a tool-change comment + M0 yields one guided pause.

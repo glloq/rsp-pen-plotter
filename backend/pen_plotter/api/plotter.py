@@ -72,6 +72,13 @@ class StatusResponse(BaseModel):
     acked: int
     state: str
     message: str | None = None
+    # True only while parked on an operator-confirm swap that needs a human.
+    # The UI gates its "tool change — Continue" affordance on this, not on the
+    # raw ``waiting`` state, so an automated inline swap (firmware / host_timed)
+    # doesn't surface a spurious operator prompt.
+    needs_operator: bool = False
+    # Magazine slot the current swap targets, when it names one.
+    slot: int | None = None
 
 
 class CommandsResponse(BaseModel):
@@ -90,6 +97,8 @@ def _status() -> StatusResponse:
         acked=p.acked,
         state=p.state.value,
         message=p.message,
+        needs_operator=p.needs_operator,
+        slot=p.slot,
     )
 
 
@@ -255,6 +264,8 @@ async def plotter_ws(websocket: WebSocket) -> None:
                     "acked": progress.acked,
                     "state": progress.state.value,
                     "message": progress.message,
+                    "needs_operator": progress.needs_operator,
+                    "slot": progress.slot,
                 }
             )
     except WebSocketDisconnect:
