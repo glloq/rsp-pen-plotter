@@ -283,7 +283,7 @@ onBeforeUnmount(() => {
 
             <!-- TOOL CHANGE -->
             <section
-              v-if="status.connected && status.state === 'waiting'"
+              v-if="status.connected && status.state === 'waiting' && status.needs_operator"
               class="rounded-lg border border-amber-600 bg-amber-950/40 p-3"
             >
               <p class="text-sm font-medium text-amber-200">{{ t('plotter.toolChange') }}</p>

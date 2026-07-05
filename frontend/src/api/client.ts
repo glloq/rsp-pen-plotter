@@ -719,6 +719,11 @@ export interface PlotterStatus {
   acked: number
   state: string
   message?: string | null
+  // True only while parked on an operator-confirm swap that needs a human to
+  // act. Automated inline swaps (firmware / host_timed) transit `waiting` too
+  // but leave this false, so the "tool change — Continue" UI must gate on this.
+  needs_operator?: boolean
+  slot?: number | null
 }
 
 export async function plotterConnect(

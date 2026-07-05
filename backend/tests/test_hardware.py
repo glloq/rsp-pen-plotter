@@ -296,6 +296,45 @@ async def test_abort_preempts_swap_wait_ms() -> None:
 
 
 @pytest.mark.asyncio
+async def test_needs_operator_flag_distinguishes_swap_kinds() -> None:
+    """``needs_operator`` is True only while parked on an operator-confirm
+    swap; an automated inline swap transits WAITING with it left False so
+    consumers don't surface a spurious operator prompt."""
+    from pen_plotter.hardware.streamer import (
+        StreamState,
+        SwapAction,
+        SwapCommandLine,
+    )
+    from pen_plotter.hardware.transport import MockTransport
+
+    # Automated host_timed swap: WAITING is reached but never needs a human.
+    auto = {0: SwapAction(kind="host_timed", commands=[SwapCommandLine(send="M280", wait_ms=0)])}
+    seen: list[tuple[StreamState, bool]] = []
+
+    async def record(p: object) -> None:
+        seen.append((p.state, p.needs_operator))  # type: ignore[attr-defined]
+
+    await GcodeStreamer(MockTransport(), on_progress=record, swap_actions=auto).run("G0 X1\n")
+    waiting = [needs for state, needs in seen if state == StreamState.WAITING]
+    assert waiting and not any(waiting), "automated swap must leave needs_operator False"
+
+    # Operator-confirm swap: the WAITING emit carries needs_operator True.
+    confirm = {0: SwapAction(kind="operator_confirm", prompt="Change to Red", slot=1)}
+    seen.clear()
+    streamer = GcodeStreamer(MockTransport(), on_progress=record, swap_actions=confirm)
+    task = asyncio.create_task(streamer.run("G0 X1\n"))
+    for _ in range(50):
+        await asyncio.sleep(0)
+        if any(state == StreamState.WAITING for state, _ in seen):
+            break
+    assert any(
+        state == StreamState.WAITING and needs for state, needs in seen
+    ), "operator-confirm swap must set needs_operator True"
+    streamer.resume()
+    await asyncio.wait_for(task, timeout=1.0)
+
+
+@pytest.mark.asyncio
 async def test_run_with_profile_inserts_swap_actions() -> None:
     """A direct ``controller.run(gcode, profile=...)`` on a multi-pen G-code
     must halt at the swap boundary (operator_confirm), not blindly send the
