@@ -424,6 +424,16 @@ presents a target of known size and calls `POST …/calibrate-scale`, which
 measures the target's pixel extent (`detect_object_extent`) and returns
 `mm_per_pixel = known_mm / extent`; the UI applies it to the config.
 
+**Tip-type adaptability + dry run (audit 2026-07 follow-up).** The
+`tip_style` field (`"dark"` default / `"light"`) inverts the luminance before
+thresholding, so a **light tip on a dark background** (white gel, pastel,
+metallic pens) is measured with the same detector — the UI exposes it as a
+"Tip type" select next to the camera, and it applies to scale calibration
+too. The measure call also takes `dry_run`: detect and report **without**
+storing the result in the session, which is what the UI's "Test detection"
+now sends so a tuning shot can never overwrite the session's reference
+measurement.
+
 **Still deferred.** Only the `aruco` detector (printed fiducial, sub-pixel),
 which needs OpenCV — additive behind the existing `detector` field.
 

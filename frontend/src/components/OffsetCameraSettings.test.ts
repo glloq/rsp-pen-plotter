@@ -110,6 +110,10 @@ const i18n = createI18n({
         guidedDone: 'Done',
         lowConfidence: 'Low confidence {c}%',
         testDetection: 'Test detection',
+        tipStyle: 'Tip type',
+        tipStyleDark: 'Dark tip on light background',
+        tipStyleLight: 'Light tip on dark background',
+        tipStyleHint: 'match the station background',
         testResult: 'Detected {c}%',
         samples: 'Frames to average',
         largeOffset: '⚠ large offset ({mm} mm)',
@@ -506,9 +510,31 @@ describe('OffsetCameraSettings', () => {
     saveSpy.mockClear()
     await wrapper.find('[data-test="tip-test"]').trigger('click')
     await flushPromises()
-    expect(measureSpy).toHaveBeenCalled()
+    // Flagged as a dry run so the backend session's reference measurement
+    // is never overwritten by a tuning shot.
+    expect(measureSpy).toHaveBeenCalledWith(expect.objectContaining({ dry_run: true }))
     expect(saveSpy).not.toHaveBeenCalled() // dry run — nothing persisted
     expect(wrapper.find('[data-test="tip-test-preview"]').exists()).toBe(true)
+  })
+
+  it('persists the tip style and sends it with measurements', async () => {
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    const select = wrapper.find('[data-test="tip-style"]')
+    expect(select.exists()).toBe(true)
+    expect((select.element as HTMLSelectElement).value).toBe('dark') // default
+    await select.setValue('light')
+    await select.trigger('change')
+    await nextTick()
+    const saved = saveSpy.mock.calls.at(-1)![0] as MachineProfile
+    expect(saved.tip_calibration?.tip_style).toBe('light')
+
+    await flushPromises()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    expect(measureSpy).toHaveBeenCalledWith(expect.objectContaining({ tip_style: 'light' }))
   })
 
   it('clears a pen offset back to unset', async () => {

@@ -37,9 +37,12 @@ A good station makes detection reliable. Aim for:
 - **A camera** pointed at that spot — a USB webcam (`mjpg-streamer` /
   `ustreamer`), a Pi CSI camera (`libcamera`/`ustreamer`), or any IP camera
   that exposes a snapshot or MJPEG URL.
-- **Even lighting and a light background.** The default detector finds the pen
-  tip as the *darkest compact blob* against a bright field — good contrast and
-  no shadows or clutter behind the tip are what make it accurate.
+- **Even lighting and a contrasting background.** The default detector finds
+  the pen tip as the *darkest compact blob* against a bright field — good
+  contrast and no shadows or clutter behind the tip are what make it accurate.
+  For **light tips** (white gel, pastel, metallic pens) flip the **Tip type**
+  setting to *light on dark* and use a dark background instead — the detector
+  then looks for the brightest compact blob with the same logic.
 - **A rigid mount.** If the camera or station can shift, the measured offsets
   drift with it.
 
@@ -88,8 +91,13 @@ automatically). The panel is a short guided flow:
    - **Station X/Y** *(optional)* and **Z** *(optional, motorised Z only)* —
      where the head presents a pen, for guided travel.
    - **Camera light** *(optional)* — the GPIO pin + polarity (see above).
+   - **Tip type** — dark tip on a light background (default, most pens) or
+     light tip on a dark background (white gel, pastel, metallic). Pick the
+     station background that contrasts with the pen and match this setting;
+     it applies to tip measurement *and* scale calibration.
    - **Dark threshold** *(Advanced)* — the luminance cutoff for "tip" (0–255).
-     Raise it if the tip is faint; lower it if shadows are picked up.
+     Raise it if the tip is faint; lower it if shadows are picked up. (With a
+     *light* tip type the same knob works on the inverted image.)
    - **Frames to average** *(Advanced)* — grab several frames per measurement
      (1–20) and take the **median** tip, so noise and the odd bad frame are
      rejected. Higher is steadier but slower; leave at `1` for a clean,
@@ -110,6 +118,7 @@ tip_calibration:
   camera_url: "http://localhost:8080/?action=snapshot"
   reference_slot: 0
   mm_per_pixel: 0.05
+  tip_style: dark                         # or "light" (light tip on dark background)
   dark_threshold: 80
   samples: 1                              # frames to average per measurement
   station_position: { x: 20.0, y: 400.0 }
@@ -189,7 +198,7 @@ and [`docs/camera_tip_offset.md`](../docs/camera_tip_offset.md).
 
 | Symptom | Likely cause / fix |
 | --- | --- |
-| *No tip detected* | Poor contrast or lighting; raise/lower the **dark threshold**; tighten the **ROI**; check the camera URL returns a frame |
+| *No tip detected* | Poor contrast or lighting; check the **Tip type** matches the pen (dark vs light); raise/lower the **dark threshold**; tighten the **ROI**; check the camera URL returns a frame |
 | Wrong blob marked in the preview | Clutter in view — set an **ROI** around the tip, or improve the background |
 | *Camera read failed* (502) | The camera URL is unreachable or not a JPEG/MJPEG stream |
 | Light won't switch | Not running on a Pi, or the GPIO library is missing; check the GPIO availability warning; verify the pin and **active high/low** |

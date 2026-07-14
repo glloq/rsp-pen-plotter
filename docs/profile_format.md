@@ -67,7 +67,8 @@ registration cancels out.
 | `reference_slot` | int (default `0`) | Pen the others are measured against (its own offset is `0`) |
 | `mm_per_pixel` | float (> 0) | Station pixel scale, calibrated once |
 | `detector` | `"dark_blob"` | Detection strategy. `dark_blob` (Pillow+NumPy) finds the darkest compact blob; no OpenCV required |
-| `dark_threshold` | int 0–255 (default `80`) | Luminance cutoff: pixels darker than this count as "tip" |
+| `tip_style` | `"dark"` \| `"light"` (default `"dark"`) | What the camera sees: a dark tip on a light background, or a light tip (white gel, pastel, metallic) on a dark background — `light` inverts the luminance before thresholding |
+| `dark_threshold` | int 0–255 (default `80`) | Luminance cutoff: pixels darker than this count as "tip" (with `tip_style: light`, pixels at least this far from black) |
 | `samples` | int 1–20 (default `1`) | Frames grabbed and averaged per measurement; raise it to cut detector noise at the cost of a slower measure |
 | `roi` | `{ x, y, width, height }` \| null | Optional pixel region to constrain detection (whole frame when `null`). Editable in Settings → Cameras → Offset camera |
 | `light_gpio_pin` | int 0–27 \| null | Optional Raspberry Pi **GPIO pin** (BCM) driving a station light. The host toggles the pin (the light is wired to the Pi, not the plotter); manual On/Off + auto on/off around a measurement |
@@ -79,6 +80,7 @@ tip_calibration:
   reference_slot: 0
   mm_per_pixel: 0.05
   detector: "dark_blob"
+  tip_style: dark                         # or "light" (light tip on dark background)
   dark_threshold: 80
   samples: 1                              # frames to average per measurement
   station_position: { x: 20.0, y: 400.0 }

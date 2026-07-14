@@ -148,10 +148,21 @@ function defaultTipConfig(): TipCalibrationConfig {
     reference_slot: 0,
     mm_per_pixel: 0.1,
     detector: 'dark_blob',
+    tip_style: 'dark',
     dark_threshold: 80,
     samples: 1,
     roi: null,
   }
+}
+
+// Contrast convention the detector uses: dark tip on a light background
+// (default) or light tip on a dark background. One select adapts the
+// measurement to any tip colour — pick the station background that
+// contrasts with the pen and flip this switch to match.
+const tipStyle = computed<'dark' | 'light'>(() => tipConfig.value?.tip_style ?? 'dark')
+
+function onTipStyle(raw: string): void {
+  onTipConfig({ tip_style: raw === 'light' ? 'light' : 'dark' })
 }
 
 function onUseStation(enabled: boolean): void {
@@ -403,6 +414,7 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       camera_url: cfg.camera_url,
       mm_per_pixel: cfg.mm_per_pixel,
       reference_slot: cfg.reference_slot,
+      tip_style: cfg.tip_style ?? 'dark',
       dark_threshold: cfg.dark_threshold,
       samples: cfg.samples,
       roi: cfg.roi,
@@ -462,9 +474,13 @@ async function onTestDetection(): Promise<void> {
       camera_url: cfg.camera_url,
       mm_per_pixel: cfg.mm_per_pixel,
       reference_slot: cfg.reference_slot,
+      tip_style: cfg.tip_style ?? 'dark',
       dark_threshold: cfg.dark_threshold,
       samples: cfg.samples,
       roi: cfg.roi,
+      // Dry run: report the detection but never store it, so tuning the
+      // station can't silently replace the session's reference measurement.
+      dry_run: true,
       light: lightDuringMeasure.value,
       light_gpio_pin: cfg.light_gpio_pin ?? null,
       light_active_high: cfg.light_active_high ?? true,
@@ -571,6 +587,7 @@ async function onCalibrateScale(): Promise<void> {
     const r = await calibrateTipScale({
       camera_url: cfg.camera_url,
       known_mm: knownMm.value,
+      tip_style: cfg.tip_style ?? 'dark',
       dark_threshold: cfg.dark_threshold,
       roi: cfg.roi,
     })
@@ -701,6 +718,22 @@ onUnmounted(() => clearTimeout(savedTimer))
                   {{ t(`offsetCamera.ready.${item.key}`) }}
                 </span>
               </div>
+              <!-- Contrast convention: adapts the detector to any tip colour
+                   (dark tip on light background, or light tip on dark). -->
+              <label class="block text-[11px] text-slate-400"
+                >{{ t('offsetCamera.tipStyle') }}
+                <select
+                  :value="tipStyle"
+                  :disabled="saving"
+                  class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
+                  data-test="tip-style"
+                  @change="(e) => onTipStyle((e.target as HTMLSelectElement).value)"
+                >
+                  <option value="dark">{{ t('offsetCamera.tipStyleDark') }}</option>
+                  <option value="light">{{ t('offsetCamera.tipStyleLight') }}</option>
+                </select>
+              </label>
+              <p class="text-[10px] text-slate-500">{{ t('offsetCamera.tipStyleHint') }}</p>
               <!-- Dry-run detection: tune framing / zone / threshold without
                    writing any offset. -->
               <div class="flex items-center gap-2">

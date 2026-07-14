@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -47,10 +48,17 @@ class TipMeasureRequest(BaseModel):
     camera_url: str
     mm_per_pixel: float = Field(gt=0.0)
     reference_slot: int = Field(default=0, ge=0)
+    # "dark" tip on a light background (default) or "light" tip on a dark
+    # background — the latter inverts the luminance before thresholding.
+    tip_style: Literal["dark", "light"] = "dark"
     dark_threshold: int = Field(default=80, ge=0, le=255)
     # Number of frames to grab and average per measurement (noise reduction).
     samples: int = Field(default=1, ge=1, le=20)
     roi: TipCameraRoi | None = None
+    # Dry run: detect and report, but do NOT remember the result as this
+    # slot's tip. Used by the UI's "Test detection" so tuning lighting /
+    # threshold can't silently overwrite the session's reference measurement.
+    dry_run: bool = False
     # Optional guided travel: when ``move_to_station`` is set, the head is
     # moved to ``station_position`` (machine mm) before the frame is grabbed,
     # so the operator need not jog by hand. Requires a connected plotter and
@@ -194,6 +202,8 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
             dark_threshold=req.dark_threshold,
             roi=roi,
             samples=req.samples,
+            invert=req.tip_style == "light",
+            store=not req.dry_run,
         )
     except Exception as exc:  # frame grab / decode failure
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
@@ -204,7 +214,11 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
                 gpio_light.set(req.light_gpio_pin, False, req.light_active_high)
 
     m = result.measurement
-    record("tip_calibration_measure", f"slot={req.slot} found={m.found} conf={m.confidence:.2f}")
+    record(
+        "tip_calibration_measure",
+        f"slot={req.slot} found={m.found} conf={m.confidence:.2f}"
+        + (" dry_run" if req.dry_run else ""),
+    )
     annotated = (
         "data:image/jpeg;base64," + base64.b64encode(m.annotated_jpeg).decode()
         if m.annotated_jpeg
@@ -255,6 +269,9 @@ class ScaleCalibrateRequest(BaseModel):
 
     camera_url: str
     known_mm: float = Field(gt=0.0)
+    # Same contrast convention as the tip measurement: a dark target on a
+    # light background, or (with "light") a light target on a dark one.
+    tip_style: Literal["dark", "light"] = "dark"
     dark_threshold: int = Field(default=80, ge=0, le=255)
     roi: TipCameraRoi | None = None
 
@@ -287,7 +304,7 @@ async def calibrate_scale(req: ScaleCalibrateRequest) -> ScaleCalibrateResponse:
     except Exception as exc:  # frame grab failure
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
 
-    m = detect_object_extent(frame, req.dark_threshold, roi)
+    m = detect_object_extent(frame, req.dark_threshold, roi, invert=req.tip_style == "light")
     annotated = (
         "data:image/jpeg;base64," + base64.b64encode(m.annotated_jpeg).decode()
         if m.annotated_jpeg

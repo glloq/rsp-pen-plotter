@@ -138,7 +138,14 @@ class TipCalibrationConfig(BaseModel):
     reference_slot: int = Field(default=0, ge=0)
     mm_per_pixel: float = Field(gt=0.0)
     detector: Literal["dark_blob"] = "dark_blob"
-    # Luminance cutoff (0–255): pixels darker than this are taken as "tip".
+    # What the camera sees: a "dark" tip on a light background (the default;
+    # most inked / felt / fineliner tips) or a "light" tip on a dark
+    # background (white gel, pastel, metallic pens). "light" inverts the
+    # luminance before thresholding, so every tip type is measurable by
+    # picking the station background that contrasts with it.
+    tip_style: Literal["dark", "light"] = "dark"
+    # Luminance cutoff (0–255): pixels darker than this are taken as "tip"
+    # (for ``tip_style: light``, pixels at least this far from black).
     dark_threshold: int = Field(default=80, ge=0, le=255)
     # Number of frames to grab and average per measurement (noise reduction).
     samples: int = Field(default=1, ge=1, le=20)

@@ -213,6 +213,10 @@ export interface TipCalibrationConfig {
   reference_slot: number
   mm_per_pixel: number
   detector: 'dark_blob'
+  // What the camera sees: a dark tip on a light background (default) or a
+  // light tip (white gel / pastel / metallic) on a dark background — the
+  // latter inverts the luminance before thresholding.
+  tip_style?: 'dark' | 'light'
   dark_threshold: number
   // Frames to grab and average per measurement (1–20; noise reduction).
   samples?: number
@@ -292,10 +296,16 @@ export interface TipMeasureRequest {
   camera_url: string
   mm_per_pixel: number
   reference_slot?: number
+  // Dark tip on light background (default) or light tip on dark background.
+  tip_style?: 'dark' | 'light'
   dark_threshold?: number
   // Frames to grab and average per measurement (1–20; noise reduction).
   samples?: number
   roi?: TipCameraRoi | null
+  // Dry run: detect and report without remembering the result as this slot's
+  // tip — the UI's "Test detection" uses it so tuning can't corrupt the
+  // session's stored reference.
+  dry_run?: boolean
   // Optional guided travel: move the head to station_position (needs a
   // connected plotter + profile_name) before grabbing the frame.
   move_to_station?: boolean
@@ -374,6 +384,7 @@ export interface ScaleCalibrateResponse {
 export async function calibrateTipScale(req: {
   camera_url: string
   known_mm: number
+  tip_style?: 'dark' | 'light'
   dark_threshold?: number
   roi?: TipCameraRoi | null
 }): Promise<ScaleCalibrateResponse> {

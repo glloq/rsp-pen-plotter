@@ -3630,6 +3630,8 @@ export interface components {
             };
             /** Swap Prompt */
             swap_prompt?: string | null;
+            /** Swap Slot */
+            swap_slot?: number | null;
             /** Total Lines */
             total_lines: number;
             /**
@@ -3680,6 +3682,8 @@ export interface components {
             state: string;
             /** Swap Prompt */
             swap_prompt?: string | null;
+            /** Swap Slot */
+            swap_slot?: number | null;
             /** Total Lines */
             total_lines: number;
             /**
@@ -3830,6 +3834,12 @@ export interface components {
             /** Known Mm */
             known_mm: number;
             roi?: components["schemas"]["TipCameraRoi"] | null;
+            /**
+             * Tip Style
+             * @default dark
+             * @enum {string}
+             */
+            tip_style: "dark" | "light";
         };
         /**
          * ScaleCalibrateResponse
@@ -3881,8 +3891,15 @@ export interface components {
             connected: boolean;
             /** Message */
             message?: string | null;
+            /**
+             * Needs Operator
+             * @default false
+             */
+            needs_operator: boolean;
             /** Sent */
             sent: number;
+            /** Slot */
+            slot?: number | null;
             /** State */
             state: string;
             /** Total */
@@ -4016,6 +4033,12 @@ export interface components {
             station_position?: components["schemas"]["Point"] | null;
             /** Station Z Mm */
             station_z_mm?: number | null;
+            /**
+             * Tip Style
+             * @default dark
+             * @enum {string}
+             */
+            tip_style: "dark" | "light";
         };
         /**
          * TipCalibrationStatus
@@ -4054,6 +4077,11 @@ export interface components {
              * @default 80
              */
             dark_threshold: number;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
             /**
              * Fetch Pen
              * @default false
@@ -4096,6 +4124,12 @@ export interface components {
             station_position?: components["schemas"]["Point"] | null;
             /** Station Z Mm */
             station_z_mm?: number | null;
+            /**
+             * Tip Style
+             * @default dark
+             * @enum {string}
+             */
+            tip_style: "dark" | "light";
         };
         /**
          * TipMeasureResponse

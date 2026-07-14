@@ -3354,6 +3354,17 @@
             ],
             "title": "Swap Prompt"
           },
+          "swap_slot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swap Slot"
+          },
           "total_lines": {
             "title": "Total Lines",
             "type": "integer"
@@ -3457,6 +3468,17 @@
               }
             ],
             "title": "Swap Prompt"
+          },
+          "swap_slot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swap Slot"
           },
           "total_lines": {
             "title": "Total Lines",
@@ -3775,6 +3797,15 @@
                 "type": "null"
               }
             ]
+          },
+          "tip_style": {
+            "default": "dark",
+            "enum": [
+              "dark",
+              "light"
+            ],
+            "title": "Tip Style",
+            "type": "string"
           }
         },
         "required": [
@@ -3901,9 +3932,25 @@
             ],
             "title": "Message"
           },
+          "needs_operator": {
+            "default": false,
+            "title": "Needs Operator",
+            "type": "boolean"
+          },
           "sent": {
             "title": "Sent",
             "type": "integer"
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot"
           },
           "state": {
             "title": "State",
@@ -4164,6 +4211,15 @@
               }
             ],
             "title": "Station Z Mm"
+          },
+          "tip_style": {
+            "default": "dark",
+            "enum": [
+              "dark",
+              "light"
+            ],
+            "title": "Tip Style",
+            "type": "string"
           }
         },
         "required": [
@@ -4236,6 +4292,11 @@
             "minimum": 0.0,
             "title": "Dark Threshold",
             "type": "integer"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
           },
           "fetch_pen": {
             "default": false,
@@ -4334,6 +4395,15 @@
               }
             ],
             "title": "Station Z Mm"
+          },
+          "tip_style": {
+            "default": "dark",
+            "enum": [
+              "dark",
+              "light"
+            ],
+            "title": "Tip Style",
+            "type": "string"
           }
         },
         "required": [
