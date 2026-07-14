@@ -27,6 +27,7 @@ import { useJobStore } from '../stores/job'
 import { useUiStore } from '../stores/ui'
 import { defaultPen, normalizePens } from '../composables/useProfileDraft'
 import CameraPreview from './CameraPreview.vue'
+import TipDetectionTuner from './TipDetectionTuner.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
@@ -121,8 +122,16 @@ const hasMagazine = computed(() => {
   return method === 'carousel' || method === 'rack'
 })
 
+// Provenance of the scale. Legacy configs (no scale_source field) carry a
+// real, working value → treat as 'manual' so they keep measuring; only a
+// fresh config (which the UI writes as 'unset') gates measurement until the
+// operator types or measures a scale.
+const scaleSource = computed<'unset' | 'manual' | 'measured'>(
+  () => tipConfig.value?.scale_source ?? 'manual',
+)
+
 const scaleLabel = computed(() =>
-  tipConfig.value
+  tipConfig.value && scaleSource.value !== 'unset'
     ? t('offsetCamera.scaleSet', { v: tipConfig.value.mm_per_pixel })
     : t('offsetCamera.scaleUnset'),
 )
@@ -147,7 +156,11 @@ function defaultTipConfig(): TipCalibrationConfig {
     station_position: null,
     reference_slot: 0,
     mm_per_pixel: 0.1,
+    // Placeholder value: the scale chip stays amber (and measurement gated)
+    // until the operator types a real scale or runs the assistant.
+    scale_source: 'unset',
     detector: 'dark_blob',
+    tip_style: 'dark',
     dark_threshold: 80,
     samples: 1,
     roi: null,
@@ -167,9 +180,26 @@ function onPickCamera(url: string): void {
   if (url) onTipConfig({ camera_url: url })
 }
 
-function onSamples(raw: string): void {
-  const v = Math.floor(Number(raw))
-  onTipConfig({ samples: Number.isFinite(v) ? Math.min(20, Math.max(1, v)) : 1 })
+// Typing a scale by hand is a real calibration → provenance 'manual'.
+function onMmPerPixel(raw: string): void {
+  const v = Number(raw)
+  if (!Number.isFinite(v) || v <= 0) return
+  onTipConfig({ mm_per_pixel: v, scale_source: 'manual' })
+}
+
+// Changing the reference redefines what "zero offset" means: the session's
+// stored measurements and any vision offsets on the profile relate to the
+// OLD reference. Reset the session so old and new measurements can't be
+// mixed, and warn when camera-measured offsets predate the change (they
+// should be re-measured against the new reference).
+const refChangedWarning = ref(false)
+
+function onReferenceSlot(raw: string): void {
+  const v = Math.max(0, Math.floor(Number(raw)))
+  if (!Number.isFinite(v) || v === tipConfig.value?.reference_slot) return
+  onTipConfig({ reference_slot: v })
+  void onResetMeasurements()
+  refChangedWarning.value = pens.value.some((p) => p.offset_source === 'vision')
 }
 
 // Session-local per-measurement options.
@@ -308,7 +338,9 @@ const readiness = computed<ReadinessItem[]>(() => {
   if (!cfg) return []
   return [
     { key: 'camera', ok: cfg.camera_url.trim().length > 0, optional: false },
-    { key: 'scale', ok: cfg.mm_per_pixel > 0, optional: false },
+    // A positive mm_per_pixel is guaranteed by the model, so the meaningful
+    // signal is its provenance: amber until typed or measured.
+    { key: 'scale', ok: cfg.mm_per_pixel > 0 && scaleSource.value !== 'unset', optional: false },
     {
       key: 'reference',
       ok: pens.value.some((p) => p.installed && p.index === cfg.reference_slot),
@@ -403,9 +435,13 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       camera_url: cfg.camera_url,
       mm_per_pixel: cfg.mm_per_pixel,
       reference_slot: cfg.reference_slot,
+      tip_style: cfg.tip_style ?? 'dark',
       dark_threshold: cfg.dark_threshold,
       samples: cfg.samples,
       roi: cfg.roi,
+      // Server-side mirror of the UI gate: an untrusted detection is never
+      // stored in the session, so it can't silently become the reference.
+      min_confidence: MIN_CONFIDENCE,
       fetch_pen: fetchPen.value,
       move_to_station: autoMove.value && cfg.station_position != null,
       station_position: cfg.station_position ?? null,
@@ -420,6 +456,9 @@ async function onMeasure(pen: PenSlot): Promise<void> {
     if (ok && (m.is_reference || m.offset_mm)) {
       const offset: Point = m.offset_mm ?? { x: 0, y: 0 }
       await patchPen(pen.index, { xy_offset_mm: offset, offset_source: 'vision' })
+      // The operator is re-measuring against the new reference — the
+      // "reference changed" nudge has served its purpose.
+      refChangedWarning.value = false
     }
     measureState[pen.index] = { busy: false, message, ok, image: m.annotated_image }
   } catch (err) {
@@ -440,50 +479,6 @@ function isPenMeasured(pen: PenSlot): boolean {
   return !!pen.offset_source && pen.offset_source !== 'unset'
 }
 const measuredCount = computed(() => installedPens.value.filter(isPenMeasured).length)
-
-// ── Test detection (dry run) ───────────────────────────────────────────────
-// Run the detector on the current view WITHOUT writing any offset, so the
-// operator can tune lighting / zone / threshold before committing. Measures
-// the reference slot's view; the result is reported, not applied.
-const testState = reactive<{ busy: boolean; message: string; ok: boolean; image?: string | null }>({
-  busy: false,
-  message: '',
-  ok: false,
-})
-
-async function onTestDetection(): Promise<void> {
-  const cfg = tipConfig.value
-  if (!cfg) return
-  testState.busy = true
-  testState.message = ''
-  try {
-    const m = await measureTipOffset({
-      slot: cfg.reference_slot,
-      camera_url: cfg.camera_url,
-      mm_per_pixel: cfg.mm_per_pixel,
-      reference_slot: cfg.reference_slot,
-      dark_threshold: cfg.dark_threshold,
-      samples: cfg.samples,
-      roi: cfg.roi,
-      light: lightDuringMeasure.value,
-      light_gpio_pin: cfg.light_gpio_pin ?? null,
-      light_active_high: cfg.light_active_high ?? true,
-    })
-    testState.image = m.annotated_image
-    const stable = (m.spread_mm ?? 0) <= SUSPICIOUS_SPREAD_MM
-    testState.ok = m.found && m.confidence >= MIN_CONFIDENCE && stable
-    testState.message = m.found
-      ? t('offsetCamera.testResult', { c: Math.round(m.confidence * 100) }) + spreadNote(m)
-      : m.message || t('magazine.measureNotFound')
-  } catch (err) {
-    testState.ok = false
-    testState.message =
-      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-      t('magazine.measureFailed')
-  } finally {
-    testState.busy = false
-  }
-}
 
 // ── Guided sequence ────────────────────────────────────────────────────────
 // Walk the operator through measuring every installed pen, reference first.
@@ -571,12 +566,13 @@ async function onCalibrateScale(): Promise<void> {
     const r = await calibrateTipScale({
       camera_url: cfg.camera_url,
       known_mm: knownMm.value,
+      tip_style: cfg.tip_style ?? 'dark',
       dark_threshold: cfg.dark_threshold,
       roi: cfg.roi,
     })
     scaleState.image = r.annotated_image
     if (r.found && r.mm_per_pixel) {
-      onTipConfig({ mm_per_pixel: Number(r.mm_per_pixel.toFixed(5)) })
+      onTipConfig({ mm_per_pixel: Number(r.mm_per_pixel.toFixed(5)), scale_source: 'measured' })
       scaleState.ok = true
       scaleState.message = t('magazine.scaleApplied', {
         v: r.mm_per_pixel.toFixed(4),
@@ -681,14 +677,6 @@ onUnmounted(() => clearTimeout(savedTimer))
                 data-test="tip-camera-url"
                 @change="(e) => onTipConfig({ camera_url: (e.target as HTMLInputElement).value })"
               />
-              <CameraPreview
-                :url="tipConfig.camera_url"
-                :label="t('offsetCamera.title')"
-                :roi="tipConfig.roi"
-                editable
-                height="md"
-                @update:roi="(r) => onTipConfig({ roi: r })"
-              />
               <div class="grid grid-cols-2 gap-1.5 sm:grid-cols-5" data-test="tip-readiness">
                 <span
                   v-for="item in readiness"
@@ -701,36 +689,13 @@ onUnmounted(() => clearTimeout(savedTimer))
                   {{ t(`offsetCamera.ready.${item.key}`) }}
                 </span>
               </div>
-              <!-- Dry-run detection: tune framing / zone / threshold without
-                   writing any offset. -->
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  class="rounded border border-slate-600 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-                  :disabled="saving || testState.busy || !tipConfig.camera_url.trim()"
-                  data-test="tip-test"
-                  @click="onTestDetection"
-                >
-                  {{
-                    testState.busy
-                      ? t('magazine.measuring')
-                      : '🔍 ' + t('offsetCamera.testDetection')
-                  }}
-                </button>
-                <span
-                  v-if="testState.message"
-                  class="text-[11px]"
-                  :class="testState.ok ? 'text-emerald-400' : 'text-amber-400'"
-                  data-test="tip-test-msg"
-                  >{{ testState.message }}</span
-                >
-              </div>
-              <img
-                v-if="testState.image"
-                :src="testState.image"
-                :alt="t('offsetCamera.testDetection')"
-                class="max-h-40 w-auto rounded border border-slate-700"
-                data-test="tip-test-preview"
+              <!-- Detection tuning: live feed + tip type / threshold /
+                   samples, with a dry-run confidence meter as feedback. -->
+              <TipDetectionTuner
+                :config="tipConfig"
+                :disabled="saving"
+                :light-during-measure="lightDuringMeasure"
+                @update:config="onTipConfig"
               />
             </div>
 
@@ -758,10 +723,7 @@ onUnmounted(() => clearTimeout(savedTimer))
                     :disabled="saving"
                     class="mt-0.5 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
                     data-test="tip-mm-per-pixel"
-                    @change="
-                      (e) =>
-                        onTipConfig({ mm_per_pixel: Number((e.target as HTMLInputElement).value) })
-                    "
+                    @change="(e) => onMmPerPixel((e.target as HTMLInputElement).value)"
                   />
                 </label>
                 <span class="pb-1 text-[10px] text-slate-500">{{
@@ -834,51 +796,7 @@ onUnmounted(() => clearTimeout(savedTimer))
                     :disabled="saving"
                     class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
                     data-test="tip-reference-slot"
-                    @change="
-                      (e) =>
-                        onTipConfig({
-                          reference_slot: Math.max(
-                            0,
-                            Math.floor(Number((e.target as HTMLInputElement).value)),
-                          ),
-                        })
-                    "
-                  />
-                </label>
-                <label class="block text-[11px] text-slate-400"
-                  >{{ t('magazine.darkThreshold') }}
-                  <input
-                    type="number"
-                    min="0"
-                    max="255"
-                    step="1"
-                    :value="tipConfig.dark_threshold"
-                    :disabled="saving"
-                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                    data-test="tip-dark-threshold"
-                    @change="
-                      (e) =>
-                        onTipConfig({
-                          dark_threshold: Math.min(
-                            255,
-                            Math.max(0, Math.floor(Number((e.target as HTMLInputElement).value))),
-                          ),
-                        })
-                    "
-                  />
-                </label>
-                <label class="block text-[11px] text-slate-400"
-                  >{{ t('offsetCamera.samples') }}
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    step="1"
-                    :value="tipConfig.samples ?? 1"
-                    :disabled="saving"
-                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
-                    data-test="tip-samples"
-                    @change="(e) => onSamples((e.target as HTMLInputElement).value)"
+                    @change="(e) => onReferenceSlot((e.target as HTMLInputElement).value)"
                   />
                 </label>
                 <label class="block text-[11px] text-slate-400"
@@ -1141,6 +1059,13 @@ onUnmounted(() => clearTimeout(savedTimer))
             data-test="offset-next-action"
           >
             {{ cameraMeasurementReady ? '✓' : '⚠' }} {{ setupHint }}
+          </p>
+          <p
+            v-if="refChangedWarning"
+            class="mb-1 rounded border border-amber-800 bg-amber-950/30 px-2 py-1 text-[11px] text-amber-200"
+            data-test="ref-changed-warn"
+          >
+            ⚠ {{ t('offsetCamera.refChanged') }}
           </p>
           <p
             v-if="canMeasure && !hasMagazine"

@@ -40,6 +40,18 @@ def _frame(blob_xy: tuple[int, int] | None, size: tuple[int, int] = (200, 200)) 
     return buf.getvalue()
 
 
+def _light_frame(blob_xy: tuple[int, int] | None, size: tuple[int, int] = (200, 200)) -> bytes:
+    """A dark frame with an optional 10×10 *light* square (light-tip station)."""
+    w, h = size
+    arr = np.full((h, w), 15, dtype=np.uint8)
+    if blob_xy is not None:
+        cx, cy = blob_xy
+        arr[cy - 5 : cy + 5, cx - 5 : cx + 5] = 245
+    buf = io.BytesIO()
+    Image.fromarray(arr, mode="L").save(buf, format="PNG")
+    return buf.getvalue()
+
+
 # ── detector ──────────────────────────────────────────────────────────────
 
 
@@ -103,6 +115,18 @@ def test_roi_offset_is_added_back() -> None:
     assert m.found and m.tip_px is not None
     assert abs(m.tip_px[0] - 149.5) < 1.0
     assert abs(m.tip_px[1] - 149.5) < 1.0
+
+
+def test_light_tip_found_with_invert() -> None:
+    # A light tip on a dark background is invisible to the default detector…
+    plain = detect_tip_dark_blob(_light_frame((120, 80)), mm_per_pixel=0.1)
+    assert not plain.found
+    # …and found once the luminance is inverted (tip_style: light).
+    m = detect_tip_dark_blob(_light_frame((120, 80)), mm_per_pixel=0.1, invert=True)
+    assert m.found and m.tip_px is not None
+    assert abs(m.tip_px[0] - 119.5) < 1.0
+    assert abs(m.tip_px[1] - 79.5) < 1.0
+    assert m.confidence > 0.5
 
 
 def test_roi_excludes_blob_outside_region() -> None:
@@ -294,6 +318,94 @@ def test_measure_endpoint_honours_samples(
     assert calls["n"] == 3  # grabbed three frames and averaged
     # Identical frames → perfect repeatability.
     assert body["spread_mm"] == pytest.approx(0.0, abs=0.01)
+
+
+def test_measure_endpoint_light_tip_style(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _light_frame((100, 100)))
+    # Default (dark) style misses the light tip…
+    miss = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1},
+    )
+    assert miss.json()["found"] is False
+    # …the light style finds it.
+    hit = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1, "tip_style": "light"},
+    )
+    assert hit.json()["found"] is True
+
+
+def test_dry_run_does_not_store_the_measurement(client: TestClient) -> None:
+    # A dry run (the UI's "Test detection") reports the tip…
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://ref", "mm_per_pixel": 0.1, "dry_run": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["found"] is True
+    # …but is NOT remembered as the slot's measurement.
+    assert client.get("/plotter/tip-calibration/status").json()["measured_slots"] == []
+
+
+def test_dry_run_does_not_overwrite_the_reference(client: TestClient) -> None:
+    # Reference measured for real at x=100 px…
+    client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://ref", "mm_per_pixel": 0.1},
+    )
+    # …then a dry-run detection on the reference slot sees a different frame
+    # (x=130 px) — e.g. the operator tuning lighting with a random object.
+    client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://pen", "mm_per_pixel": 0.1, "dry_run": True},
+    )
+    # Measuring a pen at the same x=130 px must still yield +3.0 mm vs the
+    # REAL reference, proving the dry run didn't replace it.
+    pen = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 1, "camera_url": "cam://pen", "mm_per_pixel": 0.1},
+    )
+    assert pen.json()["offset_mm"]["x"] == pytest.approx(3.0, abs=0.2)
+
+
+def _low_confidence_frame(size: tuple[int, int] = (200, 200)) -> bytes:
+    """A frame whose dark blob swamps ~25% of it → found, but low confidence."""
+    w, h = size
+    arr = np.full((h, w), 240, dtype=np.uint8)
+    arr[50:150, 50:150] = 10  # 100×100 of 200×200 = 25% coverage
+    buf = io.BytesIO()
+    Image.fromarray(arr, mode="L").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_min_confidence_gates_session_storage(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _low_confidence_frame())
+    # Below the gate: reported (found, low confidence) but NOT stored, so an
+    # untrusted reference can't become the baseline for later offsets.
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1, "min_confidence": 0.35},
+    )
+    body = resp.json()
+    assert body["found"] is True
+    assert body["confidence"] < 0.35
+    assert client.get("/plotter/tip-calibration/status").json()["measured_slots"] == []
+
+    # Without a gate (the default) the same frame is stored.
+    client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1},
+    )
+    assert client.get("/plotter/tip-calibration/status").json()["measured_slots"] == [0]
 
 
 def test_status_and_reset_endpoints(client: TestClient) -> None:
@@ -607,6 +719,25 @@ def test_calibrate_scale_not_found_on_blank(
         json={"camera_url": "cam://x", "known_mm": 20.0},
     )
     assert resp.json()["found"] is False
+
+
+def test_calibrate_scale_light_target(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    # A 40×40 px light square on a dark background.
+    arr = np.full((200, 200), 15, dtype=np.uint8)
+    arr[80:120, 60:100] = 245
+    buf = io.BytesIO()
+    Image.fromarray(arr, mode="L").save(buf, format="PNG")
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: buf.getvalue())
+
+    resp = client.post(
+        "/plotter/tip-calibration/calibrate-scale",
+        json={"camera_url": "cam://x", "known_mm": 20.0, "tip_style": "light"},
+    )
+    body = resp.json()
+    assert body["found"] is True
+    assert body["mm_per_pixel"] == pytest.approx(0.5, abs=0.02)
 
 
 def test_fetch_pen_requires_profile(client: TestClient) -> None:

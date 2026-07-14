@@ -70,8 +70,10 @@ class TipMeasurement:
     annotated_jpeg: bytes | None = None
 
 
-# A detector maps (frame bytes, mm/pixel, threshold, ROI) to a measurement.
-TipDetector = Callable[[bytes, float, int, Roi | None], TipMeasurement]
+# A detector maps (frame bytes, mm/pixel, threshold, ROI, invert) to a
+# measurement. ``invert`` flips the luminance so a *light* tip on a dark
+# station background is detected with the same thresholding as a dark tip.
+TipDetector = Callable[[bytes, float, int, Roi | None, bool], TipMeasurement]
 
 
 def offset_between(pen: TipMeasurement, reference: TipMeasurement) -> tuple[float, float] | None:
@@ -121,6 +123,7 @@ def detect_tip_dark_blob(
     mm_per_pixel: float,
     dark_threshold: int = 80,
     roi: Roi | None = None,
+    invert: bool = False,
 ) -> TipMeasurement:
     """Locate the pen tip as the darkest compact blob in the frame.
 
@@ -130,6 +133,10 @@ def detect_tip_dark_blob(
     frame the blob covers — a sane blob is a small fraction; nothing, or
     almost everything (a mis-lit frame), reads as low confidence.
 
+    ``invert=True`` flips the luminance first, so a **light tip on a dark
+    background** (white gel, pastel, metallic pens) is found with the same
+    logic — the threshold then means "at least this far from black".
+
     Coordinates are returned in **full-frame** pixels (the ROI offset is added
     back), so callers can overlay the marker on the original image.
     """
@@ -137,6 +144,8 @@ def detect_tip_dark_blob(
         return TipMeasurement(found=False, message="mm_per_pixel must be positive")
 
     gray = _decode_gray(frame)
+    if invert:
+        gray = 255 - gray
     off_x, off_y = 0, 0
     if roi is not None:
         x0 = max(0, roi.x)
@@ -202,15 +211,19 @@ def detect_object_extent(
     frame: bytes,
     dark_threshold: int = 80,
     roi: Roi | None = None,
+    invert: bool = False,
 ) -> ScaleMeasurement:
     """Measure the dark target's pixel bounding box, for scale calibration.
 
     The operator presents an object of *known* physical size (e.g. a 10 mm
     square); this returns its width/height in pixels so ``mm_per_pixel`` can be
-    derived as ``known_mm / extent_px``. Same thresholding as the tip detector,
-    but it reports the blob's extent (not its centroid) and marks the box.
+    derived as ``known_mm / extent_px``. Same thresholding as the tip detector
+    (including ``invert`` for a light target on a dark background), but it
+    reports the blob's extent (not its centroid) and marks the box.
     """
     gray = _decode_gray(frame)
+    if invert:
+        gray = 255 - gray
     off_x, off_y = 0, 0
     if roi is not None:
         x0, y0 = max(0, roi.x), max(0, roi.y)
@@ -347,23 +360,32 @@ class TipCalibrator:
         dark_threshold: int = 80,
         roi: Roi | None = None,
         samples: int = 1,
+        invert: bool = False,
+        store: bool = True,
+        min_confidence: float = 0.0,
     ) -> MeasureResult:
         """Grab ``samples`` frame(s) for ``slot`` and detect its tip, storing it.
 
         With ``samples > 1`` the tip is averaged across grabs to reduce
         detector noise. Returns the measurement and — once the reference slot
         has also been measured — the offset this slot implies relative to it.
+        ``store=False`` runs a dry detection: the result is reported but NOT
+        remembered as this slot's tip, so tuning lighting / threshold on the
+        reference slot can't silently corrupt the session's reference. A
+        measurement below ``min_confidence`` is likewise reported but not
+        stored — in particular an untrusted *reference* never becomes the
+        baseline later offsets are silently computed against.
         Raises ``RuntimeError`` only if a frame grab itself fails (propagated
         from the grabber); a frame with no detectable tip is a normal, low/zero
         confidence result, not an error.
         """
         n = max(1, samples)
         shots = [
-            self._detect(self._grab(camera_url), mm_per_pixel, dark_threshold, roi)
+            self._detect(self._grab(camera_url), mm_per_pixel, dark_threshold, roi, invert)
             for _ in range(n)
         ]
         measurement = average_tips(shots)
-        if measurement.found:
+        if store and measurement.found and measurement.confidence >= min_confidence:
             self._tips[slot] = measurement
 
         reference = self._tips.get(reference_slot)

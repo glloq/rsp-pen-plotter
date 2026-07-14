@@ -1,0 +1,208 @@
+# Audit — mesure d'offset de pointe par caméra (2026-07)
+
+> Objectif : auditer la chaîne complète « mesure de l'offset XY du stylo via
+> la caméra » (ADR 0005, `docs/camera_tip_offset.md`), valider qu'elle est
+> fonctionnelle de bout en bout, et vérifier que le système de mesure de la
+> pointe est **simple et intuitif** tout en permettant d'**adapter la mesure à
+> tous les types de pointes**.
+
+Périmètre audité :
+
+- Backend : `pen_plotter/vision/tip_detect.py` (détecteur, session
+  `TipCalibrator`), `pen_plotter/api/tip_calibration.py` (endpoints measure /
+  status / reset / calibrate-scale / gpio / light), `models.py`
+  (`TipCalibrationConfig`, `PenSlot.xy_offset_mm`), `core/gcode.py`
+  (application de l'offset + garde-fou d'enveloppe).
+- Frontend : `OffsetCameraSettings.vue` (panneau guidé), `CameraPreview.vue`
+  (aperçu live + ROI par glisser), `MagazineEditor.vue` (raccourci),
+  `api/client.ts`, locales `en`/`fr`.
+- Docs opérateur : `wiki/Offset-Camera.md`, `docs/profile_format.md`.
+
+---
+
+## 1. Verdict d'ensemble
+
+La fonctionnalité est **complète et opérationnelle** : détection (`dark_blob`
+Pillow+NumPy testée sur images synthétiques), session relative au stylo de
+référence, moyenne médiane multi-images avec signal de répétabilité
+(`spread_mm`), aperçu annoté systématique, trajet guidé vers la station,
+récupération automatique du stylo (magasins host-macro/firmware), éclairage
+GPIO, assistant mm/pixel, application de l'offset au G-code strictement
+opt-in (`apply_pen_offsets`) et limitée aux traits de dessin, avec
+élargissement du contrôle de limites (`_pen_offset_envelope`).
+
+État des tests avant correctifs : **42 tests backend** (tip_calibration +
+pen_offset) et **44 tests frontend** (OffsetCameraSettings, MagazineEditor,
+CameraPreview) passaient tous ; lint/format/typecheck propres (les 8 erreurs
+mypy présentes sont préexistantes sur `main` et hors périmètre).
+
+Côté ergonomie, le flux est bien guidé : interrupteur maître → étape 1
+caméra + aperçu live avec zone de détection dessinable à la souris → étape 2
+échelle (assistant « objet de taille connue ») → étape 3 mesure par stylo avec
+badges de provenance (référence / mesuré / manuel / à faire), chips de
+prérequis (caméra / échelle / référence), assistant pas-à-pas
+(« mesure guidée ») référence d'abord, test de détection à blanc, et
+garde-fous côté UI (confiance < 35 % non appliquée, offset > 50 mm signalé,
+instabilité inter-images > 1,5 mm signalée). La saisie manuelle sans caméra
+reste disponible partout (profil `offset_source: manual`).
+
+Deux vrais défauts ont été trouvés et **corrigés dans ce même changement**
+(§2) ; le reste est constaté sain ou consigné en recommandations (§3).
+
+---
+
+## 2. Défauts corrigés
+
+### 2.1 « Tester la détection » écrasait la référence de la session
+
+`onTestDetection` appelait `POST /plotter/tip-calibration/measure` avec
+`slot = reference_slot`, et le backend **stockait** toute mesure trouvée dans
+la session (`TipCalibrator._tips`). Un essai de réglage (éclairage, seuil,
+zone) fait avec un objet quelconque remplaçait donc silencieusement la mesure
+de référence ; les offsets mesurés ensuite étaient calculés contre cette
+image de test et **appliqués** au profil sans que rien ne le signale.
+
+**Correctif** : nouveau champ `dry_run` sur la requête de mesure →
+`TipCalibrator.measure(..., store=False)` détecte et rapporte sans rien
+mémoriser ; l'UI l'envoie pour le test de détection. Tests :
+`test_dry_run_does_not_store_the_measurement`,
+`test_dry_run_does_not_overwrite_the_reference`, et assertion `dry_run: true`
+côté frontend.
+
+### 2.2 Types de pointes : les pointes claires étaient immesurables
+
+Seul le mode « pointe sombre sur fond clair » existait. Un stylo gel blanc,
+pastel ou métallique — pointe claire — était indétectable quel que soit le
+réglage de `dark_threshold`, alors que l'exigence est d'adapter la mesure à
+tous les types de pointes.
+
+**Correctif** : champ `tip_style: "dark" | "light"` sur
+`TipCalibrationConfig` et sur les requêtes de mesure **et** de calibrage
+d'échelle. `"light"` inverse la luminance avant seuillage : même détecteur,
+même seuil, même centroïde — l'opérateur choisit simplement un fond de
+station contrastant et règle un sélecteur « Type de pointe » placé à
+l'étape 1, à côté de la caméra (pas enfoui dans « Avancé »). Libellés FR/EN
+explicites (« Pointe sombre sur fond clair (la plupart des stylos) » /
+« Pointe claire sur fond sombre (gel blanc, pastel, métallique) »). Tests :
+détecteur (`test_light_tip_found_with_invert`), endpoint
+(`test_measure_endpoint_light_tip_style`), échelle
+(`test_calibrate_scale_light_target`), UI (persistance + envoi du style).
+
+Pour les autres axes d'adaptation, déjà couverts : seuil réglable (pointes
+pâles/grises), zone de détection ROI (pointes fines dans un cadre encombré,
+excluant le corps du stylo), `samples` 1–20 avec médiane (pointes brillantes
+au rendu instable), mm/pixel par assistant (toute focale/distance).
+
+---
+
+## 3. Constats sains et recommandations (non bloquants)
+
+Les trois premières recommandations ci-dessous ont été **implémentées dans un
+second lot** (voir §5) ; elles sont conservées ici comme constat d'audit.
+
+- **Application G-code** : offset ajouté après `transform`, uniquement aux
+  polylignes de dessin ; jamais aux points d'engagement magasin / parking /
+  changement d'outil. Offsets nuls ⇒ G-code identique octet pour octet
+  (couvert par `test_pen_offset.py`).
+- **Chip « échelle » toujours vert** *(corrigé, §5.1)* : `mm_per_pixel > 0`
+  est garanti par le modèle, donc l'indicateur de prérequis ne détectait pas
+  une échelle jamais calibrée (défaut 0,1 plausible).
+- **Référence basse confiance** *(corrigé, §5.2)* : une mesure de référence
+  sous le seuil UI (35 %) n'était pas appliquée au profil mais restait
+  stockée dans la session ; les offsets suivants se calculaient contre elle.
+- **Changement de `reference_slot` a posteriori** *(corrigé, §5.3)* : les
+  offsets déjà mesurés restaient relatifs à l'ancienne référence sans
+  invalidation ni avertissement.
+- **Clés i18n `offsetCamera.next.zone` / `next.light`** référencées
+  dynamiquement mais inatteignables (seuls les prérequis bloquants
+  alimentent `setupHint`) — aucun impact, à nettoyer à l'occasion.
+- **Biais de forme de pointe** (physique, documenté) : le centroïde d'un
+  pinceau ne coïncide pas avec son point de contact comme pour une pointe
+  conique ; la mesure étant relative, le biais ne s'annule qu'entre pointes
+  de forme comparable. Le ROI serré + l'aperçu annoté restent les
+  mitigations ; l'`aruco` sub-pixel (différé, ADR 0005) n'y changerait rien.
+
+---
+
+## 4. Validation après correctifs
+
+- Backend : `pytest tests/test_tip_calibration.py tests/test_pen_offset.py`
+  → **47 passed** ; `ruff check` / `ruff format --check` propres ; contrats
+  (`check_contracts.py`) OK ; `openapi.json` et `api-types.ts` régénérés.
+- Frontend : `vitest` OffsetCameraSettings + MagazineEditor + CameraPreview
+  → **45 passed** ; `vue-tsc --noEmit` et `eslint` propres ; parité de clés
+  FR/EN vérifiée.
+
+---
+
+## 5. Améliorations post-audit (second lot)
+
+### 5.1 Provenance de l'échelle (`scale_source`)
+
+`TipCalibrationConfig.scale_source: "unset" | "manual" | "measured"`. Une
+config fraîche créée par l'UI démarre à `"unset"` : le chip « échelle » reste
+orange et la mesure caméra est bloquée tant que l'opérateur n'a pas saisi une
+échelle (→ `"manual"`) ou lancé l'assistant mm/pixel (→ `"measured"`). Les
+YAML existants sans le champ prennent `"manual"` par défaut et continuent de
+mesurer sans friction.
+
+### 5.2 Garde-fou serveur `min_confidence`
+
+`POST /tip-calibration/measure` accepte `min_confidence` (0–1, défaut 0) :
+une détection sous ce seuil est rapportée mais **jamais stockée** dans la
+session — une référence douteuse ne peut plus devenir silencieusement la
+base des offsets suivants. L'UI envoie son propre seuil (0,35), alignant les
+deux gardes. Test : `test_min_confidence_gates_session_storage`.
+
+### 5.3 Invalidation au changement de référence
+
+Changer `reference_slot` réinitialise la session de mesure backend (les
+anciennes mesures se rapportent à l'ancienne référence, mélanger serait
+faux) et, si des offsets `vision` préexistent sur le profil, affiche un
+avertissement invitant à remesurer (référence d'abord) — dissipé dès la
+première mesure appliquée.
+
+Validation du lot : backend 42/42 (tip_calibration) et suite complète verte,
+frontend 38/38 (OffsetCameraSettings) et suite complète verte,
+`vue-tsc` / `eslint` / `ruff` propres, `openapi.json` + `api-types.ts`
+régénérés, `profile_format.md` mis à jour.
+
+---
+
+## 6. Refonte du réglage de la détection (troisième lot)
+
+Objectif : un panneau de réglage **propre et intuitif** avec un **retour
+d'information immédiat**, au lieu de champs dispersés entre l'étape 1 et le
+repli « Avancé ».
+
+Nouveau composant `TipDetectionTuner.vue`, intégré à l'étape 1 de
+`OffsetCameraSettings.vue` (qui perd ~150 lignes au passage) :
+
+- **Une seule surface de réglage** : aperçu live (zone de détection
+  dessinable), type de pointe, **seuil en curseur** (0–255, aperçu pendant le
+  glissement, enregistrement au relâchement — pas une sauvegarde de profil
+  par pixel) doublé d'un champ numérique, et images à moyenner — le seuil et
+  les échantillons quittent « Avancé » pour vivre à côté du retour visuel
+  qu'ils influencent.
+- **Jauge de confiance** : chaque test à blanc affiche une barre 0–100 %
+  (verte au-dessus du seuil de confiance de 35 %, orange en dessous) avec le
+  **seuil de confiance matérialisé sur la barre**, le pourcentage, la note de
+  répétabilité et l'image annotée. Un échec caméra ou une absence de pointe
+  restent des messages explicites.
+- **Re-test automatique** : une case « Re-test automatique après chaque
+  réglage » relance le test à blanc (débouncé à 600 ms) après chaque
+  modification enregistrée du type de pointe, du seuil, des échantillons ou
+  de la zone — la jauge suit les réglages en continu, toujours en `dry_run`
+  (rien n'est jamais écrit depuis ce panneau).
+- **Contrat propre** : le tuner émet des patches `update:config` ; la
+  persistance du profil reste dans le parent. Les `data-test` historiques
+  (`tip-style`, `tip-test`, `tip-test-msg`, `tip-dark-threshold`,
+  `tip-samples`…) sont conservés, donc les tests existants passent sans
+  modification.
+
+Tests : nouveau `TipDetectionTuner.test.ts` (13 tests — patches émis,
+curseur live vs commit, clamps, jauge verte/orange/vide, marqueur du seuil,
+re-test auto immédiat + débouncé, pas de re-test quand désactivé, bouton
+désactivé sans URL, erreur caméra) ; les 38 tests du parent inchangés.
+Suite frontend complète : **1001 tests verts** ; `vue-tsc` / `eslint`
+propres. Wiki opérateur mis à jour (panneau « Réglage de la détection »).
