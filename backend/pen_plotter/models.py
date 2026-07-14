@@ -137,6 +137,12 @@ class TipCalibrationConfig(BaseModel):
     station_z_mm: float | None = None
     reference_slot: int = Field(default=0, ge=0)
     mm_per_pixel: float = Field(gt=0.0)
+    # Provenance of ``mm_per_pixel``, so the UI can tell a scale that was
+    # actually set (typed or measured by the assistant) from the placeholder a
+    # fresh config starts with, and gate camera measurement until then.
+    # Defaults to "manual" so legacy YAML (which has a real, working value but
+    # no provenance) keeps measuring; the UI writes "unset" on new configs.
+    scale_source: Literal["unset", "manual", "measured"] = "manual"
     detector: Literal["dark_blob"] = "dark_blob"
     # What the camera sees: a "dark" tip on a light background (the default;
     # most inked / felt / fineliner tips) or a "light" tip on a dark

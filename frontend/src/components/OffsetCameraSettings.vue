@@ -121,8 +121,16 @@ const hasMagazine = computed(() => {
   return method === 'carousel' || method === 'rack'
 })
 
+// Provenance of the scale. Legacy configs (no scale_source field) carry a
+// real, working value → treat as 'manual' so they keep measuring; only a
+// fresh config (which the UI writes as 'unset') gates measurement until the
+// operator types or measures a scale.
+const scaleSource = computed<'unset' | 'manual' | 'measured'>(
+  () => tipConfig.value?.scale_source ?? 'manual',
+)
+
 const scaleLabel = computed(() =>
-  tipConfig.value
+  tipConfig.value && scaleSource.value !== 'unset'
     ? t('offsetCamera.scaleSet', { v: tipConfig.value.mm_per_pixel })
     : t('offsetCamera.scaleUnset'),
 )
@@ -147,6 +155,9 @@ function defaultTipConfig(): TipCalibrationConfig {
     station_position: null,
     reference_slot: 0,
     mm_per_pixel: 0.1,
+    // Placeholder value: the scale chip stays amber (and measurement gated)
+    // until the operator types a real scale or runs the assistant.
+    scale_source: 'unset',
     detector: 'dark_blob',
     tip_style: 'dark',
     dark_threshold: 80,
@@ -181,6 +192,28 @@ function onPickCamera(url: string): void {
 function onSamples(raw: string): void {
   const v = Math.floor(Number(raw))
   onTipConfig({ samples: Number.isFinite(v) ? Math.min(20, Math.max(1, v)) : 1 })
+}
+
+// Typing a scale by hand is a real calibration → provenance 'manual'.
+function onMmPerPixel(raw: string): void {
+  const v = Number(raw)
+  if (!Number.isFinite(v) || v <= 0) return
+  onTipConfig({ mm_per_pixel: v, scale_source: 'manual' })
+}
+
+// Changing the reference redefines what "zero offset" means: the session's
+// stored measurements and any vision offsets on the profile relate to the
+// OLD reference. Reset the session so old and new measurements can't be
+// mixed, and warn when camera-measured offsets predate the change (they
+// should be re-measured against the new reference).
+const refChangedWarning = ref(false)
+
+function onReferenceSlot(raw: string): void {
+  const v = Math.max(0, Math.floor(Number(raw)))
+  if (!Number.isFinite(v) || v === tipConfig.value?.reference_slot) return
+  onTipConfig({ reference_slot: v })
+  void onResetMeasurements()
+  refChangedWarning.value = pens.value.some((p) => p.offset_source === 'vision')
 }
 
 // Session-local per-measurement options.
@@ -319,7 +352,9 @@ const readiness = computed<ReadinessItem[]>(() => {
   if (!cfg) return []
   return [
     { key: 'camera', ok: cfg.camera_url.trim().length > 0, optional: false },
-    { key: 'scale', ok: cfg.mm_per_pixel > 0, optional: false },
+    // A positive mm_per_pixel is guaranteed by the model, so the meaningful
+    // signal is its provenance: amber until typed or measured.
+    { key: 'scale', ok: cfg.mm_per_pixel > 0 && scaleSource.value !== 'unset', optional: false },
     {
       key: 'reference',
       ok: pens.value.some((p) => p.installed && p.index === cfg.reference_slot),
@@ -418,6 +453,9 @@ async function onMeasure(pen: PenSlot): Promise<void> {
       dark_threshold: cfg.dark_threshold,
       samples: cfg.samples,
       roi: cfg.roi,
+      // Server-side mirror of the UI gate: an untrusted detection is never
+      // stored in the session, so it can't silently become the reference.
+      min_confidence: MIN_CONFIDENCE,
       fetch_pen: fetchPen.value,
       move_to_station: autoMove.value && cfg.station_position != null,
       station_position: cfg.station_position ?? null,
@@ -432,6 +470,9 @@ async function onMeasure(pen: PenSlot): Promise<void> {
     if (ok && (m.is_reference || m.offset_mm)) {
       const offset: Point = m.offset_mm ?? { x: 0, y: 0 }
       await patchPen(pen.index, { xy_offset_mm: offset, offset_source: 'vision' })
+      // The operator is re-measuring against the new reference — the
+      // "reference changed" nudge has served its purpose.
+      refChangedWarning.value = false
     }
     measureState[pen.index] = { busy: false, message, ok, image: m.annotated_image }
   } catch (err) {
@@ -593,7 +634,7 @@ async function onCalibrateScale(): Promise<void> {
     })
     scaleState.image = r.annotated_image
     if (r.found && r.mm_per_pixel) {
-      onTipConfig({ mm_per_pixel: Number(r.mm_per_pixel.toFixed(5)) })
+      onTipConfig({ mm_per_pixel: Number(r.mm_per_pixel.toFixed(5)), scale_source: 'measured' })
       scaleState.ok = true
       scaleState.message = t('magazine.scaleApplied', {
         v: r.mm_per_pixel.toFixed(4),
@@ -791,10 +832,7 @@ onUnmounted(() => clearTimeout(savedTimer))
                     :disabled="saving"
                     class="mt-0.5 w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
                     data-test="tip-mm-per-pixel"
-                    @change="
-                      (e) =>
-                        onTipConfig({ mm_per_pixel: Number((e.target as HTMLInputElement).value) })
-                    "
+                    @change="(e) => onMmPerPixel((e.target as HTMLInputElement).value)"
                   />
                 </label>
                 <span class="pb-1 text-[10px] text-slate-500">{{
@@ -867,15 +905,7 @@ onUnmounted(() => clearTimeout(savedTimer))
                     :disabled="saving"
                     class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-100"
                     data-test="tip-reference-slot"
-                    @change="
-                      (e) =>
-                        onTipConfig({
-                          reference_slot: Math.max(
-                            0,
-                            Math.floor(Number((e.target as HTMLInputElement).value)),
-                          ),
-                        })
-                    "
+                    @change="(e) => onReferenceSlot((e.target as HTMLInputElement).value)"
                   />
                 </label>
                 <label class="block text-[11px] text-slate-400"
@@ -1174,6 +1204,13 @@ onUnmounted(() => clearTimeout(savedTimer))
             data-test="offset-next-action"
           >
             {{ cameraMeasurementReady ? '✓' : '⚠' }} {{ setupHint }}
+          </p>
+          <p
+            v-if="refChangedWarning"
+            class="mb-1 rounded border border-amber-800 bg-amber-950/30 px-2 py-1 text-[11px] text-amber-200"
+            data-test="ref-changed-warn"
+          >
+            ⚠ {{ t('offsetCamera.refChanged') }}
           </p>
           <p
             v-if="canMeasure && !hasMagazine"

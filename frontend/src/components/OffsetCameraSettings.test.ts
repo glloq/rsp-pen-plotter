@@ -14,13 +14,14 @@ const measureSpy = vi.hoisted(() => vi.fn())
 const lightSpy = vi.hoisted(() => vi.fn())
 const gpioSpy = vi.hoisted(() => vi.fn())
 const scaleSpy = vi.hoisted(() => vi.fn())
+const resetSpy = vi.hoisted(() => vi.fn())
 
 vi.mock('../api/client', async (importActual) => {
   const actual = await importActual<typeof import('../api/client')>()
   return {
     ...actual,
     measureTipOffset: measureSpy,
-    resetTipCalibration: vi.fn(),
+    resetTipCalibration: resetSpy,
     setTipLight: lightSpy,
     getTipGpio: gpioSpy,
     calibrateTipScale: scaleSpy,
@@ -114,6 +115,7 @@ const i18n = createI18n({
         tipStyleDark: 'Dark tip on light background',
         tipStyleLight: 'Light tip on dark background',
         tipStyleHint: 'match the station background',
+        refChanged: 'Reference changed — re-measure the pens',
         testResult: 'Detected {c}%',
         samples: 'Frames to average',
         largeOffset: '⚠ large offset ({mm} mm)',
@@ -230,6 +232,8 @@ describe('OffsetCameraSettings', () => {
     gpioSpy.mockReset()
     gpioSpy.mockResolvedValue({ available: true, pins: [17, 18, 27] })
     scaleSpy.mockReset()
+    resetSpy.mockReset()
+    resetSpy.mockResolvedValue(undefined)
   })
 
   it('hides the feature for a single-pen profile', async () => {
@@ -731,10 +735,76 @@ describe('OffsetCameraSettings', () => {
     await wrapper.find('[data-test="tip-scale-measure"]').trigger('click')
     await flushPromises()
     expect(scaleSpy).toHaveBeenCalledWith(expect.objectContaining({ known_mm: 20 }))
-    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.mm_per_pixel).toBe(
-      0.5,
-    )
+    const savedCfg = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration
+    expect(savedCfg?.mm_per_pixel).toBe(0.5)
+    expect(savedCfg?.scale_source).toBe('measured') // provenance recorded
     expect(wrapper.find('[data-test="tip-scale-preview"]').exists()).toBe(true)
+  })
+
+  it('gates measurement until the scale is set, then records manual provenance', async () => {
+    withStation({ scale_source: 'unset' })
+    const wrapper = mountPanel()
+    await flushPromises()
+    // Fresh config: scale never typed nor measured → amber chip, blocked.
+    expect(wrapper.find('[data-test="tip-ready-scale"]').text()).toContain('⚠')
+    expect((wrapper.find('[data-test="pen-measure-1"]').element as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    // Typing a scale by hand unblocks and records 'manual' provenance.
+    const input = wrapper.find('[data-test="tip-mm-per-pixel"]')
+    await input.setValue('0.05')
+    await input.trigger('change')
+    await nextTick()
+    const saved = (saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration
+    expect(saved?.mm_per_pixel).toBe(0.05)
+    expect(saved?.scale_source).toBe('manual')
+    await flushPromises()
+    expect(wrapper.find('[data-test="tip-ready-scale"]').text()).toContain('✓')
+  })
+
+  it('treats a legacy config without scale_source as already calibrated', async () => {
+    withStation() // no scale_source field, mm_per_pixel 0.1 — pre-existing YAML
+    const wrapper = mountPanel()
+    await flushPromises()
+    expect(wrapper.find('[data-test="tip-ready-scale"]').text()).toContain('✓')
+    expect(
+      (wrapper.find('[data-test="pen-measure-1"]').element as HTMLButtonElement).disabled,
+    ).toBe(false)
+  })
+
+  it('sends the confidence gate with each measurement', async () => {
+    withStation()
+    const wrapper = mountPanel()
+    await flushPromises()
+    await wrapper.find('[data-test="pen-measure-1"]').trigger('click')
+    await flushPromises()
+    expect(measureSpy).toHaveBeenCalledWith(expect.objectContaining({ min_confidence: 0.35 }))
+  })
+
+  it('resets the session and warns when the reference slot changes', async () => {
+    withStation()
+    const job = useJobStore()
+    job.profiles[0]!.pens![1]!.offset_source = 'vision'
+    job.profiles[0]!.pens![1]!.xy_offset_mm = { x: 2, y: 1 }
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    const input = wrapper.find('[data-test="tip-reference-slot"]')
+    await input.setValue('1')
+    await input.trigger('change')
+    await flushPromises()
+
+    // Old measurements relate to the old reference: session reset + nudge.
+    expect(resetSpy).toHaveBeenCalled()
+    expect((saveSpy.mock.calls.at(-1)![0] as MachineProfile).tip_calibration?.reference_slot).toBe(
+      1,
+    )
+    expect(wrapper.find('[data-test="ref-changed-warn"]').exists()).toBe(true)
+
+    // Re-measuring a pen against the new reference dismisses the nudge.
+    await wrapper.find('[data-test="pen-measure-0"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="ref-changed-warn"]').exists()).toBe(false)
   })
 
   it('passes fetch_pen when the load-from-magazine toggle is on', async () => {

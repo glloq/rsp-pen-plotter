@@ -59,6 +59,10 @@ class TipMeasureRequest(BaseModel):
     # slot's tip. Used by the UI's "Test detection" so tuning lighting /
     # threshold can't silently overwrite the session's reference measurement.
     dry_run: bool = False
+    # Detections below this confidence are reported but never stored in the
+    # session, so an untrusted reference can't silently become the baseline
+    # later offsets are computed against. 0 keeps the permissive behaviour.
+    min_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     # Optional guided travel: when ``move_to_station`` is set, the head is
     # moved to ``station_position`` (machine mm) before the frame is grabbed,
     # so the operator need not jog by hand. Requires a connected plotter and
@@ -204,6 +208,7 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
             samples=req.samples,
             invert=req.tip_style == "light",
             store=not req.dry_run,
+            min_confidence=req.min_confidence,
         )
     except Exception as exc:  # frame grab / decode failure
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc

@@ -4191,6 +4191,16 @@
             "title": "Samples",
             "type": "integer"
           },
+          "scale_source": {
+            "default": "manual",
+            "enum": [
+              "unset",
+              "manual",
+              "measured"
+            ],
+            "title": "Scale Source",
+            "type": "string"
+          },
           "station_position": {
             "anyOf": [
               {
@@ -4325,6 +4335,13 @@
               }
             ],
             "title": "Light Gpio Pin"
+          },
+          "min_confidence": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Min Confidence",
+            "type": "number"
           },
           "mm_per_pixel": {
             "exclusiveMinimum": 0.0,

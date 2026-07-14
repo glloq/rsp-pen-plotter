@@ -362,6 +362,7 @@ class TipCalibrator:
         samples: int = 1,
         invert: bool = False,
         store: bool = True,
+        min_confidence: float = 0.0,
     ) -> MeasureResult:
         """Grab ``samples`` frame(s) for ``slot`` and detect its tip, storing it.
 
@@ -370,7 +371,10 @@ class TipCalibrator:
         has also been measured — the offset this slot implies relative to it.
         ``store=False`` runs a dry detection: the result is reported but NOT
         remembered as this slot's tip, so tuning lighting / threshold on the
-        reference slot can't silently corrupt the session's reference.
+        reference slot can't silently corrupt the session's reference. A
+        measurement below ``min_confidence`` is likewise reported but not
+        stored — in particular an untrusted *reference* never becomes the
+        baseline later offsets are silently computed against.
         Raises ``RuntimeError`` only if a frame grab itself fails (propagated
         from the grabber); a frame with no detectable tip is a normal, low/zero
         confidence result, not an error.
@@ -381,7 +385,7 @@ class TipCalibrator:
             for _ in range(n)
         ]
         measurement = average_tips(shots)
-        if store and measurement.found:
+        if store and measurement.found and measurement.confidence >= min_confidence:
             self._tips[slot] = measurement
 
         reference = self._tips.get(reference_slot)

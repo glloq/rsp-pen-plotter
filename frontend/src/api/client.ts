@@ -212,6 +212,11 @@ export interface TipCalibrationConfig {
   station_z_mm?: number | null
   reference_slot: number
   mm_per_pixel: number
+  // Provenance of mm_per_pixel: 'unset' (fresh config placeholder — camera
+  // measurement is gated until the scale is typed or measured), 'manual'
+  // (typed; also what legacy configs without the field default to) or
+  // 'measured' (set by the mm-per-pixel assistant).
+  scale_source?: 'unset' | 'manual' | 'measured'
   detector: 'dark_blob'
   // What the camera sees: a dark tip on a light background (default) or a
   // light tip (white gel / pastel / metallic) on a dark background — the
@@ -306,6 +311,9 @@ export interface TipMeasureRequest {
   // tip — the UI's "Test detection" uses it so tuning can't corrupt the
   // session's stored reference.
   dry_run?: boolean
+  // Detections below this confidence are reported but never stored in the
+  // session (an untrusted reference can't become the offsets' baseline).
+  min_confidence?: number
   // Optional guided travel: move the head to station_position (needs a
   // connected plotter + profile_name) before grabbing the frame.
   move_to_station?: boolean

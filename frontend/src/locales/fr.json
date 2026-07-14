@@ -1991,6 +1991,7 @@
     "tipStyleDark": "Pointe sombre sur fond clair (la plupart des stylos)",
     "tipStyleLight": "Pointe claire sur fond sombre (gel blanc, pastel, métallique)",
     "tipStyleHint": "Choisis un fond de station qui contraste avec le stylo, puis règle ce paramètre en conséquence — tous les types de pointes deviennent mesurables.",
+    "refChanged": "Référence modifiée — les mesures caméra existantes se rapportent à l'ancienne référence. Remesure les stylos (la référence d'abord).",
     "testResult": "Détecté ({c} % de confiance)",
     "samples": "Images à moyenner",
     "largeOffset": "⚠ offset élevé ({mm} mm) — vérifie l'image marquée",

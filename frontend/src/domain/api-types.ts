@@ -4030,6 +4030,12 @@ export interface components {
              * @default 1
              */
             samples: number;
+            /**
+             * Scale Source
+             * @default manual
+             * @enum {string}
+             */
+            scale_source: "unset" | "manual" | "measured";
             station_position?: components["schemas"]["Point"] | null;
             /** Station Z Mm */
             station_z_mm?: number | null;
@@ -4099,6 +4105,11 @@ export interface components {
             light_active_high: boolean;
             /** Light Gpio Pin */
             light_gpio_pin?: number | null;
+            /**
+             * Min Confidence
+             * @default 0
+             */
+            min_confidence: number;
             /** Mm Per Pixel */
             mm_per_pixel: number;
             /**

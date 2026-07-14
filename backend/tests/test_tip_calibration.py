@@ -373,6 +373,41 @@ def test_dry_run_does_not_overwrite_the_reference(client: TestClient) -> None:
     assert pen.json()["offset_mm"]["x"] == pytest.approx(3.0, abs=0.2)
 
 
+def _low_confidence_frame(size: tuple[int, int] = (200, 200)) -> bytes:
+    """A frame whose dark blob swamps ~25% of it → found, but low confidence."""
+    w, h = size
+    arr = np.full((h, w), 240, dtype=np.uint8)
+    arr[50:150, 50:150] = 10  # 100×100 of 200×200 = 25% coverage
+    buf = io.BytesIO()
+    Image.fromarray(arr, mode="L").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_min_confidence_gates_session_storage(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api._calibrator, "_grab", lambda url: _low_confidence_frame())
+    # Below the gate: reported (found, low confidence) but NOT stored, so an
+    # untrusted reference can't become the baseline for later offsets.
+    resp = client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1, "min_confidence": 0.35},
+    )
+    body = resp.json()
+    assert body["found"] is True
+    assert body["confidence"] < 0.35
+    assert client.get("/plotter/tip-calibration/status").json()["measured_slots"] == []
+
+    # Without a gate (the default) the same frame is stored.
+    client.post(
+        "/plotter/tip-calibration/measure",
+        json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1},
+    )
+    assert client.get("/plotter/tip-calibration/status").json()["measured_slots"] == [0]
+
+
 def test_status_and_reset_endpoints(client: TestClient) -> None:
     client.post(
         "/plotter/tip-calibration/measure",

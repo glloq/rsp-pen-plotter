@@ -97,24 +97,22 @@ au rendu instable), mm/pixel par assistant (toute focale/distance).
 
 ## 3. Constats sains et recommandations (non bloquants)
 
+Les trois premières recommandations ci-dessous ont été **implémentées dans un
+second lot** (voir §5) ; elles sont conservées ici comme constat d'audit.
+
 - **Application G-code** : offset ajouté après `transform`, uniquement aux
   polylignes de dessin ; jamais aux points d'engagement magasin / parking /
   changement d'outil. Offsets nuls ⇒ G-code identique octet pour octet
   (couvert par `test_pen_offset.py`).
-- **Chip « échelle » toujours vert** : `mm_per_pixel > 0` est garanti par le
-  modèle, donc l'indicateur de prérequis ne détecte pas une échelle jamais
-  calibrée (défaut 0,1 plausible). Recommandation : tracer la provenance de
-  l'échelle (comme `offset_source`) ou marquer le chip « à vérifier » tant
-  que l'assistant n'a pas tourné.
-- **Référence basse confiance** : une mesure de référence sous le seuil UI
-  (35 %) n'est pas appliquée au profil mais reste stockée dans la session ;
-  les offsets suivants se calculent contre elle. L'opérateur a vu
-  l'avertissement, mais un garde-fou serveur (ne pas stocker sous un
-  `min_confidence`) serait plus sûr.
-- **Changement de `reference_slot` a posteriori** : les offsets déjà mesurés
-  restent relatifs à l'ancienne référence sans invalidation ni avertissement.
-  Recommandation : à la modification, proposer une remise à zéro des
-  provenances `vision`.
+- **Chip « échelle » toujours vert** *(corrigé, §5.1)* : `mm_per_pixel > 0`
+  est garanti par le modèle, donc l'indicateur de prérequis ne détectait pas
+  une échelle jamais calibrée (défaut 0,1 plausible).
+- **Référence basse confiance** *(corrigé, §5.2)* : une mesure de référence
+  sous le seuil UI (35 %) n'était pas appliquée au profil mais restait
+  stockée dans la session ; les offsets suivants se calculaient contre elle.
+- **Changement de `reference_slot` a posteriori** *(corrigé, §5.3)* : les
+  offsets déjà mesurés restaient relatifs à l'ancienne référence sans
+  invalidation ni avertissement.
 - **Clés i18n `offsetCamera.next.zone` / `next.light`** référencées
   dynamiquement mais inatteignables (seuls les prérequis bloquants
   alimentent `setupHint`) — aucun impact, à nettoyer à l'occasion.
@@ -134,3 +132,37 @@ au rendu instable), mm/pixel par assistant (toute focale/distance).
 - Frontend : `vitest` OffsetCameraSettings + MagazineEditor + CameraPreview
   → **45 passed** ; `vue-tsc --noEmit` et `eslint` propres ; parité de clés
   FR/EN vérifiée.
+
+---
+
+## 5. Améliorations post-audit (second lot)
+
+### 5.1 Provenance de l'échelle (`scale_source`)
+
+`TipCalibrationConfig.scale_source: "unset" | "manual" | "measured"`. Une
+config fraîche créée par l'UI démarre à `"unset"` : le chip « échelle » reste
+orange et la mesure caméra est bloquée tant que l'opérateur n'a pas saisi une
+échelle (→ `"manual"`) ou lancé l'assistant mm/pixel (→ `"measured"`). Les
+YAML existants sans le champ prennent `"manual"` par défaut et continuent de
+mesurer sans friction.
+
+### 5.2 Garde-fou serveur `min_confidence`
+
+`POST /tip-calibration/measure` accepte `min_confidence` (0–1, défaut 0) :
+une détection sous ce seuil est rapportée mais **jamais stockée** dans la
+session — une référence douteuse ne peut plus devenir silencieusement la
+base des offsets suivants. L'UI envoie son propre seuil (0,35), alignant les
+deux gardes. Test : `test_min_confidence_gates_session_storage`.
+
+### 5.3 Invalidation au changement de référence
+
+Changer `reference_slot` réinitialise la session de mesure backend (les
+anciennes mesures se rapportent à l'ancienne référence, mélanger serait
+faux) et, si des offsets `vision` préexistent sur le profil, affiche un
+avertissement invitant à remesurer (référence d'abord) — dissipé dès la
+première mesure appliquée.
+
+Validation du lot : backend 42/42 (tip_calibration) et suite complète verte,
+frontend 38/38 (OffsetCameraSettings) et suite complète verte,
+`vue-tsc` / `eslint` / `ruff` propres, `openapi.json` + `api-types.ts`
+régénérés, `profile_format.md` mis à jour.
