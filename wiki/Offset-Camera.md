@@ -95,19 +95,27 @@ automatically). The panel is a short guided flow:
      light tip on a dark background (white gel, pastel, metallic). Pick the
      station background that contrasts with the pen and match this setting;
      it applies to tip measurement *and* scale calibration.
-   - **Dark threshold** *(Advanced)* — the luminance cutoff for "tip" (0–255).
-     Raise it if the tip is faint; lower it if shadows are picked up. (With a
-     *light* tip type the same knob works on the inverted image.)
-   - **Frames to average** *(Advanced)* — grab several frames per measurement
+   - **Dark threshold** *(Detection tuning)* — the luminance cutoff for "tip"
+     (0–255), as a slider + number field. Raise it if the tip is faint; lower
+     it if shadows are picked up. (With a *light* tip type the same knob works
+     on the inverted image.)
+   - **Frames to average** *(Detection tuning)* — grab several frames per measurement
      (1–20) and take the **median** tip, so noise and the odd bad frame are
      rejected. Higher is steadier but slower; leave at `1` for a clean,
      well-lit station. When >1, the result reports a repeatability figure
      (*±X mm*) and warns if the frames disagree too much.
 
-Use **🔍 Test detection** (under the camera) to dry-run the detector and see
-the confidence + marked frame **without writing any offset** — handy for
-tuning the zone, threshold and lighting. A measurement below ~35% confidence
-is reported but **not applied**, so a bad detection can't corrupt an offset.
+Use the **Detection tuning** panel (under the camera) to dial the detector
+in with immediate feedback: the live feed (drag the detection zone straight
+on it), the **Tip type** select, a **threshold slider** (drag to preview,
+release to save) and the frames-to-average count sit next to a
+**🔍 Test detection** button that dry-runs the detector — the result shows a
+**confidence meter** with the 35% trust gate marked on the bar, a
+repeatability note and the marked frame, all **without writing any offset**.
+Tick **Auto re-test after each adjustment** and every saved tuning change
+re-runs the test on its own, so the meter tracks the knobs while you tune. A
+measurement below ~35% confidence is reported but **not applied**, so a bad
+detection can't corrupt an offset.
 
 Or set it straight in the profile YAML — see
 [`docs/profile_format.md`](../docs/profile_format.md#tipcalibrationconfig-camera-offset-station-adr-0005):

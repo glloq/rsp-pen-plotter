@@ -166,3 +166,43 @@ Validation du lot : backend 42/42 (tip_calibration) et suite complète verte,
 frontend 38/38 (OffsetCameraSettings) et suite complète verte,
 `vue-tsc` / `eslint` / `ruff` propres, `openapi.json` + `api-types.ts`
 régénérés, `profile_format.md` mis à jour.
+
+---
+
+## 6. Refonte du réglage de la détection (troisième lot)
+
+Objectif : un panneau de réglage **propre et intuitif** avec un **retour
+d'information immédiat**, au lieu de champs dispersés entre l'étape 1 et le
+repli « Avancé ».
+
+Nouveau composant `TipDetectionTuner.vue`, intégré à l'étape 1 de
+`OffsetCameraSettings.vue` (qui perd ~150 lignes au passage) :
+
+- **Une seule surface de réglage** : aperçu live (zone de détection
+  dessinable), type de pointe, **seuil en curseur** (0–255, aperçu pendant le
+  glissement, enregistrement au relâchement — pas une sauvegarde de profil
+  par pixel) doublé d'un champ numérique, et images à moyenner — le seuil et
+  les échantillons quittent « Avancé » pour vivre à côté du retour visuel
+  qu'ils influencent.
+- **Jauge de confiance** : chaque test à blanc affiche une barre 0–100 %
+  (verte au-dessus du seuil de confiance de 35 %, orange en dessous) avec le
+  **seuil de confiance matérialisé sur la barre**, le pourcentage, la note de
+  répétabilité et l'image annotée. Un échec caméra ou une absence de pointe
+  restent des messages explicites.
+- **Re-test automatique** : une case « Re-test automatique après chaque
+  réglage » relance le test à blanc (débouncé à 600 ms) après chaque
+  modification enregistrée du type de pointe, du seuil, des échantillons ou
+  de la zone — la jauge suit les réglages en continu, toujours en `dry_run`
+  (rien n'est jamais écrit depuis ce panneau).
+- **Contrat propre** : le tuner émet des patches `update:config` ; la
+  persistance du profil reste dans le parent. Les `data-test` historiques
+  (`tip-style`, `tip-test`, `tip-test-msg`, `tip-dark-threshold`,
+  `tip-samples`…) sont conservés, donc les tests existants passent sans
+  modification.
+
+Tests : nouveau `TipDetectionTuner.test.ts` (13 tests — patches émis,
+curseur live vs commit, clamps, jauge verte/orange/vide, marqueur du seuil,
+re-test auto immédiat + débouncé, pas de re-test quand désactivé, bouton
+désactivé sans URL, erreur caméra) ; les 38 tests du parent inchangés.
+Suite frontend complète : **1001 tests verts** ; `vue-tsc` / `eslint`
+propres. Wiki opérateur mis à jour (panneau « Réglage de la détection »).
