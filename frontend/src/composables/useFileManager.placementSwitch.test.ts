@@ -1,4 +1,7 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
+// jsdom (not happy-dom): DOMPurify >= 3.4.11 mis-detects happy-dom nodes via its
+// cross-realm instanceof hardening and mangles SVG output there; jsdom matches
+// real-Chromium sanitizer behaviour.
 // Regression guard for the "switching placements still shows the
 // previous preview SVG" bug. The singleton previewer caches the last
 // /preview response; without an explicit clear on placement switch

@@ -1,4 +1,7 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
+// jsdom (not happy-dom): DOMPurify >= 3.4.11 mis-detects happy-dom nodes via its
+// cross-realm instanceof hardening and mangles SVG output there; jsdom matches
+// real-Chromium sanitizer behaviour.
 // Regression guard for the watcher-lifetime bug.
 // ``ensureWired`` registered ``watch()`` calls inside the first
 // consumer's component scope, so Vue auto-stopped them when that

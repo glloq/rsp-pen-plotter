@@ -1,4 +1,7 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
+// jsdom (not happy-dom): DOMPurify >= 3.4.11 mis-detects happy-dom nodes via its
+// cross-realm instanceof hardening and mangles SVG output there; jsdom matches
+// real-Chromium sanitizer behaviour.
 import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
