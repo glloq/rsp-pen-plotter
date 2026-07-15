@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import type { MachineCapabilities } from '../domain/capability/schemas'
+import { promptText } from '../composables/prompt'
 import type { ToolChangeMethod } from '../api/client'
 import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
@@ -91,7 +92,12 @@ function toolChangeMethodFor(mode: MachineCapabilities['tool_change']['mode']): 
 }
 
 async function onWizardConfirm(capabilities: MachineCapabilities): Promise<void> {
-  const proposed = window.prompt(t('plotter.newPlotterPrompt'), 'Custom plotter')
+  const proposed = await promptText({
+    title: t('plotter.newPlotterPrompt'),
+    initialValue: 'Custom plotter',
+    confirmLabel: t('prompt.ok'),
+    cancelLabel: t('confirm.cancel'),
+  })
   if (!proposed || !proposed.trim()) {
     wizardOpen.value = false
     return

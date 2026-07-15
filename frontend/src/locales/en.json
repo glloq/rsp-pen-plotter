@@ -922,6 +922,9 @@
     "homeTitle": "Home axes",
     "homeMsg": "Move the plotter to its home position?"
   },
+  "prompt": {
+    "ok": "OK"
+  },
   "magazinePlan": {
     "title": "Prepare the magazine",
     "summary": "{inks} ink(s) · {slots} slot(s)",

@@ -922,6 +922,9 @@
     "homeTitle": "Origine machine",
     "homeMsg": "Déplacer le traceur vers sa position d'origine ?"
   },
+  "prompt": {
+    "ok": "OK"
+  },
   "magazinePlan": {
     "title": "Préparer le magasin",
     "summary": "{inks} couleur(s) · {slots} emplacement(s)",
