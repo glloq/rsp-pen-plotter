@@ -32,6 +32,13 @@ test.describe('Editor parcours (assisted → expert → generate)', () => {
   test.skip(!backendUp, 'requires E2E_BACKEND_RUNNING=1 with the backend on :8000')
 
   test.beforeEach(async ({ page }) => {
+    // The first-run welcome tour overlays the modal body (which turns
+    // ``inert``) and intercepts every click, so the parcours below must
+    // run as a returning operator. Seed the "seen" flag before the app
+    // boots; the tour itself is covered by the dedicated first-run test.
+    await page.addInitScript(() => {
+      window.localStorage.setItem('omniplot.onboarding.editorV2.v1', JSON.stringify({ seen: true }))
+    })
     await page.goto('/')
     await expect(page.locator('[data-test="header-version-badge"]')).toBeVisible()
   })
@@ -96,6 +103,10 @@ test.describe('Editor parcours (assisted → expert → generate)', () => {
     // Generate remains available from expert mode.
     await expect(page.locator('[data-test="confirm-button"]')).toBeEnabled({ timeout: 20_000 })
     await page.locator('[data-test="confirm-button"]').click()
+    // The single save button commits the expert draft through a re-upload
+    // (the draft reads dirty on a fresh expert session), and uploadSelected
+    // first asks to overwrite the existing conversion — acknowledge it.
+    await page.locator('[data-test="confirm-dialog-confirm"]').click({ timeout: 10_000 })
     await expect(page.locator('[data-test="modal-v2-layout"]')).toBeHidden({ timeout: 20_000 })
   })
 
@@ -103,5 +114,19 @@ test.describe('Editor parcours (assisted → expert → generate)', () => {
     await uploadAndOpenEditor(page)
     await page.keyboard.press('Escape')
     await expect(page.locator('[data-test="modal-v2-layout"]')).toBeHidden({ timeout: 10_000 })
+  })
+
+  test('first run shows the welcome tour; Escape dismisses it, not the editor', async ({
+    page,
+  }) => {
+    // Undo the beforeEach seed — this test IS the first run. Guards the
+    // exact drift that silently broke the parcours above while the e2e job
+    // was red: an overlay added over the modal body without spec coverage.
+    await page.evaluate(() => window.localStorage.removeItem('omniplot.onboarding.editorV2.v1'))
+    await uploadAndOpenEditor(page)
+    await expect(page.locator('[data-test="modal-v2-tour"]')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.locator('[data-test="modal-v2-tour"]')).toBeHidden()
+    await expect(page.locator('[data-test="modal-v2-layout"]')).toBeVisible()
   })
 })
