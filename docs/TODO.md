@@ -90,7 +90,10 @@ Duplicate / NoBase / Saved / Failed`. `MachineProfile` TS interface
 gagne un champ `capabilities?: Record<string, unknown> | null` pour
 faire round-tripper le block capability au backend.
 
-**Reste éventuel** : dialog Vue au lieu de `window.prompt` natif.
+**Reste éventuel** : ~~dialog Vue au lieu de `window.prompt` natif~~ —
+fermé 2026-07-15 (`PromptDialog.vue` + `composables/prompt.ts`, jumeau
+texte de `confirmAction` ; les 3 call sites `window.prompt` migrés, cf.
+`docs/audit_projet_2026-07-15.md` §2.4).
 
 ### 1.5 — ~~CompareView candidats réels~~ — fermé pour SVG+métriques
 

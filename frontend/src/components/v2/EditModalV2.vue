@@ -447,8 +447,10 @@ const saveDisabled = computed(
 
 // Single close gate (header ✕, backdrop, Escape all route
 // here). Blocks closing while an expert apply is committing and confirms
-// before discarding an unsaved expert draft. ``window.confirm`` is the same
-// affordance the colours panel uses for destructive actions.
+// before discarding an unsaved expert draft. ``window.confirm`` is kept
+// (last native-dialog holdout) because the guard's ``confirmDiscard``
+// contract is synchronous; switching to the async ``confirmAction``
+// dialog means making ``requestClose`` async end to end.
 //
 // Gated on EXPERT mode: the shared bitmap draft reads "dirty" by default
 // until an upload pins its baseline (``markCommitted``), and the assisted

@@ -14,6 +14,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAvailableColorsStore } from '../stores/availableColors'
+import { confirmAction } from '../composables/confirm'
 // ``canonicalHex`` matches the backend's normalisation so the dedup
 // check below treats ``#ABC`` and ``#aabbcc`` as the same entry.
 import { canonicalHex, parsePenWidthMm } from '../lib/penWidth'
@@ -131,7 +132,14 @@ async function moveDown(colorId: string): Promise<void> {
 }
 
 async function removeColor(colorId: string, label: string): Promise<void> {
-  if (!window.confirm(t('availableColors.deleteConfirm', { name: label }))) return
+  const confirmed = await confirmAction({
+    title: t('availableColors.delete'),
+    message: t('availableColors.deleteConfirm', { name: label }),
+    confirmLabel: t('availableColors.delete'),
+    cancelLabel: t('confirm.cancel'),
+    danger: true,
+  })
+  if (!confirmed) return
   await store.remove(colorId)
 }
 

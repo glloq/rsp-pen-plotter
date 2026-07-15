@@ -138,7 +138,12 @@ const autoTest = ref(false)
 let retestTimer: ReturnType<typeof setTimeout> | undefined
 
 watch(
-  () => [props.config.tip_style, props.config.dark_threshold, props.config.samples, props.config.roi],
+  () => [
+    props.config.tip_style,
+    props.config.dark_threshold,
+    props.config.samples,
+    props.config.roi,
+  ],
   () => {
     if (!autoTest.value) return
     clearTimeout(retestTimer)
@@ -156,7 +161,9 @@ onBeforeUnmount(() => clearTimeout(retestTimer))
 
 // Confidence meter: percentage width + a colour that mirrors the trust gate.
 const confidencePct = computed(() =>
-  testState.confidence == null ? 0 : Math.round(Math.min(1, Math.max(0, testState.confidence)) * 100),
+  testState.confidence == null
+    ? 0
+    : Math.round(Math.min(1, Math.max(0, testState.confidence)) * 100),
 )
 const meterClass = computed(() =>
   (testState.confidence ?? 0) >= MIN_CONFIDENCE ? 'bg-emerald-500' : 'bg-amber-500',

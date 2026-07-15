@@ -1,4 +1,7 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
+// jsdom (not happy-dom): DOMPurify >= 3.4.11 mis-detects happy-dom nodes via its
+// cross-realm instanceof hardening and mangles SVG output there; jsdom matches
+// real-Chromium sanitizer behaviour.
 /* eslint-disable vue/one-component-per-file --
    Two throwaway host components in one test file is the point: the
    regression is "two DIFFERENT consumers must share one previewer". */

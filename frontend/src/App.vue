@@ -5,6 +5,7 @@ import { getHealth, systemCheckUpdate } from './api/client'
 import AppHeader from './components/AppHeader.vue'
 import CanvasView from './components/CanvasView.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import PromptDialog from './components/PromptDialog.vue'
 import FilesPane from './components/FilesPane.vue'
 import MagazineLoadModal from './components/MagazineLoadModal.vue'
 import SwapPromptModal from './components/SwapPromptModal.vue'
@@ -444,6 +445,7 @@ onBeforeUnmount(() => {
       @confirm="onEditV2Confirm"
     />
     <ConfirmDialog />
+    <PromptDialog />
     <UpdateProgressModal />
     <GenerateProgressModal />
     <UploadProgressModal />

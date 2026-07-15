@@ -662,9 +662,9 @@ describe('OffsetCameraSettings', () => {
     expect((wrapper.find('[data-test="guide-start"]').element as HTMLButtonElement).disabled).toBe(
       true,
     )
-    expect((wrapper.find('[data-test="pen-measure-1"]').element as HTMLButtonElement).disabled).toBe(
-      true,
-    )
+    expect(
+      (wrapper.find('[data-test="pen-measure-1"]').element as HTMLButtonElement).disabled,
+    ).toBe(true)
   })
 
   it('marks the guided camera flow ready when required setup is complete', async () => {
@@ -681,9 +681,9 @@ describe('OffsetCameraSettings', () => {
     withStation({ light_gpio_pin: 17 })
     const wrapper = mountPanel()
     await flushPromises()
-    expect((wrapper.find('[data-test="tip-light-during"]').element as HTMLInputElement).checked).toBe(
-      true,
-    )
+    expect(
+      (wrapper.find('[data-test="tip-light-during"]').element as HTMLInputElement).checked,
+    ).toBe(true)
   })
 
   it('manual light buttons drive the configured GPIO pin', async () => {
@@ -751,9 +751,9 @@ describe('OffsetCameraSettings', () => {
     await flushPromises()
     // Fresh config: scale never typed nor measured → amber chip, blocked.
     expect(wrapper.find('[data-test="tip-ready-scale"]').text()).toContain('⚠')
-    expect((wrapper.find('[data-test="pen-measure-1"]').element as HTMLButtonElement).disabled).toBe(
-      true,
-    )
+    expect(
+      (wrapper.find('[data-test="pen-measure-1"]').element as HTMLButtonElement).disabled,
+    ).toBe(true)
     // Typing a scale by hand unblocks and records 'manual' provenance.
     const input = wrapper.find('[data-test="tip-mm-per-pixel"]')
     await input.setValue('0.05')

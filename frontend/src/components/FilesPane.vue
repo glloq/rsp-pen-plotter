@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
 import { confirmAction } from '../composables/confirm'
+import { promptText } from '../composables/prompt'
 import { FILE_ACCEPT } from '../composables/useFileManager'
 import { useJobStore } from '../stores/job'
 import { useLibraryStore } from '../stores/library'
@@ -115,12 +116,19 @@ function onOrderToggle(): void {
   library.sortOrder = library.sortOrder === 'asc' ? 'desc' : 'asc'
 }
 
-function onFolderChange(event: Event): void {
-  const value = (event.target as HTMLSelectElement).value
+async function onFolderChange(event: Event): Promise<void> {
+  const select = event.target as HTMLSelectElement
+  const value = select.value
   if (value === '__all__') {
     library.folderFilter = null
   } else if (value === '__new__') {
-    const name = window.prompt(t('files.newFolderPrompt'))?.trim()
+    const name = (
+      await promptText({
+        title: t('files.newFolderPrompt'),
+        confirmLabel: t('prompt.ok'),
+        cancelLabel: t('confirm.cancel'),
+      })
+    )?.trim()
     if (name) {
       if (!library.folders.includes(name)) {
         library.folders = [...library.folders, name].sort()
@@ -128,8 +136,7 @@ function onFolderChange(event: Event): void {
       library.folderFilter = name
     }
     // Reset the <select> back to the current filter regardless of result.
-    ;(event.target as HTMLSelectElement).value =
-      library.folderFilter === null ? '__all__' : library.folderFilter
+    select.value = library.folderFilter === null ? '__all__' : library.folderFilter
   } else {
     library.folderFilter = value
   }
@@ -231,9 +238,14 @@ async function editFile(fileId: string): Promise<void> {
 
 async function moveFile(file: LibraryFileRecord): Promise<void> {
   const existing = library.folders.join(', ')
-  const next = window
-    .prompt(`${t('files.moveTo')}${existing ? ` (${existing})` : ''}`, file.folder)
-    ?.trim()
+  const answer = await promptText({
+    title: t('files.moveTo'),
+    message: existing ? `(${existing})` : '',
+    initialValue: file.folder,
+    confirmLabel: t('prompt.ok'),
+    cancelLabel: t('confirm.cancel'),
+  })
+  const next = answer?.trim()
   if (next !== undefined && next !== file.folder) {
     await library.setFolder(file.file_id, next)
   }
