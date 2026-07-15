@@ -642,7 +642,9 @@ def test_apply_dither_quantises_to_requested_levels() -> None:
     ramp.putdata([int(255 * (i % 64) / 63) for i in range(64 * 64)])
     out = apply_dither(ramp.convert("RGB"), PreprocessOptions(dither_levels=2))
 
-    assert set(out.convert("L").getdata()) <= {0, 255}
+    # ``tobytes`` (not the Pillow-14-deprecated ``getdata``): mode L pixels
+    # round-trip 1:1 into raw bytes, so the value-set assertion is identical.
+    assert set(out.convert("L").tobytes()) <= {0, 255}
 
 
 def test_preprocess_no_longer_dithers_before_downscale() -> None:
@@ -660,4 +662,4 @@ def test_preprocess_no_longer_dithers_before_downscale() -> None:
     ramp.putdata([int(255 * (i % 64) / 63) for i in range(64 * 64)])
     out = apply_preprocess(ramp.convert("RGB"), PreprocessOptions(dither_levels=2))
 
-    assert len(set(out.convert("L").getdata())) > 2
+    assert len(set(out.convert("L").tobytes())) > 2

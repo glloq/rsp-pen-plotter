@@ -283,24 +283,31 @@ def average_tips(samples: list[TipMeasurement]) -> TipMeasurement:
     message / preview still surface. The annotated frame of the sample closest
     to the median is kept for review.
     """
-    found = [m for m in samples if m.found and m.tip_px and m.tip_mm]
+    found: list[TipMeasurement] = []
+    px_pts: list[tuple[float, float]] = []
+    mm_pts: list[tuple[float, float]] = []
+    for m in samples:
+        if m.found and m.tip_px is not None and m.tip_mm is not None:
+            found.append(m)
+            px_pts.append(m.tip_px)
+            mm_pts.append(m.tip_mm)
     if not found:
         return samples[-1]
     n = len(found)
     px = (
-        float(np.median([m.tip_px[0] for m in found])),
-        float(np.median([m.tip_px[1] for m in found])),
+        float(np.median([p[0] for p in px_pts])),
+        float(np.median([p[1] for p in px_pts])),
     )
     mm = (
-        float(np.median([m.tip_mm[0] for m in found])),
-        float(np.median([m.tip_mm[1] for m in found])),
+        float(np.median([p[0] for p in mm_pts])),
+        float(np.median([p[1] for p in mm_pts])),
     )
     confidence = float(np.median([m.confidence for m in found]))
     # Repeatability: farthest contributing sample from the median tip (mm).
-    dists = [np.hypot(m.tip_mm[0] - mm[0], m.tip_mm[1] - mm[1]) for m in found]
-    spread_mm = float(max(dists))
+    dists = [float(np.hypot(p[0] - mm[0], p[1] - mm[1])) for p in mm_pts]
+    spread_mm = max(dists)
     # Keep the preview of whichever sample landed closest to the median.
-    closest = min(found, key=lambda m: np.hypot(m.tip_mm[0] - mm[0], m.tip_mm[1] - mm[1]))
+    closest = found[dists.index(min(dists))]
     return TipMeasurement(
         found=True,
         tip_px=px,

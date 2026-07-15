@@ -191,10 +191,10 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         if req.roi
         else None
     )
-    light_on = req.light and req.light_gpio_pin is not None
-    if light_on:
+    light_pin = req.light_gpio_pin if req.light else None
+    if light_pin is not None:
         try:
-            gpio_light.set(req.light_gpio_pin, True, req.light_active_high)
+            gpio_light.set(light_pin, True, req.light_active_high)
         except RuntimeError as exc:  # no GPIO backend on this host
             raise HTTPException(status_code=503, detail=str(exc)) from exc
     try:
@@ -214,9 +214,9 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
     finally:
         # Always switch the light back off, even if the grab failed.
-        if light_on:
+        if light_pin is not None:
             with contextlib.suppress(RuntimeError):
-                gpio_light.set(req.light_gpio_pin, False, req.light_active_high)
+                gpio_light.set(light_pin, False, req.light_active_high)
 
     m = result.measurement
     record(
