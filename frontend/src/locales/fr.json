@@ -925,6 +925,24 @@
   "prompt": {
     "ok": "OK"
   },
+  "planRail": {
+    "title": "Mise en page",
+    "expand": "Déplier le panneau",
+    "collapse": "Replier le panneau"
+  },
+  "blockMap": {
+    "title": "Blocs de la page",
+    "loading": "Analyse de la page…",
+    "summary": "{text} blocs texte · {image} blocs image",
+    "imageBlock": "Bloc image",
+    "chars": "caractères",
+    "empty": "Aucun bloc texte ou image détecté sur cette page.",
+    "failed": "L'analyse de la page a échoué",
+    "hint": "Détecté sur la page PDF sélectionnée : les blocs texte sont retracés en polices Hershey, les blocs image re-vectorisés."
+  },
+  "simRail": {
+    "title": "Simulation"
+  },
   "magazinePlan": {
     "title": "Préparer le magasin",
     "summary": "{inks} couleur(s) · {slots} emplacement(s)",
@@ -1474,7 +1492,8 @@
     "commandHistoryEmpty": "Aucune commande envoyée pour le moment.",
     "controlHint": "Connecte le traceur, pilote-le manuellement et lance les impressions depuis cet onglet.",
     "settingsTitle": "Réglages du traceur",
-    "saveGcode": "Enregistrer le G-code"
+    "saveGcode": "Enregistrer le G-code",
+    "running": "En cours…"
   },
   "assignedColor": {
     "title": "Couleur du calque",

@@ -925,6 +925,24 @@
   "prompt": {
     "ok": "OK"
   },
+  "planRail": {
+    "title": "Layout",
+    "expand": "Expand the panel",
+    "collapse": "Collapse the panel"
+  },
+  "blockMap": {
+    "title": "Page blocks",
+    "loading": "Analysing the page…",
+    "summary": "{text} text · {image} image blocks",
+    "imageBlock": "Image block",
+    "chars": "chars",
+    "empty": "No text or image block detected on this page.",
+    "failed": "Page analysis failed",
+    "hint": "Detected on the selected PDF page: text blocks re-render with Hershey strokes, image blocks are re-vectorised."
+  },
+  "simRail": {
+    "title": "Simulation"
+  },
   "magazinePlan": {
     "title": "Prepare the magazine",
     "summary": "{inks} ink(s) · {slots} slot(s)",
@@ -1474,7 +1492,8 @@
     "commandHistoryEmpty": "No commands sent yet.",
     "controlHint": "Connect the plotter, drive it manually and start prints from this tab.",
     "settingsTitle": "Plotter settings",
-    "saveGcode": "Save G-code"
+    "saveGcode": "Save G-code",
+    "running": "Running…"
   },
   "assignedColor": {
     "title": "Layer colour",
