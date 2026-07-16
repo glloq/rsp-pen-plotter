@@ -30,12 +30,19 @@ def installed_pen_hexes(profile: MachineProfile | None) -> list[str]:
     """Return the lowercased hexes of currently-installed pen slots.
 
     Returns an empty list when no profile is selected or the profile
-    has no ``pens`` defined yet — callers route to ``available`` / the
-    raw centroid in that case.
+    has no ``pens`` DECLARED yet — callers route to ``available`` / the
+    raw centroid in that case. Deliberately reads ``profile.pens``
+    rather than ``effective_pens()``: the latter synthesizes one
+    placeholder ``#000000`` installed slot per ``pen_slot_count`` for
+    profiles that never configured their magazine, and those phantom
+    black pens (a) snapped every dark cluster onto an ink the operator
+    never declared and (b) diverged from the frontend pool, which reads
+    ``profile.pens ?? []`` (see ``frontend/src/stores/job.ts``
+    ``currentEffectivePalette``).
     """
     if profile is None:
         return []
-    return [pen.color.lower() for pen in profile.effective_pens() if pen.installed and pen.color]
+    return [pen.color.lower() for pen in profile.pens or [] if pen.installed and pen.color]
 
 
 def available_color_hexes() -> list[str]:
