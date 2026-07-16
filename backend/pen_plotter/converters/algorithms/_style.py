@@ -102,6 +102,8 @@ def tone_darkness(
     options: dict[str, Any] | None,
     *,
     min_range: float = 0.08,
+    paper_luminance: float = 0.92,
+    ink_floor: float = 0.12,
 ) -> NDArray[np.float64] | None:
     """Normalised in-mask darkness from the injected ``_tone`` map, or ``None``.
 
@@ -118,16 +120,29 @@ def tone_darkness(
     rendering, so flat fills and multicolour cluster regions (whose
     pixels share one colour, hence one luminance) render exactly as
     before the tonal upgrade.
+
+    The stretch is RELATIVE to the region, so its lightest colour maps to
+    darkness 0 even when it is saturated ink — e.g. a yellow shape merged
+    into a red cluster by a low colour count. Every renderer in the tonal
+    family blanks its near-0 pixels ("highlights stay paper"), which made
+    such shapes silently vanish from the plot. Pixels that hold real ink —
+    absolute luminance below ``paper_luminance``, the same notion as the
+    segmentation's ``background_luminance`` default — are therefore
+    floored at ``ink_floor`` (just above the family's highlight/keep
+    cutoffs) so they always receive the base pass; true near-white pixels
+    keep darkness 0 and stay blank.
     """
     tone = (options or {}).get("_tone")
     if not isinstance(tone, np.ndarray) or tone.shape != mask.shape:
         return None
     if not mask.any():
         return None
-    values = np.clip(tone[mask].astype(np.float64), 0.0, 1.0)
+    clipped = np.clip(tone.astype(np.float64), 0.0, 1.0)
+    values = clipped[mask]
     low, high = np.percentile(values, [2.0, 98.0])
     if high - low < min_range:
         return None
-    stretched = (high - np.clip(tone.astype(np.float64), 0.0, 1.0)) / (high - low)
+    stretched = (high - clipped) / (high - low)
     out: NDArray[np.float64] = np.clip(stretched, 0.0, 1.0)
-    return out
+    ink = clipped < paper_luminance
+    return np.where(ink & (out < ink_floor), ink_floor, out)
