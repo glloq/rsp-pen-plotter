@@ -202,39 +202,61 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
     return { map, rows }
   })
 
+  // Two clusters can legitimately share one ink (nearest-match reuse is
+  // deliberate — see ``assignPoolHexes``), but the strip then showed two
+  // IDENTICAL chips with no way to tell which shape each one drives.
+  // Suffix the source centroid on duplicated inks so every chip stays
+  // addressable ("Rouge Sharpie · #4e342e").
+  function disambiguateDuplicates(swatches: InkSwatch[]): InkSwatch[] {
+    const counts = new Map<string, number>()
+    for (const s of swatches) {
+      const key = s.hex.toLowerCase()
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    return swatches.map((s) =>
+      (counts.get(s.hex.toLowerCase()) ?? 0) > 1
+        ? { ...s, displayName: `${s.displayName} · ${s.layer.source_color.toLowerCase()}` }
+        : s,
+    )
+  }
+
   const inkSwatches = computed<InkSwatch[]>(() => {
     const snap = previewInkSnap.value
     if (snap) {
-      return snap.rows.map((row) => {
-        const hex = row.ink
+      return disambiguateDuplicates(
+        snap.rows.map((row) => {
+          const hex = row.ink
+          const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
+          const name = namedMatch ?? hex
+          return {
+            layerId: row.layer.layer_id,
+            hex,
+            name,
+            displayName: name,
+            displayHex: namedMatch ? hex : '',
+            isFallback: row.isFallback,
+            layer: row.layer,
+          }
+        }),
+      )
+    }
+    return disambiguateDuplicates(
+      sortedLayers.value.map((layer) => {
+        const assigned = layer.assigned_color_hex
+        const hex = assigned ?? layer.source_color
         const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
         const name = namedMatch ?? hex
         return {
-          layerId: row.layer.layer_id,
+          layerId: layer.layer_id,
           hex,
           name,
           displayName: name,
           displayHex: namedMatch ? hex : '',
-          isFallback: row.isFallback,
-          layer: row.layer,
+          isFallback: !assigned,
+          layer,
         }
-      })
-    }
-    return sortedLayers.value.map((layer) => {
-      const assigned = layer.assigned_color_hex
-      const hex = assigned ?? layer.source_color
-      const namedMatch = inventoryNameByHex.value.get(hex.toLowerCase())
-      const name = namedMatch ?? hex
-      return {
-        layerId: layer.layer_id,
-        hex,
-        name,
-        displayName: name,
-        displayHex: namedMatch ? hex : '',
-        isFallback: !assigned,
-        layer,
-      }
-    })
+      }),
+    )
   })
 
   // ---- Per-chip actions (route to cluster state OR the job store) ----

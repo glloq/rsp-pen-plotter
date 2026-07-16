@@ -49,6 +49,7 @@ recipes live in the [`wiki/`](../wiki/Home.md) folder instead.
 | [audit_report.md](audit_report.md) | Codebase audit findings and the fixes applied |
 | [audit_system_2026-06-17.md](audit_system_2026-06-17.md) | Full coherence audit focused on unnecessary layers |
 | [audit_projet_2026-07-15.md](audit_projet_2026-07-15.md) | Whole-project audit — CI back to green, dependency CVEs, native-dialog debt |
+| [audit_couleurs_2026-07-15.md](audit_couleurs_2026-07-15.md) | Colour management audit — auto-assignment fidelity, silent shape loss, phantom pens, i18n leaks |
 | [perf-baseline.md](perf-baseline.md) | Reference performance numbers |
 | [perf-report.md](perf-report.md) | Latest performance report |
 | [profiling.md](profiling.md) | How to profile a slow conversion or render |

@@ -110,6 +110,26 @@ describe('useEditorInkSwatches', () => {
     expect(inkSwatches.value.map((s) => s.hex)).toEqual(['#ff0000', '#00ff00'])
   })
 
+  it('suffixes the source centroid when two clusters share the same ink', () => {
+    // A red rectangle and a dark-brown line can both snap onto the same
+    // red pen — two identical "Rouge Sharpie" chips are unusable. The
+    // duplicated chips must carry their source centroid; unique chips
+    // keep the clean name.
+    useUiModeStore().setMode('expert')
+    const colors = useAvailableColorsStore()
+    colors.colors = [{ hex: '#ff0000', name: 'Rouge', coverage: 0 } as never]
+    const { inkSwatches } = useEditorInkSwatches({
+      fileManager: fileManagerWith([
+        { color: '#cc2020' },
+        { color: '#5a1e14' },
+        { color: '#20cc20' },
+      ]),
+      effectivePool: ref(['#ff0000', '#00ff00']),
+    })
+    const names = inkSwatches.value.map((s) => s.displayName)
+    expect(names).toEqual(['Rouge · #cc2020', 'Rouge · #5a1e14', '#00ff00'])
+  })
+
   it('expert mode: a kmeans cluster snaps to an AVAILABLE ink, never its raw centroid', () => {
     useUiModeStore().setMode('expert')
     const draft = useBitmapDraft()

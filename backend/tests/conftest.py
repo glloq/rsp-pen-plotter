@@ -10,6 +10,15 @@ os.environ.setdefault(
 os.environ.setdefault(
     "OMNIPLOT_MACROS_FILE", os.path.join(tempfile.gettempdir(), "omniplot_test_macros.json")
 )
+# The file library MUST be isolated too: ``api.files.FILES_DIR`` snapshots
+# this env var at import, and ``test_files_endpoint``'s autouse fixture
+# rmtree()s that directory between tests. Without the override the suite
+# wiped the developer's REAL library storage (backend/data/files) on every
+# ``pytest`` run — uploads vanished while their DB rows survived, and each
+# library "Edit" then dead-ended on 410 Gone.
+os.environ.setdefault(
+    "OMNIPLOT_FILES_DIR", os.path.join(tempfile.gettempdir(), "omniplot_test_files")
+)
 
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402

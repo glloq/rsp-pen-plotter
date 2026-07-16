@@ -92,6 +92,31 @@ def test_installed_pen_hexes_returns_empty_for_none_profile() -> None:
     assert installed_pen_hexes(None) == []
 
 
+def test_installed_pen_hexes_ignores_undeclared_magazine() -> None:
+    """``pens: None`` must NOT synthesize phantom black pens.
+
+    ``effective_pens()`` fabricates one ``#000000`` installed slot per
+    ``pen_slot_count`` for profiles that never configured their
+    magazine; feeding those into the pool snapped every dark cluster
+    onto an ink the operator never declared and diverged from the
+    frontend pool (which reads ``pens ?? []``).
+    """
+    profile = _profile()
+    profile.pens = None
+    profile.pen_slot_count = 6
+    assert installed_pen_hexes(profile) == []
+
+
+def test_resolve_pool_union_with_undeclared_magazine_is_inventory_only() -> None:
+    """Union on an unconfigured magazine = the inventory, no phantom black."""
+    profile = _profile()
+    profile.pens = None
+    profile.pen_slot_count = 6
+    _add_inventory("#aaaaaa", "#bbbbbb")
+    assert resolve_pool("union", profile) == ["#aaaaaa", "#bbbbbb"]
+    assert resolve_pool("pens", profile) == []
+
+
 def test_resolve_pool_pens_returns_only_installed_pens() -> None:
     profile = _profile((0, "#111111", True), (1, "#222222", True))
     _add_inventory("#aaaaaa", "#bbbbbb")
