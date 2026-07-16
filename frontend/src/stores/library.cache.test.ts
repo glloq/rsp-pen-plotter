@@ -2,6 +2,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as client from '../api/client'
 import { useLibraryStore } from './library'
+import { useToastStore } from './toasts'
 
 // The detail cache holds a full SVG per entry, so it is FIFO-capped to keep
 // memory bounded over a long browsing session. These tests pin the cap +
@@ -56,5 +57,20 @@ describe('library detail cache eviction', () => {
     expect(again?.file_id).toBe('f0')
     expect(lib.getDetail('f0')).not.toBeNull()
     expect(spy).toHaveBeenCalledTimes(42)
+  })
+
+  it('a failed detail fetch surfaces a toast (Edit must never die silently)', async () => {
+    // "Edit" on a library row resolves the detail through ensureDetail;
+    // when the stored conversion is gone (410 — storage wiped/moved) the
+    // click used to fail with no feedback at all.
+    const lib = useLibraryStore()
+    const toasts = useToastStore()
+    vi.spyOn(client, 'getLibraryFile').mockRejectedValue(new Error('Stored SVG is missing'))
+    const result = await lib.ensureDetail('gone-file')
+    expect(result).toBeNull()
+    // A bare Error carries no backend detail — errorDetail falls back to
+    // the generic library.loadFailed message; both land on the operator.
+    expect(lib.error).toBeTruthy()
+    expect(toasts.toasts.some((t) => t.kind === 'error' && t.message === lib.error)).toBe(true)
   })
 })

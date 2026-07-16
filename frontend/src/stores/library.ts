@@ -440,7 +440,13 @@ export const useLibraryStore = defineStore('library', () => {
         cacheDetail(detail)
         return detail
       } catch (err) {
-        error.value = errorDetail(err, i18n.global.t('library.loadFailed'))
+        const detail = errorDetail(err, i18n.global.t('library.loadFailed'))
+        error.value = detail
+        // "Edit" on a library row funnels through here; without a toast
+        // the click died silently when the stored conversion is gone
+        // (410 — file storage wiped / moved) and the operator saw
+        // nothing happen at all.
+        useToastStore().error(detail)
         return null
       } finally {
         detailInflight.delete(fileId)
