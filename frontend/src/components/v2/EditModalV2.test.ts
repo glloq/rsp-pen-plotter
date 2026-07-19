@@ -32,7 +32,7 @@ const i18n = createI18n({
       settings: { close: 'Fermer' },
       compare: { open: 'Comparer' },
       v2: {
-        mode: { assisted: 'Assisté', expert: 'Expert' },
+        mode: { assisted: 'Simple', expert: 'Avancé' },
         modal: {
           title: "Préparer l'impression",
           generate: 'Générer',
@@ -49,7 +49,7 @@ const i18n = createI18n({
           paletteLabel: 'Couleurs',
           paletteMachine: 'Magazine machine',
           paletteFree: 'Palette libre',
-          saveStyle: 'Enregistrer le style',
+          saveStyle: 'Appliquer',
           saveStyleHint: 'Enregistre le style',
           applyExpert: 'Appliquer',
           applyExpertHint: 'Reconvertit le fichier.',

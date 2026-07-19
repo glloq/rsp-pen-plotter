@@ -33,6 +33,24 @@ On the **Plotter** tab the live feed appears at the top of the panel. With two
 cameras enabled, a switcher lets you flip between them. The stream is torn down
 when you leave the Plotter tab so an idle camera doesn't keep streaming.
 
+## Assigning camera roles
+
+Right under the camera slots, the **Camera roles** panel answers "which
+camera does what" in one place. Two roles exist:
+
+- **Timelapse** — the camera the timelapse records from (writes the
+  timelapse default; same setting as the picker in the Timelapse section).
+- **Offset measurement** — the camera the tip-offset station grabs frames
+  from (written onto the selected machine profile's calibration block; same
+  setting as the Offset measurement section).
+
+With a single USB camera, assign it to **both** roles. With two cameras,
+give each role its own — typically the wide workshop view for the
+timelapse and the close-up station camera for offset measurement. A
+summary line per camera shows its badges so a mis-assignment is visible at
+a glance. If the offset station uses a hand-typed URL that matches no
+configured camera, the panel says so instead of silently overwriting it.
+
 ## Recording a timelapse
 
 The timelapse controls sit beside the camera feed on the **Plotter** tab. Pick

@@ -114,7 +114,9 @@
     "deleteTitle": "Delete file",
     "deleteConfirm": "Delete \"{name}\" from the library? Placements on the plan will also be removed.",
     "dropToImport": "Drop to add to the library",
-    "uploadInProgress": "An upload is already in progress."
+    "uploadInProgress": "An upload is already in progress.",
+    "addToPlan": "Add to plan",
+    "moreActions": "More actions"
   },
   "library": {
     "loadFailed": "Couldn't load the file library.",
@@ -703,7 +705,7 @@
   "canvas": {
     "sheet": "Layout",
     "simulator": "Simulator",
-    "files": "G-code files",
+    "files": "Saved plots",
     "gcode": "G-code",
     "simulatorUnavailable": "Simulator unavailable for this dialect.",
     "gcodeEmpty": "No G-code generated yet.",
@@ -1027,7 +1029,13 @@
     "clearAll": "Clear all",
     "clearAllTitle": "Clear plan",
     "clearAllMsg": "Remove all files from the work plane? This cannot be undone.",
-    "resetAspect": "Reset proportions"
+    "resetAspect": "Reset proportions",
+    "paperGuide": "Paper guide",
+    "paperGuideHint": "Placement guide — the plot follows where the drawings actually sit on the plan.",
+    "configurePens": "Configure pens",
+    "emptyTitle": "Add a file to the plan",
+    "emptyBrowse": "Pick from the library",
+    "emptyDrag": "…or drag a file here from the library"
   },
   "typography": {
     "fontSection": "Font",
@@ -1495,7 +1503,13 @@
     "controlHint": "Connect the plotter, drive it manually and start prints from this tab.",
     "settingsTitle": "Plotter settings",
     "saveGcode": "Save G-code",
-    "running": "Running…"
+    "running": "Running…",
+    "detectConnect": "Detect and connect",
+    "detecting": "Detecting…",
+    "connectedTo": "Connected on {port}",
+    "noPortsFound": "No serial port detected. Check the USB cable, then retry or use manual configuration.",
+    "detectFailed": "No plotter answered on the detected ports. Try manual configuration.",
+    "manualConfig": "Manual configuration"
   },
   "assignedColor": {
     "title": "Layer colour",
@@ -1672,7 +1686,7 @@
     }
   },
   "gcodeFiles": {
-    "title": "G-code files",
+    "title": "Saved plots",
     "empty": "No G-code files yet. Generate a drawing, then save it here.",
     "print": "Print selection",
     "rename": "Rename",
@@ -1789,11 +1803,11 @@
   },
   "v2": {
     "mode": {
-      "assisted": "Assisted",
-      "expert": "Expert",
+      "assisted": "Simple",
+      "expert": "Advanced",
       "groupLabel": "Editor mode",
-      "assistedHint": "Guided wizard: pick intent, the resolver chooses an algorithm. Ctrl/Cmd+M to switch.",
-      "expertHint": "Rich editor: per-layer algorithm + passes + variants. Ctrl/Cmd+M to switch."
+      "assistedHint": "Simple mode: pick an intent, the resolver chooses an algorithm. Ctrl/Cmd+M to switch.",
+      "expertHint": "Advanced mode: per-layer algorithm + passes + variants. Ctrl/Cmd+M to switch."
     },
     "modal": {
       "title": "Prepare the print",
@@ -1875,8 +1889,8 @@
       "sheetPickerLabel": "Sheet format",
       "sheetPortrait": "Portrait",
       "sheetLandscape": "Landscape",
-      "saveStyle": "Save style",
-      "saveStyleHint": "Save the chosen print style for this file.",
+      "saveStyle": "Apply",
+      "saveStyleHint": "Applies and remembers the print style for this file.",
       "applyExpert": "Apply",
       "applyExpertHint": "Re-convert the file with the settings from the Image / SVG / Style / Text tabs.",
       "applyExpertClean": "No changes to apply.",
@@ -2091,5 +2105,36 @@
     "stopFailed": "Could not stop the timelapse.",
     "deleteFailed": "Could not delete the timelapse.",
     "downloadFailed": "Could not download the video."
+  },
+  "workflow": {
+    "addFile": "Add a file",
+    "hintAddFile": "The library is empty — import an image, SVG or document.",
+    "addToPlan": "Add to plan",
+    "hintAddToPlan": "A file is imported but nothing is on the plan yet.",
+    "chooseStyle": "Choose the style",
+    "hintChooseStyle": "A placed drawing has no conversion style yet.",
+    "fixPens": "Fix pens",
+    "hintFixPens": "Required pens are missing from the magazine — plotting is blocked.",
+    "verify": "Check the plot",
+    "hintVerify": "Generates the G-code and opens the simulation for review.",
+    "connect": "Connect the plotter",
+    "hintConnect": "The plot is ready — only the machine is missing.",
+    "launch": "Start the plot",
+    "hintLaunch": "Everything is ready: plotter connected, plot checked.",
+    "pause": "Pause",
+    "hintRunning": "Print in progress.",
+    "resume": "Resume",
+    "hintPaused": "Print paused."
+  },
+  "cameraRoles": {
+    "title": "Camera roles",
+    "hint": "Assign each use to a camera: a single camera can hold both roles, two USB cameras let you split them.",
+    "timelapse": "Timelapse",
+    "offset": "Offset measurement",
+    "noCameras": "No camera configured — enable a camera above (stream URL) to assign roles.",
+    "needsProfile": "Select a machine profile to assign the offset camera (the setting is stored on the profile).",
+    "customUrl": "Custom URL",
+    "customUrlHint": "The offset station uses a hand-typed URL (Offset measurement section) that matches no configured camera. Pick a camera to replace it.",
+    "unassigned": "no role"
   }
 }

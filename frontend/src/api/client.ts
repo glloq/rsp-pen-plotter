@@ -758,6 +758,18 @@ export interface PlotterStatus {
   slot?: number | null
 }
 
+export interface SerialPortInfo {
+  device: string
+  description: string
+  /** True for USB-serial adapter patterns — auto-connect tries these first. */
+  likely: boolean
+}
+
+export async function listSerialPorts(): Promise<SerialPortInfo[]> {
+  const response = await api.get<{ ports: SerialPortInfo[] }>('/plotter/ports')
+  return response.data.ports
+}
+
 export async function plotterConnect(
   port: string,
   baudrate: number,

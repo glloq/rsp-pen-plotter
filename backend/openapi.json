@@ -2893,6 +2893,23 @@
         "title": "PolicyInput",
         "type": "object"
       },
+      "PortsResponse": {
+        "description": "Serial ports visible on the host, most plausible first.",
+        "properties": {
+          "ports": {
+            "items": {
+              "$ref": "#/components/schemas/SerialPortInfo"
+            },
+            "title": "Ports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ports"
+        ],
+        "title": "PortsResponse",
+        "type": "object"
+      },
       "PreflightReport": {
         "description": "Pre-run safety and estimation checks for a placed drawing.",
         "properties": {
@@ -3970,6 +3987,30 @@
         ],
         "title": "SegmentationMethod",
         "type": "string"
+      },
+      "SerialPortInfo": {
+        "description": "One serial port candidate for the connection picker.",
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "device": {
+            "title": "Device",
+            "type": "string"
+          },
+          "likely": {
+            "default": false,
+            "title": "Likely",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "device"
+        ],
+        "title": "SerialPortInfo",
+        "type": "object"
       },
       "Severity": {
         "description": "Outcome of evaluating one budget.",
@@ -8180,6 +8221,69 @@
           }
         },
         "summary": "Pause"
+      }
+    },
+    "/plotter/ports": {
+      "get": {
+        "description": "List the host's serial ports so the SPA can offer auto-connect.\n\nBacks the \u00ab D\u00e9tecter et connecter \u00bb flow (UX v2): the client tries\nthe ``likely`` candidates in order instead of asking the operator\nfor ``/dev/ttyUSB0`` up front.",
+        "operationId": "ports_plotter_ports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ports"
       }
     },
     "/plotter/resume": {

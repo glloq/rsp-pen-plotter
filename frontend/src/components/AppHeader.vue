@@ -8,7 +8,6 @@ import { useJobStore } from '../stores/job'
 import { usePlotterStore } from '../stores/plotter'
 import { useQueueStore } from '../stores/queue'
 import { useUiStore } from '../stores/ui'
-import AssistantModeToggle from './AssistantModeToggle.vue'
 
 const { t } = useI18n()
 const ui = useUiStore()
@@ -153,17 +152,12 @@ async function onStop(): Promise<void> {
       </div>
     </div>
 
-    <!-- RIGHT zone: mode toggle + plotter settings + app settings. -->
+    <!-- RIGHT zone: plotter settings + app settings. The assisted /
+         expert mode selector moved into the editor's own header (UX
+         audit Lot 1, 2026-07-19): a global toggle changed the
+         behaviour of a modal the operator wasn't looking at, and
+         duplicated the selector already shown in EditorHeader. -->
     <div class="flex items-center justify-self-end gap-3">
-      <!-- AssistantModeToggle is the single mode selector (Assisté /
-           Expert). The legacy ``Débutant / Pro`` workspace switcher
-           was removed in 2026-05-28 — it shared a header slot with
-           this toggle and the two distinct concepts (skill level vs
-           layout preset) were indistinguishable in the field. The
-           workspace store still exists for future use but no longer
-           has a UI surface. -->
-      <AssistantModeToggle data-test="header-assistant-mode-toggle" />
-
       <!-- Plotter access: opens the plotter settings modal (connection,
            profile, colours, macros, queue). The coloured dot mirrors the
            connection state — green when the traceur is linked, grey

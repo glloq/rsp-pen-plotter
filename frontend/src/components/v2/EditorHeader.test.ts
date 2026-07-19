@@ -13,7 +13,7 @@ const i18n = createI18n({
       settings: { close: 'Fermer' },
       v2: {
         modal: {
-          saveStyle: 'Enregistrer le style',
+          saveStyle: 'Appliquer',
           saveStyleHint: 'Enregistre le style',
           noPlacement: 'Aucun placement actif',
           applyingInProgress: 'Application en cours…',
@@ -57,7 +57,7 @@ describe('EditorHeader', () => {
     const w = mountHeader()
     const save = w.find('[data-test="confirm-button"]')
     expect(save.exists()).toBe(true)
-    expect(save.text()).toContain('Enregistrer le style')
+    expect(save.text()).toContain('Appliquer')
     await save.trigger('click')
     expect(w.emitted('save')).toBeTruthy()
   })

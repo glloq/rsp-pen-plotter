@@ -143,4 +143,45 @@ describe('FilesPane', () => {
     expect(ensure).toHaveBeenCalledWith('f1')
     expect(ensure).toHaveBeenCalledWith('f2')
   })
+
+  it('row "Add to plan" places the file and lands on the Plan tab (UX Lot 1)', async () => {
+    vi.stubGlobal('IntersectionObserver', MockIO)
+    const library = useLibraryStore()
+    library.files = [makeRecord('f1')]
+    vi.spyOn(library, 'ensureDetail').mockResolvedValue(undefined as never)
+    const { useJobStore } = await import('../stores/job')
+    const { useUiStore } = await import('../stores/ui')
+    const job = useJobStore()
+    const ui = useUiStore()
+    ui.canvasTab = 'simulator'
+    const create = vi.spyOn(job, 'createPlacementFromLibrary').mockResolvedValue('p1')
+    const select = vi.spyOn(job, 'selectPlacement')
+
+    const wrapper = mountPane()
+    await nextTick()
+    await wrapper.find('[data-test="file-row-add"]').trigger('click')
+    await nextTick()
+    expect(create).toHaveBeenCalledWith('f1')
+    expect(select).toHaveBeenCalledWith('p1')
+    expect(ui.canvasTab).toBe('sheet')
+  })
+
+  it('secondary actions live behind the row overflow menu', async () => {
+    vi.stubGlobal('IntersectionObserver', MockIO)
+    const library = useLibraryStore()
+    library.files = [makeRecord('f1')]
+    vi.spyOn(library, 'ensureDetail').mockResolvedValue(undefined as never)
+
+    const wrapper = mountPane()
+    await nextTick()
+    // Move / remove are not rendered until the menu opens.
+    expect(wrapper.find('[data-test="file-row-move"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="file-row-remove"]').exists()).toBe(false)
+    await wrapper.find('[data-test="file-row-menu"]').trigger('click')
+    expect(wrapper.find('[data-test="file-row-move"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="file-row-remove"]').exists()).toBe(true)
+    // The primary actions stay directly visible.
+    expect(wrapper.find('[data-test="file-row-add"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="file-row-edit"]').exists()).toBe(true)
+  })
 })

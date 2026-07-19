@@ -173,6 +173,20 @@ export const useUiStore = defineStore('ui', () => {
   // the manual control; everything else lives in this modal.
   const plotterSettingsOpen = ref(false)
   const plotterTab = ref<PlotterTab>('connection')
+  // Monotonic counter bumped by the empty-plan CTA ("pick from the
+  // library"): FilesPane watches it and flashes a highlight ring so the
+  // operator's eye lands on the library pane. A counter (not a boolean)
+  // so repeated clicks re-trigger the pulse.
+  const filesPanePulse = ref(0)
+  function pulseFilesPane(): void {
+    filesPanePulse.value += 1
+  }
+  // Counter bumped by the workflow bar's "Add a file" action: FilesPane
+  // owns the hidden <input type=file> and watches this to open it.
+  const addFileRequests = ref(0)
+  function requestAddFile(): void {
+    addFileRequests.value += 1
+  }
   const editModalOpen = ref(false)
   // Display-only sheet overlay shown on the workspace plan, positioned at
   // the top-left. Set when the user picks a sheet format in LayoutSection.
@@ -383,6 +397,10 @@ export const useUiStore = defineStore('ui', () => {
     settingsTab,
     plotterSettingsOpen,
     plotterTab,
+    filesPanePulse,
+    pulseFilesPane,
+    addFileRequests,
+    requestAddFile,
     editModalOpen,
     previewSheet,
     updateState,

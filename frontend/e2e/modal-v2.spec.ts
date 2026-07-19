@@ -14,12 +14,13 @@ test.describe('Modal V2 — fast default flow', () => {
     await page.goto('/?flag.modalV2=1&flag.compareMode=1')
   })
 
-  test('header shows the AssistantModeToggle', async ({ page }) => {
-    // The ``header-workspace-select`` data-test attribute the previous
-    // scaffold pointed at never existed in the app. The
-    // AssistantModeToggle is the real header surface that's been
-    // stable since the v0.2 migration.
-    await expect(page.locator('[data-test="header-assistant-mode-toggle"]')).toBeVisible()
+  test('header does NOT carry the mode toggle (moved into the editor)', async ({ page }) => {
+    // UX audit Lot 1 (2026-07-19): the assisted/expert selector lives
+    // only in the editor's own header now — a global header toggle
+    // changed the behaviour of a modal the operator wasn't looking at.
+    // Pin the removal so it doesn't quietly come back.
+    await expect(page.locator('[data-test="header-version-badge"]')).toBeVisible()
+    await expect(page.locator('[data-test="header-assistant-mode-toggle"]')).toHaveCount(0)
   })
 
   test('perf overlay stays hidden without ?flag.perf=1', async ({ page }) => {

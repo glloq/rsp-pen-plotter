@@ -114,7 +114,9 @@
     "deleteTitle": "Supprimer le fichier",
     "deleteConfirm": "Supprimer « {name} » de la bibliothèque ? Les instances déjà placées sur le plan seront également retirées.",
     "dropToImport": "Déposer pour ajouter à la bibliothèque",
-    "uploadInProgress": "Un envoi est déjà en cours."
+    "uploadInProgress": "Un envoi est déjà en cours.",
+    "addToPlan": "Ajouter au plan",
+    "moreActions": "Autres actions"
   },
   "library": {
     "loadFailed": "Impossible de charger la bibliothèque.",
@@ -703,7 +705,7 @@
   "canvas": {
     "sheet": "Plan",
     "simulator": "Simulation",
-    "files": "Fichiers G-code",
+    "files": "Tracés enregistrés",
     "gcode": "G-code",
     "simulatorUnavailable": "Le simulateur n'est pas disponible pour ce dialecte.",
     "gcodeEmpty": "Aucun G-code généré pour le moment.",
@@ -1027,7 +1029,13 @@
     "clearAll": "Vider tout",
     "clearAllTitle": "Vider le plan",
     "clearAllMsg": "Retirer tous les fichiers du plan de travail ? Cette action est irréversible.",
-    "resetAspect": "Proportions d'origine"
+    "resetAspect": "Proportions d'origine",
+    "paperGuide": "Repère papier",
+    "paperGuideHint": "Guide de placement — le tracé suit la position réelle des dessins sur le plan.",
+    "configurePens": "Configurer les stylos",
+    "emptyTitle": "Ajoutez un fichier au plan",
+    "emptyBrowse": "Choisir dans la bibliothèque",
+    "emptyDrag": "…ou glissez un fichier ici depuis la bibliothèque"
   },
   "typography": {
     "fontSection": "Police",
@@ -1495,7 +1503,13 @@
     "controlHint": "Connecte le traceur, pilote-le manuellement et lance les impressions depuis cet onglet.",
     "settingsTitle": "Réglages du traceur",
     "saveGcode": "Enregistrer le G-code",
-    "running": "En cours…"
+    "running": "En cours…",
+    "detectConnect": "Détecter et connecter",
+    "detecting": "Détection en cours…",
+    "connectedTo": "Connecté sur {port}",
+    "noPortsFound": "Aucun port série détecté. Vérifie le câble USB, puis réessaie ou utilise la configuration manuelle.",
+    "detectFailed": "Aucun traceur n'a répondu sur les ports détectés. Essaie la configuration manuelle.",
+    "manualConfig": "Configuration manuelle"
   },
   "assignedColor": {
     "title": "Couleur du calque",
@@ -1672,7 +1686,7 @@
     }
   },
   "gcodeFiles": {
-    "title": "Fichiers G-code",
+    "title": "Tracés enregistrés",
     "empty": "Aucun fichier G-code. Générez un dessin puis enregistrez-le ici.",
     "print": "Imprimer la sélection",
     "rename": "Renommer",
@@ -1789,11 +1803,11 @@
   },
   "v2": {
     "mode": {
-      "assisted": "Assisté",
-      "expert": "Expert",
+      "assisted": "Simple",
+      "expert": "Avancé",
       "groupLabel": "Mode éditeur",
-      "assistedHint": "Assistant guidé : choisis l'intention, le resolver propose l'algorithme. Ctrl/Cmd+M pour basculer.",
-      "expertHint": "Éditeur complet : algorithme + passes + variantes par calque. Ctrl/Cmd+M pour basculer."
+      "assistedHint": "Mode simple : choisis l'intention, le resolver propose l'algorithme. Ctrl/Cmd+M pour basculer.",
+      "expertHint": "Mode avancé : algorithme + passes + variantes par calque. Ctrl/Cmd+M pour basculer."
     },
     "modal": {
       "title": "Préparer l'impression",
@@ -1875,8 +1889,8 @@
       "sheetPickerLabel": "Format de feuille",
       "sheetPortrait": "Portrait",
       "sheetLandscape": "Paysage",
-      "saveStyle": "Enregistrer le style",
-      "saveStyleHint": "Enregistre le style d'impression choisi pour ce fichier.",
+      "saveStyle": "Appliquer",
+      "saveStyleHint": "Applique et mémorise le style d'impression pour ce fichier.",
       "applyExpert": "Appliquer",
       "applyExpertHint": "Reconvertit le fichier avec les réglages des onglets Image / SVG / Style / Texte.",
       "applyExpertClean": "Aucun changement à appliquer.",
@@ -2091,5 +2105,36 @@
     "stopFailed": "Impossible d'arrêter le timelapse.",
     "deleteFailed": "Impossible de supprimer le timelapse.",
     "downloadFailed": "Impossible de télécharger la vidéo."
+  },
+  "workflow": {
+    "addFile": "Ajouter un fichier",
+    "hintAddFile": "La bibliothèque est vide — importe une image, un SVG ou un document.",
+    "addToPlan": "Ajouter au plan",
+    "hintAddToPlan": "Un fichier est importé mais rien n'est encore posé sur le plan.",
+    "chooseStyle": "Choisir le rendu",
+    "hintChooseStyle": "Un dessin posé n'a pas encore de style de conversion.",
+    "fixPens": "Corriger les stylos",
+    "hintFixPens": "Des stylos requis manquent au magasin — le tracé est bloqué.",
+    "verify": "Vérifier le tracé",
+    "hintVerify": "Génère le G-code et ouvre la simulation pour contrôle.",
+    "connect": "Connecter le traceur",
+    "hintConnect": "Le tracé est prêt — il ne manque que la machine.",
+    "launch": "Lancer le tracé",
+    "hintLaunch": "Tout est prêt : traceur connecté, tracé vérifié.",
+    "pause": "Pause",
+    "hintRunning": "Impression en cours.",
+    "resume": "Reprendre",
+    "hintPaused": "Impression en pause."
+  },
+  "cameraRoles": {
+    "title": "Rôles des caméras",
+    "hint": "Attribue chaque usage à une caméra : une seule caméra peut cumuler les deux rôles, deux caméras USB permettent de les séparer.",
+    "timelapse": "Timelapse",
+    "offset": "Mesure d'offset",
+    "noCameras": "Aucune caméra configurée — active une caméra ci-dessus (URL de flux) pour pouvoir attribuer les rôles.",
+    "needsProfile": "Sélectionne un profil machine pour attribuer la caméra d'offset (le réglage est enregistré sur le profil).",
+    "customUrl": "URL personnalisée",
+    "customUrlHint": "La station d'offset utilise une URL saisie à la main (section Mesure d'offset) qui ne correspond à aucune caméra configurée. Choisis une caméra pour la remplacer.",
+    "unassigned": "sans rôle"
   }
 }

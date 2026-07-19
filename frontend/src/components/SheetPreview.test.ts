@@ -2,10 +2,11 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia, storeToRefs } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import SheetPreview from './SheetPreview.vue'
 import { useJobStore } from '../stores/job'
+import { useUiStore } from '../stores/ui'
 import type { MachineProfile } from '../api/client'
 
 // SheetPreview is mounted by CanvasView with no props or emits. These
@@ -36,6 +37,12 @@ const i18n = createI18n({
         outOfBounds: 'Some placements exceed the workspace',
         removePlacement: 'Remove',
         viewHint: 'Wheel = zoom · drag = pan',
+        paperGuide: 'Paper guide',
+        paperGuideHint: 'Placement guide only.',
+        configurePens: 'Configure pens',
+        emptyTitle: 'Add a file to the plan',
+        emptyBrowse: 'Pick from the library',
+        emptyDrag: 'or drag a file here',
       },
       layers: {
         generate: 'Generate',
@@ -178,5 +185,39 @@ describe('SheetPreview with a profile seeded', () => {
       (r) => r.attributes('width') === '297' && r.attributes('height') === '420',
     )
     expect(ws).toBeDefined()
+  })
+})
+
+describe('SheetPreview — UX Lot 1 surfaces', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    seedProfile()
+  })
+
+  it('shows the empty-plan call to action until a placement lands', async () => {
+    const wrapper = mountSheet()
+    await nextTick()
+    const empty = wrapper.find('[data-test="sheet-empty-state"]')
+    expect(empty.exists()).toBe(true)
+    expect(empty.text()).toContain('Add a file to the plan')
+    // The CTA pulses the library pane so the operator looks left.
+    const ui = useUiStore()
+    const before = ui.filesPanePulse
+    await wrapper.find('[data-test="sheet-empty-browse"]').trigger('click')
+    expect(ui.filesPanePulse).toBe(before + 1)
+  })
+
+  it('surfaces the missing-pens reason as a visible strip with a fix action', async () => {
+    const job = useJobStore()
+    vi.spyOn(job, 'missingPenSlots', 'get').mockReturnValue([1, 2])
+    const wrapper = mountSheet()
+    await nextTick()
+    const notice = wrapper.find('[data-test="missing-pens-notice"]')
+    expect(notice.exists()).toBe(true)
+    expect(notice.text()).toContain('Missing pens: 1, 2')
+    const ui = useUiStore()
+    await wrapper.find('[data-test="missing-pens-configure"]').trigger('click')
+    expect(ui.plotterSettingsOpen).toBe(true)
+    expect(ui.plotterTab).toBe('colors')
   })
 })
