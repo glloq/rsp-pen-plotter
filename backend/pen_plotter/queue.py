@@ -66,6 +66,35 @@ class RunState(StrEnum):
 
 _ACTIVE = (RunState.QUEUED, RunState.RUNNING, RunState.PAUSED)
 
+# Change-notification fan-out for the ``/ws/queue`` push channel. Each
+# subscriber holds a 1-slot tick queue: any queue mutation (enqueue,
+# state flip, checkpoint flush, delete) drops a tick, coalescing bursts
+# — the WebSocket handler re-reads the run list per tick, so N rapid
+# mutations collapse into one payload. ``put_nowait`` on a full queue is
+# a no-op (the pending tick already covers the change), and with no
+# subscribers the whole thing is inert, so sync callers (tests, CLI)
+# never need an event loop.
+_change_listeners: set[asyncio.Queue[None]] = set()
+
+
+def subscribe_changes() -> asyncio.Queue[None]:
+    """Register a 1-slot tick queue notified on every queue mutation."""
+    listener: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
+    _change_listeners.add(listener)
+    return listener
+
+
+def unsubscribe_changes(listener: asyncio.Queue[None]) -> None:
+    """Remove a tick queue registered by :func:`subscribe_changes`."""
+    _change_listeners.discard(listener)
+
+
+def _notify_changed() -> None:
+    """Drop a coalescing tick on every subscriber."""
+    for listener in list(_change_listeners):
+        with contextlib.suppress(asyncio.QueueFull):
+            listener.put_nowait(None)
+
 
 class PrintRun(SQLModel, table=True):
     """A persisted print job in the production queue."""
@@ -104,6 +133,14 @@ class PrintRun(SQLModel, table=True):
     # slot badge without parsing the localised prompt text. ``None`` for a
     # mono colour change (no slot) or when the run isn't paused for a swap.
     swap_slot: int | None = None
+    # Structured swap description mirrored from the streamer while the run
+    # is paused on an operator-confirm swap: target ink hex, human label
+    # and boundary kind (``tool_change`` / ``color_change`` / ``load``).
+    # Lets the frontend compose a fully localised prompt; ``swap_prompt``
+    # stays as the English fallback for pre-existing runs.
+    swap_color: str | None = None
+    swap_label: str | None = None
+    swap_reason: str | None = None
     # Layers that were skipped at runtime under a ``skip_layer`` recovery
     # policy. Populated when the streamer raises ``StreamError`` and the
     # active policy says "skip and continue" — see ``_skip_to_next_layer``.
@@ -168,6 +205,7 @@ def enqueue(
         session.add(run)
         session.commit()
         session.refresh(run)
+    _notify_changed()
     return run
 
 
@@ -200,7 +238,8 @@ def _update(run_id: str, target: Engine, **fields: object) -> PrintRun | None:
         session.add(run)
         session.commit()
         session.refresh(run)
-        return run
+    _notify_changed()
+    return run
 
 
 _LAYER_BOUNDARY_RE = re.compile(
@@ -270,7 +309,8 @@ def delete_run(run_id: str, target: Engine = default_engine) -> bool:
             return False
         session.delete(run)
         session.commit()
-        return True
+    _notify_changed()
+    return True
 
 
 def next_queued(target: Engine = default_engine) -> PrintRun | None:
@@ -327,6 +367,12 @@ class PrintQueue:
     def start(self) -> None:
         """Start the background worker loop."""
         if self._loop_task is None:
+            # Recreate the wake event on every (re)start: asyncio.Event
+            # binds itself to the loop that first awaits it, and the queue
+            # is a module-level singleton — a lifespan restart (uvicorn
+            # reload, a second TestClient) runs on a NEW loop, and reusing
+            # the old event raises "bound to a different event loop".
+            self._wake = asyncio.Event()
             self._running = True
             self._loop_task = asyncio.create_task(self._loop())
 
@@ -444,6 +490,9 @@ class PrintQueue:
                     fields["state"] = RunState.PAUSED
                     fields["swap_prompt"] = getattr(progress, "message", None)
                     fields["swap_slot"] = getattr(progress, "slot", None)
+                    fields["swap_color"] = getattr(progress, "color", None)
+                    fields["swap_label"] = getattr(progress, "label", None)
+                    fields["swap_reason"] = getattr(progress, "reason", None)
             elif state == StreamState.RUNNING and swap_waiting:
                 # Streaming resumed past the swap — clear the prompt and
                 # restore the running state.
@@ -451,6 +500,9 @@ class PrintQueue:
                 fields["state"] = RunState.RUNNING
                 fields["swap_prompt"] = None
                 fields["swap_slot"] = None
+                fields["swap_color"] = None
+                fields["swap_label"] = None
+                fields["swap_reason"] = None
             state_flipped = state != last_stream_state
             last_stream_state = state
             now = time.monotonic()
@@ -573,6 +625,9 @@ class PrintQueue:
                 acked_lines=run.total_lines,
                 swap_prompt=None,
                 swap_slot=None,
+                swap_color=None,
+                swap_label=None,
+                swap_reason=None,
             )
         elif final.state == StreamState.ABORTED:
             state = RunState.CANCELED if self._cancel_requested else RunState.PAUSED
@@ -582,7 +637,17 @@ class PrintQueue:
             # checkpoint — with throttled writes the last flushed value
             # can lag the true acked count (e.g. an emergency-stop cancel
             # never reaches the streamer's ABORTED emit).
-            clear = {"swap_prompt": None, "swap_slot": None} if state == RunState.CANCELED else {}
+            clear: dict[str, object] = (
+                {
+                    "swap_prompt": None,
+                    "swap_slot": None,
+                    "swap_color": None,
+                    "swap_label": None,
+                    "swap_reason": None,
+                }
+                if state == RunState.CANCELED
+                else {}
+            )
             _update(run.id, self._engine, state=state, acked_lines=latest_acked, **clear)
         return True
 

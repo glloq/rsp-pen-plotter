@@ -58,6 +58,18 @@ class SwapAction(BaseModel):
     # structurally so the UI doesn't have to parse it back out of ``prompt``
     # (which is localised free text).
     slot: int | None = None
+    # Structured swap description so the frontend can compose a fully
+    # localised operator prompt instead of showing the English ``prompt``
+    # text. ``color`` is the target ink's lower-cased hex when known,
+    # ``label`` its human name (without the hex), and ``reason`` says what
+    # kind of boundary this is: install a pen in a magazine slot
+    # (``tool_change``), swap the single pen's ink (``color_change``) or
+    # load a missing ink into the magazine (``load``). All ``None`` on
+    # runs queued before these fields existed — consumers must fall back
+    # to ``prompt``.
+    color: str | None = None
+    label: str | None = None
+    reason: Literal["tool_change", "color_change", "load"] | None = None
 
 
 class StreamState(StrEnum):
@@ -84,6 +96,13 @@ class StreamProgress:
     # Magazine slot the current swap targets (mirrors ``SwapAction.slot``);
     # ``None`` when the current swap names no slot.
     slot: int | None = None
+    # Structured swap fields mirrored from the active ``SwapAction`` while
+    # parked on an operator-confirm swap (``color`` hex / ``label`` human
+    # name / ``reason`` boundary kind). ``None`` outside a swap or for
+    # legacy pause points — consumers fall back to ``message``.
+    color: str | None = None
+    label: str | None = None
+    reason: str | None = None
     # True only while the streamer is parked on an *operator-confirm* swap
     # that genuinely needs a human to act + press Resume. An automated inline
     # swap (firmware / host_timed) also transits ``WAITING`` but drives itself
@@ -302,6 +321,9 @@ class GcodeStreamer:
             self.progress.state = StreamState.WAITING
             self.progress.message = action.prompt
             self.progress.slot = action.slot
+            self.progress.color = action.color
+            self.progress.label = action.label
+            self.progress.reason = action.reason
             self.progress.needs_operator = True
             self._resume.clear()
             await self._emit()
@@ -311,6 +333,9 @@ class GcodeStreamer:
             self.progress.state = StreamState.RUNNING
             self.progress.message = None
             self.progress.slot = None
+            self.progress.color = None
+            self.progress.label = None
+            self.progress.reason = None
             self.progress.needs_operator = False
             return False
 

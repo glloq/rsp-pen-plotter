@@ -1636,7 +1636,12 @@
     "parkedHint": "The head has parked at the pen-change position. Swap the pen, then resume.",
     "slotBadge": "Slot {slot}",
     "resume": "I changed the pen — Resume",
-    "cancel": "Cancel run"
+    "cancel": "Cancel run",
+    "msg": {
+      "toolChange": "Insert {label} into pen slot {slot}, then resume.",
+      "colorChange": "Change the pen to {label}, then resume.",
+      "load": "Load {label} into magazine slot {slot}, then resume."
+    }
   },
   "queue": {
     "title": "Print queue",

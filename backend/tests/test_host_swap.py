@@ -366,3 +366,40 @@ def test_rack_motion_grab_also_emits_no_command() -> None:
     orch = ToolChangeOrchestrator(profile)
     plan = orch.plan(SwapContext(slot_index=1, from_slot_index=0))
     assert [c.send for c in plan.commands] == []
+
+
+def test_swap_actions_carry_structured_label_color_reason() -> None:
+    """P3 (v2): actions expose structured ``label`` / ``color`` /
+    ``reason`` so the frontend can compose a localised prompt instead
+    of parsing the English ``prompt`` text."""
+    from pen_plotter.core.toolchange import _split_label_hex
+
+    # Hex embedded in a display label splits into parts.
+    assert _split_label_hex("Vert prairie #00ff00") == ("Vert prairie", "#00ff00")
+    assert _split_label_hex("Red (#FF0000)") == ("Red", "#ff0000")
+    assert _split_label_hex("#00ff00") == (None, "#00ff00")
+    assert _split_label_hex(None) == (None, None)
+    # A known colour wins over the embedded hex.
+    assert _split_label_hex("Red #ff0000", "#aa0000") == ("Red", "#aa0000")
+
+    profile = _host_profile()
+    gcode = generate_gcode(TWO_LAYERS, profile, layers=_layers())
+    actions = guided_swap_actions(gcode, profile)
+    plans = list(actions.values())
+    assert all(a.reason == "tool_change" for a in plans)
+    assert all(a.slot is not None for a in plans)
+    assert all(a.label for a in plans)
+
+
+def test_load_boundary_reason_is_load() -> None:
+    """A magazine-load boundary carries ``reason='load'`` plus the ink parts."""
+    gcode = "; Load pen slot 2 (Rouge cerise #ff0011) into magazine\nM0\nG1 X1 Y1\n"
+    profile = _host_profile()
+    actions = guided_swap_actions(gcode, profile)
+    assert len(actions) == 1
+    action = next(iter(actions.values()))
+    assert action.kind == "operator_confirm"
+    assert action.reason == "load"
+    assert action.slot == 2
+    assert action.label == "Rouge cerise"
+    assert action.color == "#ff0011"

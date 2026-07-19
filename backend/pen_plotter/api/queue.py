@@ -2,18 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import os
+import secrets
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from pen_plotter import queue as q
 from pen_plotter.audit import record
-from pen_plotter.auth import require_api_key
+from pen_plotter.auth import API_KEY_ENV, require_api_key
 from pen_plotter.hardware.controller import controller
 from pen_plotter.profiles import get_profile
 
 router = APIRouter()
+
+# Keepalive interval for the ``/ws/queue`` push channel. Between change
+# ticks the handler re-sends the current snapshot at this cadence so a
+# half-dead TCP connection is detected (the send fails) and the SPA's
+# reconnect logic kicks in, instead of both sides idling forever.
+_WS_KEEPALIVE_S = 30.0
 
 #: Worker bound to the shared controller; started/stopped by the app lifespan.
 print_queue = q.PrintQueue(controller)
@@ -49,6 +59,9 @@ class PrintRunSummary(BaseModel):
     error: str | None = None
     swap_prompt: str | None = None
     swap_slot: int | None = None
+    swap_color: str | None = None
+    swap_label: str | None = None
+    swap_reason: str | None = None
     skipped_layers: list[str] = []
     idempotency_key: str | None = None
     gcode_file_id: str | None = None
@@ -68,6 +81,9 @@ def _summary(run: q.PrintRun) -> PrintRunSummary:
         error=run.error,
         swap_prompt=run.swap_prompt,
         swap_slot=run.swap_slot,
+        swap_color=run.swap_color,
+        swap_label=run.swap_label,
+        swap_reason=run.swap_reason,
         skipped_layers=list(run.skipped_layers or []),
         idempotency_key=run.idempotency_key,
         gcode_file_id=run.gcode_file_id,
@@ -166,3 +182,41 @@ async def remove(run_id: str) -> dict[str, str]:
         raise HTTPException(status_code=409, detail="Cancel the running job before deleting it.")
     q.delete_run(run_id)
     return {"deleted": run_id}
+
+
+@router.websocket("/ws/queue")
+async def queue_ws(websocket: WebSocket) -> None:
+    """Push the run-summary list to a client whenever the queue changes.
+
+    Replaces the SPA's 3 s ``GET /queue`` polling (v2 roadmap): the
+    payload of every frame is exactly the ``GET /queue`` response body,
+    so the client can feed both through the same code path. A frame is
+    sent on connect (initial snapshot), on every queue mutation
+    (coalesced through the 1-slot tick queues in
+    :func:`pen_plotter.queue.subscribe_changes`), and every
+    ``_WS_KEEPALIVE_S`` as a keepalive.
+
+    Router-level ``Depends(require_api_key)`` does not apply to
+    WebSocket routes, so the optional API key is validated here from the
+    ``token`` query parameter — same contract as ``/ws/plotter``.
+    """
+    expected = os.environ.get(API_KEY_ENV)
+    if expected:
+        token = websocket.query_params.get("token") or ""
+        if not secrets.compare_digest(expected, token):
+            await websocket.close(code=1008, reason="Invalid or missing API key.")
+            return
+    await websocket.accept()
+    ticks = q.subscribe_changes()
+    try:
+        while True:
+            payload = [_summary(run).model_dump(mode="json") for run in q.list_runs()]
+            await websocket.send_json(payload)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(ticks.get(), timeout=_WS_KEEPALIVE_S)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        q.unsubscribe_changes(ticks)
+        with contextlib.suppress(Exception):
+            await websocket.close()

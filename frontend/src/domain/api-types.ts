@@ -3635,8 +3635,14 @@ export interface components {
                     [key: string]: unknown;
                 };
             };
+            /** Swap Color */
+            swap_color?: string | null;
+            /** Swap Label */
+            swap_label?: string | null;
             /** Swap Prompt */
             swap_prompt?: string | null;
+            /** Swap Reason */
+            swap_reason?: string | null;
             /** Swap Slot */
             swap_slot?: number | null;
             /** Total Lines */
@@ -3687,8 +3693,14 @@ export interface components {
             skipped_layers: string[];
             /** State */
             state: string;
+            /** Swap Color */
+            swap_color?: string | null;
+            /** Swap Label */
+            swap_label?: string | null;
             /** Swap Prompt */
             swap_prompt?: string | null;
+            /** Swap Reason */
+            swap_reason?: string | null;
             /** Swap Slot */
             swap_slot?: number | null;
             /** Total Lines */
@@ -3909,6 +3921,12 @@ export interface components {
             slot?: number | null;
             /** State */
             state: string;
+            /** Swap Color */
+            swap_color?: string | null;
+            /** Swap Label */
+            swap_label?: string | null;
+            /** Swap Reason */
+            swap_reason?: string | null;
             /** Total */
             total: number;
         };

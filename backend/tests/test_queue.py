@@ -552,3 +552,29 @@ async def test_queue_list_endpoint_returns_summaries_without_gcode() -> None:
             assert detail.json()["gcode"] == big_gcode
         finally:
             await client.delete(f"/queue/{run_id}")
+
+
+def test_queue_websocket_sends_snapshot_and_pushes_on_change() -> None:
+    """P2 (v2): /ws/queue pushes the GET /queue payload on connect and
+    again whenever the queue mutates — the SPA drops its 3 s polling."""
+    from fastapi.testclient import TestClient
+
+    from pen_plotter.main import app
+
+    with TestClient(app) as client, client.websocket_connect("/ws/queue") as ws:
+        first = ws.receive_json()
+        assert isinstance(first, list)
+        created = client.post(
+            "/queue",
+            json={"name": "ws-push", "profile_name": PROFILE, "gcode": "G1 X1"},
+        )
+        assert created.status_code == 200
+        run_id = created.json()["id"]
+        try:
+            # The enqueue tick triggers a fresh snapshot carrying the run.
+            second = ws.receive_json()
+            assert any(r["id"] == run_id for r in second)
+            # Summaries only — never the full program payload.
+            assert all("gcode" not in r for r in second)
+        finally:
+            client.delete(f"/queue/{run_id}")

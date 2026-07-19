@@ -5,6 +5,7 @@ import {
   enqueuePrint,
   listQueue,
   queueRunAction,
+  websocketUrl,
   type PrintRun,
 } from '../api/client'
 import { errorDetail } from '../api/error'
@@ -24,6 +25,10 @@ const SLOW_INTERVAL_MS = 30_000
 // Exponential backoff cap when /queue keeps failing — protects the Pi from
 // reconnect storms during a flaky network or a backend restart.
 const MAX_BACKOFF_FACTOR = 4
+// Delay before re-opening /ws/queue after it drops. Polling covers the
+// gap, so the retry can afford to be lazy instead of hammering a
+// restarting backend.
+const WS_RECONNECT_MS = 5_000
 
 export const useQueueStore = defineStore('queue', () => {
   const runs = ref<PrintRun[]>([])
@@ -56,6 +61,45 @@ export const useQueueStore = defineStore('queue', () => {
   const lastSeenSkips = new Map<string, number>()
   let primedSkips = false
 
+  // Apply a fresh run list to the store — shared by the REST poll and
+  // the /ws/queue push channel so both paths run the same skip-toast
+  // detection and bookkeeping.
+  function applyRuns(next: PrintRun[]): void {
+    // Detect newly-skipped layers between updates and surface them
+    // as a critical (persistent) toast so the operator can't
+    // miss that the recovery policy fired. ``skipped_layers`` is
+    // append-only on the backend, so size delta == new skips.
+    const toasts = useToastStore()
+    for (const run of next) {
+      const prev = lastSeenSkips.get(run.id) ?? 0
+      const current = (run.skipped_layers ?? []).length
+      if (primedSkips && current > prev) {
+        const newOnes = (run.skipped_layers ?? []).slice(prev)
+        toasts.critical(
+          i18n.global.t('queue.skipNotice', {
+            name: run.name,
+            layers: newOnes.join(', '),
+          }),
+        )
+      }
+      lastSeenSkips.set(run.id, current)
+    }
+    // Drop bookkeeping for runs that have left the queue (completed,
+    // cancelled, deleted) so the Map can't grow unbounded across a
+    // long-lived session — one entry would otherwise linger forever
+    // per run id ever seen.
+    if (lastSeenSkips.size > next.length) {
+      const live = new Set(next.map((r) => r.id))
+      for (const id of lastSeenSkips.keys()) {
+        if (!live.has(id)) lastSeenSkips.delete(id)
+      }
+    }
+    primedSkips = true
+    runs.value = next
+    error.value = null
+    consecutiveErrors = 0
+  }
+
   async function load(): Promise<void> {
     // Single-flight: avoid stacking parallel /queue requests when
     // a tick fires while the previous one is still pending (slow
@@ -64,40 +108,7 @@ export const useQueueStore = defineStore('queue', () => {
     if (inflight) return inflight
     const promise = (async () => {
       try {
-        const next = await listQueue()
-        // Detect newly-skipped layers between polls and surface them
-        // as a critical (persistent) toast so the operator can't
-        // miss that the recovery policy fired. ``skipped_layers`` is
-        // append-only on the backend, so size delta == new skips.
-        const toasts = useToastStore()
-        for (const run of next) {
-          const prev = lastSeenSkips.get(run.id) ?? 0
-          const current = (run.skipped_layers ?? []).length
-          if (primedSkips && current > prev) {
-            const newOnes = (run.skipped_layers ?? []).slice(prev)
-            toasts.critical(
-              i18n.global.t('queue.skipNotice', {
-                name: run.name,
-                layers: newOnes.join(', '),
-              }),
-            )
-          }
-          lastSeenSkips.set(run.id, current)
-        }
-        // Drop bookkeeping for runs that have left the queue (completed,
-        // cancelled, deleted) so the Map can't grow unbounded across a
-        // long-lived session — one entry would otherwise linger forever
-        // per run id ever seen.
-        if (lastSeenSkips.size > next.length) {
-          const live = new Set(next.map((r) => r.id))
-          for (const id of lastSeenSkips.keys()) {
-            if (!live.has(id)) lastSeenSkips.delete(id)
-          }
-        }
-        primedSkips = true
-        runs.value = next
-        error.value = null
-        consecutiveErrors = 0
+        applyRuns(await listQueue())
       } catch (err) {
         consecutiveErrors = Math.min(consecutiveErrors + 1, MAX_BACKOFF_FACTOR)
         error.value = errorDetail(err, i18n.global.t('queue.loadFailed'))
@@ -158,6 +169,67 @@ export const useQueueStore = defineStore('queue', () => {
 
   const isHidden = (): boolean => typeof document !== 'undefined' && document.hidden
 
+  // Live /ws/queue push channel (v2). While it is open the backend
+  // pushes the run list on every mutation, so polling drops to the slow
+  // heartbeat cadence — the fast 3 s cadence only matters as a fallback
+  // when the socket is down (old backend, proxy without WS, reconnect
+  // window).
+  let socket: WebSocket | null = null
+  let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let wsEnabled = false
+
+  const socketLive = (): boolean => socket !== null && socket.readyState === WebSocket.OPEN
+
+  function openSocket(): void {
+    if (socket !== null || typeof WebSocket === 'undefined') return
+    try {
+      socket = new WebSocket(websocketUrl('/ws/queue'))
+    } catch {
+      socket = null // ``websocketUrl`` unavailable (tests) or ctor rejected
+      return
+    }
+    socket.onmessage = (event) => {
+      try {
+        applyRuns(JSON.parse(event.data as string) as PrintRun[])
+      } catch {
+        // Malformed frame — keep the last known list, polling covers us.
+      }
+    }
+    socket.onopen = () => {
+      // Downshift the poll timer now that pushes carry the updates.
+      if (timer !== null) _schedule()
+    }
+    socket.onclose = () => {
+      socket = null
+      if (timer !== null) _schedule() // resume the fast fallback cadence
+      if (wsEnabled && wsReconnectTimer === null) {
+        wsReconnectTimer = setTimeout(() => {
+          wsReconnectTimer = null
+          if (wsEnabled) openSocket()
+        }, WS_RECONNECT_MS)
+      }
+    }
+  }
+
+  function closeSocket(): void {
+    wsEnabled = false
+    if (wsReconnectTimer !== null) {
+      clearTimeout(wsReconnectTimer)
+      wsReconnectTimer = null
+    }
+    if (socket) {
+      const s = socket
+      socket = null
+      s.onclose = null
+      s.onmessage = null
+      try {
+        s.close()
+      } catch {
+        // Already closed / closing — nothing to do.
+      }
+    }
+  }
+
   function _schedule(): void {
     if (timer !== null) clearTimeout(timer)
     // Fast cadence while a run is active (timeline cockpit needs
@@ -167,7 +239,12 @@ export const useQueueStore = defineStore('queue', () => {
     // cadence even with an active run: nobody's watching the cockpit,
     // so 3 s polling just burns the Pi's event loop. The visibility
     // listener snaps back to fast + refreshes immediately on return.
-    const base = !isHidden() && active.value.length > 0 ? FAST_INTERVAL_MS : SLOW_INTERVAL_MS
+    // With the /ws/queue push channel live, polling is only a safety
+    // heartbeat — always use the slow cadence.
+    const base =
+      !socketLive() && !isHidden() && active.value.length > 0
+        ? FAST_INTERVAL_MS
+        : SLOW_INTERVAL_MS
     // Exponential backoff on repeated failures so a dropped backend doesn't
     // pin the Pi's event loop with reconnect attempts every 3 s.
     const interval = base * Math.pow(2, consecutiveErrors)
@@ -181,6 +258,8 @@ export const useQueueStore = defineStore('queue', () => {
 
   function startPolling(): void {
     if (timer !== null) return // idempotent
+    wsEnabled = true
+    openSocket()
     if (visibilityHandler === null && typeof document !== 'undefined') {
       visibilityHandler = () => {
         // On return to the foreground, refresh immediately (the slow-cadence
@@ -200,6 +279,7 @@ export const useQueueStore = defineStore('queue', () => {
   }
 
   function stopPolling(): void {
+    closeSocket()
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
@@ -217,6 +297,9 @@ export const useQueueStore = defineStore('queue', () => {
     enqueuing,
     isBusy,
     load,
+    // Exposed so tests can drive the store exactly like a /ws/queue
+    // push frame does; production code goes through load() / the socket.
+    applyRuns,
     enqueue,
     act,
     remove,

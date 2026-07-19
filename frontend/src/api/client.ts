@@ -633,6 +633,18 @@ export interface PrintRun {
    *  ``swap_prompt`` text. Null for a mono colour change (no slot) or when
    *  the run isn't paused for a slot-bearing swap. */
   swap_slot?: number | null
+  /** Target ink of the current swap as a lower-cased hex, carried
+   *  structurally (with ``swap_label`` / ``swap_reason``) so the UI can
+   *  compose a fully localised prompt and render the swatch without
+   *  parsing ``swap_prompt``. Null outside a swap or for runs queued
+   *  before these fields existed — fall back to ``swap_prompt``. */
+  swap_color?: string | null
+  /** Human name of the target ink ("Vert prairie"), hex stripped. */
+  swap_label?: string | null
+  /** What kind of boundary the swap is: install a pen in a magazine
+   *  slot (`tool_change`), swap the single pen's ink (`color_change`)
+   *  or load a missing ink into the magazine (`load`). */
+  swap_reason?: 'tool_change' | 'color_change' | 'load' | null
   /** Layers skipped at runtime under a ``skip_layer`` recovery
    *  policy. Populated by the backend when ``StreamError`` triggers
    *  the skip-and-continue path; empty otherwise. The UI surfaces it
