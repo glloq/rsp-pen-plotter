@@ -705,7 +705,7 @@
   "canvas": {
     "sheet": "Layout",
     "simulator": "Simulator",
-    "files": "G-code files",
+    "files": "Saved plots",
     "gcode": "G-code",
     "simulatorUnavailable": "Simulator unavailable for this dialect.",
     "gcodeEmpty": "No G-code generated yet.",
@@ -1503,7 +1503,13 @@
     "controlHint": "Connect the plotter, drive it manually and start prints from this tab.",
     "settingsTitle": "Plotter settings",
     "saveGcode": "Save G-code",
-    "running": "Running…"
+    "running": "Running…",
+    "detectConnect": "Detect and connect",
+    "detecting": "Detecting…",
+    "connectedTo": "Connected on {port}",
+    "noPortsFound": "No serial port detected. Check the USB cable, then retry or use manual configuration.",
+    "detectFailed": "No plotter answered on the detected ports. Try manual configuration.",
+    "manualConfig": "Manual configuration"
   },
   "assignedColor": {
     "title": "Layer colour",
@@ -1680,7 +1686,7 @@
     }
   },
   "gcodeFiles": {
-    "title": "G-code files",
+    "title": "Saved plots",
     "empty": "No G-code files yet. Generate a drawing, then save it here.",
     "print": "Print selection",
     "rename": "Rename",
@@ -1797,11 +1803,11 @@
   },
   "v2": {
     "mode": {
-      "assisted": "Assisted",
-      "expert": "Expert",
+      "assisted": "Simple",
+      "expert": "Advanced",
       "groupLabel": "Editor mode",
-      "assistedHint": "Guided wizard: pick intent, the resolver chooses an algorithm. Ctrl/Cmd+M to switch.",
-      "expertHint": "Rich editor: per-layer algorithm + passes + variants. Ctrl/Cmd+M to switch."
+      "assistedHint": "Simple mode: pick an intent, the resolver chooses an algorithm. Ctrl/Cmd+M to switch.",
+      "expertHint": "Advanced mode: per-layer algorithm + passes + variants. Ctrl/Cmd+M to switch."
     },
     "modal": {
       "title": "Prepare the print",
@@ -1883,8 +1889,8 @@
       "sheetPickerLabel": "Sheet format",
       "sheetPortrait": "Portrait",
       "sheetLandscape": "Landscape",
-      "saveStyle": "Save style",
-      "saveStyleHint": "Save the chosen print style for this file.",
+      "saveStyle": "Apply",
+      "saveStyleHint": "Applies and remembers the print style for this file.",
       "applyExpert": "Apply",
       "applyExpertHint": "Re-convert the file with the settings from the Image / SVG / Style / Text tabs.",
       "applyExpertClean": "No changes to apply.",

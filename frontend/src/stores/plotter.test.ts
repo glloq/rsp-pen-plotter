@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlotterStatus } from '../api/client'
 
 const plotterConnect = vi.fn()
+const listSerialPorts = vi.fn()
 const plotterDisconnect = vi.fn()
 const plotterCommand = vi.fn()
 
@@ -13,6 +14,7 @@ vi.mock('../api/client', async (importOriginal) => {
     ...actual,
     websocketUrl: () => 'ws://test/ws/plotter',
     plotterConnect: (...args: unknown[]) => plotterConnect(...args),
+    listSerialPorts: (...args: unknown[]) => listSerialPorts(...args),
     plotterDisconnect: (...args: unknown[]) => plotterDisconnect(...args),
     plotterCommand: (...args: unknown[]) => plotterCommand(...args),
   }
@@ -104,5 +106,42 @@ describe('plotter store', () => {
     expect(store.status.connected).toBe(false)
     // No reconnect: a new socket must not have been opened.
     expect(FakeWebSocket.instances).toHaveLength(1)
+  })
+})
+
+describe('usePlotterStore — detectAndConnect (UX v2)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    plotterConnect.mockReset()
+    listSerialPorts.mockReset()
+  })
+
+  it('tries candidates in order and adopts the first that connects', async () => {
+    listSerialPorts.mockResolvedValue([
+      { device: '/dev/ttyUSB0', description: 'CH340', likely: true },
+      { device: '/dev/ttyS0', description: 'UART', likely: false },
+    ])
+    plotterConnect
+      .mockRejectedValueOnce(new Error('busy'))
+      .mockResolvedValueOnce(makeStatus({ connected: true, state: 'idle' }))
+    const store = usePlotterStore()
+    await store.detectAndConnect()
+    expect(plotterConnect).toHaveBeenCalledTimes(2)
+    expect(plotterConnect.mock.calls[0]?.[0]).toBe('/dev/ttyUSB0')
+    expect(plotterConnect.mock.calls[1]?.[0]).toBe('/dev/ttyS0')
+    // The manual port field now shows what actually worked.
+    expect(store.port).toBe('/dev/ttyS0')
+    expect(store.status.connected).toBe(true)
+  })
+
+  it('reports failure without connecting when no candidate answers', async () => {
+    listSerialPorts.mockResolvedValue([
+      { device: '/dev/ttyUSB0', description: '', likely: true },
+    ])
+    plotterConnect.mockRejectedValue(new Error('no device'))
+    const store = usePlotterStore()
+    await store.detectAndConnect()
+    expect(store.status.connected).toBe(false)
+    expect(store.detecting).toBe(false)
   })
 })

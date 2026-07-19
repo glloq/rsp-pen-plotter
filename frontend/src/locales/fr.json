@@ -705,7 +705,7 @@
   "canvas": {
     "sheet": "Plan",
     "simulator": "Simulation",
-    "files": "Fichiers G-code",
+    "files": "Tracés enregistrés",
     "gcode": "G-code",
     "simulatorUnavailable": "Le simulateur n'est pas disponible pour ce dialecte.",
     "gcodeEmpty": "Aucun G-code généré pour le moment.",
@@ -1503,7 +1503,13 @@
     "controlHint": "Connecte le traceur, pilote-le manuellement et lance les impressions depuis cet onglet.",
     "settingsTitle": "Réglages du traceur",
     "saveGcode": "Enregistrer le G-code",
-    "running": "En cours…"
+    "running": "En cours…",
+    "detectConnect": "Détecter et connecter",
+    "detecting": "Détection en cours…",
+    "connectedTo": "Connecté sur {port}",
+    "noPortsFound": "Aucun port série détecté. Vérifie le câble USB, puis réessaie ou utilise la configuration manuelle.",
+    "detectFailed": "Aucun traceur n'a répondu sur les ports détectés. Essaie la configuration manuelle.",
+    "manualConfig": "Configuration manuelle"
   },
   "assignedColor": {
     "title": "Couleur du calque",
@@ -1680,7 +1686,7 @@
     }
   },
   "gcodeFiles": {
-    "title": "Fichiers G-code",
+    "title": "Tracés enregistrés",
     "empty": "Aucun fichier G-code. Générez un dessin puis enregistrez-le ici.",
     "print": "Imprimer la sélection",
     "rename": "Renommer",
@@ -1797,11 +1803,11 @@
   },
   "v2": {
     "mode": {
-      "assisted": "Assisté",
-      "expert": "Expert",
+      "assisted": "Simple",
+      "expert": "Avancé",
       "groupLabel": "Mode éditeur",
-      "assistedHint": "Assistant guidé : choisis l'intention, le resolver propose l'algorithme. Ctrl/Cmd+M pour basculer.",
-      "expertHint": "Éditeur complet : algorithme + passes + variantes par calque. Ctrl/Cmd+M pour basculer."
+      "assistedHint": "Mode simple : choisis l'intention, le resolver propose l'algorithme. Ctrl/Cmd+M pour basculer.",
+      "expertHint": "Mode avancé : algorithme + passes + variantes par calque. Ctrl/Cmd+M pour basculer."
     },
     "modal": {
       "title": "Préparer l'impression",
@@ -1883,8 +1889,8 @@
       "sheetPickerLabel": "Format de feuille",
       "sheetPortrait": "Portrait",
       "sheetLandscape": "Paysage",
-      "saveStyle": "Enregistrer le style",
-      "saveStyleHint": "Enregistre le style d'impression choisi pour ce fichier.",
+      "saveStyle": "Appliquer",
+      "saveStyleHint": "Applique et mémorise le style d'impression pour ce fichier.",
       "applyExpert": "Appliquer",
       "applyExpertHint": "Reconvertit le fichier avec les réglages des onglets Image / SVG / Style / Texte.",
       "applyExpertClean": "Aucun changement à appliquer.",

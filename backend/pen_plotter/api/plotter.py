@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import secrets
 from typing import Literal
 
@@ -61,6 +62,53 @@ class RunRequest(BaseModel):
 
     gcode: str
     profile_name: str | None = None
+
+
+class SerialPortInfo(BaseModel):
+    """One serial port candidate for the connection picker."""
+
+    device: str
+    description: str = ""
+    # True when the device name / description matches a USB-serial
+    # adapter pattern — the auto-connect flow tries those first, so a
+    # motherboard UART (``/dev/ttyS0``) never shadows the plotter.
+    likely: bool = False
+
+
+class PortsResponse(BaseModel):
+    """Serial ports visible on the host, most plausible first."""
+
+    ports: list[SerialPortInfo]
+
+
+# Devices that are almost always a USB serial adapter (plotter-class
+# hardware shows up as one of these on Linux / macOS / Windows).
+_LIKELY_PORT_RE = re.compile(r"ttyUSB|ttyACM|usbserial|usbmodem|^COM\d+$", re.IGNORECASE)
+
+
+def _list_serial_ports() -> list[SerialPortInfo]:
+    """Enumerate host serial ports via pyserial, most plausible first.
+
+    With ``OMNIPLOT_FAKE_HARDWARE=1`` a synthetic entry is prepended so
+    the auto-connect flow works end to end in E2E runs without a device
+    (``open_serial`` attaches a MockTransport for any port anyway).
+    """
+    from serial.tools import list_ports  # noqa: PLC0415 — optional hardware dep
+
+    ports = [
+        SerialPortInfo(
+            device=p.device,
+            description=p.description or "",
+            likely=bool(_LIKELY_PORT_RE.search(p.device) or "usb" in (p.description or "").lower()),
+        )
+        for p in list_ports.comports()
+    ]
+    if os.environ.get("OMNIPLOT_FAKE_HARDWARE", "").strip().lower() in {"1", "true", "yes", "on"}:
+        ports.insert(
+            0, SerialPortInfo(device="/dev/ttyFAKE0", description="Fake hardware", likely=True)
+        )
+    ports.sort(key=lambda p: not p.likely)
+    return ports
 
 
 class StatusResponse(BaseModel):
@@ -122,6 +170,17 @@ def _profile_or_404(name: str) -> MachineProfile:
 async def status() -> StatusResponse:
     """Return the current connection and streaming status."""
     return _status()
+
+
+@router.get("/plotter/ports")
+async def ports() -> PortsResponse:
+    """List the host's serial ports so the SPA can offer auto-connect.
+
+    Backs the « Détecter et connecter » flow (UX v2): the client tries
+    the ``likely`` candidates in order instead of asking the operator
+    for ``/dev/ttyUSB0`` up front.
+    """
+    return PortsResponse(ports=_list_serial_ports())
 
 
 @router.get("/plotter/commands")

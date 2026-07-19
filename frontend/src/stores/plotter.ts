@@ -4,6 +4,7 @@ import { errorDetail } from '../api/error'
 import { i18n } from '../i18n'
 import { useToastStore } from './toasts'
 import {
+  listSerialPorts,
   plotterCommand,
   plotterConnect,
   plotterDisconnect,
@@ -125,6 +126,53 @@ export const usePlotterStore = defineStore('plotter', () => {
     if (status.value.connected) openSocket()
   }
 
+  // « Détecter et connecter » (UX v2): enumerate the host's serial
+  // ports and try candidates in order (USB-serial adapters first,
+  // as sorted by the backend) with the current baudrate/terminator.
+  // The manual port field is updated to whatever worked, so the
+  // operator can see — and next time reuse — the detected device.
+  const detecting = ref(false)
+  async function detectAndConnect(): Promise<void> {
+    if (detecting.value) return
+    detecting.value = true
+    error.value = null
+    const toasts = useToastStore()
+    const toastId = toasts.progress(i18n.global.t('plotter.detecting'))
+    try {
+      const candidates = await listSerialPorts()
+      if (!candidates.length) {
+        toasts.update(toastId, 'error', i18n.global.t('plotter.noPortsFound'), 6000)
+        return
+      }
+      for (const candidate of candidates) {
+        try {
+          const result = await plotterConnect(candidate.device, baudrate.value, terminator.value)
+          if (result.connected) {
+            port.value = candidate.device
+            if (!socketLive()) status.value = result
+            toasts.update(
+              toastId,
+              'success',
+              i18n.global.t('plotter.connectedTo', { port: candidate.device }),
+              3000,
+            )
+            openSocket()
+            return
+          }
+        } catch {
+          // This candidate refused — try the next one.
+        }
+      }
+      toasts.update(toastId, 'error', i18n.global.t('plotter.detectFailed'), 6000)
+    } catch (err) {
+      const message = errorDetail(err, i18n.global.t('plotter.detectFailed'))
+      error.value = message
+      toasts.update(toastId, 'error', message, 6000)
+    } finally {
+      detecting.value = false
+    }
+  }
+
   const disconnect = (): Promise<void> => {
     // Close the stream FIRST so the REST response below is allowed to
     // write the final (disconnected) status, and so the browser doesn't
@@ -198,6 +246,8 @@ export const usePlotterStore = defineStore('plotter', () => {
     progress,
     movementBusy,
     connect,
+    detecting,
+    detectAndConnect,
     disconnect,
     jog,
     goto,

@@ -881,6 +881,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plotter/ports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ports
+         * @description List the host's serial ports so the SPA can offer auto-connect.
+         *
+         *     Backs the « Détecter et connecter » flow (UX v2): the client tries
+         *     the ``likely`` candidates in order instead of asking the operator
+         *     for ``/dev/ttyUSB0`` up front.
+         */
+        get: operations["ports_plotter_ports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plotter/resume": {
         parameters: {
             query?: never;
@@ -3414,6 +3438,14 @@ export interface components {
             source_kind: components["schemas"]["SourceKind"];
         };
         /**
+         * PortsResponse
+         * @description Serial ports visible on the host, most plausible first.
+         */
+        PortsResponse: {
+            /** Ports */
+            ports: components["schemas"]["SerialPortInfo"][];
+        };
+        /**
          * PreflightReport
          * @description Pre-run safety and estimation checks for a placed drawing.
          */
@@ -3887,6 +3919,24 @@ export interface components {
          * @enum {string}
          */
         SegmentationMethod: "fixed_palette" | "kmeans" | "none";
+        /**
+         * SerialPortInfo
+         * @description One serial port candidate for the connection picker.
+         */
+        SerialPortInfo: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Device */
+            device: string;
+            /**
+             * Likely
+             * @default false
+             */
+            likely: boolean;
+        };
         /**
          * Severity
          * @description Outcome of evaluating one budget.
@@ -5968,6 +6018,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ports_plotter_ports_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortsResponse"];
                 };
             };
             /** @description Validation Error */

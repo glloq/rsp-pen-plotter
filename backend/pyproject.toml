@@ -85,6 +85,8 @@ module = [
     "vpype",
     "vpype_cli",
     "serial_asyncio",
+    "serial.tools",
+    "serial.tools.*",
     "scipy",
     "scipy.*",
     "skimage",

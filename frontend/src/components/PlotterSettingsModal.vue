@@ -227,48 +227,71 @@ onBeforeUnmount(() => {
                 v-if="!status.connected"
                 class="space-y-2 rounded-lg border border-slate-700 bg-slate-800 p-3"
               >
-                <label class="block text-xs text-slate-400">
-                  {{ t('plotter.port') }}
-                  <input
-                    v-model="port"
-                    placeholder="/dev/ttyUSB0"
-                    class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
-                  />
-                  <span class="mt-0.5 block text-[11px] text-slate-500">{{
-                    t('plotter.portHint')
-                  }}</span>
-                </label>
-                <div class="grid grid-cols-2 gap-2">
-                  <label class="block text-xs text-slate-400">
-                    {{ t('plotter.baudrate') }}
-                    <input
-                      v-model.number="baudrate"
-                      type="number"
-                      placeholder="115200"
-                      class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
-                    />
-                  </label>
-                  <label class="block text-xs text-slate-400">
-                    {{ t('execute.terminator') }}
-                    <div
-                      class="mt-0.5 flex w-full items-center rounded border border-slate-700 bg-slate-800/60 px-2 py-1 text-sm text-slate-300"
-                      data-test="terminator-readonly"
-                    >
-                      <span class="font-mono uppercase">{{ terminator }}</span>
-                      <span class="ml-auto text-[10px] text-slate-500">{{
-                        t('execute.terminatorFromProfile')
-                      }}</span>
-                    </div>
-                  </label>
-                </div>
+                <!-- Auto-detect first (UX v2): enumerate host ports and
+                     try USB-serial candidates in order. Port + baudrate
+                     stay reachable below for unusual setups. -->
                 <button
                   type="button"
-                  class="w-full rounded bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-medium text-white"
-                  data-test="plotter-connect"
-                  @click="plotter.connect()"
+                  class="w-full rounded bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  data-test="plotter-detect-connect"
+                  :disabled="plotter.detecting"
+                  @click="plotter.detectAndConnect()"
                 >
-                  {{ t('plotter.connect') }}
+                  {{ plotter.detecting ? t('plotter.detecting') : t('plotter.detectConnect') }}
                 </button>
+
+                <details class="rounded border border-slate-700/60">
+                  <summary
+                    class="cursor-pointer select-none px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+                    data-test="plotter-manual-config"
+                  >
+                    {{ t('plotter.manualConfig') }}
+                  </summary>
+                  <div class="space-y-2 px-2 pb-2">
+                    <label class="block text-xs text-slate-400">
+                      {{ t('plotter.port') }}
+                      <input
+                        v-model="port"
+                        placeholder="/dev/ttyUSB0"
+                        class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+                      />
+                      <span class="mt-0.5 block text-[11px] text-slate-500">{{
+                        t('plotter.portHint')
+                      }}</span>
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                      <label class="block text-xs text-slate-400">
+                        {{ t('plotter.baudrate') }}
+                        <input
+                          v-model.number="baudrate"
+                          type="number"
+                          placeholder="115200"
+                          class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
+                        />
+                      </label>
+                      <label class="block text-xs text-slate-400">
+                        {{ t('execute.terminator') }}
+                        <div
+                          class="mt-0.5 flex w-full items-center rounded border border-slate-700 bg-slate-800/60 px-2 py-1 text-sm text-slate-300"
+                          data-test="terminator-readonly"
+                        >
+                          <span class="font-mono uppercase">{{ terminator }}</span>
+                          <span class="ml-auto text-[10px] text-slate-500">{{
+                            t('execute.terminatorFromProfile')
+                          }}</span>
+                        </div>
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      class="w-full rounded border border-emerald-700 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-900/30"
+                      data-test="plotter-connect"
+                      @click="plotter.connect()"
+                    >
+                      {{ t('plotter.connect') }}
+                    </button>
+                  </div>
+                </details>
               </div>
 
               <div

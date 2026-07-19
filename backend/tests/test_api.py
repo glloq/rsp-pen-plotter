@@ -196,3 +196,40 @@ def test_plotter_websocket_sends_initial_status() -> None:
         message = ws.receive_json()
         assert "state" in message
         assert "connected" in message
+
+
+def test_plotter_ports_lists_candidates(monkeypatch) -> None:
+    """GET /plotter/ports enumerates host serial ports, USB-serial
+    candidates first, so the SPA's auto-connect can try them in order."""
+    from types import SimpleNamespace
+
+    from serial.tools import list_ports as lp
+
+    from pen_plotter.api import plotter as plotter_api
+
+    monkeypatch.setattr(
+        lp,
+        "comports",
+        lambda: [
+            SimpleNamespace(device="/dev/ttyS0", description="16550A UART"),
+            SimpleNamespace(device="/dev/ttyUSB0", description="CH340 serial converter"),
+        ],
+    )
+    ports = plotter_api._list_serial_ports()
+    assert [p.device for p in ports] == ["/dev/ttyUSB0", "/dev/ttyS0"]
+    assert ports[0].likely is True
+    assert ports[1].likely is False
+
+
+def test_plotter_ports_fake_hardware_prepends_synthetic(monkeypatch) -> None:
+    """OMNIPLOT_FAKE_HARDWARE=1 injects a fake candidate so the E2E
+    auto-connect parcours works without a physical device."""
+    from serial.tools import list_ports as lp
+
+    from pen_plotter.api import plotter as plotter_api
+
+    monkeypatch.setattr(lp, "comports", lambda: [])
+    monkeypatch.setenv("OMNIPLOT_FAKE_HARDWARE", "1")
+    ports = plotter_api._list_serial_ports()
+    assert ports[0].device == "/dev/ttyFAKE0"
+    assert ports[0].likely is True
