@@ -2873,6 +2873,11 @@ export interface components {
              */
             optimize: boolean;
             /**
+             * Seam Rotation
+             * @default true
+             */
+            seam_rotation: boolean;
+            /**
              * Simplify Tolerance Mm
              * @default 0.05
              */

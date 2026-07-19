@@ -443,3 +443,79 @@ def test_plan_with_rerendered_svg_returns_input_unchanged_on_fallback() -> None:
     # is actually applied.
     assert out is plan
     assert out.svg == "<svg>ORIGINAL</svg>"
+
+
+# ---- in-pipeline optimization of the rerendered SVG ------------------------
+
+
+def _svg_pen_up(svg: str) -> float:
+    """Total pen-up travel of an SVG's polylines in document order.
+
+    Mirrors how ``core.gcode._read_layers`` walks the pivot: labeled
+    fragments in order, then each layer's lines in order — the exact
+    sequence the plotter will travel.
+    """
+    from pen_plotter.core.layers import labeled_group_fragments
+    from pen_plotter.core.toolpath import _doc_from_svg
+
+    total = 0.0
+    prev_end: complex | None = None
+    for _label, fragment in labeled_group_fragments(svg):
+        doc = _doc_from_svg(fragment)
+        for collection in doc.layers.values():
+            for line in collection:
+                if len(line) < 2:
+                    continue
+                if prev_end is not None:
+                    total += abs(complex(line[0]) - prev_end)
+                prev_end = complex(line[-1])
+    return total
+
+
+def test_plan_with_rerendered_svg_optimizes_toolpaths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The rerendered SVG ships in optimized order, not raw Hershey order.
+
+    Regression cover for audit_optimisation_trace_2026-07-19 §F1: the
+    /generate-time text rerender used to replace the frontend-optimized
+    SVG with the converter's raw output, nearly doubling pen-up travel
+    on a dense text page. The wrapper now runs the toolpath optimizer on
+    the fresh render, so its travel must beat the raw converter output.
+    """
+    body = ("Le trace optimise ses trajets avant le G-code\n" * 8).encode("utf-8")
+    _seed_library_file(monkeypatch, tmp_path, file_id="opt-1", data=body, suffix=".txt")
+    plan = _text_plan(
+        library_file_id="opt-1",
+        source_mime="text/plain",
+        typography=TypographyPlan(font_size_mm=8.0),
+    )
+    raw = rerender_text_svg(plan)
+    assert raw is not None
+    out = plan_with_rerendered_svg(plan)
+    assert _svg_pen_up(out.svg) < _svg_pen_up(raw)
+
+
+def test_plan_with_rerendered_svg_falls_back_when_optimize_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An optimizer crash must never block generation — raw render flows through."""
+    from pen_plotter.application import text_render as tr
+
+    body = b"Hello\n"
+    _seed_library_file(monkeypatch, tmp_path, file_id="opt-2", data=body, suffix=".txt")
+
+    def boom(svg: str, **kwargs: object) -> object:
+        raise RuntimeError("vpype exploded")
+
+    monkeypatch.setattr(tr, "optimize_svg", boom)
+    plan = _text_plan(
+        library_file_id="opt-2",
+        source_mime="text/plain",
+        typography=TypographyPlan(),
+        svg="<svg>STALE</svg>",
+    )
+    out = plan_with_rerendered_svg(plan)
+    # The rerender still replaced the stale SVG; only the optimization
+    # step was skipped.
+    assert "STALE" not in out.svg

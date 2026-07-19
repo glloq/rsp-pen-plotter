@@ -14,10 +14,11 @@
 >
 > État global : **sain**. L'optimiseur actuel capte déjà l'essentiel du gain
 > possible (pen-up divisé par 15 à 40 sur les styles denses). Les constats
-> ci-dessous sont un vrai trou sur le chemin texte (F1), deux améliorations
-> mesurées mais de second ordre (F2, F5), et un recadrage utile : après tri,
-> ce sont **les levées de stylo qui dominent le temps résiduel**, pas les
-> trajets (F4).
+> ci-dessous sont un vrai trou sur le chemin texte (F1 — ✅ corrigé), deux
+> améliorations mesurées mais de second ordre (F2 — ✅ corrigé, F5), un bug
+> d'early-exit découvert pendant les correctifs (F7 — ✅ corrigé), et un
+> recadrage utile : après tri, ce sont **les levées de stylo qui dominent
+> le temps résiduel**, pas les trajets (F4).
 
 ---
 
@@ -104,7 +105,17 @@ Lecture :
 
 ## 3. Constats
 
-### F1 — **[HAUTE]** Un job texte re-rendu au `/generate` n'est **jamais optimisé**
+### F1 — **[HAUTE — ✅ corrigé]** Un job texte re-rendu au `/generate` n'est **jamais optimisé**
+
+> **Statut : corrigé** dans ce même lot. `plan_with_rerendered_svg`
+> passe désormais le SVG re-rendu par `optimize_svg` **après** le bake de
+> la transform de placement, en honorant les réglages `optimize` /
+> `simplify_tolerance_mm` portés par les `LayerPlan` du plan, avec repli
+> silencieux sur le rendu brut si l'optimiseur échoue (le rerender ne
+> bloque jamais la génération). Tests :
+> `test_plan_with_rerendered_svg_optimizes_toolpaths` et
+> `test_plan_with_rerendered_svg_falls_back_when_optimize_fails`.
+> Description d'origine conservée ci-dessous pour traçabilité.
 
 Pour un source `text/plain` / `text/markdown` avec plan typographique,
 `run_generate` (et `run_preflight`) remplacent le SVG du plan par un rendu
@@ -127,7 +138,21 @@ page, borné par le même early-exit que `/optimize`. Attention à le faire
 placement sur ses groupes ; l'optimiseur doit voir la géométrie finale) et à
 garder preflight/generate alignés (les deux passent par le même helper).
 
-### F2 — **[MOYENNE]** Le tri peut encore gagner −10 à −28 % de pen-up (rotation de couture + 2-opt)
+### F2 — **[MOYENNE — ✅ corrigé]** Le tri peut encore gagner −10 à −28 % de pen-up (rotation de couture + 2-opt)
+
+> **Statut : corrigé** dans ce même lot. Nouveau module
+> `core/pathsort.py` (`improve_order`) branché dans
+> `core/toolpath._optimize_svg` après le pipeline vpype : rotation de
+> couture des boucles fermées (glouton loop-aware) puis 2-opt au niveau
+> des chemins **à budget temps** (1,5 s/calque, candidats kd-tree — même
+> approche que `core/tsp.py`), sans jamais dégrader l'ordre d'entrée.
+> Opt-out par calque via `LayerOptimization.seam_rotation` (défaut
+> activé), exposé dans l'OpenAPI. Gains mesurés en intégration :
+> stippling 7 770 → 6 849, circle_pack 11 322 → 8 539, contours
+> 8 439 → 7 694, pour +0,3 à 0,6 s de CPU par calque. Tests :
+> `test_pathsort.py`, `test_optimize_rotates_closed_loop_seams`,
+> `test_optimize_seam_rotation_keeps_loops_closed`.
+> Description d'origine conservée ci-dessous.
 
 Deux limites du `linesort` actuel, mesurées ci-dessus :
 
@@ -205,6 +230,24 @@ sur les styles à cercles. À ne considérer que comme complément de F2, seuil
 borné à la largeur du stylo du calque, jamais par défaut sur un SVG importé
 (un saut peut être un blanc voulu).
 
+### F7 — **[HAUTE — ✅ corrigée]** L'early-exit sautait l'optimisation des calques faits de cercles
+
+> Découverte **pendant l'implémentation des correctifs** (le test de
+> rotation de couture sur trois `<circle>` retournait des métriques à
+> zéro), corrigée dans ce même lot.
+
+Le raccourci « mono-calque, un seul chemin » de `_optimize_svg`
+(`_path_count`) ne comptait que `path` / `polyline` / `polygon` /
+`line`. Un dessin **mono-calque composé de `<circle>`** — exactement ce
+qu'émettent `stippling`, `halftone`, `voronoi_stipple` et `circle_pack`,
+c'est-à-dire un portrait pointillisme mono-stylo typique — comptait
+« 0 chemin » et repartait **tel quel, en ordre brut de génération, avec
+des métriques à zéro**. Vu les mesures du §2 (pen-up brut ×17 à ×22 sur
+ces styles), c'est le pire cas possible passé sous le radar : le seul
+garde-fou restant était le tri « écriture » naturel de l'algorithme.
+Correctif : `_path_count` compte désormais aussi `circle` / `ellipse` /
+`rect`. Test : `test_optimize_does_not_early_exit_on_circle_only_layer`.
+
 ### F6 — **[BASSE]** Divers
 
 - `linesort` démarre du premier chemin du calque, pas de la position de
@@ -222,8 +265,9 @@ borné à la largeur du stylo du calque, jamais par défaut sur un SVG importé
 
 | # | Constat | Gain | Effort | Priorité |
 |---|---------|------|--------|----------|
-| F1 | SVG texte re-rendu jamais optimisé | −46 % de pen-up sur les jobs texte (~30 s/page dense) | Faible (brancher `optimize_svg` dans `text_render`) | **P1** |
-| F2 | Rotation de couture + 2-opt à budget | −10 à −28 % de pen-up ; 0,5–2,5 % du temps total | Moyen (réutiliser `core/tsp.py`, option par calque) | **P2** |
+| F1 | SVG texte re-rendu jamais optimisé | −46 % de pen-up sur les jobs texte (~30 s/page dense) | Faible (brancher `optimize_svg` dans `text_render`) | **P1 — ✅ corrigé** |
+| F7 | Early-exit : calques de `<circle>` jamais optimisés (stippling/halftone mono-calque) | Pen-up brut ×17–22 évité sur le cas touché | Trivial (`_path_count`) | **découverte — ✅ corrigée** |
+| F2 | Rotation de couture + 2-opt à budget | −10 à −28 % de pen-up ; 0,5–2,5 % du temps total | Moyen (`core/pathsort.py`, option par calque) | **P2 — ✅ corrigé** |
 | F3 | Tolérances en unités utilisateur, pas en mm | Fidélité des réglages (dépend de la résolution source) | Faible-moyen (conversion via l'échelle de placement) | **P3** |
 | F4 | Levées = poste dominant post-tri | Documentation + calibration profil (`pen_lift_time_ms`, dwell) | Doc + mesure machine | **P3** |
 | F5 | Chaînage émetteur | ~50 s sur `contours`, sinon nul | Ne vaut le coup qu'avec F2 | P4 |

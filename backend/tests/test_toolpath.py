@@ -58,3 +58,52 @@ def test_optimize_geometry_ir_round_trip_preserves_layers() -> None:
     assert 'inkscape:label="red"' in result.svg
     assert 'inkscape:label="blue"' in result.svg
     assert result.metrics.pen_up_after_mm <= result.metrics.pen_up_before_mm
+
+
+# Three circles in a triangle whose seams (svgelements starts a circle at
+# its rightmost point) all sit away from the shortest tour. A collinear
+# row would be seam-invariant; the 2-D arrangement makes seam rotation
+# strictly better than any reordering of fixed-seam loops.
+CLOSED_LOOPS = (
+    f'<svg {NS} viewBox="0 0 100 100">'
+    '<g inkscape:label="ink" stroke="#000000">'
+    '<circle cx="20" cy="20" r="5"/>'
+    '<circle cx="60" cy="20" r="5"/>'
+    '<circle cx="40" cy="60" r="5"/>'
+    "</g></svg>"
+)
+
+
+def test_optimize_rotates_closed_loop_seams() -> None:
+    """Seam rotation (default on) beats fixed seams on closed loops."""
+    rotated = optimize_svg(CLOSED_LOOPS)
+    fixed = optimize_svg(
+        CLOSED_LOOPS, layers=[LayerOptimization(layer_id="ink", seam_rotation=False)]
+    )
+    assert rotated.metrics.pen_up_after_mm < fixed.metrics.pen_up_after_mm
+    assert rotated.metrics.pen_up_after_mm <= rotated.metrics.pen_up_before_mm
+
+
+def test_optimize_seam_rotation_keeps_loops_closed() -> None:
+    """Rotated loops still start and end on the same point in the output."""
+    from pen_plotter.core.toolpath import _doc_from_svg
+
+    result = optimize_svg(CLOSED_LOOPS)
+    doc = _doc_from_svg(result.svg)
+    lines = [line for layer in doc.layers.values() for line in layer]
+    assert len(lines) == 3
+    for line in lines:
+        assert abs(line[0] - line[-1]) < 1e-6
+
+
+def test_optimize_does_not_early_exit_on_circle_only_layer() -> None:
+    """Regression: a mono-layer drawing made of ``<circle>`` dots must optimize.
+
+    The single-path early-exit counted only path/polyline/polygon/line, so
+    a single-layer stippling / halftone / circle_pack render (dots are
+    ``<circle>`` elements) was returned untouched — in raw generation
+    order, with zeroed metrics. Three circles across the canvas must
+    yield non-zero pen-up metrics, proof the vpype pipeline actually ran.
+    """
+    result = optimize_svg(CLOSED_LOOPS)
+    assert result.metrics.pen_up_before_mm > 0.0
