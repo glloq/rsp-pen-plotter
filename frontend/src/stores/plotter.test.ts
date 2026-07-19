@@ -135,9 +135,7 @@ describe('usePlotterStore — detectAndConnect (UX v2)', () => {
   })
 
   it('reports failure without connecting when no candidate answers', async () => {
-    listSerialPorts.mockResolvedValue([
-      { device: '/dev/ttyUSB0', description: '', likely: true },
-    ])
+    listSerialPorts.mockResolvedValue([{ device: '/dev/ttyUSB0', description: '', likely: true }])
     plotterConnect.mockRejectedValue(new Error('no device'))
     const store = usePlotterStore()
     await store.detectAndConnect()
