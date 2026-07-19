@@ -324,6 +324,29 @@ def sheet_exceeds_workspace(profile: MachineProfile, placement: Placement) -> bo
     )
 
 
+def _layers_from_geometry_ir(geometry: object) -> list[_Layer]:
+    """Build the generator's layer list straight from a :class:`GeometryIR`.
+
+    Direct counterpart of :func:`_read_layers` for the typed pipeline —
+    no SVG serialisation, no XML parse, no vpype read. Closed polylines
+    are explicitly closed (first point re-appended) to match what the
+    SVG round-trip produced via ``<polygon>`` elements.
+    """
+    out: list[_Layer] = []
+    for layer in getattr(geometry, "layers", []) or []:
+        label = getattr(layer, "label", "") or getattr(layer, "layer_id", "")
+        item = _Layer(label=label)
+        for poly in getattr(layer, "polylines", []) or []:
+            pts = [(float(x), float(y)) for x, y in (getattr(poly, "points", []) or [])]
+            if len(pts) < 2:
+                continue
+            if getattr(poly, "closed", False) and pts[0] != pts[-1]:
+                pts.append(pts[0])
+            item.polylines.append(pts)
+        out.append(item)
+    return out
+
+
 def generate_gcode_from_geometry(
     geometry: object,
     profile: MachineProfile,
@@ -337,27 +360,28 @@ def generate_gcode_from_geometry(
 
     Counterpart of :func:`pen_plotter.core.toolpath.optimize_geometry_ir`:
     closes the IR loop on the G-code side so a consumer running with
-    ``OMNIPLOT_IR_ENABLED=1`` can route both phases through typed IR
-    artifacts. Today the IR is rebuilt into the labelled SVG pivot
-    via :func:`pen_plotter.core.toolpath._geometry_ir_to_svg` and the
-    SVG path takes over; future iterations can emit G-code directly
-    from the polyline lists.
-
-    Surface is stable so downstream code can opt into the IR
-    pipeline without waiting for the inner SVG round-trip to be
-    removed.
+    ``OMNIPLOT_IR_ENABLED=1`` routes both phases through typed IR
+    artifacts. The polyline lists are consumed **directly** (v2
+    roadmap 2.1b) — no SVG round-trip, no XML parse, no vpype read —
+    which removes the dominant per-call cost of the IR generate path
+    on Pi-class hardware.
     """
-    from pen_plotter.core.toolpath import _geometry_ir_to_svg
+    from pen_plotter.observability import traced_span
 
-    svg = _geometry_ir_to_svg(geometry)
-    return generate_gcode(
-        svg,
-        profile,
-        layers=layers,
+    with traced_span(
+        "pipeline.generate_gcode_from_geometry",
+        layer_count=len(getattr(geometry, "layers", []) or []),
+        profile_name=profile.name,
         scale_mode=scale_mode,
-        margin_mm=margin_mm,
-        placement=placement,
-    )
+    ):
+        return _generate_from_layers(
+            _layers_from_geometry_ir(geometry),
+            profile,
+            layers=layers,
+            scale_mode=scale_mode,
+            margin_mm=margin_mm,
+            placement=placement,
+        )
 
 
 def generate_gcode(
@@ -416,8 +440,31 @@ def _generate_gcode_impl(
     margin_mm: float,
     placement: Placement | None,
 ) -> str:
-    layer_geometry = _read_layers(svg)
+    return _generate_from_layers(
+        _read_layers(svg),
+        profile,
+        layers=layers,
+        scale_mode=scale_mode,
+        margin_mm=margin_mm,
+        placement=placement,
+    )
 
+
+def _generate_from_layers(
+    layer_geometry: list[_Layer],
+    profile: MachineProfile,
+    *,
+    layers: list[LayerPlan] | None,
+    scale_mode: ScaleMode,
+    margin_mm: float,
+    placement: Placement | None,
+) -> str:
+    """Shared generator body: geometry already read into ``_Layer`` lists.
+
+    Fed by :func:`_read_layers` on the SVG path and by
+    :func:`_layers_from_geometry_ir` on the typed-IR path, so both
+    pipelines emit through exactly the same code.
+    """
     overrides = {item.layer_id: item for item in (layers or [])}
     bounds = _bounds_of(layer_geometry)
     transform = _make_transform(bounds, profile, scale_mode, margin_mm, placement)

@@ -211,6 +211,28 @@ def optimize_svg(
         )
 
 
+def _doc_from_ir_layer(layer: Any) -> vp.Document:
+    """Build a single-layer vpype document straight from IR polylines.
+
+    Direct counterpart of :func:`_doc_from_svg` for the typed pipeline —
+    no SVG serialisation, no XML parse. Closed polylines are explicitly
+    closed (first point re-appended) to match what the SVG round-trip
+    produced via ``<polygon>`` elements.
+    """
+    collection = vp.LineCollection()
+    for poly in getattr(layer, "polylines", []) or []:
+        pts = getattr(poly, "points", []) or []
+        if len(pts) < 2:
+            continue
+        line = np.array([complex(float(x), float(y)) for x, y in pts])
+        if getattr(poly, "closed", False) and line[0] != line[-1]:
+            line = np.append(line, line[0])
+        collection.append(line)
+    doc = vp.Document()
+    doc.add(collection, layer_id=1)
+    return doc
+
+
 def optimize_geometry_ir(
     geometry: Any,
     *,
@@ -220,24 +242,77 @@ def optimize_geometry_ir(
 ) -> ToolpathResult:
     """Optimize toolpaths starting from a :class:`GeometryIR` artifact.
 
-    First v0.2 consumer of the typed IR. The current implementation
-    rebuilds an SVG pivot from the IR and delegates to
-    :func:`optimize_svg`; future iterations can feed vpype's
-    ``Document`` directly from the polylines and skip the SVG
-    round-trip entirely (the SIMD geometry work tracked under
-    audit #1 §7).
-
-    Surface is stable today: callers can opt into the IR pipeline
-    by passing the cached ``GeometryIR`` instead of an SVG string,
-    even though the inner loop hasn't been rewritten yet.
+    Direct vpype consumer (v2 roadmap 2.1a): each IR layer's polylines
+    feed a :class:`vpype.Document` straight from the typed lists — no
+    SVG serialisation, no XML parse, no ``read_multilayer_svg``. The
+    optimized result is still serialised to the labelled SVG pivot so
+    downstream consumers (preview, G-code generation on the SVG path)
+    are unaffected. IR points are millimetres by contract, so the
+    default tolerance scale is 1.0 unless ``units_per_mm`` overrides it.
     """
     with traced_span(
         "pipeline.optimize_geometry_ir",
         layer_count=len(getattr(geometry, "layers", []) or []),
     ):
-        svg = _geometry_ir_to_svg(geometry)
-        return _optimize_svg(
-            svg, layers=layers, merge_tolerance_mm=merge_tolerance_mm, units_per_mm=units_per_mm
+        ir_layers = list(getattr(geometry, "layers", []) or [])
+        settings = {item.layer_id: item for item in (layers or [])}
+        scale = units_per_mm or 1.0
+
+        # Same single-path early-exit as the SVG route: one layer with at
+        # most one polyline is already monotonic, skip the vpype pipeline.
+        if len(ir_layers) == 1 and len(getattr(ir_layers[0], "polylines", []) or []) <= 1:
+            return ToolpathResult(
+                svg=_geometry_ir_to_svg(geometry),
+                metrics=ToolpathMetrics(
+                    pen_up_before_mm=0.0, pen_up_after_mm=0.0, reduction_pct=0.0
+                ),
+            )
+
+        before_total = 0.0
+        after_total = 0.0
+        out_groups: list[str] = []
+        for layer in ir_layers:
+            label = getattr(layer, "label", "") or getattr(layer, "layer_id", "")
+            color = getattr(layer, "color", "#000000") or "#000000"
+            setting = settings.get(label)
+            optimize = setting.optimize if setting else True
+            simplify = setting.simplify_tolerance_mm if setting else 0.05
+            seam_rotation = setting.seam_rotation if setting else True
+
+            doc = _doc_from_ir_layer(layer)
+            before_total += doc.pen_up_length()
+            if optimize:
+                pipeline_str = _pipeline(simplify * scale, merge_tolerance_mm * scale)
+                doc = vpype_cli.execute(pipeline_str, document=doc)
+                _refine_doc_order(
+                    doc,
+                    seam_rotation=seam_rotation,
+                    closed_tolerance=merge_tolerance_mm * scale,
+                )
+            after_total += doc.pen_up_length()
+            out_groups.append(_optimized_group(label, color, doc))
+
+        reduction = (
+            (before_total - after_total) / before_total * 100.0 if before_total > 0 else 0.0
+        )
+        viewbox = getattr(geometry, "viewbox", None)
+        size = vb = ""
+        if viewbox is not None:
+            x, y, w, h = viewbox
+            size = f' width="{w}" height="{h}"'
+            vb = f' viewBox="{x} {y} {w} {h}"'
+        out_svg = (
+            f'<svg xmlns="{_SVG_NS}" xmlns:inkscape="{_INKSCAPE_NS}"{size}{vb}>'
+            + "".join(out_groups)
+            + "</svg>"
+        )
+        return ToolpathResult(
+            svg=out_svg,
+            metrics=ToolpathMetrics(
+                pen_up_before_mm=before_total,
+                pen_up_after_mm=after_total,
+                reduction_pct=reduction,
+            ),
         )
 
 

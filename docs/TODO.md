@@ -139,11 +139,16 @@ les dialectes non-EBB quand le flag est on (EBB garde son
 (`test_api.py`) + `test_generate_gcode_from_geometry_matches_svg
 _path` (`test_gcode.py`) prouvent l'équivalence et le routing.
 
-**Reste v2.0** : (a) consommateur vpype direct dans
-`optimize_geometry_ir` pour skip le round-trip SVG ; (b)
-émetteur G-code direct sur polylines (skip le round-trip côté
-gcode aussi) ; (c) flipper le défaut à IR-on après audit perf
-Pi pour valider la parité.
+**Reste v2.0** : ~~(a) consommateur vpype direct dans
+`optimize_geometry_ir` pour skip le round-trip SVG~~ — fermé
+2026-07-19 (`_doc_from_ir_layer` alimente vpype depuis les
+polylines typées, test d'équivalence stricte
+`test_optimize_geometry_ir_direct_matches_svg_route`) ; ~~(b)
+émetteur G-code direct sur polylines~~ — fermé 2026-07-19
+(`_layers_from_geometry_ir` + `_generate_from_layers` partagé,
+flux de mouvements identique byte-à-byte au chemin SVG) ; (c)
+flipper le défaut à IR-on après audit perf Pi pour valider la
+parité — reste gated sur l'accès au matériel.
 
 ### 2.2 — ~~ToolChangeOrchestrator source de vérité~~ — fermé
 
