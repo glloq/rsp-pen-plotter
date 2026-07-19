@@ -12,6 +12,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useUiStore } from '../stores/ui'
 import CameraPreview from './CameraPreview.vue'
+import CameraRoleAssignments from './CameraRoleAssignments.vue'
 import OffsetCameraSettings from './OffsetCameraSettings.vue'
 import TimelapseSettings from './TimelapseSettings.vue'
 
@@ -83,6 +84,11 @@ const { cameras } = storeToRefs(ui)
       </div>
       <p class="text-[11px] text-slate-500">{{ t('system.cameraUrlHint') }}</p>
     </div>
+
+    <!-- 1bis. Role assignment: which camera records the timelapse,
+         which one measures the tip offset. Thin matrix over the same
+         storages the detailed sections below use. -->
+    <CameraRoleAssignments />
 
     <!-- 2. Offset camera (per-machine tip-offset station). -->
     <OffsetCameraSettings />

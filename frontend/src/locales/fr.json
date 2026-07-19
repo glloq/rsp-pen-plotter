@@ -2125,5 +2125,16 @@
     "hintRunning": "Impression en cours.",
     "resume": "Reprendre",
     "hintPaused": "Impression en pause."
+  },
+  "cameraRoles": {
+    "title": "Rôles des caméras",
+    "hint": "Attribue chaque usage à une caméra : une seule caméra peut cumuler les deux rôles, deux caméras USB permettent de les séparer.",
+    "timelapse": "Timelapse",
+    "offset": "Mesure d'offset",
+    "noCameras": "Aucune caméra configurée — active une caméra ci-dessus (URL de flux) pour pouvoir attribuer les rôles.",
+    "needsProfile": "Sélectionne un profil machine pour attribuer la caméra d'offset (le réglage est enregistré sur le profil).",
+    "customUrl": "URL personnalisée",
+    "customUrlHint": "La station d'offset utilise une URL saisie à la main (section Mesure d'offset) qui ne correspond à aucune caméra configurée. Choisis une caméra pour la remplacer.",
+    "unassigned": "sans rôle"
   }
 }

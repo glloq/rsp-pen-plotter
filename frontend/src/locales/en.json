@@ -2125,5 +2125,16 @@
     "hintRunning": "Print in progress.",
     "resume": "Resume",
     "hintPaused": "Print paused."
+  },
+  "cameraRoles": {
+    "title": "Camera roles",
+    "hint": "Assign each use to a camera: a single camera can hold both roles, two USB cameras let you split them.",
+    "timelapse": "Timelapse",
+    "offset": "Offset measurement",
+    "noCameras": "No camera configured — enable a camera above (stream URL) to assign roles.",
+    "needsProfile": "Select a machine profile to assign the offset camera (the setting is stored on the profile).",
+    "customUrl": "Custom URL",
+    "customUrlHint": "The offset station uses a hand-typed URL (Offset measurement section) that matches no configured camera. Pick a camera to replace it.",
+    "unassigned": "no role"
   }
 }
