@@ -165,8 +165,13 @@ function useFullWorkspace(): void {
 
 <template>
   <section v-if="store.layers.length || store.selectedProfile" class="space-y-2">
-    <div class="flex items-baseline justify-between px-1">
-      <h2 class="text-xs uppercase tracking-wider text-slate-500">{{ t('prepare.layout') }}</h2>
+    <div class="px-1">
+      <h2 class="text-xs uppercase tracking-wider text-slate-500">{{ t('sheet.paperGuide') }}</h2>
+      <!-- Honest naming (UX audit Lot 1): the sheet zone is a placement
+           guide, not the print boundary — the G-code follows where the
+           drawings actually sit on the plan. Say so instead of letting
+           the operator assume the paper drives the output. -->
+      <p class="text-[10px] text-slate-500">{{ t('sheet.paperGuideHint') }}</p>
     </div>
 
     <div

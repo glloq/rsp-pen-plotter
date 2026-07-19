@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { LibraryFileRecord, LibrarySortKey } from '../api/client'
 import { confirmAction } from '../composables/confirm'
@@ -204,6 +204,38 @@ function onPaneDrop(event: DragEvent): void {
   uploads.start(event.dataTransfer.files)
 }
 
+// Empty-plan CTA highlight: the Plan tab's "pick from the library"
+// button bumps ``ui.filesPanePulse``; flash a ring for a moment so the
+// operator's eye lands here. Timer cleared on re-trigger so rapid
+// clicks restart the flash instead of stacking timeouts.
+const pulsing = ref(false)
+let pulseTimer: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => ui.filesPanePulse,
+  () => {
+    pulsing.value = true
+    if (pulseTimer !== null) clearTimeout(pulseTimer)
+    pulseTimer = setTimeout(() => {
+      pulsing.value = false
+      pulseTimer = null
+    }, 1600)
+  },
+)
+onBeforeUnmount(() => {
+  if (pulseTimer !== null) clearTimeout(pulseTimer)
+})
+
+// Primary row action (UX audit Lot 1): place the file on the plan
+// without dragging. Reuses the same store path as the drop handler —
+// no position means the store auto-fits the placement — then selects
+// it and lands the operator on the Plan tab so the result is visible.
+async function addToPlan(fileId: string): Promise<void> {
+  const newId = await store.createPlacementFromLibrary(fileId)
+  if (!newId) return
+  store.selectPlacement(newId)
+  ui.canvasTab = 'sheet'
+}
+
 async function editFile(fileId: string): Promise<void> {
   // "Edit" is conversion-settings only — it must NOT put the file on
   // the sheet just because the operator wanted to tweak knobs (audit
@@ -278,7 +310,10 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
 <template>
   <aside
     class="relative flex min-h-0 flex-col overflow-hidden rounded-lg border bg-slate-900/40 transition-colors"
-    :class="paneDragOver ? 'border-emerald-500 bg-emerald-950/30' : 'border-slate-700'"
+    :class="[
+      paneDragOver ? 'border-emerald-500 bg-emerald-950/30' : 'border-slate-700',
+      pulsing ? 'ring-2 ring-emerald-400' : '',
+    ]"
     @dragenter.prevent="onPaneDragOver"
     @dragover.prevent="onPaneDragOver"
     @dragleave="onPaneDragLeave"
@@ -356,6 +391,7 @@ function onDragStart(event: DragEvent, file: LibraryFileRecord): void {
           :placement-count="row.placementCount"
           :configured="row.configured"
           :preview-svg="previewSvg(row.file.file_id) ?? ''"
+          @add="addToPlan"
           @edit="editFile"
           @move="moveFile"
           @remove="removeFile"

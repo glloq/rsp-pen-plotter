@@ -663,6 +663,26 @@ function pxToMm(): number {
       </div>
     </header>
 
+    <!-- Why-is-Generate-disabled notice (UX audit Lot 1): the reason
+         used to live only in the disabled button's ``title`` —
+         unreachable on touch. Surface it as a visible strip with the
+         corrective action right next to it. -->
+    <div
+      v-if="store.missingPenSlots.length"
+      class="flex items-center justify-between gap-2 rounded border border-amber-700/60 bg-amber-950/40 px-2 py-1 text-[11px] text-amber-200"
+      data-test="missing-pens-notice"
+    >
+      <span>⚠ {{ t('preflight.missingPens', { slots: store.missingPenSlots.join(', ') }) }}</span>
+      <button
+        type="button"
+        class="shrink-0 rounded border border-amber-600 px-2 py-0.5 font-semibold text-amber-100 hover:bg-amber-900/50"
+        data-test="missing-pens-configure"
+        @click="ui.openPlotterSettings('colors')"
+      >
+        {{ t('sheet.configurePens') }}
+      </button>
+    </div>
+
     <div
       ref="container"
       class="relative min-h-0 flex-1 overflow-hidden rounded border select-none"
@@ -734,6 +754,28 @@ function pxToMm(): number {
       <p class="pointer-events-none absolute bottom-1 right-2 text-[10px] text-slate-500">
         {{ t('sheet.viewHint') }}
       </p>
+
+      <!-- Empty-plan call to action (UX audit Lot 1): an empty dark
+           canvas gives a newcomer nothing to act on. Point at the two
+           ways forward — the library's "Add to plan" buttons, or the
+           drag shortcut. The wrapper ignores pointer events so pan /
+           drop keep working underneath; only the button is clickable. -->
+      <div
+        v-if="!hasPlacements"
+        class="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 text-center"
+        data-test="sheet-empty-state"
+      >
+        <p class="text-sm font-medium text-slate-300">{{ t('sheet.emptyTitle') }}</p>
+        <button
+          type="button"
+          class="pointer-events-auto rounded border border-slate-500 bg-slate-800/90 px-3 py-1.5 text-xs text-slate-100 hover:bg-slate-700"
+          data-test="sheet-empty-browse"
+          @click="ui.pulseFilesPane()"
+        >
+          {{ t('sheet.emptyBrowse') }}
+        </button>
+        <p class="text-xs text-slate-500">{{ t('sheet.emptyDrag') }}</p>
+      </div>
     </div>
 
     <p v-if="anyExceeds" class="text-xs text-red-400">

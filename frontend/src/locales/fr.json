@@ -114,7 +114,9 @@
     "deleteTitle": "Supprimer le fichier",
     "deleteConfirm": "Supprimer « {name} » de la bibliothèque ? Les instances déjà placées sur le plan seront également retirées.",
     "dropToImport": "Déposer pour ajouter à la bibliothèque",
-    "uploadInProgress": "Un envoi est déjà en cours."
+    "uploadInProgress": "Un envoi est déjà en cours.",
+    "addToPlan": "Ajouter au plan",
+    "moreActions": "Autres actions"
   },
   "library": {
     "loadFailed": "Impossible de charger la bibliothèque.",
@@ -1027,7 +1029,13 @@
     "clearAll": "Vider tout",
     "clearAllTitle": "Vider le plan",
     "clearAllMsg": "Retirer tous les fichiers du plan de travail ? Cette action est irréversible.",
-    "resetAspect": "Proportions d'origine"
+    "resetAspect": "Proportions d'origine",
+    "paperGuide": "Repère papier",
+    "paperGuideHint": "Guide de placement — le tracé suit la position réelle des dessins sur le plan.",
+    "configurePens": "Configurer les stylos",
+    "emptyTitle": "Ajoutez un fichier au plan",
+    "emptyBrowse": "Choisir dans la bibliothèque",
+    "emptyDrag": "…ou glissez un fichier ici depuis la bibliothèque"
   },
   "typography": {
     "fontSection": "Police",

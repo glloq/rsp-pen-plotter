@@ -114,7 +114,9 @@
     "deleteTitle": "Delete file",
     "deleteConfirm": "Delete \"{name}\" from the library? Placements on the plan will also be removed.",
     "dropToImport": "Drop to add to the library",
-    "uploadInProgress": "An upload is already in progress."
+    "uploadInProgress": "An upload is already in progress.",
+    "addToPlan": "Add to plan",
+    "moreActions": "More actions"
   },
   "library": {
     "loadFailed": "Couldn't load the file library.",
@@ -1027,7 +1029,13 @@
     "clearAll": "Clear all",
     "clearAllTitle": "Clear plan",
     "clearAllMsg": "Remove all files from the work plane? This cannot be undone.",
-    "resetAspect": "Reset proportions"
+    "resetAspect": "Reset proportions",
+    "paperGuide": "Paper guide",
+    "paperGuideHint": "Placement guide — the plot follows where the drawings actually sit on the plan.",
+    "configurePens": "Configure pens",
+    "emptyTitle": "Add a file to the plan",
+    "emptyBrowse": "Pick from the library",
+    "emptyDrag": "…or drag a file here from the library"
   },
   "typography": {
     "fontSection": "Font",

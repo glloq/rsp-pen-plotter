@@ -52,6 +52,7 @@ recipes live in the [`wiki/`](../wiki/Home.md) folder instead.
 | [audit_couleurs_2026-07-15.md](audit_couleurs_2026-07-15.md) | Colour management audit — auto-assignment fidelity, silent shape loss, phantom pens, i18n leaks |
 | [repo_settings.md](repo_settings.md) | Branch protection / required status checks for `main` |
 | [perf_pi_procedure.md](perf_pi_procedure.md) | Raspberry Pi performance audit procedure (IR flip decision, SLO capture) |
+| [ui_lot1_2026-07-19.md](ui_lot1_2026-07-19.md) | UX audit Lot 1 — decision record and shipped simplifications |
 | [perf-baseline.md](perf-baseline.md) | Reference performance numbers |
 | [perf-report.md](perf-report.md) | Latest performance report |
 | [profiling.md](profiling.md) | How to profile a slow conversion or render |

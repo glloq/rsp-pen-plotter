@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useJobStore } from '../stores/job'
 import LayoutSection from './LayoutSection.vue'
@@ -7,10 +7,20 @@ import LayoutSection from './LayoutSection.vue'
 const { t } = useI18n()
 const store = useJobStore()
 
-// Rail can be collapsed on narrow screens — its content is dense.
-// Defaults to open when at least one placement is ready; otherwise the
-// rail would only show the empty Layout block.
-const collapsed = ref(false)
+// Contextual inspector behaviour (UX audit Lot 1): the rail used to be
+// open whenever a profile existed — i.e. always, since profiles are
+// bundled — pushing a dense settings column at newcomers before they
+// placed anything. It now starts collapsed and expands when a
+// placement gets selected, collapsing back on deselect. The manual
+// toggle keeps working in between (the watcher only fires on
+// selection *changes*).
+const collapsed = ref(store.selectedPlacementId === null)
+watch(
+  () => store.selectedPlacementId,
+  (id) => {
+    collapsed.value = id === null
+  },
+)
 </script>
 
 <template>
