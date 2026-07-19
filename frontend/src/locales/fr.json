@@ -1426,7 +1426,9 @@
     "optPauses": "Pauses",
     "colors": "Couleurs",
     "colorAll": "Toutes",
-    "colorClickHint": "Cliquer pour basculer · double-cliquer pour isoler cette couleur."
+    "colorClickHint": "Cliquer pour basculer · double-cliquer pour isoler cette couleur.",
+    "optPenupHeat": "Heatmap des déplacements — colorés par longueur",
+    "optDensity": "Densité de tracé — plus sombre où les traits s'accumulent"
   },
   "plotter": {
     "title": "Traceur",

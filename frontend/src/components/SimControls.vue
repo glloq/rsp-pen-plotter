@@ -27,6 +27,8 @@ defineProps<{
   showPenEvents: boolean
   showColorChanges: boolean
   showPauses: boolean
+  showPenupHeat: boolean
+  showDensity: boolean
   isMultiColor: boolean
   manualPenChange: boolean
   colors: SimColor[]
@@ -46,6 +48,8 @@ const emit = defineEmits<{
   'update:showPenEvents': [value: boolean]
   'update:showColorChanges': [value: boolean]
   'update:showPauses': [value: boolean]
+  'update:showPenupHeat': [value: boolean]
+  'update:showDensity': [value: boolean]
   'update:manualPenChange': [value: boolean]
   toggleColor: [hex: string]
   selectAllColors: []
@@ -185,6 +189,34 @@ function onTogglePlayback(playing: boolean): void {
         @click="emit('update:showColorChanges', !showColorChanges)"
       >
         ●
+      </button>
+      <button
+        type="button"
+        class="rounded border px-1.5 py-1"
+        :class="
+          showPenupHeat
+            ? 'border-rose-500 bg-rose-600/30 text-rose-100'
+            : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'
+        "
+        :title="t('simulator.optPenupHeat')"
+        data-test="sim-toggle-penup-heat"
+        @click="emit('update:showPenupHeat', !showPenupHeat)"
+      >
+        🔥
+      </button>
+      <button
+        type="button"
+        class="rounded border px-1.5 py-1"
+        :class="
+          showDensity
+            ? 'border-violet-500 bg-violet-600/30 text-violet-100'
+            : 'border-slate-700 bg-slate-900 text-slate-400 hover:bg-slate-800'
+        "
+        :title="t('simulator.optDensity')"
+        data-test="sim-toggle-density"
+        @click="emit('update:showDensity', !showDensity)"
+      >
+        ▦
       </button>
       <button
         type="button"

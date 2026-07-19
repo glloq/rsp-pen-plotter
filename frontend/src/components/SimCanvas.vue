@@ -35,6 +35,15 @@ const props = defineProps<{
   showPenEvents: boolean
   showColorChanges: boolean
   showPauses: boolean
+  /** Pen-up heatmap (v2 P7): colour travel moves by their length so
+   *  wasteful hops jump out — short hops stay amber, the longest
+   *  travels burn red and thick. Replaces the plain dashed sky style
+   *  while active (implies travel visibility for the heat to read). */
+  showPenupHeat: boolean
+  /** Path-density underlay (v2 P7): accumulate drawing segments as
+   *  thick low-alpha strokes below the plot so over-inked zones
+   *  (multiple passes, dense hatching) darken visibly. */
+  showDensity: boolean
   colorFilter: Set<string>
 }>()
 
@@ -89,6 +98,25 @@ function project(x: number, y: number, b: SimBounds, s: number): [number, number
   return [zx, zy]
 }
 
+// Longest travel move in the sim (world units), cached per SimResult —
+// the heat scale needs it every frame and the segment list can be tens
+// of thousands long.
+let heatSim: SimResult | null = null
+let heatMax = 0
+
+function maxTravelLength(r: SimResult): number {
+  if (heatSim !== r) {
+    heatSim = r
+    heatMax = 0
+    for (const seg of r.segments) {
+      if (seg.drawing) continue
+      const len = Math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0)
+      if (len > heatMax) heatMax = len
+    }
+  }
+  return heatMax
+}
+
 function draw(): void {
   const c = canvas.value
   const r = props.sim
@@ -120,6 +148,29 @@ function draw(): void {
   const t = props.simTime
   let pen: [number, number] | null = null
 
+  // Density underlay: aggregate pass below the plot. Full segments only
+  // (no partial-frac interpolation) — this is a heat aggregate, not the
+  // playback head.
+  if (props.showDensity) {
+    ctx.save()
+    ctx.strokeStyle = 'rgba(124, 58, 237, 0.07)'
+    ctx.lineWidth = 6
+    ctx.lineCap = 'round'
+    for (const seg of r.segments) {
+      if (seg.startTime >= t) break
+      if (!seg.drawing || !isColorVisible(seg.colorHex)) continue
+      const [ax, ay] = project(seg.x0, seg.y0, bounds, s)
+      const [bx, by] = project(seg.x1, seg.y1, bounds, s)
+      ctx.beginPath()
+      ctx.moveTo(ax, ay)
+      ctx.lineTo(bx, by)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
+  const heatMaxLen = props.showPenupHeat ? maxTravelLength(r) : 0
+
   for (const seg of r.segments) {
     if (seg.startTime >= t) break
     // Apply the colour filter — only to drawing segments; travel moves
@@ -129,7 +180,7 @@ function draw(): void {
       pen = project(seg.x1, seg.y1, bounds, s)
       continue
     }
-    if (!seg.drawing && !props.showTravel) {
+    if (!seg.drawing && !props.showTravel && !props.showPenupHeat) {
       pen = project(seg.x1, seg.y1, bounds, s)
       continue
     }
@@ -147,6 +198,15 @@ function draw(): void {
       // the G-code didn't carry a tool-change marker.
       ctx.strokeStyle = seg.colorHex || '#0f172a'
       ctx.lineWidth = 1.2
+      ctx.setLineDash([])
+    } else if (props.showPenupHeat) {
+      // Heat scale: hue slides amber (48°) → red (0°) and the stroke
+      // thickens with the travel's share of the longest hop, so the
+      // most wasteful moves dominate the view.
+      const len = Math.hypot(seg.x1 - seg.x0, seg.y1 - seg.y0)
+      const heat = heatMaxLen > 0 ? Math.min(1, len / heatMaxLen) : 0
+      ctx.strokeStyle = `hsl(${Math.round(48 - 48 * heat)} 95% ${Math.round(58 - 13 * heat)}%)`
+      ctx.lineWidth = 0.8 + 1.8 * heat
       ctx.setLineDash([])
     } else {
       ctx.strokeStyle = '#cbd5e1'
@@ -304,6 +364,8 @@ watch(
     props.showPenEvents,
     props.showColorChanges,
     props.showPauses,
+    props.showPenupHeat,
+    props.showDensity,
     props.colorFilter,
   ],
   () => draw(),

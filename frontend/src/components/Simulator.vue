@@ -159,6 +159,10 @@ const showTravel = ref(true)
 const showPenEvents = ref(false)
 const showColorChanges = ref(true)
 const showPauses = ref(true)
+// v2 P7 overlays — default off: they are inspection lenses, not part
+// of the standard preview.
+const showPenupHeat = ref(false)
+const showDensity = ref(false)
 const colorFilter = ref<Set<string>>(new Set())
 
 // Reset the colour filter whenever a fresh plot lands so chips for
@@ -252,6 +256,8 @@ function onUpdateManualPenChange(value: boolean): void {
       :show-pen-events="showPenEvents"
       :show-color-changes="showColorChanges"
       :show-pauses="showPauses"
+      :show-penup-heat="showPenupHeat"
+      :show-density="showDensity"
       :is-multi-color="isMultiColor"
       :manual-pen-change="manualPenChange"
       :colors="sim.colors"
@@ -268,6 +274,8 @@ function onUpdateManualPenChange(value: boolean): void {
       @update:show-pen-events="(v) => (showPenEvents = v)"
       @update:show-color-changes="(v) => (showColorChanges = v)"
       @update:show-pauses="(v) => (showPauses = v)"
+      @update:show-penup-heat="(v) => (showPenupHeat = v)"
+      @update:show-density="(v) => (showDensity = v)"
       @update:manual-pen-change="onUpdateManualPenChange"
       @toggle-color="toggleColor"
       @select-all-colors="selectAllColors"
@@ -286,6 +294,8 @@ function onUpdateManualPenChange(value: boolean): void {
       :show-pen-events="showPenEvents"
       :show-color-changes="showColorChanges"
       :show-pauses="showPauses"
+      :show-penup-heat="showPenupHeat"
+      :show-density="showDensity"
       :color-filter="colorFilter"
       @update:view-zoom="(v) => (viewZoom = v)"
       @update:view-pan-x="(v) => (viewPanX = v)"

@@ -1426,7 +1426,9 @@
     "optPauses": "Pauses",
     "colors": "Colours",
     "colorAll": "All",
-    "colorClickHint": "Click to toggle · double-click to isolate this colour."
+    "colorClickHint": "Click to toggle · double-click to isolate this colour.",
+    "optPenupHeat": "Pen-up heatmap — travel moves coloured by length",
+    "optDensity": "Path density — darker where strokes accumulate"
   },
   "plotter": {
     "title": "Plotter",

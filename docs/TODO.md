@@ -226,7 +226,20 @@ deployment.md` documente déjà la séparation logique.
 
 ## Catégorie 3 — UX et perf différés
 
-### 3.1 — Overlays Compare Mode — reporté v2.0 (cf. 1.5)
+### 3.1 — ~~Overlays Compare Mode~~ — recadré et fermé 2026-07-19
+
+La surface « Compare drawer » à laquelle cette TODO se référait a été
+retirée lors du refactor éditeur (remplacée par le split-slider
+raster/SVG). Les deux overlays atteignables ont été implémentés sur la
+surface actuelle qui possède la géométrie exacte : le **simulateur
+G-code**. Nouveaux toggles `🔥` (heatmap des pen-up — déplacements
+colorés ambre→rouge et épaissis selon leur longueur relative) et `▦`
+(densité de tracé — sous-couche additive violette qui fonce où les
+traits s'accumulent), pilotés par `SimControls` → `SimCanvas`
+(`showPenupHeat` / `showDensity`), i18n FR/EN
+(`simulator.optPenupHeat` / `optDensity`). `curvature` reste
+non-implémenté (demande une géométrie que le parseur G-code ne
+calcule pas ; à re-évaluer si le besoin opérateur se confirme).
 
 ### 3.2 — Audit perf sur matériel — reporté v2.0
 
