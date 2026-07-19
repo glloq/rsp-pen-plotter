@@ -52,9 +52,13 @@ revenir à v1 via le bouton header `Modal V2 (beta)` (toggle off) ou
 via le bouton « Ouvrir l'éditeur complet » dans le header du modal
 V2 — le flag est alors persisté à `false` jusqu'à nouvelle bascule.
 
-**Suppression de v1** : reportée explicitement à v2.0. Tant que les
-contrôles per-layer / per-pass riches du modal v1 ne sont pas
-ré-implémentés dans v2, la coexistence est nécessaire.
+**Suppression de v1** : ~~reportée explicitement à v2.0~~ — **faite**
+(constat audit 2026-07-19). Le refactor éditeur a supprimé le modal v1
+du code ; les contrôles per-layer / per-pass riches vivent désormais
+dans le V2 via l'onglet Couches du panneau expert
+(`EditorExpertPanel` → `LayersSection` → `LayerCard` +
+`LayerPassStack`, chunk lazy dédié). Plus aucune coexistence à
+maintenir.
 
 ### 1.2 — ~~Queue polling pour Workshop Mode et WorkspaceRail~~ (Block A) — fixé en audit
 
@@ -326,10 +330,14 @@ v0.1. Les 6 warnings auto-fixables (`vue/attributes-order`,
 `vue/require-default-prop`, directives `eslint-disable`
 inutilisées) ont été nettoyés via `npm run lint -- --fix`.
 
-**Suivi v2.0** : refactor des composants edit/image,
-edit/render, edit/svg, ProfilePenFields, etc. pour passer à
-`defineModel()` / explicit `emit('update:propName', value)`
-quand le pattern par-section sera revisité.
+**Suivi v2.0** : ~~refactor des composants edit/image,
+edit/render, edit/svg, ProfilePenFields, etc.~~ — soldé autrement
+(constat audit 2026-07-19) : `eslint.config.js` documente le
+« shared-draft idiom » comme choix délibéré et scope le `off` de
+`vue/no-mutating-props` à exactement 13 fichiers ; partout ailleurs le
+preset recommended (error) s'applique. `npm run lint` = 0 erreur,
+0 warning. Un refactor `defineModel()` n'apporterait plus de valeur
+lint et reste purement optionnel.
 
 ### 6.2 — ~~`UploadFooter.vue` lint~~ — fermé
 

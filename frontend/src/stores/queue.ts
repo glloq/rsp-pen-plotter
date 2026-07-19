@@ -242,9 +242,7 @@ export const useQueueStore = defineStore('queue', () => {
     // With the /ws/queue push channel live, polling is only a safety
     // heartbeat — always use the slow cadence.
     const base =
-      !socketLive() && !isHidden() && active.value.length > 0
-        ? FAST_INTERVAL_MS
-        : SLOW_INTERVAL_MS
+      !socketLive() && !isHidden() && active.value.length > 0 ? FAST_INTERVAL_MS : SLOW_INTERVAL_MS
     // Exponential backoff on repeated failures so a dropped backend doesn't
     // pin the Pi's event loop with reconnect attempts every 3 s.
     const interval = base * Math.pow(2, consecutiveErrors)
