@@ -30,6 +30,7 @@ class OptimizeRequest(BaseModel):
     svg: str
     layers: list[LayerOptimization] = Field(default_factory=list)
     merge_tolerance_mm: float = 0.1
+    units_per_mm: float | None = Field(default=None, gt=0)
 
 
 class OptimizeResponse(BaseModel):
@@ -92,6 +93,7 @@ def _optimize_with_ir_when_available(request: OptimizeRequest) -> ToolpathResult
             request.svg,
             layers=request.layers,
             merge_tolerance_mm=request.merge_tolerance_mm,
+            units_per_mm=request.units_per_mm,
         )
     from pen_plotter.application.ir_cache import fetch_geometry, store_geometry
     from pen_plotter.domain.ir.adapter import geometry_ir_from_svg
@@ -108,4 +110,5 @@ def _optimize_with_ir_when_available(request: OptimizeRequest) -> ToolpathResult
         geometry,
         layers=request.layers,
         merge_tolerance_mm=request.merge_tolerance_mm,
+        units_per_mm=request.units_per_mm,
     )

@@ -489,6 +489,7 @@ export async function optimizeToolpaths(
   svg: string,
   layers: LayerOptimization[],
   signal?: AbortSignal,
+  unitsPerMm?: number,
 ): Promise<OptimizeResponse> {
   // No client timeout: toolpath optimisation (vpype linemerge/sort) on a
   // complex drawing — a photo rendered as crosshatch/contours fill is
@@ -500,7 +501,7 @@ export async function optimizeToolpaths(
   // ``/rerender`` call below.
   const response = await api.post<OptimizeResponse>(
     '/optimize',
-    { svg, layers },
+    { svg, layers, units_per_mm: unitsPerMm ?? null },
     { signal, timeout: 0 },
   )
   return response.data

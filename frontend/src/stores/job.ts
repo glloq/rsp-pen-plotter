@@ -1724,6 +1724,16 @@ export const useJobStore = defineStore('job', () => {
   // Optimize still operates on a single placement (only the selected one),
   // since the optimizer is local to a drawing. Preflight + generate fold
   // ALL placements into one composite SVG sent to the backend.
+
+  function placementUnitsPerMm(p: Placement): number | undefined {
+    // Calculate units_per_mm from placement's source_bbox and width_mm.
+    const bboxWidth = p.source_bbox.x_max - p.source_bbox.x_min
+    if (bboxWidth > 0 && p.width_mm > 0) {
+      return bboxWidth / p.width_mm
+    }
+    return undefined
+  }
+
   async function optimize(): Promise<void> {
     const p = selectedPlacement.value
     if (!p?.svg) return
@@ -1740,6 +1750,8 @@ export const useJobStore = defineStore('job', () => {
           optimize: layer.optimize,
           simplify_tolerance_mm: layer.simplify_tolerance_mm,
         })),
+        undefined,
+        placementUnitsPerMm(p),
       )
       patchPlacement(p.id, {
         svg: result.svg,
@@ -1904,6 +1916,7 @@ export const useJobStore = defineStore('job', () => {
             id: p.id,
             svg: p.svg,
             layers: p.layers,
+            unitsPerMm: placementUnitsPerMm(p),
           })),
         applyOptimized: (id, result) => {
           patchPlacement(id, {

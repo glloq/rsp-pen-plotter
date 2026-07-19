@@ -2415,6 +2415,18 @@
           "svg": {
             "title": "Svg",
             "type": "string"
+          },
+          "units_per_mm": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Units Per Mm"
           }
         },
         "required": [

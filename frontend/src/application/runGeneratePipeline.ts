@@ -24,6 +24,7 @@ export interface PipelinePlacement {
   id: string
   svg: string
   layers: LayerInfo[]
+  unitsPerMm?: number
 }
 
 export interface OptimizeOutcome {
@@ -136,6 +137,7 @@ async function optimizeAllPlacements(deps: GeneratePipelineDeps): Promise<Toolpa
         simplify_tolerance_mm: layer.simplify_tolerance_mm,
       })),
       deps.signal,
+      placement.unitsPerMm,
     )
     deps.applyOptimized(placement.id, {
       svg: result.svg,

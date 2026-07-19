@@ -14,6 +14,7 @@ passed as bare numbers.
 from __future__ import annotations
 
 import io
+import re
 from typing import Any
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import quoteattr
@@ -106,6 +107,52 @@ def _pipeline(simplify_tolerance_mm: float, merge_tolerance_mm: float) -> str:
     )
 
 
+def _detect_units_per_mm(root: ET.Element) -> float | None:
+    """Auto-detect units_per_mm from SVG root element width and viewBox.
+
+    Parses ``width`` attribute with physical units (mm/cm/in) and divides
+    by ``viewBox`` width to get the conversion factor. Returns None if
+    width has no unit (px) or is absent, value is non-positive, or viewBox
+    is missing.
+    """
+    width_str = root.get("width")
+    if not width_str:
+        return None
+
+    # Parse width with regex: "^([0-9.]+)\s*(mm|cm|in)$"
+    match = re.match(r"^([0-9.]+)\s*(mm|cm|in)$", width_str.strip())
+    if not match:
+        return None
+
+    width_value = float(match.group(1))
+    unit = match.group(2)
+
+    # Convert to mm
+    unit_factors = {"mm": 1.0, "cm": 10.0, "in": 25.4}
+    width_mm = width_value * unit_factors[unit]
+
+    if width_mm <= 0:
+        return None
+
+    # Get viewBox width
+    viewbox_str = root.get("viewBox")
+    if not viewbox_str:
+        return None
+
+    try:
+        parts = viewbox_str.split()
+        if len(parts) < 4:
+            return None
+        vb_width = float(parts[2])
+    except (ValueError, IndexError):
+        return None
+
+    if vb_width <= 0:
+        return None
+
+    return vb_width / width_mm
+
+
 def _refine_doc_order(doc: vp.Document, *, seam_rotation: bool, closed_tolerance: float) -> None:
     """Refine each layer's path order in place after the vpype pipeline.
 
@@ -134,6 +181,7 @@ def optimize_svg(
     *,
     layers: list[LayerOptimization] | None = None,
     merge_tolerance_mm: float = 0.1,
+    units_per_mm: float | None = None,
 ) -> ToolpathResult:
     """Optimize toolpaths in a pivot SVG, reducing pen-up travel.
 
@@ -143,6 +191,9 @@ def optimize_svg(
             with default settings. Layers with ``optimize=False`` are passed
             through unchanged.
         merge_tolerance_mm: Endpoint join tolerance for ``linemerge``.
+        units_per_mm: Optional scale factor (user units per millimeter). When
+            provided or auto-detected, tolerances are scaled accordingly.
+            Falls back to 1.0 (no scaling).
 
     Returns:
         A :class:`ToolpathResult` with the optimized SVG and travel metrics.
@@ -155,7 +206,9 @@ def optimize_svg(
         svg_bytes=len(svg),
         layer_count=len(layers or []),
     ):
-        return _optimize_svg(svg, layers=layers, merge_tolerance_mm=merge_tolerance_mm)
+        return _optimize_svg(
+            svg, layers=layers, merge_tolerance_mm=merge_tolerance_mm, units_per_mm=units_per_mm
+        )
 
 
 def optimize_geometry_ir(
@@ -163,6 +216,7 @@ def optimize_geometry_ir(
     *,
     layers: list[LayerOptimization] | None = None,
     merge_tolerance_mm: float = 0.1,
+    units_per_mm: float | None = None,
 ) -> ToolpathResult:
     """Optimize toolpaths starting from a :class:`GeometryIR` artifact.
 
@@ -182,7 +236,9 @@ def optimize_geometry_ir(
         layer_count=len(getattr(geometry, "layers", []) or []),
     ):
         svg = _geometry_ir_to_svg(geometry)
-        return _optimize_svg(svg, layers=layers, merge_tolerance_mm=merge_tolerance_mm)
+        return _optimize_svg(
+            svg, layers=layers, merge_tolerance_mm=merge_tolerance_mm, units_per_mm=units_per_mm
+        )
 
 
 def _geometry_ir_to_svg(geometry: Any) -> str:
@@ -246,11 +302,15 @@ def _optimize_svg(
     *,
     layers: list[LayerOptimization] | None,
     merge_tolerance_mm: float,
+    units_per_mm: float | None = None,
 ) -> ToolpathResult:
     try:
         root = ET.fromstring(svg)
     except ET.ParseError as exc:
         raise ValueError(f"Could not parse SVG: {exc}") from exc
+
+    # Determine the scale factor: explicit param > auto-detect > 1.0
+    scale = units_per_mm or _detect_units_per_mm(root) or 1.0
 
     settings = {item.layer_id: item for item in (layers or [])}
     viewbox = root.get("viewBox")
@@ -303,8 +363,14 @@ def _optimize_svg(
         doc = _doc_from_svg(group_svg)
         before_total += doc.pen_up_length()
         if optimize:
-            doc = vpype_cli.execute(_pipeline(simplify, merge_tolerance_mm), document=doc)
-            _refine_doc_order(doc, seam_rotation=seam_rotation, closed_tolerance=merge_tolerance_mm)
+            # Scale tolerances by the units_per_mm factor
+            scaled_merge_tolerance = merge_tolerance_mm * scale
+            scaled_simplify = simplify * scale
+            pipeline_str = _pipeline(scaled_simplify, scaled_merge_tolerance)
+            doc = vpype_cli.execute(pipeline_str, document=doc)
+            _refine_doc_order(
+                doc, seam_rotation=seam_rotation, closed_tolerance=scaled_merge_tolerance
+            )
         after_total += doc.pen_up_length()
         out_groups.append(_optimized_group(label, color, doc))
 

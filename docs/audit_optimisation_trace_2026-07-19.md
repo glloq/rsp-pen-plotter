@@ -178,7 +178,20 @@ rendent **0,5 à 2,5 %** (le trajet ne domine plus après V1). Ça reste le seul
 gain générique restant côté tri, il est simple et sans risque de régression
 visuelle majeure — mais ce n'est pas lui qui changera la durée d'un plot.
 
-### F3 — **[MOYENNE]** Les tolérances « _mm » s'appliquent en unités utilisateur du SVG
+### F3 — **[MOYENNE — ✅ corrigé]** Les tolérances « _mm » s'appliquent en unités utilisateur du SVG
+
+> **Statut : corrigé** dans ce même lot. Nouveau paramètre optionnel
+> `units_per_mm` de bout en bout : fourni par le client (`POST /optimize`
+> connaît la taille d'impression `source_bbox` ÷ `width_mm`), auto-détecté
+> depuis la racine SVG quand `width` porte une unité physique
+> (mm/cm/in) + `viewBox` présent, sinon 1,0. Toutes les tolérances
+> (`merge`, `simplify` par calque, `closed_tolerance` de rotation de
+> couture) sont multipliées par ce facteur avant l'appel vpype.
+> `_QUANTIZATION` reste hors périmètre (partagé avec la lecture G-code).
+> Tests : `test_units_per_mm_scales_merge_tolerance`,
+> `test_units_per_mm_autodetected_from_physical_width`,
+> `test_units_per_mm_default_keeps_mm_svgs_unchanged`. Description
+> d'origine conservée ci-dessous pour traçabilité.
 
 `merge_tolerance_mm` / `simplify_tolerance_mm` sont passées à vpype comme
 nombres nus dans le repère du `viewBox` (assumé par le docstring de
@@ -196,7 +209,14 @@ cible ; sinon ratio `viewBox` / taille physique du SVG), ou a minima renommer
 et documenter. Impact surtout sur la **fidélité des réglages**, pas un bug de
 correction.
 
-### F4 — **[INFO — le vrai levier restant]** Après tri, les levées dominent — et leur coût réel n'est ni émis ni mesuré
+### F4 — **[INFO — le vrai levier restant — ✅ doc ajoutée]** Après tri, les levées dominent — et leur coût réel n'est ni émis ni mesuré
+
+> **Statut : doc ajoutée** dans ce même lot. Nouvelle section
+> « Pen lifts are the hidden cost » dans `wiki/Picking-the-Right-Algorithm.md`
+> : chiffrage du coût par algorithme (`eulerian_hatch` 19 chemins vs
+> `dashes` 2 987), recommandations de tuning (`pen_lift_time_ms`, dwell servo),
+> référence à ce document pour les mesures détaillées. Description d'origine
+> conservée ci-dessous pour traçabilité.
 
 46–80 % du temps modélisé post-V1 part en cycles levée/descente sur les
 styles denses. Conséquences pratiques :
@@ -268,8 +288,8 @@ Correctif : `_path_count` compte désormais aussi `circle` / `ellipse` /
 | F1 | SVG texte re-rendu jamais optimisé | −46 % de pen-up sur les jobs texte (~30 s/page dense) | Faible (brancher `optimize_svg` dans `text_render`) | **P1 — ✅ corrigé** |
 | F7 | Early-exit : calques de `<circle>` jamais optimisés (stippling/halftone mono-calque) | Pen-up brut ×17–22 évité sur le cas touché | Trivial (`_path_count`) | **découverte — ✅ corrigée** |
 | F2 | Rotation de couture + 2-opt à budget | −10 à −28 % de pen-up ; 0,5–2,5 % du temps total | Moyen (`core/pathsort.py`, option par calque) | **P2 — ✅ corrigé** |
-| F3 | Tolérances en unités utilisateur, pas en mm | Fidélité des réglages (dépend de la résolution source) | Faible-moyen (conversion via l'échelle de placement) | **P3** |
-| F4 | Levées = poste dominant post-tri | Documentation + calibration profil (`pen_lift_time_ms`, dwell) | Doc + mesure machine | **P3** |
+| F3 | Tolérances en unités utilisateur, pas en mm | Fidélité des réglages (dépend de la résolution source) | Faible-moyen (conversion via l'échelle de placement) | **P3 — ✅ corrigé** |
+| F4 | Levées = poste dominant post-tri | Documentation + calibration profil (`pen_lift_time_ms`, dwell) | Doc + mesure machine | **P3 — ✅ doc ajoutée** |
 | F5 | Chaînage émetteur | ~50 s sur `contours`, sinon nul | Ne vaut le coup qu'avec F2 | P4 |
 | F6 | Divers (départ du tri, quantization) | Négligeable | — | mémoire |
 

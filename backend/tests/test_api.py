@@ -37,6 +37,29 @@ async def test_optimize_invalid_svg_returns_400() -> None:
 
 
 @pytest.mark.asyncio
+async def test_optimize_invalid_units_per_mm_returns_422() -> None:
+    """units_per_mm must be positive or omitted (None)."""
+    async with _client() as client:
+        # Test with units_per_mm = 0 (invalid)
+        response = await client.post("/optimize", json={"svg": SVG, "layers": [], "units_per_mm": 0})
+    assert response.status_code == 422
+
+    async with _client() as client:
+        # Test with units_per_mm < 0 (invalid)
+        response = await client.post(
+            "/optimize", json={"svg": SVG, "layers": [], "units_per_mm": -1.5}
+        )
+    assert response.status_code == 422
+
+    async with _client() as client:
+        # Test with units_per_mm > 0 (valid)
+        response = await client.post(
+            "/optimize", json={"svg": SVG, "layers": [], "units_per_mm": 2.5}
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_generate_routes_through_ir_when_flag_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

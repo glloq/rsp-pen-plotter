@@ -1,5 +1,10 @@
 from pen_plotter.core.layers import extract_layers
-from pen_plotter.core.toolpath import LayerOptimization, optimize_geometry_ir, optimize_svg
+from pen_plotter.core.toolpath import (
+    LayerOptimization,
+    _doc_from_svg,
+    optimize_geometry_ir,
+    optimize_svg,
+)
 from pen_plotter.domain.ir.adapter import content_sha256, geometry_ir_from_svg
 
 NS = (
@@ -107,3 +112,91 @@ def test_optimize_does_not_early_exit_on_circle_only_layer() -> None:
     """
     result = optimize_svg(CLOSED_LOOPS)
     assert result.metrics.pen_up_before_mm > 0.0
+
+
+def test_units_per_mm_scales_merge_tolerance() -> None:
+    """Verify that units_per_mm scales merge tolerance, enabling fusion.
+
+    Two colinear segments separated by 0.3 units (with a third path to
+    prevent early-exit). With units_per_mm=4 (400 px = 100 mm), merge
+    tolerance 0.1 mm → 0.4 units: the gap closes and segments fuse.
+    Without the parameter (scale=1.0), 0.1 units < 0.3 units gap → no fusion.
+    """
+    svg = (
+        f'<svg {NS} viewBox="0 0 400 400">'
+        '<g inkscape:label="test" stroke="#000000">'
+        '<path d="M0 0 L10 0"/>'  # First segment
+        '<path d="M10.3 0 L20 0"/>'  # Second segment, 0.3 unit gap
+        '<path d="M0 100 L100 100"/>'  # Third path (avoid early-exit)
+        "</g></svg>"
+    )
+    result_without = optimize_svg(svg)
+    result_with = optimize_svg(svg, units_per_mm=4.0)
+
+    # With scaling, the tolerance becomes 0.4 units, so the gap closes
+    # Without scaling, it stays 0.1 units, so the gap doesn't close
+    # We can detect this by checking that the scaled version has fewer paths
+    doc_without = _doc_from_svg(result_without.svg)
+    doc_with = _doc_from_svg(result_with.svg)
+
+    path_count_without = sum(len(layer) for layer in doc_without.layers.values())
+    path_count_with = sum(len(layer) for layer in doc_with.layers.values())
+
+    # With scaling, paths should be merged (fewer total paths)
+    assert path_count_with < path_count_without
+
+
+def test_units_per_mm_autodetected_from_physical_width() -> None:
+    """Verify auto-detection of units_per_mm from width and viewBox.
+
+    Same geometry as test_units_per_mm_scales_merge_tolerance, but with
+    width="100mm" and viewBox="0 0 400 400" (4 units/mm), without explicit
+    parameter. Should auto-detect and produce the same result as explicit
+    units_per_mm=4.0.
+    """
+    svg = (
+        f'<svg {NS} viewBox="0 0 400 400" width="100mm" height="100mm">'
+        '<g inkscape:label="test" stroke="#000000">'
+        '<path d="M0 0 L10 0"/>'  # First segment
+        '<path d="M10.3 0 L20 0"/>'  # Second segment, 0.3 unit gap
+        '<path d="M0 100 L100 100"/>'  # Third path (avoid early-exit)
+        "</g></svg>"
+    )
+    result_auto = optimize_svg(svg)
+
+    # With auto-detection (4 units/mm), paths should be merged
+    doc_auto = _doc_from_svg(result_auto.svg)
+    path_count_auto = sum(len(layer) for layer in doc_auto.layers.values())
+
+    # Same geometry without scaling for comparison
+    svg_no_unit = (
+        f'<svg {NS} viewBox="0 0 400 400">'
+        '<g inkscape:label="test" stroke="#000000">'
+        '<path d="M0 0 L10 0"/>'
+        '<path d="M10.3 0 L20 0"/>'
+        '<path d="M0 100 L100 100"/>'
+        "</g></svg>"
+    )
+    result_no_unit = optimize_svg(svg_no_unit)
+    doc_no_unit = _doc_from_svg(result_no_unit.svg)
+    path_count_no_unit = sum(len(layer) for layer in doc_no_unit.layers.values())
+
+    # Auto-detected should have fewer paths than no-unit version
+    assert path_count_auto < path_count_no_unit
+
+
+def test_units_per_mm_default_keeps_mm_svgs_unchanged() -> None:
+    """Verify that units_per_mm=1.0 produces identical results on mm-unit SVGs.
+
+    On an SVG already in millimeters (TWO_LAYERS), passing units_per_mm=1.0
+    should produce the same optimization result as without the parameter
+    (since the auto-detected value would also be 1.0 or undefined, defaulting
+    to 1.0).
+    """
+    result_without = optimize_svg(TWO_LAYERS)
+    result_with = optimize_svg(TWO_LAYERS, units_per_mm=1.0)
+
+    # Both should have identical metrics
+    assert result_without.metrics.pen_up_before_mm == result_with.metrics.pen_up_before_mm
+    assert result_without.metrics.pen_up_after_mm == result_with.metrics.pen_up_after_mm
+    assert result_without.metrics.reduction_pct == result_with.metrics.reduction_pct

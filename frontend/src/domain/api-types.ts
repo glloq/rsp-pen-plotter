@@ -3176,6 +3176,8 @@ export interface components {
             merge_tolerance_mm: number;
             /** Svg */
             svg: string;
+            /** Units Per Mm */
+            units_per_mm?: number | null;
         };
         /**
          * OptimizeResponse

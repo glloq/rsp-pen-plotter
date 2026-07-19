@@ -132,8 +132,31 @@ Common knobs:
 Defaults are tuned to look reasonable on a Pi-class device in under a few
 seconds.
 
-## See also
+## Pen lifts are the hidden cost
 
-- [`docs/converters.md`](../docs/converters.md) — every algorithm with kind + complexity
-- [The editor](The-Editor.md)
-- [Multi-pass plotting](Multi-Pass-Plotting.md)
+After the toolpath optimizer finishes (see `docs/audit_optimisation_trace_2026-07-19.md`),
+46–80% of residual plot time in dense styles still goes to pen-up/pen-down cycles,
+even on optimized paths. The effect varies dramatically by algorithm:
+
+- **`eulerian_hatch`** (~19 paths): minimal pen lifts via Eulerian walk
+- **`crosshatch`** (~86 paths): angled layer hatches require frequent lifts between bands
+- **`dashes`** (~2,987 paths): nearly 3,000 discrete strokes, 1,493 lift/drop transitions per second
+
+**Cost per transition:** On an EBB servo (SG90-class), each lift or drop takes
+150–250 ms (machine profile's `pen_lift_time_ms`). A `dashes` render stalls
+for 250–400 seconds in cycles alone — often longer than the drawing strokes.
+
+**Recommendations:**
+
+1. **Prefer serpentine styles** for large solid fills: `eulerian_hatch` beats
+   `crosshatch` / `dashes` by design, deferring horizontal lifts to layer
+   boundaries instead of per-line.
+2. **Tune `pen_lift_time_ms`** in your machine profile to match hardware.
+   Faster servos can drop the estimate below 150 ms; hydraulic pen mechanisms
+   may need 300+ ms.
+3. **Calibrate servo dwell.** Some EBB boards (Adafruit MotorWing) benefit from
+   an extra 50–100 ms post-transition hold before re-drawing, especially on
+   fast paper with springy mechanics.
+
+See `docs/audit_optimisation_trace_2026-07-19.md` for the measured breakdowns
+per algorithm family.
