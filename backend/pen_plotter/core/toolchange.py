@@ -21,6 +21,7 @@ the legacy strings byte-for-byte for backwards compatibility.
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from pen_plotter.domain.toolchange import (
     PauseKind,
@@ -38,6 +39,27 @@ _COLOR_RE = re.compile(r"Change pen:\s*(.+?)\s*\((#[0-9a-fA-F]{3,8})\)\s*$")
 # operator loads the ink from the inventory) regardless of the profile's
 # tool-change mode, so it's parsed and handled ahead of the orchestrator.
 _LOAD_RE = re.compile(r"Load pen slot (\d+) \((.*)\) into magazine\s*$")
+
+# Hex colour embedded in a display label ("Vert prairie #00ff00",
+# "Red (#ff0000)") — split out so the structured ``SwapAction.color`` /
+# ``label`` fields carry the parts separately for frontend localisation.
+_HEX_IN_LABEL_RE = re.compile(r"\(?#[0-9a-fA-F]{3,8}\)?")
+
+
+def _split_label_hex(text: str | None, color: str | None = None) -> tuple[str | None, str | None]:
+    """Split a display label into ``(label, color)`` structured parts.
+
+    ``color`` (when already known, e.g. from :class:`SwapContext`) wins
+    over a hex embedded in the text. The returned label has any embedded
+    hex removed; both come back ``None`` when empty so consumers can use
+    plain truthiness.
+    """
+    label = (text or "").strip()
+    found = _HEX_IN_LABEL_RE.search(label)
+    if found:
+        color = color or found.group(0).strip("()").lower()
+        label = _HEX_IN_LABEL_RE.sub("", label).strip(" -–:,")
+    return label or None, (color.lower() if color else None)
 
 
 def _context_from_comment(comment: str) -> SwapContext | None:
@@ -146,10 +168,14 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
                 # swap for a pen that isn't physically present yet.
                 slot_index, label = int(load.group(1)), load.group(2)
                 last_slot = slot_index
+                s_label, s_color = _split_label_hex(label)
                 pending = SwapAction(
                     kind="operator_confirm",
                     prompt=f"Load {label} into magazine slot {slot_index}, then press Resume.",
                     slot=slot_index,
+                    label=s_label,
+                    color=s_color,
+                    reason="load",
                 )
             else:
                 context = _context_from_comment(comment)
@@ -157,6 +183,10 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
                     if context.slot_index is not None:
                         context = context.model_copy(update={"from_slot_index": last_slot})
                         last_slot = context.slot_index
+                    s_label, s_color = _split_label_hex(context.pen_label, context.pen_color)
+                    s_reason: Literal["tool_change", "color_change"] = (
+                        "tool_change" if context.slot_index is not None else "color_change"
+                    )
                     try:
                         plan = orchestrator.plan(context)
                     except ValueError:
@@ -179,6 +209,9 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
                                 "this profile; swap by hand, then press Resume."
                             ),
                             slot=context.slot_index,
+                            label=s_label,
+                            color=s_color,
+                            reason=s_reason,
                         )
                     else:
                         pending = SwapAction(
@@ -189,6 +222,9 @@ def guided_swap_actions(gcode: str, profile: MachineProfile) -> dict[int, SwapAc
                                 for c in plan.commands
                             ],
                             slot=context.slot_index,
+                            label=s_label,
+                            color=s_color,
+                            reason=s_reason,
                         )
         if not code:
             continue

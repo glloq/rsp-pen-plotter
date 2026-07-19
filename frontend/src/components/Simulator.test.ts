@@ -37,6 +37,8 @@ const i18n = createI18n({
         optPenEvents: 'Pen events',
         optColorChanges: 'Tool changes',
         optPauses: 'Pauses',
+        optPenupHeat: 'Pen-up heatmap',
+        optDensity: 'Path density',
         manualPenChange: 'Manual pen change',
         manualPenChangeHint: 'Single-pen machines: pause before each colour transition.',
         colorFilterLabel: 'Filter colours',
@@ -222,5 +224,27 @@ describe('Simulator with G-code seeded', () => {
     // After click: showTravel=false → highlight class is gone.
     expect(travel.classes().join(' ')).not.toContain('bg-sky-600/30')
     expect(travel.classes().join(' ')).toContain('bg-slate-900')
+  })
+})
+
+describe('Simulator — v2 overlay toggles (P7)', () => {
+  beforeEach(async () => {
+    setActivePinia(createPinia())
+    await seedJobStore()
+  })
+
+  it('renders the pen-up heatmap and density pills, off by default, toggling on click', async () => {
+    const wrapper = mountSimulator()
+    await nextTick()
+    const heat = wrapper.find('[data-test="sim-toggle-penup-heat"]')
+    const density = wrapper.find('[data-test="sim-toggle-density"]')
+    expect(heat.exists()).toBe(true)
+    expect(density.exists()).toBe(true)
+    expect(heat.classes().join(' ')).not.toContain('border-rose-500')
+    expect(density.classes().join(' ')).not.toContain('border-violet-500')
+    await heat.trigger('click')
+    await density.trigger('click')
+    expect(heat.classes().join(' ')).toContain('border-rose-500')
+    expect(density.classes().join(' ')).toContain('border-violet-500')
   })
 })

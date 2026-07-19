@@ -52,9 +52,13 @@ revenir à v1 via le bouton header `Modal V2 (beta)` (toggle off) ou
 via le bouton « Ouvrir l'éditeur complet » dans le header du modal
 V2 — le flag est alors persisté à `false` jusqu'à nouvelle bascule.
 
-**Suppression de v1** : reportée explicitement à v2.0. Tant que les
-contrôles per-layer / per-pass riches du modal v1 ne sont pas
-ré-implémentés dans v2, la coexistence est nécessaire.
+**Suppression de v1** : ~~reportée explicitement à v2.0~~ — **faite**
+(constat audit 2026-07-19). Le refactor éditeur a supprimé le modal v1
+du code ; les contrôles per-layer / per-pass riches vivent désormais
+dans le V2 via l'onglet Couches du panneau expert
+(`EditorExpertPanel` → `LayersSection` → `LayerCard` +
+`LayerPassStack`, chunk lazy dédié). Plus aucune coexistence à
+maintenir.
 
 ### 1.2 — ~~Queue polling pour Workshop Mode et WorkspaceRail~~ (Block A) — fixé en audit
 
@@ -139,11 +143,16 @@ les dialectes non-EBB quand le flag est on (EBB garde son
 (`test_api.py`) + `test_generate_gcode_from_geometry_matches_svg
 _path` (`test_gcode.py`) prouvent l'équivalence et le routing.
 
-**Reste v2.0** : (a) consommateur vpype direct dans
-`optimize_geometry_ir` pour skip le round-trip SVG ; (b)
-émetteur G-code direct sur polylines (skip le round-trip côté
-gcode aussi) ; (c) flipper le défaut à IR-on après audit perf
-Pi pour valider la parité.
+**Reste v2.0** : ~~(a) consommateur vpype direct dans
+`optimize_geometry_ir` pour skip le round-trip SVG~~ — fermé
+2026-07-19 (`_doc_from_ir_layer` alimente vpype depuis les
+polylines typées, test d'équivalence stricte
+`test_optimize_geometry_ir_direct_matches_svg_route`) ; ~~(b)
+émetteur G-code direct sur polylines~~ — fermé 2026-07-19
+(`_layers_from_geometry_ir` + `_generate_from_layers` partagé,
+flux de mouvements identique byte-à-byte au chemin SVG) ; (c)
+flipper le défaut à IR-on après audit perf Pi pour valider la
+parité — reste gated sur l'accès au matériel.
 
 ### 2.2 — ~~ToolChangeOrchestrator source de vérité~~ — fermé
 
@@ -221,7 +230,20 @@ deployment.md` documente déjà la séparation logique.
 
 ## Catégorie 3 — UX et perf différés
 
-### 3.1 — Overlays Compare Mode — reporté v2.0 (cf. 1.5)
+### 3.1 — ~~Overlays Compare Mode~~ — recadré et fermé 2026-07-19
+
+La surface « Compare drawer » à laquelle cette TODO se référait a été
+retirée lors du refactor éditeur (remplacée par le split-slider
+raster/SVG). Les deux overlays atteignables ont été implémentés sur la
+surface actuelle qui possède la géométrie exacte : le **simulateur
+G-code**. Nouveaux toggles `🔥` (heatmap des pen-up — déplacements
+colorés ambre→rouge et épaissis selon leur longueur relative) et `▦`
+(densité de tracé — sous-couche additive violette qui fonce où les
+traits s'accumulent), pilotés par `SimControls` → `SimCanvas`
+(`showPenupHeat` / `showDensity`), i18n FR/EN
+(`simulator.optPenupHeat` / `optDensity`). `curvature` reste
+non-implémenté (demande une géométrie que le parseur G-code ne
+calcule pas ; à re-évaluer si le besoin opérateur se confirme).
 
 ### 3.2 — Audit perf sur matériel — reporté v2.0
 
@@ -308,10 +330,14 @@ v0.1. Les 6 warnings auto-fixables (`vue/attributes-order`,
 `vue/require-default-prop`, directives `eslint-disable`
 inutilisées) ont été nettoyés via `npm run lint -- --fix`.
 
-**Suivi v2.0** : refactor des composants edit/image,
-edit/render, edit/svg, ProfilePenFields, etc. pour passer à
-`defineModel()` / explicit `emit('update:propName', value)`
-quand le pattern par-section sera revisité.
+**Suivi v2.0** : ~~refactor des composants edit/image,
+edit/render, edit/svg, ProfilePenFields, etc.~~ — soldé autrement
+(constat audit 2026-07-19) : `eslint.config.js` documente le
+« shared-draft idiom » comme choix délibéré et scope le `off` de
+`vue/no-mutating-props` à exactement 13 fichiers ; partout ailleurs le
+preset recommended (error) s'applique. `npm run lint` = 0 erreur,
+0 warning. Un refactor `defineModel()` n'apporterait plus de valeur
+lint et reste purement optionnel.
 
 ### 6.2 — ~~`UploadFooter.vue` lint~~ — fermé
 

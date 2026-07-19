@@ -124,3 +124,23 @@ describe('useQueueStore — single-flight load', () => {
     await Promise.all([p1, p2])
   })
 })
+
+describe('useQueueStore — /ws/queue push frames', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(listQueue).mockReset()
+  })
+
+  it('applies a push frame like a poll: runs update + skip toast fires', async () => {
+    vi.mocked(listQueue).mockResolvedValueOnce([makeRun({ skipped_layers: [] })])
+    const queue = useQueueStore()
+    const toasts = useToastStore()
+    await queue.load() // primes the skip bookkeeping
+    // A WS frame reporting a new skip must fire the critical toast the
+    // same way a poll does (shared applyRuns path).
+    queue.applyRuns([makeRun({ skipped_layers: ['Bleu'] })])
+    expect(queue.runs).toHaveLength(1)
+    expect(queue.runs[0]?.skipped_layers).toEqual(['Bleu'])
+    expect(toasts.toasts.some((t) => t.message.includes('Bleu'))).toBe(true)
+  })
+})

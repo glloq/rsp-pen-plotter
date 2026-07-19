@@ -1426,7 +1426,9 @@
     "optPauses": "Pauses",
     "colors": "Couleurs",
     "colorAll": "Toutes",
-    "colorClickHint": "Cliquer pour basculer · double-cliquer pour isoler cette couleur."
+    "colorClickHint": "Cliquer pour basculer · double-cliquer pour isoler cette couleur.",
+    "optPenupHeat": "Heatmap des déplacements — colorés par longueur",
+    "optDensity": "Densité de tracé — plus sombre où les traits s'accumulent"
   },
   "plotter": {
     "title": "Traceur",
@@ -1636,7 +1638,12 @@
     "parkedHint": "La tête s'est garée à la position de changement. Change le stylo, puis reprends.",
     "slotBadge": "Emplacement {slot}",
     "resume": "J'ai changé le stylo — Reprendre",
-    "cancel": "Annuler le run"
+    "cancel": "Annuler le run",
+    "msg": {
+      "toolChange": "Insère {label} dans l'emplacement {slot}, puis reprends.",
+      "colorChange": "Change le stylo pour {label}, puis reprends.",
+      "load": "Charge {label} dans l'emplacement {slot} du magasin, puis reprends."
+    }
   },
   "queue": {
     "title": "File d'impression",

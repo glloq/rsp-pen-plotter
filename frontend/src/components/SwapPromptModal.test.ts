@@ -18,6 +18,11 @@ const i18n = createI18n({
         slotBadge: 'Slot {slot}',
         resume: 'I changed the pen — Resume',
         cancel: 'Cancel run',
+        msg: {
+          toolChange: 'Insert {label} into pen slot {slot}, then resume.',
+          colorChange: 'Change the pen to {label}, then resume.',
+          load: 'Load {label} into magazine slot {slot}, then resume.',
+        },
       },
     },
   },
@@ -96,6 +101,54 @@ describe('SwapPromptModal', () => {
     queue.runs = [run({ swap_prompt: 'Insert pen slot 2: Red #ff0000', swap_slot: 5 })]
     const wrapper = mountModal()
     expect(wrapper.find('[data-test="swap-prompt-slot"]').text()).toBe('Slot 5')
+  })
+
+  it('composes a localised prompt from the structured fields when present', () => {
+    const queue = useQueueStore()
+    queue.runs = [
+      run({
+        swap_prompt: 'Insert pen slot 2: Vert prairie #00ff00',
+        swap_slot: 2,
+        swap_label: 'Vert prairie',
+        swap_color: '#00ff00',
+        swap_reason: 'tool_change',
+      }),
+    ]
+    const wrapper = mountModal()
+    expect(wrapper.find('[data-test="swap-prompt-text"]').text()).toBe(
+      'Insert Vert prairie into pen slot 2, then resume.',
+    )
+    // Swatch driven by the structured hex, not by text parsing.
+    expect(
+      (wrapper.find('[data-test="swap-prompt-swatch"]').element as HTMLElement).style
+        .backgroundColor,
+    ).toBe('#00ff00')
+  })
+
+  it('keeps the backend prompt for runs without structured fields', () => {
+    const queue = useQueueStore()
+    queue.runs = [run({ swap_prompt: 'Change pen to Red (#ff0000)' })]
+    const wrapper = mountModal()
+    expect(wrapper.find('[data-test="swap-prompt-text"]').text()).toBe(
+      'Change pen to Red (#ff0000)',
+    )
+  })
+
+  it('composes the load message for a magazine-load boundary', () => {
+    const queue = useQueueStore()
+    queue.runs = [
+      run({
+        swap_prompt: 'Load Rouge into magazine slot 1, then press Resume.',
+        swap_slot: 1,
+        swap_label: 'Rouge',
+        swap_color: '#ff0011',
+        swap_reason: 'load',
+      }),
+    ]
+    const wrapper = mountModal()
+    expect(wrapper.find('[data-test="swap-prompt-text"]').text()).toBe(
+      'Load Rouge into magazine slot 1, then resume.',
+    )
   })
 
   it('falls back to an inventory name match when the prompt has no hex', async () => {

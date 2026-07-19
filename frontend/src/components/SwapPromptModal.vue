@@ -28,6 +28,24 @@ const availableColors = useAvailableColorsStore()
 const run = computed(() => queue.active[0] ?? null)
 const visible = computed(() => run.value?.state === 'paused' && Boolean(run.value?.swap_prompt))
 
+// Localised prompt composition. Runs queued on a v2 backend carry the
+// structured ``swap_reason`` / ``swap_label`` / ``swap_color`` /
+// ``swap_slot`` fields, from which we build the operator sentence in
+// the active locale. Older runs only carry the backend-built English
+// ``swap_prompt`` — keep it as the fallback so nothing regresses.
+const structuredText = computed<string | null>(() => {
+  const r = run.value
+  if (!r?.swap_reason) return null
+  const label = r.swap_label || r.swap_color || ''
+  if (!label) return null
+  if (r.swap_reason === 'load' && r.swap_slot != null)
+    return t('swap.msg.load', { label, slot: r.swap_slot })
+  if (r.swap_reason === 'tool_change' && r.swap_slot != null)
+    return t('swap.msg.toolChange', { label, slot: r.swap_slot })
+  if (r.swap_reason === 'color_change') return t('swap.msg.colorChange', { label })
+  return null
+})
+
 // Visual slot + ink extraction. The prompt is backend-built text
 // ("Insert pen slot 2: Vert prairie #00ff00", "Change pen to Red
 // (#ff0000)", "Load … into magazine slot 1, …") — parse the magazine
@@ -36,6 +54,7 @@ const visible = computed(() => run.value?.state === 'paused' && Boolean(run.valu
 // else from an inventory name appearing in the text (longest match so
 // "Vert prairie foncé" wins over "Vert prairie").
 const promptText = computed<string>(() => run.value?.swap_prompt ?? '')
+const displayText = computed<string>(() => structuredText.value ?? promptText.value)
 const promptSlot = computed<number | null>(() => {
   // Prefer the structured slot the backend now carries on the run — it's
   // language-independent. Fall back to parsing the prompt text for runs
@@ -46,6 +65,9 @@ const promptSlot = computed<number | null>(() => {
   return m ? Number(m[1]) : null
 })
 const promptHex = computed<string | null>(() => {
+  // Structured field first — language-independent, hex already lowered.
+  const structured = run.value?.swap_color
+  if (structured) return structured
   const direct = /#[0-9a-fA-F]{6}\b/.exec(promptText.value)
   if (direct) return direct[0].toLowerCase()
   const text = promptText.value.toLowerCase()
@@ -91,7 +113,7 @@ async function cancel(): Promise<void> {
         class="mt-4 rounded-lg bg-slate-800 px-4 py-3 text-sm text-slate-100"
         data-test="swap-prompt-text"
       >
-        {{ run.swap_prompt }}
+        {{ displayText }}
       </p>
 
       <!-- Visual "which slot, which colour" row, parsed from the prompt

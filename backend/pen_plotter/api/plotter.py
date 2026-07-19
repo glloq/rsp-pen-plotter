@@ -79,6 +79,12 @@ class StatusResponse(BaseModel):
     needs_operator: bool = False
     # Magazine slot the current swap targets, when it names one.
     slot: int | None = None
+    # Structured swap description (ink hex / human label / boundary kind)
+    # mirrored from the streamer so the SPA can compose a localised prompt
+    # for direct ``/plotter/run`` jobs too. ``None`` outside a swap.
+    swap_color: str | None = None
+    swap_label: str | None = None
+    swap_reason: str | None = None
 
 
 class CommandsResponse(BaseModel):
@@ -99,6 +105,9 @@ def _status() -> StatusResponse:
         message=p.message,
         needs_operator=p.needs_operator,
         slot=p.slot,
+        swap_color=p.color,
+        swap_label=p.label,
+        swap_reason=p.reason,
     )
 
 
@@ -266,6 +275,9 @@ async def plotter_ws(websocket: WebSocket) -> None:
                     "message": progress.message,
                     "needs_operator": progress.needs_operator,
                     "slot": progress.slot,
+                    "swap_color": progress.color,
+                    "swap_label": progress.label,
+                    "swap_reason": progress.reason,
                 }
             )
     except WebSocketDisconnect:
