@@ -32,6 +32,7 @@ from pen_plotter.converters.base import UnsupportedFormatError
 from pen_plotter.converters.pipeline import convert_file
 from pen_plotter.core.layers import _measure
 from pen_plotter.core.svg_ns import svg_tostring
+from pen_plotter.core.toolpath import LayerOptimization, optimize_svg
 from pen_plotter.domain.print_plan import PlacementPlan, PrintPlan, TypographyPlan
 from pen_plotter.models import MachineProfile
 
@@ -262,10 +263,44 @@ def plan_with_rerendered_svg(
     test fixtures) get the legacy behaviour: the SVG is swapped but
     no transform is applied, leaving the generator to centre the raw
     page-mm bbox on the placement region.
+
+    The rerendered SVG then goes through the toolpath optimizer
+    (``core.toolpath.optimize_svg``): the fresh converter output would
+    otherwise ship to the engines in raw Hershey emission order,
+    silently discarding the optimization the frontend applied to the
+    placement it replaces — measured at nearly double the pen-up
+    travel on a dense text page (audit_optimisation_trace_2026-07-19
+    §F1). Runs after the placement bake so the optimizer sees the
+    final geometry; falls back to the unoptimized render on any
+    failure, because the rerender path must never block generation.
     """
     fresh_svg = rerender_text_svg(plan)
     if fresh_svg is None:
         return plan
     if plan.placement is not None and profile is not None:
         fresh_svg = _bake_placement_transform(fresh_svg, plan.placement, profile)
+    fresh_svg = _optimize_rerendered_svg(fresh_svg, plan)
     return plan.model_copy(update={"svg": fresh_svg})
+
+
+def _optimize_rerendered_svg(svg: str, plan: PrintPlan) -> str:
+    """Run the toolpath optimizer on a rerendered SVG, best-effort.
+
+    The plan's per-layer ``optimize`` / ``simplify_tolerance_mm`` settings
+    are forwarded so an operator's opt-out is honoured when the layer
+    labels of the fresh render match the plan's layer ids (labels that
+    don't match simply fall back to the optimizer defaults).
+    """
+    settings = [
+        LayerOptimization(
+            layer_id=layer.layer_id,
+            optimize=layer.optimize,
+            simplify_tolerance_mm=layer.simplify_tolerance_mm or 0.05,
+        )
+        for layer in plan.layers
+    ]
+    try:
+        return optimize_svg(svg, layers=settings).svg
+    except Exception as exc:  # noqa: BLE001 — same safety net as rerender_text_svg
+        _log.warning("optimize of rerendered text svg failed (%r); using raw render", exc)
+        return svg

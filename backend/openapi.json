@@ -1870,6 +1870,11 @@
             "title": "Optimize",
             "type": "boolean"
           },
+          "seam_rotation": {
+            "default": true,
+            "title": "Seam Rotation",
+            "type": "boolean"
+          },
           "simplify_tolerance_mm": {
             "default": 0.05,
             "title": "Simplify Tolerance Mm",

@@ -1,10 +1,14 @@
 """Toolpath optimization via vpype.
 
 Runs vpype's ``linemerge -> linesimplify -> linesort`` pipeline on each layer
-to reduce pen-up travel, preserving layer labels and colors. Optimization
-operates per labeled group so that the layer identity established during
-extraction is retained. Geometry is processed in the SVG's user-unit
-coordinate system (its ``viewBox``), so tolerances are passed as bare numbers.
+to reduce pen-up travel, preserving layer labels and colors, then refines the
+resulting order with :mod:`pen_plotter.core.pathsort` (closed-loop seam
+rotation + time-budgeted 2-opt — see
+``docs/audit_optimisation_trace_2026-07-19.md`` §F2 for the measured gains).
+Optimization operates per labeled group so that the layer identity
+established during extraction is retained. Geometry is processed in the
+SVG's user-unit coordinate system (its ``viewBox``), so tolerances are
+passed as bare numbers.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import quoteattr
 
+import numpy as np
 import vpype as vp
 import vpype_cli
 from pydantic import BaseModel
@@ -25,11 +30,18 @@ from pen_plotter.core.layers import (
     _local,
     strip_root_size,
 )
+from pen_plotter.core.pathsort import improve_order
 from pen_plotter.core.svg_ns import INKSCAPE_NS as _INKSCAPE_NS
 from pen_plotter.core.svg_ns import SVG_NS as _SVG_NS
 from pen_plotter.observability import traced_span
 
 _QUANTIZATION = 0.5
+
+# Time budget for the 2-opt refinement pass, per layer. Chosen to match
+# ``core.tsp.two_opt_improve``'s default: enough for the measured −6…−13 %
+# pen-up gain on thousand-path layers, bounded so a Pi-class device never
+# stalls the /optimize call.
+_TWO_OPT_BUDGET_S = 1.5
 
 
 class LayerOptimization(BaseModel):
@@ -38,6 +50,11 @@ class LayerOptimization(BaseModel):
     layer_id: str
     optimize: bool = True
     simplify_tolerance_mm: float = 0.05
+    # Allow closed loops to start anywhere along their perimeter so the
+    # sorter can enter them at the nearest vertex. Moves the visible seam
+    # of each loop to wherever the travel path lands — opt out for plots
+    # where the original seam placement matters aesthetically.
+    seam_rotation: bool = True
 
 
 class ToolpathMetrics(BaseModel):
@@ -87,6 +104,29 @@ def _pipeline(simplify_tolerance_mm: float, merge_tolerance_mm: float) -> str:
         f"linesimplify --tolerance {simplify_tolerance_mm} "
         "linesort"
     )
+
+
+def _refine_doc_order(doc: vp.Document, *, seam_rotation: bool, closed_tolerance: float) -> None:
+    """Refine each layer's path order in place after the vpype pipeline.
+
+    Applies :func:`pen_plotter.core.pathsort.improve_order` (closed-loop
+    seam rotation + time-budgeted 2-opt) on top of ``linesort``'s greedy
+    result. ``improve_order`` never returns a worse order than its input,
+    so the reported ``pen_up_after_mm`` can only shrink.
+    """
+    for layer_id, layer in doc.layers.items():
+        # No length filter: every line must survive the round-trip, even a
+        # degenerate single-point one, or geometry would silently vanish.
+        lines = [np.asarray(line) for line in layer]
+        if len(lines) < 3:
+            continue
+        improved = improve_order(
+            lines,
+            seam_rotation=seam_rotation,
+            closed_tolerance=max(closed_tolerance, 1e-6),
+            two_opt_budget_s=_TWO_OPT_BUDGET_S,
+        )
+        doc.replace(improved, layer_id)
 
 
 def optimize_svg(
@@ -178,7 +218,17 @@ def _geometry_ir_to_svg(geometry: Any) -> str:
 
 
 def _path_count(svg: str) -> int:
-    """Count drawable primitives (path/polyline/polygon/line) in ``svg``."""
+    """Count drawable primitives in ``svg``.
+
+    Every shape svgelements turns into plottable geometry must be listed
+    here: the count gates the single-path early-exit in
+    :func:`_optimize_svg`, and a missing tag silently skips optimization.
+    Regression cover: ``circle`` was absent, so a mono-layer stippling /
+    halftone / circle_pack job (dots are ``<circle>`` elements) shipped
+    in raw generation order — the exact pen-up regression the optimizer
+    exists to prevent (audit_optimisation_trace_2026-07-19, découverte
+    pendant F2).
+    """
     try:
         root = ET.fromstring(svg)
     except ET.ParseError:
@@ -186,7 +236,7 @@ def _path_count(svg: str) -> int:
     count = 0
     for elem in root.iter():
         tag = _local(elem.tag)
-        if tag in {"path", "polyline", "polygon", "line"}:
+        if tag in {"path", "polyline", "polygon", "line", "circle", "ellipse", "rect"}:
             count += 1
     return count
 
@@ -248,11 +298,13 @@ def _optimize_svg(
         setting = settings.get(label)
         optimize = setting.optimize if setting else True
         simplify = setting.simplify_tolerance_mm if setting else 0.05
+        seam_rotation = setting.seam_rotation if setting else True
 
         doc = _doc_from_svg(group_svg)
         before_total += doc.pen_up_length()
         if optimize:
             doc = vpype_cli.execute(_pipeline(simplify, merge_tolerance_mm), document=doc)
+            _refine_doc_order(doc, seam_rotation=seam_rotation, closed_tolerance=merge_tolerance_mm)
         after_total += doc.pen_up_length()
         out_groups.append(_optimized_group(label, color, doc))
 
