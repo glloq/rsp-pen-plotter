@@ -27,3 +27,7 @@ frontend/dist/
 *.swp
 backend/.coverage
 backend/coverage.xml
+
+# Playwright local artifacts
+frontend/test-results/
+frontend/playwright-report/
