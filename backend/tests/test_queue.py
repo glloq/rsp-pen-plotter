@@ -291,8 +291,9 @@ def test_next_layer_boundary_finds_change_comment() -> None:
     # ("red" layer body starts at executable line 2).
     assert _next_layer_boundary(gcode, 0) == (2, "red")
     # From inside the red layer (exec=2) → next is the slot-1 swap at
-    # executable line 4.
-    assert _next_layer_boundary(gcode, 2) == (4, "1")
+    # executable line 4, labelled with the pen name (not the slot number)
+    # so the cockpit badge names the ink the operator recognises.
+    assert _next_layer_boundary(gcode, 2) == (4, "Blue")
     # No further boundary past the last layer.
     assert _next_layer_boundary(gcode, 10) is None
 

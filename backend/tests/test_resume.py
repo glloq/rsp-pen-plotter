@@ -34,3 +34,37 @@ def test_resume_reinitializes_modal_state_and_position() -> None:
 def test_resume_remainder_matches_checkpoint() -> None:
     program = build_resume_program(GCODE, 6, _profile())
     assert program[-1:] == executable_lines(GCODE)[6:]
+
+
+def test_resume_mid_stroke_relowers_the_pen() -> None:
+    """A checkpoint that falls mid-polyline (pen down, next line keeps
+    drawing) must re-issue the pen-down after travelling back, or the
+    rest of the interrupted path is air-drawn with the pen up."""
+    profile = _profile()
+    # Checkpoint 6 acked through the first draw move; the pen was left
+    # down and the remainder opens on another G1 draw move.
+    program = build_resume_program(GCODE, 6, profile)
+    down = program.index(profile.pen_down_command)
+    travel = next(i for i, line in enumerate(program) if "X30.000 Y40.000" in line)
+    # Pen down comes after the travel back and before the remaining draw move.
+    assert travel < down < len(program) - 1
+    assert program[-1] == "G1 X50 Y60"
+
+
+def test_resume_at_polyline_boundary_keeps_pen_up() -> None:
+    """When the remainder opens on a new polyline (pen-up first), no
+    pen-down is re-issued — the program re-establishes its own state,
+    and lowering the pen first would stamp a stray dot."""
+    profile = _profile()
+    gcode = (
+        "G21\nG90\n"
+        f"{profile.pen_up_command}\nG0 X10 Y20\n{profile.pen_down_command}\n"
+        "G1 X30 Y40 F1800\n"
+        f"{profile.pen_up_command}\nG0 X50 Y60\n{profile.pen_down_command}\n"
+        "G1 X70 Y80\n"
+    )
+    # Checkpoint 6 = acked through the first polyline's last draw move;
+    # the remainder opens on the second polyline's pen-up.
+    program = build_resume_program(gcode, 6, profile)
+    preamble_len = len(program) - len(executable_lines(gcode)[6:])
+    assert profile.pen_down_command not in program[:preamble_len]

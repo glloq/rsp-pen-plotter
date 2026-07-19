@@ -2265,7 +2265,7 @@
         "version": 1,
         "deprecated": false,
         "label": "Backend version",
-        "value": "0.1.0"
+        "value": "0.3.0"
       }
     ]
   }

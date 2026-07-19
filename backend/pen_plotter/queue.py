@@ -204,10 +204,27 @@ def _update(run_id: str, target: Engine, **fields: object) -> PrintRun | None:
 
 
 _LAYER_BOUNDARY_RE = re.compile(
-    r"^\s*;\s*(?:Change\s+to\s+pen\s+slot\s+(\d+)\s*\((.*?)\)|Load\s+pen\s+slot\s+(\d+)\s*\((.*?)\)"
-    r"|Change\s+pen[:\s]+(.+)|layer[-_\s](\S+))",
+    r"^\s*;\s*(?:Change\s+to\s+pen\s+slot\s+(?P<slot>\d+)\s*\((?P<label>.*?)\)"
+    r"|Load\s+pen\s+slot\s+(?P<load_slot>\d+)\s*\((?P<load_label>.*?)\)"
+    r"|Change\s+pen[:\s]+(?P<color_label>.+)|layer[-_\s](?P<layer_name>\S+))",
     re.IGNORECASE,
 )
+
+
+def _boundary_label(match: re.Match[str]) -> str:
+    """Extract the operator-facing label from a layer-boundary match.
+
+    Prefers the human-readable pen label / colour / layer name over the
+    bare slot number — ``skipped_layers`` feeds the cockpit badge and
+    toast, where "Blue" beats "1". Falls back to the slot number when
+    the comment carries an empty label, then to a generic "layer".
+    """
+    groups = match.groupdict()
+    for key in ("label", "load_label", "color_label", "layer_name", "slot", "load_slot"):
+        value = groups.get(key)
+        if value:
+            return value
+    return "layer"
 
 
 def _next_layer_boundary(gcode: str, start_exec_index: int) -> tuple[int, str] | None:
@@ -232,7 +249,7 @@ def _next_layer_boundary(gcode: str, start_exec_index: int) -> tuple[int, str] |
         if comment:
             match = _LAYER_BOUNDARY_RE.match(f"; {comment}")
             if match:
-                pending_label = next((g for g in match.groups() if g), "layer")
+                pending_label = _boundary_label(match)
         if not code:
             continue
         if pending_label is not None and exec_index > start_exec_index:
