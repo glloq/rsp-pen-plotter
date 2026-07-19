@@ -225,6 +225,13 @@ onBeforeUnmount(() => {
   if (pulseTimer !== null) clearTimeout(pulseTimer)
 })
 
+// The workflow bar's "Add a file" action routes here — this pane owns
+// the hidden file input, so it opens the picker on request.
+watch(
+  () => ui.addFileRequests,
+  () => addFile(),
+)
+
 // Primary row action (UX audit Lot 1): place the file on the plan
 // without dragging. Reuses the same store path as the drop handler —
 // no position means the store auto-fits the placement — then selects

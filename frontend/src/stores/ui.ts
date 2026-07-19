@@ -181,6 +181,12 @@ export const useUiStore = defineStore('ui', () => {
   function pulseFilesPane(): void {
     filesPanePulse.value += 1
   }
+  // Counter bumped by the workflow bar's "Add a file" action: FilesPane
+  // owns the hidden <input type=file> and watches this to open it.
+  const addFileRequests = ref(0)
+  function requestAddFile(): void {
+    addFileRequests.value += 1
+  }
   const editModalOpen = ref(false)
   // Display-only sheet overlay shown on the workspace plan, positioned at
   // the top-left. Set when the user picks a sheet format in LayoutSection.
@@ -393,6 +399,8 @@ export const useUiStore = defineStore('ui', () => {
     plotterTab,
     filesPanePulse,
     pulseFilesPane,
+    addFileRequests,
+    requestAddFile,
     editModalOpen,
     previewSheet,
     updateState,

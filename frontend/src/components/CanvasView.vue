@@ -15,6 +15,7 @@ import SimRail from './SimRail.vue'
 import GcodePreview from './GcodePreview.vue'
 import GcodeFilesPanel from './GcodeFilesPanel.vue'
 import AppFooter from './AppFooter.vue'
+import PrimaryWorkflowAction from './PrimaryWorkflowAction.vue'
 
 const { t } = useI18n()
 const job = useJobStore()
@@ -193,6 +194,11 @@ const { launch: startPrint } = useLaunchCurrentJob()
         <PlotterControl />
       </div>
     </div>
+
+    <!-- Single contextual primary action (UX vague 2): one bar, one
+         button, label follows the workflow step. Sits above the metrics
+         footer so it's always at the same spot under the plan. -->
+    <PrimaryWorkflowAction />
 
     <!-- Metrics footer (size / scale / estimate / pen changes) is scoped
          to the canvas column so it spans the plan/simulation/plotter area

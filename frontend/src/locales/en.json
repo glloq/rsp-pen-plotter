@@ -2105,5 +2105,25 @@
     "stopFailed": "Could not stop the timelapse.",
     "deleteFailed": "Could not delete the timelapse.",
     "downloadFailed": "Could not download the video."
+  },
+  "workflow": {
+    "addFile": "Add a file",
+    "hintAddFile": "The library is empty — import an image, SVG or document.",
+    "addToPlan": "Add to plan",
+    "hintAddToPlan": "A file is imported but nothing is on the plan yet.",
+    "chooseStyle": "Choose the style",
+    "hintChooseStyle": "A placed drawing has no conversion style yet.",
+    "fixPens": "Fix pens",
+    "hintFixPens": "Required pens are missing from the magazine — plotting is blocked.",
+    "verify": "Check the plot",
+    "hintVerify": "Generates the G-code and opens the simulation for review.",
+    "connect": "Connect the plotter",
+    "hintConnect": "The plot is ready — only the machine is missing.",
+    "launch": "Start the plot",
+    "hintLaunch": "Everything is ready: plotter connected, plot checked.",
+    "pause": "Pause",
+    "hintRunning": "Print in progress.",
+    "resume": "Resume",
+    "hintPaused": "Print paused."
   }
 }
