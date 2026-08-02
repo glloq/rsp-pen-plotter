@@ -53,6 +53,16 @@ class TimelapseSummary(BaseModel):
     duration_seconds: float
     has_video: bool
     size_bytes: int
+    # Lifecycle state: ``complete`` (assembled), ``assembly_failed`` (frames
+    # captured but ffmpeg couldn't run), or ``interrupted`` (recovered from a
+    # crash). Older metas predate the field, so default to ``complete``.
+    state: str = "complete"
+
+
+class TimelapseAssembleRequest(BaseModel):
+    """Body for ``POST /timelapse/{id}/assemble`` — optional fps override."""
+
+    fps: int | None = Field(default=None, ge=tl.MIN_FPS, le=tl.MAX_FPS)
 
 
 @router.get("/timelapse/status")
@@ -117,6 +127,33 @@ async def download_video(timelapse_id: str) -> FileResponse:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", str(meta.get("label") or timelapse_id)).strip("_")
     filename = f"timelapse-{safe or timelapse_id}.mp4"
     return FileResponse(path, media_type="video/mp4", filename=filename)
+
+
+@router.post("/timelapse/{timelapse_id}/assemble")
+async def assemble(
+    timelapse_id: str, body: TimelapseAssembleRequest | None = None
+) -> TimelapseSummary:
+    """(Re)assemble an interrupted or assembly-failed timelapse into its MP4.
+
+    Lets the operator recover a session that crashed before ``stop`` finished,
+    or retry assembly that ran out of disk space (P1.3).
+
+    Raises:
+        HTTPException: 404 if unknown / no frames, 507 if the space guard
+            refuses, 409 if a recording is active.
+    """
+    fps = body.fps if body else None
+    try:
+        meta = await tl.recorder.assemble(timelapse_id, fps=fps)
+    except RuntimeError as exc:
+        message = str(exc)
+        if "no frames" in message.lower() or "unknown" in message.lower():
+            raise HTTPException(status_code=404, detail=message) from exc
+        if "quota" in message.lower() or "disk space" in message.lower():
+            raise HTTPException(status_code=507, detail=message) from exc
+        raise HTTPException(status_code=409, detail=message) from exc
+    record("timelapse.assemble", timelapse_id)
+    return TimelapseSummary(**meta)
 
 
 @router.delete("/timelapse/{timelapse_id}")

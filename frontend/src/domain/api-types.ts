@@ -1868,6 +1868,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/timelapse/{timelapse_id}/assemble": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assemble
+         * @description (Re)assemble an interrupted or assembly-failed timelapse into its MP4.
+         *
+         *     Lets the operator recover a session that crashed before ``stop`` finished,
+         *     or retry assembly that ran out of disk space (P1.3).
+         *
+         *     Raises:
+         *         HTTPException: 404 if unknown / no frames, 507 if the space guard
+         *             refuses, 409 if a recording is active.
+         */
+        post: operations["assemble_timelapse__timelapse_id__assemble_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/timelapse/{timelapse_id}/video": {
         parameters: {
             query?: never;
@@ -3985,6 +4012,14 @@ export interface components {
             total: number;
         };
         /**
+         * TimelapseAssembleRequest
+         * @description Body for ``POST /timelapse/{id}/assemble`` — optional fps override.
+         */
+        TimelapseAssembleRequest: {
+            /** Fps */
+            fps?: number | null;
+        };
+        /**
          * TimelapseStartRequest
          * @description Body for ``POST /timelapse/start``.
          */
@@ -4064,6 +4099,11 @@ export interface components {
             label: string;
             /** Size Bytes */
             size_bytes: number;
+            /**
+             * State
+             * @default complete
+             */
+            state: string;
         };
         /**
          * TipCalibrationConfig
@@ -7472,6 +7512,43 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assemble_timelapse__timelapse_id__assemble_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-api-key"?: string | null;
+            };
+            path: {
+                timelapse_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TimelapseAssembleRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelapseSummary"];
                 };
             };
             /** @description Validation Error */

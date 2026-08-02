@@ -4151,6 +4151,26 @@
         "title": "StatusResponse",
         "type": "object"
       },
+      "TimelapseAssembleRequest": {
+        "description": "Body for ``POST /timelapse/{id}/assemble`` \u2014 optional fps override.",
+        "properties": {
+          "fps": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fps"
+          }
+        },
+        "title": "TimelapseAssembleRequest",
+        "type": "object"
+      },
       "TimelapseStartRequest": {
         "description": "Body for ``POST /timelapse/start``.",
         "properties": {
@@ -4289,6 +4309,11 @@
           "size_bytes": {
             "title": "Size Bytes",
             "type": "integer"
+          },
+          "state": {
+            "default": "complete",
+            "title": "State",
+            "type": "string"
           }
         },
         "required": [
@@ -10071,6 +10096,79 @@
           }
         },
         "summary": "Delete"
+      }
+    },
+    "/timelapse/{timelapse_id}/assemble": {
+      "post": {
+        "description": "(Re)assemble an interrupted or assembly-failed timelapse into its MP4.\n\nLets the operator recover a session that crashed before ``stop`` finished,\nor retry assembly that ran out of disk space (P1.3).\n\nRaises:\n    HTTPException: 404 if unknown / no frames, 507 if the space guard\n        refuses, 409 if a recording is active.",
+        "operationId": "assemble_timelapse__timelapse_id__assemble_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "timelapse_id",
+            "required": true,
+            "schema": {
+              "title": "Timelapse Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-api-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/TimelapseAssembleRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelapseSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assemble"
       }
     },
     "/timelapse/{timelapse_id}/video": {

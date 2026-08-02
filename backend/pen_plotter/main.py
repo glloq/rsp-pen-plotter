@@ -105,16 +105,18 @@ def _log_library_integrity() -> None:
 
 
 def _cleanup_orphan_timelapses() -> None:
-    """Reclaim timelapse directories left unfinished by a crash (P1.4)."""
+    """Recover timelapse directories left unfinished by a crash (P1.4)."""
     from pen_plotter.timelapse import recorder as timelapse_recorder
 
     try:
-        removed = timelapse_recorder.cleanup_orphan_sessions()
+        recovered = timelapse_recorder.recover_orphan_sessions()
     except Exception:
-        _log.exception("Timelapse orphan cleanup failed")
+        _log.exception("Timelapse orphan recovery failed")
         return
-    if removed:
-        _log.info("Reclaimed %d orphaned timelapse session(s) from an unclean stop", removed)
+    if recovered:
+        _log.info(
+            "Recovered %d interrupted timelapse session(s) from an unclean stop", recovered
+        )
 
 
 @asynccontextmanager

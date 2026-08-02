@@ -476,17 +476,65 @@ class TimelapseRecorder:
             except Exception as exc:  # a transient grab failure must not kill the loop
                 self._error = str(exc)
                 _log.warning("Timelapse frame grab failed: %s", exc)
-            else:
-                # Contiguous numbering (only on success) keeps ffmpeg's
-                # ``%06d`` input pattern gap-free. Writing up to 8 MiB to a slow
-                # SD card is offloaded so the event loop keeps serving HTTP
-                # (an emergency stop must stay reactive) — P1.2.
-                frame_path = frames_dir / f"frame_{session.frame_count:06d}.jpg"
+                await asyncio.sleep(session.interval_seconds)
+                continue
+            # Exact per-frame quota check now that the real size is known: the
+            # pre-grab guard uses the *running* total, so one final frame could
+            # still tip the store past the quota without this (P1.6).
+            max_store = _env_mb_bytes(_TIMELAPSE_MAX_MB_ENV, _DEFAULT_TIMELAPSE_MAX_MB)
+            projected = session.store_baseline_bytes + session.bytes_written + len(frame)
+            if max_store and projected > max_store:
+                self._error = (
+                    f"Timelapse quota ({max_store // (1024 * 1024)} MB) reached — stop to save."
+                )
+                await asyncio.sleep(session.interval_seconds)
+                continue
+            # Contiguous numbering (only on success) keeps ffmpeg's ``%06d``
+            # input pattern gap-free. Writing up to 8 MiB to a slow SD card is
+            # offloaded so the event loop keeps serving HTTP (P1.2).
+            frame_path = frames_dir / f"frame_{session.frame_count:06d}.jpg"
+            try:
                 await asyncio.to_thread(frame_path.write_bytes, frame)
-                session.frame_count += 1
-                session.bytes_written += len(frame)
-                self._error = None
+            except OSError as exc:
+                # A disk error (full / read-only / permissions) must not silently
+                # kill the task and strand the session. Record it and mark the
+                # session interrupted so the captured frames stay recoverable and
+                # a fresh start() isn't blocked by a half-dead recording (P1.5).
+                self._error = f"Timelapse write failed: {exc}"
+                _log.error("Timelapse write failed, ending capture: %s", exc)
+                with contextlib.suppress(Exception):
+                    self._finalize_interrupted(session, self._error)
+                return
+            session.frame_count += 1
+            session.bytes_written += len(frame)
+            self._error = None
             await asyncio.sleep(session.interval_seconds)
+
+    def _finalize_interrupted(self, session: _Session, error: str | None) -> None:
+        """Write an ``interrupted`` meta.json so a stranded session is saveable.
+
+        Used when the capture loop dies on a disk error (P1.5) and by startup
+        recovery (P1.4): the frames stay on disk and the session shows up in
+        :meth:`list`, so the operator can assemble or delete it instead of
+        silently losing the capture.
+        """
+        directory = self._base_dir / session.id
+        meta: dict[str, Any] = {
+            "id": session.id,
+            "label": session.label,
+            "created_at": session.started_at.isoformat(),
+            "interval_seconds": session.interval_seconds,
+            "fps": session.fps,
+            "frame_count": session.frame_count,
+            "duration_seconds": (
+                round(session.frame_count / session.fps, 2) if session.fps else 0.0
+            ),
+            "has_video": False,
+            "size_bytes": 0,
+            "state": "interrupted",
+            "error": error,
+        }
+        (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
 
     def _assembly_space_reason(self, frames_dir: Path) -> str | None:
         """Why the MP4 must not be assembled now, or ``None`` if it's safe.
@@ -559,6 +607,10 @@ class TimelapseRecorder:
                 self._error = "No frames were captured."
 
             video = directory / "video.mp4"
+            # ``assembly_failed`` when frames exist but ffmpeg couldn't run (out
+            # of space, etc.) so the UI can offer a re-assemble; otherwise
+            # ``complete``.
+            state = "complete" if (has_video or session.frame_count == 0) else "assembly_failed"
             meta: dict[str, Any] = {
                 "id": session.id,
                 "label": session.label,
@@ -569,23 +621,26 @@ class TimelapseRecorder:
                 "duration_seconds": duration,
                 "has_video": has_video,
                 "size_bytes": video.stat().st_size if has_video and video.is_file() else 0,
+                "state": state,
             }
             (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
             return meta
 
-    def cleanup_orphan_sessions(self) -> int:
-        """Remove crashed, unfinished timelapse directories. Returns the count.
+    def recover_orphan_sessions(self) -> int:
+        """Mark crashed, unfinished timelapse directories ``interrupted``.
 
         A power blip during recording leaves a session directory with frames
-        but no ``meta.json`` (written only by :meth:`stop`). Such a directory
-        never appears in :meth:`list` yet still counts toward the storage quota
-        and can't be deleted from the UI (P1.4) — dead weight that can slowly
-        wedge the card. Called at startup, when no recording is active, so any
-        directory missing its ``meta.json`` is definitively an orphan.
+        but no ``meta.json`` (written only by :meth:`stop`). Rather than delete
+        it — which throws away frames the operator may want — reconstruct a
+        minimal ``interrupted`` meta so the session shows up in :meth:`list`,
+        and can be re-assembled or deleted from the UI (P1.4). A directory with
+        frames but no ``frames`` subdir content is pruned (nothing to keep).
+        Called at startup, when no recording is active, so a directory missing
+        its ``meta.json`` is definitively an orphan. Returns the count recovered.
         """
         if not self._base_dir.is_dir():
             return 0
-        removed = 0
+        recovered = 0
         for directory in self._base_dir.iterdir():
             if not directory.is_dir():
                 continue
@@ -593,10 +648,76 @@ class TimelapseRecorder:
                 continue
             if (directory / "meta.json").is_file():
                 continue
-            shutil.rmtree(directory, ignore_errors=True)
-            removed += 1
-            _log.info("Removed orphan timelapse session %s", directory.name)
-        return removed
+            frames_dir = directory / "frames"
+            frames = sorted(frames_dir.glob("frame_*.jpg")) if frames_dir.is_dir() else []
+            if not frames:
+                shutil.rmtree(directory, ignore_errors=True)
+                continue
+            try:
+                created = datetime.fromtimestamp(directory.stat().st_mtime, UTC).isoformat()
+            except OSError:
+                created = datetime.now(UTC).isoformat()
+            meta: dict[str, Any] = {
+                "id": directory.name,
+                "label": "",
+                "created_at": created,
+                "interval_seconds": 0.0,
+                "fps": 0,  # unknown; the assemble endpoint picks a default
+                "frame_count": len(frames),
+                "duration_seconds": 0.0,
+                "has_video": False,
+                "size_bytes": 0,
+                "state": "interrupted",
+                "error": "Recording interrupted before it was saved.",
+            }
+            (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
+            recovered += 1
+            _log.info("Recovered interrupted timelapse session %s (%d frames)",
+                      directory.name, len(frames))
+        return recovered
+
+    async def assemble(self, timelapse_id: str, fps: int | None = None) -> dict[str, Any]:
+        """(Re)assemble an existing session's frames into its MP4 (P1.3).
+
+        For an ``interrupted`` or ``assembly_failed`` session: encode the
+        captured frames and flip the state to ``complete``. Serialised on the
+        lifecycle lock so it can't race a start / stop / delete.
+
+        Raises:
+            RuntimeError: unknown id, no frames, or the space guard refuses.
+        """
+        async with self._get_lifecycle_lock():
+            directory = self._session_dir(timelapse_id)
+            if directory is None or not (directory / "meta.json").is_file():
+                raise RuntimeError("Unknown timelapse.")
+            frames_dir = directory / "frames"
+            if not frames_dir.is_dir() or not any(frames_dir.glob("frame_*.jpg")):
+                raise RuntimeError("This timelapse has no frames to assemble.")
+            meta = _read_meta(directory) or {}
+            fps = fps or int(meta.get("fps") or 0) or MIN_FPS
+            reason = await asyncio.to_thread(self._assembly_space_reason, frames_dir)
+            if reason is not None:
+                raise RuntimeError(reason)
+            await asyncio.to_thread(
+                self._assembler, frames_dir, directory / "video.mp4", fps
+            )
+            video = directory / "video.mp4"
+            frame_count = int(meta.get("frame_count") or 0) or len(
+                list(frames_dir.glob("frame_*.jpg"))
+            )
+            meta.update(
+                {
+                    "fps": fps,
+                    "frame_count": frame_count,
+                    "duration_seconds": round(frame_count / fps, 2) if fps else 0.0,
+                    "has_video": True,
+                    "size_bytes": video.stat().st_size if video.is_file() else 0,
+                    "state": "complete",
+                    "error": None,
+                }
+            )
+            (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
+            return meta
 
     def list(self) -> list[dict[str, Any]]:
         """All saved timelapses, newest first."""
