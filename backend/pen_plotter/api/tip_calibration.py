@@ -388,17 +388,26 @@ async def calibrate_scale(req: ScaleCalibrateRequest) -> ScaleCalibrateResponse:
     lock = _get_calibration_lock()
     if lock.locked():
         raise HTTPException(status_code=409, detail="A calibration is already in progress.")
-    try:
-        async with lock:
+    async with lock:
+        # Same drain-on-timeout as ``measure`` (P1.1): the worker thread can't
+        # be killed, so on timeout we shield + await it to completion before
+        # releasing the lock, so a fresh calibration can't grab the camera
+        # while this grab is still in flight.
+        scale_task = asyncio.create_task(asyncio.to_thread(_grab_and_measure))
+        try:
             m = await asyncio.wait_for(
-                asyncio.to_thread(_grab_and_measure), timeout=_CALIBRATION_TIMEOUT_S
+                asyncio.shield(scale_task), timeout=_CALIBRATION_TIMEOUT_S
             )
-    except TimeoutError as exc:
-        raise HTTPException(status_code=504, detail="Camera measurement timed out.") from exc
-    except CameraUrlError as exc:  # SSRF guard rejected the URL — client error
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # frame grab failure
-        raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
+        except TimeoutError as exc:
+            with contextlib.suppress(Exception):
+                await scale_task  # drain before releasing the lock
+            raise HTTPException(
+                status_code=504, detail="Camera measurement timed out."
+            ) from exc
+        except CameraUrlError as exc:  # SSRF guard rejected the URL — client error
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # frame grab failure
+            raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
     annotated = (
         "data:image/jpeg;base64," + base64.b64encode(m.annotated_jpeg).decode()
         if m.annotated_jpeg
