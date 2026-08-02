@@ -502,3 +502,52 @@ def test_upload_refused_when_disk_at_reserve(tmp_path, monkeypatch):
             files={"file": ("drawing.svg", svg, "image/svg+xml")},
         )
     assert resp.status_code == 507
+
+
+@pytest.mark.asyncio
+async def test_reprocess_failure_leaves_old_artefacts_intact(monkeypatch) -> None:
+    """A crash mid-reconversion must not corrupt the live entry (P1.6): the
+    new artefacts are staged and swapped in atomically, so a failure at swap
+    time leaves the previous normalized.svg / meta.json byte-for-byte intact
+    and no staging directory behind."""
+    import json
+
+    from pen_plotter.api import files as files_mod
+    from pen_plotter.application.file_library import file_dir
+
+    txt = b"Hello plotter"
+    async with _client() as client:
+        first = await client.post(
+            "/files",
+            files={"file": ("hello.txt", txt, "text/plain")},
+            data={"folder": "", "options": json.dumps({"font_size_mm": 4.0})},
+        )
+    assert first.status_code == 200
+    file_id = first.json()["file"]["file_id"]
+    directory = file_dir(file_id)
+    old_svg = (directory / "normalized.svg").read_bytes()
+    old_meta = (directory / "meta.json").read_bytes()
+
+    # Make the atomic swap fail as if the process died mid-reconversion.
+    def boom(src, dst):  # noqa: ANN001
+        raise RuntimeError("simulated crash during swap")
+
+    monkeypatch.setattr(files_mod.os, "replace", boom)
+
+    # ASGITransport re-raises app exceptions, so the failed reconversion
+    # surfaces here — exactly the mid-write crash we're guarding against.
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        async with _client() as client:
+            await client.post(
+                "/files",
+                files={"file": ("hello.txt", txt, "text/plain")},
+                data={"folder": "", "options": json.dumps({"font_size_mm": 20.0})},
+            )
+
+    monkeypatch.undo()
+    # Live artefacts are untouched — no torn write, no new-svg/old-meta skew.
+    assert (directory / "normalized.svg").read_bytes() == old_svg
+    assert (directory / "meta.json").read_bytes() == old_meta
+    # No staging directory was left behind.
+    leftovers = [p.name for p in directory.parent.glob(".tmp-reprocess-*")]
+    assert leftovers == []

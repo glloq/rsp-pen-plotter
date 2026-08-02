@@ -261,14 +261,6 @@ def _reprocess_existing(
     converted = convert_file(data, record.source_file, mime, new_options)
     directory = file_dir(record.file_id)
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / "normalized.svg").write_text(converted.svg, encoding="utf-8")
-    # Refresh the on-disk original too — extension may differ if the
-    # operator re-uploaded the same content under a different filename.
-    original_target = directory / f"original{_ext_for(record.source_file, converted.source_mime)}"
-    for stale in directory.iterdir():
-        if stale.is_file() and stale.stem == "original" and stale != original_target:
-            stale.unlink(missing_ok=True)
-    original_target.write_bytes(data)
     # Auto-attribute every cluster centroid to its nearest pool ink before
     # the meta is sealed. The library upload is profile-agnostic (no pen
     # rack in scope here), so ``active_pool(None)`` honours the operator's
@@ -287,7 +279,32 @@ def _reprocess_existing(
         ),
         source_options=dict(new_options) if new_options else None,
     )
-    (directory / "meta.json").write_text(meta.model_dump_json(), encoding="utf-8")
+    original_name = f"original{_ext_for(record.source_file, converted.source_mime)}"
+
+    # Reconversion overwrites live artefacts (normalized.svg / original /
+    # meta.json). Writing them in place would leave the entry inconsistent if
+    # the process died mid-write — a torn file, or a new SVG paired with the
+    # old meta. Instead stage every artefact in a sibling temp dir, then move
+    # each into place with an atomic ``os.replace``, sealing meta.json LAST so
+    # a concurrent reader never sees fresh metadata pointing at a stale SVG.
+    staging = directory.with_name(f".tmp-reprocess-{record.file_id}-{uuid.uuid4().hex}")
+    staging.mkdir(parents=True, exist_ok=False)
+    try:
+        (staging / "normalized.svg").write_text(converted.svg, encoding="utf-8")
+        (staging / original_name).write_bytes(data)
+        (staging / "meta.json").write_text(meta.model_dump_json(), encoding="utf-8")
+
+        os.replace(staging / "normalized.svg", directory / "normalized.svg")
+        # Drop any prior original whose extension differs from the new one
+        # (the operator may have re-uploaded the same content under a new
+        # filename) before swapping the fresh bytes in.
+        for stale in directory.iterdir():
+            if stale.is_file() and stale.stem == "original" and stale.name != original_name:
+                stale.unlink(missing_ok=True)
+        os.replace(staging / original_name, directory / original_name)
+        os.replace(staging / "meta.json", directory / "meta.json")
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
     # Update DB row: layer_count and source_mime may have shifted; keep
     # file_id, sha256, folder, created_at.

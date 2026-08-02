@@ -7,6 +7,20 @@ re-established first. This module replays the executed prefix to recover that
 modal state, then emits a small preamble (restore units/positioning, lift the
 pen, travel back to the last position, re-lower the pen if the checkpoint fell
 mid-stroke) followed by the remaining lines.
+
+Two limits worth stating plainly:
+
+* **Checkpoint granularity.** The streamer persists a checkpoint at most every
+  ~50 acknowledged lines / 2 s (plus on every pause / swap / error boundary),
+  so an unclean stop can lose up to that many lines — resume replays from the
+  last *checkpoint*, not the last physical stroke, and may retrace a short
+  already-drawn section. Callers should describe resume as "from the last
+  checkpoint", never "from the exact interruption point".
+* **EBB is partial.** This reconstruction reads absolute X/Y from the executed
+  prefix. An EBB program is a stream of *relative* ``SM`` step moves with no
+  absolute coordinates, so the head position cannot be recovered this way;
+  resuming an interrupted EBB job may misregister and should be treated as
+  best-effort until a native EBB resume path exists.
 """
 
 from __future__ import annotations

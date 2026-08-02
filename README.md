@@ -25,8 +25,10 @@ any browser on your LAN, drop a file, watch it draw.
   on Klipper. New machines via a YAML profile, no code.
 - **Two skill levels** — *Assistant* wizard for quick prints, *Expert* editor
   for per-layer control.
-- **Plot survives reboots.** The queue checkpoints; a power blip resumes
-  from the last stroke, not from the start.
+- **Plot survives reboots.** The queue checkpoints as it streams, so after a
+  power blip a job resumes from its last checkpoint instead of the start — a
+  short already-drawn section may be retraced. (Native EBB resume is partial:
+  its moves are relative, so the exact head position can't be reconstructed.)
 
 <p align="center">
   <img src="docs/images/workflow.svg" alt="Five-step workflow: import, edit, place, preview, plot" width="900"/>
