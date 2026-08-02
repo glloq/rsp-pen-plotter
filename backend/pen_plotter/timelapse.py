@@ -370,6 +370,21 @@ class TimelapseRecorder:
         self._task: asyncio.Task[None] | None = None
         self._session: _Session | None = None
         self._error: str | None = None
+        # Serialises the whole lifecycle (start / stop / delete) so two
+        # concurrent ``start`` calls can't both pass the "already recording?"
+        # check and spawn two capture loops, orphaning the first task (P0.1).
+        # Rebuilt on loop change so a second TestClient (new event loop) doesn't
+        # await a lock bound to the previous loop.
+        self._lifecycle_lock: asyncio.Lock | None = None
+        self._lifecycle_lock_loop: asyncio.AbstractEventLoop | None = None
+
+    def _get_lifecycle_lock(self) -> asyncio.Lock:
+        """Return the per-loop lifecycle lock, (re)creating it on loop change."""
+        loop = asyncio.get_running_loop()
+        if self._lifecycle_lock is None or self._lifecycle_lock_loop is not loop:
+            self._lifecycle_lock = asyncio.Lock()
+            self._lifecycle_lock_loop = loop
+        return self._lifecycle_lock
 
     @property
     def recording(self) -> bool:
@@ -398,26 +413,30 @@ class TimelapseRecorder:
         Raises:
             RuntimeError: If a recording is already in progress.
         """
-        if self.recording:
-            raise RuntimeError("A timelapse is already recording.")
-        interval_seconds = max(MIN_INTERVAL_S, min(MAX_INTERVAL_S, interval_seconds))
-        fps = max(MIN_FPS, min(MAX_FPS, fps))
-        session_id = uuid4().hex
-        (self._base_dir / session_id / "frames").mkdir(parents=True, exist_ok=True)
-        # Baselining walks the whole store (potentially many old sessions);
-        # keep that off the event loop so /timelapse/start stays snappy (P1.2).
-        baseline = await asyncio.to_thread(_dir_size_bytes, self._base_dir)
-        self._session = _Session(
-            id=session_id,
-            stream_url=stream_url,
-            interval_seconds=interval_seconds,
-            fps=fps,
-            label=label.strip(),
-            store_baseline_bytes=baseline,
-        )
-        self._error = None
-        self._task = asyncio.create_task(self._loop(self._session))
-        return self.status()
+        async with self._get_lifecycle_lock():
+            # The check + task creation must be atomic against a concurrent
+            # start; the lock is held across the ``to_thread`` await so a second
+            # caller can't slip in and spawn a rival capture loop (P0.1).
+            if self.recording:
+                raise RuntimeError("A timelapse is already recording.")
+            interval_seconds = max(MIN_INTERVAL_S, min(MAX_INTERVAL_S, interval_seconds))
+            fps = max(MIN_FPS, min(MAX_FPS, fps))
+            session_id = uuid4().hex
+            (self._base_dir / session_id / "frames").mkdir(parents=True, exist_ok=True)
+            # Baselining walks the whole store (potentially many old sessions);
+            # keep that off the event loop so /timelapse/start stays snappy (P1.2).
+            baseline = await asyncio.to_thread(_dir_size_bytes, self._base_dir)
+            self._session = _Session(
+                id=session_id,
+                stream_url=stream_url,
+                interval_seconds=interval_seconds,
+                fps=fps,
+                label=label.strip(),
+                store_baseline_bytes=baseline,
+            )
+            self._error = None
+            self._task = asyncio.create_task(self._loop(self._session))
+            return self.status()
 
     def _capacity_block_reason(self, session: _Session) -> str | None:
         """Why capture must pause right now, or ``None`` when it may continue.
@@ -499,56 +518,60 @@ class TimelapseRecorder:
         Raises:
             RuntimeError: If no recording is in progress.
         """
-        session = self._session
-        if session is None or self._task is None:
-            raise RuntimeError("No timelapse is recording.")
-        self._task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await self._task
-        self._task = None
-        self._session = None
+        # Held across assembly so a concurrent delete() can't rmtree the
+        # session directory while ffmpeg is writing into it, and a start()
+        # can't begin until finalisation completes (P0.1).
+        async with self._get_lifecycle_lock():
+            session = self._session
+            if session is None or self._task is None:
+                raise RuntimeError("No timelapse is recording.")
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
+            self._session = None
 
-        directory = self._base_dir / session.id
-        duration = round(session.frame_count / session.fps, 2) if session.fps else 0.0
-        has_video = False
-        if session.frame_count > 0:
-            frames_dir = directory / "frames"
-            # The MP4 is written alongside the frames, so encoding needs
-            # headroom the capture-time quota never accounted for (P1.3).
-            # Refuse to assemble if it would breach the free-space reserve or
-            # the timelapse quota — the frames stay on disk so the operator can
-            # free space and retry rather than losing the capture or wedging
-            # the SD card mid-encode.
-            reason = await asyncio.to_thread(self._assembly_space_reason, frames_dir)
-            if reason is not None:
-                self._error = reason
-                _log.error("Timelapse assembly skipped: %s", reason)
+            directory = self._base_dir / session.id
+            duration = round(session.frame_count / session.fps, 2) if session.fps else 0.0
+            has_video = False
+            if session.frame_count > 0:
+                frames_dir = directory / "frames"
+                # The MP4 is written alongside the frames, so encoding needs
+                # headroom the capture-time quota never accounted for (P1.3).
+                # Refuse to assemble if it would breach the free-space reserve
+                # or the timelapse quota — the frames stay on disk so the
+                # operator can free space and retry rather than losing the
+                # capture or wedging the SD card mid-encode.
+                reason = await asyncio.to_thread(self._assembly_space_reason, frames_dir)
+                if reason is not None:
+                    self._error = reason
+                    _log.error("Timelapse assembly skipped: %s", reason)
+                else:
+                    try:
+                        await asyncio.to_thread(
+                            self._assembler, frames_dir, directory / "video.mp4", session.fps
+                        )
+                        has_video = True
+                    except Exception as exc:
+                        self._error = str(exc)
+                        _log.error("Timelapse assembly failed: %s", exc)
             else:
-                try:
-                    await asyncio.to_thread(
-                        self._assembler, frames_dir, directory / "video.mp4", session.fps
-                    )
-                    has_video = True
-                except Exception as exc:
-                    self._error = str(exc)
-                    _log.error("Timelapse assembly failed: %s", exc)
-        else:
-            self._error = "No frames were captured."
+                self._error = "No frames were captured."
 
-        video = directory / "video.mp4"
-        meta: dict[str, Any] = {
-            "id": session.id,
-            "label": session.label,
-            "created_at": session.started_at.isoformat(),
-            "interval_seconds": session.interval_seconds,
-            "fps": session.fps,
-            "frame_count": session.frame_count,
-            "duration_seconds": duration,
-            "has_video": has_video,
-            "size_bytes": video.stat().st_size if has_video and video.is_file() else 0,
-        }
-        (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
-        return meta
+            video = directory / "video.mp4"
+            meta: dict[str, Any] = {
+                "id": session.id,
+                "label": session.label,
+                "created_at": session.started_at.isoformat(),
+                "interval_seconds": session.interval_seconds,
+                "fps": session.fps,
+                "frame_count": session.frame_count,
+                "duration_seconds": duration,
+                "has_video": has_video,
+                "size_bytes": video.stat().st_size if has_video and video.is_file() else 0,
+            }
+            (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
+            return meta
 
     def cleanup_orphan_sessions(self) -> int:
         """Remove crashed, unfinished timelapse directories. Returns the count.
@@ -620,13 +643,14 @@ class TimelapseRecorder:
         The tree can hold up to 100 000 frames, so the ``rmtree`` runs in a
         worker thread to keep the event loop responsive (P1.2).
         """
-        if self._session is not None and self._session.id == timelapse_id:
-            return False
-        directory = self._session_dir(timelapse_id)
-        if directory is None or not directory.is_dir():
-            return False
-        await asyncio.to_thread(shutil.rmtree, directory, ignore_errors=True)
-        return True
+        async with self._get_lifecycle_lock():
+            if self._session is not None and self._session.id == timelapse_id:
+                return False
+            directory = self._session_dir(timelapse_id)
+            if directory is None or not directory.is_dir():
+                return False
+            await asyncio.to_thread(shutil.rmtree, directory, ignore_errors=True)
+            return True
 
 
 recorder = TimelapseRecorder()

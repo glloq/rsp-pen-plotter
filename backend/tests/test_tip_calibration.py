@@ -932,3 +932,67 @@ async def test_second_calibration_while_busy_returns_409(
 
         done = await first
         assert done.status_code == 200
+
+
+def test_measure_cancel_event_stops_before_grab_and_stores_nothing() -> None:
+    """A pre-set cancel flag aborts the measurement before any grab and never
+    stores a result (P0.2)."""
+    import threading
+
+    from pen_plotter.vision.tip_detect import TipCalibrator
+
+    ev = threading.Event()
+    ev.set()
+    calib = TipCalibrator(grabber=lambda _u: _frame((100, 100)))
+    result = calib.measure(
+        slot=0, reference_slot=0, camera_url="x", mm_per_pixel=0.1, cancel_event=ev
+    )
+    assert result.measurement.found is False
+    assert calib.measured_slots == []
+
+
+@pytest.mark.asyncio
+async def test_calibration_timeout_drains_worker_and_discards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On timeout the route returns 504, the straggler worker's store is
+    discarded (generation invalidated), and the lock is released only after
+    the worker drains — so the next calibration succeeds (P0.2)."""
+    import time
+
+    import httpx
+    from httpx import ASGITransport
+
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api, "_CALIBRATION_TIMEOUT_S", 0.1)
+    slow = {"grab": True}
+
+    def maybe_slow_grab(_url: str) -> bytes:
+        if slow["grab"]:
+            time.sleep(0.4)  # exceeds the 0.1 s timeout
+        return _frame((100, 100))
+
+    monkeypatch.setattr(api._calibrator, "_grab", maybe_slow_grab)
+    api._calibrator.reset()
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        timed_out = await client.post(
+            "/plotter/tip-calibration/measure",
+            json={"slot": 0, "camera_url": "x", "mm_per_pixel": 0.1},
+        )
+        assert timed_out.status_code == 504
+        # The timed-out worker stored nothing.
+        status = await client.get("/plotter/tip-calibration/status")
+        assert status.json()["measured_slots"] == []
+
+        # The lock was released after the drain: a fast measurement now works.
+        slow["grab"] = False
+        ok = await client.post(
+            "/plotter/tip-calibration/measure",
+            json={"slot": 0, "camera_url": "x", "mm_per_pixel": 0.1},
+        )
+        assert ok.status_code == 200
+        assert ok.json()["found"] is True

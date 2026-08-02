@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import threading
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -242,31 +243,47 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
                 gpio_light.set(light_pin, True, req.light_active_high)
             except RuntimeError as exc:  # no GPIO backend on this host
                 raise HTTPException(status_code=503, detail=str(exc)) from exc
+        cancel_event = threading.Event()
+        measure_task = asyncio.create_task(
+            asyncio.to_thread(
+                _calibrator.measure,
+                slot=req.slot,
+                reference_slot=req.reference_slot,
+                camera_url=req.camera_url,
+                mm_per_pixel=req.mm_per_pixel,
+                dark_threshold=req.dark_threshold,
+                roi=roi,
+                samples=req.samples,
+                invert=req.tip_style == "light",
+                store=not req.dry_run,
+                min_confidence=req.min_confidence,
+                cancel_event=cancel_event,
+            )
+        )
         try:
+            # ``shield`` so the timeout cancels only our wait, not the worker —
+            # a thread can't be killed, so on timeout we ask it to stop and then
+            # DRAIN it (below) before releasing the lock / light, so the next
+            # calibration can never touch the camera or head while this worker
+            # is still reading them (P0.2).
             result = await asyncio.wait_for(
-                asyncio.to_thread(
-                    _calibrator.measure,
-                    slot=req.slot,
-                    reference_slot=req.reference_slot,
-                    camera_url=req.camera_url,
-                    mm_per_pixel=req.mm_per_pixel,
-                    dark_threshold=req.dark_threshold,
-                    roi=roi,
-                    samples=req.samples,
-                    invert=req.tip_style == "light",
-                    store=not req.dry_run,
-                    min_confidence=req.min_confidence,
-                ),
-                timeout=_CALIBRATION_TIMEOUT_S,
+                asyncio.shield(measure_task), timeout=_CALIBRATION_TIMEOUT_S
             )
         except TimeoutError as exc:
+            cancel_event.set()  # cooperative stop between samples
+            _calibrator.invalidate()  # discard any late store from this worker
+            with contextlib.suppress(Exception):
+                await measure_task  # wait for the thread to actually finish
             raise HTTPException(status_code=504, detail="Camera measurement timed out.") from exc
         except CameraUrlError as exc:  # SSRF guard rejected the URL — client error
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:  # frame grab / decode failure
             raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
         finally:
-            # Always switch the light back off, even if the grab failed.
+            # Always switch the light back off, even if the grab failed — but
+            # only after the worker has drained (the drain above completes
+            # before this runs on the timeout path), so the light stays on
+            # while the camera is still being read.
             if light_pin is not None:
                 with contextlib.suppress(RuntimeError):
                     gpio_light.set(light_pin, False, req.light_active_high)
