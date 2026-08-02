@@ -371,3 +371,22 @@ def test_cleanup_orphan_sessions_removes_metaless_dirs(recorder: tl.TimelapseRec
     assert removed == 1
     assert not orphan.exists()
     assert good.exists()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_start_creates_a_single_session(recorder: tl.TimelapseRecorder) -> None:
+    """Two start() calls racing must yield exactly one recording, not two
+    capture loops with an orphaned task (P0.1)."""
+    results = await asyncio.gather(
+        recorder.start("http://cam/a", 0.5, 12),
+        recorder.start("http://cam/b", 0.5, 12),
+        return_exceptions=True,
+    )
+    started = [r for r in results if not isinstance(r, Exception)]
+    refused = [r for r in results if isinstance(r, RuntimeError)]
+    assert len(started) == 1
+    assert len(refused) == 1
+    assert recorder.recording
+    session_dirs = [d for d in recorder._base_dir.iterdir() if d.is_dir()]
+    assert len(session_dirs) == 1
+    await recorder.stop()

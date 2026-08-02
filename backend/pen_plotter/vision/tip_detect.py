@@ -385,6 +385,16 @@ class TipCalibrator:
             self._tips.clear()
             self._generation += 1
 
+    def invalidate(self) -> None:
+        """Bump the generation without clearing measurements.
+
+        Called when a measurement times out: the straggler worker's eventual
+        store is discarded (generation mismatch) even though no ``reset`` or new
+        measurement has happened yet, keeping the session honest (P0.2).
+        """
+        with self._lock:
+            self._generation += 1
+
     def grab(self, camera_url: str) -> bytes:
         """Grab one frame via the injected grabber (used by scale calibration)."""
         return self._grab(camera_url)
@@ -408,6 +418,7 @@ class TipCalibrator:
         invert: bool = False,
         store: bool = True,
         min_confidence: float = 0.0,
+        cancel_event: threading.Event | None = None,
     ) -> MeasureResult:
         """Grab ``samples`` frame(s) for ``slot`` and detect its tip, storing it.
 
@@ -432,15 +443,27 @@ class TipCalibrator:
             self._generation += 1
             generation = self._generation
 
+        # Grab frame-by-frame, checking the cancel flag between samples so a
+        # timed-out worker stops promptly (within one grab) instead of running
+        # the full sample budget while the caller has already 504'd (P0.2).
         n = max(1, samples)
-        shots = [
-            self._detect(self._grab(camera_url), mm_per_pixel, dark_threshold, roi, invert)
-            for _ in range(n)
-        ]
-        measurement = average_tips(shots)
+        shots: list[TipMeasurement] = []
+        cancelled = False
+        for _ in range(n):
+            if cancel_event is not None and cancel_event.is_set():
+                cancelled = True
+                break
+            shots.append(
+                self._detect(self._grab(camera_url), mm_per_pixel, dark_threshold, roi, invert)
+            )
+        measurement = (
+            average_tips(shots)
+            if shots
+            else TipMeasurement(found=False, message="calibration cancelled")
+        )
 
         with self._lock:
-            superseded = self._generation != generation
+            superseded = cancelled or self._generation != generation
             if (
                 store
                 and not superseded

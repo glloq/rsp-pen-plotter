@@ -108,3 +108,45 @@ def test_resume_lifts_with_active_pens_pen_up_override() -> None:
     # Mid-stroke resume re-lowers with the same override.
     assert "DOWN_A" in program
     assert program[-1] == "G1 X50 Y60"
+
+
+def test_conservative_resume_rewinds_to_last_pen_up(monkeypatch) -> None:
+    """With OMNIPLOT_RESUME_CONSERVATIVE=1 the resume point rewinds to the last
+    pen-up so an acked-but-unexecuted move is re-drawn, not skipped (P0.3)."""
+    monkeypatch.setenv("OMNIPLOT_RESUME_CONSERVATIVE", "1")
+    profile = _profile()
+    up = profile.pen_up_command
+    down = profile.pen_down_command
+    # Two strokes; checkpoint lands mid second stroke (exec index 7).
+    gcode = "\n".join(
+        [
+            "G21",  # 0
+            "G90",  # 1
+            up,  # 2
+            "G0 X10 Y10",  # 3  travel to stroke 1
+            down,  # 4
+            "G1 X20 Y20 F1800",  # 5  stroke 1
+            up,  # 6  <-- last pen-up before the checkpoint
+            "G0 X30 Y30",  # 7  travel to stroke 2
+            down,  # 8
+            "G1 X40 Y40 F1800",  # 9  stroke 2 (interrupted here)
+            "G1 X50 Y50",  # 10
+        ]
+    )
+    # Default (exact) resume at checkpoint 10 would skip line 9's move if the
+    # firmware hadn't executed it. Conservative rewinds to the pen-up at 6.
+    program = build_resume_program(gcode, 10, profile)
+    # The remainder starts at the rewound pen-up (line 6), re-doing stroke 2.
+    assert up in program
+    assert "G0 X30 Y30" in program
+    assert down in program
+    assert "G1 X40 Y40 F1800" in program  # the interrupted move is re-drawn
+    assert program[-1] == "G1 X50 Y50"
+
+
+def test_conservative_resume_default_off_is_exact(monkeypatch) -> None:
+    """Without the flag, resume stays exact (unchanged contract)."""
+    monkeypatch.delenv("OMNIPLOT_RESUME_CONSERVATIVE", raising=False)
+    program = build_resume_program(GCODE, 6, _profile())
+    # Exact resume: remainder is exactly the tail from the checkpoint.
+    assert program[-1:] == executable_lines(GCODE)[6:]

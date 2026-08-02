@@ -5087,22 +5087,6 @@
         "operationId": "list_algorithms_algorithms_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -5153,22 +5137,6 @@
         "description": "List recent sensitive actions, newest first.",
         "operationId": "audit_audit_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -5221,22 +5189,6 @@
         "operationId": "list_colors_available_colors_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -5285,22 +5237,6 @@
         "description": "Add an entry to the inventory.\n\nIdempotent on the hex value: re-adding an existing colour returns\nthe existing record (its name may be updated if a non-empty name\nis supplied in the request) instead of erroring with 409. This\nmatches the library / file dedup semantics \u2014 declaring the same\nink twice should be a no-op, not a failure.",
         "operationId": "create_color_available_colors_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -5368,22 +5304,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -5439,22 +5359,6 @@
             "schema": {
               "title": "Color Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -5514,22 +5418,6 @@
         "description": "Extract text and image blocks for every page of a PDF.\n\nArgs:\n    file: A PDF upload; other MIME types are rejected with 415.\n\nReturns:\n    A :class:`DocumentAnalysis` listing the blocks of each page.\n\nRaises:\n    HTTPException: 415 when the upload is not a PDF; 413 if the\n        file exceeds the analysis size limit; 422 if PyMuPDF cannot\n        parse the document.",
         "operationId": "analyze_document_document_analyze_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -5640,22 +5528,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -5704,22 +5576,6 @@
         "description": "Add a file to the library, deduplicating by content hash.\n\nIf a file with the same SHA-256 already exists, the existing record is\nreturned and ``existing`` is ``true`` \u2014 no second copy is stored.\nException: when the request carries conversion ``options`` (e.g. the\noperator changed the bitmap algorithm or palette in SourceSection and\nclicked Apply), and those options differ from what was used last time,\nwe re-process the file in place \u2014 overwriting ``normalized.svg`` and\n``meta.json`` \u2014 instead of silently returning the stale conversion.\nWithout this branch the operator's option edits would never reach the\nplotter, because the editor re-uploads the same bytes to apply changes.",
         "operationId": "upload_to_library_files_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -5787,22 +5643,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -5849,22 +5689,6 @@
         "description": "Return the distinct folder names currently used by library entries.",
         "operationId": "list_folders_files_folders_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -5916,22 +5740,6 @@
         "description": "Return the integrity report for the file library.\n\nLets the UI surface a banner (\"3 file(s) need re-upload to support\nstyle editing\") instead of failing on the next /rerender click.",
         "operationId": "files_integrity_files_integrity_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -5986,22 +5794,6 @@
             "schema": {
               "title": "File Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -6063,22 +5855,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -6130,22 +5906,6 @@
             "schema": {
               "title": "File Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -6215,22 +5975,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -6296,22 +6040,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -6356,22 +6084,6 @@
         "description": "List the single-stroke Hershey fonts available for text rendering.\n\nReturns:\n    Sorted font names for the typography panel to offer as choices.",
         "operationId": "list_fonts_fonts_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -6424,22 +6136,6 @@
         "operationId": "list_files_gcode_files_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -6488,22 +6184,6 @@
         "description": "Save a G-code program to the library.\n\nLenient on the profile (a saved file is just text); the profile is\nvalidated again when the file is actually printed.\n\nRaises:\n    HTTPException: 422 if the G-code is empty.",
         "operationId": "create_file_gcode_files_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -6571,22 +6251,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -6642,22 +6306,6 @@
             "schema": {
               "title": "File Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -6727,22 +6375,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -6789,22 +6421,6 @@
         "description": "Generate G-code for a print plan.\n\nReturns the program plus the resolved-plan snapshot (and its hash)\nthat produced it \u2014 the snapshot is also persisted to SQLite for\nlater inspection via ``GET /plans/{hash}``.\n\nRaises:\n    HTTPException: 404 if the profile is unknown; 400 if the plan\n        fails business validation; 422 if generation itself fails.",
         "operationId": "generate_generate_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -6882,22 +6498,6 @@
         "operationId": "jobs_jobs_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -6958,22 +6558,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -7020,22 +6604,6 @@
         "description": "List the saved macros, sorted by name.",
         "operationId": "list_macros_macros_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -7085,22 +6653,6 @@
         "description": "Create or update a macro from a JSON body and persist it.",
         "operationId": "create_or_update_macros_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -7168,22 +6720,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -7244,22 +6780,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -7310,22 +6830,6 @@
         "description": "List the manifest domains the backend serves.\n\nReturns:\n    One entry per registered domain; the frontend uses this as a\n    capability probe before requesting a specific manifest.",
         "operationId": "list_manifests_manifests_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -7383,22 +6887,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -7445,22 +6933,6 @@
         "description": "Optimize toolpaths to reduce pen-up travel.\n\nWhen ``OMNIPLOT_IR_ENABLED=1`` and a matching :class:`GeometryIR`\nartifact has been previously cached for this SVG, we route through\n:func:`optimize_geometry_ir` so the IR path gets real traffic in\nproduction. The SVG path stays the fallback when no cached IR is\navailable (typical fresh upload, no prior cache hit).\n\nArgs:\n    request: The SVG to optimize plus optional per-layer settings.\n\nReturns:\n    An :class:`OptimizeResponse` with the optimized SVG, refreshed layer\n    descriptors, and before/after travel metrics.\n\nRaises:\n    HTTPException: 400 if the SVG cannot be processed.",
         "operationId": "optimize_optimize_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -7528,22 +7000,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -7590,22 +7046,6 @@
         "description": "Abort the running job.",
         "operationId": "abort_plotter_abort_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -7654,22 +7094,6 @@
         "operationId": "commands_plotter_commands_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -7716,22 +7140,6 @@
         "description": "Open a serial connection to the plotter.\n\nRaises:\n    HTTPException: 400 if the serial port cannot be opened.",
         "operationId": "connect_plotter_connect_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -7789,22 +7197,6 @@
         "description": "Disconnect from the plotter.",
         "operationId": "disconnect_plotter_disconnect_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -7869,22 +7261,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -7931,22 +7307,6 @@
         "description": "Move the head to an absolute workspace position.",
         "operationId": "goto_plotter_goto_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -8030,22 +7390,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -8092,22 +7436,6 @@
         "description": "Jog the head by a relative offset.",
         "operationId": "jog_plotter_jog_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -8166,22 +7494,6 @@
         "operationId": "pause_plotter_pause_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -8228,22 +7540,6 @@
         "description": "List the host's serial ports so the SPA can offer auto-connect.\n\nBacks the \u00ab D\u00e9tecter et connecter \u00bb flow (UX v2): the client tries\nthe ``likely`` candidates in order instead of asking the operator\nfor ``/dev/ttyUSB0`` up front.",
         "operationId": "ports_plotter_ports_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -8292,22 +7588,6 @@
         "operationId": "resume_plotter_resume_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -8354,22 +7634,6 @@
         "description": "Start streaming a G-code job.",
         "operationId": "run_plotter_run_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -8428,22 +7692,6 @@
         "operationId": "status_plotter_status_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -8490,22 +7738,6 @@
         "description": "Derive ``mm_per_pixel`` from a known-size target in the frame.\n\nUses the target's longest visible edge (max of width/height in pixels) so a\nsquare or round target of side/diameter ``known_mm`` gives a robust scale.",
         "operationId": "calibrate_scale_plotter_tip_calibration_calibrate_scale_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -8564,22 +7796,6 @@
         "operationId": "gpio_plotter_tip_calibration_gpio_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -8626,22 +7842,6 @@
         "description": "Switch the station light on/off via its GPIO pin.",
         "operationId": "light_plotter_tip_calibration_light_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -8704,22 +7904,6 @@
         "operationId": "measure_plotter_tip_calibration_measure_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -8777,22 +7961,6 @@
         "operationId": "reset_plotter_tip_calibration_reset_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -8840,22 +8008,6 @@
         "operationId": "status_plotter_tip_calibration_status_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -8902,22 +8054,6 @@
         "description": "Return the recommended algorithm + parameters for ``payload``.\n\nMirrors the matrix from audit #4 (see ``backend/pen_plotter/domain/policy``).\nThe reasoning trail in the response is what the modal V2 surfaces\nnext to the recommendation as \"Pourquoi ce choix ?\".",
         "operationId": "resolve_policy_policy_resolve_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -8976,22 +8112,6 @@
         "operationId": "preflight_preflight_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -9048,22 +8168,6 @@
         "description": "Estimate metrics for a standalone SVG against a profile.\n\nLightweight variant that skips plan resolution / TypographyPlan\nre-rendering / placement composition. Returns the same\n:class:`PreflightReport` shape as the full ``/preflight`` so\nconsumers (e.g. the Compare drawer) can read\n``drawing_length_mm``, ``travel_length_mm``,\n``estimated_seconds`` and ``pen_changes`` straight from the\nreport.\n\nRaises:\n    HTTPException: 404 if the profile is unknown; 400 if the SVG\n        cannot be parsed.",
         "operationId": "preflight_svg_preflight_svg_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -9122,22 +8226,6 @@
         "operationId": "presets_presets_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -9186,22 +8274,6 @@
         "description": "Persist an operator-defined preset, replacing any same-name entry.",
         "operationId": "create_preset_presets_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -9269,22 +8341,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -9324,22 +8380,6 @@
         "description": "Run a quick bitmap vectorisation and return the SVG.\n\nArgs:\n    file: Uploaded image (PNG / JPEG / TIFF / WebP / HEIC).\n    algorithm: ``direct`` / ``halftone`` / ``stippling``.\n    options: Optional JSON object mirroring ``BitmapOptions`` (the same\n        keys ``/upload`` accepts).\n    quality: ``draft`` / ``standard`` / ``final``. Trades latency for\n        fidelity \u2014 see ``_QUALITY_TIERS`` for the concrete knobs.\n\nReturns:\n    A :class:`PreviewResponse` with a fast-rendered SVG and the palette.\n\nRaises:\n    HTTPException: 415 if the MIME is not a supported raster image;\n        413 if the upload exceeds ``MAX_PREVIEW_BYTES``;\n        400 if options can't be parsed or the quality tier is unknown.",
         "operationId": "preview_preview_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -9397,22 +8437,6 @@
         "description": "Render a typography draft to single-stroke Hershey SVG.\n\nArgs:\n    file: Uploaded ``.txt`` or ``.md`` source. Truncated to\n        ``MAX_PREVIEW_TEXT_BYTES`` so a runaway paste never pins the\n        event loop; the response flags whether truncation happened so\n        the UI can warn.\n    options: Optional JSON object mirroring\n        :class:`~pen_plotter.typography.TypographyOptions`.\n\nReturns:\n    A :class:`TypographyPreviewResponse` carrying the SVG ready for\n    the EditPreviewPane.\n\nRaises:\n    HTTPException: 415 if the MIME isn't text/markdown; 400 if the\n        options can't be parsed or the font name is unknown; 413 if\n        the upload is empty.",
         "operationId": "preview_text_preview_text_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -9499,22 +8523,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -9559,22 +8567,6 @@
         "description": "List the configured machine profiles, sorted by name.",
         "operationId": "list_profiles_profiles_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -9624,22 +8616,6 @@
         "description": "Create or update a profile from a JSON body and persist it.\n\nThe profile is written to the writable user directory, overriding any\nbundled profile with the same name. FastAPI returns 422 if the body fails\nvalidation.",
         "operationId": "create_or_update_profiles_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -9697,22 +8673,6 @@
         "description": "Validate and persist an imported YAML profile.\n\nRaises:\n    HTTPException: 422 if the YAML is malformed or fails validation.",
         "operationId": "import_one_profiles_import_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -9780,22 +8740,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -9851,22 +8795,6 @@
             "schema": {
               "title": "Name",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -9926,22 +8854,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -9988,22 +8900,6 @@
         "description": "List print runs, active ones first \u2014 summaries without ``gcode``.\n\nProtected because the swap prompt carries operator-facing pen\nconfiguration when an API key is configured. The frontend polls\nthis endpoint; fetch ``GET /queue/{run_id}`` when the full G-code\npayload is needed.",
         "operationId": "list_queue_queue_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -10053,22 +8949,6 @@
         "description": "Enqueue a G-code program for the plotter.\n\nSupplying an ``Idempotency-Key`` header makes retries safe: if a run already\nexists with that key, it is returned instead of creating a duplicate.\n\nRaises:\n    HTTPException: 404 if the profile is unknown.",
         "operationId": "create_queue_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "Idempotency-Key",
@@ -10152,22 +9032,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -10223,22 +9087,6 @@
             "schema": {
               "title": "Run Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -10298,22 +9146,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -10367,22 +9199,6 @@
             "schema": {
               "title": "Run Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -10442,22 +9258,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -10504,22 +9304,6 @@
         "description": "Re-render the cached bitmap job with optional per-layer algorithm overrides.\n\nArgs:\n    request: The job id and per-layer algorithm choices.\n\nReturns:\n    The freshly rendered SVG (sanitized) plus rendering warnings.\n\nRaises:\n    HTTPException: 404 with a structured ``{reason, job_id, message}``\n        detail when no cached segmentation exists and rehydration\n        cannot reconstruct one \u2014 see\n        ``application.file_library.REHYDRATE_*`` for the reason codes.",
         "operationId": "rerender_rerender_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -10578,22 +9362,6 @@
         "operationId": "rerender_stream_rerender_stream_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -10649,22 +9417,6 @@
         "operationId": "read_palette_source_settings_palette_source_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -10709,22 +9461,6 @@
         "description": "Persist the operator's palette-source choice.",
         "operationId": "write_palette_source_settings_palette_source_put",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -10783,22 +9519,6 @@
         "operationId": "list_budgets_slo_budgets_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -10849,22 +9569,6 @@
         "description": "Evaluate the SLO budgets against ``request.samples``.\n\nAlso feeds the samples into the runtime accumulator so the\nbackground evaluator (when enabled) sees the same data. A breach\non an ``alert_on_breach=True`` budget emits one structured log\nline; the deployment is responsible for routing those to an\nexternal alertmanager.",
         "operationId": "evaluate_slo_evaluate_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -10923,22 +9627,6 @@
         "operationId": "check_update_system_check_update_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -10988,22 +9676,6 @@
         "description": "Run the bundled ``update.sh`` script and return its log.\n\nThe script pulls the latest commit on the current branch and rebuilds\nthe frontend. If a new commit is applied, the backend needs a restart\nto load the new Python code \u2014 we report that in the response so the UI\ncan prompt the operator.\n\nPass ``{\"force\": true}`` to discard uncommitted local changes before\npulling. Use sparingly \u2014 this is irreversible.",
         "operationId": "trigger_update_system_update_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -11072,22 +9744,6 @@
         "operationId": "get_version_system_version_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -11137,22 +9793,6 @@
         "description": "List saved timelapses, newest first.",
         "operationId": "list_all_timelapse_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -11204,22 +9844,6 @@
         "description": "Begin capturing frames from the given camera stream URL.\n\nRaises:\n    HTTPException: 422 on a non-http(s) URL, 409 if already recording.",
         "operationId": "start_timelapse_start_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -11278,22 +9902,6 @@
         "operationId": "status_timelapse_status_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -11340,22 +9948,6 @@
         "description": "Stop recording, assemble the MP4, and return the saved summary.\n\nRaises:\n    HTTPException: 409 if no recording is in progress.",
         "operationId": "stop_timelapse_stop_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",
@@ -11410,22 +10002,6 @@
             "schema": {
               "title": "Timelapse Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -11489,22 +10065,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "x-api-key",
             "required": false,
@@ -11549,22 +10109,6 @@
         "description": "Accept a file, normalize it to SVG, extract layers, and create a job.\n\nRaises:\n    HTTPException: 400 for invalid options or input the converter rejects;\n        415 if the file's MIME type has no registered converter.",
         "operationId": "upload_upload_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "x-api-key",

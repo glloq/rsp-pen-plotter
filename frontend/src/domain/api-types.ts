@@ -4492,9 +4492,7 @@ export type $defs = Record<string, never>;
 export interface operations {
     list_algorithms_algorithms_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4525,9 +4523,7 @@ export interface operations {
     };
     audit_audit_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4558,9 +4554,7 @@ export interface operations {
     };
     list_colors_available_colors_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4591,9 +4585,7 @@ export interface operations {
     };
     create_color_available_colors_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4628,9 +4620,7 @@ export interface operations {
     };
     delete_color_available_colors__color_id__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4665,9 +4655,7 @@ export interface operations {
     };
     patch_color_available_colors__color_id__patch: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4704,9 +4692,7 @@ export interface operations {
     };
     analyze_document_document_analyze_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4746,7 +4732,6 @@ export interface operations {
                 search?: string | null;
                 sort?: string;
                 order?: string;
-                token?: string | null;
             };
             header?: {
                 "x-api-key"?: string | null;
@@ -4778,9 +4763,7 @@ export interface operations {
     };
     upload_to_library_files_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4815,9 +4798,7 @@ export interface operations {
     };
     get_file_by_hash_files_by_hash__sha256__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4850,9 +4831,7 @@ export interface operations {
     };
     list_folders_files_folders_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4883,9 +4862,7 @@ export interface operations {
     };
     files_integrity_files_integrity_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4916,9 +4893,7 @@ export interface operations {
     };
     get_file_files__file_id__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4951,9 +4926,7 @@ export interface operations {
     };
     delete_file_files__file_id__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -4988,9 +4961,7 @@ export interface operations {
     };
     patch_file_files__file_id__patch: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5027,9 +4998,7 @@ export interface operations {
     };
     download_original_files__file_id__original_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5064,7 +5033,6 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
-                token?: string | null;
             };
             header?: {
                 "x-api-key"?: string | null;
@@ -5098,9 +5066,7 @@ export interface operations {
     };
     list_fonts_fonts_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5131,9 +5097,7 @@ export interface operations {
     };
     list_files_gcode_files_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5164,9 +5128,7 @@ export interface operations {
     };
     create_file_gcode_files_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5201,9 +5163,7 @@ export interface operations {
     };
     delete_file_gcode_files__file_id__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5238,9 +5198,7 @@ export interface operations {
     };
     rename_file_gcode_files__file_id__patch: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5277,9 +5235,7 @@ export interface operations {
     };
     print_file_gcode_files__file_id__print_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5312,9 +5268,7 @@ export interface operations {
     };
     generate_generate_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5369,9 +5323,7 @@ export interface operations {
     };
     jobs_jobs_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5402,9 +5354,7 @@ export interface operations {
     };
     job_jobs__job_id__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5437,9 +5387,7 @@ export interface operations {
     };
     list_macros_macros_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5470,9 +5418,7 @@ export interface operations {
     };
     create_or_update_macros_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5507,9 +5453,7 @@ export interface operations {
     };
     delete_one_macros__name__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5544,9 +5488,7 @@ export interface operations {
     };
     run_one_macros__name__run_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5581,9 +5523,7 @@ export interface operations {
     };
     list_manifests_manifests_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5614,9 +5554,7 @@ export interface operations {
     };
     read_manifest_manifests__domain__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5649,9 +5587,7 @@ export interface operations {
     };
     optimize_optimize_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5686,9 +5622,7 @@ export interface operations {
     };
     get_plan_plans__plan_hash__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5721,9 +5655,7 @@ export interface operations {
     };
     abort_plotter_abort_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5754,9 +5686,7 @@ export interface operations {
     };
     commands_plotter_commands_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5787,9 +5717,7 @@ export interface operations {
     };
     connect_plotter_connect_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5824,9 +5752,7 @@ export interface operations {
     };
     disconnect_plotter_disconnect_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5859,7 +5785,6 @@ export interface operations {
         parameters: {
             query?: {
                 profile_name?: string | null;
-                token?: string | null;
             };
             header?: {
                 "x-api-key"?: string | null;
@@ -5891,9 +5816,7 @@ export interface operations {
     };
     goto_plotter_goto_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -5931,7 +5854,6 @@ export interface operations {
             query: {
                 profile_name: string;
                 axis?: string | null;
-                token?: string | null;
             };
             header?: {
                 "x-api-key"?: string | null;
@@ -5963,9 +5885,7 @@ export interface operations {
     };
     jog_plotter_jog_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6000,9 +5920,7 @@ export interface operations {
     };
     pause_plotter_pause_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6033,9 +5951,7 @@ export interface operations {
     };
     ports_plotter_ports_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6066,9 +5982,7 @@ export interface operations {
     };
     resume_plotter_resume_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6099,9 +6013,7 @@ export interface operations {
     };
     run_plotter_run_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6136,9 +6048,7 @@ export interface operations {
     };
     status_plotter_status_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6169,9 +6079,7 @@ export interface operations {
     };
     calibrate_scale_plotter_tip_calibration_calibrate_scale_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6206,9 +6114,7 @@ export interface operations {
     };
     gpio_plotter_tip_calibration_gpio_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6239,9 +6145,7 @@ export interface operations {
     };
     light_plotter_tip_calibration_light_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6278,9 +6182,7 @@ export interface operations {
     };
     measure_plotter_tip_calibration_measure_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6315,9 +6217,7 @@ export interface operations {
     };
     reset_plotter_tip_calibration_reset_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6348,9 +6248,7 @@ export interface operations {
     };
     status_plotter_tip_calibration_status_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6381,9 +6279,7 @@ export interface operations {
     };
     resolve_policy_policy_resolve_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6418,9 +6314,7 @@ export interface operations {
     };
     preflight_preflight_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6455,9 +6349,7 @@ export interface operations {
     };
     preflight_svg_preflight_svg_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6492,9 +6384,7 @@ export interface operations {
     };
     presets_presets_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6525,9 +6415,7 @@ export interface operations {
     };
     create_preset_presets_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6562,9 +6450,7 @@ export interface operations {
     };
     remove_preset_presets__name__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6595,9 +6481,7 @@ export interface operations {
     };
     preview_preview_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6632,9 +6516,7 @@ export interface operations {
     };
     preview_text_preview_text_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6672,7 +6554,6 @@ export interface operations {
             query?: {
                 layer_count?: number;
                 file_id?: string | null;
-                token?: string | null;
             };
             header?: {
                 "x-api-key"?: string | null;
@@ -6704,9 +6585,7 @@ export interface operations {
     };
     list_profiles_profiles_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6737,9 +6616,7 @@ export interface operations {
     };
     create_or_update_profiles_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6774,9 +6651,7 @@ export interface operations {
     };
     import_one_profiles_import_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6811,9 +6686,7 @@ export interface operations {
     };
     get_one_profiles__name__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6846,9 +6719,7 @@ export interface operations {
     };
     delete_one_profiles__name__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6883,9 +6754,7 @@ export interface operations {
     };
     export_one_profiles__name__export_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6918,9 +6787,7 @@ export interface operations {
     };
     list_queue_queue_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -6951,9 +6818,7 @@ export interface operations {
     };
     create_queue_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "Idempotency-Key"?: string | null;
                 "x-api-key"?: string | null;
@@ -6989,9 +6854,7 @@ export interface operations {
     };
     get_one_queue__run_id__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7024,9 +6887,7 @@ export interface operations {
     };
     remove_queue__run_id__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7061,9 +6922,7 @@ export interface operations {
     };
     cancel_queue__run_id__cancel_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7096,9 +6955,7 @@ export interface operations {
     };
     pause_queue__run_id__pause_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7131,9 +6988,7 @@ export interface operations {
     };
     resume_queue__run_id__resume_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7166,9 +7021,7 @@ export interface operations {
     };
     rerender_rerender_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7203,9 +7056,7 @@ export interface operations {
     };
     rerender_stream_rerender_stream_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7240,9 +7091,7 @@ export interface operations {
     };
     read_palette_source_settings_palette_source_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7273,9 +7122,7 @@ export interface operations {
     };
     write_palette_source_settings_palette_source_put: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7310,9 +7157,7 @@ export interface operations {
     };
     list_budgets_slo_budgets_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7343,9 +7188,7 @@ export interface operations {
     };
     evaluate_slo_evaluate_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7380,9 +7223,7 @@ export interface operations {
     };
     check_update_system_check_update_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7413,9 +7254,7 @@ export interface operations {
     };
     trigger_update_system_update_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7450,9 +7289,7 @@ export interface operations {
     };
     get_version_system_version_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7483,9 +7320,7 @@ export interface operations {
     };
     list_all_timelapse_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7516,9 +7351,7 @@ export interface operations {
     };
     start_timelapse_start_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7553,9 +7386,7 @@ export interface operations {
     };
     status_timelapse_status_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7586,9 +7417,7 @@ export interface operations {
     };
     stop_timelapse_stop_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7619,9 +7448,7 @@ export interface operations {
     };
     delete_timelapse__timelapse_id__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7656,9 +7483,7 @@ export interface operations {
     };
     download_video_timelapse__timelapse_id__video_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
@@ -7691,9 +7516,7 @@ export interface operations {
     };
     upload_upload_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 "x-api-key"?: string | null;
             };
