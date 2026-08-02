@@ -352,3 +352,22 @@ async def test_assembly_skipped_when_no_space_for_video(
     assert summary["has_video"] is False
     assert summary["frame_count"] >= 1  # frames were kept, not lost
     assert "disk space" in (recorder.status()["error"] or "").lower()
+
+
+def test_cleanup_orphan_sessions_removes_metaless_dirs(recorder: tl.TimelapseRecorder) -> None:
+    """A crashed recording (frames but no meta.json) is reclaimed at startup;
+    a finished session (with meta.json) is kept (P1.4)."""
+    base = recorder._base_dir
+    # Orphan: frames, no meta.json.
+    orphan = base / ("0" * 32)
+    (orphan / "frames").mkdir(parents=True)
+    (orphan / "frames" / "frame_000000.jpg").write_bytes(b"x")
+    # Finished: has meta.json.
+    good = base / ("1" * 32)
+    good.mkdir()
+    (good / "meta.json").write_text("{}", encoding="utf-8")
+
+    removed = recorder.cleanup_orphan_sessions()
+    assert removed == 1
+    assert not orphan.exists()
+    assert good.exists()

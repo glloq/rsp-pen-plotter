@@ -98,7 +98,13 @@ if [ "$MODE" = "prod" ]; then
   ip="$(lan_ip)"
   echo "==> OmniPlot (production)"
   echo "    Local:    http://localhost:$PORT"
-  [ -n "$ip" ] && echo "    Network:  http://$ip:$PORT"
+  # Only advertise the LAN URL when we actually bound a non-local interface —
+  # otherwise the address is unreachable and misleads the operator (P1.1).
+  if ! is_local_host "$HOST" && [ -n "$ip" ]; then
+    echo "    Network:  http://$ip:$PORT"
+  elif is_local_host "$HOST" && [ -n "$ip" ]; then
+    echo "    Network:  (disabled — bound to loopback; set HOST=0.0.0.0 + OMNIPLOT_API_KEY to expose)"
+  fi
   if ! is_local_host "$HOST" && [ -z "${OMNIPLOT_API_KEY:-}" ]; then
     # We only reach here on a non-local bind with OMNIPLOT_ALLOW_INSECURE_LAN=1
     # (otherwise the guard above already exited). Make the exposure loud.

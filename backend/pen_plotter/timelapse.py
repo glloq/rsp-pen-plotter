@@ -550,6 +550,31 @@ class TimelapseRecorder:
         (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
         return meta
 
+    def cleanup_orphan_sessions(self) -> int:
+        """Remove crashed, unfinished timelapse directories. Returns the count.
+
+        A power blip during recording leaves a session directory with frames
+        but no ``meta.json`` (written only by :meth:`stop`). Such a directory
+        never appears in :meth:`list` yet still counts toward the storage quota
+        and can't be deleted from the UI (P1.4) — dead weight that can slowly
+        wedge the card. Called at startup, when no recording is active, so any
+        directory missing its ``meta.json`` is definitively an orphan.
+        """
+        if not self._base_dir.is_dir():
+            return 0
+        removed = 0
+        for directory in self._base_dir.iterdir():
+            if not directory.is_dir():
+                continue
+            if self._session is not None and directory.name == self._session.id:
+                continue
+            if (directory / "meta.json").is_file():
+                continue
+            shutil.rmtree(directory, ignore_errors=True)
+            removed += 1
+            _log.info("Removed orphan timelapse session %s", directory.name)
+        return removed
+
     def list(self) -> list[dict[str, Any]]:
         """All saved timelapses, newest first."""
         if not self._base_dir.is_dir():
