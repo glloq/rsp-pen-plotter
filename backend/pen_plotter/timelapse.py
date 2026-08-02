@@ -54,8 +54,51 @@ _ASSEMBLE_TIMEOUT_S = 600.0
 # capturing past this many frames (the operator still stops to save).
 _MAX_FRAMES = 100_000
 
+# Storage backstops against SD-card saturation (P0.5). A full disk corrupts
+# SQLite, drops queue checkpoints and can wedge the OS, so recording halts
+# well before that: capture stops when free space would fall below the reserve
+# or the timelapse store grows past its byte quota. Both are env-tunable.
+_MIN_FREE_MB_ENV = "OMNIPLOT_MIN_FREE_MB"
+_TIMELAPSE_MAX_MB_ENV = "OMNIPLOT_TIMELAPSE_MAX_MB"
+_DEFAULT_MIN_FREE_MB = 1024
+_DEFAULT_TIMELAPSE_MAX_MB = 4096
+
 JpegGrabber = Callable[[str], bytes]
 VideoAssembler = Callable[[Path, Path, int], None]
+
+
+def _env_mb_bytes(name: str, default_mb: int) -> int:
+    """Read a megabyte budget from ``name`` (0/negative disables the cap)."""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default_mb * 1024 * 1024
+    try:
+        mb = int(float(raw))
+    except ValueError:
+        return default_mb * 1024 * 1024
+    return max(0, mb) * 1024 * 1024
+
+
+def _free_bytes(path: Path) -> int:
+    """Free bytes on the filesystem holding ``path`` (0 if it can't be read)."""
+    try:
+        return shutil.disk_usage(path).free
+    except OSError:
+        return 0
+
+
+def _dir_size_bytes(path: Path) -> int:
+    """Total size of the files under ``path`` (missing dir ⇒ 0)."""
+    total = 0
+    if not path.exists():
+        return 0
+    for entry in path.rglob("*"):
+        try:
+            if entry.is_file():
+                total += entry.stat().st_size
+        except OSError:
+            continue
+    return total
 
 
 # SSRF guard: the camera URL is operator-supplied and the backend fetches it
@@ -254,6 +297,11 @@ class _Session:
     label: str
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     frame_count: int = 0
+    # Bytes this session has written, plus the store's size when it began, so
+    # the quota guard can bound total timelapse storage without re-walking the
+    # whole tree on every frame.
+    bytes_written: int = 0
+    store_baseline_bytes: int = 0
 
 
 def _read_meta(directory: Path) -> dict[str, Any] | None:
@@ -323,17 +371,43 @@ class TimelapseRecorder:
             interval_seconds=interval_seconds,
             fps=fps,
             label=label.strip(),
+            store_baseline_bytes=_dir_size_bytes(self._base_dir),
         )
         self._error = None
         self._task = asyncio.create_task(self._loop(self._session))
         return self.status()
 
+    def _capacity_block_reason(self, session: _Session) -> str | None:
+        """Why capture must pause right now, or ``None`` when it may continue.
+
+        Guards, in order: the frame-count backstop, the free-space reserve
+        (protects the whole SD card / OS), and the timelapse byte quota. The
+        first two protect against saturation that would corrupt SQLite and the
+        print queue; all three keep the captured frames intact so the operator
+        can still stop-to-save.
+        """
+        if session.frame_count >= _MAX_FRAMES:
+            return f"Frame limit ({_MAX_FRAMES}) reached — stop to save."
+        min_free = _env_mb_bytes(_MIN_FREE_MB_ENV, _DEFAULT_MIN_FREE_MB)
+        if min_free and _free_bytes(self._base_dir) < min_free:
+            return (
+                f"Low disk space (< {min_free // (1024 * 1024)} MB free) — "
+                "recording stopped to protect the system. Stop to save."
+            )
+        max_store = _env_mb_bytes(_TIMELAPSE_MAX_MB_ENV, _DEFAULT_TIMELAPSE_MAX_MB)
+        if max_store and session.store_baseline_bytes + session.bytes_written >= max_store:
+            return f"Timelapse quota ({max_store // (1024 * 1024)} MB) reached — stop to save."
+        return None
+
     async def _loop(self, session: _Session) -> None:
         """Capture a frame every ``interval`` until cancelled."""
         frames_dir = self._base_dir / session.id / "frames"
         while True:
-            if session.frame_count >= _MAX_FRAMES:
-                self._error = f"Frame limit ({_MAX_FRAMES}) reached — stop to save."
+            blocked = self._capacity_block_reason(session)
+            if blocked is not None:
+                # Keep the session alive (frames captured so far stay saveable)
+                # but stop writing so a runaway recording can't fill the disk.
+                self._error = blocked
                 await asyncio.sleep(session.interval_seconds)
                 continue
             try:
@@ -346,6 +420,7 @@ class TimelapseRecorder:
                 # ``%06d`` input pattern gap-free.
                 (frames_dir / f"frame_{session.frame_count:06d}.jpg").write_bytes(frame)
                 session.frame_count += 1
+                session.bytes_written += len(frame)
                 self._error = None
             await asyncio.sleep(session.interval_seconds)
 

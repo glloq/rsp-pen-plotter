@@ -482,3 +482,23 @@ async def test_concurrent_identical_upload_race_is_idempotent(monkeypatch) -> No
     # The loser's artefact directory was cleaned up — no orphans.
     dirs_after = {p.name for p in FILES_DIR.iterdir()}
     assert dirs_after == dirs_before
+
+
+def test_upload_refused_when_disk_at_reserve(tmp_path, monkeypatch):
+    """A new upload is rejected with 507 when free space is below the
+    reserve, so a saturated SD card can't corrupt SQLite / the queue (P0.5)."""
+    from fastapi.testclient import TestClient
+
+    from pen_plotter.application import file_library
+    from pen_plotter.main import app
+
+    monkeypatch.setenv("OMNIPLOT_MIN_FREE_MB", "1024")
+    monkeypatch.setattr(file_library, "_free_bytes", lambda: 1 * 1024 * 1024)
+
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M1 1 L9 9"/></svg>'
+    with TestClient(app) as client:
+        resp = client.post(
+            "/files",
+            files={"file": ("drawing.svg", svg, "image/svg+xml")},
+        )
+    assert resp.status_code == 507

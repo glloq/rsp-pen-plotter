@@ -204,3 +204,67 @@ class TestCameraUrlSsrfGuard:
         # The guard fires before any socket is opened.
         with pytest.raises(tl.CameraUrlError):
             tl.grab_jpeg("http://127.0.0.1:8000/stream")
+
+
+class TestTimelapseStorageGuards:
+    """Disk-saturation backstops on the capture loop (P0.5)."""
+
+    def test_free_space_below_reserve_blocks_capture(
+        self, recorder: tl.TimelapseRecorder, monkeypatch
+    ) -> None:
+        # Pretend the disk is almost full → capture must pause, not write.
+        monkeypatch.setenv("OMNIPLOT_MIN_FREE_MB", "1024")
+        monkeypatch.setattr(tl, "_free_bytes", lambda _p: 10 * 1024 * 1024)
+        session = tl._Session(
+            id="s", stream_url="http://cam/x", interval_seconds=0.5, fps=12, label=""
+        )
+        reason = recorder._capacity_block_reason(session)
+        assert reason is not None
+        assert "disk space" in reason.lower()
+
+    def test_timelapse_quota_blocks_capture(
+        self, recorder: tl.TimelapseRecorder, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("OMNIPLOT_TIMELAPSE_MAX_MB", "1")
+        monkeypatch.setattr(tl, "_free_bytes", lambda _p: 100 * 1024 * 1024 * 1024)
+        session = tl._Session(
+            id="s", stream_url="http://cam/x", interval_seconds=0.5, fps=12, label=""
+        )
+        session.bytes_written = 2 * 1024 * 1024  # over the 1 MB quota
+        reason = recorder._capacity_block_reason(session)
+        assert reason is not None
+        assert "quota" in reason.lower()
+
+    def test_capacity_allows_capture_with_headroom(
+        self, recorder: tl.TimelapseRecorder, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(tl, "_free_bytes", lambda _p: 100 * 1024 * 1024 * 1024)
+        session = tl._Session(
+            id="s", stream_url="http://cam/x", interval_seconds=0.5, fps=12, label=""
+        )
+        assert recorder._capacity_block_reason(session) is None
+
+    def test_disabled_reserve_never_blocks(
+        self, recorder: tl.TimelapseRecorder, monkeypatch
+    ) -> None:
+        # A zero budget disables the guard even on a nearly-full disk.
+        monkeypatch.setenv("OMNIPLOT_MIN_FREE_MB", "0")
+        monkeypatch.setenv("OMNIPLOT_TIMELAPSE_MAX_MB", "0")
+        monkeypatch.setattr(tl, "_free_bytes", lambda _p: 1)
+        session = tl._Session(
+            id="s", stream_url="http://cam/x", interval_seconds=0.5, fps=12, label=""
+        )
+        session.bytes_written = 10**12
+        assert recorder._capacity_block_reason(session) is None
+
+    @pytest.mark.asyncio
+    async def test_loop_stops_writing_when_disk_full(
+        self, recorder: tl.TimelapseRecorder, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(tl, "_free_bytes", lambda _p: 1)  # always "full"
+        await recorder.start("http://cam/stream", interval_seconds=0.01, fps=12)
+        await asyncio.sleep(0.1)
+        status = recorder.status()
+        assert status["frame_count"] == 0  # nothing written
+        assert "disk space" in (status["error"] or "").lower()
+        await recorder.stop()

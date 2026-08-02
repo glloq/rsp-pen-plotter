@@ -16,10 +16,19 @@ Set ``OMNIPLOT_REQUIRE_AUTH=1`` to refuse startup when no key is
 configured. Production deployments on a LAN should set both env vars so
 an accidental restart without the secret cannot silently expose the
 machine controls.
+
+Independently of that opt-in, :func:`verify_auth_configuration` refuses to
+start when the process is bound to a **non-local** address (anything other
+than loopback) without a key — a remote bind exposes jog / homing / macros /
+GPIO / self-update to the whole LAN, and open mode makes ``require_api_key`` a
+no-op. ``start.sh`` exports the bind host as ``OMNIPLOT_BIND_HOST`` so this
+guard sees it. Set ``OMNIPLOT_ALLOW_INSECURE_LAN=1`` to knowingly bind the LAN
+without authentication (not recommended).
 """
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import secrets
 
@@ -27,10 +36,34 @@ from fastapi import Header, HTTPException, Query
 
 API_KEY_ENV = "OMNIPLOT_API_KEY"
 REQUIRE_AUTH_ENV = "OMNIPLOT_REQUIRE_AUTH"
+# Bind host the server was launched with (exported by ``start.sh``). Used only
+# to decide whether open mode is safe — the actual bind is uvicorn's job.
+BIND_HOST_ENV = "OMNIPLOT_BIND_HOST"
+ALLOW_INSECURE_LAN_ENV = "OMNIPLOT_ALLOW_INSECURE_LAN"
+
+# Hostnames that only ever reach this machine.
+_LOCAL_HOSTNAMES = {"localhost", ""}
 
 
 def _truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_local_bind(host: str | None) -> bool:
+    """True when ``host`` only exposes the API to this machine (loopback).
+
+    ``0.0.0.0`` / ``::`` (all interfaces) and any concrete LAN address count
+    as remote; ``127.0.0.0/8``, ``::1`` and ``localhost`` are local.
+    """
+    candidate = (host or "").strip().lower().strip("[]")
+    if candidate in _LOCAL_HOSTNAMES:
+        return True
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        # An unresolved hostname other than "localhost" — treat as remote so
+        # an ambiguous bind never silently runs open.
+        return False
 
 
 def _matches(expected: str, candidate: str | None) -> bool:
@@ -66,11 +99,34 @@ def verify_auth_configuration() -> None:
 
     Raises:
         RuntimeError: When ``OMNIPLOT_REQUIRE_AUTH`` is truthy and
-            ``OMNIPLOT_API_KEY`` is empty / unset.
+            ``OMNIPLOT_API_KEY`` is empty / unset, or when the server is bound
+            to a non-local address without a key and without the explicit
+            ``OMNIPLOT_ALLOW_INSECURE_LAN`` opt-in.
     """
-    if _truthy(os.environ.get(REQUIRE_AUTH_ENV)) and not os.environ.get(API_KEY_ENV):
+    api_key = os.environ.get(API_KEY_ENV)
+    if _truthy(os.environ.get(REQUIRE_AUTH_ENV)) and not api_key:
         raise RuntimeError(
             f"{REQUIRE_AUTH_ENV} is set but {API_KEY_ENV} is not. "
             "Configure a strong secret in the environment before starting "
             "the service, or unset the require-auth flag for local use."
+        )
+
+    # Refuse an unauthenticated remote bind: open mode + a LAN-reachable
+    # address would expose machine control (jog, homing, GPIO, self-update)
+    # to anyone on the network. Only enforced when the bind host is known
+    # (start.sh exports it); a direct ``uvicorn`` launch is the operator's
+    # responsibility.
+    bind_host = os.environ.get(BIND_HOST_ENV)
+    if (
+        bind_host is not None
+        and not _is_local_bind(bind_host)
+        and not api_key
+        and not _truthy(os.environ.get(ALLOW_INSECURE_LAN_ENV))
+    ):
+        raise RuntimeError(
+            f"Refusing to start: bound to {bind_host!r}, reachable off this "
+            f"machine, with no {API_KEY_ENV}. Machine control would be open to "
+            f"the whole network. Set {API_KEY_ENV} to a strong secret, or set "
+            f"{ALLOW_INSECURE_LAN_ENV}=1 to bind the LAN without authentication "
+            "(not recommended)."
         )

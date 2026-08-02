@@ -25,7 +25,9 @@ from pen_plotter.api.upload_limits import max_upload_bytes as _max_upload_bytes
 from pen_plotter.application.color_assignment import auto_assign_layer_colors
 from pen_plotter.application.file_library import (
     FileMeta,
+    InsufficientStorageError,
     IntegrityReport,
+    ensure_upload_space,
     file_dir,
     find_original,
     forget_job,
@@ -373,6 +375,15 @@ async def upload_to_library(
             )
             return FileUploadResponse(file=_record_to_detail(updated), existing=True)
         return FileUploadResponse(file=_record_to_detail(existing), existing=True)
+
+    # New content: refuse to write when the disk is at its reserve — a
+    # saturated SD card corrupts SQLite and drops the print queue (P0.5).
+    # Dedup returns above already short-circuited, so a re-upload of bytes
+    # already in the library is never blocked here.
+    try:
+        ensure_upload_space(len(data))
+    except InsufficientStorageError as exc:
+        raise HTTPException(status_code=507, detail=str(exc)) from exc
 
     # Conversion is the dominant, fully synchronous cost of an upload
     # (segmentation, potrace, vpype, …). Off-load it to the threadpool so a

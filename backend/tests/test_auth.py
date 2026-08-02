@@ -3,8 +3,11 @@ import pytest
 from httpx import ASGITransport
 
 from pen_plotter.auth import (
+    ALLOW_INSECURE_LAN_ENV,
     API_KEY_ENV,
+    BIND_HOST_ENV,
     REQUIRE_AUTH_ENV,
+    _is_local_bind,
     verify_auth_configuration,
 )
 from pen_plotter.hardware.controller import controller
@@ -195,6 +198,67 @@ def test_strict_mode_no_op_when_flag_unset(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.delenv(API_KEY_ENV, raising=False)
     monkeypatch.delenv(REQUIRE_AUTH_ENV, raising=False)
     verify_auth_configuration()  # no raise — open mode is allowed
+
+
+def _clear_bind_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for env in (API_KEY_ENV, REQUIRE_AUTH_ENV, BIND_HOST_ENV, ALLOW_INSECURE_LAN_ENV):
+        monkeypatch.delenv(env, raising=False)
+
+
+@pytest.mark.parametrize(
+    "host,local",
+    [
+        ("127.0.0.1", True),
+        ("localhost", True),
+        ("::1", True),
+        ("", True),
+        ("0.0.0.0", False),
+        ("::", False),
+        ("192.168.1.10", False),
+    ],
+)
+def test_is_local_bind_classifies_hosts(host: str, local: bool) -> None:
+    assert _is_local_bind(host) is local
+
+
+def test_remote_bind_without_key_refuses_startup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-local bind in open mode would expose machine control to the LAN
+    (P0.3) — startup must fail loud."""
+    _clear_bind_env(monkeypatch)
+    monkeypatch.setenv(BIND_HOST_ENV, "0.0.0.0")
+    with pytest.raises(RuntimeError, match="reachable off this machine"):
+        verify_auth_configuration()
+
+
+def test_remote_bind_with_key_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_bind_env(monkeypatch)
+    monkeypatch.setenv(BIND_HOST_ENV, "0.0.0.0")
+    monkeypatch.setenv(API_KEY_ENV, "secret-key")
+    verify_auth_configuration()  # no raise
+
+
+def test_remote_bind_allowed_with_explicit_insecure_optin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_bind_env(monkeypatch)
+    monkeypatch.setenv(BIND_HOST_ENV, "192.168.1.10")
+    monkeypatch.setenv(ALLOW_INSECURE_LAN_ENV, "1")
+    verify_auth_configuration()  # no raise — operator knowingly opted in
+
+
+def test_local_bind_without_key_is_allowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Loopback in open mode stays the friction-free default for a fresh
+    single-machine install."""
+    _clear_bind_env(monkeypatch)
+    monkeypatch.setenv(BIND_HOST_ENV, "127.0.0.1")
+    verify_auth_configuration()  # no raise
+
+
+def test_unknown_bind_host_does_not_enforce(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A direct uvicorn launch that doesn't export the bind host is the
+    operator's responsibility — the guard stays silent rather than guessing."""
+    _clear_bind_env(monkeypatch)  # BIND_HOST_ENV unset
+    verify_auth_configuration()  # no raise
 
 
 def test_cors_wildcard_with_credentials_rejected(

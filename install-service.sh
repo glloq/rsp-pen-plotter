@@ -33,9 +33,15 @@ if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" <<'EOF'
 # OmniPlot service environment.
 # Uncomment and edit as needed, then: sudo systemctl restart omniplot
+#
+# HOST defaults to 127.0.0.1 (loopback only). To reach the studio from other
+# machines on your network, bind all interfaces AND set an API key — an open
+# LAN bind exposes jog / homing / GPIO / self-update to everyone:
 #HOST=0.0.0.0
-#PORT=8000
 #OMNIPLOT_API_KEY=change-me
+# ...or, to bind the LAN with NO key (not recommended), opt in explicitly:
+#OMNIPLOT_ALLOW_INSECURE_LAN=1
+#PORT=8000
 EOF
   chown "$USER_NAME":"$USER_NAME" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
