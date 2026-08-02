@@ -68,3 +68,43 @@ def test_resume_at_polyline_boundary_keeps_pen_up() -> None:
     program = build_resume_program(gcode, 6, profile)
     preamble_len = len(program) - len(executable_lines(gcode)[6:])
     assert profile.pen_down_command not in program[:preamble_len]
+
+
+def test_resume_after_arc_recovers_the_arc_endpoint() -> None:
+    """A checkpoint taken after a G2/G3 arc must travel back to the arc's
+    endpoint, not the position before the arc (P0.4)."""
+    profile = _profile()
+    # G0 travels to (10,20); the arc ENDS at (30,40). Ack through the arc.
+    gcode = "G21\nG90\nG0 X10 Y20\nG2 X30 Y40 I5 J5 F1800\nG1 X50 Y60\n"
+    program = build_resume_program(gcode, 4, profile)  # G21,G90,G0,G2 acked
+    # Travel back targets the ARC endpoint, never the pre-arc G0 point.
+    assert any("X30.000 Y40.000" in line for line in program)
+    assert not any("X10.000 Y20.000" in line for line in program)
+    assert program[-1] == "G1 X50 Y60"
+
+
+def test_resume_after_g3_arc_recovers_endpoint() -> None:
+    profile = _profile()
+    gcode = "G21\nG90\nG0 X0 Y0\nG3 X12 Y8 I2 J2 F1800\nG1 X20 Y20\n"
+    program = build_resume_program(gcode, 4, profile)
+    assert any("X12.000 Y8.000" in line for line in program)
+
+
+def test_resume_lifts_with_active_pens_pen_up_override() -> None:
+    """The resume travel must lift with the loaded pen's own pen_up_command
+    override, not the profile default (P0.4)."""
+    from pen_plotter.models import PenSlot
+
+    profile = _profile().model_copy(deep=True)
+    profile.pens = [
+        PenSlot(index=0, name="A", pen_down_command="DOWN_A", pen_up_command="UP_A")
+    ]
+    # Pen A lowered, then a draw move; checkpoint mid-stroke.
+    gcode = "G21\nG90\nDOWN_A\nG1 X30 Y40 F1800\nG1 X50 Y60\n"
+    program = build_resume_program(gcode, 4, profile)
+    # Travel back lifts with UP_A (the pen's override), not the profile default.
+    assert "UP_A" in program
+    assert profile.pen_up_command not in program
+    # Mid-stroke resume re-lowers with the same override.
+    assert "DOWN_A" in program
+    assert program[-1] == "G1 X50 Y60"

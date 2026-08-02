@@ -268,3 +268,46 @@ class TestTimelapseStorageGuards:
         assert status["frame_count"] == 0  # nothing written
         assert "disk space" in (status["error"] or "").lower()
         await recorder.stop()
+
+
+class TestTimelapseIdConfinement:
+    """Timelapse ids from the URL must never escape TIMELAPSE_DIR (P0.1)."""
+
+    @pytest.mark.parametrize(
+        "bad_id",
+        [
+            "..",
+            "../files",
+            "%2e%2e",
+            "%2e%2e%2f",
+            "/absolute/path",
+            "a" * 31,  # too short
+            "a" * 33,  # too long
+            "A" * 32,  # uppercase — uuid4().hex is lowercase
+            "g" * 32,  # non-hex
+            "../../etc/passwd",
+        ],
+    )
+    def test_bad_id_is_rejected(self, recorder: tl.TimelapseRecorder, bad_id: str) -> None:
+        assert recorder._session_dir(bad_id) is None
+        assert recorder.get(bad_id) is None
+        assert recorder.video_path(bad_id) is None
+        assert recorder.delete(bad_id) is False
+
+    def test_valid_hex_id_is_accepted(self, recorder: tl.TimelapseRecorder) -> None:
+        good = "0123456789abcdef0123456789abcdef"
+        resolved = recorder._session_dir(good)
+        assert resolved is not None
+        assert resolved.parent == recorder._base_dir.resolve()
+
+    @pytest.mark.asyncio
+    async def test_traversal_delete_does_not_escape_base(
+        self, recorder: tl.TimelapseRecorder, tmp_path
+    ) -> None:
+        # A sensitive file living beside the timelapse dir must survive a
+        # delete() that tries to climb out with "..".
+        victim = recorder._base_dir.parent / "victim.txt"
+        victim.write_text("keep me", encoding="utf-8")
+        assert recorder.delete("..") is False
+        assert recorder.delete("%2e%2e") is False
+        assert victim.exists()

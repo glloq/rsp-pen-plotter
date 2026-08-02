@@ -34,7 +34,11 @@ def jog_command(
 
 
 def goto_command(
-    x_mm: float, y_mm: float, profile: MachineProfile, z_mm: float | None = None
+    x_mm: float,
+    y_mm: float,
+    profile: MachineProfile,
+    z_mm: float | None = None,
+    pen_up_command: str | None = None,
 ) -> list[str]:
     """Build an absolute move to a workspace position.
 
@@ -47,6 +51,9 @@ def goto_command(
         profile: The target machine profile (for travel speed and pen-up).
         z_mm: Optional absolute Z target for a motorised Z axis. Added to the
             move only when given so X/Y-only machines never see a ``Z`` word.
+        pen_up_command: Override for the pen-up line — used on resume to lift
+            with the *active pen's* calibrated up command instead of the
+            profile default. Defaults to ``profile.pen_up_command``.
 
     Returns:
         The G-code lines for an absolute travel move.
@@ -58,7 +65,7 @@ def goto_command(
     move += f" F{feed:.1f}"
     return [
         "G90",
-        profile.pen_up_command,
+        pen_up_command if pen_up_command is not None else profile.pen_up_command,
         move,
     ]
 

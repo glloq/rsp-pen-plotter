@@ -200,35 +200,49 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         if profile is None:
             raise HTTPException(status_code=404, detail=f"Unknown profile: {req.profile_name!r}")
 
-    if req.fetch_pen and profile is not None:
-        await _fetch_pen(profile, req.slot)
-
-    if req.move_to_station and profile is not None:
-        if req.station_position is None:
-            raise HTTPException(status_code=422, detail="move_to_station requires station_position")
-        try:
-            await controller.goto(
-                req.station_position.x,
-                req.station_position.y,
-                profile,
-                z_mm=req.station_z_mm,
-            )
-        except RuntimeError as exc:  # disconnected / job in flight
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-
     roi = (
         Roi(x=req.roi.x, y=req.roi.y, width=req.roi.width, height=req.roi.height)
         if req.roi
         else None
     )
     light_pin = req.light_gpio_pin if req.light else None
-    if light_pin is not None:
+
+    # Serialise the ENTIRE physical transaction — pen fetch, head travel,
+    # lighting and the measurement itself — under one lock (P0.2). The lock
+    # used to cover only the grab, so two concurrent calibrations could
+    # interleave (A loads slot 1, B loads slot 2, A measures and stores the
+    # result as slot 1) and mis-attribute a measurement, or one request's
+    # ``finally`` could kill the light mid-measurement for the other. Refuse
+    # a second calibration outright rather than silently queueing behind the
+    # first, so the operator gets immediate feedback.
+    lock = _get_calibration_lock()
+    if lock.locked():
+        raise HTTPException(status_code=409, detail="A calibration is already in progress.")
+    async with lock:
+        if req.fetch_pen and profile is not None:
+            await _fetch_pen(profile, req.slot)
+
+        if req.move_to_station and profile is not None:
+            if req.station_position is None:
+                raise HTTPException(
+                    status_code=422, detail="move_to_station requires station_position"
+                )
+            try:
+                await controller.goto(
+                    req.station_position.x,
+                    req.station_position.y,
+                    profile,
+                    z_mm=req.station_z_mm,
+                )
+            except RuntimeError as exc:  # disconnected / job in flight
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        if light_pin is not None:
+            try:
+                gpio_light.set(light_pin, True, req.light_active_high)
+            except RuntimeError as exc:  # no GPIO backend on this host
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
         try:
-            gpio_light.set(light_pin, True, req.light_active_high)
-        except RuntimeError as exc:  # no GPIO backend on this host
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-    try:
-        async with _get_calibration_lock():
             result = await asyncio.wait_for(
                 asyncio.to_thread(
                     _calibrator.measure,
@@ -245,17 +259,17 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
                 ),
                 timeout=_CALIBRATION_TIMEOUT_S,
             )
-    except TimeoutError as exc:
-        raise HTTPException(status_code=504, detail="Camera measurement timed out.") from exc
-    except CameraUrlError as exc:  # SSRF guard rejected the URL — client error
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # frame grab / decode failure
-        raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
-    finally:
-        # Always switch the light back off, even if the grab failed.
-        if light_pin is not None:
-            with contextlib.suppress(RuntimeError):
-                gpio_light.set(light_pin, False, req.light_active_high)
+        except TimeoutError as exc:
+            raise HTTPException(status_code=504, detail="Camera measurement timed out.") from exc
+        except CameraUrlError as exc:  # SSRF guard rejected the URL — client error
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # frame grab / decode failure
+            raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
+        finally:
+            # Always switch the light back off, even if the grab failed.
+            if light_pin is not None:
+                with contextlib.suppress(RuntimeError):
+                    gpio_light.set(light_pin, False, req.light_active_high)
 
     m = result.measurement
     record(
@@ -352,8 +366,13 @@ async def calibrate_scale(req: ScaleCalibrateRequest) -> ScaleCalibrateResponse:
             frame, req.dark_threshold, roi, invert=req.tip_style == "light"
         )
 
+    # Shares the camera + lock with ``measure`` (P0.2): refuse if a
+    # calibration is already running rather than interleaving frame grabs.
+    lock = _get_calibration_lock()
+    if lock.locked():
+        raise HTTPException(status_code=409, detail="A calibration is already in progress.")
     try:
-        async with _get_calibration_lock():
+        async with lock:
             m = await asyncio.wait_for(
                 asyncio.to_thread(_grab_and_measure), timeout=_CALIBRATION_TIMEOUT_S
             )

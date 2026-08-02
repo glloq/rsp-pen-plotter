@@ -24,6 +24,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -40,6 +41,10 @@ _log = logging.getLogger(__name__)
 
 _DEFAULT_DIR = Path(__file__).resolve().parent.parent / "data" / "timelapses"
 TIMELAPSE_DIR = Path(os.environ.get("OMNIPLOT_TIMELAPSE_DIR", _DEFAULT_DIR))
+
+# Every timelapse id is ``uuid4().hex`` — 32 lowercase hex chars. Anything
+# else in a request path is a traversal attempt and is refused (see P0.1).
+_TIMELAPSE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 # Guards: cap a single grabbed frame, the grab timeout, and the bounds the
 # API also validates so the recorder is safe even if called directly.
@@ -477,21 +482,43 @@ class TimelapseRecorder:
         items.sort(key=lambda m: str(m.get("created_at", "")), reverse=True)
         return items
 
+    def _session_dir(self, timelapse_id: str) -> Path | None:
+        """Resolve a timelapse id to its confined directory, or ``None``.
+
+        The id comes straight from the request URL and drives an ``rmtree`` /
+        file read, so it must never be able to escape ``TIMELAPSE_DIR``. Every
+        real id is ``uuid4().hex`` — exactly 32 lowercase hex chars — so
+        anything else (``..``, encoded separators, an absolute path) is
+        rejected before any filesystem access, and the resolved path is
+        re-checked to sit directly under the base dir as defence in depth.
+        """
+        if not _TIMELAPSE_ID_RE.fullmatch(timelapse_id):
+            return None
+        base = self._base_dir.resolve()
+        directory = (base / timelapse_id).resolve()
+        if directory.parent != base:
+            return None
+        return directory
+
     def get(self, timelapse_id: str) -> dict[str, Any] | None:
         """One saved timelapse's metadata, or ``None``."""
-        return _read_meta(self._base_dir / timelapse_id)
+        directory = self._session_dir(timelapse_id)
+        return None if directory is None else _read_meta(directory)
 
     def video_path(self, timelapse_id: str) -> Path | None:
         """Path to a timelapse's MP4 if it exists, else ``None``."""
-        video = self._base_dir / timelapse_id / "video.mp4"
+        directory = self._session_dir(timelapse_id)
+        if directory is None:
+            return None
+        video = directory / "video.mp4"
         return video if video.is_file() else None
 
     def delete(self, timelapse_id: str) -> bool:
         """Delete a saved timelapse (cannot delete the active recording)."""
         if self._session is not None and self._session.id == timelapse_id:
             return False
-        directory = self._base_dir / timelapse_id
-        if not directory.is_dir():
+        directory = self._session_dir(timelapse_id)
+        if directory is None or not directory.is_dir():
             return False
         shutil.rmtree(directory, ignore_errors=True)
         return True

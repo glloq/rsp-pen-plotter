@@ -26,6 +26,7 @@ Design choices that keep this testable and dependency-light:
 from __future__ import annotations
 
 import io
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -365,10 +366,24 @@ class TipCalibrator:
         self._grab = grabber
         self._detect = detector
         self._tips: dict[int, TipMeasurement] = {}
+        # ``measure`` runs in a worker thread and can outlive its request (a
+        # timed-out grab keeps reading), so the session state is guarded by a
+        # real thread lock. Every measurement takes a monotonic token at the
+        # start; a ``reset`` — or a newer measurement — bumps the generation so
+        # a straggler thread's late store is discarded instead of corrupting
+        # the session (P0.3).
+        self._lock = threading.Lock()
+        self._generation = 0
 
     def reset(self) -> None:
-        """Forget all measurements (start a fresh calibration run)."""
-        self._tips.clear()
+        """Forget all measurements (start a fresh calibration run).
+
+        Bumps the generation so any in-flight ``measure`` thread (e.g. one that
+        outlived its 120 s timeout) can no longer write its result back.
+        """
+        with self._lock:
+            self._tips.clear()
+            self._generation += 1
 
     def grab(self, camera_url: str) -> bytes:
         """Grab one frame via the injected grabber (used by scale calibration)."""
@@ -377,7 +392,8 @@ class TipCalibrator:
     @property
     def measured_slots(self) -> list[int]:
         """Slots measured so far, in ascending order."""
-        return sorted(self._tips)
+        with self._lock:
+            return sorted(self._tips)
 
     def measure(
         self,
@@ -408,23 +424,37 @@ class TipCalibrator:
         from the grabber); a frame with no detectable tip is a normal, low/zero
         confidence result, not an error.
         """
+        # Claim a generation token up front. A later measurement or a reset
+        # bumps the counter; if that happens while this (possibly timed-out)
+        # thread is still grabbing frames, the store below is dropped so a
+        # straggler can't overwrite a fresher measurement or a reset session.
+        with self._lock:
+            self._generation += 1
+            generation = self._generation
+
         n = max(1, samples)
         shots = [
             self._detect(self._grab(camera_url), mm_per_pixel, dark_threshold, roi, invert)
             for _ in range(n)
         ]
         measurement = average_tips(shots)
-        if store and measurement.found and measurement.confidence >= min_confidence:
-            self._tips[slot] = measurement
 
-        reference = self._tips.get(reference_slot)
-        offset = None
-        if reference is not None:
-            offset = offset_between(measurement, reference)
+        with self._lock:
+            superseded = self._generation != generation
+            if (
+                store
+                and not superseded
+                and measurement.found
+                and measurement.confidence >= min_confidence
+            ):
+                self._tips[slot] = measurement
+            reference = self._tips.get(reference_slot)
+            offset = offset_between(measurement, reference) if reference is not None else None
+            reference_measured = reference is not None
         return MeasureResult(
             slot=slot,
             is_reference=slot == reference_slot,
             measurement=measurement,
-            reference_measured=reference is not None,
+            reference_measured=reference_measured,
             offset_mm=offset,
         )

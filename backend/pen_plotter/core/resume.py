@@ -46,6 +46,12 @@ class _ModalState:
     # calibration override (``PenSlot.pen_down_command``) is replayed
     # unchanged instead of being replaced by the profile default.
     pen_down_line: str | None = None
+    # Pen-up command for the *currently loaded* pen — the calibrated up line of
+    # whichever pen the last pen-down belonged to. The resume preamble lifts
+    # the pen with this before travelling back, so a per-slot ``pen_up_command``
+    # override isn't clobbered by the profile default. ``None`` ⇒ no pen seen
+    # yet, fall back to the profile default.
+    active_pen_up_line: str | None = None
 
 
 def _coord(token: str) -> float | None:
@@ -75,12 +81,44 @@ def _pen_command_sets(profile: MachineProfile) -> tuple[set[str], set[str]]:
     return ups, downs
 
 
-def _replay(lines: list[str], pen_ups: set[str], pen_downs: set[str]) -> _ModalState:
+def _pen_up_by_down(profile: MachineProfile) -> dict[str, str]:
+    """Map each pen's effective pen-down line to its effective pen-up line.
+
+    The executed prefix has no tool-change comments (they're stripped), so the
+    only in-band signal of which pen is loaded is the pen-down command itself.
+    A per-slot calibration that overrides ``pen_down_command`` yields a unique
+    down line, letting the resume replay recover *that* pen's ``pen_up_command``
+    rather than lifting with the profile default.
+    """
+    mapping: dict[str, str] = {}
+    for pen in profile.effective_pens():
+        down = (pen.pen_down_command or profile.pen_down_command).strip()
+        up = (pen.pen_up_command or profile.pen_up_command).strip()
+        if down and up:
+            mapping.setdefault(down, up)
+    return mapping
+
+
+# Draw/travel moves whose X/Y words define the head's new position. Arcs
+# (G2/G3) end at their X/Y just like a line, so their endpoint must advance the
+# replayed position — omitting them left the checkpoint position stuck before
+# the last arc and could send the head back to the wrong point on resume (P0.4).
+_MOVE_CODES = ("G0", "G1", "G2", "G3", "G00", "G01", "G02", "G03")
+
+
+def _replay(
+    lines: list[str],
+    pen_ups: set[str],
+    pen_downs: set[str],
+    pen_up_by_down: dict[str, str],
+) -> _ModalState:
     """Recover modal state by scanning already-executed command lines."""
     state = _ModalState()
     for line in lines:
         if line in pen_downs:
             state.pen_down_line = line
+            # Remember the loaded pen's up line so travel lifts correctly.
+            state.active_pen_up_line = pen_up_by_down.get(line, state.active_pen_up_line)
             continue
         if line in pen_ups:
             state.pen_down_line = None
@@ -98,7 +136,7 @@ def _replay(lines: list[str], pen_ups: set[str], pen_downs: set[str]) -> _ModalS
         if code == "G91":
             state.absolute = False
             continue
-        if code not in ("G0", "G1", "G00", "G01"):
+        if code not in _MOVE_CODES:
             continue
         for token in tokens[1:]:
             if token[:1] == "X":
@@ -148,13 +186,24 @@ def build_resume_program(gcode: str, acked_lines: int, profile: MachineProfile) 
         return remainder if checkpoint else lines
 
     pen_ups, pen_downs = _pen_command_sets(profile)
-    state = _replay(lines[:checkpoint], pen_ups, pen_downs)
+    pen_up_by_down = _pen_up_by_down(profile)
+    state = _replay(lines[:checkpoint], pen_ups, pen_downs, pen_up_by_down)
     preamble: list[str] = []
     if state.units:
         preamble.append(state.units)
     if state.x is not None and state.y is not None:
         # goto_command asserts G90, lifts the pen, and travels to the position.
-        preamble.extend(goto_command(state.x, state.y, profile))
+        # Lift with the loaded pen's own up command so a per-slot override is
+        # honoured — otherwise the pen may not actually clear the paper on the
+        # travel back to the checkpoint (P0.4).
+        preamble.extend(
+            goto_command(
+                state.x,
+                state.y,
+                profile,
+                pen_up_command=state.active_pen_up_line,
+            )
+        )
         # The checkpoint fell mid-stroke (pen was down, the next line keeps
         # drawing): re-lower the pen so the rest of the interrupted path is
         # actually inked instead of being air-drawn until the next pen-down.
