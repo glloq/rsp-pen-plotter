@@ -264,6 +264,118 @@ def test_enqueue_without_key_allows_duplicates() -> None:
     assert len(list_runs(engine)) == 2
 
 
+def test_idempotency_key_is_unique_at_db_level() -> None:
+    """The DB rejects a second row with an existing idempotency_key — the
+    constraint that makes ``enqueue``'s TOCTOU recovery meaningful (P1.2)."""
+    import uuid
+
+    from sqlalchemy.exc import IntegrityError
+    from sqlmodel import Session
+
+    from pen_plotter.queue import PrintRun
+
+    engine = _engine()
+    enqueue("job", PROFILE, GCODE, idempotency_key="k1", target=engine)
+    with Session(engine) as session:
+        session.add(
+            PrintRun(
+                id=str(uuid.uuid4()),
+                name="dup",
+                profile_name=PROFILE,
+                gcode=GCODE,
+                total_lines=1,
+                idempotency_key="k1",
+            )
+        )
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+
+def test_enqueue_idempotency_survives_concurrent_race(tmp_path, monkeypatch) -> None:
+    """Two concurrent enqueues with the same idempotency_key must yield ONE
+    run: both pass the pre-check, race the INSERT, and the loser recovers the
+    winner from the unique-index IntegrityError instead of raising (P1.2)."""
+    import threading
+
+    from pen_plotter import queue as queue_module
+
+    db = tmp_path / "queue.sqlite"
+    engine = create_engine(f"sqlite:///{db}")
+    init_db(engine)
+
+    # Synchronise both workers *after* enqueue's idempotency pre-check (which
+    # runs just before ``get_profile``) so their INSERTs genuinely race.
+    barrier = threading.Barrier(2)
+    real_get_profile = queue_module.get_profile
+
+    def synced_get_profile(name: str):
+        barrier.wait(timeout=5)
+        return real_get_profile(name)
+
+    monkeypatch.setattr(queue_module, "get_profile", synced_get_profile)
+
+    results: dict[str, object] = {}
+
+    def worker(tag: str) -> None:
+        try:
+            results[tag] = enqueue("job", PROFILE, GCODE, idempotency_key="k1", target=engine)
+        except Exception as exc:  # noqa: BLE001 — surfaced as a test failure below
+            results[tag] = exc
+
+    threads = [threading.Thread(target=worker, args=(t,)) for t in ("a", "b")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+
+    a, b = results["a"], results["b"]
+    assert not isinstance(a, Exception), a
+    assert not isinstance(b, Exception), b
+    assert a.id == b.id  # type: ignore[union-attr]
+    assert len(list_runs(engine)) == 1
+
+
+def test_list_runs_orders_active_before_history() -> None:
+    """Active runs sort ahead of terminal ones regardless of priority, in
+    running → paused → queued order; history follows (P1.1)."""
+    engine = _engine()
+    # A high-priority COMPLETED run must NOT jump ahead of live work.
+    done = enqueue("done", PROFILE, GCODE, priority=9, target=engine)
+    _update(done.id, engine, state=RunState.COMPLETED)
+    queued = enqueue("queued", PROFILE, GCODE, priority=0, target=engine)
+    running = enqueue("running", PROFILE, GCODE, priority=0, target=engine)
+    _update(running.id, engine, state=RunState.RUNNING)
+    paused = enqueue("paused", PROFILE, GCODE, priority=0, target=engine)
+    _update(paused.id, engine, state=RunState.PAUSED)
+
+    order = [r.id for r in list_runs(engine)]
+    assert order == [running.id, paused.id, queued.id, done.id]
+
+
+def test_list_runs_history_is_newest_first() -> None:
+    """Terminal runs form the history bucket, ordered newest first (P1.1)."""
+    from datetime import UTC, datetime
+
+    engine = _engine()
+    first = enqueue("first", PROFILE, GCODE, target=engine)
+    _update(
+        first.id,
+        engine,
+        state=RunState.COMPLETED,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    second = enqueue("second", PROFILE, GCODE, target=engine)
+    _update(
+        second.id,
+        engine,
+        state=RunState.CANCELED,
+        created_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+
+    order = [r.id for r in list_runs(engine)]
+    assert order == [second.id, first.id]
+
+
 def test_cancel_queued_run() -> None:
     engine = _engine()
     run = enqueue("job", PROFILE, GCODE, target=engine)

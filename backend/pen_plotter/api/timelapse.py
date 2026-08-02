@@ -71,6 +71,9 @@ async def start(body: TimelapseStartRequest) -> TimelapseStatus:
     url = body.stream_url.strip()
     if not url.lower().startswith(("http://", "https://")):
         raise HTTPException(status_code=422, detail="A http(s) camera stream URL is required.")
+    # Every frame grab routes through ``grab_jpeg`` → ``validate_camera_url``,
+    # so an SSRF target (loopback / metadata / off-allowlist) is refused at
+    # fetch time; we don't resolve DNS here so ``start`` stays offline-safe.
     try:
         state = await tl.recorder.start(url, body.interval_seconds, body.fps, body.label)
     except RuntimeError as exc:

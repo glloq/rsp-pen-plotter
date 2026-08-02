@@ -760,3 +760,47 @@ def test_fetch_pen_when_disconnected_is_409(client: TestClient) -> None:
         },
     )
     assert resp.status_code == 409
+
+
+# ── P0.1: camera work must not block the event loop ──────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_slow_camera_does_not_block_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A wedged camera can make ``measure`` sit for tens of seconds. That work
+    must run in a worker thread so other routes (an emergency stop, status)
+    keep responding — the loop must never be parked on the blocking grab."""
+    import asyncio
+    import time
+
+    import httpx
+    from httpx import ASGITransport
+
+    from pen_plotter.api import tip_calibration as api
+
+    def slow_grab(_url: str) -> bytes:
+        time.sleep(1.0)  # a stalled camera, blocking the calling *thread*
+        return _frame((100, 100))
+
+    monkeypatch.setattr(api._calibrator, "_grab", slow_grab)
+    api._calibrator.reset()
+
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        measure = asyncio.create_task(
+            client.post(
+                "/plotter/tip-calibration/measure",
+                json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1},
+            )
+        )
+        await asyncio.sleep(0.05)  # let the grab get underway in its thread
+        # An unrelated route must answer promptly while the grab is in flight.
+        start = time.monotonic()
+        status = await client.get("/plotter/tip-calibration/status")
+        elapsed = time.monotonic() - start
+        assert status.status_code == 200
+        assert elapsed < 0.5, f"event loop blocked for {elapsed:.2f}s during camera grab"
+
+        resp = await measure
+        assert resp.status_code == 200
+        assert resp.json()["found"] is True

@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
 import json
 import logging
 import os
 import shutil
+import socket
 import subprocess
 import urllib.request
 from collections.abc import Callable
@@ -31,6 +33,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 _log = logging.getLogger(__name__)
@@ -55,6 +58,124 @@ JpegGrabber = Callable[[str], bytes]
 VideoAssembler = Callable[[Path, Path, int], None]
 
 
+# SSRF guard: the camera URL is operator-supplied and the backend fetches it
+# server-side (no CORS), so an attacker who can set it could otherwise make the
+# appliance hit its own admin/update API on loopback or a cloud metadata
+# service on 169.254.169.254. ``validate_camera_url`` rejects those before any
+# request and re-checks every redirect hop.
+#
+# Cameras normally live on the LAN (private IPs), so private ranges stay
+# reachable by default — set ``OMNIPLOT_CAMERA_HOSTS`` (comma-separated hosts
+# and/or CIDRs) to lock grabbing down to known cameras, the recommended mode.
+_CAMERA_HOSTS_ENV = "OMNIPLOT_CAMERA_HOSTS"
+_MAX_CAMERA_REDIRECTS = 3
+
+
+class CameraUrlError(RuntimeError):
+    """A camera URL was rejected by the SSRF guard before any request."""
+
+
+def _camera_host_allowlist() -> list[str]:
+    """Parse ``OMNIPLOT_CAMERA_HOSTS`` into a list of host / CIDR entries."""
+    raw = os.environ.get(_CAMERA_HOSTS_ENV, "")
+    return [entry.strip() for entry in raw.split(",") if entry.strip()]
+
+
+def _resolve_ips(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Resolve ``host`` to every IP it maps to (all A/AAAA records)."""
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        raise CameraUrlError(f"Camera host {host!r} did not resolve.") from exc
+    ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for info in infos:
+        addr = str(info[4][0]).split("%", 1)[0]  # strip any zone id
+        with contextlib.suppress(ValueError):
+            ips.append(ipaddress.ip_address(addr))
+    if not ips:
+        raise CameraUrlError(f"Camera host {host!r} did not resolve to an IP.")
+    return ips
+
+
+def _ip_is_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """True for addresses a camera should never legitimately live on.
+
+    Loopback (the appliance's own services), link-local (incl. the cloud
+    metadata endpoint 169.254.169.254), multicast, reserved and the
+    unspecified address are all refused. Private LAN ranges are deliberately
+    *not* blocked here — that's where real cameras sit — so operators who
+    want a tighter boundary use the allowlist instead.
+    """
+    return (
+        ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def validate_camera_url(url: str) -> None:
+    """Reject a camera URL that could be used for SSRF.
+
+    Enforces an http(s) scheme, resolves the host, and either matches it
+    against ``OMNIPLOT_CAMERA_HOSTS`` (when set) or refuses loopback /
+    link-local / reserved targets. Called once per URL and again for every
+    redirect hop.
+
+    Raises:
+        CameraUrlError: When the URL or its resolved address is not allowed.
+    """
+    parts = urlsplit(url)
+    if parts.scheme.lower() not in ("http", "https"):
+        raise CameraUrlError("Camera URL must be an http(s) stream.")
+    host = parts.hostname
+    if not host:
+        raise CameraUrlError("Camera URL has no host.")
+
+    ips = _resolve_ips(host)
+    allowlist = _camera_host_allowlist()
+    if allowlist:
+        networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        names: set[str] = set()
+        for entry in allowlist:
+            try:
+                networks.append(ipaddress.ip_network(entry, strict=False))
+            except ValueError:
+                names.add(entry.lower())
+        allowed = host.lower() in names or any(ip in net for ip in ips for net in networks)
+        if not allowed:
+            raise CameraUrlError(
+                f"Camera host {host!r} is not permitted by {_CAMERA_HOSTS_ENV}."
+            )
+        return
+
+    for ip in ips:
+        if _ip_is_blocked(ip):
+            raise CameraUrlError(
+                f"Camera host {host!r} resolves to a blocked address ({ip})."
+            )
+
+
+class _ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-run the SSRF guard on each redirect target and cap the hop count.
+
+    An open redirect on an allowed host could otherwise bounce the fetch to
+    loopback or the metadata service; validating every ``Location`` closes
+    that. ``max_redirections`` keeps a redirect loop from hanging the grab.
+    """
+
+    max_redirections = _MAX_CAMERA_REDIRECTS
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        """Validate ``newurl`` before letting urllib follow the redirect."""
+        validate_camera_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_camera_opener = urllib.request.build_opener(_ValidatingRedirectHandler())
+
+
 def grab_jpeg(url: str, timeout: float = _FRAME_GRAB_TIMEOUT_S) -> bytes:
     """Fetch one JPEG frame from a snapshot or MJPEG stream URL.
 
@@ -62,13 +183,17 @@ def grab_jpeg(url: str, timeout: float = _FRAME_GRAB_TIMEOUT_S) -> bytes:
     image/jpeg``) and an ``multipart/x-mixed-replace`` MJPEG stream, from
     which the first complete JPEG frame (SOI…EOI) is extracted.
 
+    The URL is checked by :func:`validate_camera_url` first (and again for
+    every redirect) so it can't be used to reach the appliance's own services
+    or a cloud metadata endpoint.
+
     Raises:
-        RuntimeError: On a non-http(s) URL or when no JPEG frame is found.
+        CameraUrlError: When the URL fails the SSRF guard.
+        RuntimeError: When no JPEG frame is found.
     """
-    if not url.lower().startswith(("http://", "https://")):
-        raise RuntimeError("Camera URL must be an http(s) stream.")
+    validate_camera_url(url)
     req = urllib.request.Request(url, headers={"User-Agent": "omniplot-timelapse"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (scheme checked above)
+    with _camera_opener.open(req, timeout=timeout) as resp:  # noqa: S310 (guarded above)
         if resp.headers.get_content_type() == "image/jpeg":
             return bytes(resp.read(_MAX_FRAME_BYTES))
         # MJPEG (or unknown): read until one full JPEG frame is buffered.

@@ -155,3 +155,52 @@ async def test_timelapse_api_validation(api_recorder: None) -> None:
         bad = await client.post("/timelapse/start", json={"stream_url": "ftp://nope"})
         assert bad.status_code == 422
         assert (await client.post("/timelapse/stop")).status_code == 409
+
+
+class TestCameraUrlSsrfGuard:
+    """SSRF guard on operator-supplied camera URLs (P0.4).
+
+    Uses literal IPs so ``socket.getaddrinfo`` resolves numerically with no
+    live DNS, keeping the suite offline.
+    """
+
+    def test_rejects_non_http_scheme(self) -> None:
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("file:///etc/passwd")
+
+    def test_blocks_loopback(self) -> None:
+        # An attacker could otherwise hit the appliance's own admin/update API.
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://127.0.0.1:8000/plotter/update")
+
+    def test_blocks_cloud_metadata_endpoint(self) -> None:
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://169.254.169.254/latest/meta-data/")
+
+    def test_allows_private_lan_camera_by_default(self) -> None:
+        # Real cameras live on the LAN; private ranges stay reachable.
+        tl.validate_camera_url("http://192.168.1.50/stream")
+
+    def test_allowlist_permits_only_listed_hosts(self, monkeypatch) -> None:
+        monkeypatch.setenv("OMNIPLOT_CAMERA_HOSTS", "192.168.1.30,10.0.0.0/8")
+        tl.validate_camera_url("http://192.168.1.30/stream")  # exact host
+        tl.validate_camera_url("http://10.4.5.6/stream")  # inside the CIDR
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://192.168.1.31/stream")  # off the list
+
+    def test_allowlist_still_blocks_unlisted_loopback(self, monkeypatch) -> None:
+        monkeypatch.setenv("OMNIPLOT_CAMERA_HOSTS", "192.168.1.30")
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://127.0.0.1/stream")
+
+    def test_redirect_handler_revalidates_target(self) -> None:
+        # An open redirect on an allowed host must not bounce to loopback.
+        handler = tl._ValidatingRedirectHandler()
+        assert handler.max_redirections <= 3
+        with pytest.raises(tl.CameraUrlError):
+            handler.redirect_request(None, None, 302, "Found", {}, "http://127.0.0.1/x")
+
+    def test_grab_jpeg_refuses_blocked_target_without_fetching(self) -> None:
+        # The guard fires before any socket is opened.
+        with pytest.raises(tl.CameraUrlError):
+            tl.grab_jpeg("http://127.0.0.1:8000/stream")
