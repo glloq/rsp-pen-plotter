@@ -68,6 +68,15 @@ def _get_calibration_lock() -> asyncio.Lock:
     return _calibration_lock
 
 
+def calibration_in_progress() -> bool:
+    """True if a tip/scale calibration currently holds the mechanical lock.
+
+    Reads the last-created lock directly (no running loop required) so callers
+    like the self-update guard can check it from any context.
+    """
+    return _calibration_lock is not None and _calibration_lock.locked()
+
+
 class TipMeasureRequest(BaseModel):
     """Body for ``POST /plotter/tip-calibration/measure``.
 
