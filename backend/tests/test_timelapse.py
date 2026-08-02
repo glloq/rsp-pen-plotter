@@ -311,3 +311,27 @@ class TestTimelapseIdConfinement:
         assert recorder.delete("..") is False
         assert recorder.delete("%2e%2e") is False
         assert victim.exists()
+
+
+class TestCameraAllowlistPorts:
+    """Port-pinned camera allowlist entries (P1.7)."""
+
+    def test_port_pin_matches_only_that_port(self, monkeypatch) -> None:
+        monkeypatch.setenv("OMNIPLOT_CAMERA_HOSTS", "192.168.1.30:8080")
+        tl.validate_camera_url("http://192.168.1.30:8080/stream")  # exact port
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://192.168.1.30:9000/stream")  # wrong port
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://192.168.1.30/stream")  # default 80 ≠ 8080
+
+    def test_cidr_with_port(self, monkeypatch) -> None:
+        monkeypatch.setenv("OMNIPLOT_CAMERA_HOSTS", "192.168.1.0/24:80")
+        tl.validate_camera_url("http://192.168.1.5/stream")  # port 80 in the CIDR
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://192.168.1.5:8080/stream")  # wrong port
+
+    def test_entry_without_port_matches_any_port(self, monkeypatch) -> None:
+        # Backward compatible: a host with no :port still allows every port.
+        monkeypatch.setenv("OMNIPLOT_CAMERA_HOSTS", "192.168.1.30")
+        tl.validate_camera_url("http://192.168.1.30:8080/stream")
+        tl.validate_camera_url("http://192.168.1.30/stream")

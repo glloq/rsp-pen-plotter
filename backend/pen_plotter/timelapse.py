@@ -113,8 +113,12 @@ def _dir_size_bytes(path: Path) -> int:
 # request and re-checks every redirect hop.
 #
 # Cameras normally live on the LAN (private IPs), so private ranges stay
-# reachable by default — set ``OMNIPLOT_CAMERA_HOSTS`` (comma-separated hosts
-# and/or CIDRs) to lock grabbing down to known cameras, the recommended mode.
+# reachable by default — set ``OMNIPLOT_CAMERA_HOSTS`` (comma-separated) to lock
+# grabbing down to known cameras, the recommended mode. Each entry is a
+# hostname, IP or CIDR, optionally with a ``:port`` suffix (P1.7) so the
+# allowlist can pin the exact camera endpoint and not just its host — e.g.
+# ``192.168.1.30:8080,192.168.1.0/24:80``. An entry without a port matches any
+# port on that host, preserving the earlier behaviour.
 _CAMERA_HOSTS_ENV = "OMNIPLOT_CAMERA_HOSTS"
 _MAX_CAMERA_REDIRECTS = 3
 
@@ -127,6 +131,26 @@ def _camera_host_allowlist() -> list[str]:
     """Parse ``OMNIPLOT_CAMERA_HOSTS`` into a list of host / CIDR entries."""
     raw = os.environ.get(_CAMERA_HOSTS_ENV, "")
     return [entry.strip() for entry in raw.split(",") if entry.strip()]
+
+
+def _split_host_port(entry: str) -> tuple[str, int | None]:
+    """Split an allowlist entry into ``(host_or_cidr, port | None)``.
+
+    Supports ``ip``, ``ip:port``, ``host``, ``host:port``, ``cidr``,
+    ``cidr:port`` and bracketed IPv6 (``[::1]`` / ``[::1]:80``). A bare IPv6
+    (multiple colons, no brackets) is returned host-only so its colons aren't
+    mistaken for a port separator.
+    """
+    if entry.startswith("["):
+        host, sep, rest = entry[1:].partition("]")
+        if sep and rest.startswith(":") and rest[1:].isdigit():
+            return host, int(rest[1:])
+        return host, None
+    if entry.count(":") == 1:
+        host, _, port = entry.partition(":")
+        if port.isdigit():
+            return host, int(port)
+    return entry, None
 
 
 def _resolve_ips(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
@@ -184,17 +208,27 @@ def validate_camera_url(url: str) -> None:
     ips = _resolve_ips(host)
     allowlist = _camera_host_allowlist()
     if allowlist:
-        networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
-        names: set[str] = set()
+        # The effective port the connection will use (explicit, or the scheme
+        # default) — matched against any ``:port`` pin in the allowlist.
+        url_port = parts.port or (443 if parts.scheme.lower() == "https" else 80)
+        allowed = False
         for entry in allowlist:
+            host_part, allow_port = _split_host_port(entry)
+            if allow_port is not None and allow_port != url_port:
+                continue
             try:
-                networks.append(ipaddress.ip_network(entry, strict=False))
+                network = ipaddress.ip_network(host_part, strict=False)
             except ValueError:
-                names.add(entry.lower())
-        allowed = host.lower() in names or any(ip in net for ip in ips for net in networks)
+                if host.lower() == host_part.lower():
+                    allowed = True
+                    break
+            else:
+                if any(ip in network for ip in ips):
+                    allowed = True
+                    break
         if not allowed:
             raise CameraUrlError(
-                f"Camera host {host!r} is not permitted by {_CAMERA_HOSTS_ENV}."
+                f"Camera target {host}:{url_port} is not permitted by {_CAMERA_HOSTS_ENV}."
             )
         return
 

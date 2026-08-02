@@ -65,13 +65,15 @@ async def test_machine_endpoint_accepts_header_key(api_key: str, connected: Mock
 
 
 @pytest.mark.asyncio
-async def test_machine_endpoint_accepts_token_query(api_key: str, connected: MockTransport) -> None:
+async def test_machine_endpoint_rejects_token_query(api_key: str, connected: MockTransport) -> None:
+    """The API key must NOT be accepted in the query string on HTTP routes
+    (P1.9) — a key in a URL leaks into logs / history. Header only."""
     async with _client() as client:
         response = await client.post(
             "/plotter/home",
             params={"profile_name": PROFILE, "token": api_key},
         )
-    assert response.status_code == 200
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
