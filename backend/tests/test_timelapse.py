@@ -75,9 +75,9 @@ async def test_stop_without_recording_raises(recorder: tl.TimelapseRecorder) -> 
 async def test_delete_guards_active_then_removes(recorder: tl.TimelapseRecorder) -> None:
     await recorder.start("http://cam/stream", 0.5, 12)
     sid = recorder.status()["session_id"]
-    assert recorder.delete(sid) is False  # cannot delete the active recording
+    assert await recorder.delete(sid) is False  # cannot delete the active recording
     await recorder.stop()
-    assert recorder.delete(sid) is True
+    assert await recorder.delete(sid) is True
     assert recorder.get(sid) is None
 
 
@@ -288,11 +288,12 @@ class TestTimelapseIdConfinement:
             "../../etc/passwd",
         ],
     )
-    def test_bad_id_is_rejected(self, recorder: tl.TimelapseRecorder, bad_id: str) -> None:
+    @pytest.mark.asyncio
+    async def test_bad_id_is_rejected(self, recorder: tl.TimelapseRecorder, bad_id: str) -> None:
         assert recorder._session_dir(bad_id) is None
         assert recorder.get(bad_id) is None
         assert recorder.video_path(bad_id) is None
-        assert recorder.delete(bad_id) is False
+        assert await recorder.delete(bad_id) is False
 
     def test_valid_hex_id_is_accepted(self, recorder: tl.TimelapseRecorder) -> None:
         good = "0123456789abcdef0123456789abcdef"
@@ -308,8 +309,8 @@ class TestTimelapseIdConfinement:
         # delete() that tries to climb out with "..".
         victim = recorder._base_dir.parent / "victim.txt"
         victim.write_text("keep me", encoding="utf-8")
-        assert recorder.delete("..") is False
-        assert recorder.delete("%2e%2e") is False
+        assert await recorder.delete("..") is False
+        assert await recorder.delete("%2e%2e") is False
         assert victim.exists()
 
 
@@ -335,3 +336,19 @@ class TestCameraAllowlistPorts:
         monkeypatch.setenv("OMNIPLOT_CAMERA_HOSTS", "192.168.1.30")
         tl.validate_camera_url("http://192.168.1.30:8080/stream")
         tl.validate_camera_url("http://192.168.1.30/stream")
+
+
+@pytest.mark.asyncio
+async def test_assembly_skipped_when_no_space_for_video(
+    recorder: tl.TimelapseRecorder, monkeypatch
+) -> None:
+    """stop() must not run ffmpeg when the video wouldn't fit under the
+    reserve — the frames are kept and an error is surfaced (P1.3)."""
+    await recorder.start("http://cam/stream", interval_seconds=0.01, fps=12)
+    await _await_first_frame(recorder)
+    # Simulate a nearly-full disk only for the assembly space check.
+    monkeypatch.setattr(tl, "_free_bytes", lambda _p: 1)
+    summary = await recorder.stop()
+    assert summary["has_video"] is False
+    assert summary["frame_count"] >= 1  # frames were kept, not lost
+    assert "disk space" in (recorder.status()["error"] or "").lower()

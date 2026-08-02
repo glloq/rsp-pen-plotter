@@ -404,13 +404,16 @@ class TimelapseRecorder:
         fps = max(MIN_FPS, min(MAX_FPS, fps))
         session_id = uuid4().hex
         (self._base_dir / session_id / "frames").mkdir(parents=True, exist_ok=True)
+        # Baselining walks the whole store (potentially many old sessions);
+        # keep that off the event loop so /timelapse/start stays snappy (P1.2).
+        baseline = await asyncio.to_thread(_dir_size_bytes, self._base_dir)
         self._session = _Session(
             id=session_id,
             stream_url=stream_url,
             interval_seconds=interval_seconds,
             fps=fps,
             label=label.strip(),
-            store_baseline_bytes=_dir_size_bytes(self._base_dir),
+            store_baseline_bytes=baseline,
         )
         self._error = None
         self._task = asyncio.create_task(self._loop(self._session))
@@ -456,12 +459,39 @@ class TimelapseRecorder:
                 _log.warning("Timelapse frame grab failed: %s", exc)
             else:
                 # Contiguous numbering (only on success) keeps ffmpeg's
-                # ``%06d`` input pattern gap-free.
-                (frames_dir / f"frame_{session.frame_count:06d}.jpg").write_bytes(frame)
+                # ``%06d`` input pattern gap-free. Writing up to 8 MiB to a slow
+                # SD card is offloaded so the event loop keeps serving HTTP
+                # (an emergency stop must stay reactive) — P1.2.
+                frame_path = frames_dir / f"frame_{session.frame_count:06d}.jpg"
+                await asyncio.to_thread(frame_path.write_bytes, frame)
                 session.frame_count += 1
                 session.bytes_written += len(frame)
                 self._error = None
             await asyncio.sleep(session.interval_seconds)
+
+    def _assembly_space_reason(self, frames_dir: Path) -> str | None:
+        """Why the MP4 must not be assembled now, or ``None`` if it's safe.
+
+        Budgets the encoded video conservatively as the full size of the source
+        frames (the H.264 MP4 is normally far smaller, so this over-estimates
+        headroom) and refuses when writing it would drop below the free-space
+        reserve or push the store past the timelapse quota. Runs in a worker
+        thread — it walks the frames directory and the whole store.
+        """
+        estimate = _dir_size_bytes(frames_dir)
+        min_free = _env_mb_bytes(_MIN_FREE_MB_ENV, _DEFAULT_MIN_FREE_MB)
+        if min_free and _free_bytes(self._base_dir) - estimate < min_free:
+            return (
+                "Not enough free disk space to assemble the video safely — the "
+                "frames were kept. Free some space and stop again to retry."
+            )
+        max_store = _env_mb_bytes(_TIMELAPSE_MAX_MB_ENV, _DEFAULT_TIMELAPSE_MAX_MB)
+        if max_store and _dir_size_bytes(self._base_dir) + estimate > max_store:
+            return (
+                "Assembling the video would exceed the timelapse quota — the "
+                "frames were kept. Free some space and stop again to retry."
+            )
+        return None
 
     async def stop(self) -> dict[str, Any]:
         """Stop recording, assemble the MP4, and return the saved summary.
@@ -482,14 +512,26 @@ class TimelapseRecorder:
         duration = round(session.frame_count / session.fps, 2) if session.fps else 0.0
         has_video = False
         if session.frame_count > 0:
-            try:
-                await asyncio.to_thread(
-                    self._assembler, directory / "frames", directory / "video.mp4", session.fps
-                )
-                has_video = True
-            except Exception as exc:
-                self._error = str(exc)
-                _log.error("Timelapse assembly failed: %s", exc)
+            frames_dir = directory / "frames"
+            # The MP4 is written alongside the frames, so encoding needs
+            # headroom the capture-time quota never accounted for (P1.3).
+            # Refuse to assemble if it would breach the free-space reserve or
+            # the timelapse quota — the frames stay on disk so the operator can
+            # free space and retry rather than losing the capture or wedging
+            # the SD card mid-encode.
+            reason = await asyncio.to_thread(self._assembly_space_reason, frames_dir)
+            if reason is not None:
+                self._error = reason
+                _log.error("Timelapse assembly skipped: %s", reason)
+            else:
+                try:
+                    await asyncio.to_thread(
+                        self._assembler, frames_dir, directory / "video.mp4", session.fps
+                    )
+                    has_video = True
+                except Exception as exc:
+                    self._error = str(exc)
+                    _log.error("Timelapse assembly failed: %s", exc)
         else:
             self._error = "No frames were captured."
 
@@ -547,14 +589,18 @@ class TimelapseRecorder:
         video = directory / "video.mp4"
         return video if video.is_file() else None
 
-    def delete(self, timelapse_id: str) -> bool:
-        """Delete a saved timelapse (cannot delete the active recording)."""
+    async def delete(self, timelapse_id: str) -> bool:
+        """Delete a saved timelapse (cannot delete the active recording).
+
+        The tree can hold up to 100 000 frames, so the ``rmtree`` runs in a
+        worker thread to keep the event loop responsive (P1.2).
+        """
         if self._session is not None and self._session.id == timelapse_id:
             return False
         directory = self._session_dir(timelapse_id)
         if directory is None or not directory.is_dir():
             return False
-        shutil.rmtree(directory, ignore_errors=True)
+        await asyncio.to_thread(shutil.rmtree, directory, ignore_errors=True)
         return True
 
 

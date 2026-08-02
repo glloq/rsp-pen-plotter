@@ -287,6 +287,9 @@ def _reprocess_existing(
     # old meta. Instead stage every artefact in a sibling temp dir, then move
     # each into place with an atomic ``os.replace``, sealing meta.json LAST so
     # a concurrent reader never sees fresh metadata pointing at a stale SVG.
+    # Reconversion writes a fresh full copy into staging, so it too must fit
+    # under the free-space reserve (P1.8) — refuse before staging anything.
+    ensure_upload_space(len(data) + len(converted.svg.encode("utf-8")) + 64 * 1024)
     staging = directory.with_name(f".tmp-reprocess-{record.file_id}-{uuid.uuid4().hex}")
     staging.mkdir(parents=True, exist_ok=False)
     try:
@@ -387,9 +390,12 @@ async def upload_to_library(
             # to disk — both block the event loop. Run it in the threadpool so
             # the server keeps serving other requests (listings, previews,
             # concurrent uploads) while the conversion churns.
-            updated = await run_in_threadpool(
-                _reprocess_existing, existing, data, mime, parsed_options
-            )
+            try:
+                updated = await run_in_threadpool(
+                    _reprocess_existing, existing, data, mime, parsed_options
+                )
+            except InsufficientStorageError as exc:
+                raise HTTPException(status_code=507, detail=str(exc)) from exc
             return FileUploadResponse(file=_record_to_detail(updated), existing=True)
         return FileUploadResponse(file=_record_to_detail(existing), existing=True)
 
@@ -407,6 +413,15 @@ async def upload_to_library(
     # heavy file on a Pi-class device doesn't freeze the whole API for every
     # other client while it runs.
     converted = await run_in_threadpool(convert_file, data, file.filename, mime, parsed_options)
+
+    # Re-check now that the true footprint is known (P1.8): a dense
+    # vectorisation can make normalized.svg dwarf the uploaded bytes, so the
+    # pre-conversion ``len(data)`` guard alone under-counts what the commit
+    # writes (original + SVG + meta).
+    try:
+        ensure_upload_space(len(data) + len(converted.svg.encode("utf-8")) + 64 * 1024)
+    except InsufficientStorageError as exc:
+        raise HTTPException(status_code=507, detail=str(exc)) from exc
 
     file_id = str(uuid.uuid4())
     # Same auto-attribution as ``_reprocess_existing`` — keep the two
