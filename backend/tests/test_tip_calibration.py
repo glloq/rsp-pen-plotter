@@ -996,3 +996,47 @@ async def test_calibration_timeout_drains_worker_and_discards(
         )
         assert ok.status_code == 200
         assert ok.json()["found"] is True
+
+
+@pytest.mark.asyncio
+async def test_calibrate_scale_timeout_drains_and_frees_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """/calibrate-scale must drain its worker on timeout before releasing the
+    lock, so the next calibration isn't racing a still-running grab (P1.1)."""
+    import time
+
+    import httpx
+    from httpx import ASGITransport
+
+    from pen_plotter.api import tip_calibration as api
+
+    monkeypatch.setattr(api, "_CALIBRATION_TIMEOUT_S", 0.1)
+    slow = {"grab": True}
+
+    def maybe_slow_grab(_url: str) -> bytes:
+        if slow["grab"]:
+            time.sleep(0.4)
+        arr = np.full((200, 200), 240, dtype=np.uint8)
+        arr[80:120, 60:100] = 10
+        buf = io.BytesIO()
+        Image.fromarray(arr, mode="L").save(buf, format="PNG")
+        return buf.getvalue()
+
+    monkeypatch.setattr(api._calibrator, "_grab", maybe_slow_grab)
+
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        timed_out = await client.post(
+            "/plotter/tip-calibration/calibrate-scale",
+            json={"camera_url": "x", "known_mm": 20.0},
+        )
+        assert timed_out.status_code == 504
+        slow["grab"] = False
+        ok = await client.post(
+            "/plotter/tip-calibration/calibrate-scale",
+            json={"camera_url": "x", "known_mm": 20.0},
+        )
+        assert ok.status_code == 200
+        assert ok.json()["found"] is True

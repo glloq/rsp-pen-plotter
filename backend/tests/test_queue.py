@@ -690,3 +690,82 @@ def test_queue_websocket_sends_snapshot_and_pushes_on_change() -> None:
             assert all("gcode" not in r for r in second)
         finally:
             client.delete(f"/queue/{run_id}")
+
+
+def test_claim_next_queued_is_atomic_single_winner() -> None:
+    """Two workers claiming from a queue of one run: exactly one wins, the
+    other gets None — never the same run twice (P0.2)."""
+    from pen_plotter.queue import claim_next_queued
+
+    engine = _engine()
+    run = enqueue("job", PROFILE, GCODE, target=engine)
+
+    a = claim_next_queued("worker-a", engine)
+    b = claim_next_queued("worker-b", engine)
+
+    claimed = [c for c in (a, b) if c is not None]
+    assert len(claimed) == 1
+    assert claimed[0].id == run.id
+    assert claimed[0].state == RunState.RUNNING
+    assert claimed[0].worker_id == "worker-a"  # first caller wins
+    assert claimed[0].lease_until is not None
+
+
+def test_claim_next_queued_respects_priority_order() -> None:
+    from pen_plotter.queue import claim_next_queued
+
+    engine = _engine()
+    enqueue("low", PROFILE, GCODE, priority=0, target=engine)
+    high = enqueue("high", PROFILE, GCODE, priority=5, target=engine)
+    claimed = claim_next_queued("w", engine)
+    assert claimed is not None
+    assert claimed.id == high.id
+
+
+def test_claim_returns_none_when_empty() -> None:
+    from pen_plotter.queue import claim_next_queued
+
+    engine = _engine()
+    assert claim_next_queued("w", engine) is None
+
+
+def test_reclaim_expired_leases_parks_stale_running_run() -> None:
+    """A run left RUNNING by a crashed worker (lease lapsed) is parked to
+    PAUSED for position-safe manual resume (P0.2)."""
+    from datetime import UTC, datetime, timedelta
+
+    from pen_plotter.queue import reclaim_expired_leases
+
+    engine = _engine()
+    run = enqueue("job", PROFILE, GCODE, target=engine)
+    _update(
+        run.id,
+        engine,
+        state=RunState.RUNNING,
+        worker_id="dead-worker",
+        lease_until=datetime.now(UTC) - timedelta(seconds=1),  # already expired
+    )
+    assert reclaim_expired_leases(engine) == 1
+    parked = get_run(run.id, engine)
+    assert parked is not None
+    assert parked.state == RunState.PAUSED
+    assert parked.worker_id is None
+
+
+def test_reclaim_skips_the_excluded_worker() -> None:
+    """A worker never parks the run it is itself streaming (P0.2)."""
+    from datetime import UTC, datetime, timedelta
+
+    from pen_plotter.queue import reclaim_expired_leases
+
+    engine = _engine()
+    run = enqueue("job", PROFILE, GCODE, target=engine)
+    _update(
+        run.id,
+        engine,
+        state=RunState.RUNNING,
+        worker_id="me",
+        lease_until=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    assert reclaim_expired_leases(engine, exclude_worker_id="me") == 0
+    assert get_run(run.id, engine).state == RunState.RUNNING

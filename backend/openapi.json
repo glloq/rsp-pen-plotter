@@ -3337,6 +3337,18 @@
             ],
             "title": "Idempotency Key"
           },
+          "lease_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Until"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -3440,6 +3452,17 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "worker_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Id"
           }
         },
         "required": [

@@ -175,13 +175,19 @@ def _starts_with_draw_move(remainder: list[str]) -> bool:
 
 
 def _resume_conservative() -> bool:
-    """Whether to rewind the resume point to the last pen-up boundary (P0.3)."""
-    return (os.environ.get("OMNIPLOT_RESUME_CONSERVATIVE") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    """Whether to rewind the resume point to the last pen-up boundary (P0.1).
+
+    Default **on**: a firmware ``ok`` is *accepted*, not *executed*, so resuming
+    exactly at the checkpoint can skip moves that were acknowledged but never
+    physically drawn — a permanent gap, which is worse than a little over-draw.
+    Set ``OMNIPLOT_RESUME_CONSERVATIVE=0`` to opt back into exact-checkpoint
+    resume (only safe once checkpoints are confirmed by firmware ``Idle`` /
+    ``M400``, which needs per-controller hardware validation).
+    """
+    raw = os.environ.get("OMNIPLOT_RESUME_CONSERVATIVE")
+    if raw is None or not raw.strip():
+        return True  # default: never leave a gap
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _rewind_to_pen_up(lines: list[str], checkpoint: int, pen_ups: set[str]) -> int:

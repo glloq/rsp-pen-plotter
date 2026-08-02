@@ -3641,6 +3641,8 @@ export interface components {
             id: string;
             /** Idempotency Key */
             idempotency_key?: string | null;
+            /** Lease Until */
+            lease_until?: string | null;
             /** Name */
             name: string;
             /** Pause Points */
@@ -3684,6 +3686,8 @@ export interface components {
              * Format: date-time
              */
             updated_at?: string;
+            /** Worker Id */
+            worker_id?: string | null;
         };
         /**
          * PrintRunSummary
