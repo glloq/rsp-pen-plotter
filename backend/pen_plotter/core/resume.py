@@ -15,7 +15,14 @@ Two limits worth stating plainly:
   so an unclean stop can lose up to that many lines — resume replays from the
   last *checkpoint*, not the last physical stroke, and may retrace a short
   already-drawn section. Callers should describe resume as "from the last
-  checkpoint", never "from the exact interruption point".
+  checkpoint", never "from the exact interruption point". A firmware ``ok`` is
+  *accepted*, not *executed*, so after a power loss the head can sit several
+  buffered moves behind the checkpoint. ``OMNIPLOT_RESUME_CONSERVATIVE=1``
+  rewinds the resume point to the last pen-up boundary so those unexecuted
+  moves are re-drawn rather than skipped (a little over-draw instead of a gap);
+  it is opt-in because it changes the default no-over-draw behaviour, and the
+  fully robust fix (checkpoint only on ``M400`` / ``Idle`` confirmation) needs
+  per-firmware validation on real hardware.
 * **EBB is partial.** This reconstruction reads absolute X/Y from the executed
   prefix. An EBB program is a stream of *relative* ``SM`` step moves with no
   absolute coordinates, so the head position cannot be recovered this way;
@@ -25,6 +32,7 @@ Two limits worth stating plainly:
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from pen_plotter.hardware.commands import goto_command
@@ -166,6 +174,31 @@ def _starts_with_draw_move(remainder: list[str]) -> bool:
     return code in ("G1", "G01", "G2", "G02", "G3", "G03")
 
 
+def _resume_conservative() -> bool:
+    """Whether to rewind the resume point to the last pen-up boundary (P0.3)."""
+    return (os.environ.get("OMNIPLOT_RESUME_CONSERVATIVE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _rewind_to_pen_up(lines: list[str], checkpoint: int, pen_ups: set[str]) -> int:
+    """Index of the last pen-up command at or before ``checkpoint`` (else 0).
+
+    A firmware ``ok`` means *accepted*, not *executed*: on power loss the head
+    may sit several buffered moves behind the checkpoint. Restarting from the
+    last point where the pen was UP re-draws the interrupted stroke instead of
+    skipping the moves that were acknowledged but never physically drawn —
+    trading a little over-draw (harmless on a pen plot) for never leaving a gap.
+    """
+    for i in range(checkpoint - 1, -1, -1):
+        if lines[i] in pen_ups:
+            return i
+    return 0
+
+
 def build_resume_program(gcode: str, acked_lines: int, profile: MachineProfile) -> list[str]:
     """Build the executable line list needed to resume a job from a checkpoint.
 
@@ -178,14 +211,23 @@ def build_resume_program(gcode: str, acked_lines: int, profile: MachineProfile) 
         Executable command lines: a re-initialization preamble followed by the
         not-yet-sent lines. Resuming from the start returns the full program
         unchanged; resuming past the end returns an empty list.
+
+    With ``OMNIPLOT_RESUME_CONSERVATIVE=1`` the resume point is rewound to the
+    last pen-up boundary at or before the checkpoint, so an acknowledged-but-
+    unexecuted move at power-loss is re-drawn rather than skipped (P0.3).
     """
     lines = executable_lines(gcode)
     checkpoint = max(0, min(acked_lines, len(lines)))
-    remainder = lines[checkpoint:]
-    if checkpoint == 0 or not remainder:
-        return remainder if checkpoint else lines
+    if checkpoint == 0 or checkpoint >= len(lines):
+        # Past the end → nothing to resume; at the start → full program.
+        return [] if checkpoint >= len(lines) and checkpoint else lines
 
     pen_ups, pen_downs = _pen_command_sets(profile)
+    if _resume_conservative():
+        checkpoint = _rewind_to_pen_up(lines, checkpoint, pen_ups)
+        if checkpoint == 0:
+            return lines  # rewound all the way back → replot from the start
+    remainder = lines[checkpoint:]
     pen_up_by_down = _pen_up_by_down(profile)
     state = _replay(lines[:checkpoint], pen_ups, pen_downs, pen_up_by_down)
     preamble: list[str] = []
