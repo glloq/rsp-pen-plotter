@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
 import json
 import logging
 import os
 import shutil
+import socket
 import subprocess
 import urllib.request
 from collections.abc import Callable
@@ -31,6 +33,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 _log = logging.getLogger(__name__)
@@ -51,8 +54,169 @@ _ASSEMBLE_TIMEOUT_S = 600.0
 # capturing past this many frames (the operator still stops to save).
 _MAX_FRAMES = 100_000
 
+# Storage backstops against SD-card saturation (P0.5). A full disk corrupts
+# SQLite, drops queue checkpoints and can wedge the OS, so recording halts
+# well before that: capture stops when free space would fall below the reserve
+# or the timelapse store grows past its byte quota. Both are env-tunable.
+_MIN_FREE_MB_ENV = "OMNIPLOT_MIN_FREE_MB"
+_TIMELAPSE_MAX_MB_ENV = "OMNIPLOT_TIMELAPSE_MAX_MB"
+_DEFAULT_MIN_FREE_MB = 1024
+_DEFAULT_TIMELAPSE_MAX_MB = 4096
+
 JpegGrabber = Callable[[str], bytes]
 VideoAssembler = Callable[[Path, Path, int], None]
+
+
+def _env_mb_bytes(name: str, default_mb: int) -> int:
+    """Read a megabyte budget from ``name`` (0/negative disables the cap)."""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default_mb * 1024 * 1024
+    try:
+        mb = int(float(raw))
+    except ValueError:
+        return default_mb * 1024 * 1024
+    return max(0, mb) * 1024 * 1024
+
+
+def _free_bytes(path: Path) -> int:
+    """Free bytes on the filesystem holding ``path`` (0 if it can't be read)."""
+    try:
+        return shutil.disk_usage(path).free
+    except OSError:
+        return 0
+
+
+def _dir_size_bytes(path: Path) -> int:
+    """Total size of the files under ``path`` (missing dir ⇒ 0)."""
+    total = 0
+    if not path.exists():
+        return 0
+    for entry in path.rglob("*"):
+        try:
+            if entry.is_file():
+                total += entry.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
+# SSRF guard: the camera URL is operator-supplied and the backend fetches it
+# server-side (no CORS), so an attacker who can set it could otherwise make the
+# appliance hit its own admin/update API on loopback or a cloud metadata
+# service on 169.254.169.254. ``validate_camera_url`` rejects those before any
+# request and re-checks every redirect hop.
+#
+# Cameras normally live on the LAN (private IPs), so private ranges stay
+# reachable by default — set ``OMNIPLOT_CAMERA_HOSTS`` (comma-separated hosts
+# and/or CIDRs) to lock grabbing down to known cameras, the recommended mode.
+_CAMERA_HOSTS_ENV = "OMNIPLOT_CAMERA_HOSTS"
+_MAX_CAMERA_REDIRECTS = 3
+
+
+class CameraUrlError(RuntimeError):
+    """A camera URL was rejected by the SSRF guard before any request."""
+
+
+def _camera_host_allowlist() -> list[str]:
+    """Parse ``OMNIPLOT_CAMERA_HOSTS`` into a list of host / CIDR entries."""
+    raw = os.environ.get(_CAMERA_HOSTS_ENV, "")
+    return [entry.strip() for entry in raw.split(",") if entry.strip()]
+
+
+def _resolve_ips(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Resolve ``host`` to every IP it maps to (all A/AAAA records)."""
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        raise CameraUrlError(f"Camera host {host!r} did not resolve.") from exc
+    ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for info in infos:
+        addr = str(info[4][0]).split("%", 1)[0]  # strip any zone id
+        with contextlib.suppress(ValueError):
+            ips.append(ipaddress.ip_address(addr))
+    if not ips:
+        raise CameraUrlError(f"Camera host {host!r} did not resolve to an IP.")
+    return ips
+
+
+def _ip_is_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """True for addresses a camera should never legitimately live on.
+
+    Loopback (the appliance's own services), link-local (incl. the cloud
+    metadata endpoint 169.254.169.254), multicast, reserved and the
+    unspecified address are all refused. Private LAN ranges are deliberately
+    *not* blocked here — that's where real cameras sit — so operators who
+    want a tighter boundary use the allowlist instead.
+    """
+    return (
+        ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def validate_camera_url(url: str) -> None:
+    """Reject a camera URL that could be used for SSRF.
+
+    Enforces an http(s) scheme, resolves the host, and either matches it
+    against ``OMNIPLOT_CAMERA_HOSTS`` (when set) or refuses loopback /
+    link-local / reserved targets. Called once per URL and again for every
+    redirect hop.
+
+    Raises:
+        CameraUrlError: When the URL or its resolved address is not allowed.
+    """
+    parts = urlsplit(url)
+    if parts.scheme.lower() not in ("http", "https"):
+        raise CameraUrlError("Camera URL must be an http(s) stream.")
+    host = parts.hostname
+    if not host:
+        raise CameraUrlError("Camera URL has no host.")
+
+    ips = _resolve_ips(host)
+    allowlist = _camera_host_allowlist()
+    if allowlist:
+        networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        names: set[str] = set()
+        for entry in allowlist:
+            try:
+                networks.append(ipaddress.ip_network(entry, strict=False))
+            except ValueError:
+                names.add(entry.lower())
+        allowed = host.lower() in names or any(ip in net for ip in ips for net in networks)
+        if not allowed:
+            raise CameraUrlError(
+                f"Camera host {host!r} is not permitted by {_CAMERA_HOSTS_ENV}."
+            )
+        return
+
+    for ip in ips:
+        if _ip_is_blocked(ip):
+            raise CameraUrlError(
+                f"Camera host {host!r} resolves to a blocked address ({ip})."
+            )
+
+
+class _ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-run the SSRF guard on each redirect target and cap the hop count.
+
+    An open redirect on an allowed host could otherwise bounce the fetch to
+    loopback or the metadata service; validating every ``Location`` closes
+    that. ``max_redirections`` keeps a redirect loop from hanging the grab.
+    """
+
+    max_redirections = _MAX_CAMERA_REDIRECTS
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        """Validate ``newurl`` before letting urllib follow the redirect."""
+        validate_camera_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_camera_opener = urllib.request.build_opener(_ValidatingRedirectHandler())
 
 
 def grab_jpeg(url: str, timeout: float = _FRAME_GRAB_TIMEOUT_S) -> bytes:
@@ -62,13 +226,17 @@ def grab_jpeg(url: str, timeout: float = _FRAME_GRAB_TIMEOUT_S) -> bytes:
     image/jpeg``) and an ``multipart/x-mixed-replace`` MJPEG stream, from
     which the first complete JPEG frame (SOI…EOI) is extracted.
 
+    The URL is checked by :func:`validate_camera_url` first (and again for
+    every redirect) so it can't be used to reach the appliance's own services
+    or a cloud metadata endpoint.
+
     Raises:
-        RuntimeError: On a non-http(s) URL or when no JPEG frame is found.
+        CameraUrlError: When the URL fails the SSRF guard.
+        RuntimeError: When no JPEG frame is found.
     """
-    if not url.lower().startswith(("http://", "https://")):
-        raise RuntimeError("Camera URL must be an http(s) stream.")
+    validate_camera_url(url)
     req = urllib.request.Request(url, headers={"User-Agent": "omniplot-timelapse"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (scheme checked above)
+    with _camera_opener.open(req, timeout=timeout) as resp:  # noqa: S310 (guarded above)
         if resp.headers.get_content_type() == "image/jpeg":
             return bytes(resp.read(_MAX_FRAME_BYTES))
         # MJPEG (or unknown): read until one full JPEG frame is buffered.
@@ -129,6 +297,11 @@ class _Session:
     label: str
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     frame_count: int = 0
+    # Bytes this session has written, plus the store's size when it began, so
+    # the quota guard can bound total timelapse storage without re-walking the
+    # whole tree on every frame.
+    bytes_written: int = 0
+    store_baseline_bytes: int = 0
 
 
 def _read_meta(directory: Path) -> dict[str, Any] | None:
@@ -198,17 +371,43 @@ class TimelapseRecorder:
             interval_seconds=interval_seconds,
             fps=fps,
             label=label.strip(),
+            store_baseline_bytes=_dir_size_bytes(self._base_dir),
         )
         self._error = None
         self._task = asyncio.create_task(self._loop(self._session))
         return self.status()
 
+    def _capacity_block_reason(self, session: _Session) -> str | None:
+        """Why capture must pause right now, or ``None`` when it may continue.
+
+        Guards, in order: the frame-count backstop, the free-space reserve
+        (protects the whole SD card / OS), and the timelapse byte quota. The
+        first two protect against saturation that would corrupt SQLite and the
+        print queue; all three keep the captured frames intact so the operator
+        can still stop-to-save.
+        """
+        if session.frame_count >= _MAX_FRAMES:
+            return f"Frame limit ({_MAX_FRAMES}) reached — stop to save."
+        min_free = _env_mb_bytes(_MIN_FREE_MB_ENV, _DEFAULT_MIN_FREE_MB)
+        if min_free and _free_bytes(self._base_dir) < min_free:
+            return (
+                f"Low disk space (< {min_free // (1024 * 1024)} MB free) — "
+                "recording stopped to protect the system. Stop to save."
+            )
+        max_store = _env_mb_bytes(_TIMELAPSE_MAX_MB_ENV, _DEFAULT_TIMELAPSE_MAX_MB)
+        if max_store and session.store_baseline_bytes + session.bytes_written >= max_store:
+            return f"Timelapse quota ({max_store // (1024 * 1024)} MB) reached — stop to save."
+        return None
+
     async def _loop(self, session: _Session) -> None:
         """Capture a frame every ``interval`` until cancelled."""
         frames_dir = self._base_dir / session.id / "frames"
         while True:
-            if session.frame_count >= _MAX_FRAMES:
-                self._error = f"Frame limit ({_MAX_FRAMES}) reached — stop to save."
+            blocked = self._capacity_block_reason(session)
+            if blocked is not None:
+                # Keep the session alive (frames captured so far stay saveable)
+                # but stop writing so a runaway recording can't fill the disk.
+                self._error = blocked
                 await asyncio.sleep(session.interval_seconds)
                 continue
             try:
@@ -221,6 +420,7 @@ class TimelapseRecorder:
                 # ``%06d`` input pattern gap-free.
                 (frames_dir / f"frame_{session.frame_count:06d}.jpg").write_bytes(frame)
                 session.frame_count += 1
+                session.bytes_written += len(frame)
                 self._error = None
             await asyncio.sleep(session.interval_seconds)
 

@@ -20,8 +20,9 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Column, Engine
-from sqlmodel import Field, Session, SQLModel, asc, desc, select
+from sqlalchemy import JSON, Column, Engine, case
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Field, Session, SQLModel, asc, col, desc, select
 
 from pen_plotter.core.resume import build_resume_program
 from pen_plotter.core.toolchange import guided_pause_points, guided_swap_actions
@@ -146,7 +147,10 @@ class PrintRun(SQLModel, table=True):
     # active policy says "skip and continue" — see ``_skip_to_next_layer``.
     skipped_layers: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     # Optional client-supplied key to make enqueue idempotent across retries.
-    idempotency_key: str | None = Field(default=None, index=True)
+    # ``unique`` so two concurrent enqueues with the same key can't both slip
+    # past ``enqueue``'s pre-check and create duplicate runs — the second
+    # INSERT hits the index and is turned back into the existing run.
+    idempotency_key: str | None = Field(default=None, index=True, unique=True)
     # Links a run back to the saved G-code file it was launched from
     # (:mod:`pen_plotter.gcode_library`), so the file list can show which
     # program is currently printing. ``None`` for direct enqueues that
@@ -203,21 +207,64 @@ def enqueue(
     )
     with Session(target) as session:
         session.add(run)
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            # A concurrent enqueue with the same idempotency_key won the race
+            # between the SELECT above and this INSERT; the unique index
+            # rejected our duplicate. Return the winner so retries stay
+            # idempotent instead of surfacing a 500.
+            session.rollback()
+            if idempotency_key:
+                existing = session.exec(
+                    select(PrintRun).where(PrintRun.idempotency_key == idempotency_key)
+                ).first()
+                if existing is not None:
+                    return existing
+            raise
         session.refresh(run)
     _notify_changed()
     return run
 
 
+# Lifecycle ordering for ``list_runs``: active runs first (running before
+# paused before queued), everything terminal collapses into the history
+# bucket that ``list_runs`` orders newest-first separately.
+_STATE_RANK = case(
+    (col(PrintRun.state) == RunState.RUNNING, 0),
+    (col(PrintRun.state) == RunState.PAUSED, 1),
+    (col(PrintRun.state) == RunState.QUEUED, 2),
+    else_=3,
+)
+
+
 def list_runs(target: Engine = default_engine, limit: int = 100) -> list[PrintRun]:
-    """Return runs, active ones first (by priority) then recent history."""
+    """Return runs, active ones first then recent history.
+
+    Active runs (running → paused → queued) always sort ahead of terminal
+    ones, ordered by lifecycle state then priority (high first) and age
+    (oldest first, matching the print order). Terminal runs follow as
+    history, newest first. ``limit`` bounds the total returned; active runs
+    are never dropped so the cockpit always sees live work.
+    """
     with Session(target) as session:
-        statement = (
-            select(PrintRun)
-            .order_by(desc(PrintRun.priority), asc(PrintRun.created_at))
-            .limit(limit)
+        active = list(
+            session.exec(
+                select(PrintRun)
+                .where(col(PrintRun.state).in_(_ACTIVE))
+                .order_by(_STATE_RANK, desc(PrintRun.priority), asc(PrintRun.created_at))
+            ).all()
         )
-        return list(session.exec(statement).all())
+        history_limit = max(0, limit - len(active))
+        history = list(
+            session.exec(
+                select(PrintRun)
+                .where(col(PrintRun.state).notin_(_ACTIVE))
+                .order_by(desc(PrintRun.created_at))
+                .limit(history_limit)
+            ).all()
+        )
+        return active + history
 
 
 def get_run(run_id: str, target: Engine = default_engine) -> PrintRun | None:

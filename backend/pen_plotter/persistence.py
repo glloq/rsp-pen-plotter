@@ -7,6 +7,7 @@ engine so tests can use an isolated in-memory database.
 
 from __future__ import annotations
 
+import enum
 import logging
 import os
 from datetime import UTC, datetime
@@ -14,6 +15,8 @@ from pathlib import Path
 from typing import Any, cast
 
 from sqlalchemy import Engine, inspect, text
+from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.schema import Column
 from sqlmodel import Field, Session, SQLModel, create_engine, desc, select
 
 from pen_plotter.domain.print_plan import ResolvedPlan
@@ -141,13 +144,37 @@ class AvailableColorRecord(SQLModel, table=True):
 engine: Engine = create_engine(f"sqlite:///{_DB_PATH}")
 
 
+_MISSING = object()
+
+
+def _scalar_default(column: Column[Any]) -> object:
+    """Return a column's constant Python default, or ``_MISSING``.
+
+    SQLModel's ``Field(default=…)`` becomes a scalar SQLAlchemy column
+    default; ``default_factory`` (JSON containers) and callables (timestamps)
+    are per-row and can't be inlined, so they're skipped. Enum members are
+    unwrapped to their stored value (``RunState.QUEUED`` → ``"queued"``).
+    """
+    default = column.default
+    if default is None or not getattr(default, "is_scalar", False):
+        return _MISSING
+    value = getattr(default, "arg", _MISSING)
+    if isinstance(value, enum.Enum):
+        return value.value
+    return value
+
+
 def _add_missing_columns(target: Engine) -> None:
     """Add columns that exist on the models but not yet in the database.
 
-    A lightweight, additive-only migration so new nullable columns (e.g. queue
-    fields added in later versions) don't break an existing SQLite database.
-    Renames, drops and type changes are out of scope and still require a manual
-    migration.
+    A lightweight, additive-only migration so new columns (e.g. queue fields
+    added in later versions) don't break an existing SQLite database. Each
+    added column is **back-filled** to its declared default so pre-migration
+    rows read back the intended value instead of ``NULL`` — e.g. an
+    ``AvailableColorRecord`` from before ``stroke_width_mm`` existed becomes
+    ``0.5`` rather than ``NULL`` (which would violate the model's ``float``
+    type on read). Renames, drops and type changes are out of scope and still
+    require a manual migration.
     """
     inspector = inspect(target)
     for table_name, table in SQLModel.metadata.tables.items():
@@ -157,7 +184,8 @@ def _add_missing_columns(target: Engine) -> None:
         for column in table.columns:
             if column.name in existing:
                 continue
-            if not column.nullable and column.default is None:
+            default_value = _scalar_default(column)
+            if not column.nullable and default_value is _MISSING:
                 _log.warning(
                     "Cannot auto-add non-nullable column %s.%s without a default; "
                     "a manual migration is required.",
@@ -167,8 +195,53 @@ def _add_missing_columns(target: Engine) -> None:
                 continue
             col_type = column.type.compile(dialect=target.dialect)
             with target.begin() as conn:
-                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column.name} {col_type}"))
+                conn.execute(
+                    text(f'ALTER TABLE "{table_name}" ADD COLUMN "{column.name}" {col_type}')
+                )
+                # Back-fill existing rows to the declared default. Without this
+                # the new column is NULL on every pre-migration row, silently
+                # corrupting non-nullable numeric/string fields on read.
+                if default_value is not _MISSING:
+                    conn.execute(
+                        text(
+                            f'UPDATE "{table_name}" SET "{column.name}" = :value '
+                            f'WHERE "{column.name}" IS NULL'
+                        ),
+                        {"value": default_value},
+                    )
             _log.info("Added missing column %s.%s", table_name, column.name)
+
+
+def _add_missing_indexes(target: Engine) -> None:
+    """Create model-declared indexes absent from an existing table.
+
+    ``create_all`` builds indexes when it creates a table, but a table that
+    predates a newly-indexed (or newly-``unique``) column keeps the old,
+    index-less shape. This creates the missing ones so, e.g. a ``PrintRun``
+    table from before ``idempotency_key`` was ``unique`` gains the unique
+    index that makes concurrent-enqueue dedup atomic. A unique index that
+    can't be built because the existing data already holds duplicates is
+    logged and skipped rather than crashing startup.
+    """
+    inspector = inspect(target)
+    existing_tables = set(inspector.get_table_names())
+    for table_name, table in SQLModel.metadata.tables.items():
+        if table_name not in existing_tables:
+            continue
+        present = {idx["name"] for idx in inspector.get_indexes(table_name)}
+        for index in table.indexes:
+            if index.name in present:
+                continue
+            try:
+                index.create(bind=target, checkfirst=True)
+                _log.info("Created missing index %s on %s", index.name, table_name)
+            except (OperationalError, IntegrityError) as exc:
+                _log.warning(
+                    "Could not create index %s on %s (existing data may violate it): %s",
+                    index.name,
+                    table_name,
+                    exc,
+                )
 
 
 def _install_audit_immutability_triggers(target: Engine) -> None:
@@ -223,6 +296,7 @@ def init_db(target: Engine = engine) -> None:
 
     SQLModel.metadata.create_all(target)
     _add_missing_columns(target)
+    _add_missing_indexes(target)
     _install_audit_immutability_triggers(target)
 
 

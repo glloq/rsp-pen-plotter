@@ -7,9 +7,11 @@ be measured instead of typed by hand.
 
 Design choices that keep this testable and dependency-light:
 
-- **No OpenCV.** The default ``dark_blob`` detector uses Pillow + NumPy
-  (both already dependencies). The pen tip is the darkest compact region
-  against the light station background; we threshold and take the centroid.
+- **No OpenCV.** The default ``dark_blob`` detector uses Pillow + NumPy plus
+  ``scipy.ndimage`` for connected-component labelling (all already project
+  dependencies). The pen tip is the darkest compact region against the light
+  station background; we threshold, keep the largest connected dark region,
+  and take its centroid so a shadow or stray mark can't skew the result.
   A future ``aruco`` detector (printed fiducial, sub-pixel) would need
   OpenCV and slots in behind the same :class:`TipMeasurement` contract.
 - **Relative, not absolute.** A measurement yields the tip position in mm
@@ -29,6 +31,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from PIL import Image, ImageDraw
+from scipy import ndimage
 
 # A frame grabber maps a camera URL to JPEG bytes (see ``timelapse.grab_jpeg``).
 FrameGrabber = Callable[[str], bytes]
@@ -128,9 +131,12 @@ def detect_tip_dark_blob(
     """Locate the pen tip as the darkest compact blob in the frame.
 
     The station presents a dark tip on a light, evenly-lit background. Pixels
-    below ``dark_threshold`` are taken as "tip"; the centroid of that mask is
-    the tip position. ``confidence`` reflects how much of the (ROI-cropped)
-    frame the blob covers — a sane blob is a small fraction; nothing, or
+    below ``dark_threshold`` are taken as "tip"; the centroid of the **largest
+    connected dark region** is the tip position. Isolating the largest
+    component (rather than averaging *all* dark pixels) keeps a shadow, a fleck
+    of dust or a stray mark elsewhere in the ROI from dragging the measurement
+    off the actual tip. ``confidence`` reflects how much of the (ROI-cropped)
+    frame that region covers — a sane blob is a small fraction; nothing, or
     almost everything (a mis-lit frame), reads as low confidence.
 
     ``invert=True`` flips the luminance first, so a **light tip on a dark
@@ -179,12 +185,28 @@ def detect_tip_dark_blob(
             annotated_jpeg=_encode_preview(frame, None),
         )
 
-    ys, xs = np.nonzero(mask)
+    # Isolate the largest connected dark region so a second dark patch (a
+    # shadow, text, a speck) in the ROI can't pull the centroid off the tip.
+    # 8-connectivity so a diagonally-touching tip stays one blob. A single-blob
+    # frame is unchanged: its one component is the whole mask.
+    labels, n = ndimage.label(mask, structure=np.ones((3, 3), dtype=int))
+    if n > 1:
+        counts = np.bincount(labels.ravel())
+        counts[0] = 0  # ignore background
+        blob = labels == counts.argmax()
+    else:
+        blob = mask
+    blob_pixels = int(blob.sum())
+
+    ys, xs = np.nonzero(blob)
     cx = float(xs.mean()) + off_x
     cy = float(ys.mean()) + off_y
-    # Confidence: peaks for a small, well-defined blob; falls off as the blob
-    # vanishes (noise) or grows to fill the frame.
-    confidence = float(max(0.0, min(1.0, 1.0 - abs(coverage - 0.02) / 0.3)))
+    # Confidence tracks the *selected* blob's coverage, not the total dark
+    # area, so ignoring stray patches doesn't inflate or deflate it. Peaks for
+    # a small, well-defined blob; falls off as it vanishes (noise) or fills the
+    # frame.
+    blob_coverage = blob_pixels / total
+    confidence = float(max(0.0, min(1.0, 1.0 - abs(blob_coverage - 0.02) / 0.3)))
 
     return TipMeasurement(
         found=True,

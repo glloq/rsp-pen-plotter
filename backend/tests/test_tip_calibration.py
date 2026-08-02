@@ -760,3 +760,88 @@ def test_fetch_pen_when_disconnected_is_409(client: TestClient) -> None:
         },
     )
     assert resp.status_code == 409
+
+
+# ── P0.1: camera work must not block the event loop ──────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_slow_camera_does_not_block_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A wedged camera can make ``measure`` sit for tens of seconds. That work
+    must run in a worker thread so other routes (an emergency stop, status)
+    keep responding — the loop must never be parked on the blocking grab."""
+    import asyncio
+    import time
+
+    import httpx
+    from httpx import ASGITransport
+
+    from pen_plotter.api import tip_calibration as api
+
+    def slow_grab(_url: str) -> bytes:
+        time.sleep(1.0)  # a stalled camera, blocking the calling *thread*
+        return _frame((100, 100))
+
+    monkeypatch.setattr(api._calibrator, "_grab", slow_grab)
+    api._calibrator.reset()
+
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        measure = asyncio.create_task(
+            client.post(
+                "/plotter/tip-calibration/measure",
+                json={"slot": 0, "camera_url": "cam://x", "mm_per_pixel": 0.1},
+            )
+        )
+        await asyncio.sleep(0.05)  # let the grab get underway in its thread
+        # An unrelated route must answer promptly while the grab is in flight.
+        start = time.monotonic()
+        status = await client.get("/plotter/tip-calibration/status")
+        elapsed = time.monotonic() - start
+        assert status.status_code == 200
+        assert elapsed < 0.5, f"event loop blocked for {elapsed:.2f}s during camera grab"
+
+        resp = await measure
+        assert resp.status_code == 200
+        assert resp.json()["found"] is True
+
+
+# ── P2: robustness to a second dark region in the ROI ────────────────────────
+
+
+def _frame_two_blobs(
+    tip_xy: tuple[int, int],
+    tip_half: int,
+    stray_xy: tuple[int, int],
+    stray_half: int,
+    size: tuple[int, int] = (200, 200),
+) -> bytes:
+    """Light frame with a large 'tip' square and a smaller stray dark square."""
+    w, h = size
+    arr = np.full((h, w), 240, dtype=np.uint8)
+    for (cx, cy), half in ((tip_xy, tip_half), (stray_xy, stray_half)):
+        arr[cy - half : cy + half, cx - half : cx + half] = 10
+    buf = io.BytesIO()
+    Image.fromarray(arr, mode="L").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_stray_dark_patch_does_not_shift_centroid() -> None:
+    """A shadow / stray mark elsewhere in the ROI must not pull the measured
+    tip off the real (largest) blob (P2)."""
+    # Tip: 20×20 square at (60, 100); stray: 6×6 speck far away at (160, 40).
+    frame = _frame_two_blobs((60, 100), 10, (160, 40), 3)
+    m = detect_tip_dark_blob(frame, mm_per_pixel=0.1)
+    assert m.found and m.tip_px is not None
+    # Centroid stays on the tip (~59.5, 99.5), not dragged toward the speck.
+    assert abs(m.tip_px[0] - 59.5) < 2.0
+    assert abs(m.tip_px[1] - 99.5) < 2.0
+
+
+def test_single_blob_detection_is_unchanged() -> None:
+    """The largest-component logic is a no-op for a clean single-blob frame."""
+    m = detect_tip_dark_blob(_frame((120, 80)), mm_per_pixel=0.1)
+    assert m.found and m.tip_px is not None
+    assert abs(m.tip_px[0] - 119.5) < 1.0
+    assert abs(m.tip_px[1] - 79.5) < 1.0
+    assert m.confidence > 0.5

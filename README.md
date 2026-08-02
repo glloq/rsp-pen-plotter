@@ -25,8 +25,10 @@ any browser on your LAN, drop a file, watch it draw.
   on Klipper. New machines via a YAML profile, no code.
 - **Two skill levels** — *Assistant* wizard for quick prints, *Expert* editor
   for per-layer control.
-- **Plot survives reboots.** The queue checkpoints; a power blip resumes
-  from the last stroke, not from the start.
+- **Plot survives reboots.** The queue checkpoints as it streams, so after a
+  power blip a job resumes from its last checkpoint instead of the start — a
+  short already-drawn section may be retraced. (Native EBB resume is partial:
+  its moves are relative, so the exact head position can't be reconstructed.)
 
 <p align="center">
   <img src="docs/images/workflow.svg" alt="Five-step workflow: import, edit, place, preview, plot" width="900"/>
@@ -183,7 +185,8 @@ End-to-end working: full conversion pipeline, colour separation, G-code
 generation, simulator, plotter connection, manual cockpit, durable queue,
 G-code library, ink odometer, camera feeds + timelapse, audit trail,
 profile editor, presets, macros, optional API-key auth, one-command
-install, systemd auto-start. Backend ships 940 unit and integration tests.
+install, systemd auto-start. Backend ships an extensive automated test
+suite (1,100+ unit and integration tests) gated by a coverage floor in CI.
 
 See [`docs/ROADMAP_V0.2.md`](docs/ROADMAP_V0.2.md) for what's coming next.
 

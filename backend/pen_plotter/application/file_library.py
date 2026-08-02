@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any
@@ -72,6 +73,56 @@ def files_dir() -> Path:
 def file_dir(file_id: str) -> Path:
     """Directory holding all artefacts for ``file_id``."""
     return files_dir() / file_id
+
+
+# Shared free-space reserve (same knob the timelapse recorder honours). A full
+# disk corrupts SQLite and drops queue checkpoints, so an upload that would eat
+# into the reserve is refused before any bytes are written (P0.5).
+_MIN_FREE_MB_ENV = "OMNIPLOT_MIN_FREE_MB"
+_DEFAULT_MIN_FREE_MB = 1024
+
+
+class InsufficientStorageError(RuntimeError):
+    """An upload was refused because the disk is at/near its free-space floor."""
+
+
+def _min_free_bytes() -> int:
+    """Free-space floor in bytes (0/blank/invalid disables the check)."""
+    raw = os.environ.get(_MIN_FREE_MB_ENV)
+    if raw is None or not raw.strip():
+        return _DEFAULT_MIN_FREE_MB * 1024 * 1024
+    try:
+        return max(0, int(float(raw))) * 1024 * 1024
+    except ValueError:
+        return _DEFAULT_MIN_FREE_MB * 1024 * 1024
+
+
+def _free_bytes() -> int:
+    """Free bytes on the library filesystem, walking up to an existing dir."""
+    path = files_dir()
+    for candidate in (path, *path.parents):
+        try:
+            return shutil.disk_usage(candidate).free
+        except OSError:
+            continue
+    return 0
+
+
+def ensure_upload_space(incoming_bytes: int = 0) -> None:
+    """Refuse an upload that would push free space below the reserve.
+
+    Raises:
+        InsufficientStorageError: When writing ``incoming_bytes`` more would
+            drop the filesystem under ``OMNIPLOT_MIN_FREE_MB``.
+    """
+    floor = _min_free_bytes()
+    if not floor:
+        return
+    if _free_bytes() - max(0, incoming_bytes) < floor:
+        raise InsufficientStorageError(
+            f"Not enough free disk space to accept this upload "
+            f"(reserve is {floor // (1024 * 1024)} MB). Free space and retry."
+        )
 
 
 def meta_path(file_id: str) -> Path:

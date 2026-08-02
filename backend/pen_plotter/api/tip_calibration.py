@@ -28,13 +28,43 @@ from pen_plotter.hardware.gpio import AVAILABLE_GPIO_PINS
 from pen_plotter.hardware.gpio import light as gpio_light
 from pen_plotter.models import MachineProfile, Point, TipCameraRoi
 from pen_plotter.profiles import get_profile
-from pen_plotter.timelapse import grab_jpeg
-from pen_plotter.vision.tip_detect import Roi, TipCalibrator, detect_object_extent
+from pen_plotter.timelapse import CameraUrlError, grab_jpeg
+from pen_plotter.vision.tip_detect import (
+    Roi,
+    ScaleMeasurement,
+    TipCalibrator,
+    detect_object_extent,
+)
 
 router = APIRouter()
 
 # One calibration session per appliance, mirroring the timelapse recorder.
 _calibrator = TipCalibrator(grabber=grab_jpeg)
+
+# ``measure``/``grab``/``detect_object_extent`` do synchronous HTTP reads plus
+# NumPy image work — a measurement averages up to 20 frames, each with a 5 s
+# camera timeout, so an unreachable camera could otherwise block the event
+# loop for ~100 s and stall every other route (including an emergency stop).
+# All three run in a worker thread via ``asyncio.to_thread`` so the loop stays
+# free, and ``_CALIBRATION_TIMEOUT_S`` bounds the wait the client sees.
+_CALIBRATION_TIMEOUT_S = 120.0
+
+# Serialise calibrations: they share the injected camera / GPIO light and the
+# in-memory measurement session, so two at once would interleave frames and
+# corrupt the reference. Rebuilt on loop change so a second TestClient (new
+# event loop) doesn't await a lock bound to the previous loop.
+_calibration_lock: asyncio.Lock | None = None
+_calibration_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_calibration_lock() -> asyncio.Lock:
+    """Return the per-loop calibration lock, (re)creating it on loop change."""
+    global _calibration_lock, _calibration_lock_loop
+    loop = asyncio.get_running_loop()
+    if _calibration_lock is None or _calibration_lock_loop is not loop:
+        _calibration_lock = asyncio.Lock()
+        _calibration_lock_loop = loop
+    return _calibration_lock
 
 
 class TipMeasureRequest(BaseModel):
@@ -198,18 +228,27 @@ async def measure(req: TipMeasureRequest) -> TipMeasureResponse:
         except RuntimeError as exc:  # no GPIO backend on this host
             raise HTTPException(status_code=503, detail=str(exc)) from exc
     try:
-        result = _calibrator.measure(
-            slot=req.slot,
-            reference_slot=req.reference_slot,
-            camera_url=req.camera_url,
-            mm_per_pixel=req.mm_per_pixel,
-            dark_threshold=req.dark_threshold,
-            roi=roi,
-            samples=req.samples,
-            invert=req.tip_style == "light",
-            store=not req.dry_run,
-            min_confidence=req.min_confidence,
-        )
+        async with _get_calibration_lock():
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _calibrator.measure,
+                    slot=req.slot,
+                    reference_slot=req.reference_slot,
+                    camera_url=req.camera_url,
+                    mm_per_pixel=req.mm_per_pixel,
+                    dark_threshold=req.dark_threshold,
+                    roi=roi,
+                    samples=req.samples,
+                    invert=req.tip_style == "light",
+                    store=not req.dry_run,
+                    min_confidence=req.min_confidence,
+                ),
+                timeout=_CALIBRATION_TIMEOUT_S,
+            )
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Camera measurement timed out.") from exc
+    except CameraUrlError as exc:  # SSRF guard rejected the URL — client error
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # frame grab / decode failure
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
     finally:
@@ -304,12 +343,26 @@ async def calibrate_scale(req: ScaleCalibrateRequest) -> ScaleCalibrateResponse:
         if req.roi
         else None
     )
-    try:
+    def _grab_and_measure() -> ScaleMeasurement:
+        # Both the HTTP grab and the NumPy extent detection are blocking;
+        # run them together in one worker so the event loop never stalls on
+        # an unreachable camera (P0.1) — an emergency stop must stay reactive.
         frame = _calibrator.grab(req.camera_url)
+        return detect_object_extent(
+            frame, req.dark_threshold, roi, invert=req.tip_style == "light"
+        )
+
+    try:
+        async with _get_calibration_lock():
+            m = await asyncio.wait_for(
+                asyncio.to_thread(_grab_and_measure), timeout=_CALIBRATION_TIMEOUT_S
+            )
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Camera measurement timed out.") from exc
+    except CameraUrlError as exc:  # SSRF guard rejected the URL — client error
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # frame grab failure
         raise HTTPException(status_code=502, detail=f"Camera read failed: {exc}") from exc
-
-    m = detect_object_extent(frame, req.dark_threshold, roi, invert=req.tip_style == "light")
     annotated = (
         "data:image/jpeg;base64," + base64.b64encode(m.annotated_jpeg).decode()
         if m.annotated_jpeg

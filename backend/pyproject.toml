@@ -131,6 +131,11 @@ exclude_also = [
 ]
 show_missing = true
 skip_covered = false
+# Coverage floor for CI (P2). The suite sits at ~87%; 85 leaves a little
+# headroom for churn while still failing the build on a real coverage drop.
+# Raise this deliberately as coverage climbs — never lower it to make a red
+# build pass.
+fail_under = 85
 
 [dependency-groups]
 dev = [
