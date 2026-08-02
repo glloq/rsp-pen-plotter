@@ -473,3 +473,36 @@ async def test_per_frame_quota_stops_before_overshoot(
     assert status["frame_count"] == 0  # nothing written
     assert "quota" in (status["error"] or "").lower()
     await recorder.stop()
+
+
+def test_grab_jpeg_rejects_oversized_frame(monkeypatch) -> None:
+    """A snapshot larger than the cap is rejected, not silently truncated (P2.2)."""
+
+    class _FakeHeaders:
+        def get_content_type(self) -> str:
+            return "image/jpeg"
+
+    class _FakeResp:
+        def __init__(self, data: bytes) -> None:
+            self._data = data
+            self.headers = _FakeHeaders()
+
+        def read(self, n: int = -1) -> bytes:
+            out = self._data[:n] if n and n > 0 else self._data
+            self._data = self._data[n:] if n and n > 0 else b""
+            return out
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(tl, "_MAX_FRAME_BYTES", 10)
+    monkeypatch.setattr(tl._camera_opener, "open", lambda req, timeout=0: _FakeResp(b"x" * 11))
+    with pytest.raises(RuntimeError, match="exceeds"):
+        tl.grab_jpeg("http://192.168.1.50/snap")
+
+    # Exactly at the limit is accepted.
+    monkeypatch.setattr(tl._camera_opener, "open", lambda req, timeout=0: _FakeResp(b"x" * 10))
+    assert tl.grab_jpeg("http://192.168.1.50/snap") == b"x" * 10

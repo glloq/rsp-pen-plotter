@@ -277,7 +277,15 @@ def grab_jpeg(url: str, timeout: float = _FRAME_GRAB_TIMEOUT_S) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "omniplot-timelapse"})
     with _camera_opener.open(req, timeout=timeout) as resp:  # noqa: S310 (guarded above)
         if resp.headers.get_content_type() == "image/jpeg":
-            return bytes(resp.read(_MAX_FRAME_BYTES))
+            # Read one byte past the cap so an image sitting exactly at the
+            # limit is distinguishable from a truncated over-limit one — reject
+            # the latter instead of silently passing a cut-off frame (P2.2).
+            data = resp.read(_MAX_FRAME_BYTES + 1)
+            if len(data) > _MAX_FRAME_BYTES:
+                raise RuntimeError(
+                    f"Camera frame exceeds the {_MAX_FRAME_BYTES // (1024 * 1024)} MiB limit."
+                )
+            return bytes(data)
         # MJPEG (or unknown): read until one full JPEG frame is buffered.
         buf = b""
         while len(buf) < _MAX_FRAME_BYTES:

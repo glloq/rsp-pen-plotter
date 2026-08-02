@@ -237,8 +237,17 @@ def build_resume_program(gcode: str, acked_lines: int, profile: MachineProfile) 
     pen_up_by_down = _pen_up_by_down(profile)
     state = _replay(lines[:checkpoint], pen_ups, pen_downs, pen_up_by_down)
     preamble: list[str] = []
-    if state.units:
-        preamble.append(state.units)
+    # ``goto_command`` emits metric coordinates and an mm/min feed. If the job
+    # is running in inches (``G20``), the firmware would read those as
+    # inches — travelling to the wrong spot at ~25.4× the feed (P2.3). So the
+    # re-init travel is always done in ``G21`` with the recovered position
+    # converted to mm, then the job's real units are restored before the
+    # remainder runs.
+    inch_mode = state.units == "G20"
+    scale = 25.4 if inch_mode else 1.0
+    travel_units = "G21" if inch_mode else state.units
+    if travel_units:
+        preamble.append(travel_units)
     if state.x is not None and state.y is not None:
         # goto_command asserts G90, lifts the pen, and travels to the position.
         # Lift with the loaded pen's own up command so a per-slot override is
@@ -246,8 +255,8 @@ def build_resume_program(gcode: str, acked_lines: int, profile: MachineProfile) 
         # travel back to the checkpoint (P0.4).
         preamble.extend(
             goto_command(
-                state.x,
-                state.y,
+                state.x * scale,
+                state.y * scale,
                 profile,
                 pen_up_command=state.active_pen_up_line,
             )
@@ -259,6 +268,9 @@ def build_resume_program(gcode: str, acked_lines: int, profile: MachineProfile) 
             preamble.append(state.pen_down_line)
     else:
         preamble.append("G90")
+    # Restore the job's real units (only when we overrode them for the travel).
+    if inch_mode:
+        preamble.append("G20")
     if not state.absolute:
         preamble.append("G91")
     return preamble + remainder
