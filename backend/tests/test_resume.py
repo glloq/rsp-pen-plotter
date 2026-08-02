@@ -1,8 +1,17 @@
+import pytest
+
 from pen_plotter.core.resume import build_resume_program
 from pen_plotter.hardware.streamer import executable_lines
 from pen_plotter.profiles import get_profile
 
 GCODE = "G21\nG90\nM280 P0 S40\nG0 X10 Y20\nM280 P0 S90\nG1 X30 Y40 F1800\nG1 X50 Y60\n"
+
+
+@pytest.fixture(autouse=True)
+def _exact_resume(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Most tests here validate the exact-resume preamble mechanics, so pin
+    OMNIPLOT_RESUME_CONSERVATIVE=0. Conservative-mode tests override it."""
+    monkeypatch.setenv("OMNIPLOT_RESUME_CONSERVATIVE", "0")
 
 
 def _profile():
@@ -144,9 +153,26 @@ def test_conservative_resume_rewinds_to_last_pen_up(monkeypatch) -> None:
     assert program[-1] == "G1 X50 Y50"
 
 
-def test_conservative_resume_default_off_is_exact(monkeypatch) -> None:
-    """Without the flag, resume stays exact (unchanged contract)."""
+def test_resume_is_conservative_by_default(monkeypatch) -> None:
+    """With the flag unset, resume now defaults to conservative so an
+    acked-but-unexecuted move is never skipped (P0.1)."""
     monkeypatch.delenv("OMNIPLOT_RESUME_CONSERVATIVE", raising=False)
+    profile = _profile()
+    up = profile.pen_up_command
+    down = profile.pen_down_command
+    gcode = "\n".join(
+        ["G21", "G90", up, "G0 X10 Y10", down, "G1 X20 Y20 F1800", up, "G0 X30 Y30",
+         down, "G1 X40 Y40 F1800", "G1 X50 Y50"]
+    )
+    # Interrupted mid stroke-2 at checkpoint 10; the default rewinds to the
+    # pen-up at index 6 and re-draws the interrupted move rather than skipping.
+    program = build_resume_program(gcode, 10, profile)
+    assert "G1 X40 Y40 F1800" in program
+    assert program[-1] == "G1 X50 Y50"
+
+
+def test_exact_resume_when_opted_out(monkeypatch) -> None:
+    """OMNIPLOT_RESUME_CONSERVATIVE=0 opts back into exact-checkpoint resume."""
+    monkeypatch.setenv("OMNIPLOT_RESUME_CONSERVATIVE", "0")
     program = build_resume_program(GCODE, 6, _profile())
-    # Exact resume: remainder is exactly the tail from the checkpoint.
     assert program[-1:] == executable_lines(GCODE)[6:]

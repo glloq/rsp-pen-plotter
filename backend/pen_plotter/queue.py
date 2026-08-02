@@ -15,12 +15,12 @@ import contextlib
 import logging
 import re
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Column, Engine, case
+from sqlalchemy import JSON, Column, Engine, case, text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Field, Session, SQLModel, asc, col, desc, select
 
@@ -156,6 +156,12 @@ class PrintRun(SQLModel, table=True):
     # program is currently printing. ``None`` for direct enqueues that
     # weren't started from the library.
     gcode_file_id: str | None = Field(default=None, index=True)
+    # Which worker holds this run, and until when its lease is valid. Set by the
+    # atomic claim (P0.2) so two workers / processes can't both pick up the same
+    # queued run, and so a run abandoned by a crashed worker can be reclaimed
+    # once its lease expires. ``None`` for runs no worker currently owns.
+    worker_id: str | None = Field(default=None)
+    lease_until: datetime | None = Field(default=None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -361,7 +367,7 @@ def delete_run(run_id: str, target: Engine = default_engine) -> bool:
 
 
 def next_queued(target: Engine = default_engine) -> PrintRun | None:
-    """Return the highest-priority queued run, or ``None``."""
+    """Return the highest-priority queued run, or ``None`` (read-only peek)."""
     with Session(target) as session:
         statement = (
             select(PrintRun)
@@ -370,6 +376,89 @@ def next_queued(target: Engine = default_engine) -> PrintRun | None:
             .limit(1)
         )
         return session.exec(statement).first()
+
+
+# Default worker lease. The claim stamps ``lease_until = now + LEASE`` and the
+# streaming checkpoint renews it; a run whose lease lapses (worker crashed) can
+# be reclaimed to PAUSED for manual, position-safe resume.
+_LEASE_SECONDS = 120.0
+
+
+def claim_next_queued(
+    worker_id: str, target: Engine = default_engine, lease_seconds: float = _LEASE_SECONDS
+) -> PrintRun | None:
+    """Atomically claim the highest-priority queued run for ``worker_id``.
+
+    A single ``UPDATE … WHERE id = (SELECT … WHERE state='queued' …) AND
+    state='queued' RETURNING`` flips exactly one row to ``running`` and stamps
+    the owner + lease in one statement, so two workers (or two processes) can
+    never both pick up the same run — the loser's ``UPDATE`` matches no row and
+    returns ``None`` (P0.2). Replaces the old select-then-update, which had a
+    window where both saw the same ``queued`` row.
+    """
+    now = datetime.now(UTC)
+    lease_until = now + timedelta(seconds=lease_seconds)
+    stmt = text(
+        "UPDATE printrun "
+        "SET state = :running, worker_id = :wid, lease_until = :lease, "
+        "    error = NULL, updated_at = :now "
+        "WHERE id = ("
+        "    SELECT id FROM printrun WHERE state = :queued "
+        "    ORDER BY priority DESC, created_at ASC LIMIT 1"
+        ") AND state = :queued "
+        "RETURNING id"
+    )
+    with Session(target) as session:
+        row = session.execute(
+            stmt,
+            {
+                "running": RunState.RUNNING.value,
+                "queued": RunState.QUEUED.value,
+                "wid": worker_id,
+                "lease": lease_until.isoformat(),
+                "now": now.isoformat(),
+            },
+        ).first()
+        session.commit()
+        if row is None:
+            return None
+        claimed_id = row[0]
+    return get_run(claimed_id, target)
+
+
+def reclaim_expired_leases(
+    target: Engine = default_engine, exclude_worker_id: str | None = None
+) -> int:
+    """Move ``running`` runs whose lease has lapsed to ``paused``. Returns count.
+
+    A worker that dies mid-print leaves its run ``running`` with a stale lease.
+    The head position is unknown after such a crash, so the run is parked for
+    manual, position-safe resume rather than auto-restarted — the same policy
+    :func:`recover_interrupted` applies at startup, but keyed on lease expiry so
+    it also works while other workers keep running. ``exclude_worker_id`` skips
+    the caller's own runs so a worker can never park the job it is streaming.
+    """
+    now = datetime.now(UTC)
+    with Session(target) as session:
+        statement = select(PrintRun).where(
+            col(PrintRun.state) == RunState.RUNNING,
+            col(PrintRun.lease_until).is_not(None),
+            col(PrintRun.lease_until) < now,
+        )
+        if exclude_worker_id is not None:
+            statement = statement.where(col(PrintRun.worker_id) != exclude_worker_id)
+        stale = list(session.exec(statement).all())
+        for run in stale:
+            run.state = RunState.PAUSED
+            run.worker_id = None
+            run.lease_until = None
+            run.updated_at = now
+            session.add(run)
+        session.commit()
+        count = len(stale)
+    if count:
+        _notify_changed()
+    return count
 
 
 def recover_interrupted(target: Engine = default_engine) -> int:
@@ -383,6 +472,8 @@ def recover_interrupted(target: Engine = default_engine) -> int:
         interrupted = list(session.exec(statement).all())
         for run in interrupted:
             run.state = RunState.PAUSED
+            run.worker_id = None
+            run.lease_until = None
             run.updated_at = datetime.now(UTC)
             session.add(run)
         session.commit()
@@ -401,6 +492,8 @@ class PrintQueue:
         self._running = False
         self._current_id: str | None = None
         self._cancel_requested = False
+        # Identity used for the atomic queue claim + lease (P0.2).
+        self._worker_id = uuid4().hex
 
     @property
     def current_id(self) -> str | None:
@@ -462,7 +555,13 @@ class PrintQueue:
             StreamState.WAITING,
         ):
             return False
-        run = next_queued(self._engine)
+        # Park any run abandoned by another crashed worker (expired lease)
+        # before claiming, never our own (P0.2).
+        reclaim_expired_leases(self._engine, exclude_worker_id=self._worker_id)
+        # Atomically claim the next queued run: the row flips to RUNNING with
+        # our worker id + lease in one statement, so a second worker/process
+        # can't grab the same run (P0.2).
+        run = claim_next_queued(self._worker_id, self._engine)
         if run is None:
             return False
 
@@ -565,6 +664,9 @@ class PrintQueue:
             ):
                 return
             fields["acked_lines"] = absolute
+            # Renew the lease on every durable checkpoint so a long-running
+            # print isn't reclaimed by another worker mid-stream (P0.2).
+            fields["lease_until"] = datetime.now(UTC) + timedelta(seconds=_LEASE_SECONDS)
             flushed_acked = absolute
             flushed_at = now
             _update(run.id, self._engine, **fields)
