@@ -126,7 +126,7 @@ async def delete(timelapse_id: str) -> dict[str, bool]:
     Raises:
         HTTPException: 404 if unknown or currently recording.
     """
-    if not tl.recorder.delete(timelapse_id):
+    if not await tl.recorder.delete(timelapse_id):
         raise HTTPException(
             status_code=404, detail=f"Unknown or active timelapse: {timelapse_id!r}"
         )

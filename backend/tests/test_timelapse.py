@@ -75,9 +75,9 @@ async def test_stop_without_recording_raises(recorder: tl.TimelapseRecorder) -> 
 async def test_delete_guards_active_then_removes(recorder: tl.TimelapseRecorder) -> None:
     await recorder.start("http://cam/stream", 0.5, 12)
     sid = recorder.status()["session_id"]
-    assert recorder.delete(sid) is False  # cannot delete the active recording
+    assert await recorder.delete(sid) is False  # cannot delete the active recording
     await recorder.stop()
-    assert recorder.delete(sid) is True
+    assert await recorder.delete(sid) is True
     assert recorder.get(sid) is None
 
 
@@ -268,3 +268,106 @@ class TestTimelapseStorageGuards:
         assert status["frame_count"] == 0  # nothing written
         assert "disk space" in (status["error"] or "").lower()
         await recorder.stop()
+
+
+class TestTimelapseIdConfinement:
+    """Timelapse ids from the URL must never escape TIMELAPSE_DIR (P0.1)."""
+
+    @pytest.mark.parametrize(
+        "bad_id",
+        [
+            "..",
+            "../files",
+            "%2e%2e",
+            "%2e%2e%2f",
+            "/absolute/path",
+            "a" * 31,  # too short
+            "a" * 33,  # too long
+            "A" * 32,  # uppercase — uuid4().hex is lowercase
+            "g" * 32,  # non-hex
+            "../../etc/passwd",
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_bad_id_is_rejected(self, recorder: tl.TimelapseRecorder, bad_id: str) -> None:
+        assert recorder._session_dir(bad_id) is None
+        assert recorder.get(bad_id) is None
+        assert recorder.video_path(bad_id) is None
+        assert await recorder.delete(bad_id) is False
+
+    def test_valid_hex_id_is_accepted(self, recorder: tl.TimelapseRecorder) -> None:
+        good = "0123456789abcdef0123456789abcdef"
+        resolved = recorder._session_dir(good)
+        assert resolved is not None
+        assert resolved.parent == recorder._base_dir.resolve()
+
+    @pytest.mark.asyncio
+    async def test_traversal_delete_does_not_escape_base(
+        self, recorder: tl.TimelapseRecorder, tmp_path
+    ) -> None:
+        # A sensitive file living beside the timelapse dir must survive a
+        # delete() that tries to climb out with "..".
+        victim = recorder._base_dir.parent / "victim.txt"
+        victim.write_text("keep me", encoding="utf-8")
+        assert await recorder.delete("..") is False
+        assert await recorder.delete("%2e%2e") is False
+        assert victim.exists()
+
+
+class TestCameraAllowlistPorts:
+    """Port-pinned camera allowlist entries (P1.7)."""
+
+    def test_port_pin_matches_only_that_port(self, monkeypatch) -> None:
+        monkeypatch.setenv("OMNIPLOT_CAMERA_HOSTS", "192.168.1.30:8080")
+        tl.validate_camera_url("http://192.168.1.30:8080/stream")  # exact port
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://192.168.1.30:9000/stream")  # wrong port
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://192.168.1.30/stream")  # default 80 ≠ 8080
+
+    def test_cidr_with_port(self, monkeypatch) -> None:
+        monkeypatch.setenv("OMNIPLOT_CAMERA_HOSTS", "192.168.1.0/24:80")
+        tl.validate_camera_url("http://192.168.1.5/stream")  # port 80 in the CIDR
+        with pytest.raises(tl.CameraUrlError):
+            tl.validate_camera_url("http://192.168.1.5:8080/stream")  # wrong port
+
+    def test_entry_without_port_matches_any_port(self, monkeypatch) -> None:
+        # Backward compatible: a host with no :port still allows every port.
+        monkeypatch.setenv("OMNIPLOT_CAMERA_HOSTS", "192.168.1.30")
+        tl.validate_camera_url("http://192.168.1.30:8080/stream")
+        tl.validate_camera_url("http://192.168.1.30/stream")
+
+
+@pytest.mark.asyncio
+async def test_assembly_skipped_when_no_space_for_video(
+    recorder: tl.TimelapseRecorder, monkeypatch
+) -> None:
+    """stop() must not run ffmpeg when the video wouldn't fit under the
+    reserve — the frames are kept and an error is surfaced (P1.3)."""
+    await recorder.start("http://cam/stream", interval_seconds=0.01, fps=12)
+    await _await_first_frame(recorder)
+    # Simulate a nearly-full disk only for the assembly space check.
+    monkeypatch.setattr(tl, "_free_bytes", lambda _p: 1)
+    summary = await recorder.stop()
+    assert summary["has_video"] is False
+    assert summary["frame_count"] >= 1  # frames were kept, not lost
+    assert "disk space" in (recorder.status()["error"] or "").lower()
+
+
+def test_cleanup_orphan_sessions_removes_metaless_dirs(recorder: tl.TimelapseRecorder) -> None:
+    """A crashed recording (frames but no meta.json) is reclaimed at startup;
+    a finished session (with meta.json) is kept (P1.4)."""
+    base = recorder._base_dir
+    # Orphan: frames, no meta.json.
+    orphan = base / ("0" * 32)
+    (orphan / "frames").mkdir(parents=True)
+    (orphan / "frames" / "frame_000000.jpg").write_bytes(b"x")
+    # Finished: has meta.json.
+    good = base / ("1" * 32)
+    good.mkdir()
+    (good / "meta.json").write_text("{}", encoding="utf-8")
+
+    removed = recorder.cleanup_orphan_sessions()
+    assert removed == 1
+    assert not orphan.exists()
+    assert good.exists()

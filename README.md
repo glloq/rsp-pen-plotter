@@ -44,7 +44,12 @@ Fresh Raspberry Pi OS / Ubuntu / Debian. One command, ~3 minutes:
 bash <(curl -fsSL https://raw.githubusercontent.com/glloq/rsp-pen-plotter/main/bootstrap.sh) --service
 ```
 
-Then open `http://<pi-ip>:8000` from any device on your network. That's it.
+Then open `http://localhost:8000` on the Pi itself. By default the server
+binds loopback only, so it is **not** reachable from other machines until you
+opt in — machine control (jog, homing, GPIO, self-update) must not sit open on
+the LAN. To reach it from your network, edit `.env.service` to set
+`HOST=0.0.0.0` **and** an `OMNIPLOT_API_KEY`, then restart the service; it
+then answers at `http://<pi-ip>:8000` with that key.
 
 What the installer does: apt packages (`potrace`, `ghostscript`,
 `libreoffice-writer`, `ffmpeg`), Node.js 22, the `uv` Python toolchain, builds

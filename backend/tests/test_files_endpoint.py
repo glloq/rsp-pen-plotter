@@ -551,3 +551,31 @@ async def test_reprocess_failure_leaves_old_artefacts_intact(monkeypatch) -> Non
     # No staging directory was left behind.
     leftovers = [p.name for p in directory.parent.glob(".tmp-reprocess-*")]
     assert leftovers == []
+
+
+@pytest.mark.asyncio
+async def test_reprocess_refused_when_disk_at_reserve(monkeypatch) -> None:
+    """Reconversion writes a fresh full copy, so it must also be refused with
+    507 when the disk is at its reserve (P1.8)."""
+    import json
+
+    from pen_plotter.application import file_library
+
+    txt = b"Hello plotter"
+    async with _client() as client:
+        first = await client.post(
+            "/files",
+            files={"file": ("hello.txt", txt, "text/plain")},
+            data={"folder": "", "options": json.dumps({"font_size_mm": 4.0})},
+        )
+        assert first.status_code == 200
+        # Now pretend the disk filled up, then re-upload with changed options
+        # (which triggers the reconversion path).
+        monkeypatch.setattr(file_library, "_free_bytes", lambda: 1 * 1024 * 1024)
+        monkeypatch.setenv("OMNIPLOT_MIN_FREE_MB", "1024")
+        second = await client.post(
+            "/files",
+            files={"file": ("hello.txt", txt, "text/plain")},
+            data={"folder": "", "options": json.dumps({"font_size_mm": 20.0})},
+        )
+    assert second.status_code == 507

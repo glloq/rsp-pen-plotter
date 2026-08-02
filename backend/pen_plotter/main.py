@@ -104,6 +104,19 @@ def _log_library_integrity() -> None:
         _log.warning("  - %s (%s): %s", issue.source_file, issue.file_id, issue.reason)
 
 
+def _cleanup_orphan_timelapses() -> None:
+    """Reclaim timelapse directories left unfinished by a crash (P1.4)."""
+    from pen_plotter.timelapse import recorder as timelapse_recorder
+
+    try:
+        removed = timelapse_recorder.cleanup_orphan_sessions()
+    except Exception:
+        _log.exception("Timelapse orphan cleanup failed")
+        return
+    if removed:
+        _log.info("Reclaimed %d orphaned timelapse session(s) from an unclean stop", removed)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Initialize subsystems according to the resolved process role (D.6).
@@ -123,6 +136,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     init_db()
     if caps.serves_http:
         _log_library_integrity()
+        _cleanup_orphan_timelapses()
     if caps.runs_queue_worker:
         recover_interrupted()
         print_queue.start()

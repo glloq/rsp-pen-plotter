@@ -8,9 +8,13 @@ Two modes:
 * **Locked mode** — ``OMNIPLOT_API_KEY`` set to a non-empty value. Every
   router that mounts ``require_api_key`` (in practice all of them except
   ``/health`` and the static SPA) rejects requests that don't carry the
-  matching key in the ``X-API-Key`` header or the ``token`` query
-  parameter (the latter exists so browsers can authenticate the
-  WebSocket, where custom headers are not available).
+  matching key in the ``X-API-Key`` **header**. The key is NOT accepted in
+  the query string for HTTP routes (P1.9): a key in a URL leaks into Uvicorn
+  and reverse-proxy access logs, browser history, ``Referer`` headers and
+  error captures. WebSockets — where the browser API can't set a custom
+  header — carry the key in a ``token`` query parameter that each WebSocket
+  endpoint validates itself (see ``plotter_ws`` / ``queue_ws``), so that
+  narrow, unavoidable exception stays out of the shared HTTP dependency.
 
 Set ``OMNIPLOT_REQUIRE_AUTH=1`` to refuse startup when no key is
 configured. Production deployments on a LAN should set both env vars so
@@ -32,7 +36,7 @@ import ipaddress
 import os
 import secrets
 
-from fastapi import Header, HTTPException, Query
+from fastapi import Header, HTTPException
 
 API_KEY_ENV = "OMNIPLOT_API_KEY"
 REQUIRE_AUTH_ENV = "OMNIPLOT_REQUIRE_AUTH"
@@ -73,11 +77,13 @@ def _matches(expected: str, candidate: str | None) -> bool:
     return secrets.compare_digest(expected, candidate)
 
 
-def require_api_key(
-    x_api_key: str | None = Header(default=None),
-    token: str | None = Query(default=None),
-) -> None:
-    """Reject the request when an API key is configured but not matched.
+def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    """Reject the HTTP request when an API key is configured but not matched.
+
+    Header-only by design (P1.9): the key must arrive in ``X-API-Key`` and is
+    never read from the query string, so it can't leak into access logs or
+    browser history. WebSocket endpoints validate their own ``token`` query
+    param separately.
 
     Raises:
         HTTPException: 401 if a key is configured and the request omits it or
@@ -86,7 +92,7 @@ def require_api_key(
     expected = os.environ.get(API_KEY_ENV)
     if not expected:
         return
-    if not (_matches(expected, x_api_key) or _matches(expected, token)):
+    if not _matches(expected, x_api_key):
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
 

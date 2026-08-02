@@ -127,28 +127,73 @@ def test_idempotency_unique_index_created_on_old_printrun() -> None:
             session.commit()
 
 
-def test_unique_index_skipped_when_data_has_duplicates() -> None:
-    """If an old table already holds duplicate keys, the unique index can't
-    be built — startup must warn and continue, not crash."""
+def test_duplicate_idempotency_keys_are_repaired_then_index_created() -> None:
+    """An old table with duplicate idempotency keys must be repaired (earliest
+    row keeps the key, the rest NULLed) so the unique index — and atomic
+    enqueue — can be established rather than silently skipped (P1.5)."""
+    from sqlalchemy.exc import IntegrityError
+
     engine = create_engine("sqlite://")
     with engine.begin() as conn:
         conn.execute(text(_OLD_PRINTRUN))
-        # Two rows sharing an idempotency_key would violate the new unique
-        # index. The column doesn't exist yet, so add it and the dupes first.
         conn.execute(text("ALTER TABLE printrun ADD COLUMN idempotency_key VARCHAR"))
-        for rid in ("r1", "r2"):
+        for rid, created in (("r1", "2026-01-01"), ("r2", "2026-02-01")):
             conn.execute(
                 text(
                     "INSERT INTO printrun (id, name, profile_name, gcode, total_lines, "
                     "acked_lines, state, priority, created_at, updated_at, idempotency_key) "
                     f"VALUES ('{rid}', 'j', 'p', 'g', 1, 0, 'queued', 0, "
-                    "'2026-01-01', '2026-01-01', 'same')"
+                    f"'{created}', '{created}', 'same')"
                 )
             )
 
-    # Must not raise despite the duplicate keys.
-    init_db(engine)
+    init_db(engine)  # repairs the duplicate, then builds the unique index
 
     with engine.begin() as conn:
         count = conn.execute(text("SELECT COUNT(*) FROM printrun")).scalar_one()
-    assert count == 2  # rows preserved
+        keyed = conn.execute(
+            text("SELECT COUNT(*) FROM printrun WHERE idempotency_key = 'same'")
+        ).scalar_one()
+    assert count == 2  # both rows preserved
+    assert keyed == 1  # exactly one keeps the key; the duplicate was NULLed
+
+    # The unique index is now real: a fresh duplicate insert is rejected.
+    from sqlmodel import Session
+
+    from pen_plotter.queue import PrintRun
+
+    with Session(engine) as session:
+        session.add(
+            PrintRun(
+                id="r3",
+                name="j",
+                profile_name="p",
+                gcode="g",
+                total_lines=1,
+                idempotency_key="same",
+            )
+        )
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+
+def test_non_unique_index_is_upgraded_to_unique() -> None:
+    """A same-named but non-unique idempotency_key index from an intermediate
+    version must be replaced with the unique one (P1.5)."""
+    from sqlalchemy import inspect
+
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(text(_OLD_PRINTRUN))
+        conn.execute(text("ALTER TABLE printrun ADD COLUMN idempotency_key VARCHAR"))
+        # A NON-unique index with the exact name SQLModel would generate.
+        conn.execute(
+            text("CREATE INDEX ix_printrun_idempotency_key ON printrun (idempotency_key)")
+        )
+
+    init_db(engine)
+
+    indexes = {
+        ix["name"]: ix for ix in inspect(engine).get_indexes("printrun")
+    }
+    assert bool(indexes["ix_printrun_idempotency_key"]["unique"]) is True

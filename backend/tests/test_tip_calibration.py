@@ -845,3 +845,90 @@ def test_single_blob_detection_is_unchanged() -> None:
     assert abs(m.tip_px[0] - 119.5) < 1.0
     assert abs(m.tip_px[1] - 79.5) < 1.0
     assert m.confidence > 0.5
+
+
+# ── P0.2 / P0.3: calibration concurrency + session safety ────────────────────
+
+
+def test_measure_storing_is_discarded_after_reset() -> None:
+    """A measurement whose worker outlives a reset (e.g. after a timeout) must
+    NOT write its result back into the fresh session (P0.3)."""
+    import threading
+    import time
+
+    from pen_plotter.vision.tip_detect import TipCalibrator
+
+    release = threading.Event()
+
+    def slow_grab(_url: str) -> bytes:
+        release.wait(2.0)
+        return _frame((100, 100))
+
+    calib = TipCalibrator(grabber=slow_grab)
+    box: dict[str, object] = {}
+
+    def run() -> None:
+        box["result"] = calib.measure(
+            slot=0, reference_slot=0, camera_url="x", mm_per_pixel=0.1
+        )
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    time.sleep(0.05)  # let the worker claim its generation, then reset under it
+    calib.reset()
+    release.set()
+    worker.join(2.0)
+
+    # The straggler's store was dropped — the reset session stays empty.
+    assert calib.measured_slots == []
+
+
+def test_reset_does_not_corrupt_a_later_measurement() -> None:
+    """After a reset, a fresh measurement stores normally (generation bump is
+    per-operation, not a permanent lock-out)."""
+    from pen_plotter.vision.tip_detect import TipCalibrator
+
+    calib = TipCalibrator(grabber=lambda _u: _frame((100, 100)))
+    calib.measure(slot=0, reference_slot=0, camera_url="x", mm_per_pixel=0.1)
+    assert calib.measured_slots == [0]
+    calib.reset()
+    assert calib.measured_slots == []
+    calib.measure(slot=1, reference_slot=1, camera_url="x", mm_per_pixel=0.1)
+    assert calib.measured_slots == [1]
+
+
+@pytest.mark.asyncio
+async def test_second_calibration_while_busy_returns_409(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A whole calibration is one physical transaction; a second one arriving
+    mid-flight is refused with 409 rather than interleaving (P0.2)."""
+    import asyncio
+    import time
+
+    import httpx
+    from httpx import ASGITransport
+
+    from pen_plotter.api import tip_calibration as api
+
+    def slow_grab(_url: str) -> bytes:
+        time.sleep(0.5)  # hold the lock for the whole measurement
+        return _frame((100, 100))
+
+    monkeypatch.setattr(api._calibrator, "_grab", slow_grab)
+    api._calibrator.reset()
+
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        body = {"slot": 0, "camera_url": "x", "mm_per_pixel": 0.1}
+        first = asyncio.create_task(client.post("/plotter/tip-calibration/measure", json=body))
+        await asyncio.sleep(0.1)  # let the first calibration acquire the lock
+        second = await client.post(
+            "/plotter/tip-calibration/measure",
+            json={"slot": 1, "camera_url": "x", "mm_per_pixel": 0.1},
+        )
+        assert second.status_code == 409
+        assert "in progress" in second.json()["message"]
+
+        done = await first
+        assert done.status_code == 200

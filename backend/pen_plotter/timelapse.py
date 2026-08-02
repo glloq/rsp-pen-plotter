@@ -24,6 +24,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -40,6 +41,10 @@ _log = logging.getLogger(__name__)
 
 _DEFAULT_DIR = Path(__file__).resolve().parent.parent / "data" / "timelapses"
 TIMELAPSE_DIR = Path(os.environ.get("OMNIPLOT_TIMELAPSE_DIR", _DEFAULT_DIR))
+
+# Every timelapse id is ``uuid4().hex`` — 32 lowercase hex chars. Anything
+# else in a request path is a traversal attempt and is refused (see P0.1).
+_TIMELAPSE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 # Guards: cap a single grabbed frame, the grab timeout, and the bounds the
 # API also validates so the recorder is safe even if called directly.
@@ -108,8 +113,12 @@ def _dir_size_bytes(path: Path) -> int:
 # request and re-checks every redirect hop.
 #
 # Cameras normally live on the LAN (private IPs), so private ranges stay
-# reachable by default — set ``OMNIPLOT_CAMERA_HOSTS`` (comma-separated hosts
-# and/or CIDRs) to lock grabbing down to known cameras, the recommended mode.
+# reachable by default — set ``OMNIPLOT_CAMERA_HOSTS`` (comma-separated) to lock
+# grabbing down to known cameras, the recommended mode. Each entry is a
+# hostname, IP or CIDR, optionally with a ``:port`` suffix (P1.7) so the
+# allowlist can pin the exact camera endpoint and not just its host — e.g.
+# ``192.168.1.30:8080,192.168.1.0/24:80``. An entry without a port matches any
+# port on that host, preserving the earlier behaviour.
 _CAMERA_HOSTS_ENV = "OMNIPLOT_CAMERA_HOSTS"
 _MAX_CAMERA_REDIRECTS = 3
 
@@ -122,6 +131,26 @@ def _camera_host_allowlist() -> list[str]:
     """Parse ``OMNIPLOT_CAMERA_HOSTS`` into a list of host / CIDR entries."""
     raw = os.environ.get(_CAMERA_HOSTS_ENV, "")
     return [entry.strip() for entry in raw.split(",") if entry.strip()]
+
+
+def _split_host_port(entry: str) -> tuple[str, int | None]:
+    """Split an allowlist entry into ``(host_or_cidr, port | None)``.
+
+    Supports ``ip``, ``ip:port``, ``host``, ``host:port``, ``cidr``,
+    ``cidr:port`` and bracketed IPv6 (``[::1]`` / ``[::1]:80``). A bare IPv6
+    (multiple colons, no brackets) is returned host-only so its colons aren't
+    mistaken for a port separator.
+    """
+    if entry.startswith("["):
+        host, sep, rest = entry[1:].partition("]")
+        if sep and rest.startswith(":") and rest[1:].isdigit():
+            return host, int(rest[1:])
+        return host, None
+    if entry.count(":") == 1:
+        host, _, port = entry.partition(":")
+        if port.isdigit():
+            return host, int(port)
+    return entry, None
 
 
 def _resolve_ips(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
@@ -179,17 +208,27 @@ def validate_camera_url(url: str) -> None:
     ips = _resolve_ips(host)
     allowlist = _camera_host_allowlist()
     if allowlist:
-        networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
-        names: set[str] = set()
+        # The effective port the connection will use (explicit, or the scheme
+        # default) — matched against any ``:port`` pin in the allowlist.
+        url_port = parts.port or (443 if parts.scheme.lower() == "https" else 80)
+        allowed = False
         for entry in allowlist:
+            host_part, allow_port = _split_host_port(entry)
+            if allow_port is not None and allow_port != url_port:
+                continue
             try:
-                networks.append(ipaddress.ip_network(entry, strict=False))
+                network = ipaddress.ip_network(host_part, strict=False)
             except ValueError:
-                names.add(entry.lower())
-        allowed = host.lower() in names or any(ip in net for ip in ips for net in networks)
+                if host.lower() == host_part.lower():
+                    allowed = True
+                    break
+            else:
+                if any(ip in network for ip in ips):
+                    allowed = True
+                    break
         if not allowed:
             raise CameraUrlError(
-                f"Camera host {host!r} is not permitted by {_CAMERA_HOSTS_ENV}."
+                f"Camera target {host}:{url_port} is not permitted by {_CAMERA_HOSTS_ENV}."
             )
         return
 
@@ -365,13 +404,16 @@ class TimelapseRecorder:
         fps = max(MIN_FPS, min(MAX_FPS, fps))
         session_id = uuid4().hex
         (self._base_dir / session_id / "frames").mkdir(parents=True, exist_ok=True)
+        # Baselining walks the whole store (potentially many old sessions);
+        # keep that off the event loop so /timelapse/start stays snappy (P1.2).
+        baseline = await asyncio.to_thread(_dir_size_bytes, self._base_dir)
         self._session = _Session(
             id=session_id,
             stream_url=stream_url,
             interval_seconds=interval_seconds,
             fps=fps,
             label=label.strip(),
-            store_baseline_bytes=_dir_size_bytes(self._base_dir),
+            store_baseline_bytes=baseline,
         )
         self._error = None
         self._task = asyncio.create_task(self._loop(self._session))
@@ -417,12 +459,39 @@ class TimelapseRecorder:
                 _log.warning("Timelapse frame grab failed: %s", exc)
             else:
                 # Contiguous numbering (only on success) keeps ffmpeg's
-                # ``%06d`` input pattern gap-free.
-                (frames_dir / f"frame_{session.frame_count:06d}.jpg").write_bytes(frame)
+                # ``%06d`` input pattern gap-free. Writing up to 8 MiB to a slow
+                # SD card is offloaded so the event loop keeps serving HTTP
+                # (an emergency stop must stay reactive) — P1.2.
+                frame_path = frames_dir / f"frame_{session.frame_count:06d}.jpg"
+                await asyncio.to_thread(frame_path.write_bytes, frame)
                 session.frame_count += 1
                 session.bytes_written += len(frame)
                 self._error = None
             await asyncio.sleep(session.interval_seconds)
+
+    def _assembly_space_reason(self, frames_dir: Path) -> str | None:
+        """Why the MP4 must not be assembled now, or ``None`` if it's safe.
+
+        Budgets the encoded video conservatively as the full size of the source
+        frames (the H.264 MP4 is normally far smaller, so this over-estimates
+        headroom) and refuses when writing it would drop below the free-space
+        reserve or push the store past the timelapse quota. Runs in a worker
+        thread — it walks the frames directory and the whole store.
+        """
+        estimate = _dir_size_bytes(frames_dir)
+        min_free = _env_mb_bytes(_MIN_FREE_MB_ENV, _DEFAULT_MIN_FREE_MB)
+        if min_free and _free_bytes(self._base_dir) - estimate < min_free:
+            return (
+                "Not enough free disk space to assemble the video safely — the "
+                "frames were kept. Free some space and stop again to retry."
+            )
+        max_store = _env_mb_bytes(_TIMELAPSE_MAX_MB_ENV, _DEFAULT_TIMELAPSE_MAX_MB)
+        if max_store and _dir_size_bytes(self._base_dir) + estimate > max_store:
+            return (
+                "Assembling the video would exceed the timelapse quota — the "
+                "frames were kept. Free some space and stop again to retry."
+            )
+        return None
 
     async def stop(self) -> dict[str, Any]:
         """Stop recording, assemble the MP4, and return the saved summary.
@@ -443,14 +512,26 @@ class TimelapseRecorder:
         duration = round(session.frame_count / session.fps, 2) if session.fps else 0.0
         has_video = False
         if session.frame_count > 0:
-            try:
-                await asyncio.to_thread(
-                    self._assembler, directory / "frames", directory / "video.mp4", session.fps
-                )
-                has_video = True
-            except Exception as exc:
-                self._error = str(exc)
-                _log.error("Timelapse assembly failed: %s", exc)
+            frames_dir = directory / "frames"
+            # The MP4 is written alongside the frames, so encoding needs
+            # headroom the capture-time quota never accounted for (P1.3).
+            # Refuse to assemble if it would breach the free-space reserve or
+            # the timelapse quota — the frames stay on disk so the operator can
+            # free space and retry rather than losing the capture or wedging
+            # the SD card mid-encode.
+            reason = await asyncio.to_thread(self._assembly_space_reason, frames_dir)
+            if reason is not None:
+                self._error = reason
+                _log.error("Timelapse assembly skipped: %s", reason)
+            else:
+                try:
+                    await asyncio.to_thread(
+                        self._assembler, frames_dir, directory / "video.mp4", session.fps
+                    )
+                    has_video = True
+                except Exception as exc:
+                    self._error = str(exc)
+                    _log.error("Timelapse assembly failed: %s", exc)
         else:
             self._error = "No frames were captured."
 
@@ -469,6 +550,31 @@ class TimelapseRecorder:
         (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
         return meta
 
+    def cleanup_orphan_sessions(self) -> int:
+        """Remove crashed, unfinished timelapse directories. Returns the count.
+
+        A power blip during recording leaves a session directory with frames
+        but no ``meta.json`` (written only by :meth:`stop`). Such a directory
+        never appears in :meth:`list` yet still counts toward the storage quota
+        and can't be deleted from the UI (P1.4) — dead weight that can slowly
+        wedge the card. Called at startup, when no recording is active, so any
+        directory missing its ``meta.json`` is definitively an orphan.
+        """
+        if not self._base_dir.is_dir():
+            return 0
+        removed = 0
+        for directory in self._base_dir.iterdir():
+            if not directory.is_dir():
+                continue
+            if self._session is not None and directory.name == self._session.id:
+                continue
+            if (directory / "meta.json").is_file():
+                continue
+            shutil.rmtree(directory, ignore_errors=True)
+            removed += 1
+            _log.info("Removed orphan timelapse session %s", directory.name)
+        return removed
+
     def list(self) -> list[dict[str, Any]]:
         """All saved timelapses, newest first."""
         if not self._base_dir.is_dir():
@@ -477,23 +583,49 @@ class TimelapseRecorder:
         items.sort(key=lambda m: str(m.get("created_at", "")), reverse=True)
         return items
 
+    def _session_dir(self, timelapse_id: str) -> Path | None:
+        """Resolve a timelapse id to its confined directory, or ``None``.
+
+        The id comes straight from the request URL and drives an ``rmtree`` /
+        file read, so it must never be able to escape ``TIMELAPSE_DIR``. Every
+        real id is ``uuid4().hex`` — exactly 32 lowercase hex chars — so
+        anything else (``..``, encoded separators, an absolute path) is
+        rejected before any filesystem access, and the resolved path is
+        re-checked to sit directly under the base dir as defence in depth.
+        """
+        if not _TIMELAPSE_ID_RE.fullmatch(timelapse_id):
+            return None
+        base = self._base_dir.resolve()
+        directory = (base / timelapse_id).resolve()
+        if directory.parent != base:
+            return None
+        return directory
+
     def get(self, timelapse_id: str) -> dict[str, Any] | None:
         """One saved timelapse's metadata, or ``None``."""
-        return _read_meta(self._base_dir / timelapse_id)
+        directory = self._session_dir(timelapse_id)
+        return None if directory is None else _read_meta(directory)
 
     def video_path(self, timelapse_id: str) -> Path | None:
         """Path to a timelapse's MP4 if it exists, else ``None``."""
-        video = self._base_dir / timelapse_id / "video.mp4"
+        directory = self._session_dir(timelapse_id)
+        if directory is None:
+            return None
+        video = directory / "video.mp4"
         return video if video.is_file() else None
 
-    def delete(self, timelapse_id: str) -> bool:
-        """Delete a saved timelapse (cannot delete the active recording)."""
+    async def delete(self, timelapse_id: str) -> bool:
+        """Delete a saved timelapse (cannot delete the active recording).
+
+        The tree can hold up to 100 000 frames, so the ``rmtree`` runs in a
+        worker thread to keep the event loop responsive (P1.2).
+        """
         if self._session is not None and self._session.id == timelapse_id:
             return False
-        directory = self._base_dir / timelapse_id
-        if not directory.is_dir():
+        directory = self._session_dir(timelapse_id)
+        if directory is None or not directory.is_dir():
             return False
-        shutil.rmtree(directory, ignore_errors=True)
+        await asyncio.to_thread(shutil.rmtree, directory, ignore_errors=True)
         return True
 
 
