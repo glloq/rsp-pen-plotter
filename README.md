@@ -185,7 +185,8 @@ End-to-end working: full conversion pipeline, colour separation, G-code
 generation, simulator, plotter connection, manual cockpit, durable queue,
 G-code library, ink odometer, camera feeds + timelapse, audit trail,
 profile editor, presets, macros, optional API-key auth, one-command
-install, systemd auto-start. Backend ships 940 unit and integration tests.
+install, systemd auto-start. Backend ships an extensive automated test
+suite (1,100+ unit and integration tests) gated by a coverage floor in CI.
 
 See [`docs/ROADMAP_V0.2.md`](docs/ROADMAP_V0.2.md) for what's coming next.
 
