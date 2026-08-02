@@ -228,13 +228,34 @@ def _add_missing_indexes(target: Engine) -> None:
     for table_name, table in SQLModel.metadata.tables.items():
         if table_name not in existing_tables:
             continue
-        present = {idx["name"] for idx in inspector.get_indexes(table_name)}
+        present = {idx["name"]: idx for idx in inspector.get_indexes(table_name)}
         for index in table.indexes:
-            if index.name in present:
+            existing = present.get(index.name)
+            # Already there with the right uniqueness — nothing to do. An
+            # index present with the WRONG uniqueness (e.g. a non-unique
+            # ``idempotency_key`` index from an intermediate version) must be
+            # replaced, or dedup would silently stay non-atomic (P1.5).
+            if existing is not None and bool(existing.get("unique")) == bool(index.unique):
                 continue
             try:
+                if index.unique and not _prepare_unique_index(target, table, index):
+                    _log.error(
+                        "Cannot create unique index %s on %s: unrepairable duplicate data. "
+                        "Dedup for this column is NOT atomic until it is resolved.",
+                        index.name,
+                        table_name,
+                    )
+                    continue
+                if existing is not None:
+                    with target.begin() as conn:
+                        conn.execute(text(f'DROP INDEX IF EXISTS "{index.name}"'))
                 index.create(bind=target, checkfirst=True)
-                _log.info("Created missing index %s on %s", index.name, table_name)
+                _log.info(
+                    "Created %sindex %s on %s",
+                    "unique " if index.unique else "",
+                    index.name,
+                    table_name,
+                )
             except (OperationalError, IntegrityError) as exc:
                 _log.warning(
                     "Could not create index %s on %s (existing data may violate it): %s",
@@ -242,6 +263,56 @@ def _add_missing_indexes(target: Engine) -> None:
                     table_name,
                     exc,
                 )
+
+
+def _has_duplicate_values(target: Engine, table_name: str, columns: list[str]) -> bool:
+    """True if any non-NULL value (combination) repeats in ``columns``."""
+    col_list = ", ".join(f'"{c}"' for c in columns)
+    not_null = " AND ".join(f'"{c}" IS NOT NULL' for c in columns)
+    with target.connect() as conn:
+        row = conn.execute(
+            text(
+                f'SELECT 1 FROM "{table_name}" WHERE {not_null} '
+                f"GROUP BY {col_list} HAVING COUNT(*) > 1 LIMIT 1"
+            )
+        ).first()
+    return row is not None
+
+
+def _prepare_unique_index(target: Engine, table: Any, index: Any) -> bool:
+    """Make the data safe for a unique ``index``; return ``True`` if it can be built.
+
+    For a single **nullable** column (the ``idempotency_key`` case) duplicate
+    values are repaired in place on SQLite: the earliest row keeps the value and
+    the rest are set to NULL, so the client-supplied key still dedups the run it
+    first created while the unique index — and therefore atomic ``enqueue`` — can
+    be established. Anything else (non-nullable, multi-column, non-SQLite) is not
+    auto-repaired; the caller is told whether duplicates remain.
+    """
+    columns = list(index.columns)
+    names = [c.name for c in columns]
+    if len(columns) == 1 and columns[0].nullable and target.dialect.name == "sqlite":
+        col = names[0]
+        with target.begin() as conn:
+            result = conn.execute(
+                text(
+                    f'UPDATE "{table.name}" SET "{col}" = NULL '
+                    f'WHERE "{col}" IS NOT NULL AND rowid NOT IN ('
+                    f'  SELECT MIN(rowid) FROM "{table.name}" '
+                    f'  WHERE "{col}" IS NOT NULL GROUP BY "{col}")'
+                )
+            )
+            if result.rowcount:
+                _log.warning(
+                    "Repaired %d duplicate %s.%s value(s) to build unique index %s",
+                    result.rowcount,
+                    table.name,
+                    col,
+                    index.name,
+                )
+        return True
+    # Can't auto-repair — report whether the index is buildable as-is.
+    return not _has_duplicate_values(target, table.name, names)
 
 
 def _install_audit_immutability_triggers(target: Engine) -> None:
