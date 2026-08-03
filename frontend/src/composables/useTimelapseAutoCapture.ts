@@ -39,8 +39,17 @@ export function useTimelapseAutoCapture(): void {
       if (!url) return
       const label = job.job?.source_file?.trim() || 'print'
       autoActive = await timelapse.start(url, timelapse.intervalSeconds, timelapse.fps, label)
+      // A very short print (or a slow backend) can finish while ``start`` is
+      // still in flight — the stop branch below would have run with
+      // ``autoActive`` still false and left the recording running over an idle
+      // bed. Re-check once ``start`` resolves and stop what we just started.
+      if (autoActive && !printActive.value && timelapse.status.recording) {
+        autoActive = false
+        await timelapse.stop()
+      }
     } else if (!active && was) {
-      // The print ended — stop only what we auto-started.
+      // The print ended — stop only what we auto-started. If ``start`` is still
+      // in flight, its post-await re-check above stops the recording instead.
       if (autoActive && timelapse.status.recording) await timelapse.stop()
       autoActive = false
     }

@@ -788,6 +788,15 @@ export async function plotterDisconnect(): Promise<PlotterStatus> {
   return response.data
 }
 
+// Read-only snapshot of the connection + streaming status. The backend holds
+// the serial connection across HTTP requests, so after a page reload this
+// re-learns that the machine is still connected (and possibly streaming) —
+// the /ws/plotter socket is otherwise only opened from connect().
+export async function plotterStatus(): Promise<PlotterStatus> {
+  const response = await api.get<PlotterStatus>('/plotter/status')
+  return response.data
+}
+
 export async function plotterJog(
   dxMm: number,
   dyMm: number,

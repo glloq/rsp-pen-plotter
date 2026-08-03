@@ -7,6 +7,7 @@ const plotterConnect = vi.fn()
 const listSerialPorts = vi.fn()
 const plotterDisconnect = vi.fn()
 const plotterCommand = vi.fn()
+const plotterStatus = vi.fn()
 
 vi.mock('../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../api/client')>()
@@ -17,6 +18,7 @@ vi.mock('../api/client', async (importOriginal) => {
     listSerialPorts: (...args: unknown[]) => listSerialPorts(...args),
     plotterDisconnect: (...args: unknown[]) => plotterDisconnect(...args),
     plotterCommand: (...args: unknown[]) => plotterCommand(...args),
+    plotterStatus: (...args: unknown[]) => plotterStatus(...args),
   }
 })
 
@@ -63,8 +65,28 @@ describe('plotter store', () => {
     plotterConnect.mockReset()
     plotterDisconnect.mockReset()
     plotterCommand.mockReset()
+    plotterStatus.mockReset()
     FakeWebSocket.instances = []
     vi.stubGlobal('WebSocket', FakeWebSocket)
+  })
+
+  it('hydrate() re-learns a live connection and opens the status socket', async () => {
+    const store = usePlotterStore()
+    plotterStatus.mockResolvedValue(makeStatus({ connected: true, acked: 30 }))
+    await store.hydrate()
+    // After a reload the cockpit reflects the still-open connection + progress.
+    expect(store.status.connected).toBe(true)
+    expect(store.status.acked).toBe(30)
+    // …and the /ws/plotter stream is reopened so progress keeps flowing.
+    expect(FakeWebSocket.instances).toHaveLength(1)
+  })
+
+  it('hydrate() stays disconnected (no socket) when the machine is not connected', async () => {
+    const store = usePlotterStore()
+    plotterStatus.mockResolvedValue(makeStatus({ connected: false, state: 'idle' }))
+    await store.hydrate()
+    expect(store.status.connected).toBe(false)
+    expect(FakeWebSocket.instances).toHaveLength(0)
   })
 
   it('REST responses update status when no live socket exists', async () => {

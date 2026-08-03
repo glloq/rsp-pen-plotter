@@ -111,6 +111,7 @@ import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts'
 import { useTimelapseAutoCapture } from './composables/useTimelapseAutoCapture'
 import { useLibraryStore } from './stores/library'
 import { usePerfStore } from './stores/perf'
+import { usePlotterStore } from './stores/plotter'
 import { useQueueStore } from './stores/queue'
 import { useToastStore } from './stores/toasts'
 import { useUiModeStore } from './stores/uiMode'
@@ -127,6 +128,7 @@ const algorithms = useAlgorithmsStore()
 const availableColors = useAvailableColorsStore()
 const perf = usePerfStore()
 const queue = useQueueStore()
+const plotter = usePlotterStore()
 const uploads = useUploadsStore()
 
 // Auto-record a timelapse for the duration of a print (when enabled in the
@@ -375,6 +377,11 @@ onMounted(async () => {
   // opens the Plotter tab. ``startPolling`` is idempotent — calling
   // it again from PlotterControl is a no-op.
   queue.startPolling()
+  // Re-learn the plotter connection after a (re)load: the backend keeps the
+  // serial link open across requests, so a mid-print refresh should show the
+  // machine as connected + streaming (header dot, cockpit) instead of a stale
+  // "disconnected" until the operator clicks Connect again.
+  void plotter.hydrate()
   // Advisory data — none of it is needed for first paint. Defer to idle so
   // it doesn't contend for sockets / main-thread time with the critical
   // boot wave (profiles, queue, library):
