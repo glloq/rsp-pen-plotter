@@ -92,6 +92,11 @@ class DitherAlgorithm(RasterAlgorithm):
         method = str(opts.get("method", "floyd"))
         bool_mask = mask.astype(bool)
         height, width = bool_mask.shape
+        # Cap the cell to the image size: a larger cell yields a single
+        # meaningless block but a ``(rows*cell, cols*cell)`` pad allocation that
+        # grows with ``cell`` (rows collapses to 1), so a crafted ``cell_px``
+        # would OOM the worker. Above the image dimension it's a no-op anyway.
+        cell = max(2, min(cell, max(height, width) or 2))
 
         group_open = f"<g inkscape:label={quoteattr(label)} fill={quoteattr(color_hex)}>"
         if not bool_mask.any():

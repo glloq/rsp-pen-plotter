@@ -96,6 +96,14 @@ class ContoursAlgorithm(RasterAlgorithm):
         spacing = int(floored_spacing(max(1, int(opts.get("spacing_px", 4))), opts))
         max_rings = max(1, int(opts.get("max_rings", 20)))
         bool_mask = mask.astype(bool)
+        # Bound the work against a hostile options payload (``spacing_px`` is a
+        # direct escape hatch, and a tiny ``target_width_mm`` inflates the
+        # mm→px scale): eroding more than the mask's largest dimension only
+        # yields empty masks, and rings beyond the schema ceiling add nothing.
+        # Without this a crafted ``spacing_px=2_000_000`` turns the erosion
+        # loop below into a multi-second full-canvas hang.
+        spacing = min(spacing, max(bool_mask.shape) or 1)
+        max_rings = min(max_rings, 1000)
 
         paths: list[str] = []
         darkness = tone_darkness(bool_mask, opts)
@@ -120,8 +128,12 @@ class ContoursAlgorithm(RasterAlgorithm):
                 for poly in _boundary_polylines(current):
                     pts = " ".join(f"{x},{y}" for x, y in poly)
                     paths.append(f'<polygon points="{pts}"/>')
-                # Erode ``spacing`` times to inset the next ring.
+                # Erode ``spacing`` times to inset the next ring. Stop early
+                # once the mask empties so a large spacing can't keep running
+                # no-op full-canvas erosions.
                 for _step in range(spacing):
+                    if not current.any():
+                        break
                     current = _erode(current)
 
         return (

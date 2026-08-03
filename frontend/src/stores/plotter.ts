@@ -12,6 +12,7 @@ import {
   plotterHome,
   plotterJog,
   plotterRun,
+  plotterStatus,
   websocketUrl,
   type PlotterStatus,
 } from '../api/client'
@@ -114,6 +115,28 @@ export const usePlotterStore = defineStore('plotter', () => {
       } else {
         toasts.error(message)
       }
+    }
+  }
+
+  // Re-learn the connection state after a page (re)load. The backend keeps the
+  // serial connection open across HTTP requests, but this store starts fresh
+  // with connected:false and only ever opens the /ws/plotter socket from
+  // connect()/detectAndConnect() — so a reload mid-print would show the cockpit
+  // as disconnected (controls disabled, progress frozen at 0) until the
+  // operator manually reconnects. Fetch the live status once on mount; if the
+  // machine is still connected, seed it and resume the progress stream.
+  let hydrated = false
+  async function hydrate(): Promise<void> {
+    if (hydrated) return
+    hydrated = true
+    try {
+      const result = await plotterStatus()
+      if (!socketLive()) status.value = result
+      if (result.connected) openSocket()
+    } catch {
+      // Backend unreachable at boot — leave the disconnected default; the
+      // operator can connect manually and normal error toasts cover real use.
+      hydrated = false
     }
   }
 
@@ -245,6 +268,7 @@ export const usePlotterStore = defineStore('plotter', () => {
     error,
     progress,
     movementBusy,
+    hydrate,
     connect,
     detecting,
     detectAndConnect,

@@ -70,11 +70,24 @@ def _is_local_bind(host: str | None) -> bool:
         return False
 
 
-def _matches(expected: str, candidate: str | None) -> bool:
-    """Constant-time comparison that handles ``None`` candidates."""
+def api_key_matches(expected: str, candidate: str | None) -> bool:
+    """Constant-time key comparison that tolerates ``None`` / non-ASCII input.
+
+    ``secrets.compare_digest`` raises ``TypeError`` when handed ``str`` values
+    containing non-ASCII characters, and the candidate is fully client
+    controlled (the ``X-API-Key`` header, decoded latin-1, or a WebSocket
+    ``token`` query param). Comparing on UTF-8 bytes keeps the check
+    constant-time, matches correctly for the ASCII keys deployments actually
+    use, and turns a hostile non-ASCII header byte into a clean non-match
+    (401) instead of an unhandled 500.
+    """
     if candidate is None:
         return False
-    return secrets.compare_digest(expected, candidate)
+    return secrets.compare_digest(expected.encode("utf-8"), candidate.encode("utf-8"))
+
+
+# Backwards-compatible internal alias.
+_matches = api_key_matches
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:

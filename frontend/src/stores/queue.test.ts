@@ -15,6 +15,7 @@ vi.mock('../api/client', () => ({
   enqueuePrint: vi.fn(),
   queueRunAction: vi.fn(),
   deleteQueuedRun: vi.fn(),
+  websocketUrl: (path: string) => `ws://test${path}`,
 }))
 
 // Mock the i18n module so the queue store's
@@ -142,5 +143,48 @@ describe('useQueueStore — /ws/queue push frames', () => {
     expect(queue.runs).toHaveLength(1)
     expect(queue.runs[0]?.skipped_layers).toEqual(['Bleu'])
     expect(toasts.toasts.some((t) => t.message.includes('Bleu'))).toBe(true)
+  })
+})
+
+describe('useQueueStore — REST does not clobber live WS', () => {
+  class FakeWS {
+    static OPEN = 1
+    static instances: FakeWS[] = []
+    readyState = 0
+    onmessage: ((event: { data: string }) => void) | null = null
+    onopen: (() => void) | null = null
+    onclose: (() => void) | null = null
+    constructor() {
+      FakeWS.instances.push(this)
+    }
+    close(): void {
+      this.readyState = 3
+    }
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(listQueue).mockReset()
+    FakeWS.instances = []
+    vi.stubGlobal('WebSocket', FakeWS)
+  })
+
+  it('a stale REST poll must not roll back WS-updated runs', async () => {
+    // Every listQueue resolves with the OLD snapshot (acked 0).
+    vi.mocked(listQueue).mockResolvedValue([makeRun({ acked_lines: 0 })])
+    const queue = useQueueStore()
+    queue.startPolling() // opens the /ws/queue socket
+    const ws = FakeWS.instances[0]!
+    ws.readyState = FakeWS.OPEN
+
+    // WS pushes a fresher frame: 50 lines acked.
+    ws.onmessage!({ data: JSON.stringify([makeRun({ acked_lines: 50 })]) })
+    expect(queue.runs[0]?.acked_lines).toBe(50)
+
+    // A REST poll resolving with the older snapshot must NOT overwrite it.
+    await queue.load()
+    expect(queue.runs[0]?.acked_lines).toBe(50)
+
+    queue.stopPolling()
   })
 })

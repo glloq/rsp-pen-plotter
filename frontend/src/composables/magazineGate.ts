@@ -44,12 +44,24 @@ export function useMagazineGateState(): MagazineGateState {
 export function ensureMagazineLoaded(): Promise<MagazineGateResult> {
   const job = useJobStore()
   const slotCount = job.selectedProfile?.pen_slot_count ?? 0
-  const inks = new Set(
-    job.layers.map((l) => (l.assigned_color_hex ?? l.source_color).toLowerCase()),
-  )
+  // Count inks across EVERY visible placement, not just the selected one:
+  // the launched G-code composites all of them (buildPlanPayload walks
+  // ``visiblePlacements``), so a two-placement sheet whose selected placement
+  // uses one ink but whose other placement uses a second must still gate on
+  // the load plan — otherwise the operator skips it and hits runtime swap
+  // pauses mid-print. The odometer / plan already aggregate the same way.
+  const placements = job.visiblePlacements
+  const inks = new Set<string>()
+  let layerCount = 0
+  for (const placement of placements) {
+    for (const layer of placement.layers) {
+      layerCount += 1
+      inks.add((layer.assigned_color_hex ?? layer.source_color).toLowerCase())
+    }
+  }
   // No holder to plan against, no layers, or a single ink → nothing to
   // load or swap, so keep the caller's regular confirmation dialog.
-  if (slotCount < 1 || job.layers.length === 0 || inks.size < 2) {
+  if (slotCount < 1 || layerCount === 0 || inks.size < 2) {
     return Promise.resolve('skipped')
   }
   // Settle a dangling previous gate (double-click on Play) as cancelled

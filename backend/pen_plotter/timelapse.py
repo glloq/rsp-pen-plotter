@@ -28,6 +28,7 @@ import re
 import shutil
 import socket
 import subprocess
+import tempfile
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -362,6 +363,29 @@ def _read_meta(directory: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
+def _write_meta(directory: Path, meta: dict[str, Any]) -> None:
+    """Atomically write ``meta.json`` (tempfile + ``os.replace``).
+
+    A plain ``write_text`` can be interrupted by power loss or a disk-full
+    ``OSError`` mid-write, leaving a truncated ``meta.json``. That is worse than
+    no file at all: ``recover_orphan_sessions`` skips any directory whose
+    ``meta.json`` merely *exists*, and ``_read_meta`` returns ``None`` on a
+    parse error, so the frames would be neither recovered nor listed — stranded
+    on disk, still counting toward the quota, invisible to the UI. The atomic
+    swap keeps the previous good file (or no file) in place on failure (same
+    pattern as ``presets._write_user_store`` / ``macros._write_all``).
+    """
+    fd, tmp = tempfile.mkstemp(prefix=".meta.", suffix=".json", dir=str(directory))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(meta, fh)
+        os.replace(tmp, directory / "meta.json")
+    except Exception:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+
+
 class TimelapseRecorder:
     """Manages a single timelapse recording and the saved-timelapse store."""
 
@@ -542,7 +566,7 @@ class TimelapseRecorder:
             "state": "interrupted",
             "error": error,
         }
-        (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
+        _write_meta(directory, meta)
 
     def _assembly_space_reason(self, frames_dir: Path) -> str | None:
         """Why the MP4 must not be assembled now, or ``None`` if it's safe.
@@ -631,7 +655,7 @@ class TimelapseRecorder:
                 "size_bytes": video.stat().st_size if has_video and video.is_file() else 0,
                 "state": state,
             }
-            (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
+            _write_meta(directory, meta)
             return meta
 
     def recover_orphan_sessions(self) -> int:
@@ -678,7 +702,7 @@ class TimelapseRecorder:
                 "state": "interrupted",
                 "error": "Recording interrupted before it was saved.",
             }
-            (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
+            _write_meta(directory, meta)
             recovered += 1
             _log.info("Recovered interrupted timelapse session %s (%d frames)",
                       directory.name, len(frames))
@@ -724,7 +748,7 @@ class TimelapseRecorder:
                     "error": None,
                 }
             )
-            (directory / "meta.json").write_text(json.dumps(meta), "utf-8")
+            _write_meta(directory, meta)
             return meta
 
     def list(self) -> list[dict[str, Any]]:

@@ -33,11 +33,26 @@ _log = logging.getLogger(__name__)
 # unbounded; tighten / loosen as the budget table evolves.
 _RING_CAP = 500
 
+# Only metrics named in the budget table are ever evaluated
+# (``evaluate_budgets`` filters on ``s.metric == budget.metric``), so a
+# sample for any other name would sit in memory forever without use. The
+# ``POST /slo/evaluate`` body carries a free-form ``metric`` string from an
+# authenticated/LAN client; whitelisting here bounds ``_samples`` to a fixed
+# key set instead of letting arbitrary names grow it without bound.
+_KNOWN_METRICS: frozenset[str] = frozenset(budget.metric for budget in DEFAULT_BUDGETS)
+
 _samples: dict[str, deque[float]] = {}
 
 
 def record_sample(metric: str, value_ms: float) -> None:
-    """Push one observation for ``metric`` into the ring buffer."""
+    """Push one observation for ``metric`` into the ring buffer.
+
+    Samples for metrics absent from the budget table are dropped: they can
+    never be evaluated, so keeping them would only grow ``_samples`` without
+    bound on untrusted input.
+    """
+    if metric not in _KNOWN_METRICS:
+        return
     bucket = _samples.get(metric)
     if bucket is None:
         bucket = deque(maxlen=_RING_CAP)

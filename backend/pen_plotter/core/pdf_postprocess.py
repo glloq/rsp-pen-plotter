@@ -173,17 +173,33 @@ def strip_text_glyphs(root: ET.Element) -> int:
     return removed
 
 
+# Hard ceiling on total ``<use>`` inlinings. A cyclic reference
+# (``<g id="a"><use href="#a"/></g>``) or an acyclic-but-exponential
+# "billion laughs" fan-out expands without bound — a 204-byte SVG can
+# exhaust gigabytes in seconds and trip the OOM killer on a Pi. Legitimate
+# PyMuPDF output inlines one ``<use>`` per glyph and never approaches this,
+# so hitting the cap means the input is pathological: we stop and strip the
+# survivors rather than keep growing the tree.
+_MAX_USE_EXPANSIONS = 100_000
+
+
 def expand_use_refs(root: ET.Element) -> int:
     """Replace every ``<use>`` whose target is local with the referenced geometry.
 
     Returns the number of expanded references. Operates in-place. Iterates
     until quiescent so nested ``<use>`` chains (a glyph referencing another
     glyph) all collapse.
+
+    Guards against cyclic / exponentially-expanding ``<use>`` graphs: once
+    ``_MAX_USE_EXPANSIONS`` inlinings have happened it stops and removes any
+    remaining ``<use>`` elements, so a malicious SVG cannot drive unbounded
+    memory growth through this pass.
     """
     targets = _id_map(root)
     expansions = 0
+    capped = False
     # Iteratively expand: nested <use>s require multiple passes.
-    while True:
+    while not capped:
         parent_map = {child: parent for parent in root.iter() for child in parent}
         round_count = 0
         for use in list(root.iter()):
@@ -216,8 +232,20 @@ def expand_use_refs(root: ET.Element) -> int:
             parent.insert(index, wrapper)
             round_count += 1
             expansions += 1
+            if expansions >= _MAX_USE_EXPANSIONS:
+                # Pathological (cyclic / exponential) graph — abandon expansion.
+                capped = True
+                break
         if round_count == 0:
             break
+    if capped:
+        # Strip every surviving <use> so the bomb can't keep expanding
+        # downstream (e.g. a second pass) or leave dangling references.
+        parent_map = {child: parent for parent in root.iter() for child in parent}
+        for use in [e for e in root.iter() if _local(e.tag) == "use"]:
+            parent = parent_map.get(use)
+            if parent is not None:
+                parent.remove(use)
     # Best-effort <defs> cleanup, tuned to PyMuPDF output. The check is
     # purely structural: PyMuPDF emits <defs> whose children all carry
     # ``id`` attributes (the glyph definitions the <use>s above pointed

@@ -185,10 +185,15 @@ class HostMacroStrategy(ToolChangeStrategy):
                     else context.slot_index
                 )
                 pen = pens.get(slot) if slot is not None else None
+                # Track the slot being serviced *unconditionally* — even when it
+                # is unresolved (None) or uncalibrated (no position). Otherwise
+                # ``current_slot`` keeps pointing at the previously-serviced slot,
+                # and the following advance/retract drives the head into the
+                # wrong pen instead of correctly skipping the uncalibrated one.
+                current_slot = slot
                 if pen is not None and pen.position is not None:
                     # Travel to the *approach* point (engagement + clearance)
                     # so lateral motion clears the neighbouring pens.
-                    current_slot = slot
                     send = goto(pen.position.x + dx, pen.position.y + dy)
             elif step.kind in ("advance_to_slot", "retract_from_slot"):
                 pen = pens.get(current_slot) if current_slot is not None else None

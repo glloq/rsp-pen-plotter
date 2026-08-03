@@ -33,6 +33,29 @@ _BG_BLACK_RE = re.compile(
 )
 
 
+def local_only_url_fetcher(url: str) -> dict[str, Any]:
+    """A WeasyPrint URL fetcher that permits only inline ``data:`` URIs.
+
+    Uploaded HTML is untrusted. WeasyPrint's default fetcher resolves
+    ``http(s)://`` **and** ``file://`` references server-side while
+    rendering, so an ``<img src="http://169.254.169.254/…">`` /
+    ``<link rel="stylesheet" href="http://10.0.0.5/…">`` / CSS
+    ``url(file:///…)`` in the uploaded document turns into an SSRF (LAN,
+    cloud-metadata) and local-file-read primitive controllable purely by
+    the file. Inline ``data:`` images stay allowed — they carry no
+    network or filesystem access.
+
+    Raises:
+        ValueError: For any non-``data:`` URL, which WeasyPrint surfaces as
+            a skipped resource rather than aborting the render.
+    """
+    from weasyprint import default_url_fetcher  # noqa: PLC0415
+
+    if url.startswith("data:"):
+        return default_url_fetcher(url)  # type: ignore[no-any-return]
+    raise ValueError(f"Blocked external resource in untrusted HTML: {url!r}")
+
+
 def _nudge_explicit_black_backgrounds(html: str) -> str:
     """Replace explicit pure-black backgrounds with ``#010101``.
 
@@ -76,7 +99,7 @@ class HtmlConverter(Converter):
         bitmap_options = extract_bitmap_options(opts)
         html = data.decode("utf-8", errors="replace")
         html = _nudge_explicit_black_backgrounds(html)
-        pdf_bytes = HTML(string=html).write_pdf()
+        pdf_bytes = HTML(string=html, url_fetcher=local_only_url_fetcher).write_pdf()
         raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(pdf_bytes, page_index)
         hershey_group = build_hershey_text_group(pdf_bytes, page_index, opts)
         svg, warnings = postprocess_pdf_svg(

@@ -464,7 +464,24 @@ def _generate_from_layers(
     Fed by :func:`_read_layers` on the SVG path and by
     :func:`_layers_from_geometry_ir` on the typed-IR path, so both
     pipelines emit through exactly the same code.
+
+    Raises:
+        ValueError: If the profile declares ``units: inch``. Generation is
+            millimetre-only end to end — feed words are ``mm/s * 60`` (mm/min)
+            and the fit-mode margin is a mm constant, so emitting them under a
+            ``G20`` header would drive the head at ~25.4× the intended speed
+            and collapse the fit-mode drawing to a dot. Fail loudly instead of
+            silently producing dangerous output; author the profile in mm.
+            (Raw inch G-code can still be queued and resumed directly — only
+            conversion output is mm-only.)
     """
+    if profile.units == "inch":
+        raise ValueError(
+            "G-code generation supports millimetre machine profiles only "
+            "(profile.units must be 'mm', got 'inch'). Author the profile in "
+            "millimetres — inch feed rates and margins are not converted and "
+            "would run the head far too fast."
+        )
     overrides = {item.layer_id: item for item in (layers or [])}
     bounds = _bounds_of(layer_geometry)
     transform = _make_transform(bounds, profile, scale_mode, margin_mm, placement)

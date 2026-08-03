@@ -7,12 +7,15 @@ SQLite database as the job history and print queue.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import Engine
 from sqlmodel import Field, Session, SQLModel, desc, select
 
 from pen_plotter.persistence import engine as default_engine
+
+_log = logging.getLogger(__name__)
 
 
 class AuditEntry(SQLModel, table=True):
@@ -25,16 +28,26 @@ class AuditEntry(SQLModel, table=True):
 
 
 def record(action: str, detail: str = "", target: Engine = default_engine) -> None:
-    """Append an entry to the audit trail.
+    """Append an entry to the audit trail (best-effort).
+
+    Audit call sites run *after* the sensitive action has already happened
+    (the macro executed, the job started). A failed write here — SQLite
+    locked past ``busy_timeout``, or a full disk mid-rebuild — must therefore
+    never propagate: raising would turn a completed hardware action into a 500,
+    and an operator retry would re-send the commands to the machine. On failure
+    we log and move on rather than mask or duplicate the action.
 
     Args:
         action: A short action identifier, e.g. ``"plotter.run"``.
         detail: Optional human-readable context.
         target: The engine to write to.
     """
-    with Session(target) as session:
-        session.add(AuditEntry(action=action, detail=detail))
-        session.commit()
+    try:
+        with Session(target) as session:
+            session.add(AuditEntry(action=action, detail=detail))
+            session.commit()
+    except Exception:  # noqa: BLE001 — audit is best-effort; never break the caller
+        _log.warning("Audit write failed for action=%r; continuing", action, exc_info=True)
 
 
 def list_entries(limit: int = 100, target: Engine = default_engine) -> list[AuditEntry]:

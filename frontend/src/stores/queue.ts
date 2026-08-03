@@ -108,7 +108,20 @@ export const useQueueStore = defineStore('queue', () => {
     if (inflight) return inflight
     const promise = (async () => {
       try {
-        applyRuns(await listQueue())
+        const next = await listQueue()
+        // Don't let a slow REST poll clobber fresher /ws/queue pushes: while
+        // the socket is live it is the authoritative channel (it sends the
+        // full list on connect and pushes every mutation), so an in-flight or
+        // heartbeat poll that resolves after a push must not roll the run
+        // state backward. Mirrors the plotter store's socketLive() guard.
+        if (!socketLive()) {
+          applyRuns(next)
+        } else {
+          // The fetch still confirms the backend is reachable — clear any
+          // prior error/backoff without touching the WS-owned run list.
+          error.value = null
+          consecutiveErrors = 0
+        }
       } catch (err) {
         consecutiveErrors = Math.min(consecutiveErrors + 1, MAX_BACKOFF_FACTOR)
         error.value = errorDetail(err, i18n.global.t('queue.loadFailed'))

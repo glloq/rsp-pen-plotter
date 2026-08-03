@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-import secrets
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
@@ -13,7 +12,7 @@ from pydantic import BaseModel
 
 from pen_plotter import queue as q
 from pen_plotter.audit import record
-from pen_plotter.auth import API_KEY_ENV, require_api_key
+from pen_plotter.auth import API_KEY_ENV, api_key_matches, require_api_key
 from pen_plotter.hardware.controller import controller
 from pen_plotter.profiles import get_profile
 
@@ -203,7 +202,7 @@ async def queue_ws(websocket: WebSocket) -> None:
     expected = os.environ.get(API_KEY_ENV)
     if expected:
         token = websocket.query_params.get("token") or ""
-        if not secrets.compare_digest(expected, token):
+        if not api_key_matches(expected, token):
             await websocket.close(code=1008, reason="Invalid or missing API key.")
             return
     await websocket.accept()

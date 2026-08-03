@@ -41,21 +41,33 @@ def _eps_to_pdf(data: bytes) -> bytes:
         eps_path = Path(tmp) / "in.eps"
         pdf_path = Path(tmp) / "out.pdf"
         eps_path.write_bytes(data)
-        subprocess.run(
-            [
-                "gs",
-                "-q",
-                "-dNOPAUSE",
-                "-dBATCH",
-                "-dSAFER",
-                "-dEPSCrop",
-                "-sDEVICE=pdfwrite",
-                f"-sOutputFile={pdf_path}",
-                str(eps_path),
-            ],
-            check=True,
-            capture_output=True,
-        )
+        try:
+            subprocess.run(
+                [
+                    "gs",
+                    "-q",
+                    "-dNOPAUSE",
+                    "-dBATCH",
+                    "-dSAFER",
+                    "-dEPSCrop",
+                    "-sDEVICE=pdfwrite",
+                    f"-sOutputFile={pdf_path}",
+                    str(eps_path),
+                ],
+                check=True,
+                capture_output=True,
+                # PostScript is Turing-complete and ``-dSAFER`` restricts file
+                # access but not execution time: a crafted ``{ } loop`` would
+                # otherwise hang ghostscript (and the conversion worker) forever.
+                # Match the potrace/LibreOffice call sites, which all cap runtime.
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired as exc:
+            # ``subprocess.run`` already killed the ``gs`` child before raising;
+            # surface a clean error instead of an unhandled TimeoutExpired.
+            raise RuntimeError(
+                "EPS/PostScript conversion timed out (ghostscript exceeded 120s)."
+            ) from exc
         return pdf_path.read_bytes()
 
 

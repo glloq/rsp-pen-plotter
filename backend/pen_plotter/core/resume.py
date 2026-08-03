@@ -198,7 +198,9 @@ def _resume_conservative() -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _rewind_to_pen_up(lines: list[str], checkpoint: int, pen_ups: set[str]) -> int:
+def _rewind_to_pen_up(
+    lines: list[str], checkpoint: int, pen_ups: set[str], tool_change_command: str
+) -> int:
     """Index of the last pen-up command at or before ``checkpoint`` (else 0).
 
     A firmware ``ok`` means *accepted*, not *executed*: on power loss the head
@@ -206,8 +208,19 @@ def _rewind_to_pen_up(lines: list[str], checkpoint: int, pen_ups: set[str]) -> i
     last point where the pen was UP re-draws the interrupted stroke instead of
     skipping the moves that were acknowledged but never physically drawn —
     trading a little over-draw (harmless on a pen plot) for never leaving a gap.
+
+    The backward scan stops at a completed tool-change boundary (the firmware
+    pause command staged at every swap). Rewinding *past* a swap the operator
+    has already confirmed would redraw the previous layer with the newly loaded
+    pen (wrong colour) and re-emit the swap's ``M0`` as a raw firmware pause
+    (the queue filters guided pauses on the original checkpoint, so the crossed
+    one is dropped). When a tool change sits between the checkpoint and the last
+    pen-up, resume from just after that swap instead (P0.5).
     """
+    boundary = tool_change_command.strip()
     for i in range(checkpoint - 1, -1, -1):
+        if boundary and lines[i] == boundary:
+            return i + 1
         if lines[i] in pen_ups:
             return i
     return 0
@@ -238,7 +251,9 @@ def build_resume_program(gcode: str, acked_lines: int, profile: MachineProfile) 
 
     pen_ups, pen_downs = _pen_command_sets(profile)
     if _resume_conservative():
-        checkpoint = _rewind_to_pen_up(lines, checkpoint, pen_ups)
+        checkpoint = _rewind_to_pen_up(
+            lines, checkpoint, pen_ups, profile.tool_change_command
+        )
         if checkpoint == 0:
             return lines  # rewound all the way back → replot from the start
     remainder = lines[checkpoint:]

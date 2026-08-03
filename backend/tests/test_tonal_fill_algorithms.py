@@ -266,3 +266,30 @@ def test_gosper_gradient_blanks_the_lightest_strip() -> None:
     )
     xs = [x for x, _ in _coords(svg)]
     assert xs and max(xs) < SIZE - 2
+
+
+def test_contours_bounds_hostile_options() -> None:
+    """A crafted spacing_px / max_rings must not hang: spacing is clamped to the
+    mask size and the erosion loop early-outs on an empty mask, so it can't run
+    millions of no-op full-canvas erosions."""
+    algo = get_algorithm("contours")
+    svg = algo.render_layer(
+        _full_mask(),
+        "#000000",
+        "layer",
+        options={"spacing_px": 2_000_000, "max_rings": 10_000_000},
+    )
+    assert svg.startswith("<g")
+
+
+def test_dither_bounds_hostile_cell() -> None:
+    """A crafted cell_px must not OOM: the ``(rows*cell, cols*cell)`` pad grows
+    with cell, so cell is capped to the image size."""
+    algo = get_algorithm("dither")
+    svg = algo.render_layer(
+        _full_mask(),
+        "#000000",
+        "layer",
+        options={"cell_px": 1_000_000_000},
+    )
+    assert svg.startswith("<g")
