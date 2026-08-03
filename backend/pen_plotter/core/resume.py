@@ -98,13 +98,21 @@ def _pen_up_by_down(profile: MachineProfile) -> dict[str, str]:
     down line, letting the resume replay recover *that* pen's ``pen_up_command``
     rather than lifting with the profile default.
     """
-    mapping: dict[str, str] = {}
+    # A down command is only a reliable signal of the loaded pen when it maps to
+    # exactly one up command. If two slots share a down command but differ in
+    # their up command, the down line is ambiguous, so fall back to the profile
+    # default up for it rather than picking an arbitrary slot's override (P2.4).
+    candidates: dict[str, set[str]] = {}
     for pen in profile.effective_pens():
         down = (pen.pen_down_command or profile.pen_down_command).strip()
         up = (pen.pen_up_command or profile.pen_up_command).strip()
         if down and up:
-            mapping.setdefault(down, up)
-    return mapping
+            candidates.setdefault(down, set()).add(up)
+    default_up = profile.pen_up_command.strip()
+    return {
+        down: next(iter(ups)) if len(ups) == 1 else default_up
+        for down, ups in candidates.items()
+    }
 
 
 # Draw/travel moves whose X/Y words define the head's new position. Arcs
