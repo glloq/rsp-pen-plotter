@@ -504,6 +504,29 @@ def test_upload_refused_when_disk_at_reserve(tmp_path, monkeypatch):
     assert resp.status_code == 507
 
 
+def test_upload_refused_when_library_at_quota(monkeypatch):
+    """A new upload is rejected with 507 once the library hits its
+    OMNIPLOT_LIBRARY_MAX_MB cap, so it can't grow to fill the disk (P2.6)."""
+    from fastapi.testclient import TestClient
+
+    from pen_plotter.application import file_library
+    from pen_plotter.main import app
+
+    monkeypatch.setenv("OMNIPLOT_LIBRARY_MAX_MB", "1")
+    monkeypatch.setattr(file_library, "_free_bytes", lambda: 100 * 1024 * 1024 * 1024)
+    # Library already over its 1 MB cap.
+    monkeypatch.setattr(file_library, "_library_size_bytes", lambda: 2 * 1024 * 1024)
+
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M1 1 L9 9"/></svg>'
+    with TestClient(app) as client:
+        resp = client.post(
+            "/files",
+            files={"file": ("drawing.svg", svg, "image/svg+xml")},
+        )
+    assert resp.status_code == 507
+    assert "library is at its" in resp.json()["message"]
+
+
 @pytest.mark.asyncio
 async def test_reprocess_failure_leaves_old_artefacts_intact(monkeypatch) -> None:
     """A crash mid-reconversion must not corrupt the live entry (P1.6): the
@@ -579,3 +602,54 @@ async def test_reprocess_refused_when_disk_at_reserve(monkeypatch) -> None:
             data={"folder": "", "options": json.dumps({"font_size_mm": 20.0})},
         )
     assert second.status_code == 507
+
+
+@pytest.mark.asyncio
+async def test_file_lock_is_per_id() -> None:
+    from pen_plotter.api.files import _file_lock
+
+    a1 = _file_lock("aaa")
+    a2 = _file_lock("aaa")
+    b = _file_lock("bbb")
+    assert a1 is a2
+    assert a1 is not b
+
+
+@pytest.mark.asyncio
+async def test_concurrent_reprocess_same_file_stays_consistent() -> None:
+    """Two concurrent reconversions of the same file must serialize and leave a
+    consistent entry, not a mixed svg/meta (P1.7)."""
+    import asyncio
+    import json
+
+    txt = b"Hello plotter"
+    async with _client() as client:
+        first = await client.post(
+            "/files",
+            files={"file": ("hello.txt", txt, "text/plain")},
+            data={"folder": "", "options": json.dumps({"font_size_mm": 4.0})},
+        )
+        assert first.status_code == 200
+        # Fire two reconversions with different options at once.
+        a, b = await asyncio.gather(
+            client.post(
+                "/files",
+                files={"file": ("hello.txt", txt, "text/plain")},
+                data={"folder": "", "options": json.dumps({"font_size_mm": 10.0})},
+            ),
+            client.post(
+                "/files",
+                files={"file": ("hello.txt", txt, "text/plain")},
+                data={"folder": "", "options": json.dumps({"font_size_mm": 20.0})},
+            ),
+        )
+    assert a.status_code == 200 and b.status_code == 200
+    file_id = first.json()["file"]["file_id"]
+    async with _client() as client:
+        detail = await client.get(f"/files/{file_id}")
+    assert detail.status_code == 200
+    body = detail.json()
+    # The winning conversion left a self-consistent entry (svg present, layers
+    # match) — no half-written mix.
+    assert body["svg"]
+    assert body["layer_count"] >= 1

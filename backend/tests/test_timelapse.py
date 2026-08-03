@@ -354,22 +354,34 @@ async def test_assembly_skipped_when_no_space_for_video(
     assert "disk space" in (recorder.status()["error"] or "").lower()
 
 
-def test_cleanup_orphan_sessions_removes_metaless_dirs(recorder: tl.TimelapseRecorder) -> None:
-    """A crashed recording (frames but no meta.json) is reclaimed at startup;
-    a finished session (with meta.json) is kept (P1.4)."""
+def test_recover_orphan_sessions_marks_interrupted_keeps_frames(
+    recorder: tl.TimelapseRecorder,
+) -> None:
+    """A crashed recording (frames, no meta.json) is preserved as an
+    ``interrupted`` session rather than deleted (P1.4); an empty orphan is
+    pruned; a finished session is untouched."""
+    import json
+
     base = recorder._base_dir
-    # Orphan: frames, no meta.json.
+    # Orphan with frames → recovered, not deleted.
     orphan = base / ("0" * 32)
     (orphan / "frames").mkdir(parents=True)
     (orphan / "frames" / "frame_000000.jpg").write_bytes(b"x")
-    # Finished: has meta.json.
+    # Empty orphan (no frames) → pruned.
+    empty = base / ("e" * 32)
+    (empty / "frames").mkdir(parents=True)
+    # Finished session with meta.json → untouched.
     good = base / ("1" * 32)
     good.mkdir()
     (good / "meta.json").write_text("{}", encoding="utf-8")
 
-    removed = recorder.cleanup_orphan_sessions()
-    assert removed == 1
-    assert not orphan.exists()
+    recovered = recorder.recover_orphan_sessions()
+    assert recovered == 1
+    assert orphan.exists()  # frames kept
+    meta = json.loads((orphan / "meta.json").read_text())
+    assert meta["state"] == "interrupted"
+    assert meta["frame_count"] == 1
+    assert not empty.exists()  # empty orphan pruned
     assert good.exists()
 
 
@@ -390,3 +402,107 @@ async def test_concurrent_start_creates_a_single_session(recorder: tl.TimelapseR
     session_dirs = [d for d in recorder._base_dir.iterdir() if d.is_dir()]
     assert len(session_dirs) == 1
     await recorder.stop()
+
+
+@pytest.mark.asyncio
+async def test_assemble_recovers_an_interrupted_session(
+    recorder: tl.TimelapseRecorder,
+) -> None:
+    """An interrupted session's frames can be re-assembled into an MP4 and the
+    state flips to complete (P1.3)."""
+    import json
+
+    base = recorder._base_dir
+    sid = "0" * 32
+    frames = base / sid / "frames"
+    frames.mkdir(parents=True)
+    for i in range(3):
+        (frames / f"frame_{i:06d}.jpg").write_bytes(b"x")
+    recorder.recover_orphan_sessions()
+    assert json.loads((base / sid / "meta.json").read_text())["state"] == "interrupted"
+
+    meta = await recorder.assemble(sid, fps=12)
+    assert meta["state"] == "complete"
+    assert meta["has_video"] is True
+    assert recorder.video_path(sid) is not None
+
+
+@pytest.mark.asyncio
+async def test_assemble_unknown_id_raises(recorder: tl.TimelapseRecorder) -> None:
+    with pytest.raises(RuntimeError):
+        await recorder.assemble("f" * 32)
+
+
+@pytest.mark.asyncio
+async def test_assemble_endpoint(api_recorder: None) -> None:
+    """POST /timelapse/{id}/assemble drives recovery through the API."""
+    import json
+
+    base = tl.recorder._base_dir
+    sid = "0" * 32
+    frames = base / sid / "frames"
+    frames.mkdir(parents=True)
+    (frames / "frame_000000.jpg").write_bytes(b"x")
+    tl.recorder.recover_orphan_sessions()
+
+    async with _client() as client:
+        resp = await client.post(f"/timelapse/{sid}/assemble", json={"fps": 10})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["state"] == "complete"
+    assert json.loads((base / sid / "meta.json").read_text())["has_video"] is True
+
+
+@pytest.mark.asyncio
+async def test_per_frame_quota_stops_before_overshoot(
+    recorder: tl.TimelapseRecorder, monkeypatch
+) -> None:
+    """The exact per-frame check refuses a frame that would tip the store past
+    the quota, so it can't overshoot by one image (P1.6)."""
+    monkeypatch.setattr(tl, "_free_bytes", lambda _p: 100 * 1024 * 1024 * 1024)
+    # Quota of 0 MB with a non-zero frame → the pre-grab guard passes on the
+    # first tick (0 bytes written) but the per-frame check blocks the write.
+    monkeypatch.setenv("OMNIPLOT_TIMELAPSE_MAX_MB", "1")
+
+    def big_grab(_url: str) -> bytes:
+        return b"\xff\xd8" + b"\x00" * (2 * 1024 * 1024) + b"\xff\xd9"  # ~2 MiB > 1 MiB
+
+    monkeypatch.setattr(recorder, "_grabber", big_grab)
+    await recorder.start("http://cam/x", interval_seconds=0.01, fps=12)
+    await asyncio.sleep(0.1)
+    status = recorder.status()
+    assert status["frame_count"] == 0  # nothing written
+    assert "quota" in (status["error"] or "").lower()
+    await recorder.stop()
+
+
+def test_grab_jpeg_rejects_oversized_frame(monkeypatch) -> None:
+    """A snapshot larger than the cap is rejected, not silently truncated (P2.2)."""
+
+    class _FakeHeaders:
+        def get_content_type(self) -> str:
+            return "image/jpeg"
+
+    class _FakeResp:
+        def __init__(self, data: bytes) -> None:
+            self._data = data
+            self.headers = _FakeHeaders()
+
+        def read(self, n: int = -1) -> bytes:
+            out = self._data[:n] if n and n > 0 else self._data
+            self._data = self._data[n:] if n and n > 0 else b""
+            return out
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(tl, "_MAX_FRAME_BYTES", 10)
+    monkeypatch.setattr(tl._camera_opener, "open", lambda req, timeout=0: _FakeResp(b"x" * 11))
+    with pytest.raises(RuntimeError, match="exceeds"):
+        tl.grab_jpeg("http://192.168.1.50/snap")
+
+    # Exactly at the limit is accepted.
+    monkeypatch.setattr(tl._camera_opener, "open", lambda req, timeout=0: _FakeResp(b"x" * 10))
+    assert tl.grab_jpeg("http://192.168.1.50/snap") == b"x" * 10

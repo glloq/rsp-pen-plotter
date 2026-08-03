@@ -7,6 +7,7 @@ only the HTTP wire shape and the upload orchestration.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import shutil
@@ -63,6 +64,27 @@ from pen_plotter.persistence import (
 router = APIRouter()
 
 MAX_UPLOAD_BYTES = _max_upload_bytes()
+
+# Per-file_id locks so a reconversion and a delete (or two reconversions) of the
+# same file can't interleave their artefact swaps and leave a mixed
+# normalized.svg / original / meta.json (P1.7). Keyed per event loop so a second
+# TestClient doesn't reuse locks bound to a dead loop.
+_file_locks: dict[str, asyncio.Lock] = {}
+_file_locks_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _file_lock(file_id: str) -> asyncio.Lock:
+    """Return the per-file lock for ``file_id`` (rebuilt on loop change)."""
+    global _file_locks_loop
+    loop = asyncio.get_running_loop()
+    if _file_locks_loop is not loop:
+        _file_locks.clear()
+        _file_locks_loop = loop
+    lock = _file_locks.get(file_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _file_locks[file_id] = lock
+    return lock
 
 # Folder is a free-form label stored in the FileRecord row, never
 # joined onto a filesystem path on disk (the file_id — a UUID — is the
@@ -390,12 +412,15 @@ async def upload_to_library(
             # to disk — both block the event loop. Run it in the threadpool so
             # the server keeps serving other requests (listings, previews,
             # concurrent uploads) while the conversion churns.
-            try:
-                updated = await run_in_threadpool(
-                    _reprocess_existing, existing, data, mime, parsed_options
-                )
-            except InsufficientStorageError as exc:
-                raise HTTPException(status_code=507, detail=str(exc)) from exc
+            # Serialise per file: two reconversions (or a reconvert racing a
+            # delete) of the same file must not interleave their swaps (P1.7).
+            async with _file_lock(existing.file_id):
+                try:
+                    updated = await run_in_threadpool(
+                        _reprocess_existing, existing, data, mime, parsed_options
+                    )
+                except InsufficientStorageError as exc:
+                    raise HTTPException(status_code=507, detail=str(exc)) from exc
             return FileUploadResponse(file=_record_to_detail(updated), existing=True)
         return FileUploadResponse(file=_record_to_detail(existing), existing=True)
 
@@ -621,11 +646,15 @@ async def patch_file(file_id: str, patch: FilePatch) -> FileRecordOut:
 @router.delete("/files/{file_id}")
 async def delete_file(file_id: str) -> dict[str, bool]:
     """Remove a library entry and its on-disk artifacts."""
-    if not delete_file_record(file_id):
-        raise HTTPException(status_code=404, detail=f"Unknown file: {file_id!r}")
-    directory = file_dir(file_id)
-    if directory.is_dir():
-        shutil.rmtree(directory, ignore_errors=True)
+    # Hold the per-file lock so a delete can't race a concurrent reconversion of
+    # the same file, and rmtree off the event loop so a large tree on a slow SD
+    # card doesn't stall other requests (P1.7).
+    async with _file_lock(file_id):
+        if not delete_file_record(file_id):
+            raise HTTPException(status_code=404, detail=f"Unknown file: {file_id!r}")
+        directory = file_dir(file_id)
+        if directory.is_dir():
+            await run_in_threadpool(shutil.rmtree, directory, ignore_errors=True)
     return {"ok": True}
 
 

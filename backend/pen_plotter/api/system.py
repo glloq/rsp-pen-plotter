@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
 import os
+import signal
 import subprocess
 from pathlib import Path
 
@@ -17,6 +19,92 @@ from pen_plotter.audit import record
 from pen_plotter.auth import require_api_key
 
 router = APIRouter(prefix="/system", tags=["system"], dependencies=[Depends(require_api_key)])
+
+# Serialise self-updates. An update rebuilds the checkout and restarts the
+# service, so two at once would race git / npm / systemctl. The asyncio lock
+# stops two in-process requests; the flock stops a second *process* (P1.9).
+_update_lock: asyncio.Lock | None = None
+_update_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_update_lock() -> asyncio.Lock:
+    """Return the per-loop self-update lock, (re)creating it on loop change."""
+    global _update_lock, _update_lock_loop
+    loop = asyncio.get_running_loop()
+    if _update_lock is None or _update_lock_loop is not loop:
+        _update_lock = asyncio.Lock()
+        _update_lock_loop = loop
+    return _update_lock
+
+
+def _machine_busy_reason() -> str | None:
+    """Why a self-update must not start now, or ``None`` when the machine is idle.
+
+    Refuse to rebuild + restart the backend while a physical or disk operation
+    is in flight — an update mid-print would drop the job and could restart the
+    service with the head still moving (P1.10). Imported lazily to avoid an
+    import cycle (queue / controller import back into the API layer).
+    """
+    from pen_plotter.api.queue import print_queue
+    from pen_plotter.api.tip_calibration import calibration_in_progress
+    from pen_plotter.hardware.controller import controller
+    from pen_plotter.hardware.streamer import StreamState
+    from pen_plotter.timelapse import recorder as timelapse_recorder
+
+    if print_queue.current_id is not None:
+        return "a print is running"
+    if controller.progress.state in (
+        StreamState.RUNNING,
+        StreamState.PAUSED,
+        StreamState.WAITING,
+    ):
+        return "the plotter is streaming or paused"
+    if calibration_in_progress():
+        return "a calibration is in progress"
+    if timelapse_recorder.recording:
+        return "a timelapse is recording"
+    return None
+
+
+def _try_acquire_update_flock(root: Path) -> int | None:
+    """Take a non-blocking exclusive flock; return the fd, or ``None`` if held.
+
+    Guards against a *second process* (e.g. a cron job or a second uvicorn)
+    running update.sh at the same time — the asyncio lock only covers this one.
+    """
+    fd = os.open(str(root / ".update.lock"), os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def _release_update_flock(fd: int) -> None:
+    with contextlib.suppress(Exception):
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    with contextlib.suppress(Exception):
+        os.close(fd)
+
+
+async def _terminate_process_group(process: asyncio.subprocess.Process) -> None:
+    """SIGTERM then (after a grace period) SIGKILL the whole process group.
+
+    update.sh spawns git / uv / npm / vite children; killing only the shell
+    leaves them running (P1.11). Because the script is launched with
+    ``start_new_session=True`` its pid is the group leader, so ``killpg`` reaps
+    every descendant.
+    """
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGTERM)
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(process.wait(), timeout=5.0)
+    if process.returncode is None:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        with contextlib.suppress(Exception):
+            await process.wait()
 
 
 def _repo_root() -> Path:
@@ -294,7 +382,38 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
     if os.environ.get("OMNIPLOT_DISABLE_UPDATE"):
         raise HTTPException(status_code=403, detail="self-update is disabled on this host")
 
+    # Maintenance guard (P1.10): never rebuild + restart the backend while the
+    # machine is doing physical or disk work.
+    busy = _machine_busy_reason()
+    if busy is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Refusing to update while {busy}. Stop it first, then retry.",
+        )
+
+    # Serialise updates (P1.9): a fast 409 for a second in-process request…
+    lock = _get_update_lock()
+    if lock.locked():
+        raise HTTPException(status_code=409, detail="An update is already running.")
+
     force = bool(request.force) if request else False
+
+    async with lock:
+        # …and a cross-process flock so a second process can't run update.sh too.
+        flock_fd = _try_acquire_update_flock(root)
+        if flock_fd is None:
+            raise HTTPException(
+                status_code=409,
+                detail="An update is already running (held by another process).",
+            )
+        try:
+            return await _run_update(root, script, force)
+        finally:
+            _release_update_flock(flock_fd)
+
+
+async def _run_update(root: Path, script: Path, force: bool) -> UpdateResponse:
+    """Run update.sh under the acquired locks and shape the response."""
     previous = await _git_async("rev-parse", "HEAD")
 
     cmd: list[str] = [str(script)]
@@ -306,6 +425,9 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
             cwd=str(root),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            # New session so the pid leads a process group we can kill wholesale
+            # on timeout — otherwise git / npm / vite children survive (P1.11).
+            start_new_session=True,
         )
     except OSError as exc:
         # Spawning can fail before the script even runs — most commonly a
@@ -326,7 +448,7 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
         # wrong and we'd rather surface the timeout than hang the request.
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=600)
     except TimeoutError as exc:
-        process.kill()
+        await _terminate_process_group(process)
         with contextlib.suppress(Exception):
             record("system.update_timeout")
         raise HTTPException(status_code=504, detail="update timed out after 10 minutes") from exc

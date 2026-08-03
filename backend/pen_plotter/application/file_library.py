@@ -77,9 +77,13 @@ def file_dir(file_id: str) -> Path:
 
 # Shared free-space reserve (same knob the timelapse recorder honours). A full
 # disk corrupts SQLite and drops queue checkpoints, so an upload that would eat
-# into the reserve is refused before any bytes are written (P0.5).
+# into the reserve is refused before any bytes are written (P0.5). A per-library
+# byte cap (P2.6) additionally stops the file library from being the subsystem
+# that grows to fill everything above the reserve — mirroring the timelapse
+# quota. 0 / unset disables each check.
 _MIN_FREE_MB_ENV = "OMNIPLOT_MIN_FREE_MB"
 _DEFAULT_MIN_FREE_MB = 1024
+_LIBRARY_MAX_MB_ENV = "OMNIPLOT_LIBRARY_MAX_MB"
 
 
 class InsufficientStorageError(RuntimeError):
@@ -97,6 +101,17 @@ def _min_free_bytes() -> int:
         return _DEFAULT_MIN_FREE_MB * 1024 * 1024
 
 
+def _library_max_bytes() -> int:
+    """Library size cap in bytes (0/unset disables it)."""
+    raw = os.environ.get(_LIBRARY_MAX_MB_ENV)
+    if raw is None or not raw.strip():
+        return 0
+    try:
+        return max(0, int(float(raw))) * 1024 * 1024
+    except ValueError:
+        return 0
+
+
 def _free_bytes() -> int:
     """Free bytes on the library filesystem, walking up to an existing dir."""
     path = files_dir()
@@ -108,20 +123,41 @@ def _free_bytes() -> int:
     return 0
 
 
+def _library_size_bytes() -> int:
+    """Total on-disk size of the file library (0 if the dir is missing)."""
+    root = files_dir()
+    if not root.exists():
+        return 0
+    total = 0
+    for entry in root.rglob("*"):
+        try:
+            if entry.is_file():
+                total += entry.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
 def ensure_upload_space(incoming_bytes: int = 0) -> None:
-    """Refuse an upload that would push free space below the reserve.
+    """Refuse an upload that can't be safely stored.
 
     Raises:
         InsufficientStorageError: When writing ``incoming_bytes`` more would
-            drop the filesystem under ``OMNIPLOT_MIN_FREE_MB``.
+            drop the filesystem under ``OMNIPLOT_MIN_FREE_MB`` (P0.5), or push
+            the library past ``OMNIPLOT_LIBRARY_MAX_MB`` (P2.6).
     """
+    incoming = max(0, incoming_bytes)
     floor = _min_free_bytes()
-    if not floor:
-        return
-    if _free_bytes() - max(0, incoming_bytes) < floor:
+    if floor and _free_bytes() - incoming < floor:
         raise InsufficientStorageError(
             f"Not enough free disk space to accept this upload "
             f"(reserve is {floor // (1024 * 1024)} MB). Free space and retry."
+        )
+    cap = _library_max_bytes()
+    if cap and _library_size_bytes() + incoming > cap:
+        raise InsufficientStorageError(
+            f"The file library is at its {cap // (1024 * 1024)} MB limit. "
+            "Delete some files and retry."
         )
 
 

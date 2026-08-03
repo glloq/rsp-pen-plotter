@@ -176,3 +176,37 @@ def test_exact_resume_when_opted_out(monkeypatch) -> None:
     monkeypatch.setenv("OMNIPLOT_RESUME_CONSERVATIVE", "0")
     program = build_resume_program(GCODE, 6, _profile())
     assert program[-1:] == executable_lines(GCODE)[6:]
+
+
+def test_resume_in_inch_mode_travels_in_metric_then_restores_g20(monkeypatch) -> None:
+    """A G20 (inch) job must have its re-init travel done in G21 with mm-scaled
+    coordinates, then G20 restored — otherwise the head travels ~25.4x too fast
+    to the wrong spot (P2.3)."""
+    monkeypatch.setenv("OMNIPLOT_RESUME_CONSERVATIVE", "0")  # exact, for clarity
+    profile = _profile()
+    gcode = "G20\nG90\nG0 X4 Y2\nG1 X6 Y3 F60\nG1 X8 Y4\n"
+    program = build_resume_program(gcode, 4, profile)  # acked G20,G90,G0,G1
+    assert "G21" in program
+    assert any("X152.400 Y76.200" in line for line in program)  # 6in,3in -> mm
+    assert "G20" in program
+    assert program.index("G21") < program.index("G20")
+    assert program[-1] == "G1 X8 Y4"
+
+
+def test_ambiguous_pen_down_falls_back_to_default_up(monkeypatch) -> None:
+    """Two slots sharing a pen-down command but differing pen-up commands make
+    the down line ambiguous — resume must lift with the profile default, not an
+    arbitrary slot's override (P2.4)."""
+    monkeypatch.setenv("OMNIPLOT_RESUME_CONSERVATIVE", "0")
+    from pen_plotter.models import PenSlot
+
+    profile = _profile().model_copy(deep=True)
+    profile.pens = [
+        PenSlot(index=0, name="A", pen_down_command="DOWN", pen_up_command="UP_A"),
+        PenSlot(index=1, name="B", pen_down_command="DOWN", pen_up_command="UP_B"),
+    ]
+    gcode = "G21\nG90\nDOWN\nG1 X30 Y40 F1800\nG1 X50 Y60\n"
+    program = build_resume_program(gcode, 4, profile)
+    assert profile.pen_up_command in program
+    assert "UP_A" not in program
+    assert "UP_B" not in program
