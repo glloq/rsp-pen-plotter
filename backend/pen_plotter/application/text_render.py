@@ -295,7 +295,12 @@ def _optimize_rerendered_svg(svg: str, plan: PrintPlan) -> str:
         LayerOptimization(
             layer_id=layer.layer_id,
             optimize=layer.optimize,
-            simplify_tolerance_mm=layer.simplify_tolerance_mm or 0.05,
+            # ``is not None`` (not ``or``): an explicit 0.0 means the operator
+            # disabled simplification and must be honoured, not overridden with
+            # the 0.05 default — matching plan_resolver._resolve_layer.
+            simplify_tolerance_mm=(
+                layer.simplify_tolerance_mm if layer.simplify_tolerance_mm is not None else 0.05
+            ),
         )
         for layer in plan.layers
     ]

@@ -120,7 +120,21 @@ class PlotterController:
             baudrate: Connection baud rate.
             terminator: Line terminator (line feed for GRBL/Marlin, carriage
                 return for EBB).
+
+        Raises:
+            RuntimeError: If a streaming job is currently active — reconnecting
+                on top of it would orphan the streaming task (still writing to
+                the old link) and leak the old transport handle.
         """
+        # Refuse to reconnect over a live job: ``attach`` would overwrite
+        # ``_transport`` without cancelling the running streamer task, leaving
+        # it driving the machine through a now-unreferenced (leaked) transport.
+        if self._job_active:
+            raise RuntimeError("A job is running; abort it before reconnecting.")
+        # Cleanly drop an existing idle connection first so its transport is
+        # closed instead of leaked when we attach the new one.
+        if self._transport is not None:
+            await self.disconnect()
         if _fake_hardware_enabled():
             self.attach(MockTransport())
             return
@@ -213,8 +227,21 @@ class PlotterController:
     async def goto(
         self, x_mm: float, y_mm: float, profile: MachineProfile, z_mm: float | None = None
     ) -> None:
-        """Move the head to an absolute workspace position (optional Z)."""
+        """Move the head to an absolute workspace position (optional Z).
+
+        Raises:
+            ValueError: If the target lies outside the profile's workspace —
+                an absolute move is unbounded, so a typo (``x_mm=2000`` on a
+                300 mm machine) would otherwise drive the head into the frame
+                at travel speed. The app knows the bounds; enforce them here.
+        """
         self._require_idle()
+        ws = profile.workspace
+        if not (ws.x_min <= x_mm <= ws.x_max and ws.y_min <= y_mm <= ws.y_max):
+            raise ValueError(
+                f"Target ({x_mm:.1f}, {y_mm:.1f}) mm is outside the workspace "
+                f"X[{ws.x_min:.1f}, {ws.x_max:.1f}] Y[{ws.y_min:.1f}, {ws.y_max:.1f}]."
+            )
         await self._send_immediate(goto_command(x_mm, y_mm, profile, z_mm=z_mm))
 
     async def home(self, profile: MachineProfile, axis: str | None = None) -> None:

@@ -126,6 +126,24 @@ async def test_run_next_streams_to_completion() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_next_blocked_during_maintenance() -> None:
+    # A self-update sets maintenance; the worker must not claim a queued run
+    # (it would be torn down mid-stroke by the restart). Clearing it resumes.
+    engine = _engine()
+    run = enqueue("job", PROFILE, GCODE, target=engine)
+    queue, transport = _queue(engine)
+
+    queue.set_maintenance(True)
+    assert await queue.run_next() is False
+    assert get_run(run.id, engine).state == RunState.QUEUED
+    assert transport.written == []
+
+    queue.set_maintenance(False)
+    assert await queue.run_next() is True
+    assert get_run(run.id, engine).state == RunState.COMPLETED
+
+
+@pytest.mark.asyncio
 async def test_run_next_resumes_from_checkpoint() -> None:
     engine = _engine()
     run = enqueue("job", PROFILE, GCODE, target=engine)

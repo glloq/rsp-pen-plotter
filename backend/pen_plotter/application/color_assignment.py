@@ -36,18 +36,50 @@ from numpy.typing import NDArray
 
 from pen_plotter.models import LayerInfo
 
+_HEX_DIGITS = frozenset("0123456789abcdef")
 
-def _hex_to_rgb(hex_value: str) -> tuple[int, int, int]:
-    """Lower / strip / parse ``#rrggbb`` → ``(r, g, b)`` ints in 0..255."""
-    body = hex_value.lstrip("#").lower()
+
+def _try_hex_to_rgb(hex_value: str) -> tuple[int, int, int] | None:
+    """Parse ``#rrggbb`` / ``#rgb`` → ``(r, g, b)``, or ``None`` if not hex.
+
+    SVG paint values reaching colour assignment are not always hex: a layer
+    group wrapper can carry ``stroke="red"`` or ``fill="hsl(0,100%,50%)"``
+    (Inkscape emits labeled groups with named / functional colours, left
+    intact on the wrapper). Those must degrade to "no snap" rather than
+    crash the upload/reconvert colour-assignment step with a ``ValueError``.
+    """
+    body = hex_value.strip().lstrip("#").lower()
     if len(body) == 3:
         body = "".join(ch * 2 for ch in body)
+    if len(body) != 6 or any(ch not in _HEX_DIGITS for ch in body):
+        return None
     return int(body[0:2], 16), int(body[2:4], 16), int(body[4:6], 16)
+
+
+def _hex_to_rgb(hex_value: str) -> tuple[int, int, int]:
+    """Lower / strip / parse ``#rrggbb`` → ``(r, g, b)`` ints in 0..255.
+
+    Strict: raises on a non-hex value. Callers that may see untrusted paint
+    values (``assign_pool_inks``) go through :func:`_safe_normalise_hex`.
+    """
+    rgb = _try_hex_to_rgb(hex_value)
+    if rgb is None:
+        raise ValueError(f"not a hex colour: {hex_value!r}")
+    return rgb
 
 
 def _normalise_hex(hex_value: str) -> str:
     """Canonical ``#rrggbb`` form so dedup/comparison stay case-insensitive."""
     r, g, b = _hex_to_rgb(hex_value)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _safe_normalise_hex(hex_value: str) -> str | None:
+    """Canonical ``#rrggbb``, or ``None`` when ``hex_value`` isn't a hex colour."""
+    rgb = _try_hex_to_rgb(hex_value)
+    if rgb is None:
+        return None
+    r, g, b = rgb
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
@@ -208,11 +240,21 @@ def assign_pool_inks(source_hexes: list[str], pool: list[str]) -> list[str | Non
     result: list[str | None] = [None] * len(source_hexes)
     if not pool or not source_hexes:
         return result
-    pool_hex = [_normalise_hex(h) for h in pool]
+    # Pool inks come from owned pens / inventory (hex-validated on entry), but
+    # stay defensive: drop any unparseable entry rather than crash the snap.
+    pool_hex = [h for h in (_safe_normalise_hex(p) for p in pool) if h is not None]
+    if not pool_hex:
+        return result
     pool_lab = _hexes_to_lab(pool_hex)
-    src_lab = _hexes_to_lab([_normalise_hex(h) for h in source_hexes])
-    for row in range(len(source_hexes)):
-        distances = _delta_e_2000(np.broadcast_to(src_lab[row], pool_lab.shape), pool_lab)
+    for row, source in enumerate(source_hexes):
+        norm = _safe_normalise_hex(source)
+        if norm is None:
+            # Non-hex source paint (named colour, ``hsl(…)``, ``url(#…)``) —
+            # leave unsnapped so the G-code path falls back to the raw value
+            # instead of 500-ing the upload / reconvert.
+            continue
+        src_lab = _hexes_to_lab([norm])
+        distances = _delta_e_2000(np.broadcast_to(src_lab[0], pool_lab.shape), pool_lab)
         result[row] = pool_hex[int(np.argmin(distances))]
     return result
 

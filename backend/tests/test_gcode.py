@@ -21,6 +21,15 @@ def _profile():
     return profile
 
 
+def test_inch_profile_is_rejected_not_silently_overspeeding() -> None:
+    # Generation is mm-only: feed words are mm/min and the margin is a mm
+    # constant, so an inch profile would run the head ~25.4x too fast under G20.
+    # Refuse loudly instead of emitting dangerous output.
+    inch_profile = _profile().model_copy(update={"units": "inch"})
+    with pytest.raises(ValueError, match="millimetre"):
+        generate_gcode(TWO_LAYERS, inch_profile)
+
+
 def test_generates_header_pen_and_footer() -> None:
     gcode = generate_gcode(TWO_LAYERS, _profile())
     assert "G21" in gcode  # mm units

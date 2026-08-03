@@ -273,3 +273,16 @@ def test_cors_wildcard_with_credentials_rejected(
     monkeypatch.setenv("OMNIPLOT_CORS_ORIGINS", "*")
     with pytest.raises(RuntimeError, match="wildcard"):
         _cors_origins()
+
+
+def test_api_key_matches_tolerates_non_ascii_candidate() -> None:
+    """A client-supplied non-ASCII key/token must yield a clean non-match, not
+    a ``TypeError`` (which would surface as an unhandled 500)."""
+    from pen_plotter.auth import api_key_matches
+
+    # Non-ASCII bytes in the candidate (e.g. ``X-API-Key: \xff``) used to crash
+    # ``secrets.compare_digest`` on ``str`` inputs.
+    assert api_key_matches("s3kr1t", "\xff\xfe") is False
+    assert api_key_matches("s3kr1t", None) is False
+    assert api_key_matches("s3kr1t", "wrong") is False
+    assert api_key_matches("s3kr1t", "s3kr1t") is True

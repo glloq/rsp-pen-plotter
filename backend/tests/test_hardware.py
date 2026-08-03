@@ -59,12 +59,26 @@ async def test_streamer_reports_progress() -> None:
 
 
 def test_jog_command_is_relative() -> None:
-    lines = jog_command(5.0, -3.0, _profile())
-    assert lines[0] == "G91"
+    profile = _profile()
+    lines = jog_command(5.0, -3.0, profile)
+    # A pure X/Y jog lifts the pen first so it can't drag after a mid-stroke
+    # abort, then does the relative move and restores absolute mode.
+    assert lines[0] == profile.pen_up_command
+    assert "G91" in lines
     assert lines[-1] == "G90"
-    assert "X5.000 Y-3.000" in lines[1]
+    move = next(line for line in lines if line.startswith("G1"))
+    assert "X5.000 Y-3.000" in move
     # An X/Y-only jog never emits a Z word.
-    assert "Z" not in lines[1]
+    assert "Z" not in move
+
+
+def test_jog_command_with_z_does_not_force_pen_up() -> None:
+    # A Z jog is the operator controlling pen height directly; don't inject a
+    # pen-up that would fight that intent.
+    profile = _profile()
+    lines = jog_command(1.0, 0.0, profile, dz_mm=-2.0)
+    assert lines[0] == "G91"
+    assert profile.pen_up_command not in lines
 
 
 def test_jog_command_adds_z_when_nonzero() -> None:
@@ -186,21 +200,65 @@ async def test_send_immediate_serialises_concurrent_callers() -> None:
     controller.attach(transport)
     profile = _profile()
 
-    # Fire two jogs in parallel — each emits 3 lines (G91, G1, G90).
+    # Fire two jogs in parallel — each emits 4 lines (pen-up, G91, G1, G90).
     await asyncio.gather(
         controller.jog(1.0, 0.0, profile),
         controller.jog(2.0, 0.0, profile),
     )
-    # The 6 writes must come out as two contiguous 3-line groups, not
-    # interleaved. Look at the X coordinates of the G1 lines: they
-    # bracket the G91/G90 of the same caller.
-    assert len(transport.written) == 6
-    # Each caller's triple is (G91, G1 X*, G90); the two triples are
-    # contiguous when ordered, which means index 0 and 3 are G91.
-    assert transport.written[0] == "G91"
-    assert transport.written[2] == "G90"
-    assert transport.written[3] == "G91"
-    assert transport.written[5] == "G90"
+    # The 8 writes must come out as two contiguous 4-line groups, not
+    # interleaved: each block is (pen-up, G91, G1 X*, G90).
+    assert len(transport.written) == 8
+    assert transport.written[1] == "G91"
+    assert transport.written[3] == "G90"
+    assert transport.written[2].startswith("G1 ")
+    assert transport.written[5] == "G91"
+    assert transport.written[7] == "G90"
+    assert transport.written[6].startswith("G1 ")
+
+
+@pytest.mark.asyncio
+async def test_goto_rejects_target_outside_workspace() -> None:
+    # Absolute moves are unbounded; a typo'd target must be refused, not driven
+    # into the frame. Custom CoreXY A3 workspace is X[0,300] Y[0,420].
+    controller = PlotterController()
+    controller.attach(MockTransport())
+    with pytest.raises(ValueError, match="outside the workspace"):
+        await controller.goto(99999.0, 30.0, _profile())
+
+
+@pytest.mark.asyncio
+async def test_goto_accepts_in_bounds_target() -> None:
+    controller = PlotterController()
+    transport = MockTransport()
+    controller.attach(transport)
+    await controller.goto(20.0, 30.0, _profile())
+    assert any("X20.000 Y30.000" in line for line in transport.written)
+
+
+@pytest.mark.asyncio
+async def test_open_serial_refuses_reconnect_while_job_active() -> None:
+    # Reconnecting over a live job would orphan the streamer task and leak the
+    # old transport — the controller must refuse instead.
+    controller = PlotterController()
+    controller.attach(_SilentTransport())
+    await controller.run("G1 X1\nG1 X2\n")
+    assert controller._job_active
+    with pytest.raises(RuntimeError, match="job is running"):
+        await controller.open_serial("/dev/ttyFAKE0")
+    controller.abort()
+    await controller.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_open_serial_closes_previous_idle_transport(monkeypatch) -> None:
+    # An idle reconnection must cleanly close the old transport, not leak it.
+    monkeypatch.setenv("OMNIPLOT_FAKE_HARDWARE", "1")
+    controller = PlotterController()
+    old = MockTransport()
+    controller.attach(old)
+    await controller.open_serial("/dev/ttyFAKE0")
+    assert old.closed
+    assert controller.connected
 
 
 @pytest.mark.asyncio

@@ -5,14 +5,13 @@ from __future__ import annotations
 import contextlib
 import os
 import re
-import secrets
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from pen_plotter.audit import record
-from pen_plotter.auth import API_KEY_ENV
+from pen_plotter.auth import API_KEY_ENV, api_key_matches
 from pen_plotter.hardware.controller import controller
 from pen_plotter.models import MachineProfile
 from pen_plotter.profiles import get_profile
@@ -231,6 +230,9 @@ async def goto(request: GotoRequest) -> StatusResponse:
     profile = _profile_or_404(request.profile_name)
     try:
         await controller.goto(request.x_mm, request.y_mm, profile)
+    except ValueError as exc:
+        # Target outside the workspace — reject rather than drive into the frame.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _status()
@@ -315,7 +317,7 @@ async def plotter_ws(websocket: WebSocket) -> None:
     expected = os.environ.get(API_KEY_ENV)
     if expected:
         token = websocket.query_params.get("token") or ""
-        if not secrets.compare_digest(expected, token):
+        if not api_key_matches(expected, token):
             await websocket.close(code=1008, reason="Invalid or missing API key.")
             return
     await websocket.accept()

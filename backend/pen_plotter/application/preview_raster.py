@@ -160,8 +160,12 @@ def _html_to_pdf(data: bytes) -> bytes:
     """Render HTML to PDF via WeasyPrint (the converter's existing dep)."""
     from weasyprint import HTML  # local: weasyprint pulls in cairo / pango.
 
+    from pen_plotter.converters.html import local_only_url_fetcher  # noqa: PLC0415
+
     html = data.decode("utf-8", errors="replace")
-    pdf_bytes: bytes = HTML(string=html).write_pdf()
+    # Untrusted HTML: block external/file resources to prevent SSRF and
+    # local-file reads during render (mirrors the HtmlConverter path).
+    pdf_bytes: bytes = HTML(string=html, url_fetcher=local_only_url_fetcher).write_pdf()
     return pdf_bytes
 
 

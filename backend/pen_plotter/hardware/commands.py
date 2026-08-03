@@ -30,7 +30,15 @@ def jog_command(
     if dz_mm:
         move += f" Z{dz_mm:.3f}"
     move += f" F{feed:.1f}"
-    return ["G91", move, "G90"]
+    lines = ["G91", move, "G90"]
+    if not dz_mm:
+        # A pure X/Y jog is a positioning action — lift the pen first so a jog
+        # issued after a mid-stroke abort (which leaves the pen down) can't drag
+        # it across the sheet. A jog that moves Z is left alone: the operator is
+        # controlling the pen height directly, so forcing a pen-up would fight
+        # their intent.
+        lines.insert(0, profile.pen_up_command)
+    return lines
 
 
 def goto_command(

@@ -171,6 +171,44 @@ def test_resume_is_conservative_by_default(monkeypatch) -> None:
     assert program[-1] == "G1 X50 Y50"
 
 
+def test_conservative_resume_does_not_rewind_past_tool_change(monkeypatch) -> None:
+    """Conservative rewind must stop at a completed tool change: crossing it
+    would redraw the previous layer with the newly loaded pen and re-emit the
+    swap's firmware pause as a raw M0 (P0.5)."""
+    monkeypatch.setenv("OMNIPLOT_RESUME_CONSERVATIVE", "1")
+    profile = _profile()
+    up = profile.pen_up_command
+    down = profile.pen_down_command
+    m0 = profile.tool_change_command  # firmware pause staged at every swap
+    assert m0.strip() == "M0"
+    gcode = "\n".join(
+        [
+            "G21",  # 0
+            "G90",  # 1
+            up,  # 2
+            "G0 X10 Y10",  # 3
+            down,  # 4
+            "G1 X20 Y20 F1800",  # 5  layer 1 stroke (pen A)
+            up,  # 6  layer 1 last pen-up
+            m0,  # 7  tool change — operator swapped to pen B
+            "G0 X30 Y30",  # 8  travel with pen B
+            down,  # 9
+            "G1 X40 Y40 F1800",  # 10 layer 2 stroke (interrupted here)
+            "G1 X50 Y50",  # 11
+        ]
+    )
+    # Checkpoint 10 falls just after the swap, before pen B's first pen-up — the
+    # exact spot where the old rewind walked back past the M0 into layer 1.
+    program = build_resume_program(gcode, 10, profile)
+    # The completed swap is not re-run as a raw firmware pause...
+    assert m0 not in program
+    # ...and layer 1's stroke is not redrawn with pen B...
+    assert "G1 X20 Y20 F1800" not in program
+    # ...the remainder resumes from just after the swap.
+    assert "G0 X30 Y30" in program
+    assert program[-1] == "G1 X50 Y50"
+
+
 def test_exact_resume_when_opted_out(monkeypatch) -> None:
     """OMNIPLOT_RESUME_CONSERVATIVE=0 opts back into exact-checkpoint resume."""
     monkeypatch.setenv("OMNIPLOT_RESUME_CONSERVATIVE", "0")

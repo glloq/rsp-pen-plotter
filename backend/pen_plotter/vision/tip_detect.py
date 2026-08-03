@@ -265,7 +265,29 @@ def detect_object_extent(
             annotated_jpeg=_encode_preview(frame, None),
         )
 
-    ys, xs = np.nonzero(mask)
+    # A real calibration target is one compact blob. If the dark region swamps
+    # the frame the threshold/lighting is wrong — refuse rather than derive a
+    # bogus scale (mirrors the tip detector's swamp guard).
+    if int(mask.sum()) / mask.size > 0.6:
+        return ScaleMeasurement(
+            found=False,
+            message="dark region covers the frame — adjust lighting or threshold",
+            annotated_jpeg=_encode_preview(frame, None),
+        )
+
+    # Bound only the largest connected dark region, so a stray speck / shadow /
+    # fleck elsewhere in the ROI can't inflate the extent and hence deflate
+    # ``mm_per_pixel`` — a scale error that would then mis-register every pen.
+    # (Same isolation the tip detector uses; a single-blob frame is unchanged.)
+    labels, n = ndimage.label(mask, structure=np.ones((3, 3), dtype=int))
+    if n > 1:
+        counts = np.bincount(labels.ravel())
+        counts[0] = 0  # ignore background
+        blob = labels == counts.argmax()
+    else:
+        blob = mask
+
+    ys, xs = np.nonzero(blob)
     x_min, x_max = int(xs.min()) + off_x, int(xs.max()) + off_x
     y_min, y_max = int(ys.min()) + off_y, int(ys.max()) + off_y
     width_px = float(x_max - x_min + 1)

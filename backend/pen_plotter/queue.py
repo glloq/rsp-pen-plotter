@@ -494,11 +494,27 @@ class PrintQueue:
         self._cancel_requested = False
         # Identity used for the atomic queue claim + lease (P0.2).
         self._worker_id = uuid4().hex
+        # When True the worker refuses to *start* a new run. Held while a
+        # self-update rebuilds + restarts the backend, so a run isn't claimed
+        # and streamed only to be torn down mid-stroke by the restart (P1.12).
+        self._maintenance = False
 
     @property
     def current_id(self) -> str | None:
         """The id of the run currently streaming, if any."""
         return self._current_id
+
+    def set_maintenance(self, active: bool) -> None:
+        """Pause (or resume) the worker's claiming of new runs.
+
+        Set for the duration of a self-update: the update guard already
+        refuses to start when a print is *running*, but the multi-minute
+        rebuild yields to the event loop, during which the 2 s-polling worker
+        could otherwise claim a queued run and begin streaming — only for the
+        restart to kill it mid-stroke. This leaves an in-flight run untouched;
+        it only blocks starting a new one.
+        """
+        self._maintenance = active
 
     def wake(self) -> None:
         """Signal the worker to re-check the queue (e.g. after enqueue)."""
@@ -547,8 +563,13 @@ class PrintQueue:
 
         Returns:
             ``True`` if a run was started (and has now finished), ``False`` if
-            there was nothing to do or the plotter is busy/disconnected.
+            there was nothing to do, the plotter is busy/disconnected, or a
+            self-update is in progress.
         """
+        if self._maintenance:
+            # A self-update is rebuilding + restarting the backend — don't start
+            # a new physical run that the restart would kill mid-stroke (P1.12).
+            return False
         if not self._controller.connected or self._controller.progress.state in (
             StreamState.RUNNING,
             StreamState.PAUSED,

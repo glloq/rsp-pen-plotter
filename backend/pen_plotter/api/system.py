@@ -406,10 +406,23 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
                 status_code=409,
                 detail="An update is already running (held by another process).",
             )
+        # Pause the queue worker for the whole rebuild: ``_machine_busy_reason``
+        # only checks the instant the update starts, but ``_run_update`` yields
+        # to the loop for minutes, during which the worker could claim a queued
+        # run and stream it into the imminent restart (P1.12). Lazy import keeps
+        # the queue↔API import cycle out of module load.
+        from pen_plotter.api.queue import print_queue  # noqa: PLC0415
+
+        print_queue.set_maintenance(True)
         try:
             return await _run_update(root, script, force)
         finally:
             _release_update_flock(flock_fd)
+            # Resume the worker. On a successful update a restart is imminent
+            # and will reset a fresh process anyway; clearing here also covers
+            # the failed / already-up-to-date paths so the worker never stays
+            # wedged in this (surviving) process.
+            print_queue.set_maintenance(False)
 
 
 async def _run_update(root: Path, script: Path, force: bool) -> UpdateResponse:
