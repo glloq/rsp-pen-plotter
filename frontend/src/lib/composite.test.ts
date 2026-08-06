@@ -253,4 +253,39 @@ describe('buildComposite', () => {
     // rect identically (scale 1, no margin offset).
     expect(result.svg).toContain('translate(30 30) scale(1 1)')
   })
+
+  it('parses a comma-separated viewBox in the fallback path', () => {
+    // When source_bbox is degenerate the code falls back to the SVG viewBox.
+    // A comma-delimited viewBox ("0,0,100,100") must parse identically to the
+    // whitespace form — otherwise it becomes NaN and the placement is
+    // mis-scaled (or dropped) from the composite / G-code.
+    const build = (viewBox: string) => {
+      const snap: PlacementSnapshot = {
+        id: 'p1',
+        svg:
+          '<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" ' +
+          `viewBox="${viewBox}">` +
+          '<g inkscape:label="color-ff0000"><rect width="50" height="50" /></g>' +
+          '</svg>',
+        layers: [layer('color-ff0000')],
+        // Degenerate bbox forces the viewBox fallback.
+        source_bbox: { x_min: 0, y_min: 0, x_max: 0, y_max: 0 },
+        visibility: { 'color-ff0000': true },
+        x_mm: 10,
+        y_mm: 20,
+        width_mm: 200,
+        height_mm: 100,
+      }
+      return buildComposite([snap], profile()).layers[0]!
+    }
+    const spaced = build('0 0 100 100')
+    const comma = build('0,0,100,100')
+    expect(comma.bbox.x_min).toBeCloseTo(spaced.bbox.x_min, 6)
+    expect(comma.bbox.x_max).toBeCloseTo(spaced.bbox.x_max, 6)
+    expect(comma.bbox.y_min).toBeCloseTo(spaced.bbox.y_min, 6)
+    expect(comma.bbox.y_max).toBeCloseTo(spaced.bbox.y_max, 6)
+    // Sanity: the shared result reflects the 200×100 / 100×100 → sx=2 sy=1 map
+    // (the layer bbox spans the full 0..100 viewBox → x_max maps to 10 + 100·2).
+    expect(spaced.bbox.x_max).toBeCloseTo(10 + 100 * 2, 6)
+  })
 })

@@ -312,6 +312,7 @@ def render_placed_spans(
     font: str = "futural",
     stroke_width: float = 0.3,
     label: str = "text",
+    transform: str | None = None,
 ) -> str:
     """Render placed text spans as a labeled single-stroke SVG group.
 
@@ -329,6 +330,9 @@ def render_placed_spans(
             plotter ignores it but downstream consumers may render it).
         label: ``inkscape:label`` for the group — drives the layer name
             that ``extract_layers`` produces.
+        transform: Optional SVG ``transform`` stamped on the group, so a
+            caller splicing the overlay into a rebased document can keep it
+            in the host's coordinate system.
     """
     if not spans:
         return ""
@@ -365,11 +369,12 @@ def render_placed_spans(
     # ``xml.etree`` would otherwise hit an "unbound prefix" error
     # because the host's namespace declarations aren't visible to
     # ``ET.fromstring``.
+    transform_attr = f" transform={quoteattr(transform)}" if transform else ""
     return (
         '<g xmlns="http://www.w3.org/2000/svg" '
         'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
         f'fill="none" stroke="black" stroke-width="{stroke_width}" '
-        f"inkscape:label={quoteattr(label)}>" + "".join(paths) + "</g>"
+        f"inkscape:label={quoteattr(label)}{transform_attr}>" + "".join(paths) + "</g>"
     )
 
 

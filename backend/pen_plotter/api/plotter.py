@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import os
 import re
@@ -305,6 +306,13 @@ async def emergency_stop(profile_name: str | None = None) -> StatusResponse:
     return _status()
 
 
+# Idle keepalive interval: how long the progress stream waits before re-sending
+# the current status. A dead but never-closed socket (flaky tab) is only noticed
+# on the next ``send``, so without this an idle client leaks its subscriber +
+# task until the next print. Mirrors ``api.queue._WS_KEEPALIVE_S``.
+_WS_KEEPALIVE_S = 30.0
+
+
 @router.websocket("/ws/plotter")
 async def plotter_ws(websocket: WebSocket) -> None:
     """Push streaming progress to a connected client until it disconnects.
@@ -325,7 +333,15 @@ async def plotter_ws(websocket: WebSocket) -> None:
     try:
         await websocket.send_json(_status().model_dump())
         while True:
-            progress = await queue.get()
+            try:
+                progress = await asyncio.wait_for(queue.get(), timeout=_WS_KEEPALIVE_S)
+            except TimeoutError:
+                # Idle: no streaming progress for a while. Re-send the current
+                # status as a keepalive so a dead socket raises here and the
+                # ``finally`` unsubscribes promptly instead of leaking the
+                # subscriber until the next print.
+                await websocket.send_json(_status().model_dump())
+                continue
             await websocket.send_json(
                 {
                     "connected": controller.connected,

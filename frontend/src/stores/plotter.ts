@@ -196,11 +196,17 @@ export const usePlotterStore = defineStore('plotter', () => {
     }
   }
 
+  // Set while the operator explicitly disconnects so the connected→false
+  // transition that follows isn't mistaken for a mid-run *device loss* and
+  // alerted as one. Consumed by the watcher below on the next connected change.
+  let intentionalDisconnect = false
+
   const disconnect = (): Promise<void> => {
     // Close the stream FIRST so the REST response below is allowed to
     // write the final (disconnected) status, and so the browser doesn't
     // keep a dangling socket + reconnect timer alive after the operator
     // explicitly disconnected.
+    intentionalDisconnect = true
     closeSocket()
     return withErrors(() => plotterDisconnect())
   }
@@ -254,9 +260,12 @@ export const usePlotterStore = defineStore('plotter', () => {
     [() => status.value.connected, () => status.value.state],
     ([nextConnected, _nextState], [prevConnected, prevState]) => {
       const wasRunning = prevState === 'running' || prevState === 'paused'
-      if (prevConnected && !nextConnected && wasRunning) {
+      if (prevConnected && !nextConnected && wasRunning && !intentionalDisconnect) {
         useToastStore().critical(i18n.global.t('plotter.deviceLost'))
       }
+      // Consume the flag on the connection transition so a genuine loss later
+      // (which the operator did not initiate) still raises the alert.
+      if (nextConnected !== prevConnected) intentionalDisconnect = false
     },
   )
 

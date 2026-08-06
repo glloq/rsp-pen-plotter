@@ -536,6 +536,15 @@ class TimelapseRecorder:
                 _log.error("Timelapse write failed, ending capture: %s", exc)
                 with contextlib.suppress(Exception):
                     self._finalize_interrupted(session, self._error)
+                # Release the now-dead session so it is no longer treated as the
+                # *active* recording. Otherwise ``delete()`` refuses it (its id
+                # still equals ``self._session.id``) and the captured frames sit
+                # on disk unremovable — exactly when a disk-full error means the
+                # operator wants to free space. ``recording``/``stop`` already
+                # read False via the task's ``done()`` state; only ``_session``
+                # needs releasing. ``_task`` is left untouched so we never race a
+                # concurrent ``stop()`` that may be mid-cancel.
+                self._session = None
                 return
             session.frame_count += 1
             session.bytes_written += len(frame)

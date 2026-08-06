@@ -15,6 +15,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
 from pen_plotter.converters.pdf_blocks import DocumentAnalysis, extract_blocks
+from pen_plotter.converters.pipeline import read_upload_safely
 
 router = APIRouter()
 
@@ -47,12 +48,11 @@ async def analyze_document(
     """
     if not _is_pdf(file):
         raise HTTPException(status_code=415, detail="Only PDF analysis is supported.")
-    data = await file.read()
-    if len(data) > MAX_ANALYZE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File exceeds the {MAX_ANALYZE_BYTES // (1024 * 1024)} MB analysis limit.",
-        )
+    # Stream with a hard cap instead of ``await file.read()`` then checking the
+    # length: the latter materialises the whole (multi-GB) body in RAM before
+    # the 413, which OOM-kills the backend on a Pi. ``read_upload_safely``
+    # aborts mid-read the moment the cap is crossed.
+    data = await read_upload_safely(file, MAX_ANALYZE_BYTES)
     try:
         # PyMuPDF parsing is synchronous CPU-bound work; keep it off the
         # event loop so a large PDF doesn't stall every other request.

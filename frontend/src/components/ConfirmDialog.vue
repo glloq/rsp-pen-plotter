@@ -1,7 +1,20 @@
 <script setup lang="ts">
+import { nextTick, ref, watch } from 'vue'
 import { resolveConfirm, useConfirmState } from '../composables/confirm'
 
 const state = useConfirmState()
+const cancelEl = ref<HTMLButtonElement | null>(null)
+
+// Move focus to the (safe) Cancel button when the dialog opens, so keyboard
+// users land inside the overlay and Escape events originate here.
+watch(
+  () => state.open,
+  async (open) => {
+    if (!open) return
+    await nextTick()
+    cancelEl.value?.focus()
+  },
+)
 </script>
 
 <template>
@@ -9,6 +22,7 @@ const state = useConfirmState()
     v-if="state.open"
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
     @click.self="resolveConfirm(false)"
+    @keydown.escape.stop.prevent="resolveConfirm(false)"
   >
     <div
       role="dialog"
@@ -19,6 +33,7 @@ const state = useConfirmState()
       <p class="mt-2 text-sm text-slate-300">{{ state.message }}</p>
       <div class="mt-5 flex justify-end gap-2">
         <button
+          ref="cancelEl"
           type="button"
           class="rounded bg-slate-700 px-4 py-2 text-sm text-slate-100 hover:bg-slate-600"
           data-test="confirm-dialog-cancel"

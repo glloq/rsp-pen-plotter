@@ -98,7 +98,11 @@ export const useAvailableColorsStore = defineStore('availableColors', () => {
   async function addToOdometer(hex: string, deltaMm: number): Promise<void> {
     if (deltaMm <= 0) return
     const canon = canonicalHex(hex)
-    const color = ordered.value.find((c) => c.hex === canon)
+    // Canonicalise the stored hex too — every other consumer (penWidth,
+    // useMagazinePlan, job.nearestColor) does, so an inventory row saved
+    // uppercase or as #rgb shorthand would otherwise never match and its ink
+    // odometer would silently never advance.
+    const color = ordered.value.find((c) => canonicalHex(c.hex) === canon)
     if (!color) return
     await rename(color.color_id, { odometer_mm: color.odometer_mm + deltaMm })
   }

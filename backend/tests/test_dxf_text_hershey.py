@@ -75,6 +75,47 @@ def test_dxf_hershey_warns_on_rotated_text() -> None:
     assert any("rotated" in w.lower() for w in result.warnings)
 
 
+def test_dxf_hershey_text_lands_inside_the_mm_viewbox() -> None:
+    """Regression: the Hershey overlay must be rebased into mm like the rest.
+
+    ezdxf renders into a ~1 000 000-unit canvas; ``postprocess_dxf_svg``
+    rebases the document into mm and stamps a ``scale(...)`` transform on
+    every group. The spliced Hershey group is built in the raw million-unit
+    space, so without the *same* transform its glyphs stay at ~1e6-unit
+    coordinates and land thousands× off-page, blowing up the drawing bbox.
+    """
+    import re
+
+    result = DxfConverter().convert(_make_dxf(), options={"hershey_text": True, "font": "futural"})
+    root = ET.fromstring(result.svg)
+    vb = (root.get("viewBox") or "").split()
+    assert len(vb) == 4
+    view_w, view_h = float(vb[2]), float(vb[3])
+
+    text_layer = next(child for child in root.iter() if child.get(_INKSCAPE_LABEL) == "text")
+
+    # Effective coordinate = raw path number × the group's scale transform.
+    scale = 1.0
+    tf = text_layer.get("transform")
+    if tf:
+        m = re.search(r"scale\(\s*([-\d.eE]+)", tf)
+        assert m, f"unexpected transform form: {tf!r}"
+        scale = float(m.group(1))
+
+    coords = [
+        abs(float(tok))
+        for path in text_layer.iter("{http://www.w3.org/2000/svg}path")
+        for tok in re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", path.get("d") or "")
+    ]
+    assert coords, "text layer has no path coordinates"
+    effective_max = max(coords) * scale
+    # On-page (with a generous glyph-extent margin); pre-fix this was ~1e6.
+    assert effective_max <= max(view_w, view_h) * 3, (
+        f"Hershey text extends to {effective_max:.1f} user units, far outside "
+        f"the {view_w}×{view_h} mm viewBox — overlay was not rebased into mm."
+    )
+
+
 def test_dxf_hershey_disabled_emits_no_extra_text_layer() -> None:
     """When the toggle is off, no Hershey overlay is appended."""
     result = DxfConverter().convert(_make_dxf(), options={"hershey_text": False})

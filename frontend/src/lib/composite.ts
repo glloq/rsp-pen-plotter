@@ -149,7 +149,13 @@ function extractPlacementChunk(parser: DOMParser, p: PlacementSnapshot): Placeme
   // the machine limits. Fall back to the SVG viewBox only when the
   // source bbox is degenerate.
   const vbAttr = root.getAttribute('viewBox') ?? ''
-  const vbParts = vbAttr.split(/\s+/).map(Number)
+  // viewBox values may be separated by whitespace *or* commas ("0,0,100,100");
+  // split on both so a comma-delimited viewBox isn't parsed as a single NaN
+  // (which would silently drop the placement from the composite / G-code).
+  const vbParts = vbAttr
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number)
   const sbW = p.source_bbox.x_max - p.source_bbox.x_min
   const sbH = p.source_bbox.y_max - p.source_bbox.y_min
   let vbX = 0

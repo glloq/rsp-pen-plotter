@@ -8,7 +8,7 @@
 // the operator clicks "Confirm" so a stray drag doesn't mutate the
 // underlying field.
 
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
@@ -125,11 +125,18 @@ function syncFromHex(hex: string): void {
   val.value = hsv.v
 }
 
+const dialogPanel = ref<HTMLElement | null>(null)
+
 function openPicker(): void {
   if (props.disabled) return
   hexInput.value = props.modelValue || '#000000'
   syncFromHex(hexInput.value)
   open.value = true
+  // Move focus into the teleported dialog so its own Escape/Enter handler
+  // receives the key events. Without this, focus stays on the swatch (outside
+  // the teleport), so Escape bubbles straight to the host modal's window-level
+  // handler and closes the *whole* modal instead of just this picker.
+  void nextTick(() => dialogPanel.value?.focus())
 }
 
 const currentHex = computed(() => {
@@ -229,8 +236,17 @@ function cancel(): void {
 
 function onKey(event: KeyboardEvent): void {
   if (!open.value) return
-  if (event.key === 'Escape') cancel()
-  else if (event.key === 'Enter' && (event.target as HTMLElement)?.tagName !== 'INPUT') confirm()
+  if (event.key === 'Escape') {
+    // Stop the event before it reaches the host modal's window-level Escape
+    // handler, which would otherwise close the whole modal underneath us.
+    event.stopPropagation()
+    event.preventDefault()
+    cancel()
+  } else if (event.key === 'Enter' && (event.target as HTMLElement)?.tagName !== 'INPUT') {
+    event.stopPropagation()
+    event.preventDefault()
+    confirm()
+  }
 }
 
 const hueColor = computed(() => {
@@ -260,7 +276,11 @@ const hueColor = computed(() => {
       @click.self="cancel"
       @keydown="onKey"
     >
-      <div class="w-full max-w-xs rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
+      <div
+        ref="dialogPanel"
+        tabindex="-1"
+        class="w-full max-w-xs rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl focus:outline-none"
+      >
         <h3 class="mb-3 text-sm font-semibold text-slate-100">
           {{ label || t('colorPicker.title') }}
         </h3>

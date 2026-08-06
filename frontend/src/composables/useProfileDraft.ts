@@ -209,7 +209,9 @@ export function useProfileDraft(inputs: ProfileDraftInputs, callbacks: ProfileDr
     link.href = url
     link.download = `${draft.value.name}.yaml`
     link.click()
-    URL.revokeObjectURL(url)
+    // Defer the revoke so the browser has begun fetching the blob before its
+    // URL is invalidated (a synchronous revoke can yield an empty download).
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   return {

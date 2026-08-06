@@ -116,6 +116,17 @@ def load_rgb(data: bytes) -> Image.Image:
             f"max is {MAX_PIXELS:,} px. Resize the source "
             "or split it into smaller plots."
         )
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        # Composite over opaque white before dropping alpha. A bare
+        # ``convert("RGB")`` discards the alpha channel and keeps whatever
+        # stale RGB sits under fully-transparent pixels — many exporters
+        # store those as (0, 0, 0, 0), so a transparent background would
+        # otherwise become a solid black fill (a bogus ``color-000000``
+        # layer that ``drop_background`` won't remove). Compositing maps
+        # transparent regions to white (paper).
+        rgba = img.convert("RGBA")
+        canvas = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+        return Image.alpha_composite(canvas, rgba).convert("RGB")
     return img.convert("RGB")
 
 

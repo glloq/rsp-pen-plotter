@@ -30,6 +30,15 @@ class Transport(Protocol):
         """Read one response line from the controller, stripped of whitespace."""
         ...
 
+    def at_eof(self) -> bool:
+        """Whether the read side has hit end-of-file (the link closed).
+
+        Distinguishes a genuine EOF — where :meth:`read_line` returns ``""``
+        immediately and forever — from a one-off blank line, so an ack wait
+        can abort a dropped link instead of spinning on empty reads.
+        """
+        ...
+
     async def write_raw(self, data: bytes) -> None:
         """Write raw bytes immediately, bypassing the line terminator.
 
@@ -74,6 +83,10 @@ class MockTransport:
     async def read_line(self) -> str:
         """Return the next queued response."""
         return await self._responses.get()
+
+    def at_eof(self) -> bool:
+        """The mock blocks on an empty queue rather than reaching EOF."""
+        return False
 
     async def write_raw(self, data: bytes) -> None:
         """Record the raw byte payload on a separate channel.
@@ -147,6 +160,10 @@ class SerialTransport:
         """Read one newline-terminated response and strip it."""
         data = await self._reader.readline()
         return data.decode("ascii", errors="replace").strip()
+
+    def at_eof(self) -> bool:
+        """True once the serial reader has seen EOF and drained its buffer."""
+        return self._reader.at_eof()
 
     async def write_raw(self, data: bytes) -> None:
         """Write raw bytes for real-time / emergency commands and flush."""

@@ -270,6 +270,41 @@ class TestTimelapseStorageGuards:
         await recorder.stop()
 
 
+    @pytest.mark.asyncio
+    async def test_write_error_leaves_session_deletable(
+        self, recorder: tl.TimelapseRecorder, monkeypatch
+    ) -> None:
+        """A frame-write disk error must release the active session so its
+        frames can be deleted — otherwise ``delete()`` refuses the id (it still
+        equals ``self._session.id``) and the frames sit unremovable (P1.5)."""
+        import pathlib
+
+        monkeypatch.setattr(tl, "_free_bytes", lambda _p: 100 * 1024 * 1024 * 1024)
+        real_write = pathlib.Path.write_bytes
+
+        def failing_write(self: pathlib.Path, data: bytes) -> int:
+            if self.name.startswith("frame_"):
+                raise OSError(28, "No space left on device")
+            return real_write(self, data)
+
+        monkeypatch.setattr(pathlib.Path, "write_bytes", failing_write)
+
+        started = await recorder.start("http://cam/stream", interval_seconds=0.01, fps=12)
+        session_id = started["session_id"]
+        assert session_id
+
+        for _ in range(200):
+            await asyncio.sleep(0.005)
+            if recorder.status()["error"]:
+                break
+        status = recorder.status()
+        assert status["error"] and "failed" in status["error"].lower()
+        assert status["recording"] is False
+
+        # The dead session must no longer be treated as active: delete succeeds.
+        assert await recorder.delete(session_id) is True
+
+
 class TestTimelapseIdConfinement:
     """Timelapse ids from the URL must never escape TIMELAPSE_DIR (P0.1)."""
 

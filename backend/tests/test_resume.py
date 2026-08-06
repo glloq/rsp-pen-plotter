@@ -60,6 +60,36 @@ def test_resume_mid_stroke_relowers_the_pen() -> None:
     assert program[-1] == "G1 X50 Y60"
 
 
+def test_resume_restores_modal_feed_for_mid_stroke_remainder() -> None:
+    """A remainder that keeps drawing without restating ``F`` must have the
+    checkpoint's modal feed re-established, or it inherits the travel feed the
+    resume travel-back emitted and draws the rest of the path far too fast."""
+    profile = _profile()
+    # GCODE sets F1800 on the first draw; "G1 X50 Y60" (the remainder) has no
+    # F word and relies on that modal feed.
+    program = build_resume_program(GCODE, 6, profile)
+    assert program[-1] == "G1 X50 Y60"
+    # The restored drawing feed is emitted just before the remainder, after the
+    # travel-back move (which carries the larger travel feed).
+    assert program[-2] == "F1800"
+    travel_idx = next(i for i, line in enumerate(program) if "X30.000 Y40.000" in line)
+    feed_idx = program.index("F1800")
+    assert travel_idx < feed_idx, "drawing feed must be restored after the travel move"
+
+
+def test_resume_does_not_inject_feed_when_program_restates_it() -> None:
+    """When every draw move carries its own ``F``, no standalone feed line is
+    added — generated programs (explicit ``F`` per move) stay byte-identical."""
+    profile = _profile()
+    gcode = (
+        "G21\nG90\nM280 P0 S40\nG0 X10 Y20\nM280 P0 S90\n"
+        "G1 X30 Y40 F1800\nG1 X50 Y60 F1800\n"
+    )
+    program = build_resume_program(gcode, 6, profile)
+    standalone_feed = [line for line in program if line.split()[:1] == ["F1800"]]
+    assert standalone_feed == []
+
+
 def test_resume_at_polyline_boundary_keeps_pen_up() -> None:
     """When the remainder opens on a new polyline (pen-up first), no
     pen-down is re-issued — the program re-establishes its own state,
