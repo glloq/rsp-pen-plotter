@@ -92,9 +92,21 @@ export const useTimelapseStore = defineStore('timelapse', () => {
     }
   })
 
+  // Bumped at the start of every start()/stop() mutation so a status poll that
+  // raced a mutation can discard its now-stale snapshot instead of clobbering
+  // the local state the mutation just wrote (the "live status clobbered by a
+  // late REST poll" class — TimelapsePanel polls refreshStatus every 1.5 s).
+  let mutationSeq = 0
+
   async function refreshStatus(): Promise<void> {
+    if (busy.value) return // a start/stop mutation currently owns the status
+    const startedAt = mutationSeq
     try {
-      status.value = await getTimelapseStatus()
+      const next = await getTimelapseStatus()
+      // Drop the result if a mutation began (or is running) while we awaited —
+      // it holds the authoritative status.
+      if (busy.value || mutationSeq !== startedAt) return
+      status.value = next
     } catch {
       // Transient (e.g. offline) — keep the last known status.
     }
@@ -117,6 +129,7 @@ export const useTimelapseStore = defineStore('timelapse', () => {
   ): Promise<boolean> {
     if (busy.value) return false
     busy.value = true
+    mutationSeq++
     try {
       status.value = await startTimelapse(streamUrl, intervalSeconds, fps, label)
       error.value = null
@@ -134,6 +147,7 @@ export const useTimelapseStore = defineStore('timelapse', () => {
   async function stop(): Promise<void> {
     if (busy.value) return
     busy.value = true
+    mutationSeq++
     try {
       const summary = await stopTimelapse()
       status.value = { ...IDLE }
@@ -167,7 +181,10 @@ export const useTimelapseStore = defineStore('timelapse', () => {
       link.href = url
       link.download = `timelapse-${file.label || file.id}.mp4`
       link.click()
-      URL.revokeObjectURL(url)
+      // Defer the revoke: revoking synchronously after click() can invalidate
+      // the blob URL before the browser has started fetching it, so a large
+      // .mp4 (tens of MB) may download as a 0-byte file.
+      setTimeout(() => URL.revokeObjectURL(url), 0)
     } catch (err) {
       const message = errorDetail(err, i18n.global.t('timelapse.downloadFailed'))
       error.value = message

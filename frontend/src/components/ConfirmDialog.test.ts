@@ -75,6 +75,24 @@ describe('ConfirmDialog', () => {
     await expect(result).resolves.toBe(false)
   })
 
+  it('pressing Escape resolves with false and stops propagation', async () => {
+    // Keyboard users must be able to dismiss the confirm. The handler is
+    // marked ``.stop`` so a confirm shown over a modal doesn't also trip the
+    // modal's own window-level Escape (which would close it underneath).
+    const wrapper = mount(ConfirmDialog, { attachTo: document.body })
+    const result = confirmAction({
+      title: 't',
+      message: 'm',
+      confirmLabel: 'OK',
+      cancelLabel: 'Cancel',
+    })
+    await nextTick()
+    const overlay = wrapper.find('.fixed.inset-0')
+    await overlay.trigger('keydown', { key: 'Escape' })
+    await expect(result).resolves.toBe(false)
+    wrapper.unmount()
+  })
+
   it('clicking the backdrop resolves with false', async () => {
     // Same affordance as cancel — clicking outside the dialog is a
     // dismiss. The .self modifier guarantees the inner panel's click

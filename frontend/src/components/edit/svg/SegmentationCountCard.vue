@@ -84,7 +84,11 @@ function setNumColors(value: number): void {
 }
 
 function setNumBands(value: number): void {
-  props.bitmap.num_bands = value
+  // Clamp to the input's declared [2, 16] range (mirrors setNumColors): the
+  // number input's min/max only bound the spinner, so a cleared or typed-out
+  // value would otherwise send 0 / >16 to the segmentation backend. Round to
+  // an integer band count; an empty/NaN field falls back to the minimum.
+  props.bitmap.num_bands = Math.max(2, Math.min(16, Math.round(value) || 2))
   draft.markSegmentationTouched('num_bands')
 }
 
@@ -164,7 +168,7 @@ function commitThresholdOrder(): void {
         :max="16"
         class="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
         data-test="svg-num-bands-input"
-        @input="(e) => setNumBands(Number((e.target as HTMLInputElement).value))"
+        @change="(e) => setNumBands(Number((e.target as HTMLInputElement).value))"
       />
     </template>
 
