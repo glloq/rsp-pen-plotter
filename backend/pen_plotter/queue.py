@@ -20,7 +20,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Column, Engine, case, text
+from sqlalchemy import JSON, Column, DateTime, Engine, bindparam, case, text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Field, Session, SQLModel, asc, col, desc, select
 
@@ -407,6 +407,18 @@ def claim_next_queued(
         "    ORDER BY priority DESC, created_at ASC LIMIT 1"
         ") AND state = :queued "
         "RETURNING id"
+    ).bindparams(
+        # Type the datetime params so SQLAlchemy's DateTime bind processor
+        # serialises them exactly as the ORM does everywhere else. Previously
+        # these were hand-formatted with ``.isoformat()``, which yields a
+        # 'T'-separated, offset-bearing string (``…T…+00:00``). SQLite stores
+        # datetimes as text and compares them lexically; that form sorts
+        # *greater* than the space-separated, offset-free form the ORM binds in
+        # ``reclaim_expired_leases`` (``col(lease_until) < now``), so an expired
+        # lease never satisfied ``lease_until < now`` and a crashed worker's run
+        # was never parked to PAUSED for recovery.
+        bindparam("lease", type_=DateTime),
+        bindparam("now", type_=DateTime),
     )
     with Session(target) as session:
         row = session.execute(
@@ -415,8 +427,8 @@ def claim_next_queued(
                 "running": RunState.RUNNING.value,
                 "queued": RunState.QUEUED.value,
                 "wid": worker_id,
-                "lease": lease_until.isoformat(),
-                "now": now.isoformat(),
+                "lease": lease_until,
+                "now": now,
             },
         ).first()
         session.commit()

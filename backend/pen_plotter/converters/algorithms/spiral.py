@@ -94,6 +94,12 @@ class SpiralAlgorithm(RasterAlgorithm):
             bool_mask = bool_mask[yi][:, xi]
             if tone is not None:
                 tone = np.asarray(tone)[yi][:, xi]
+            # A sparse mask can lose *every* set pixel to the nearest-neighbour
+            # subsample (all its True cells landing on dropped rows/cols). The
+            # pre-downscale guard above no longer holds, and an empty mask would
+            # make ``xs.mean()`` NaN and ``…max()`` raise on a zero-size array.
+            if not bool_mask.any():
+                return f"<g inkscape:label={quoteattr(label)}></g>"
 
         ys, xs = np.where(bool_mask)
         cx, cy = float(xs.mean()), float(ys.mean())

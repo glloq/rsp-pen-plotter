@@ -770,6 +770,32 @@ def test_reclaim_expired_leases_parks_stale_running_run() -> None:
     assert parked.worker_id is None
 
 
+def test_reclaim_expired_leases_parks_run_claimed_via_real_claim_path() -> None:
+    """Regression: a lease stamped by the *real* ``claim_next_queued`` raw-SQL
+    path (not seeded through the ORM) must still reclaim once expired.
+
+    ``claim_next_queued`` writes ``lease_until`` via a raw ``text()`` UPDATE,
+    while ``reclaim_expired_leases`` compares it through the ORM. If the two
+    serialise datetimes differently (``…T…+00:00`` vs ``… …``), SQLite's
+    lexical text comparison silently never matches and the crashed-worker run
+    is never parked — which the ORM-seeded test above cannot catch."""
+    from pen_plotter.queue import claim_next_queued, reclaim_expired_leases
+
+    engine = _engine()
+    run = enqueue("job", PROFILE, GCODE, target=engine)
+    # A negative lease stamps an already-expired ``lease_until`` through the
+    # exact writer path a worker uses, without sleeping.
+    claimed = claim_next_queued("dead-worker", engine, lease_seconds=-1)
+    assert claimed is not None
+    assert claimed.state == RunState.RUNNING
+
+    assert reclaim_expired_leases(engine) == 1
+    parked = get_run(run.id, engine)
+    assert parked is not None
+    assert parked.state == RunState.PAUSED
+    assert parked.worker_id is None
+
+
 def test_reclaim_skips_the_excluded_worker() -> None:
     """A worker never parks the run it is itself streaming (P0.2)."""
     from datetime import UTC, datetime, timedelta

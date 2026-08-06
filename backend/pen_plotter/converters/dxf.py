@@ -30,7 +30,7 @@ from ezdxf.addons.drawing.layout import Page
 from ezdxf.addons.drawing.svg import SVGBackend
 
 from pen_plotter.converters.base import ConversionResult, Converter
-from pen_plotter.core.dxf_postprocess import postprocess_dxf_svg
+from pen_plotter.core.dxf_postprocess import mm_rebase_transform, postprocess_dxf_svg
 from pen_plotter.typography import PlacedSpan, render_placed_spans
 
 
@@ -158,8 +158,18 @@ def _build_dxf_hershey_group(doc: Any, msp: Any, raw_svg: str, opts: dict[str, A
     # stroke width that scales with the drawing's scale so it stays
     # visible. The simulator overrides stroke width at render time anyway.
     stroke_width = max(scale * float(opts.get("stroke_width_mm", 0.3)), 1.0)
+    # ``postprocess_dxf_svg`` rebases the whole document from the million-unit
+    # ezdxf canvas into mm, stamping a ``scale(...)`` transform on each colour
+    # group. These spans are computed in that same million-unit viewBox space,
+    # so they must carry the identical transform — otherwise the text stays at
+    # ~1e6-unit coordinates and lands thousands× off-page once the document is
+    # in mm. ``None`` when no rebasing happens (already mm-aligned).
+    transform = mm_rebase_transform(raw_svg)
     return render_placed_spans(
-        spans, font=str(opts.get("font", "futural")), stroke_width=stroke_width
+        spans,
+        font=str(opts.get("font", "futural")),
+        stroke_width=stroke_width,
+        transform=transform,
     )
 
 

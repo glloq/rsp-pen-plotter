@@ -175,12 +175,28 @@ def otsu(
     return labels, palette
 
 
+def _distinct_color_count(rgb_u8: NDArray[np.uint8]) -> int:
+    """Count distinct RGB triples in an ``(N, 3)`` uint8 array.
+
+    Packs each pixel into a single int32 and does a 1-D ``np.unique`` — far
+    cheaper than ``np.unique(float_rows, axis=0)``, which sorts every pixel
+    row (≈15 s + ~1 GB on a multi-megapixel photo) purely to cap ``k``.
+    """
+    packed = (
+        (rgb_u8[:, 0].astype(np.int32) << 16)
+        | (rgb_u8[:, 1].astype(np.int32) << 8)
+        | rgb_u8[:, 2].astype(np.int32)
+    )
+    return int(np.unique(packed).size)
+
+
 def kmeans(
     image: Image.Image, *, num_colors: int, n_init: int = 10
 ) -> tuple[NDArray[np.intp], NDArray[np.uint8]]:
     """Cluster pixels into ``num_colors`` clusters in RGB space."""
-    arr = np.asarray(image, dtype=np.float64).reshape(-1, 3)
-    k = min(num_colors, max(1, np.unique(arr, axis=0).shape[0]))
+    rgb_u8 = np.asarray(image, dtype=np.uint8).reshape(-1, 3)
+    arr = rgb_u8.astype(np.float64)
+    k = min(num_colors, max(1, _distinct_color_count(rgb_u8)))
     model = KMeans(n_clusters=k, n_init=n_init, random_state=0)
     flat_labels = model.fit_predict(arr)
     palette = model.cluster_centers_.round().astype(np.uint8)
@@ -281,16 +297,8 @@ def kmeans_lab(
     rgb01 = rgb_u8.astype(np.float64) / 255.0
     lab = _rgb_to_lab(rgb01)
     # Cap k at the number of distinct source colours so KMeans never asks
-    # for more clusters than there are points. Counting distinct colours on
-    # packed uint8 RGB (a 1-D int sort) is far cheaper than ``np.unique`` on
-    # the float Lab rows, which on a photo would sort ~every pixel.
-    packed = (
-        (rgb_u8[:, 0].astype(np.int32) << 16)
-        | (rgb_u8[:, 1].astype(np.int32) << 8)
-        | rgb_u8[:, 2].astype(np.int32)
-    )
-    distinct = int(np.unique(packed).size)
-    k = min(num_colors, max(1, distinct))
+    # for more clusters than there are points (cheap packed-int count).
+    k = min(num_colors, max(1, _distinct_color_count(rgb_u8)))
     model = KMeans(n_clusters=k, n_init=n_init, random_state=0)
     flat_labels = model.fit_predict(lab)
     counts = np.bincount(flat_labels, minlength=k).astype(np.float64)

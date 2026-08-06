@@ -59,12 +59,15 @@ def _class_colors(style_text: str) -> dict[str, str]:
     return out
 
 
-def _is_background_rect(rect: ET.Element) -> bool:
+def _is_background_rect(
+    rect: ET.Element, view_w: float | None = None, view_h: float | None = None
+) -> bool:
     """Detect the editor-background rectangle emitted by ezdxf.
 
-    It is filled with no stroke and covers the whole viewBox. We're
-    intentionally narrow here so a user's own filled ``<rect>`` is not
-    misclassified.
+    It is filled with no stroke, anchored at the viewBox origin, and spans
+    the whole viewBox. We're intentionally narrow here so a user's own
+    filled ``<rect>`` is not misclassified — in particular a *small* filled
+    rect that merely happens to sit at ``(0, 0)`` must be preserved.
     """
     if rect.get("stroke") and rect.get("stroke") != "none":
         return False
@@ -74,12 +77,18 @@ def _is_background_rect(rect: ET.Element) -> bool:
     try:
         x = float(rect.get("x", "0"))
         y = float(rect.get("y", "0"))
-        _ = float(rect.get("width", "0"))
-        _ = float(rect.get("height", "0"))
+        w = float(rect.get("width", "0"))
+        h = float(rect.get("height", "0"))
     except ValueError:
         return False
-    # ezdxf places the background at the origin of the viewBox.
-    return x == 0.0 and y == 0.0
+    if x != 0.0 or y != 0.0:
+        return False
+    # Require the rect to (near-)fully span the viewBox before treating it as
+    # background. When the viewBox is unknown, fall back to the origin-only
+    # heuristic rather than risk leaving the background in.
+    if view_w is None or view_h is None:
+        return True
+    return w >= view_w * 0.99 and h >= view_h * 0.99
 
 
 _MM_RE = re.compile(r"^([0-9.+\-eE]+)\s*mm$")
@@ -133,6 +142,32 @@ def _mm_scale(root: ET.Element) -> tuple[float, float] | None:
     return scale_x, scale_y
 
 
+def _scale_transform_str(sx: float, sy: float) -> str:
+    """Format an SVG ``scale(...)`` transform, collapsing equal axes."""
+    return f"scale({sx})" if abs(sx - sy) < 1e-9 else f"scale({sx} {sy})"
+
+
+def mm_rebase_transform(svg: str) -> str | None:
+    """Return the mm-rebasing ``transform`` for an ezdxf SVG, or ``None``.
+
+    This is the exact transform :func:`postprocess_dxf_svg` applies to each
+    colour group when it rebases the million-unit ezdxf canvas into mm.
+    Exposed so a caller that splices an extra overlay into the post-processed
+    document (e.g. the Hershey TEXT group, whose coordinates are built in the
+    raw ezdxf viewBox space) can stamp the *same* transform on it and stay in
+    the mm coordinate system — otherwise the overlay is left in million-unit
+    space and lands thousands× off-page.
+    """
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return None
+    scale = _mm_scale(root)
+    if scale is None:
+        return None
+    return _scale_transform_str(*scale)
+
+
 def postprocess_dxf_svg(svg: str) -> str:
     """Strip the ezdxf background and group drawables into labeled layers.
 
@@ -160,9 +195,16 @@ def postprocess_dxf_svg(svg: str) -> str:
             style_text += elem.text
     class_map = _class_colors(style_text)
 
-    # Drop the background rect.
+    # Drop the background rect (filled, stroke-less, spanning the viewBox).
+    viewbox_parts = (root.get("viewBox") or "").split()
+    view_w = view_h = None
+    if len(viewbox_parts) == 4:
+        try:
+            view_w, view_h = float(viewbox_parts[2]), float(viewbox_parts[3])
+        except ValueError:
+            view_w = view_h = None
     for child in list(root):
-        if _local(child.tag) == "rect" and _is_background_rect(child):
+        if _local(child.tag) == "rect" and _is_background_rect(child, view_w, view_h):
             root.remove(child)
 
     # Gather every drawable element (and its parent group) under a single
@@ -194,10 +236,7 @@ def postprocess_dxf_svg(svg: str) -> str:
 
     # Sort buckets for deterministic output: classes alphabetical, no-class last.
     keys = sorted(buckets.keys(), key=lambda k: (k == "", k))
-    transform = None
-    if mm_scale is not None:
-        sx, sy = mm_scale
-        transform = f"scale({sx})" if abs(sx - sy) < 1e-9 else f"scale({sx} {sy})"
+    transform = _scale_transform_str(*mm_scale) if mm_scale is not None else None
     for cls in keys:
         color = class_map.get(cls, "#000000") if cls else "#000000"
         label = (

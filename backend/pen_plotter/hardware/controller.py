@@ -205,13 +205,23 @@ class PlotterController:
             for line in lines:
                 self._record_sent(line)
                 await transport.write_line(line)
+                # Bound the whole ack wait by a deadline (not a per-read silence
+                # timeout) and treat a closed link (EOF) as terminal, so a
+                # controller that chatters non-``ok`` — or a dropped port whose
+                # reads return ``""`` instantly — can't spin here forever.
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + timeout_s
                 while True:
+                    remaining = deadline - loop.time()
+                    if remaining <= 0:
+                        raise RuntimeError("Controller did not acknowledge in time.")
                     try:
-                        response = (
-                            await asyncio.wait_for(transport.read_line(), timeout_s)
-                        ).lower()
+                        raw = await asyncio.wait_for(transport.read_line(), remaining)
                     except TimeoutError as exc:
                         raise RuntimeError("Controller did not acknowledge in time.") from exc
+                    if raw == "" and transport.at_eof():
+                        raise RuntimeError("Controller closed the connection before acknowledging.")
+                    response = raw.lower()
                     if response.startswith("ok"):
                         break
                     if response.startswith(("error", "alarm", "!!")):

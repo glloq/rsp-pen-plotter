@@ -60,6 +60,13 @@ class _ModalState:
     # override isn't clobbered by the profile default. ``None`` ⇒ no pen seen
     # yet, fall back to the profile default.
     active_pen_up_line: str | None = None
+    # Last modal feedrate (``F`` word) seen in the executed prefix, in the
+    # program's own units-per-minute. ``F`` is modal, so a program can set it
+    # once and draw many moves without restating it. The resume travel-back
+    # emits its own *travel* ``F``; restoring this before the remainder keeps a
+    # mid-stroke resume from drawing the rest of the path at travel speed.
+    # ``None`` ⇒ no feed seen yet.
+    feed: float | None = None
 
 
 def _coord(token: str) -> float | None:
@@ -152,6 +159,12 @@ def _replay(
         if code == "G91":
             state.absolute = False
             continue
+        if code[:1] == "F":
+            # A standalone modal feed line (``F1500``) with no motion word.
+            value = _coord(code)
+            if value is not None:
+                state.feed = value
+            continue
         if code not in _MOVE_CODES:
             continue
         for token in tokens[1:]:
@@ -163,6 +176,10 @@ def _replay(
                 value = _coord(token)
                 if value is not None:
                     state.y = value if state.absolute else (state.y or 0.0) + value
+            elif token[:1] == "F":
+                value = _coord(token)
+                if value is not None:
+                    state.feed = value
     return state
 
 
@@ -180,6 +197,27 @@ def _starts_with_draw_move(remainder: list[str]) -> bool:
         return False
     code = remainder[0].split()[0] if remainder[0].split() else ""
     return code in ("G1", "G01", "G2", "G02", "G3", "G03")
+
+
+def _remainder_relies_on_modal_feed(remainder: list[str]) -> bool:
+    """Whether the remainder's first drawing move inherits the modal feed.
+
+    ``F`` is modal: after the resume travel-back (which emits the *travel*
+    feed) a program that draws G1/G2/G3 without restating ``F`` would run the
+    rest of the interrupted path at travel speed. Returns True only when the
+    first feed-relevant line is a draw with no ``F`` word — so programs that
+    restate their feed (every OmniPlot-generated program does) are untouched.
+    """
+    draw_codes = ("G1", "G01", "G2", "G02", "G3", "G03")
+    for line in remainder:
+        tokens = line.split()
+        if not tokens:
+            continue
+        if any(token[:1] == "F" for token in tokens):
+            return False  # feed restated before/at the first draw
+        if tokens[0] in draw_codes:
+            return True  # draws without an F → inherits the (travel) modal feed
+    return False
 
 
 def _resume_conservative() -> bool:
@@ -296,4 +334,13 @@ def build_resume_program(gcode: str, acked_lines: int, profile: MachineProfile) 
         preamble.append("G20")
     if not state.absolute:
         preamble.append("G91")
+    # Re-establish the modal feed the checkpoint was drawing at. The firmware
+    # lost its modal state on the interruption and ``goto_command`` above just
+    # set the *travel* feed, so a remainder that keeps drawing without
+    # restating ``F`` would otherwise finish the interrupted path at travel
+    # speed (potentially ~24× too fast → skipped steps / ruined strokes).
+    # Emitted after the units are restored so ``F`` is in the job's own units,
+    # and only when the remainder actually inherits the modal feed.
+    if state.feed is not None and _remainder_relies_on_modal_feed(remainder):
+        preamble.append(f"F{state.feed:g}")
     return preamble + remainder

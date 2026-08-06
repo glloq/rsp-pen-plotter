@@ -178,6 +178,45 @@ async def test_streamer_times_out_without_ack() -> None:
     assert streamer.progress.state == StreamState.ERROR
 
 
+class _EofTransport:
+    """A link that has closed: every read returns ``""`` immediately (EOF)."""
+
+    def __init__(self) -> None:
+        self.written: list[str] = []
+        self.raw: list[bytes] = []
+
+    async def write_line(self, line: str) -> None:
+        self.written.append(line)
+
+    async def read_line(self) -> str:
+        return ""  # sticky EOF — StreamReader.readline() returns b"" forever
+
+    def at_eof(self) -> bool:
+        return True
+
+    async def write_raw(self, data: bytes) -> None:
+        self.raw.append(data)
+
+    async def drain_input(self, idle_timeout_s: float = 0.2) -> None:
+        return
+
+    async def close(self) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_streamer_fails_fast_on_closed_link_instead_of_spinning() -> None:
+    """A closed link returns ``""`` on every read with no per-read timeout ever
+    tripping. The ack wait must detect EOF and fail promptly rather than
+    busy-spinning to the deadline (which would peg a CPU and wedge the queue)."""
+    # A long ack timeout would mask a busy-spin; the EOF fast-path must make
+    # this return well before it.
+    streamer = GcodeStreamer(_EofTransport(), ack_timeout_s=30.0)
+    with pytest.raises(StreamError):
+        await asyncio.wait_for(streamer.run("G0 X1\n"), timeout=2.0)
+    assert streamer.progress.state == StreamState.ERROR
+
+
 @pytest.mark.asyncio
 async def test_controller_rejects_jog_during_job() -> None:
     controller = PlotterController()

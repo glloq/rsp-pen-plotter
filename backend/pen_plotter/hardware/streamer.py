@@ -233,17 +233,33 @@ class GcodeStreamer:
     async def _wait_ok(self) -> None:
         """Read responses until an ``ok`` is seen, raising on error or timeout.
 
+        The whole wait is bounded by a single ``ack_timeout_s`` *deadline*, not
+        a per-read silence timeout: a controller that keeps emitting non-``ok``
+        chatter — or a closed link whose reads return ``""`` instantly — would
+        otherwise never trip a per-read timeout and would spin here forever,
+        wedging the queue worker that awaits us.
+
         Raises:
-            StreamError: If the controller reports an ``error``/``alarm`` or
-                fails to acknowledge within ``ack_timeout_s``.
+            StreamError: If the controller reports an ``error``/``alarm``,
+                closes the link (EOF), or fails to acknowledge within
+                ``ack_timeout_s``.
         """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self._ack_timeout_s
         while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise StreamError(f"No acknowledgment within {self._ack_timeout_s}s")
             try:
-                response = (
-                    await asyncio.wait_for(self._transport.read_line(), self._ack_timeout_s)
-                ).lower()
+                line = await asyncio.wait_for(self._transport.read_line(), remaining)
             except TimeoutError as exc:
                 raise StreamError(f"No acknowledgment within {self._ack_timeout_s}s") from exc
+            if line == "" and self._transport.at_eof():
+                # Sticky EOF: the link closed, so every further read returns ""
+                # immediately. Fail fast instead of busy-spinning to the
+                # deadline.
+                raise StreamError("Controller closed the connection before acknowledging")
+            response = line.lower()
             if response.startswith("ok"):
                 return
             if response.startswith(("error", "alarm", "!!")):
