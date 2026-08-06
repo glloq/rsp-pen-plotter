@@ -194,14 +194,19 @@ export function useLayerCardState(layer: Ref<LayerInfo>) {
 
   function onSpeed(event: Event): void {
     const value = (event.target as HTMLInputElement).value
+    // Empty = "use the profile default" (null). Otherwise clamp to the input's
+    // min of 1: a typed 0 / negative would persist a zero/negative feedrate
+    // into /optimize and G-code (and a divide-by-zero in the time estimate).
     store.updateLayer(layer.value.layer_id, {
-      drawing_speed_mm_s: value === '' ? null : Number(value),
+      drawing_speed_mm_s: value === '' ? null : Math.max(1, Number(value) || 1),
     })
   }
 
   function onSimplify(event: Event): void {
+    // Clamp to the input's min of 0 — a negative tolerance is meaningless and
+    // would reach the optimizer unchanged.
     store.updateLayer(layer.value.layer_id, {
-      simplify_tolerance_mm: Number((event.target as HTMLInputElement).value),
+      simplify_tolerance_mm: Math.max(0, Number((event.target as HTMLInputElement).value) || 0),
     })
   }
 

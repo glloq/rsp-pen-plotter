@@ -77,7 +77,12 @@ function plainClone<T>(value: T): T {
 
 export function normalizePens(profile: MachineProfile): void {
   const existing = profile.pens ?? []
-  const count = Math.max(0, Math.floor(profile.pen_slot_count))
+  const count = Math.floor(Number(profile.pen_slot_count))
+  // A transiently empty / invalid pen-count field mid-edit (Number('') === 0,
+  // a partial entry → NaN) must not wipe the operator's per-slot names / colours
+  // / positions: leave pens untouched until the count is a valid positive
+  // integer. The watcher re-runs once a real value is typed.
+  if (!Number.isInteger(count) || count < 1) return
   profile.pens = Array.from({ length: count }, (_, i) => {
     const found = existing.find((p) => p.index === i)
     // Deep-plain copy of a retained slot: when this runs on a reactive

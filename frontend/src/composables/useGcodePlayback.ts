@@ -106,6 +106,10 @@ export function useGcodePlayback(
   function play(): void {
     const r = sim.value
     if (!r) return
+    // Guard re-entrancy: a second play() (rapid double-click / keyboard) before
+    // the button's reactive state flips would start a second RAF chain, and
+    // both would advance simTime each frame → playback at 2×+ speed.
+    if (playing.value) return
     // ``play`` after the plot finished should rewind to the start so
     // the operator doesn't have to hit Restart first — the toolbar's
     // big green button is one click, not two.

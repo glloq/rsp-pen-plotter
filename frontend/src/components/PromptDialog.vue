@@ -37,7 +37,7 @@ watch(
         :placeholder="state.placeholder"
         class="mt-3 w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
         data-test="prompt-input"
-        @keydown.escape.prevent="resolvePrompt(null)"
+        @keydown.escape.stop.prevent="resolvePrompt(null)"
       />
       <div class="mt-5 flex justify-end gap-2">
         <button

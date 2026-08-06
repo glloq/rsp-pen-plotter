@@ -30,7 +30,9 @@ function download(): void {
   link.href = url
   link.download = `${base}.gcode`
   link.click()
-  URL.revokeObjectURL(url)
+  // Defer the revoke so the browser has started fetching the blob before its
+  // URL is invalidated (a synchronous revoke can yield an empty download).
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 </script>
 
