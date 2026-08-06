@@ -9,6 +9,7 @@ import os
 import signal
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -18,7 +19,36 @@ from pen_plotter import __version__
 from pen_plotter.audit import record
 from pen_plotter.auth import require_api_key
 
+if TYPE_CHECKING:
+    from pen_plotter.queue import PrintQueue
+
 router = APIRouter(prefix="/system", tags=["system"], dependencies=[Depends(require_api_key)])
+
+# If a self-update's deferred restart silently fails (e.g. a broken sudoers
+# rule), this is how long the maintenance hold lingers before a failsafe
+# resumes the queue worker so it can't stay wedged in the surviving process.
+_MAINTENANCE_FAILSAFE_S = 60.0
+_maintenance_failsafe_task: asyncio.Task[None] | None = None
+
+
+def _arm_maintenance_failsafe(queue: PrintQueue) -> None:
+    """Resume the queue worker after a delay if the pending restart never lands.
+
+    A successful API-triggered update schedules a *detached* restart ~3s out and
+    returns; normally this process is replaced before the timer fires, so the
+    worker stays paused through the restart. If the restart silently fails, this
+    failsafe clears maintenance so the worker isn't wedged forever.
+    """
+    global _maintenance_failsafe_task
+
+    async def _resume_later() -> None:
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.sleep(_MAINTENANCE_FAILSAFE_S)
+            queue.set_maintenance(False)
+
+    if _maintenance_failsafe_task is not None and not _maintenance_failsafe_task.done():
+        _maintenance_failsafe_task.cancel()
+    _maintenance_failsafe_task = asyncio.create_task(_resume_later())
 
 # Serialise self-updates. An update rebuilds the checkout and restarts the
 # service, so two at once would race git / npm / systemctl. The asyncio lock
@@ -414,15 +444,24 @@ async def trigger_update(request: UpdateRequest | None = None) -> UpdateResponse
         from pen_plotter.api.queue import print_queue  # noqa: PLC0415
 
         print_queue.set_maintenance(True)
+        keep_paused = False
         try:
-            return await _run_update(root, script, force)
+            result = await _run_update(root, script, force)
+            # A successful update schedules a *deferred* (~3s) restart on the UI
+            # path and returns before it fires. Clearing maintenance now reopens
+            # the window where the worker claims a queued run and streams it into
+            # the restart (P1.12). Keep the worker paused; the restart resets a
+            # fresh process, and a failsafe resumes it if the restart never lands.
+            keep_paused = result.needs_restart
+            return result
         finally:
             _release_update_flock(flock_fd)
-            # Resume the worker. On a successful update a restart is imminent
-            # and will reset a fresh process anyway; clearing here also covers
-            # the failed / already-up-to-date paths so the worker never stays
-            # wedged in this (surviving) process.
-            print_queue.set_maintenance(False)
+            if keep_paused:
+                _arm_maintenance_failsafe(print_queue)
+            else:
+                # Nothing to restart (already up to date / failed): resume now so
+                # the worker never stays wedged in this surviving process.
+                print_queue.set_maintenance(False)
 
 
 async def _run_update(root: Path, script: Path, force: bool) -> UpdateResponse:

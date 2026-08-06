@@ -68,6 +68,30 @@ def test_expand_use_refs_inlines_local_targets() -> None:
     assert 'd="M0 0L10 10"' in out
 
 
+def test_expand_use_propagates_paint_so_colored_text_keeps_its_layer() -> None:
+    """PyMuPDF emits coloured text as ``<use fill="#…" href="#font_…"/>`` with
+    the paint on the ``<use>``, not on the glyph ``<path>``. The expansion must
+    push that paint onto the leaf so colour bucketing routes red/blue text to
+    their own pens instead of collapsing every colour into the black layer."""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 100">'
+        '<defs><path id="font_A" d="M0 0 L5 0 L5 10 L0 10 Z"/>'
+        '<path id="font_B" d="M0 0 L5 0 L5 10 L0 10 Z"/></defs>'
+        '<use data-text="R" xlink:href="#font_A" transform="matrix(1 0 0 1 10 20)" fill="#ff0000"/>'
+        '<use data-text="B" xlink:href="#font_B" transform="matrix(1 0 0 1 40 20)" fill="#0000ff"/>'
+        "</svg>"
+    )
+    out, _warnings = postprocess_pdf_svg(svg)
+    labels = {
+        g.get(f"{{{_INKSCAPE_NS}}}label")
+        for g in ET.fromstring(out).iter()
+        if g.tag.endswith("}g") and g.get(f"{{{_INKSCAPE_NS}}}label")
+    }
+    assert any("ff0000" in label for label in labels), labels
+    assert any("0000ff" in label for label in labels), labels
+
+
 def test_expand_use_refs_drops_external_use() -> None:
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">'

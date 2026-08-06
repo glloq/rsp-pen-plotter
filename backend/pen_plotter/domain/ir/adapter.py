@@ -148,6 +148,32 @@ def _polylines_from_path(d: str) -> list[Polyline]:
                     nx, ny = x + nx, y + ny
                 x, y = nx, ny
                 points.append((x, y))
+            elif op == "S":
+                # Smooth cubic (x2 y2 x y): reduce to the endpoint like C.
+                x2, y2, nx, ny = (float(tokens[i + k]) for k in range(4))
+                i += 4
+                if not absolute:
+                    nx, ny = x + nx, y + ny
+                x, y = nx, ny
+                points.append((x, y))
+            elif op == "T":
+                # Smooth quadratic (x y): reduce to the endpoint like Q.
+                nx, ny = float(tokens[i]), float(tokens[i + 1])
+                i += 2
+                if not absolute:
+                    nx, ny = x + nx, y + ny
+                x, y = nx, ny
+                points.append((x, y))
+            elif op == "A":
+                # Elliptical arc (rx ry rot large-arc sweep x y): take the
+                # endpoint (last two params) as the chord vertex. Only the
+                # endpoint is offset for a relative arc.
+                nx, ny = float(tokens[i + 5]), float(tokens[i + 6])
+                i += 7
+                if not absolute:
+                    nx, ny = x + nx, y + ny
+                x, y = nx, ny
+                points.append((x, y))
             else:
                 # Unknown / unsupported operator — bail this contour.
                 i += 1

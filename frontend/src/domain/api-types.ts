@@ -2010,11 +2010,8 @@ export interface components {
              * @default
              */
             name: string;
-            /**
-             * Stroke Width Mm
-             * @default 0.5
-             */
-            stroke_width_mm: number;
+            /** Stroke Width Mm */
+            stroke_width_mm?: number | null;
         };
         /**
          * AvailableColorOut

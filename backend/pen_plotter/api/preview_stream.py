@@ -234,9 +234,14 @@ async def preview_stream(
         from pen_plotter.application import file_library  # noqa: PLC0415
         from pen_plotter.persistence import get_file_record  # noqa: PLC0415
 
+        # Resolve the record first (a DB lookup on the server-issued id) so a
+        # traversing ``file_id`` 404s before we ever read bytes off disk with
+        # the raw, unvalidated id.
         record = get_file_record(file_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"unknown file_id {file_id!r}")
         raw = file_library.read_original_bytes(file_id)
-        if record is None or raw is None:
+        if raw is None:
             raise HTTPException(status_code=404, detail=f"unknown file_id {file_id!r}")
         body: AsyncIterator[bytes] = _real_stream(file_id, record, raw)
     else:

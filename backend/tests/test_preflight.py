@@ -109,6 +109,30 @@ def test_assigned_color_pen_changes_match_gcode_prompts() -> None:
     assert report.pen_changes == prompts
 
 
+def test_warns_when_multipen_colour_maps_to_no_slot() -> None:
+    """A multi-pen layer whose colour resolves to no installed slot fires no
+    tool-change/re-ink pause, so it draws with whatever pen is mounted (wrong
+    ink). ``missing_pen_slots`` only catches *explicit* slots, so preflight must
+    surface this colour separately."""
+    from pen_plotter.models import PenSlot
+
+    profile = _profile().model_copy(
+        update={
+            "pen_slot_count": 4,
+            # Only black is loaded; red/blue are not in any slot.
+            "pens": [PenSlot(index=0, name="Black", color="#000000", installed=True)],
+        }
+    )
+    # Assigned colours with no explicit slot and no matching installed pen.
+    layers = [
+        LayerGeneration(layer_id="red", assigned_color_hex="#ff0000"),
+        LayerGeneration(layer_id="blue", assigned_color_hex="#0000ff"),
+    ]
+    report = preflight_report(TWO_LAYERS, profile, layers=layers)
+    assert any("#ff0000" in w for w in report.warnings), report.warnings
+    assert any("#0000ff" in w for w in report.warnings), report.warnings
+
+
 def test_pen_changes_counts_slot_reink_pauses() -> None:
     """The preflight pen_changes count must include re-ink pauses
     (slot reused with a different assigned colour) so it matches the

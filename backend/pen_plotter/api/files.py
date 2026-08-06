@@ -655,6 +655,14 @@ async def delete_file(file_id: str) -> dict[str, bool]:
         directory = file_dir(file_id)
         if directory.is_dir():
             await run_in_threadpool(shutil.rmtree, directory, ignore_errors=True)
+        # Evict the in-memory /rerender segmentation cache too, or a deleted
+        # file keeps rendering (POST /rerender {job_id: <deleted>}) until LRU
+        # eviction. The reprocess path already does this.
+        forget_job(file_id)
+    # The file is gone — drop its per-file lock so the dict can't grow without
+    # bound on a long-running appliance. Any later access to this id 404s (the
+    # record is gone), and _file_lock() re-creates a lock on demand regardless.
+    _file_locks.pop(file_id, None)
     return {"ok": True}
 
 
