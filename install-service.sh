@@ -48,7 +48,11 @@ EOF
 fi
 
 UNIT=/etc/systemd/system/omniplot.service
-sed -e "s|__USER__|$USER_NAME|g" -e "s|__ROOT__|$ROOT|g" \
+# Escape characters special in a sed *replacement* (\ & and the | delimiter)
+# so an install path containing them (e.g. /home/pi/a&b/…) can't corrupt or
+# truncate the unit file mid-write and leave a half-installed service.
+sed_escape() { printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'; }
+sed -e "s|__USER__|$(sed_escape "$USER_NAME")|g" -e "s|__ROOT__|$(sed_escape "$ROOT")|g" \
   "$ROOT/deploy/omniplot.service.in" > "$UNIT"
 chmod 644 "$UNIT"
 
