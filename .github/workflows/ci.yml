@@ -68,7 +68,7 @@ jobs:
           git diff --exit-code -- openapi.json
 
       - name: Set up Node for manifest snapshot drift check
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -107,7 +107,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -166,7 +166,7 @@ jobs:
         working-directory: backend
         run: uv sync --extra dev
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
