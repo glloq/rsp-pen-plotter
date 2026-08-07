@@ -55,6 +55,18 @@ function optionMin(opt: AlgoOption): number | undefined {
   return opt.min === undefined ? floor : Math.max(opt.min, floor)
 }
 
+// Clamp a committed numeric value to the option's [effective-min, max] schema
+// range. The input's min/max attributes only bound the spinner, so a typed or
+// cleared value (Number('') === 0) would otherwise reach /rerender unclamped.
+function clampToRange(value: number, opt: AlgoOption): number {
+  const lo = optionMin(opt)
+  const hi = opt.max
+  let v = Number.isFinite(value) ? value : (lo ?? 0)
+  if (lo !== undefined) v = Math.max(lo, v)
+  if (hi !== undefined && hi !== null) v = Math.min(hi, v)
+  return v
+}
+
 // Value shown, clamped up to the pen floor so a stored knob never
 // displays a thinner mark than the pen can make.
 function displayValue(opt: AlgoOption): unknown {
@@ -95,14 +107,14 @@ function onChange(opt: AlgoOption, ev: Event): void {
   } else if (opt.type === 'integer') {
     // Round to keep the operator from sending non-integer values that
     // the backend would silently truncate (and that bypass the form's
-    // step=1 constraint when typed in directly).
-    value = Math.round(Number((el as HTMLInputElement).value))
+    // step=1 constraint when typed in directly), then clamp to the schema
+    // range so a typed out-of-range / cleared value can't reach /rerender.
+    value = clampToRange(Math.round(Number((el as HTMLInputElement).value)), opt)
   } else {
-    value = Number((el as HTMLInputElement).value)
-    // A typed number can dip below the input's ``min`` attribute, so
-    // clamp mark-size options up to the pen floor explicitly.
-    const floor = penFloor(opt)
-    if (floor !== null && typeof value === 'number' && value < floor) value = floor
+    // A typed number can dip below the input's ``min``/above ``max`` (the
+    // attributes only bound the spinner), so clamp to the effective range
+    // (which already folds in the pen-mark floor via optionMin).
+    value = clampToRange(Number((el as HTMLInputElement).value), opt)
   }
   emit('update', opt.key, value)
 }
