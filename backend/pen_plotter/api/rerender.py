@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator
-from queue import Queue
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -243,10 +242,18 @@ async def _rerender_stream(
     """
     loop = asyncio.get_event_loop()
     start_ts = loop.time()
-    queue: Queue[tuple[str, dict[str, Any]] | None] = Queue()
+    events: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
+
+    def emit(item: tuple[str, dict[str, Any]] | None) -> None:
+        # Bridge the render worker thread onto the event loop rather than a
+        # thread-safe queue.Queue the consumer must park a second pool thread on
+        # (blocking ``get``). Frees the second thread each stream otherwise pins,
+        # which on a Pi's ~8-worker default pool starves ``run_in_threadpool``
+        # after a few concurrent streams.
+        loop.call_soon_threadsafe(events.put_nowait, item)
 
     def progress(i: int, total: int, label: str) -> None:
-        queue.put(
+        emit(
             (
                 "progress",
                 {
@@ -268,13 +275,13 @@ async def _rerender_stream(
                 px_per_mm=px_per_mm,
                 progress_callback=progress,
             )
-            queue.put(("done", {"svg": sanitize_svg(svg), "warnings": warnings}))
+            emit(("done", {"svg": sanitize_svg(svg), "warnings": warnings}))
         except (KeyError, ValueError) as exc:
-            queue.put(("error", {"message": str(exc)}))
+            emit(("error", {"message": str(exc)}))
         except Exception as exc:  # noqa: BLE001 — relay to the SSE client
-            queue.put(("error", {"message": f"Re-render failed: {exc}"}))
+            emit(("error", {"message": f"Re-render failed: {exc}"}))
         finally:
-            queue.put(None)
+            emit(None)
 
     seq = 0
     yield _sse(
@@ -291,7 +298,7 @@ async def _rerender_stream(
     task.add_done_callback(_log_stream_worker_outcome)
     try:
         while True:
-            item = await loop.run_in_executor(None, queue.get)
+            item = await events.get()
             if item is None:
                 break
             kind, payload = item

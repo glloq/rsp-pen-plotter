@@ -367,7 +367,16 @@ def _path_count(svg: str) -> int:
     count = 0
     for elem in root.iter():
         tag = _local(elem.tag)
-        if tag in {"path", "polyline", "polygon", "line", "circle", "ellipse", "rect"}:
+        if tag == "path":
+            # A single <path> can hold many disconnected subpaths (each ``M``/
+            # ``m`` starts one), and each is a separate stroke with a potential
+            # pen-up the optimizer may reorder. Count subpaths, not the element,
+            # or a multi-subpath path (single-line Hershey text emits one
+            # ``<path>`` per line; icon/hatch art is often one ``<path>``) would
+            # trip the single-path early-exit and ship un-optimized in raw order.
+            d = elem.get("d") or ""
+            count += sum(1 for ch in d if ch in "Mm") or (1 if d.strip() else 0)
+        elif tag in {"polyline", "polygon", "line", "circle", "ellipse", "rect"}:
             count += 1
     return count
 

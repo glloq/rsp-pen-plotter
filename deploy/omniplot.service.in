@@ -3,6 +3,12 @@ Description=OmniPlot pen plotter studio
 Documentation=https://github.com/glloq/rsp-pen-plotter
 After=network-online.target
 Wants=network-online.target
+# Stop restarting after 5 failures within 60s and settle into ``failed`` an
+# operator can diagnose. With RestartSec=5 the systemd defaults
+# (StartLimitIntervalSec=10s) never trip, so a deterministic early exit (bad
+# .env.service, missing dist/, refused LAN bind) would restart-storm forever.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=exec

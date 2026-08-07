@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: CI only reads the checkout. Without this the workflow
+# inherits the repo/org default token scope, which can be read-write on push.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

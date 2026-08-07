@@ -26,11 +26,27 @@ const props = defineProps<{
 const { t } = useI18n()
 const draft = useBitmapDraft()
 
+// Clamp on @change (commit on blur) rather than binding v-model.number: the
+// min/max attributes only bound the spinner arrows, so a cleared or typed-out
+// value would otherwise ship '' → NaN into the /preview + /upload payload (a
+// broken preview / 422), and an out-of-range background luminance would drop
+// every layer. NaN/empty falls back to the field's neutral minimum.
+function onMinRegionChange(e: Event): void {
+  const v = Math.round(Number((e.target as HTMLInputElement).value) || 0)
+  props.bitmap.min_region_pixels = Math.max(0, Math.min(5000, v))
+}
+
+function onMergeDeltaEChange(e: Event): void {
+  const v = Number((e.target as HTMLInputElement).value) || 0
+  props.bitmap.merge_delta_e = Math.max(0, Math.min(50, v))
+}
+
 // Manual edit of the background-drop threshold pins it: mark it touched so
 // the band-count auto-tune (setNumBands) stops overriding the operator's
 // chosen value.
-function onBgLuminanceInput(e: Event): void {
-  props.bitmap.background_luminance = Number((e.target as HTMLInputElement).value)
+function onBgLuminanceChange(e: Event): void {
+  const v = Number((e.target as HTMLInputElement).value) || 0
+  props.bitmap.background_luminance = Math.max(0, Math.min(1, v))
   draft.markSegmentationTouched('background_luminance')
 }
 
@@ -65,11 +81,12 @@ function reset(): void {
       <label class="block text-slate-400">
         {{ t('convert.minRegion') }}
         <input
-          v-model.number="bitmap.min_region_pixels"
+          :value="bitmap.min_region_pixels"
           type="number"
           min="0"
           max="5000"
           class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          @change="onMinRegionChange"
         />
         <span class="mt-0.5 block text-[10px] leading-snug text-slate-500">{{
           t('convert.minRegionHint')
@@ -78,12 +95,13 @@ function reset(): void {
       <label class="block text-slate-400">
         {{ t('convert.mergeDeltaE') }}
         <input
-          v-model.number="bitmap.merge_delta_e"
+          :value="bitmap.merge_delta_e"
           type="number"
           min="0"
           max="50"
           step="0.5"
           class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          @change="onMergeDeltaEChange"
         />
         <span class="mt-0.5 block text-[10px] leading-snug text-slate-500">{{
           t('convert.mergeDeltaEHint')
@@ -110,7 +128,7 @@ function reset(): void {
           step="0.01"
           :disabled="!bitmap.drop_background"
           class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-          @input="onBgLuminanceInput"
+          @change="onBgLuminanceChange"
         />
         <span class="mt-0.5 block text-[10px] leading-snug text-slate-500">{{
           t('convert.bgLuminanceHint')

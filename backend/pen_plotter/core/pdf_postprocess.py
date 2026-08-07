@@ -34,10 +34,15 @@ import base64
 import copy
 import math
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from xml.etree import ElementTree as ET
 
-from pen_plotter.converters.base import ConversionResult
+if TYPE_CHECKING:
+    # Only referenced in local-variable annotations (never evaluated under
+    # ``from __future__ import annotations``). Importing it at runtime pulls in
+    # ``converters`` while it is still initialising ``core`` — a cycle that
+    # breaks importing any ``core`` module before the ``converters`` package.
+    from pen_plotter.converters.base import ConversionResult
 from pen_plotter.core.svg_ns import INKSCAPE_NS as _INKSCAPE_NS
 from pen_plotter.core.svg_ns import SVG_NS as _SVG_NS
 from pen_plotter.core.svg_ns import XLINK_NS as _XLINK_NS
@@ -133,6 +138,43 @@ def _combined_transform(use: ET.Element) -> str | None:
     return " ".join(parts) if parts else None
 
 
+# Presentation paint a ``<use>`` can carry that must follow the expanded
+# geometry. PyMuPDF puts the text colour here (``<use … fill="#ff0000"/>``),
+# not on the glyph ``<path>`` in ``<defs>``.
+_USE_PAINT_ATTRS = (
+    "fill",
+    "stroke",
+    "opacity",
+    "fill-opacity",
+    "stroke-opacity",
+    "stroke-width",
+)
+
+
+def _propagate_use_paint(clone: ET.Element, use: ET.Element) -> None:
+    """Push a ``<use>``'s presentation paint onto the expanded geometry's leaves.
+
+    Colour bucketing (:func:`_effective_color_key`) reads each *leaf's own* fill
+    /stroke with no ancestor inheritance, so a colour set on the ``<use>`` (or
+    the wrapper ``<g>``) is invisible to it — the glyph would collapse into the
+    default black bucket. Copy the paint onto each drawable leaf that doesn't
+    already carry its own, so coloured PDF/HTML/DOCX text keeps its per-colour
+    layer instead of all routing to the black pen.
+    """
+    paint = {attr: v for attr in _USE_PAINT_ATTRS if (v := use.get(attr)) is not None}
+    style = use.get("style")
+    if not paint and not style:
+        return
+    for leaf in clone.iter():
+        if _local(leaf.tag) not in _DRAWABLE_LEAVES:
+            continue
+        for attr, value in paint.items():
+            if leaf.get(attr) is None:  # the glyph's own paint (rare) wins
+                leaf.set(attr, value)
+        if style and leaf.get("style") is None:
+            leaf.set("style", style)
+
+
 def strip_text_glyphs(root: ET.Element) -> int:
     """Remove PyMuPDF text glyphs and their <use> instances.
 
@@ -219,6 +261,9 @@ def expand_use_refs(root: ET.Element) -> int:
             clone = copy.deepcopy(target)
             # The clone keeps an `id`, which would now collide; strip it.
             clone.attrib.pop("id", None)
+            # Carry the <use>'s paint (esp. PyMuPDF's per-glyph text colour)
+            # onto the expanded leaves so colour bucketing sees it.
+            _propagate_use_paint(clone, use)
             transform = _combined_transform(use)
             wrapper = ET.Element(f"{{{_SVG_NS}}}g")
             if transform:
@@ -246,18 +291,18 @@ def expand_use_refs(root: ET.Element) -> int:
             parent = parent_map.get(use)
             if parent is not None:
                 parent.remove(use)
-    # Best-effort <defs> cleanup, tuned to PyMuPDF output. The check is
-    # purely structural: PyMuPDF emits <defs> whose children all carry
-    # ``id`` attributes (the glyph definitions the <use>s above pointed
-    # at), so a block in which *every* child has an ``id`` is treated as
-    # consumed and removed. A block with any id-less child is preserved
-    # (we cannot prove it held only consumed glyphs). Note this does NOT
-    # verify the ids are unreferenced elsewhere — an id'd gradient still
-    # used via ``fill="url(#…)"`` inside an all-id'd <defs> would be
-    # dropped too; PyMuPDF doesn't produce that shape today.
+    # <defs> cleanup, tuned to PyMuPDF output: it ids the glyph definitions the
+    # <use>s above pointed at as ``font_*``. Only remove a <defs> holding
+    # *nothing but* those consumed glyph defs. A block containing a gradient /
+    # clipPath / marker / any non-glyph def is kept — it may still be referenced
+    # elsewhere via ``url(#id)`` / ``clip-path`` (true for the arbitrary user SVG
+    # routed through here by ``SvgConverter``), and dropping it would leave a
+    # dangling reference (e.g. an unclipped drawing plotting geometry that
+    # should have been bounded). The previous "all children have *any* id"
+    # check dropped such still-referenced defs.
     for defs in [e for e in root.iter() if _local(e.tag) == "defs"]:
-        keep = any(not child.get("id") for child in defs)
-        if not keep:
+        removable = all((child.get("id") or "").startswith("font_") for child in list(defs))
+        if removable:
             parent = next((p for p in root.iter() if defs in list(p)), None)
             if parent is not None:
                 parent.remove(defs)
@@ -913,6 +958,14 @@ def _parse_grayscale_hex(value: str) -> tuple[bool, int]:
     return False, 0
 
 
+# Upper bound on hatch lines per shape. A shape with an enormous bbox (e.g.
+# coordinates far outside the media box in an adversarial or malformed PDF) at
+# the ~0.85pt minimum spacing would otherwise emit millions of <path>s (minutes
+# of CPU / OOM). Far above any legitimate hatched shape — a full A0 fill at
+# 0.85pt spacing is ~5k lines.
+_MAX_HATCH_LINES = 50_000
+
+
 def _hatch_lines_for_bbox(
     bbox: tuple[float, float, float, float],
     angle_rad: float,
@@ -937,6 +990,13 @@ def _hatch_lines_for_bbox(
     corners = [(x_min, y_min), (x_max, y_min), (x_min, y_max), (x_max, y_max)]
     projections = [px * nx + py * ny for px, py in corners]
     d_min, d_max = min(projections), max(projections)
+    # Cap the total line count by widening the spacing when a huge bbox would
+    # otherwise blow past _MAX_HATCH_LINES. Legitimate shapes (well under the
+    # cap) keep their requested spacing; a pathological bbox degrades to a
+    # coarse fill instead of DoSing the converter.
+    span = d_max - d_min
+    if span / spacing > _MAX_HATCH_LINES:
+        spacing = span / _MAX_HATCH_LINES
     # Snap to a multiple of spacing for a stable phase across nearby
     # rectangles (otherwise abutting swatches show a seam where the
     # hatching shifts).

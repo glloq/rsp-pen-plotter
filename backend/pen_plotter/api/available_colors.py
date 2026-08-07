@@ -91,8 +91,10 @@ class AvailableColorCreate(BaseModel):
 
     hex: str
     name: str = ""
-    # Pen tip / line width in mm. Defaults to a typical fineliner.
-    stroke_width_mm: float = Field(default=0.5, gt=0)
+    # Pen tip / line width in mm. ``None`` means "unset" so an idempotent
+    # re-add that omits it can't overwrite a previously-customized width; the
+    # create path falls back to a typical fineliner (0.5 mm).
+    stroke_width_mm: float | None = Field(default=None, gt=0)
 
     @field_validator("hex")
     @classmethod
@@ -148,7 +150,7 @@ async def create_color(body: AvailableColorCreate) -> AvailableColorOut:
             existing.name = body.name
             changed = True
         existing_sw = existing.stroke_width_mm if existing.stroke_width_mm is not None else 0.5
-        if body.stroke_width_mm != existing_sw:
+        if body.stroke_width_mm is not None and body.stroke_width_mm != existing_sw:
             existing.stroke_width_mm = body.stroke_width_mm
             changed = True
         if changed:
@@ -160,7 +162,7 @@ async def create_color(body: AvailableColorCreate) -> AvailableColorOut:
         hex=body.hex,
         name=body.name,
         position=next_available_color_position(),
-        stroke_width_mm=body.stroke_width_mm,
+        stroke_width_mm=body.stroke_width_mm if body.stroke_width_mm is not None else 0.5,
         created_at=datetime.now(UTC),
     )
     save_available_color(record)

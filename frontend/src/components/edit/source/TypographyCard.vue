@@ -29,7 +29,7 @@ interface TypographyDraft {
 // renderer lays text out from scratch; ``document`` (PDF / DOCX / HTML)
 // only needs the font face + stroke width because per-span size and
 // position come from the source document.
-withDefaults(
+const props = withDefaults(
   defineProps<{
     typo: TypographyDraft
     fonts: string[]
@@ -39,6 +39,25 @@ withDefaults(
 )
 
 const { t } = useI18n()
+
+type NumericField =
+  | 'font_size_mm'
+  | 'letter_spacing_mm'
+  | 'stroke_width_mm'
+  | 'line_spacing'
+  | 'margin_mm'
+  | 'page_width_mm'
+  | 'page_height_mm'
+
+// Clamp on @change (commit on blur) instead of binding v-model.number: the
+// input min/max only bound the spinner, so a cleared field would ship '' → NaN
+// into the typography plan (broken/blank text preview and a bad /preflight
+// plan) and out-of-range values would ride through unclamped. NaN/empty falls
+// back to the field minimum; a field with no upper bound passes max=Infinity.
+function clampField(field: NumericField, min: number, max: number, e: Event): void {
+  const raw = Number((e.target as HTMLInputElement).value)
+  props.typo[field] = Math.max(min, Math.min(max, Number.isFinite(raw) ? raw : min))
+}
 
 // Hershey-name → friendly label. Operators don't recognise "futural"
 // as "Sans" or "timesrb" as "Serif bold". The dropdown still keys on
@@ -207,23 +226,25 @@ function sortedFonts(fonts: string[]): FontOption[] {
         <label class="block text-slate-400">
           {{ t('convert.fontSize') }}
           <input
-            v-model.number="typo.font_size_mm"
+            :value="typo.font_size_mm"
             type="number"
             step="0.5"
             min="1"
             max="200"
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            @change="(e) => clampField('font_size_mm', 1, 200, e)"
           />
         </label>
         <label class="block text-slate-400">
           {{ t('convert.letterSpacing') }}
           <input
-            v-model.number="typo.letter_spacing_mm"
+            :value="typo.letter_spacing_mm"
             type="number"
             step="0.1"
             min="-10"
             max="50"
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            @change="(e) => clampField('letter_spacing_mm', -10, 50, e)"
           />
         </label>
       </div>
@@ -255,12 +276,13 @@ function sortedFonts(fonts: string[]): FontOption[] {
       <label class="block text-slate-400">
         {{ t('convert.strokeWidth') }}
         <input
-          v-model.number="typo.stroke_width_mm"
+          :value="typo.stroke_width_mm"
           type="number"
           step="0.1"
           min="0.05"
           max="10"
           class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+          @change="(e) => clampField('stroke_width_mm', 0.05, 10, e)"
         />
       </label>
     </section>
@@ -286,12 +308,13 @@ function sortedFonts(fonts: string[]): FontOption[] {
         <label class="block text-slate-400">
           {{ t('convert.lineSpacing') }}
           <input
-            v-model.number="typo.line_spacing"
+            :value="typo.line_spacing"
             type="number"
             step="0.1"
             min="0.5"
             max="5"
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            @change="(e) => clampField('line_spacing', 0.5, 5, e)"
           />
         </label>
       </div>
@@ -307,11 +330,12 @@ function sortedFonts(fonts: string[]): FontOption[] {
         <label class="block text-slate-400">
           {{ t('convert.margin') }}
           <input
-            v-model.number="typo.margin_mm"
+            :value="typo.margin_mm"
             type="number"
             step="any"
             min="0"
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            @change="(e) => clampField('margin_mm', 0, Infinity, e)"
           />
         </label>
         <span class="self-end text-[10px] text-slate-500 leading-snug">
@@ -320,21 +344,23 @@ function sortedFonts(fonts: string[]): FontOption[] {
         <label class="block text-slate-400">
           {{ t('convert.pageWidth') }}
           <input
-            v-model.number="typo.page_width_mm"
+            :value="typo.page_width_mm"
             type="number"
             step="any"
             min="1"
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            @change="(e) => clampField('page_width_mm', 1, Infinity, e)"
           />
         </label>
         <label class="block text-slate-400">
           {{ t('convert.pageHeight') }}
           <input
-            v-model.number="typo.page_height_mm"
+            :value="typo.page_height_mm"
             type="number"
             step="any"
             min="1"
             class="mt-0.5 w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+            @change="(e) => clampField('page_height_mm', 1, Infinity, e)"
           />
         </label>
       </div>

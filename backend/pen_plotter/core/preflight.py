@@ -114,8 +114,17 @@ def preflight_report(
     # Slots the plan actually draws from — feeds the rack-calibration
     # warning below (a host swap can only travel to calibrated slots).
     used_slots: set[int] = set()
+    # Colours that, on a multi-pen machine, resolve to no magazine slot: no
+    # tool-change / re-ink pause fires for them, so they draw with whatever pen
+    # is mounted (wrong ink). ``missing`` only catches *explicit* slots.
+    unresolved_ink: list[str] = []
 
-    for layer in geometry:
+    # Mirror generate_gcode, which wraps its whole per-layer loop in
+    # ``if not bounds.empty``: a labeled-but-empty layer (no drawable polyline
+    # ≥ 2 points) emits no G-code and no pause, so preflight must not count a
+    # pen change / missing slot for one either — the pause_logic module makes
+    # this preflight↔G-code parity mandatory.
+    for layer in geometry if not bounds.empty else []:
         setting = overrides.get(layer.label)
         slot = setting.target_pen_slot if setting else None
         source_color = setting.source_color if setting else None
@@ -154,6 +163,13 @@ def preflight_report(
             slot_reinked=slot_reinked,
         ).pause:
             pen_changes += 1
+        if (
+            not mono_pen
+            and effective_slot is None
+            and effective_color is not None
+            and effective_color not in unresolved_ink
+        ):
+            unresolved_ink.append(effective_color)
         if effective_slot is not None:
             previous_slot = effective_slot
             used_slots.add(effective_slot)
@@ -184,6 +200,13 @@ def preflight_report(
 
     for slot in missing:
         warnings.append(f"Pen slot {slot} is assigned but not installed in the magazine.")
+
+    for color in unresolved_ink:
+        warnings.append(
+            f"Colour {color} is not loaded in any magazine slot; it will draw with "
+            "whichever pen is currently mounted. Assign it to a slot or load it as "
+            "an available colour."
+        )
 
     # Host (rack) swaps travel to each slot's CALIBRATED position; the
     # strategy silently skips move steps for uncalibrated slots, which

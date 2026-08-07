@@ -40,6 +40,29 @@ def _text_only_pdf() -> bytes:
     return pdf.write()
 
 
+def test_hershey_on_rotated_pdf_places_text_in_rotated_space_and_warns() -> None:
+    """PyMuPDF reports glyph origins in un-rotated space but emits the SVG in
+    the rotated viewBox, so on a /Rotate page the Hershey overlay must be mapped
+    through rotation_matrix (or it lands thousands of pt off-page). Non-zero
+    rotation also warns because the horizontal renderer can't rotate the run."""
+    from pen_plotter.converters.pdf import extract_pdf_text_spans
+
+    pdf = pymupdf.open()
+    page = pdf.new_page(width=600, height=400)
+    page.insert_text((500, 50), "ABC", fontsize=20)
+    page.set_rotation(90)
+    data = pdf.write()
+
+    spans, rotation = extract_pdf_text_spans(data, 0)
+    assert rotation == 90
+    # (500, 50) un-rotated → ~(350, 500) in the rotated 400×600 frame.
+    assert 300 < spans[0].x < 400
+    assert 450 < spans[0].baseline_y < 550
+
+    result = PdfConverter().convert(data, options={"hershey_text": True})
+    assert any("rotated" in w.lower() for w in result.warnings)
+
+
 def _text_and_image_pdf() -> bytes:
     pdf = pymupdf.open()
     page = pdf.new_page(width=200, height=200)
@@ -66,6 +89,30 @@ def test_expand_use_refs_inlines_local_targets() -> None:
     # The expanded geometry now lives wrapped in a transform-bearing group.
     assert "translate(5 5)" in out
     assert 'd="M0 0L10 10"' in out
+
+
+def test_expand_use_propagates_paint_so_colored_text_keeps_its_layer() -> None:
+    """PyMuPDF emits coloured text as ``<use fill="#…" href="#font_…"/>`` with
+    the paint on the ``<use>``, not on the glyph ``<path>``. The expansion must
+    push that paint onto the leaf so colour bucketing routes red/blue text to
+    their own pens instead of collapsing every colour into the black layer."""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 200 100">'
+        '<defs><path id="font_A" d="M0 0 L5 0 L5 10 L0 10 Z"/>'
+        '<path id="font_B" d="M0 0 L5 0 L5 10 L0 10 Z"/></defs>'
+        '<use data-text="R" xlink:href="#font_A" transform="matrix(1 0 0 1 10 20)" fill="#ff0000"/>'
+        '<use data-text="B" xlink:href="#font_B" transform="matrix(1 0 0 1 40 20)" fill="#0000ff"/>'
+        "</svg>"
+    )
+    out, _warnings = postprocess_pdf_svg(svg)
+    labels = {
+        g.get(f"{{{_INKSCAPE_NS}}}label")
+        for g in ET.fromstring(out).iter()
+        if g.tag.endswith("}g") and g.get(f"{{{_INKSCAPE_NS}}}label")
+    }
+    assert any("ff0000" in label for label in labels), labels
+    assert any("0000ff" in label for label in labels), labels
 
 
 def test_expand_use_refs_drops_external_use() -> None:

@@ -274,7 +274,7 @@ function resetSequence(): void {
 // the operator configures everything (steps + positions + heights) in
 // one place. Mirrors the magazine length so every slot has a row.
 function ensurePens(): NonNullable<MachineProfile['pens']> {
-  const count = Math.max(0, Math.floor(props.draft.pen_slot_count))
+  const count = Math.min(MAX_PEN_SLOTS, Math.max(0, Math.floor(props.draft.pen_slot_count)))
   const existing = props.draft.pens ?? []
   const pens = Array.from({ length: count }, (_, i) => {
     const found = existing.find((p) => p.index === i)
@@ -295,7 +295,10 @@ function ensurePens(): NonNullable<MachineProfile['pens']> {
 }
 
 const penRows = computed(() => {
-  const count = Math.max(0, Math.floor(props.draft.pen_slot_count))
+  // Cap at MAX_PEN_SLOTS so a mid-edit typo (e.g. 9999 in the live-bound count
+  // field, before clampPenCount runs on blur) can't render thousands of rows
+  // and spike layout/paint.
+  const count = Math.min(MAX_PEN_SLOTS, Math.max(0, Math.floor(props.draft.pen_slot_count)))
   const existing = props.draft.pens ?? []
   return Array.from({ length: count }, (_, i) => existing.find((p) => p.index === i) ?? null)
 })

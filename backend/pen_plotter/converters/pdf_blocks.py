@@ -77,6 +77,13 @@ def extract_blocks(data: bytes, *, max_pages: int = 20) -> DocumentAnalysis:
         pages: list[PageBlocks] = []
         for page_index in range(min(doc.page_count, max_pages)):
             page = doc[page_index]
+            # get_text("blocks") / get_image_bbox return rects in the page's
+            # *un-rotated* space, but width_mm/height_mm below come from the
+            # *rotated* page.rect. Map every block rect through rotation_matrix
+            # (identity at 0°) so blocks and page dimensions share one frame —
+            # otherwise BlockMapCard overlays every block in the wrong region on
+            # a /Rotate page.
+            matrix = page.rotation_matrix
             blocks: list[Block] = []
 
             # Text blocks. PyMuPDF returns one tuple per block:
@@ -101,7 +108,7 @@ def extract_blocks(data: bytes, *, max_pages: int = 20) -> DocumentAnalysis:
                     Block(
                         id=f"p{page_index}-t{text_index}",
                         kind="text",
-                        bbox=_rect_to_bbox_mm(rect),
+                        bbox=_rect_to_bbox_mm(rect * matrix),
                         text_sample=stripped[:60],
                         char_count=len(stripped),
                     )
@@ -124,7 +131,7 @@ def extract_blocks(data: bytes, *, max_pages: int = 20) -> DocumentAnalysis:
                     Block(
                         id=f"p{page_index}-i{image_index}",
                         kind="image",
-                        bbox=_rect_to_bbox_mm(rect),
+                        bbox=_rect_to_bbox_mm(rect * matrix),
                     )
                 )
 

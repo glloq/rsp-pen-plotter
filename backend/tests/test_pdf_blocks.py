@@ -69,6 +69,30 @@ def test_extract_blocks_text_only_has_no_image_block() -> None:
     assert [b.kind for b in blocks] == ["text"]
 
 
+def test_extract_blocks_maps_bboxes_into_the_rotated_frame() -> None:
+    """On a /Rotate page the block bboxes must share the (rotated) page frame the
+    reported width_mm/height_mm use — otherwise BlockMapCard overlays them in the
+    wrong region. A block near the un-rotated top-left lands on the right of the
+    rotated (tall) page."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=400)
+    page.insert_text((50, 100), "top-left text in unrotated space", fontsize=12)
+    page.set_rotation(90)
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+
+    pg = extract_blocks(buf.getvalue()).pages[0]
+    # Rotated: the 600×400 page is reported as portrait (tall).
+    assert pg.height_mm > pg.width_mm
+    block = pg.blocks[0]
+    # Its bbox must fit inside the rotated page dims and sit on the right half
+    # (x0 > half width) — not the left, where the un-rotated coordinate was.
+    assert block.bbox[0] > pg.width_mm * 0.5
+    assert block.bbox[2] <= pg.width_mm + 1
+    assert block.bbox[3] <= pg.height_mm + 1
+
+
 def test_extract_blocks_caps_max_pages() -> None:
     """``max_pages`` caps how many pages are walked."""
     doc = pymupdf.open()

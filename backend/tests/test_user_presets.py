@@ -35,6 +35,15 @@ def test_save_then_list_includes_user_preset() -> None:
     assert mine.options == {"algorithm": "stippling"}
 
 
+def test_save_rejects_oversized_options() -> None:
+    """The store's documented invariant caps ``options`` size — a stray huge
+    paste must be rejected (ValueError → 422 at the API) rather than bloating
+    user_presets.json. A normal-sized options blob is accepted."""
+    save_user_preset("small", "", {"algorithm": "stippling", "num_colors": 6})
+    with pytest.raises(ValueError, match="options exceed"):
+        save_user_preset("huge", "", {"blob": "x" * 40_000})
+
+
 def test_save_replaces_same_name() -> None:
     save_user_preset("X", "v1", {"algorithm": "a"})
     save_user_preset("X", "v2", {"algorithm": "b"})

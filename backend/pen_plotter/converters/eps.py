@@ -94,7 +94,7 @@ class EpsConverter(Converter):
         bitmap_options = extract_bitmap_options(opts)
         pdf_bytes = _eps_to_pdf(data)
         raw_svg, *_ = pdf_bytes_to_svg(pdf_bytes, 0)
-        hershey_group = build_hershey_text_group(pdf_bytes, 0, opts)
+        hershey_group, hershey_warnings = build_hershey_text_group(pdf_bytes, 0, opts)
         svg, warnings = postprocess_pdf_svg(
             raw_svg,
             bitmap_options=bitmap_options,
@@ -102,4 +102,6 @@ class EpsConverter(Converter):
             pdf_bytes=pdf_bytes,
             page_index=0,
         )
-        return ConversionResult(svg=svg, source_mime="image/svg+xml", warnings=warnings)
+        return ConversionResult(
+            svg=svg, source_mime="image/svg+xml", warnings=[*warnings, *hershey_warnings]
+        )

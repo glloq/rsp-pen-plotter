@@ -9,6 +9,7 @@
 // returns an empty map where there's no canvas (SSR / happy-dom tests), so the
 // caller falls back to an unweighted merge.
 import { deltaE2000, rgbToLab } from './nearestColor'
+import { canonicalHex } from './penWidth'
 
 // Raster size: big enough that small regions register, small enough that the
 // per-pixel nearest-centroid snap stays well under a frame.
@@ -66,7 +67,10 @@ export async function colorCoverageFromSvg(
 
   const labs = centroids.map((h) => h.replace('#', '').toLowerCase())
   const centroidLab = centroids.map((h) => {
-    const body = h.replace('#', '')
+    // Expand ``#rgb`` → ``#rrggbb`` before slicing: a 3-digit centroid would
+    // otherwise slice(4,6) to "" → parseInt('',16) = NaN → NaN Lab, and every
+    // pixel would then snap to centroid 0 (wrong coverage map).
+    const body = canonicalHex(h).replace('#', '')
     return rgbToLab(
       parseInt(body.slice(0, 2), 16),
       parseInt(body.slice(2, 4), 16),

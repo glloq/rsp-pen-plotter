@@ -37,6 +37,28 @@ from scipy import ndimage
 # A frame grabber maps a camera URL to JPEG bytes (see ``timelapse.grab_jpeg``).
 FrameGrabber = Callable[[str], bytes]
 
+# Cap the *decoded* pixel count, not just the wire bytes. The camera URL is
+# operator-configured but semi-trusted, and ``timelapse.grab_jpeg`` only bounds
+# the compressed size (~8 MiB); a tiny but highly-compressible frame can decode
+# to hundreds of megapixels and OOM the process (PIL only *raises* above
+# ~179 MP). 40 MP is far above any real webcam frame (4K ≈ 8 MP). Mirrors the
+# bitmap converter's ``MAX_PIXELS`` guard.
+_MAX_FRAME_PIXELS = 40_000_000
+
+
+def _guard_frame_pixels(img: Image.Image) -> None:
+    """Reject a frame whose decoded pixel count exceeds the vision cap.
+
+    ``Image.size`` is available after ``open`` without materialising the bitmap,
+    so the guard runs before the O(w·h) allocation in ``convert()``.
+    """
+    width, height = img.size
+    if width * height > _MAX_FRAME_PIXELS:
+        raise ValueError(
+            f"Camera frame {width}×{height} exceeds the "
+            f"{_MAX_FRAME_PIXELS:,}px vision limit."
+        )
+
 
 @dataclass(frozen=True)
 class Roi:
@@ -96,6 +118,7 @@ def offset_between(pen: TipMeasurement, reference: TipMeasurement) -> tuple[floa
 def _decode_gray(frame: bytes) -> np.ndarray:
     """Decode JPEG/PNG bytes to a 2-D uint8 luminance array."""
     with Image.open(io.BytesIO(frame)) as img:
+        _guard_frame_pixels(img)
         return np.asarray(img.convert("L"), dtype=np.uint8)
 
 
@@ -107,6 +130,7 @@ def _encode_preview(frame: bytes, tip_px: tuple[float, float] | None) -> bytes |
     """
     try:
         with Image.open(io.BytesIO(frame)) as img:
+            _guard_frame_pixels(img)
             rgb = img.convert("RGB")
     except Exception:
         return None
@@ -305,6 +329,7 @@ def _encode_box(frame: bytes, box: tuple[int, int, int, int]) -> bytes | None:
     """JPEG preview with a green bounding box drawn around the target."""
     try:
         with Image.open(io.BytesIO(frame)) as img:
+            _guard_frame_pixels(img)
             rgb = img.convert("RGB")
     except Exception:
         return None
@@ -328,6 +353,8 @@ def average_tips(samples: list[TipMeasurement]) -> TipMeasurement:
     message / preview still surface. The annotated frame of the sample closest
     to the median is kept for review.
     """
+    if not samples:
+        return TipMeasurement(found=False, message="no samples to average")
     found: list[TipMeasurement] = []
     px_pts: list[tuple[float, float]] = []
     mm_pts: list[tuple[float, float]] = []

@@ -130,6 +130,24 @@ async def test_dedup_preserves_name_when_empty() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dedup_preserves_stroke_width_when_omitted() -> None:
+    """Re-adding a colour without ``stroke_width_mm`` must NOT reset a custom
+    width to the 0.5 default — same "idempotent re-add is a no-op" contract the
+    name field already honours (a stray re-declare shouldn't change tip width)."""
+    async with _client() as client:
+        created = await client.post(
+            "/available-colors", json={"hex": "#abcdef", "name": "Sky", "stroke_width_mm": 0.8}
+        )
+        color_id = created.json()["color_id"]
+        assert created.json()["stroke_width_mm"] == 0.8
+
+        # Re-add with no width supplied — must keep 0.8, not reset to 0.5.
+        echo = await client.post("/available-colors", json={"hex": "#abcdef"})
+        assert echo.json()["color_id"] == color_id
+        assert echo.json()["stroke_width_mm"] == 0.8
+
+
+@pytest.mark.asyncio
 async def test_invalid_hex_returns_422() -> None:
     """Pydantic validation rejects payloads that aren't ``#rgb`` / ``#rrggbb``."""
     async with _client() as client:

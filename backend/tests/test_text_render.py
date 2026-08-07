@@ -341,11 +341,19 @@ def test_plan_with_rerendered_svg_bakes_placement_transform(
         svg="<svg>STALE</svg>",
         placement=placement,
     )
+    from pen_plotter.core.layers import _measure as _measure_svg
+
     out = plan_with_rerendered_svg(plan, _profile())
-    # The SVG was swapped (no longer the placeholder) and a transform
-    # was applied so the rendered geometry lives in workspace mm.
+    # The SVG was swapped (no longer the placeholder) and the placement
+    # transform was applied so the rendered geometry lives in workspace mm at
+    # the placement rectangle. The bake wraps each child in a ``matrix()``, then
+    # optimize_svg runs on it (a line of Hershey text is many reorderable
+    # subpaths) and flattens that matrix into absolute coordinates — so assert
+    # the *effect* (geometry at the placement offset), not the matrix() form.
     assert "STALE" not in out.svg
-    assert "matrix(" in out.svg
+    _, bbox = _measure_svg(out.svg)
+    assert bbox.x_min == pytest.approx(placement.offset_x_mm, abs=0.05)
+    assert bbox.y_min == pytest.approx(placement.offset_y_mm, abs=0.05)
     # The viewBox was rewritten to the workspace bounds so downstream
     # svgelements reads coordinates in workspace mm.
     assert 'viewBox="0.0 0.0 297.0 210.0"' in out.svg or 'viewBox="0 0 297' in out.svg
