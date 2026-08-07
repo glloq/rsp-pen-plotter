@@ -76,6 +76,10 @@ _STORE_PATH = Path(os.environ.get("OMNIPLOT_USER_PRESETS", _DEFAULT_STORE))
 _MAX_PRESETS = 64
 _MAX_NAME_LEN = 64
 _MAX_DESC_LEN = 256
+# Serialized ``options`` ceiling — far above any real preset payload (algorithm
+# name + a handful of params + at most a 16-colour palette), so a stray paste
+# or buggy client can't bloat the JSON store the comment above promises to bound.
+_MAX_OPTIONS_BYTES = 32 * 1024
 _NAME_RE = re.compile(r"^[\w \-./()]{1,64}$")
 
 
@@ -172,6 +176,12 @@ def save_user_preset(name: str, description: str, options: dict[str, Any]) -> Pr
         raise PresetExistsError(f"{clean_name!r} is a built-in preset name")
     if not isinstance(options, dict):
         raise ValueError("options must be a JSON object")
+    try:
+        options_bytes = len(json.dumps(options).encode("utf-8"))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("options must be JSON-serialisable") from exc
+    if options_bytes > _MAX_OPTIONS_BYTES:
+        raise ValueError(f"preset options exceed the {_MAX_OPTIONS_BYTES // 1024} KiB limit")
 
     presets = _read_user_store()
     presets = [p for p in presets if p.name != clean_name]

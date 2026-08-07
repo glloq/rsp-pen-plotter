@@ -107,11 +107,17 @@ export function useEditorInkSwatches(deps: EditorInkSwatchesDeps) {
   // off a canvas raster) whenever the /preview SVG changes — i.e. once per
   // segmentation, NOT on every M tweak, so lowering M stays instant.
   const coverageWeights = ref<Map<string, number>>(new Map())
+  // Monotonic token: colorCoverageFromSvg awaits an Image decode of variable
+  // latency, so a later-starting raster can resolve first. Apply only the
+  // newest so a stale coverage map can't clobber the fresh one.
+  let coverageSeq = 0
   watch(
     () => deps.fileManager.previewSvg?.value ?? '',
     async (svg) => {
+      const seq = ++coverageSeq
       const centroids = deps.fileManager.previewResult?.value?.palette?.map((p) => p.color) ?? []
-      coverageWeights.value = await colorCoverageFromSvg(svg, centroids)
+      const next = await colorCoverageFromSvg(svg, centroids)
+      if (seq === coverageSeq) coverageWeights.value = next
     },
     { immediate: true },
   )
