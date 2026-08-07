@@ -119,7 +119,12 @@ def preflight_report(
     # is mounted (wrong ink). ``missing`` only catches *explicit* slots.
     unresolved_ink: list[str] = []
 
-    for layer in geometry:
+    # Mirror generate_gcode, which wraps its whole per-layer loop in
+    # ``if not bounds.empty``: a labeled-but-empty layer (no drawable polyline
+    # ≥ 2 points) emits no G-code and no pause, so preflight must not count a
+    # pen change / missing slot for one either — the pause_logic module makes
+    # this preflight↔G-code parity mandatory.
+    for layer in geometry if not bounds.empty else []:
         setting = overrides.get(layer.label)
         slot = setting.target_pen_slot if setting else None
         source_color = setting.source_color if setting else None

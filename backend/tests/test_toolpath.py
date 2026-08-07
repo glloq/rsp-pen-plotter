@@ -37,6 +37,22 @@ def test_optimize_reduces_or_keeps_travel() -> None:
     assert 0.0 <= result.metrics.reduction_pct <= 100.0
 
 
+def test_optimize_runs_for_a_single_path_with_many_subpaths() -> None:
+    """A single-layer, single-<path> SVG whose ``d`` holds several disconnected
+    subpaths is NOT monotonic — the optimizer must run (and measure real
+    pen-up), not skip via the single-path early-exit that counted elements."""
+    svg = (
+        f'<svg {NS} viewBox="0 0 100 100">'
+        '<g inkscape:label="drawings">'
+        '<path d="M0 0 L5 0 M90 0 L95 0 M45 0 L50 0"/>'
+        "</g></svg>"
+    )
+    result = optimize_svg(svg)
+    # Three reorderable subpaths → real travel measured (early-exit reported 0).
+    assert result.metrics.pen_up_before_mm > 0
+    assert result.metrics.pen_up_after_mm <= result.metrics.pen_up_before_mm
+
+
 def test_optimize_respects_disabled_layer() -> None:
     settings = [
         LayerOptimization(layer_id="red", optimize=False),

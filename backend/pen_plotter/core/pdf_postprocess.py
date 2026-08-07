@@ -958,6 +958,14 @@ def _parse_grayscale_hex(value: str) -> tuple[bool, int]:
     return False, 0
 
 
+# Upper bound on hatch lines per shape. A shape with an enormous bbox (e.g.
+# coordinates far outside the media box in an adversarial or malformed PDF) at
+# the ~0.85pt minimum spacing would otherwise emit millions of <path>s (minutes
+# of CPU / OOM). Far above any legitimate hatched shape — a full A0 fill at
+# 0.85pt spacing is ~5k lines.
+_MAX_HATCH_LINES = 50_000
+
+
 def _hatch_lines_for_bbox(
     bbox: tuple[float, float, float, float],
     angle_rad: float,
@@ -982,6 +990,13 @@ def _hatch_lines_for_bbox(
     corners = [(x_min, y_min), (x_max, y_min), (x_min, y_max), (x_max, y_max)]
     projections = [px * nx + py * ny for px, py in corners]
     d_min, d_max = min(projections), max(projections)
+    # Cap the total line count by widening the spacing when a huge bbox would
+    # otherwise blow past _MAX_HATCH_LINES. Legitimate shapes (well under the
+    # cap) keep their requested spacing; a pathological bbox degrades to a
+    # coarse fill instead of DoSing the converter.
+    span = d_max - d_min
+    if span / spacing > _MAX_HATCH_LINES:
+        spacing = span / _MAX_HATCH_LINES
     # Snap to a multiple of spacing for a stable phase across nearby
     # rectangles (otherwise abutting swatches show a seam where the
     # hatching shifts).
