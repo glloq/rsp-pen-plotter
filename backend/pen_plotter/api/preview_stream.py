@@ -21,7 +21,6 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
-from queue import Queue
 from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -124,10 +123,19 @@ async def _real_stream(file_id: str, record: FileRecord, raw: bytes) -> AsyncIte
     """
     loop = asyncio.get_event_loop()
     start_ts = loop.time()
-    queue: Queue[tuple[str, dict[str, Any]] | None] = Queue()
+    events: asyncio.Queue[tuple[str, dict[str, Any]] | None] = asyncio.Queue()
+
+    def emit(item: tuple[str, dict[str, Any]] | None) -> None:
+        # Called from the render worker thread: hand the item to the event loop
+        # rather than a thread-safe queue.Queue whose consumer would have to
+        # park a second pool thread on a blocking ``get``. Each stream otherwise
+        # pins two default-executor threads (render + drain), so a handful of
+        # concurrent streams starve ``run_in_threadpool`` on a Pi's ~8-worker
+        # pool (uploads / conversions queue behind them).
+        loop.call_soon_threadsafe(events.put_nowait, item)
 
     def progress(i: int, total: int, label: str) -> None:
-        queue.put(
+        emit(
             (
                 "progress",
                 {
@@ -151,7 +159,7 @@ async def _real_stream(file_id: str, record: FileRecord, raw: bytes) -> AsyncIte
                 record.source_mime,
                 progress_callback=progress,
             )
-            queue.put(
+            emit(
                 (
                     "done",
                     {
@@ -162,9 +170,9 @@ async def _real_stream(file_id: str, record: FileRecord, raw: bytes) -> AsyncIte
                 )
             )
         except Exception as exc:  # noqa: BLE001 — relay to SSE client
-            queue.put(("error", {"message": str(exc)}))
+            emit(("error", {"message": str(exc)}))
         finally:
-            queue.put(None)
+            emit(None)
 
     seq = 0
     yield _sse(
@@ -184,7 +192,7 @@ async def _real_stream(file_id: str, record: FileRecord, raw: bytes) -> AsyncIte
     task.add_done_callback(_log_stream_worker_outcome)
     try:
         while True:
-            item = await loop.run_in_executor(None, queue.get)
+            item = await events.get()
             if item is None:
                 break
             kind, payload = item
