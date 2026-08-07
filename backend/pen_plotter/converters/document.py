@@ -94,7 +94,7 @@ class DocumentConverter(Converter):
         bitmap_options = extract_bitmap_options(opts)
         pdf_bytes = _office_to_pdf(data, extension)
         raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(pdf_bytes, page_index)
-        hershey_group = build_hershey_text_group(pdf_bytes, page_index, opts)
+        hershey_group, hershey_warnings = build_hershey_text_group(pdf_bytes, page_index, opts)
         svg, warnings = postprocess_pdf_svg(
             raw_svg,
             bitmap_options=bitmap_options,
@@ -105,7 +105,7 @@ class DocumentConverter(Converter):
         return ConversionResult(
             svg=svg,
             source_mime="image/svg+xml",
-            warnings=warnings,
+            warnings=[*warnings, *hershey_warnings],
             metadata={
                 "page_count": page_count,
                 "page": page_index,

@@ -66,7 +66,7 @@ def pdf_bytes_to_svg(data: bytes, page_index: int) -> tuple[str, int, float, flo
     return svg, page_count, width_mm, height_mm
 
 
-def extract_pdf_text_spans(data: bytes, page_index: int) -> list[PlacedSpan]:
+def extract_pdf_text_spans(data: bytes, page_index: int) -> tuple[list[PlacedSpan], int]:
     """Extract Hershey-renderable text spans from one PDF page.
 
     Coordinates are returned in PyMuPDF SVG user units (points) so the
@@ -74,12 +74,20 @@ def extract_pdf_text_spans(data: bytes, page_index: int) -> list[PlacedSpan]:
     :func:`pdf_bytes_to_svg` without any further conversion. ``size``
     is the PDF font size in points; bold / italic come from the PyMuPDF
     span ``flags`` bitmask.
+
+    Returns ``(spans, page_rotation_degrees)``. ``get_text("dict")`` yields
+    glyph origins in the page's *un-rotated* space, but ``get_svg_image()``
+    emits every other path in the *rotated* viewBox space, so on a ``/Rotate``
+    page the two disagree. Each origin is mapped through ``page.rotation_matrix``
+    (identity at 0°) so the overlay lands where the source text sits.
     """
     spans: list[PlacedSpan] = []
     with pymupdf.open(stream=data, filetype="pdf") as doc:
         if not 0 <= page_index < doc.page_count:
-            return spans
+            return spans, 0
         page = doc[page_index]
+        rotation = int(page.rotation) % 360
+        matrix = page.rotation_matrix
         text_dict = page.get_text("dict")
         for block in text_dict.get("blocks", []):
             for line in block.get("lines", []):
@@ -89,57 +97,69 @@ def extract_pdf_text_spans(data: bytes, page_index: int) -> list[PlacedSpan]:
                         continue
                     origin = span.get("origin") or (0.0, 0.0)
                     flags = int(span.get("flags", 0))
+                    # Map the origin into the rendered/rotated viewBox space.
+                    placed = pymupdf.Point(origin) * matrix
                     # The PDF's span ``bbox`` gives the source layout's
-                    # intended horizontal extent. We forward the distance
-                    # from the span's text origin to the right edge of
-                    # its bbox so the Hershey renderer can squeeze its
-                    # (typically wider) single-stroke glyphs back to
-                    # fit — preserving the document's line layout
-                    # instead of drifting past the right edge of the
-                    # page. Measuring from ``origin.x`` (not
-                    # ``bbox.x0``) keeps the target accurate when the
-                    # first glyph has a left side bearing that pulls
-                    # the bbox past the actual text start.
+                    # intended horizontal extent; forward the distance from the
+                    # origin to the bbox's right edge so the Hershey renderer can
+                    # squeeze its (typically wider) glyphs back to fit and
+                    # preserve the line layout. This is only meaningful on an
+                    # un-rotated page — after a rotation the horizontal extent
+                    # maps to a different axis, so drop it and draw at natural
+                    # width rather than squeezing along the wrong direction.
                     bbox = span.get("bbox")
                     source_width: float | None = None
-                    if bbox and len(bbox) >= 4:
+                    if rotation == 0 and bbox and len(bbox) >= 4:
                         width = float(bbox[2]) - float(origin[0])
                         if width > 0:
                             source_width = width
                     spans.append(
                         PlacedSpan(
                             text=text,
-                            x=float(origin[0]),
-                            baseline_y=float(origin[1]),
+                            x=float(placed.x),
+                            baseline_y=float(placed.y),
                             size=float(span.get("size", 10.0)),
                             bold=bool(flags & _FLAG_BOLD),
                             italic=bool(flags & _FLAG_ITALIC),
                             source_width=source_width,
                         )
                     )
-    return spans
+    return spans, rotation
 
 
-def build_hershey_text_group(data: bytes, page_index: int, opts: dict[str, Any]) -> str:
+def build_hershey_text_group(
+    data: bytes, page_index: int, opts: dict[str, Any]
+) -> tuple[str, list[str]]:
     """Build the Hershey text replacement group for a PDF page.
 
-    Returns the empty string when ``hershey_text`` is not enabled or
-    the page contains no extractable text. ``opts`` may carry
-    ``font`` (Hershey face name) and ``stroke_width_mm`` overrides;
-    other ``TypographyOptions`` fields (size, alignment, margins) are
-    ignored because the document's own layout dictates per-span size
-    and position.
+    Returns ``(group, warnings)``. The group is empty when ``hershey_text`` is
+    not enabled or the page has no extractable text. ``opts`` may carry ``font``
+    (Hershey face name) and ``stroke_width_mm`` overrides; other
+    ``TypographyOptions`` fields (size, alignment, margins) are ignored because
+    the document's own layout dictates per-span size and position.
     """
     if not bool(opts.get("hershey_text", False)):
-        return ""
-    spans = extract_pdf_text_spans(data, page_index)
+        return "", []
+    spans, rotation = extract_pdf_text_spans(data, page_index)
     if not spans:
-        return ""
-    return render_placed_spans(
+        return "", []
+    warnings: list[str] = []
+    if rotation != 0:
+        # The origin is now placed correctly, but ``render_placed_spans`` draws
+        # each line horizontally — it can't yet honour a rotated text-run
+        # direction, so on a rotated page the glyphs sit at the right spot but
+        # run the wrong way. Warn rather than silently mis-orient.
+        warnings.append(
+            "This PDF page is rotated; the Hershey text re-render positions each "
+            "line correctly but draws it horizontally (rotated text direction is "
+            "not yet supported)."
+        )
+    group = render_placed_spans(
         spans,
         font=str(opts.get("font", "futural")),
         stroke_width=float(opts.get("stroke_width_mm", 0.3)),
     )
+    return group, warnings
 
 
 class PdfConverter(Converter):
@@ -169,7 +189,7 @@ class PdfConverter(Converter):
         bitmap_options = extract_bitmap_options(opts)
 
         raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(data, page_index)
-        hershey_group = build_hershey_text_group(data, page_index, opts)
+        hershey_group, hershey_warnings = build_hershey_text_group(data, page_index, opts)
         svg, warnings = postprocess_pdf_svg(
             raw_svg,
             bitmap_options=bitmap_options,
@@ -177,6 +197,7 @@ class PdfConverter(Converter):
             pdf_bytes=data,
             page_index=page_index,
         )
+        warnings = [*warnings, *hershey_warnings]
         return ConversionResult(
             svg=svg,
             source_mime="image/svg+xml",

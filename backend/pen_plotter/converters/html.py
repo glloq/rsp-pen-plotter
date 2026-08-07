@@ -101,7 +101,7 @@ class HtmlConverter(Converter):
         html = _nudge_explicit_black_backgrounds(html)
         pdf_bytes = HTML(string=html, url_fetcher=local_only_url_fetcher).write_pdf()
         raw_svg, page_count, width_mm, height_mm = pdf_bytes_to_svg(pdf_bytes, page_index)
-        hershey_group = build_hershey_text_group(pdf_bytes, page_index, opts)
+        hershey_group, hershey_warnings = build_hershey_text_group(pdf_bytes, page_index, opts)
         svg, warnings = postprocess_pdf_svg(
             raw_svg,
             bitmap_options=bitmap_options,
@@ -112,7 +112,7 @@ class HtmlConverter(Converter):
         return ConversionResult(
             svg=svg,
             source_mime="image/svg+xml",
-            warnings=warnings,
+            warnings=[*warnings, *hershey_warnings],
             metadata={
                 "page_count": page_count,
                 "page": page_index,

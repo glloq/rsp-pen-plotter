@@ -40,6 +40,29 @@ def _text_only_pdf() -> bytes:
     return pdf.write()
 
 
+def test_hershey_on_rotated_pdf_places_text_in_rotated_space_and_warns() -> None:
+    """PyMuPDF reports glyph origins in un-rotated space but emits the SVG in
+    the rotated viewBox, so on a /Rotate page the Hershey overlay must be mapped
+    through rotation_matrix (or it lands thousands of pt off-page). Non-zero
+    rotation also warns because the horizontal renderer can't rotate the run."""
+    from pen_plotter.converters.pdf import extract_pdf_text_spans
+
+    pdf = pymupdf.open()
+    page = pdf.new_page(width=600, height=400)
+    page.insert_text((500, 50), "ABC", fontsize=20)
+    page.set_rotation(90)
+    data = pdf.write()
+
+    spans, rotation = extract_pdf_text_spans(data, 0)
+    assert rotation == 90
+    # (500, 50) un-rotated → ~(350, 500) in the rotated 400×600 frame.
+    assert 300 < spans[0].x < 400
+    assert 450 < spans[0].baseline_y < 550
+
+    result = PdfConverter().convert(data, options={"hershey_text": True})
+    assert any("rotated" in w.lower() for w in result.warnings)
+
+
 def _text_and_image_pdf() -> bytes:
     pdf = pymupdf.open()
     page = pdf.new_page(width=200, height=200)
